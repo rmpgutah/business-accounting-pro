@@ -1,10 +1,38 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { useAppStore } from './stores/appStore';
 import { useCompanyStore } from './stores/companyStore';
 import api from './lib/api';
 import AppShell from './components/layout/AppShell';
 import CompanySetup from './components/onboarding/CompanySetup';
-import Dashboard from './modules/dashboard/Dashboard';
+
+// ─── Lazy-loaded Modules ─────────────────────────────────
+const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
+const AccountsModule = lazy(() => import('./modules/accounts'));
+const InvoicingModule = lazy(() => import('./modules/invoices'));
+const ExpensesModule = lazy(() => import('./modules/expenses'));
+const ClientsModule = lazy(() => import('./modules/clients'));
+const PayrollModule = lazy(() => import('./modules/payroll'));
+const TimeTracking = lazy(() => import('./modules/time'));
+const ProjectsModule = lazy(() => import('./modules/projects'));
+const InventoryModule = lazy(() => import('./modules/inventory'));
+const TaxesModule = lazy(() => import('./modules/taxes'));
+const BudgetsModule = lazy(() => import('./modules/budgets'));
+const BankReconModule = lazy(() => import('./modules/bank-recon'));
+const StripeModule = lazy(() => import('./modules/stripe'));
+const ReportsModule = lazy(() => import('./modules/reports'));
+const KpiModule = lazy(() => import('./modules/kpi'));
+const ForecastingModule = lazy(() => import('./modules/forecasting'));
+const CustomReportsModule = lazy(() => import('./modules/custom-reports'));
+const DocumentsModule = lazy(() => import('./modules/documents'));
+const RecurringModule = lazy(() => import('./modules/recurring'));
+const EmailModule = lazy(() => import('./modules/email'));
+const NotificationsModule = lazy(() => import('./modules/notifications'));
+const AuditModule = lazy(() => import('./modules/audit'));
+const MultiCompanyModule = lazy(() => import('./modules/multi-company'));
+const ApiModule = lazy(() => import('./modules/api'));
+const PortalModule = lazy(() => import('./modules/portal'));
+const MobileModule = lazy(() => import('./modules/mobile'));
+const SettingsModule = lazy(() => import('./modules/settings'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -37,32 +65,65 @@ const MODULE_NAMES: Record<string, string> = {
   settings: 'Settings',
 };
 
-// ─── Module Placeholder ─────────────────────────────────
-const ModulePlaceholder: React.FC<{ moduleId: string }> = ({ moduleId }) => {
-  const name = MODULE_NAMES[moduleId] ?? moduleId;
-  return (
-    <div className="flex items-center justify-center h-full p-6">
-      <div
-        className="block-card p-8 text-center"
-        style={{ borderRadius: '2px' }}
-      >
-        <h2 className="text-lg font-bold text-text-primary mb-1">{name}</h2>
-        <p className="text-sm text-text-muted">This module is coming soon.</p>
-      </div>
-    </div>
-  );
-};
+// ─── Loading Fallback ────────────────────────────────────
+const ModuleLoading = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="text-text-muted text-sm font-mono">Loading module...</div>
+  </div>
+);
 
 // ─── Module Router ──────────────────────────────────────
 const ModuleView: React.FC = () => {
   const { currentModule } = useAppStore();
 
-  switch (currentModule) {
-    case 'dashboard':
-      return <Dashboard />;
-    default:
-      return <ModulePlaceholder moduleId={currentModule} />;
-  }
+  const renderModule = () => {
+    switch (currentModule) {
+      case 'dashboard': return <Dashboard />;
+      case 'accounts': return <AccountsModule />;
+      case 'invoicing': return <InvoicingModule />;
+      case 'expenses': return <ExpensesModule />;
+      case 'clients': return <ClientsModule />;
+      case 'payroll': return <PayrollModule />;
+      case 'time-tracking': return <TimeTracking />;
+      case 'projects': return <ProjectsModule />;
+      case 'inventory': return <InventoryModule />;
+      case 'taxes': return <TaxesModule />;
+      case 'budgets': return <BudgetsModule />;
+      case 'bank-recon': return <BankReconModule />;
+      case 'stripe-sync': return <StripeModule />;
+      case 'reports': return <ReportsModule />;
+      case 'kpi-dashboard': return <KpiModule />;
+      case 'forecasting': return <ForecastingModule />;
+      case 'report-builder': return <CustomReportsModule />;
+      case 'documents': return <DocumentsModule />;
+      case 'recurring': return <RecurringModule />;
+      case 'email': return <EmailModule />;
+      case 'notifications': return <NotificationsModule />;
+      case 'audit-trail': return <AuditModule />;
+      case 'companies': return <MultiCompanyModule />;
+      case 'api-integrations': return <ApiModule />;
+      case 'client-portal': return <PortalModule />;
+      case 'mobile': return <MobileModule />;
+      case 'settings': return <SettingsModule />;
+      default:
+        return (
+          <div className="flex items-center justify-center h-full p-6">
+            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+              <h2 className="text-lg font-bold text-text-primary mb-1">
+                {MODULE_NAMES[currentModule] ?? currentModule}
+              </h2>
+              <p className="text-sm text-text-muted">Module loading...</p>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <Suspense fallback={<ModuleLoading />}>
+      {renderModule()}
+    </Suspense>
+  );
 };
 
 // ─── App ────────────────────────────────────────────────
@@ -75,7 +136,6 @@ const App: React.FC = () => {
       try {
         const list = await api.listCompanies();
         setCompanies(list ?? []);
-
         if (list && list.length > 0) {
           setActiveCompany(list[0]);
         }
@@ -86,7 +146,6 @@ const App: React.FC = () => {
         setLoading(false);
       }
     };
-
     init();
   }, []);
 
