@@ -473,6 +473,38 @@ CREATE TABLE IF NOT EXISTS settings (
   UNIQUE(company_id, key)
 );
 
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  type TEXT DEFAULT 'expense' CHECK(type IN ('income','expense')),
+  description TEXT DEFAULT '',
+  parent_id TEXT REFERENCES categories(id),
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  invoice_id TEXT NOT NULL REFERENCES invoices(id),
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  payment_method TEXT DEFAULT '',
+  reference TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS bank_reconciliation_matches (
+  id TEXT PRIMARY KEY,
+  bank_transaction_id TEXT NOT NULL REFERENCES bank_transactions(id),
+  journal_entry_id TEXT REFERENCES journal_entries(id),
+  journal_entry_line_id TEXT REFERENCES journal_entry_lines(id),
+  match_type TEXT DEFAULT 'manual' CHECK(match_type IN ('manual','auto')),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_accounts_company ON accounts(company_id);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_company_date ON journal_entries(company_id, date);

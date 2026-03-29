@@ -44,6 +44,20 @@ interface ClientFormProps {
   onSaved: () => void;
 }
 
+// ─── Field Helper (must be outside component to avoid remount) ──
+const Field: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  span?: 1 | 2;
+}> = ({ label, children, span = 1 }) => (
+  <div className={span === 2 ? 'col-span-2' : ''}>
+    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
 // ─── Component ──────────────────────────────────────────
 const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) => {
   const [data, setData] = useState<ClientData>({ ...EMPTY_CLIENT });
@@ -124,20 +138,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       setSaving(false);
     }
   };
-
-  // ─── Field Row Helper ──────────────────────────────
-  const Field: React.FC<{
-    label: string;
-    children: React.ReactNode;
-    span?: 1 | 2;
-  }> = ({ label, children, span = 1 }) => (
-    <div className={span === 2 ? 'col-span-2' : ''}>
-      <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
 
   // ─── Render ─────────────────────────────────────────
   return (

@@ -61,7 +61,34 @@ export default function EmailModule() {
   useEffect(() => {
     loadEmailLog();
     loadSmtpConfig();
+    loadTemplates();
   }, []);
+
+  const loadTemplates = async () => {
+    try {
+      const rows = await api.rawQuery("SELECT value FROM settings WHERE key = 'email_templates' LIMIT 1");
+      if (rows && rows.length > 0) {
+        const parsed = JSON.parse(rows[0].value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTemplates(parsed);
+        }
+      }
+    } catch { /* use defaults */ }
+  };
+
+  const saveTemplates = async (updated: EmailTemplate[]) => {
+    try {
+      const existing = await api.rawQuery("SELECT id FROM settings WHERE key = 'email_templates' LIMIT 1");
+      const value = JSON.stringify(updated);
+      if (existing && existing.length > 0) {
+        await api.update('settings', existing[0].id, { value });
+      } else {
+        await api.create('settings', { key: 'email_templates', value });
+      }
+    } catch (err) {
+      console.error('Failed to save email templates:', err);
+    }
+  };
 
   const loadEmailLog = async () => {
     try {
@@ -217,7 +244,9 @@ export default function EmailModule() {
               </p>
               <div className="flex gap-2">
                 <button className="block-btn-primary" onClick={() => {
-                  setTemplates(templates.map((t) => (t.key === editingTemplate.key ? editingTemplate : t)));
+                  const updated = templates.map((t) => (t.key === editingTemplate.key ? editingTemplate : t));
+                  setTemplates(updated);
+                  saveTemplates(updated);
                   setEditingTemplate(null);
                 }}>
                   Save Template

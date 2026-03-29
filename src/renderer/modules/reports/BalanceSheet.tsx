@@ -28,9 +28,78 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+// ─── Render helpers ─────────────────────────────────────
+const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
+  <tr className="bg-bg-tertiary/30">
+    <td
+      colSpan={2}
+      className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
+    >
+      {label}
+    </td>
+  </tr>
+);
+
+const SubSectionHeader: React.FC<{ label: string }> = ({ label }) => (
+  <tr>
+    <td
+      colSpan={2}
+      className="px-6 pt-2 pb-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider"
+      style={{ paddingLeft: '24px' }}
+    >
+      {label}
+    </td>
+  </tr>
+);
+
+const LineRow: React.FC<{
+  name: string;
+  amount: number;
+  indent?: number;
+}> = ({ name, amount, indent = 0 }) => (
+  <tr className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
+    <td
+      className="py-1.5 text-xs text-text-secondary"
+      style={{ paddingLeft: `${24 + indent * 20}px` }}
+    >
+      {name}
+    </td>
+    <td className="py-1.5 text-right pr-6 font-mono text-xs text-text-primary">
+      {fmt.format(amount)}
+    </td>
+  </tr>
+);
+
+const SubtotalRow: React.FC<{
+  label: string;
+  amount: number;
+  accent?: string;
+  topBorder?: boolean;
+  doubleBorder?: boolean;
+}> = ({ label, amount, accent, topBorder, doubleBorder }) => (
+  <tr
+    className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
+  >
+    <td className="px-6 py-2 text-xs font-bold text-text-primary">
+      {label}
+    </td>
+    <td
+      className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
+    >
+      {fmt.format(amount)}
+    </td>
+  </tr>
+);
+
+const Spacer: React.FC = () => (
+  <tr>
+    <td colSpan={2} className="py-1" />
+  </tr>
+);
+
 // ─── Component ──────────────────────────────────────────
 const BalanceSheet: React.FC = () => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [asOfDate, setAsOfDate] = useState(() =>
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
   );
@@ -59,7 +128,7 @@ const BalanceSheet: React.FC = () => {
              a.code AS account_code,
              a.type AS account_type,
              a.subtype AS subtype,
-             COALESCE(SUM(jel.debit_amount - jel.credit_amount), 0) AS balance
+             COALESCE(SUM(jel.debit - jel.credit), 0) AS balance
            FROM accounts a
            LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
            LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
@@ -87,7 +156,7 @@ const BalanceSheet: React.FC = () => {
         // Also get retained earnings (revenue - expense up to date)
         const reRows: any[] = await api.rawQuery(
           `SELECT
-             COALESCE(SUM(jel.credit_amount - jel.debit_amount), 0) AS retained_earnings
+             COALESCE(SUM(jel.credit - jel.debit), 0) AS retained_earnings
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
@@ -192,75 +261,6 @@ const BalanceSheet: React.FC = () => {
 
   const isBalanced =
     Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.01;
-
-  // ─── Render helpers ─────────────────────────────────────
-  const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
-    <tr className="bg-bg-tertiary/30">
-      <td
-        colSpan={2}
-        className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
-      >
-        {label}
-      </td>
-    </tr>
-  );
-
-  const SubSectionHeader: React.FC<{ label: string }> = ({ label }) => (
-    <tr>
-      <td
-        colSpan={2}
-        className="px-6 pt-2 pb-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider"
-        style={{ paddingLeft: '24px' }}
-      >
-        {label}
-      </td>
-    </tr>
-  );
-
-  const LineRow: React.FC<{
-    name: string;
-    amount: number;
-    indent?: number;
-  }> = ({ name, amount, indent = 0 }) => (
-    <tr className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
-      <td
-        className="py-1.5 text-xs text-text-secondary"
-        style={{ paddingLeft: `${24 + indent * 20}px` }}
-      >
-        {name}
-      </td>
-      <td className="py-1.5 text-right pr-6 font-mono text-xs text-text-primary">
-        {fmt.format(amount)}
-      </td>
-    </tr>
-  );
-
-  const SubtotalRow: React.FC<{
-    label: string;
-    amount: number;
-    accent?: string;
-    topBorder?: boolean;
-    doubleBorder?: boolean;
-  }> = ({ label, amount, accent, topBorder, doubleBorder }) => (
-    <tr
-      className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
-    >
-      <td className="px-6 py-2 text-xs font-bold text-text-primary">
-        {label}
-      </td>
-      <td
-        className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
-      >
-        {fmt.format(amount)}
-      </td>
-    </tr>
-  );
-
-  const Spacer: React.FC = () => (
-    <tr>
-      <td colSpan={2} className="py-1" />
-    </tr>
-  );
 
   return (
     <div className="space-y-4">

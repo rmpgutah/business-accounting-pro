@@ -1,89 +1,139 @@
-import React, { useState } from 'react';
-import { Smartphone, Wifi, QrCode, ExternalLink, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Smartphone, Settings, Save, CheckCircle, Info } from 'lucide-react';
+import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 export default function MobileModule() {
-  const [enabled, setEnabled] = useState(false);
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const [port, setPort] = useState('3847');
+  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const rows = await api.rawQuery("SELECT value FROM settings WHERE key = 'mobile_port' LIMIT 1");
+      if (rows && rows.length > 0) {
+        setPort(rows[0].value);
+      }
+    } catch { /* use default */ }
+    finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const savePort = async () => {
+    if (!activeCompany) return;
+    try {
+      const existing = await api.rawQuery("SELECT id FROM settings WHERE key = 'mobile_port' LIMIT 1");
+      if (existing && existing.length > 0) {
+        await api.update('settings', existing[0].id, { value: port });
+      } else {
+        await api.create('settings', { company_id: activeCompany.id, key: 'mobile_port', value: port });
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error('Failed to save mobile port:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center h-full">
+        <span className="text-text-muted text-sm">Loading mobile settings...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="module-header">
         <h1 className="module-title">Mobile Companion</h1>
-        <div className="module-actions">
-          <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="accent-accent-blue"
-            />
-            Enable Mobile Access
-          </label>
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div className="block-card">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 flex items-center justify-center bg-accent-blue-bg" style={{ borderRadius: '2px' }}>
-                <Smartphone size={20} className="text-accent-blue" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold">Mobile Web Interface</h3>
-                <p className="text-xs text-text-muted mt-1">
-                  Access a lightweight version of Business Accounting Pro from your phone or tablet.
-                  Works on any device with a web browser on the same network.
-                </p>
-              </div>
-            </div>
-          </div>
-
+          {/* Status */}
           <div className="block-card space-y-3">
             <div className="flex items-center gap-2">
-              <Wifi size={16} className="text-accent-blue" />
-              <h3 className="text-sm font-semibold">Connection</h3>
+              <Smartphone size={16} className="text-accent-blue" />
+              <h3 className="text-sm font-semibold">Mobile Web Interface</h3>
             </div>
-            <div className={`flex items-center gap-2 ${enabled ? 'text-accent-income' : 'text-text-muted'}`}>
-              <div className="w-2 h-2" style={{ borderRadius: '50%', background: enabled ? '#22c55e' : '#6b6b6b' }} />
-              <span className="text-xs">{enabled ? 'Mobile server running' : 'Mobile server offline'}</span>
+            <div className="bg-bg-primary border border-border-primary p-3 flex items-start gap-2" style={{ borderRadius: '2px' }}>
+              <Info size={14} className="text-accent-blue mt-0.5 shrink-0" />
+              <p className="text-xs text-text-secondary">
+                The mobile companion is available when running the optional web server.
+                Devices on the same network can access a lightweight interface for expense entry,
+                time tracking, and dashboard viewing.
+              </p>
             </div>
-            {enabled && (
-              <div className="mt-2">
-                <p className="text-xs text-text-muted mb-1">Open this URL on your phone:</p>
-                <code className="block px-3 py-2 bg-bg-primary border border-border-primary text-accent-blue text-sm font-mono" style={{ borderRadius: '2px' }}>
-                  http://192.168.1.100:3847/mobile
-                </code>
-              </div>
-            )}
           </div>
 
+          {/* Port Configuration */}
           <div className="block-card space-y-3">
-            <h3 className="text-sm font-semibold">Features Available on Mobile</h3>
-            <div className="space-y-2">
-              {[
-                'Quick expense entry with receipt camera',
-                'Start/stop time tracking',
-                'View dashboard and KPIs',
-                'Approve pending transactions',
-                'View client and project details',
-                'Check invoice status',
-              ].map((feature, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-accent-income" />
-                  <span className="text-xs text-text-secondary">{feature}</span>
-                </div>
-              ))}
+            <div className="flex items-center gap-2">
+              <Settings size={16} className="text-accent-blue" />
+              <h3 className="text-sm font-semibold">Server Configuration</h3>
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                Port
+              </label>
+              <input
+                className="block-input"
+                type="number"
+                min="1024"
+                max="65535"
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                placeholder="3847"
+              />
+              <p className="text-xs text-text-muted mt-1">
+                Default: 3847. The companion server will listen on this port.
+              </p>
+            </div>
+            <button className="block-btn-primary text-xs flex items-center gap-1" onClick={savePort}>
+              {saved ? <CheckCircle size={12} className="text-white" /> : <Save size={12} />}
+              {saved ? 'Saved' : 'Save Configuration'}
+            </button>
           </div>
         </div>
 
-        <div className="block-card flex flex-col items-center justify-center" style={{ minHeight: '300px' }}>
-          <div className="w-48 h-48 bg-bg-primary border border-border-primary flex items-center justify-center mb-4" style={{ borderRadius: '2px' }}>
-            <QrCode size={80} className="text-text-muted" />
+        {/* Instructions */}
+        <div className="block-card space-y-4">
+          <h3 className="text-sm font-semibold">How to Start</h3>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '2px' }}>1</span>
+              <p className="text-xs text-text-secondary">
+                Go to <span className="text-text-primary font-medium">Settings &gt; Integrations</span> and enable the companion web server.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '2px' }}>2</span>
+              <p className="text-xs text-text-secondary">
+                The server will start on port <code className="text-accent-blue font-mono">{port}</code>.
+                Your local network address will be shown in the settings panel.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '2px' }}>3</span>
+              <p className="text-xs text-text-secondary">
+                Open the displayed URL on your phone or tablet browser. Both devices must be on the same network.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-text-muted">
-            {enabled ? 'Scan QR code to open on your device' : 'Enable mobile access to generate QR code'}
-          </p>
+
+          <div className="bg-bg-primary border border-border-primary p-3" style={{ borderRadius: '2px' }}>
+            <p className="text-xs text-text-muted">
+              Start the companion server via <span className="text-text-primary font-medium">Settings &gt; Integrations</span>.
+              A QR code will be generated once the server is running.
+            </p>
+          </div>
         </div>
       </div>
     </div>

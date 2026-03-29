@@ -1,9 +1,55 @@
-import React, { useState } from 'react';
-import { Plug, Key, Globe, Webhook, Copy, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plug, Key, Webhook, Copy, CheckCircle, RefreshCw, Save } from 'lucide-react';
+import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
+
+const WEBHOOK_EVENTS = ['invoice.created', 'invoice.paid', 'expense.created', 'payment.received'];
 
 export default function ApiModule() {
-  const [apiKey] = useState('bap_' + Math.random().toString(36).substring(2, 15));
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const [apiKey, setApiKey] = useState('');
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookEvents, setWebhookEvents] = useState<string[]>([]);
+  const [webhookSaved, setWebhookSaved] = useState(false);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      // Load API key
+      const keyRows = await api.rawQuery("SELECT value FROM settings WHERE key = 'api_key' LIMIT 1");
+      if (keyRows && keyRows.length > 0) {
+        setApiKey(keyRows[0].value);
+      } else if (activeCompany) {
+        // Generate and save a new key
+        const newKey = 'bap_' + crypto.randomUUID().replace(/-/g, '');
+        await api.create('settings', { company_id: activeCompany.id, key: 'api_key', value: newKey });
+        setApiKey(newKey);
+      }
+
+      // Load webhook URL
+      const urlRows = await api.rawQuery("SELECT value FROM settings WHERE key = 'webhook_url' LIMIT 1");
+      if (urlRows && urlRows.length > 0) {
+        setWebhookUrl(urlRows[0].value);
+      }
+
+      // Load webhook events
+      const evtRows = await api.rawQuery("SELECT value FROM settings WHERE key = 'webhook_events' LIMIT 1");
+      if (evtRows && evtRows.length > 0) {
+        try {
+          setWebhookEvents(JSON.parse(evtRows[0].value));
+        } catch { /* invalid JSON, ignore */ }
+      }
+    } catch (err) {
+      console.error('Failed to load API settings:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeCompany]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const copyKey = () => {
     navigator.clipboard.writeText(apiKey);
@@ -11,19 +57,62 @@ export default function ApiModule() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const endpoints = [
-    { method: 'GET', path: '/api/clients', description: 'List all clients' },
-    { method: 'POST', path: '/api/clients', description: 'Create a client' },
-    { method: 'GET', path: '/api/invoices', description: 'List all invoices' },
-    { method: 'POST', path: '/api/invoices', description: 'Create an invoice' },
-    { method: 'GET', path: '/api/expenses', description: 'List all expenses' },
-    { method: 'POST', path: '/api/expenses', description: 'Create an expense' },
-    { method: 'GET', path: '/api/time-entries', description: 'List time entries' },
-    { method: 'POST', path: '/api/time-entries', description: 'Create time entry' },
-    { method: 'GET', path: '/api/projects', description: 'List all projects' },
-    { method: 'GET', path: '/api/reports/pnl', description: 'Profit & Loss report' },
-    { method: 'GET', path: '/api/reports/balance-sheet', description: 'Balance Sheet' },
-  ];
+  const regenerateKey = async () => {
+    if (!activeCompany) return;
+    try {
+      const newKey = 'bap_' + crypto.randomUUID().replace(/-/g, '');
+      const existing = await api.rawQuery("SELECT id FROM settings WHERE key = 'api_key' LIMIT 1");
+      if (existing && existing.length > 0) {
+        await api.update('settings', existing[0].id, { value: newKey });
+      } else {
+        await api.create('settings', { company_id: activeCompany.id, key: 'api_key', value: newKey });
+      }
+      setApiKey(newKey);
+    } catch (err) {
+      console.error('Failed to regenerate API key:', err);
+    }
+  };
+
+  const toggleEvent = (event: string) => {
+    setWebhookEvents((prev) =>
+      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
+    );
+  };
+
+  const saveWebhookConfig = async () => {
+    if (!activeCompany) return;
+    try {
+      // Save webhook URL
+      const urlRows = await api.rawQuery("SELECT id FROM settings WHERE key = 'webhook_url' LIMIT 1");
+      if (urlRows && urlRows.length > 0) {
+        await api.update('settings', urlRows[0].id, { value: webhookUrl });
+      } else {
+        await api.create('settings', { company_id: activeCompany.id, key: 'webhook_url', value: webhookUrl });
+      }
+
+      // Save webhook events
+      const evtRows = await api.rawQuery("SELECT id FROM settings WHERE key = 'webhook_events' LIMIT 1");
+      const eventsJson = JSON.stringify(webhookEvents);
+      if (evtRows && evtRows.length > 0) {
+        await api.update('settings', evtRows[0].id, { value: eventsJson });
+      } else {
+        await api.create('settings', { company_id: activeCompany.id, key: 'webhook_events', value: eventsJson });
+      }
+
+      setWebhookSaved(true);
+      setTimeout(() => setWebhookSaved(false), 2000);
+    } catch (err) {
+      console.error('Failed to save webhook config:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center h-full">
+        <span className="text-text-muted text-sm">Loading API settings...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -33,6 +122,7 @@ export default function ApiModule() {
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
+          {/* API Key */}
           <div className="block-card space-y-3">
             <div className="flex items-center gap-2">
               <Key size={16} className="text-accent-blue" />
@@ -47,20 +137,16 @@ export default function ApiModule() {
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
+            <div className="flex items-center gap-2">
+              <button className="block-btn flex items-center gap-1 text-xs" onClick={regenerateKey}>
+                <RefreshCw size={12} />
+                Regenerate
+              </button>
+            </div>
             <p className="text-xs text-text-muted">Include in requests as: Authorization: Bearer {'<api_key>'}</p>
           </div>
 
-          <div className="block-card space-y-3">
-            <div className="flex items-center gap-2">
-              <Globe size={16} className="text-accent-blue" />
-              <h3 className="text-sm font-semibold">API Base URL</h3>
-            </div>
-            <code className="block px-3 py-2 bg-bg-primary border border-border-primary text-text-secondary text-xs font-mono" style={{ borderRadius: '2px' }}>
-              http://localhost:3847/api
-            </code>
-            <p className="text-xs text-text-muted">API server runs when the application is open</p>
-          </div>
-
+          {/* Webhooks */}
           <div className="block-card space-y-3">
             <div className="flex items-center gap-2">
               <Webhook size={16} className="text-accent-blue" />
@@ -69,37 +155,64 @@ export default function ApiModule() {
             <p className="text-xs text-text-muted">Configure webhook URLs to receive notifications when data changes.</p>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Webhook URL</label>
-              <input className="block-input" placeholder="https://your-server.com/webhook" />
+              <input
+                className="block-input"
+                placeholder="https://your-server.com/webhook"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+              />
             </div>
             <div className="flex flex-wrap gap-2">
-              {['invoice.created', 'invoice.paid', 'expense.created', 'payment.received'].map((event) => (
+              {WEBHOOK_EVENTS.map((event) => (
                 <label key={event} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                  <input type="checkbox" className="accent-accent-blue" />
+                  <input
+                    type="checkbox"
+                    className="accent-accent-blue"
+                    checked={webhookEvents.includes(event)}
+                    onChange={() => toggleEvent(event)}
+                  />
                   {event}
                 </label>
               ))}
             </div>
-            <button className="block-btn-primary text-xs">Save Webhook</button>
+            <button className="block-btn-primary text-xs flex items-center gap-1" onClick={saveWebhookConfig}>
+              {webhookSaved ? <CheckCircle size={12} className="text-white" /> : <Save size={12} />}
+              {webhookSaved ? 'Saved' : 'Save Webhook'}
+            </button>
           </div>
         </div>
 
-        <div className="block-card">
-          <h3 className="text-sm font-semibold mb-4">API Endpoints</h3>
-          <div className="space-y-2">
-            {endpoints.map((ep, i) => (
-              <div key={i} className="flex items-center gap-3 py-2 border-b border-border-primary last:border-0">
-                <span
-                  className={`text-[10px] font-bold uppercase w-12 text-center py-0.5 ${
-                    ep.method === 'GET' ? 'block-badge-income' : 'block-badge-blue'
-                  }`}
-                >
-                  {ep.method}
-                </span>
-                <code className="text-xs font-mono text-text-primary flex-1">{ep.path}</code>
-                <span className="text-xs text-text-muted">{ep.description}</span>
-              </div>
-            ))}
+        {/* IPC / Plugin System Note */}
+        <div className="block-card space-y-4">
+          <div className="flex items-center gap-2">
+            <Plug size={16} className="text-accent-blue" />
+            <h3 className="text-sm font-semibold">Data Access</h3>
           </div>
+          <p className="text-sm text-text-secondary">
+            The Business Accounting Pro API is accessible via the IPC bridge and plugin system.
+            All database tables can be queried, created, updated, and deleted through the IPC channels.
+          </p>
+          <div className="bg-bg-primary border border-border-primary p-4 space-y-2" style={{ borderRadius: '2px' }}>
+            <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Available IPC Channels</p>
+            <div className="space-y-1">
+              {[
+                { channel: 'db:query', desc: 'Query records with filters and sorting' },
+                { channel: 'db:create', desc: 'Insert a new record' },
+                { channel: 'db:update', desc: 'Update an existing record' },
+                { channel: 'db:delete', desc: 'Delete a record' },
+                { channel: 'db:rawQuery', desc: 'Execute raw SQL (read-only)' },
+              ].map((item) => (
+                <div key={item.channel} className="flex items-center gap-3 py-1.5 border-b border-border-primary last:border-0">
+                  <code className="text-xs font-mono text-accent-blue">{item.channel}</code>
+                  <span className="text-xs text-text-muted">{item.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-text-muted">
+            Use your API key for authentication when building plugins or external integrations.
+            Webhook events will be dispatched to the configured URL when data changes occur.
+          </p>
         </div>
       </div>
     </div>

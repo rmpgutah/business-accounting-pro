@@ -9,6 +9,8 @@ import {
   Edit,
 } from 'lucide-react';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
+import { Plus } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -137,6 +139,7 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass }) 
 
 // ─── Component ──────────────────────────────────────────
 const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit }) => {
+  const nav = useNavigation();
   const [project, setProject] = useState<Project | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -334,7 +337,21 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           <TimeEntriesTab entries={timeEntries} />
         )}
         {activeTab === 'expenses' && (
-          <ExpensesTab expenses={expenses} />
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <button
+                className="block-btn-primary inline-flex items-center gap-1.5 text-xs"
+                onClick={() => {
+                  sessionStorage.setItem('nav:prefillProjectId', projectId);
+                  nav.goTo('expenses');
+                }}
+              >
+                <Plus size={14} />
+                Record Expense
+              </button>
+            </div>
+            <ExpensesTab expenses={expenses} />
+          </div>
         )}
         {activeTab === 'invoices' && (
           <InvoicesTab invoices={invoices} />

@@ -8,55 +8,49 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-interface FormData {
-  name: string;
-  legal_name: string;
-  email: string;
-  phone: string;
-  address_line1: string;
-  city: string;
-  state: string;
-  zip: string;
-  tax_id: string;
-  fiscal_year_start: number;
-}
-
 const CompanySetup: React.FC = () => {
-  const { setCompanies, setActiveCompany } = useCompanyStore();
+  const setCompanies = useCompanyStore((s) => s.setCompanies);
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState<FormData>({
-    name: '',
-    legal_name: '',
-    email: '',
-    phone: '',
-    address_line1: '',
-    city: '',
-    state: '',
-    zip: '',
-    tax_id: '',
-    fiscal_year_start: 1,
-  });
+  const [error, setError] = useState('');
 
-  const set = (field: keyof FormData) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const value = field === 'fiscal_year_start' ? Number(e.target.value) : e.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  const [name, setName] = useState('');
+  const [legalName, setLegalName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zip, setZip] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [fiscalYearStart, setFiscalYearStart] = useState(1);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || submitting) return;
+    if (!name.trim() || submitting) return;
 
     setSubmitting(true);
+    setError('');
     try {
-      const company = await api.createCompany(form);
+      const company = await api.createCompany({
+        name: name.trim(),
+        legal_name: legalName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        address_line1: address.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        zip: zip.trim(),
+        tax_id: taxId.trim(),
+        fiscal_year_start: fiscalYearStart,
+      });
       await api.switchCompany(company.id);
       const companies = await api.listCompanies();
       setCompanies(companies);
       setActiveCompany(company);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create company:', err);
+      setError(err?.message || 'Failed to create company');
     } finally {
       setSubmitting(false);
     }
@@ -65,157 +59,155 @@ const CompanySetup: React.FC = () => {
   const labelClass = 'text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block';
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-bg-primary p-6">
-      <div
-        className="w-full max-w-2xl bg-bg-secondary border border-border-primary p-8"
-        style={{ borderRadius: '2px' }}
-      >
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0a0a0a', padding: '24px' }}>
+      <div style={{ width: '100%', maxWidth: '640px', background: '#141414', border: '1px solid #2e2e2e', padding: '32px', borderRadius: '2px' }}>
         {/* Logo & Header */}
-        <div className="flex flex-col items-center mb-8">
-          <div
-            className="flex items-center justify-center w-14 h-14 bg-accent-blue mb-4"
-            style={{ borderRadius: '2px' }}
-          >
-            <Building2 size={28} className="text-white" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', background: '#3b82f6', marginBottom: '16px', borderRadius: '2px' }}>
+            <Building2 size={28} color="white" />
           </div>
-          <h1 className="text-xl font-bold text-text-primary">Business Accounting Pro</h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Set up your company to get started
-          </p>
+          <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#f0f0f0' }}>Business Accounting Pro</h1>
+          <p style={{ fontSize: '14px', color: '#a0a0a0', marginTop: '4px' }}>Set up your company to get started</p>
         </div>
 
+        {error && (
+          <div style={{ padding: '8px 12px', marginBottom: '16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '13px', borderRadius: '2px' }}>
+            {error}
+          </div>
+        )}
+
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Company Name */}
-          <div>
-            <label className={labelClass}>
-              Company Name <span className="text-accent-expense">*</span>
-            </label>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '16px' }}>
+            <label className={labelClass}>Company Name <span style={{ color: '#ef4444' }}>*</span></label>
             <input
               type="text"
-              className="block-input w-full"
+              className="block-input"
+              style={{ width: '100%' }}
               placeholder="Acme Corp"
-              value={form.name}
-              onChange={set('name')}
-              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
             />
           </div>
 
-          {/* Legal Name */}
-          <div>
+          <div style={{ marginBottom: '16px' }}>
             <label className={labelClass}>Legal Name</label>
             <input
               type="text"
-              className="block-input w-full"
+              className="block-input"
+              style={{ width: '100%' }}
               placeholder="Acme Corporation LLC"
-              value={form.legal_name}
-              onChange={set('legal_name')}
+              value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
             />
           </div>
 
-          {/* Email & Phone */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
             <div>
               <label className={labelClass}>Email</label>
               <input
                 type="email"
-                className="block-input w-full"
+                className="block-input"
+                style={{ width: '100%' }}
                 placeholder="hello@acme.com"
-                value={form.email}
-                onChange={set('email')}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
               <label className={labelClass}>Phone</label>
               <input
                 type="tel"
-                className="block-input w-full"
+                className="block-input"
+                style={{ width: '100%' }}
                 placeholder="(555) 123-4567"
-                value={form.phone}
-                onChange={set('phone')}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Address */}
-          <div>
+          <div style={{ marginBottom: '16px' }}>
             <label className={labelClass}>Address</label>
             <input
               type="text"
-              className="block-input w-full"
+              className="block-input"
+              style={{ width: '100%' }}
               placeholder="123 Main Street"
-              value={form.address_line1}
-              onChange={set('address_line1')}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
             />
           </div>
 
-          {/* City / State / ZIP */}
-          <div className="grid grid-cols-3 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
             <div>
               <label className={labelClass}>City</label>
               <input
                 type="text"
-                className="block-input w-full"
+                className="block-input"
+                style={{ width: '100%' }}
                 placeholder="New York"
-                value={form.city}
-                onChange={set('city')}
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
               />
             </div>
             <div>
               <label className={labelClass}>State</label>
               <input
                 type="text"
-                className="block-input w-full"
+                className="block-input"
+                style={{ width: '100%' }}
                 placeholder="NY"
-                value={form.state}
-                onChange={set('state')}
+                value={state}
+                onChange={(e) => setState(e.target.value)}
               />
             </div>
             <div>
               <label className={labelClass}>ZIP</label>
               <input
                 type="text"
-                className="block-input w-full"
+                className="block-input"
+                style={{ width: '100%' }}
                 placeholder="10001"
-                value={form.zip}
-                onChange={set('zip')}
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Tax ID & Fiscal Year */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
             <div>
               <label className={labelClass}>Tax ID (EIN)</label>
               <input
                 type="text"
-                className="block-input w-full"
+                className="block-input"
+                style={{ width: '100%' }}
                 placeholder="XX-XXXXXXX"
-                value={form.tax_id}
-                onChange={set('tax_id')}
+                value={taxId}
+                onChange={(e) => setTaxId(e.target.value)}
               />
             </div>
             <div>
               <label className={labelClass}>Fiscal Year Start</label>
               <select
-                className="block-select w-full"
-                value={form.fiscal_year_start}
-                onChange={set('fiscal_year_start')}
+                className="block-select"
+                style={{ width: '100%' }}
+                value={fiscalYearStart}
+                onChange={(e) => setFiscalYearStart(Number(e.target.value))}
               >
                 {MONTHS.map((month, i) => (
-                  <option key={month} value={i + 1}>
-                    {month}
-                  </option>
+                  <option key={month} value={i + 1}>{month}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
-            disabled={!form.name.trim() || submitting}
-            className="block-btn-primary w-full flex items-center justify-center gap-2 mt-6"
+            disabled={!name.trim() || submitting}
+            className="block-btn-primary"
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: (!name.trim() || submitting) ? 0.5 : 1 }}
           >
             {submitting ? 'Creating...' : 'Create Company & Get Started'}
             {!submitting && <ArrowRight size={16} />}

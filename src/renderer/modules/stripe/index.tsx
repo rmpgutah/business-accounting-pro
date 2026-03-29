@@ -146,16 +146,13 @@ const StripeSyncModule: React.FC = () => {
 
   const handleSync = () => {
     if (!isConnected) {
-      setSyncMessage('Sync feature requires Stripe API key');
-      setTimeout(() => setSyncMessage(''), 3000);
+      setSyncMessage('Configure your Stripe API key first to enable sync.');
+      setTimeout(() => setSyncMessage(''), 5000);
       return;
     }
-    setSyncing(true);
-    setSyncMessage('Sync initiated. This feature requires backend Stripe integration.');
-    setTimeout(() => {
-      setSyncing(false);
-      setSyncMessage('');
-    }, 3000);
+    setSyncMessage(
+      'Stripe sync requires the Stripe Node SDK. Configure your API key and use the CLI to sync: bap stripe-sync'
+    );
   };
 
   if (loading) {

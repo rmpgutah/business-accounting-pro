@@ -24,7 +24,7 @@ interface JournalEntry {
   date: string;
   description: string;
   reference: string;
-  status: 'posted' | 'unposted';
+  is_posted: number;
 }
 
 interface JournalEntryFormProps {
@@ -64,7 +64,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   onClose,
   onSaved,
 }) => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const isEdit = entry !== null;
 
   const [date, setDate] = useState(
@@ -210,9 +210,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         date,
         description: description.trim(),
         reference: reference.trim() || null,
-        total_debit: totalDebit,
-        total_credit: totalCredit,
-        status: 'unposted' as const,
+        is_posted: 0,
       };
 
       let entryId: string;
@@ -244,7 +242,6 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           debit: parseAmount(l.debit),
           credit: parseAmount(l.credit),
           description: l.description.trim() || null,
-          line_order: i + 1,
         });
       }
 

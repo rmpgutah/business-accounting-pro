@@ -19,7 +19,7 @@ export default function PortalModule() {
   };
 
   const generateToken = async (clientId: string) => {
-    const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    const token = crypto.randomUUID();
     await api.update('clients', clientId, { portal_token: token });
     loadClients();
   };

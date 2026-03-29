@@ -70,18 +70,19 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
         // Query actual expenses per category within budget date range
         if (b && linesList.length > 0) {
           const expenseData = await api.rawQuery(
-            `SELECT category_name, COALESCE(SUM(amount), 0) as total
-             FROM expenses
-             WHERE date BETWEEN ? AND ?
-             GROUP BY category_name`,
+            `SELECT c.name as category, COALESCE(SUM(e.amount), 0) as total
+             FROM expenses e
+             LEFT JOIN categories c ON e.category_id = c.id
+             WHERE e.date BETWEEN ? AND ?
+             GROUP BY c.name`,
             [b.start_date, b.end_date]
           );
           if (cancelled) return;
           const map: Record<string, number> = {};
           if (Array.isArray(expenseData)) {
             for (const row of expenseData) {
-              if (row.category_name) {
-                map[row.category_name.toLowerCase()] = row.total || 0;
+              if (row.category) {
+                map[row.category.toLowerCase()] = row.total || 0;
               }
             }
           }

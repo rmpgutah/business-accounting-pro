@@ -2,7 +2,7 @@ import React from 'react';
 import { useCompanyStore } from '../../stores/companyStore';
 
 const StatusBar: React.FC = () => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   const fiscalYear = activeCompany?.fiscal_year_end
     ? `FY ${activeCompany.fiscal_year_end}`

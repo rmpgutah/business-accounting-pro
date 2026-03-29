@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download } from 'lucide-react';
 import api from '../../lib/api';
 import PaymentRecorder from './PaymentRecorder';
 
@@ -156,6 +156,18 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           <span className={badge.className}>{badge.label}</span>
         </div>
         <div className="module-actions">
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              try {
+                const result = await api.exportInvoicePdf(invoiceId);
+                if (result?.error) console.error(result.error);
+              } catch (err) { console.error('PDF export failed:', err); }
+            }}
+          >
+            <Download size={14} />
+            Export PDF
+          </button>
           {invoice.status === 'draft' && (
             <button
               className="block-btn flex items-center gap-2"

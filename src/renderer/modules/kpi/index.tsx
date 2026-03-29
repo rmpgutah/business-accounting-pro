@@ -49,7 +49,7 @@ const KPIDashboard: React.FC = () => {
           `SELECT COALESCE(SUM(total), 0) as total_revenue FROM invoices WHERE status IN ('paid', 'sent')`
         );
         const [hoursResult] = await api.rawQuery(
-          `SELECT COALESCE(SUM(duration_minutes), 0) as total_billable_minutes FROM time_entries WHERE billable = 1`
+          `SELECT COALESCE(SUM(duration_minutes), 0) as total_billable_minutes FROM time_entries WHERE is_billable = 1`
         );
         const [totalHoursResult] = await api.rawQuery(
           `SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries`
@@ -71,11 +71,11 @@ const KPIDashboard: React.FC = () => {
 
         // Monthly revenue trend (last 6 months)
         const monthlyResults = await api.rawQuery(
-          `SELECT strftime('%Y-%m', invoice_date) as month,
+          `SELECT strftime('%Y-%m', issue_date) as month,
                   COALESCE(SUM(total), 0) as total_revenue
            FROM invoices
            WHERE status IN ('paid', 'sent')
-             AND invoice_date >= date('now', '-6 months')
+             AND issue_date >= date('now', '-6 months')
            GROUP BY month
            ORDER BY month ASC`
         );

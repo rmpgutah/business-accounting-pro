@@ -67,7 +67,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
   onNewAccount,
   onEditAccount,
 }) => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

@@ -48,7 +48,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Component ──────────────────────────────────────────
 const ReconcileView: React.FC = () => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [selectedBankId, setSelectedBankId] = useState('');
   const [bankTxns, setBankTxns] = useState<BankTransaction[]>([]);
@@ -101,9 +101,9 @@ const ReconcileView: React.FC = () => {
         const bookData: any[] = await api.rawQuery(
           `SELECT
              jel.id,
-             je.entry_date,
-             je.memo,
-             (jel.debit_amount - jel.credit_amount) AS amount,
+             je.date AS entry_date,
+             je.description AS memo,
+             (jel.debit - jel.credit) AS amount,
              jel.journal_entry_id
            FROM journal_entry_lines jel
            JOIN journal_entries je ON je.id = jel.journal_entry_id
@@ -113,7 +113,7 @@ const ReconcileView: React.FC = () => {
                SELECT book_entry_id FROM bank_reconciliation_matches
                WHERE bank_account_id = ?
              )
-           ORDER BY je.entry_date DESC`,
+           ORDER BY je.date DESC`,
           [accountId, activeCompany.id, selectedBankId]
         );
         setBookEntries(bookData ?? []);

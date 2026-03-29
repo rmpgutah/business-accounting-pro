@@ -28,9 +28,72 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+// ─── Render helpers ─────────────────────────────────────
+const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
+  <tr className="bg-bg-tertiary/30">
+    <td
+      colSpan={2}
+      className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
+    >
+      {label}
+    </td>
+  </tr>
+);
+
+const PnLLineRow: React.FC<{
+  name: string;
+  amount: number;
+  indent?: number;
+  bold?: boolean;
+  accent?: string;
+}> = ({ name, amount, indent = 0, bold = false, accent }) => (
+  <tr className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
+    <td
+      className={`py-1.5 text-xs ${bold ? 'font-bold text-text-primary' : 'text-text-secondary'}`}
+      style={{ paddingLeft: `${24 + indent * 20}px` }}
+    >
+      {name}
+    </td>
+    <td
+      className={`py-1.5 text-right pr-6 font-mono text-xs ${
+        bold ? 'font-bold' : ''
+      } ${accent || 'text-text-primary'}`}
+    >
+      {fmt.format(amount)}
+    </td>
+  </tr>
+);
+
+const PnLSubtotalRow: React.FC<{
+  label: string;
+  amount: number;
+  accent?: string;
+  topBorder?: boolean;
+  doubleBorder?: boolean;
+}> = ({ label, amount, accent, topBorder, doubleBorder }) => (
+  <tr
+    className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
+  >
+    <td className="px-6 py-2 text-xs font-bold text-text-primary">
+      {label}
+    </td>
+    <td
+      className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
+    >
+      {fmt.format(amount)}
+    </td>
+  </tr>
+);
+
+const PnLSpacer: React.FC = () => (
+  <tr>
+    <td colSpan={2} className="py-1" />
+  </tr>
+);
+
 // ─── Component ──────────────────────────────────────────
 const ProfitAndLoss: React.FC = () => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [startDate, setStartDate] = useState(() =>
     format(startOfYear(new Date()), 'yyyy-MM-dd')
   );
@@ -60,7 +123,7 @@ const ProfitAndLoss: React.FC = () => {
              a.code AS account_code,
              a.type AS account_type,
              a.subtype AS subtype,
-             COALESCE(SUM(jel.credit_amount - jel.debit_amount), 0) AS total
+             COALESCE(SUM(jel.credit - jel.debit), 0) AS total
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
@@ -169,69 +232,6 @@ const ProfitAndLoss: React.FC = () => {
   );
   const netIncome = netOperatingIncome + totalOtherIncome - totalOtherExpenses;
 
-  // ─── Render helpers ─────────────────────────────────────
-  const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
-    <tr className="bg-bg-tertiary/30">
-      <td
-        colSpan={2}
-        className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
-      >
-        {label}
-      </td>
-    </tr>
-  );
-
-  const LineRow: React.FC<{
-    name: string;
-    amount: number;
-    indent?: number;
-    bold?: boolean;
-    accent?: string;
-  }> = ({ name, amount, indent = 0, bold = false, accent }) => (
-    <tr className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
-      <td
-        className={`py-1.5 text-xs ${bold ? 'font-bold text-text-primary' : 'text-text-secondary'}`}
-        style={{ paddingLeft: `${24 + indent * 20}px` }}
-      >
-        {name}
-      </td>
-      <td
-        className={`py-1.5 text-right pr-6 font-mono text-xs ${
-          bold ? 'font-bold' : ''
-        } ${accent || 'text-text-primary'}`}
-      >
-        {fmt.format(amount)}
-      </td>
-    </tr>
-  );
-
-  const SubtotalRow: React.FC<{
-    label: string;
-    amount: number;
-    accent?: string;
-    topBorder?: boolean;
-    doubleBorder?: boolean;
-  }> = ({ label, amount, accent, topBorder, doubleBorder }) => (
-    <tr
-      className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
-    >
-      <td className="px-6 py-2 text-xs font-bold text-text-primary">
-        {label}
-      </td>
-      <td
-        className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
-      >
-        {fmt.format(amount)}
-      </td>
-    </tr>
-  );
-
-  const Spacer: React.FC = () => (
-    <tr>
-      <td colSpan={2} className="py-1" />
-    </tr>
-  );
-
   // ─── Quick date presets ─────────────────────────────────
   const setPreset = (label: string) => {
     const now = new Date();
@@ -335,52 +335,52 @@ const ProfitAndLoss: React.FC = () => {
               {/* Revenue */}
               <SectionHeader label="Revenue" />
               {data.revenue.map((r) => (
-                <LineRow
+                <PnLLineRow
                   key={r.account_code}
                   name={r.account_name}
                   amount={r.total}
                   indent={1}
                 />
               ))}
-              <SubtotalRow
+              <PnLSubtotalRow
                 label="Total Revenue"
                 amount={totalRevenue}
                 accent="text-accent-income"
                 topBorder
               />
 
-              <Spacer />
+              <PnLSpacer />
 
               {/* Cost of Services */}
               {data.costOfServices.length > 0 && (
                 <>
                   <SectionHeader label="Cost of Goods / Services" />
                   {data.costOfServices.map((r) => (
-                    <LineRow
+                    <PnLLineRow
                       key={r.account_code}
                       name={r.account_name}
                       amount={Math.abs(r.total)}
                       indent={1}
                     />
                   ))}
-                  <SubtotalRow
+                  <PnLSubtotalRow
                     label="Total Cost of Services"
                     amount={totalCOS}
                     topBorder
                   />
-                  <Spacer />
+                  <PnLSpacer />
                 </>
               )}
 
               {/* Gross Profit */}
-              <SubtotalRow
+              <PnLSubtotalRow
                 label="Gross Profit"
                 amount={grossProfit}
                 accent={grossProfit >= 0 ? 'text-accent-income' : 'text-accent-expense'}
                 doubleBorder
               />
 
-              <Spacer />
+              <PnLSpacer />
 
               {/* Operating Expenses */}
               <SectionHeader label="Operating Expenses" />
@@ -398,7 +398,7 @@ const ProfitAndLoss: React.FC = () => {
                       </td>
                     </tr>
                     {items.map((r) => (
-                      <LineRow
+                      <PnLLineRow
                         key={r.account_code}
                         name={r.account_name}
                         amount={r.total}
@@ -407,17 +407,17 @@ const ProfitAndLoss: React.FC = () => {
                     ))}
                   </React.Fragment>
                 ))}
-              <SubtotalRow
+              <PnLSubtotalRow
                 label="Total Operating Expenses"
                 amount={totalOpex}
                 accent="text-accent-expense"
                 topBorder
               />
 
-              <Spacer />
+              <PnLSpacer />
 
               {/* Net Operating Income */}
-              <SubtotalRow
+              <PnLSubtotalRow
                 label="Net Operating Income"
                 amount={netOperatingIncome}
                 accent={
@@ -428,7 +428,7 @@ const ProfitAndLoss: React.FC = () => {
                 doubleBorder
               />
 
-              <Spacer />
+              <PnLSpacer />
 
               {/* Other Income / Expenses */}
               {(data.otherIncome.length > 0 ||
@@ -436,7 +436,7 @@ const ProfitAndLoss: React.FC = () => {
                 <>
                   <SectionHeader label="Other Income & Expenses" />
                   {data.otherIncome.map((r) => (
-                    <LineRow
+                    <PnLLineRow
                       key={r.account_code}
                       name={r.account_name}
                       amount={r.total}
@@ -444,19 +444,19 @@ const ProfitAndLoss: React.FC = () => {
                     />
                   ))}
                   {data.otherExpenses.map((r) => (
-                    <LineRow
+                    <PnLLineRow
                       key={r.account_code}
                       name={r.account_name}
                       amount={-r.total}
                       indent={1}
                     />
                   ))}
-                  <SubtotalRow
+                  <PnLSubtotalRow
                     label="Total Other Income/Expenses"
                     amount={totalOtherIncome - totalOtherExpenses}
                     topBorder
                   />
-                  <Spacer />
+                  <PnLSpacer />
                 </>
               )}
 

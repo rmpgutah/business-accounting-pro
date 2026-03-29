@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { FileText, Plus, Search } from 'lucide-react';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -62,6 +63,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   onViewInvoice,
   onEditInvoice,
 }) => {
+  const nav = useNavigation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
@@ -216,8 +218,16 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     onClick={() => onViewInvoice(inv.id)}
                   >
                     <td className="font-mono text-accent-blue">{inv.invoice_number}</td>
-                    <td className="text-text-primary">
-                      {clientMap.get(inv.client_id) ?? 'Unknown'}
+                    <td>
+                      <button
+                        className="text-accent-blue hover:underline text-left"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          nav.goToClient(inv.client_id);
+                        }}
+                      >
+                        {clientMap.get(inv.client_id) ?? 'Unknown'}
+                      </button>
                     </td>
                     <td className="text-text-secondary">{inv.issue_date}</td>
                     <td className="text-text-secondary">{inv.due_date}</td>

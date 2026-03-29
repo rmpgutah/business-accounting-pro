@@ -4,6 +4,7 @@ import { useCompanyStore } from './stores/companyStore';
 import api from './lib/api';
 import AppShell from './components/layout/AppShell';
 import CompanySetup from './components/onboarding/CompanySetup';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
@@ -74,7 +75,7 @@ const ModuleLoading = () => (
 
 // ─── Module Router ──────────────────────────────────────
 const ModuleView: React.FC = () => {
-  const { currentModule } = useAppStore();
+  const currentModule = useAppStore((s) => s.currentModule);
 
   const renderModule = () => {
     switch (currentModule) {
@@ -120,16 +121,21 @@ const ModuleView: React.FC = () => {
   };
 
   return (
-    <Suspense fallback={<ModuleLoading />}>
-      {renderModule()}
-    </Suspense>
+    <ErrorBoundary key={currentModule}>
+      <Suspense fallback={<ModuleLoading />}>
+        {renderModule()}
+      </Suspense>
+    </ErrorBoundary>
   );
 };
 
 // ─── App ────────────────────────────────────────────────
 const App: React.FC = () => {
-  const { loading, setLoading } = useAppStore();
-  const { companies, setCompanies, setActiveCompany } = useCompanyStore();
+  const loading = useAppStore((s) => s.loading);
+  const setLoading = useAppStore((s) => s.setLoading);
+  const companies = useCompanyStore((s) => s.companies);
+  const setCompanies = useCompanyStore((s) => s.setCompanies);
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
 
   useEffect(() => {
     const init = async () => {

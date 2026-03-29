@@ -80,7 +80,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
   onClose,
   onSaved,
 }) => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const isEdit = account !== null;
 
   const [code, setCode] = useState(account?.code ?? '');

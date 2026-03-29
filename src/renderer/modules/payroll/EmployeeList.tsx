@@ -39,6 +39,27 @@ const scheduleLabels: Record<string, string> = {
   monthly: 'Monthly',
 };
 
+// ─── Column Header (module-level to avoid re-creation) ──
+const SortableHeader: React.FC<{
+  field: SortField;
+  label: string;
+  activeSortField: SortField;
+  onSort: (field: SortField) => void;
+}> = ({ field, label, activeSortField, onSort }) => (
+  <th
+    className="cursor-pointer select-none hover:text-text-primary transition-colors"
+    onClick={() => onSort(field)}
+  >
+    <span className="inline-flex items-center gap-1">
+      {label}
+      <ArrowUpDown
+        size={12}
+        className={activeSortField === field ? 'text-accent-blue' : 'text-text-muted'}
+      />
+    </span>
+  </th>
+);
+
 // ─── Component ──────────────────────────────────────────
 const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmployee }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -111,22 +132,6 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
 
     return list;
   }, [employees, typeFilter, statusFilter, searchQuery, sortField, sortDir]);
-
-  // ─── Column Header ─────────────────────────────────
-  const SortableHeader: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
-    <th
-      className="cursor-pointer select-none hover:text-text-primary transition-colors"
-      onClick={() => handleSort(field)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        <ArrowUpDown
-          size={12}
-          className={sortField === field ? 'text-accent-blue' : 'text-text-muted'}
-        />
-      </span>
-    </th>
-  );
 
   // ─── Render ─────────────────────────────────────────
   return (
@@ -208,13 +213,13 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
           <table className="block-table">
             <thead>
               <tr>
-                <SortableHeader field="name" label="Name" />
-                <SortableHeader field="email" label="Email" />
-                <SortableHeader field="type" label="Type" />
-                <SortableHeader field="pay_type" label="Pay Type" />
-                <SortableHeader field="pay_rate" label="Pay Rate" />
-                <SortableHeader field="pay_schedule" label="Schedule" />
-                <SortableHeader field="status" label="Status" />
+                <SortableHeader field="name" label="Name" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="email" label="Email" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="type" label="Type" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="pay_type" label="Pay Type" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="pay_rate" label="Pay Rate" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="pay_schedule" label="Schedule" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="status" label="Status" activeSortField={sortField} onSort={handleSort} />
               </tr>
             </thead>
             <tbody>

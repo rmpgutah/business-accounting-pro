@@ -83,10 +83,10 @@ const TimeTracking: React.FC = () => {
     setLoading(true);
     const { start, end } = weekDateRange(weekStart);
     try {
-      const data = await api.query('time_entries', {
-        date_gte: start,
-        date_lte: end,
-      });
+      const data = await api.rawQuery(
+        'SELECT * FROM time_entries WHERE date >= ? AND date <= ? ORDER BY date DESC',
+        [start, end]
+      );
       if (Array.isArray(data)) {
         setEntries(data);
       }

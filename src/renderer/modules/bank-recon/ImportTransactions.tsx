@@ -87,7 +87,7 @@ function parseCSV(text: string): ParsedRow[] {
 
 // ─── Component ──────────────────────────────────────────
 const ImportTransactions: React.FC = () => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [selectedBankId, setSelectedBankId] = useState('');
   const [csvPath, setCsvPath] = useState('');

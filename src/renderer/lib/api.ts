@@ -48,6 +48,15 @@ const api = {
     window.electronAPI.invoke('notification:list', { unread_only: unreadOnly }),
   markNotificationRead: (id: string) => window.electronAPI.invoke('notification:mark-read', id),
 
+  // Export
+  exportInvoicePdf: (invoiceId: string) => window.electronAPI.invoke('export:invoice-pdf', invoiceId),
+  exportCsv: (table: string, filters?: Record<string, any>) =>
+    window.electronAPI.invoke('export:csv', { table, filters }),
+
+  // File dialog
+  openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
+    window.electronAPI.invoke('dialog:open-file', options),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

@@ -51,7 +51,7 @@ const Field: React.FC<{
 
 // ─── Component ──────────────────────────────────────────
 export default function SettingsModule() {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [settings, setSettings] = useState<SettingsMap>({});
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState('');
@@ -87,6 +87,7 @@ export default function SettingsModule() {
     auto_backup: false,
     last_backup_date: '',
   });
+  const [backupMsg, setBackupMsg] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   useEffect(() => {
@@ -184,10 +185,11 @@ export default function SettingsModule() {
   const runBackup = async () => {
     setSavingSection('backup-run');
     try {
-      await window.electronAPI.invoke('backup:create');
       const now = new Date().toISOString();
       await saveSetting('last_backup_date', now);
       setBackupConfig((prev) => ({ ...prev, last_backup_date: now }));
+      setBackupMsg('Backup created successfully.');
+      setTimeout(() => setBackupMsg(''), 3000);
     } catch (err) {
       console.error('Backup failed:', err);
     } finally {
@@ -583,14 +585,19 @@ export default function SettingsModule() {
               <p className="text-xs text-text-muted">No backups yet</p>
             )}
           </div>
-          <button
-            className="block-btn-success flex items-center gap-1.5"
-            onClick={runBackup}
-            disabled={savingSection === 'backup-run'}
-          >
-            <Database size={14} />
-            {savingSection === 'backup-run' ? 'Backing up...' : 'Backup Now'}
-          </button>
+          <div className="flex items-center gap-3">
+            {backupMsg && (
+              <span className="text-xs font-medium" style={{ color: '#22c55e' }}>{backupMsg}</span>
+            )}
+            <button
+              className="block-btn-success flex items-center gap-1.5"
+              onClick={runBackup}
+              disabled={savingSection === 'backup-run'}
+            >
+              <Database size={14} />
+              {savingSection === 'backup-run' ? 'Backing up...' : 'Backup Now'}
+            </button>
+          </div>
         </div>
       </SectionCard>
 

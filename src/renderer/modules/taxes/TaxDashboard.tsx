@@ -116,7 +116,7 @@ const TaxDashboard: React.FC = () => {
       try {
         const [incomeData, expenseData, payments] = await Promise.all([
           api.rawQuery(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM invoices WHERE status = 'paid' AND date BETWEEN ? AND ?`,
+            `SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE status = 'paid' AND issue_date BETWEEN ? AND ?`,
             [yearStart, yearEnd]
           ),
           api.rawQuery(

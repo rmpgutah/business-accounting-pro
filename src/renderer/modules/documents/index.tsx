@@ -68,6 +68,35 @@ const Documents: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  const handleUpload = async () => {
+    try {
+      const file = await api.openFileDialog();
+      if (!file) return; // user cancelled
+
+      const mimeType = file.name.endsWith('.pdf') ? 'application/pdf'
+        : file.name.endsWith('.png') ? 'image/png'
+        : file.name.endsWith('.jpg') || file.name.endsWith('.jpeg') ? 'image/jpeg'
+        : file.name.endsWith('.csv') ? 'text/csv'
+        : file.name.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/octet-stream';
+
+      const doc = await api.create('documents', {
+        filename: file.name,
+        file_path: file.path,
+        file_size: file.size,
+        mime_type: mimeType,
+        entity_type: '',
+        entity_id: '',
+        tags: '',
+        uploaded_at: new Date().toISOString(),
+      });
+
+      setDocuments((prev) => [doc, ...prev]);
+    } catch (err) {
+      console.error('Failed to upload document:', err);
+    }
+  };
+
   const filtered = useMemo(() => {
     return documents.filter((doc) => {
       if (search) {
@@ -109,7 +138,7 @@ const Documents: React.FC = () => {
             </p>
           </div>
         </div>
-        <button className="block-btn-primary flex items-center gap-2" onClick={() => alert('Upload functionality will be available when file system integration is configured.')}>
+        <button className="block-btn-primary flex items-center gap-2" onClick={handleUpload}>
           <Upload size={16} />
           Upload
         </button>

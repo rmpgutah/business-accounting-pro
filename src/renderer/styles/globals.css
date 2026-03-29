@@ -32,9 +32,6 @@
 }
 
 /* Base styles */
-* {
-  border-radius: 2px;
-}
 
 body {
   background-color: var(--color-bg-primary);

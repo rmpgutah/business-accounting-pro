@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { required, validateForm, minValue } from '../../lib/validation';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -57,9 +58,22 @@ const newLineItem = (): LineItem => ({
   account_id: '',
 });
 
-const generateInvoiceNumber = (): string => {
-  const num = Math.floor(1000 + Math.random() * 9000);
-  return `INV-${num}`;
+const fetchNextInvoiceNumber = async (): Promise<string> => {
+  try {
+    const rows = await api.rawQuery(
+      'SELECT invoice_number FROM invoices ORDER BY created_at DESC LIMIT 1'
+    );
+    if (rows && rows.length > 0) {
+      const last = rows[0].invoice_number as string;
+      const match = last.match(/(\d+)$/);
+      if (match) {
+        return `INV-${parseInt(match[1], 10) + 1}`;
+      }
+    }
+  } catch {
+    /* fall through to default */
+  }
+  return 'INV-1001';
 };
 
 const todayISO = (): string => new Date().toISOString().slice(0, 10);
@@ -84,10 +98,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<string[]>([]);
 
   const [form, setForm] = useState<InvoiceFormData>({
     client_id: '',
-    invoice_number: generateInvoiceNumber(),
+    invoice_number: '',
     issue_date: todayISO(),
     due_date: thirtyDaysLater(),
     terms: 'Net 30',
@@ -115,6 +130,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         if (cancelled) return;
         setClients(clientData ?? []);
         setAccounts(accountData ?? []);
+
+        if (!invoiceId) {
+          const nextNum = await fetchNextInvoiceNumber();
+          if (!cancelled) {
+            setForm((prev) => ({ ...prev, invoice_number: nextNum }));
+          }
+        }
 
         if (invoiceId) {
           const inv = await api.get('invoices', invoiceId);
@@ -212,14 +234,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   // ─── Save ────────────────────────────────────────────
   const handleSave = async (sendAfterSave: boolean) => {
-    if (!form.client_id) {
-      alert('Please select a client.');
+    const checks: Array<string | null> = [
+      required(form.client_id, 'Client'),
+      lines.every((l) => !l.description && l.unit_price === 0)
+        ? 'At least one line item is required'
+        : null,
+      ...lines
+        .filter((l) => l.description || l.unit_price > 0)
+        .map((l, i) =>
+          minValue(l.quantity * l.unit_price, 0.01, `Line item ${i + 1} amount`)
+        ),
+    ];
+    const validationErrors = validateForm(checks);
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
       return;
     }
-    if (lines.every((l) => !l.description && l.unit_price === 0)) {
-      alert('Please add at least one line item.');
-      return;
-    }
+    setErrors([]);
 
     setSaving(true);
     try {
@@ -318,6 +349,26 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           </button>
         </div>
       </div>
+
+      {/* Validation Errors */}
+      {errors.length > 0 && (
+        <div
+          style={{
+            background: '#2a1215',
+            border: '1px solid #ef4444',
+            borderRadius: '2px',
+            padding: '12px 16px',
+          }}
+        >
+          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
+            {errors.map((err, i) => (
+              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+                {err}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Invoice Header Fields */}
       <div className="block-card">

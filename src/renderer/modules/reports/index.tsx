@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
 import ReportSelector, { type ReportType } from './ReportSelector';
 import ProfitAndLoss from './ProfitAndLoss';
 import BalanceSheet from './BalanceSheet';
 import ExpenseByCategory from './ExpenseByCategory';
+
+const CashFlowStatement = React.lazy(() => import('./CashFlowStatement'));
+const ARAgingReport = React.lazy(() => import('./ARAgingReport'));
+const TaxSummary = React.lazy(() => import('./TaxSummary'));
 
 // ─── Report title map ───────────────────────────────────
 const REPORT_TITLES: Record<ReportType, string> = {
@@ -15,18 +19,10 @@ const REPORT_TITLES: Record<ReportType, string> = {
   'tax-summary': 'Tax Summary',
 };
 
-// ─── Placeholder for unimplemented reports ──────────────
-const ReportPlaceholder: React.FC<{ title: string }> = ({ title }) => (
-  <div className="flex items-center justify-center h-64">
-    <div
-      className="block-card p-8 text-center"
-      style={{ borderRadius: '2px' }}
-    >
-      <h2 className="text-lg font-bold text-text-primary mb-1">{title}</h2>
-      <p className="text-sm text-text-muted">
-        This report is coming soon.
-      </p>
-    </div>
+// ─── Lazy loading fallback ───────────────────────────────
+const LazyFallback: React.FC = () => (
+  <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">
+    Loading report...
   </div>
 );
 
@@ -43,11 +39,11 @@ const ReportsModule: React.FC = () => {
       case 'expense-by-category':
         return <ExpenseByCategory />;
       case 'cash-flow':
-        return <ReportPlaceholder title="Cash Flow Statement" />;
+        return <Suspense fallback={<LazyFallback />}><CashFlowStatement /></Suspense>;
       case 'ar-aging':
-        return <ReportPlaceholder title="Accounts Receivable Aging" />;
+        return <Suspense fallback={<LazyFallback />}><ARAgingReport /></Suspense>;
       case 'tax-summary':
-        return <ReportPlaceholder title="Tax Summary" />;
+        return <Suspense fallback={<LazyFallback />}><TaxSummary /></Suspense>;
       default:
         return null;
     }

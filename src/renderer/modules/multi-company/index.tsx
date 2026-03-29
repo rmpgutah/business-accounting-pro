@@ -20,7 +20,9 @@ interface Company {
 
 // ─── Multi-Company Component ────────────────────────────
 const MultiCompany: React.FC = () => {
-  const { activeCompany, setActiveCompany, setCompanies } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
+  const setCompanies = useCompanyStore((s) => s.setCompanies);
   const [companies, setLocalCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);

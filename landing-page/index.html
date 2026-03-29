@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Accounting Pro - Professional Desktop Accounting Software</title>
+  <meta name="description" content="Free professional accounting software for small businesses. Income tracking, invoicing, payroll, tax preparation, bank reconciliation and more. Download for Mac or Windows.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#050508;--bg-card:#0e0e14;--bg-elevated:#15151e;
+      --border:#1e1e2e;--border-accent:#6366f1;
+      --text:#e4e4ef;--text-dim:#8888a0;--text-bright:#ffffff;
+      --accent:#6366f1;--accent-hover:#818cf8;
+      --green:#22c55e;--blue:#3b82f6;--purple:#a855f7;
+    }
+    html{scroll-behavior:smooth}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{color:var(--accent-hover)}
+
+    /* NAV */
+    nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(5,5,8,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 2rem;height:60px;display:flex;align-items:center;justify-content:space-between}
+    .nav-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:var(--text-bright)}
+    .nav-brand svg{width:28px;height:28px}
+    .nav-links{display:flex;gap:2rem;align-items:center}
+    .nav-links a{color:var(--text-dim);font-size:0.9rem;font-weight:500;transition:color 0.2s}
+    .nav-links a:hover{color:var(--text-bright)}
+    .btn-nav{background:var(--accent);color:#fff!important;padding:8px 20px;border-radius:2px;font-weight:600;font-size:0.85rem;transition:background 0.2s}
+    .btn-nav:hover{background:var(--accent-hover)}
+
+    /* HERO */
+    .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 2rem 80px;position:relative;overflow:hidden}
+    .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%);pointer-events:none}
+    .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);padding:6px 16px;border-radius:2px;font-size:0.8rem;color:var(--text-dim);margin-bottom:2rem}
+    .hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+    .hero h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;line-height:1.1;color:var(--text-bright);margin-bottom:1.5rem;letter-spacing:-0.03em}
+    .hero h1 span{background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .hero p{font-size:1.2rem;color:var(--text-dim);max-width:600px;margin-bottom:3rem}
+    .hero-buttons{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+    .btn-primary{background:var(--accent);color:#fff;padding:14px 32px;border-radius:2px;font-weight:700;font-size:1rem;border:none;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:10px}
+    .btn-primary:hover{background:var(--accent-hover);transform:translateY(-1px)}
+    .btn-primary svg{width:20px;height:20px}
+    .btn-secondary{background:transparent;color:var(--text);padding:14px 32px;border-radius:2px;font-weight:600;font-size:1rem;border:1px solid var(--border);cursor:pointer;transition:all 0.2s}
+    .btn-secondary:hover{border-color:var(--accent);color:var(--text-bright)}
+    .hero-stats{display:flex;gap:3rem;margin-top:4rem;padding-top:2rem;border-top:1px solid var(--border)}
+    .hero-stat{text-align:center}
+    .hero-stat .num{font-size:1.8rem;font-weight:800;color:var(--text-bright)}
+    .hero-stat .label{font-size:0.8rem;color:var(--text-dim);margin-top:2px}
+
+    /* SCREENSHOT */
+    .screenshot-section{padding:0 2rem 6rem;display:flex;justify-content:center}
+    .screenshot-wrap{max-width:1100px;width:100%;border-radius:4px;overflow:hidden;border:1px solid var(--border);background:var(--bg-card);box-shadow:0 40px 80px rgba(0,0,0,0.5)}
+    .screenshot-bar{height:36px;background:var(--bg-elevated);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:8px}
+    .screenshot-dot{width:12px;height:12px;border-radius:50%;background:#333}
+    .screenshot-dot:nth-child(1){background:#ff5f57}
+    .screenshot-dot:nth-child(2){background:#febc2e}
+    .screenshot-dot:nth-child(3){background:#28c840}
+    .screenshot-body{aspect-ratio:16/9;background:var(--bg);display:flex;overflow:hidden}
+    .mock-sidebar{width:220px;background:var(--bg-card);border-right:1px solid var(--border);padding:20px 0}
+    .mock-sidebar-item{padding:10px 20px;font-size:0.8rem;color:var(--text-dim);display:flex;align-items:center;gap:10px}
+    .mock-sidebar-item.active{background:var(--bg-elevated);color:var(--accent);border-left:2px solid var(--accent)}
+    .mock-sidebar-icon{width:16px;height:16px;background:var(--border);border-radius:2px}
+    .mock-sidebar-item.active .mock-sidebar-icon{background:var(--accent)}
+    .mock-main{flex:1;padding:24px;display:flex;flex-direction:column;gap:16px}
+    .mock-header{height:32px;display:flex;justify-content:space-between;align-items:center}
+    .mock-title{width:180px;height:20px;background:var(--bg-elevated);border-radius:2px}
+    .mock-btn{width:100px;height:28px;background:var(--accent);border-radius:2px;opacity:0.7}
+    .mock-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .mock-card{background:var(--bg-card);border:1px solid var(--border);border-radius:2px;padding:16px}
+    .mock-card-label{width:60%;height:10px;background:var(--border);border-radius:2px;margin-bottom:10px}
+    .mock-card-value{width:40%;height:18px;background:var(--bg-elevated);border-radius:2px}
+    .mock-card:nth-child(1) .mock-card-value{background:rgba(34,197,94,0.2)}
+    .mock-card:nth-child(2) .mock-card-value{background:rgba(59,130,246,0.2)}
+    .mock-card:nth-child(3) .mock-card-value{background:rgba(168,85,247,0.2)}
+    .mock-card:nth-child(4) .mock-card-value{background:rgba(99,102,241,0.2)}
+    .mock-table{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:2px;overflow:hidden}
+    .mock-table-header{height:36px;background:var(--bg-elevated);display:flex;align-items:center;padding:0 16px;gap:20%}
+    .mock-table-col{width:15%;height:8px;background:var(--border);border-radius:2px}
+    .mock-table-row{height:40px;display:flex;align-items:center;padding:0 16px;gap:20%;border-bottom:1px solid var(--border)}
+    .mock-table-cell{width:15%;height:8px;background:var(--bg-elevated);border-radius:2px;opacity:0.5}
+
+    /* FEATURES */
+    .features{padding:6rem 2rem;max-width:1200px;margin:0 auto}
+    .section-label{font-size:0.8rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem}
+    .section-title{font-size:2.5rem;font-weight:800;color:var(--text-bright);margin-bottom:1rem;letter-spacing:-0.02em}
+    .section-desc{font-size:1.1rem;color:var(--text-dim);max-width:600px;margin-bottom:3rem}
+    .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem}
+    .feature-card{background:var(--bg-card);border:1px solid var(--border);border-radius:2px;padding:2rem;transition:all 0.3s}
+    .feature-card:hover{border-color:var(--border-accent);transform:translateY(-2px)}
+    .feature-icon{width:44px;height:44px;border-radius:2px;display:flex;align-items:center;justify-content:center;margin-bottom:1.2rem;font-size:1.4rem}
+    .feature-icon.green{background:rgba(34,197,94,0.1);color:var(--green)}
+    .feature-icon.blue{background:rgba(59,130,246,0.1);color:var(--blue)}
+    .feature-icon.purple{background:rgba(168,85,247,0.1);color:var(--purple)}
+    .feature-icon.accent{background:rgba(99,102,241,0.1);color:var(--accent)}
+    .feature-card h3{font-size:1.1rem;font-weight:700;color:var(--text-bright);margin-bottom:0.6rem}
+    .feature-card p{font-size:0.9rem;color:var(--text-dim);line-height:1.6}
+
+    /* MODULES */
+    .modules{padding:6rem 2rem;background:var(--bg-card);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .modules-inner{max-width:1200px;margin:0 auto}
+    .modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem}
+    .module-chip{background:var(--bg-elevated);border:1px solid var(--border);border-radius:2px;padding:12px 16px;font-size:0.85rem;color:var(--text);display:flex;align-items:center;gap:8px;transition:border-color 0.2s}
+    .module-chip:hover{border-color:var(--accent)}
+    .module-chip .check{color:var(--green);font-weight:bold}
+
+    /* DOWNLOAD */
+    .download{padding:6rem 2rem;max-width:900px;margin:0 auto;text-align:center}
+    .download-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;margin-top:3rem}
+    .download-card{background:var(--bg-card);border:1px solid var(--border);border-radius:2px;padding:2.5rem 2rem;text-align:center;transition:all 0.3s}
+    .download-card:hover{border-color:var(--accent)}
+    .download-card .os-icon{font-size:3rem;margin-bottom:1rem}
+    .download-card h3{font-size:1.3rem;font-weight:700;color:var(--text-bright);margin-bottom:0.3rem}
+    .download-card .version{font-size:0.8rem;color:var(--text-dim);margin-bottom:1.5rem}
+    .download-card .btn-dl{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;padding:12px 28px;border-radius:2px;font-weight:600;font-size:0.9rem;border:none;cursor:pointer;transition:background 0.2s;width:100%;justify-content:center}
+    .download-card .btn-dl:hover{background:var(--accent-hover)}
+    .download-card .alt-links{margin-top:0.8rem;font-size:0.8rem;color:var(--text-dim)}
+    .download-card .alt-links a{color:var(--text-dim);text-decoration:underline}
+    .download-card .alt-links a:hover{color:var(--accent)}
+
+    /* FOOTER */
+    footer{padding:3rem 2rem;border-top:1px solid var(--border);text-align:center;color:var(--text-dim);font-size:0.85rem}
+    footer a{color:var(--text-dim)}
+    footer a:hover{color:var(--text-bright)}
+
+    /* RESPONSIVE */
+    @media(max-width:768px){
+      .nav-links a:not(.btn-nav){display:none}
+      .hero-stats{flex-direction:column;gap:1.5rem}
+      .mock-sidebar{display:none}
+      .mock-cards{grid-template-columns:repeat(2,1fr)}
+      .features-grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">
+    <svg viewBox="0 0 1024 1024" fill="none"><rect width="1024" height="1024" rx="220" fill="#0e0e14"/><text x="512" y="620" text-anchor="middle" font-family="system-ui" font-weight="800" font-size="580" fill="#6366f1">$</text></svg>
+    Business Accounting Pro
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#modules">Modules</a>
+    <a href="#download" class="btn-nav">Download Free</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot"></span>
+    v1.0.0 -- Free Desktop Software
+  </div>
+  <h1>Professional Accounting<br>for <span>Your Business</span></h1>
+  <p>Complete financial management that runs on your computer. Invoicing, payroll, taxes, bank reconciliation, and 27 integrated modules. No cloud fees. Your data stays yours.</p>
+  <div class="hero-buttons">
+    <a href="#download" class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Free
+    </a>
+    <a href="#features" class="btn-secondary">See Features</a>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="num">27</div><div class="label">Integrated Modules</div></div>
+    <div class="hero-stat"><div class="num">100%</div><div class="label">Offline / Local</div></div>
+    <div class="hero-stat"><div class="num">$0</div><div class="label">Forever Free</div></div>
+  </div>
+</section>
+
+<!-- SCREENSHOT MOCK -->
+<section class="screenshot-section">
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar">
+      <span class="screenshot-dot"></span>
+      <span class="screenshot-dot"></span>
+      <span class="screenshot-dot"></span>
+    </div>
+    <div class="screenshot-body">
+      <div class="mock-sidebar">
+        <div class="mock-sidebar-item active"><div class="mock-sidebar-icon"></div>Dashboard</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Accounts</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Invoicing</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Expenses</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Payroll</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Taxes</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Reports</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Bank Recon</div>
+        <div class="mock-sidebar-item"><div class="mock-sidebar-icon"></div>Clients</div>
+      </div>
+      <div class="mock-main">
+        <div class="mock-header"><div class="mock-title"></div><div class="mock-btn"></div></div>
+        <div class="mock-cards">
+          <div class="mock-card"><div class="mock-card-label"></div><div class="mock-card-value"></div></div>
+          <div class="mock-card"><div class="mock-card-label"></div><div class="mock-card-value"></div></div>
+          <div class="mock-card"><div class="mock-card-label"></div><div class="mock-card-value"></div></div>
+          <div class="mock-card"><div class="mock-card-label"></div><div class="mock-card-value"></div></div>
+        </div>
+        <div class="mock-table">
+          <div class="mock-table-header"><div class="mock-table-col"></div><div class="mock-table-col"></div><div class="mock-table-col"></div></div>
+          <div class="mock-table-row"><div class="mock-table-cell"></div><div class="mock-table-cell"></div><div class="mock-table-cell"></div></div>
+          <div class="mock-table-row"><div class="mock-table-cell"></div><div class="mock-table-cell"></div><div class="mock-table-cell"></div></div>
+          <div class="mock-table-row"><div class="mock-table-cell"></div><div class="mock-table-cell"></div><div class="mock-table-cell"></div></div>
+          <div class="mock-table-row"><div class="mock-table-cell"></div><div class="mock-table-cell"></div><div class="mock-table-cell"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-label">Why Business Accounting Pro</div>
+  <div class="section-title">Everything you need. Nothing you don't.</div>
+  <div class="section-desc">Built for small businesses, freelancers, and accountants who want powerful tools without monthly subscriptions.</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon green">$</div>
+      <h3>Double-Entry Bookkeeping</h3>
+      <p>Full chart of accounts with journal entries, debit/credit validation, and real-time balance verification. GAAP-compliant from day one.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue">&#9993;</div>
+      <h3>Professional Invoicing</h3>
+      <p>Create, send, and track invoices with line items, tax calculations, payment recording, and automatic status updates from draft to paid.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon purple">&#128188;</div>
+      <h3>Payroll Processing</h3>
+      <p>3-step payroll wizard with federal bracket calculations, Social Security, Medicare, state withholding, and pay stub generation.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon accent">&#128202;</div>
+      <h3>Financial Reports</h3>
+      <p>P&L, Balance Sheet, Cash Flow, AR Aging, Expense by Category, and Tax Summary. Date-range filtering and export support.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green">&#127974;</div>
+      <h3>Bank Reconciliation</h3>
+      <p>Import bank transactions via CSV, auto-match with book entries, and reconcile with visual side-by-side comparison.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue">&#128200;</div>
+      <h3>Tax Preparation</h3>
+      <p>Year-to-date tracking, Schedule C categories, quarterly estimated payments, federal bracket breakdown, and self-employment tax.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon purple">&#128338;</div>
+      <h3>Time Tracking</h3>
+      <p>Live timer, manual entries, billable/non-billable tracking, weekly summaries with bar charts, and client/project assignment.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon accent">&#128274;</div>
+      <h3>100% Local &amp; Private</h3>
+      <p>All data stored in SQLite on your machine. No cloud dependency, no subscription, no one else touches your financial data. Ever.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green">&#128187;</div>
+      <h3>Cross-Platform</h3>
+      <p>Native desktop app for macOS (Intel + Apple Silicon) and Windows. Runs fast, works offline, backs up locally.</p>
+    </div>
+  </div>
+</section>
+
+<!-- MODULES -->
+<section class="modules" id="modules">
+  <div class="modules-inner">
+    <div class="section-label">27 Integrated Modules</div>
+    <div class="section-title">Complete business accounting platform</div>
+    <div class="section-desc">Every module works together. Create an invoice from a client profile. Track project expenses. Run payroll and see the impact on your P&L instantly.</div>
+    <div class="modules-grid">
+      <div class="module-chip"><span class="check">&#10003;</span> Dashboard &amp; KPIs</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Chart of Accounts</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Journal Entries</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Invoicing</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Expense Tracking</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Payroll</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Tax Dashboard</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Bank Reconciliation</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Client Management</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Project Tracking</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Time Tracking</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Budgets</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Financial Reports</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Custom Reports</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Forecasting</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Documents</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Recurring Templates</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Vendor Management</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Inventory</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Multi-Company</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Audit Log</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Email Templates</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Client Portal</div>
+      <div class="module-chip"><span class="check">&#10003;</span> API Integration</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Stripe Connect</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Settings</div>
+      <div class="module-chip"><span class="check">&#10003;</span> Notifications</div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download" id="download">
+  <div class="section-label">Get Started</div>
+  <div class="section-title">Download Business Accounting Pro</div>
+  <div class="section-desc" style="margin:0 auto 1rem">Free. No account required. No strings attached.</div>
+  <div class="download-cards">
+    <div class="download-card">
+      <div class="os-icon">&#63743;</div>
+      <h3>macOS</h3>
+      <div class="version">v1.0.0 &middot; Intel &amp; Apple Silicon</div>
+      <a href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.0.0/BusinessAccountingPro-1.0.0-arm64.dmg" class="btn-dl">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download DMG (Apple Silicon)
+      </a>
+      <div class="alt-links">
+        <a href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.0.0/BusinessAccountingPro-1.0.0-x64.dmg">Intel Mac (x64)</a>
+      </div>
+    </div>
+    <div class="download-card">
+      <div class="os-icon">&#9783;</div>
+      <h3>Windows</h3>
+      <div class="version">v1.0.0 &middot; Windows 10+</div>
+      <a href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.0.0/BusinessAccountingPro-Setup-1.0.0.exe" class="btn-dl">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Installer
+      </a>
+      <div class="alt-links">
+        <a href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.0.0/BusinessAccountingPro-Setup-1.0.0.exe">Portable ZIP</a>
+      </div>
+    </div>
+  </div>
+  <p style="margin-top:2rem;font-size:0.85rem;color:var(--text-dim)">
+    All releases available on <a href="https://github.com/rmpgutah/business-accounting-pro/releases">GitHub Releases</a>
+  </p>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>&copy; 2026 RMPG &middot; Business Accounting Pro &middot; <a href="https://rmpgutah.us">rmpgutah.us</a></p>
+</footer>
+
+</body>
+</html>

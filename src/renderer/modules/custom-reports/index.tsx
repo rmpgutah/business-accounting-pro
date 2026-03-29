@@ -43,6 +43,7 @@ export default function CustomReportsModule() {
   const [config, setConfig] = useState<ReportConfig>({ ...defaultConfig });
   const [results, setResults] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const availableFields = AVAILABLE_FIELDS[config.table] || [];
 
@@ -77,6 +78,31 @@ export default function CustomReportsModule() {
   };
 
   const runReport = async () => {
+    setError('');
+    // Validate table name is in the allowed list
+    if (!(config.table in AVAILABLE_FIELDS)) {
+      setError(`Invalid data source: "${config.table}"`);
+      return;
+    }
+    // Validate all selected fields are in the allowed list for this table
+    const allowed = AVAILABLE_FIELDS[config.table];
+    const invalidFields = config.fields.filter((f) => !allowed.includes(f));
+    if (invalidFields.length > 0) {
+      setError(`Invalid fields for ${config.table}: ${invalidFields.join(', ')}`);
+      return;
+    }
+    // Validate filter fields, groupBy, and sortField
+    const allReferencedFields = [
+      ...config.filters.map((f) => f.field),
+      config.groupBy,
+      config.sortField,
+    ].filter(Boolean);
+    const invalidRefs = allReferencedFields.filter((f) => !allowed.includes(f));
+    if (invalidRefs.length > 0) {
+      setError(`Invalid referenced fields: ${invalidRefs.join(', ')}`);
+      return;
+    }
+
     setLoading(true);
     try {
       const selectFields = config.fields.length > 0 ? config.fields.join(', ') : '*';
@@ -138,6 +164,20 @@ export default function CustomReportsModule() {
           )}
         </div>
       </div>
+
+      {error && (
+        <div
+          style={{
+            background: '#2a1215',
+            border: '1px solid #ef4444',
+            borderRadius: '2px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+          }}
+        >
+          <p style={{ color: '#ef4444', fontSize: '13px', margin: 0 }}>{error}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-6">
         {/* Config Panel */}

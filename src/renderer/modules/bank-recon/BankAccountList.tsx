@@ -31,7 +31,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Component ──────────────────────────────────────────
 const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
 

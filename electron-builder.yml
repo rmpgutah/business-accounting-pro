@@ -1,6 +1,6 @@
-appId: com.bap.businessaccountingpro
+appId: com.rmpg.businessaccountingpro
 productName: Business Accounting Pro
-copyright: Copyright 2026
+copyright: Copyright 2026 RMPG
 directories:
   output: release
   buildResources: build
@@ -8,14 +8,46 @@ files:
   - dist/**/*
   - node_modules/**/*
   - package.json
+extraResources:
+  - from: src/main/database/schema.sql
+    to: schema.sql
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**
 mac:
   category: public.app-category.finance
+  icon: build/icon.icns
+  darkModeSupport: true
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+dmg:
+  title: Business Accounting Pro
+  artifactName: BusinessAccountingPro-${version}-${arch}.${ext}
 win:
+  icon: build/icon.ico
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  artifactName: BusinessAccountingPro-Setup-${version}.${ext}
+  shortcutName: Business Accounting Pro
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+    - deb
+  category: Finance

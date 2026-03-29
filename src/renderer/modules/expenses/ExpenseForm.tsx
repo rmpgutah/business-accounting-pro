@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Receipt, DollarSign } from 'lucide-react';
+import { ArrowLeft, Receipt, DollarSign, Paperclip, X } from 'lucide-react';
 import api from '../../lib/api';
+import { required, validateForm, minValue } from '../../lib/validation';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -66,6 +67,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [clients, setClients] = useState<DropdownOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [receiptPath, setReceiptPath] = useState<string>('');
 
   const isEditing = !!expenseId;
 
@@ -91,6 +94,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         if (expenseId) {
           const existing = await api.get('expenses', expenseId);
           if (existing && !cancelled) {
+            setReceiptPath(existing.receipt_path || '');
             setForm({
               date: existing.date || emptyForm.date,
               amount: existing.amount?.toString() || '',
@@ -132,6 +136,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
+
+    const checks: Array<string | null> = [
+      minValue(parseFloat(form.amount) || 0, 0.01, 'Amount'),
+      required(form.date, 'Date'),
+    ];
+    const validationErrors = validateForm(checks);
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors([]);
+
     setSaving(true);
 
     try {
@@ -148,6 +164,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         client_id: form.client_id || null,
         is_billable: form.is_billable,
         reference: form.reference || null,
+        receipt_path: receiptPath || null,
         tags: form.tags
           ? form.tags.split(',').map((t) => t.trim()).filter(Boolean)
           : [],
@@ -194,6 +211,26 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           </div>
         </div>
       </div>
+
+      {/* Validation Errors */}
+      {errors.length > 0 && (
+        <div
+          style={{
+            background: '#2a1215',
+            border: '1px solid #ef4444',
+            borderRadius: '2px',
+            padding: '12px 16px',
+          }}
+        >
+          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
+            {errors.map((err, i) => (
+              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+                {err}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="block-card p-6">
@@ -420,18 +457,52 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             </label>
           </div>
 
-          {/* Receipt Attachment Placeholder */}
+          {/* Receipt Attachment */}
           <div className="col-span-3">
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
               Receipt Attachment
             </label>
-            <div
-              className="border border-dashed border-border-secondary flex items-center justify-center py-8 text-text-muted text-sm cursor-pointer hover:border-border-focus hover:bg-bg-hover transition-colors"
-              style={{ borderRadius: '2px' }}
-            >
-              <Receipt size={16} className="mr-2" />
-              Click or drag to attach receipt (coming soon)
-            </div>
+            {receiptPath ? (
+              <div
+                className="border border-border-secondary flex items-center justify-between px-4 py-3 bg-bg-tertiary"
+                style={{ borderRadius: '2px' }}
+              >
+                <div className="flex items-center gap-2 text-sm text-text-secondary truncate">
+                  <Paperclip size={14} className="text-accent-blue shrink-0" />
+                  <span className="truncate">{receiptPath.split(/[/\\]/).pop()}</span>
+                </div>
+                <button
+                  type="button"
+                  className="text-text-muted hover:text-accent-expense transition-colors p-1"
+                  onClick={() => setReceiptPath('')}
+                  title="Remove receipt"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div
+                className="border border-dashed border-border-secondary flex items-center justify-center py-8 text-text-muted text-sm cursor-pointer hover:border-border-focus hover:bg-bg-hover transition-colors"
+                style={{ borderRadius: '2px' }}
+                onClick={async () => {
+                  try {
+                    const result = await api.openFileDialog({
+                      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'pdf'] }],
+                    });
+                    if (result && typeof result === 'string') {
+                      setReceiptPath(result);
+                    } else if (Array.isArray(result) && result.length > 0) {
+                      setReceiptPath(result[0]);
+                    }
+                  } catch (err) {
+                    console.error('Failed to open file dialog:', err);
+                  }
+                }}
+              >
+                <Receipt size={16} className="mr-2" />
+                Click to attach receipt
+              </div>
+            )}
           </div>
         </div>
 

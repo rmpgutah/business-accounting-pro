@@ -105,7 +105,10 @@ const sections: NavSection[] = [
 ];
 
 const Sidebar: React.FC = () => {
-  const { currentModule, setModule, sidebarCollapsed, toggleSidebar } = useAppStore();
+  const currentModule = useAppStore((s) => s.currentModule);
+  const setModule = useAppStore((s) => s.setModule);
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
 
   return (
     <aside

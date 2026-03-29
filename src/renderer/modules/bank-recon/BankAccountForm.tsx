@@ -23,7 +23,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
   onSave,
   onCancel,
 }) => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const isEditing = !!account;
 
   const [name, setName] = useState(account?.name ?? '');

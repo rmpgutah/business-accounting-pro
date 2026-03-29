@@ -7,12 +7,11 @@ import { v4 as uuid } from 'uuid';
 let db: Database.Database | null = null;
 let currentCompanyId: string | null = null;
 
-export function getDbPath(companyId?: string): string {
+export function getDbPath(): string {
   const userDataPath = app.getPath('userData');
   const dbDir = path.join(userDataPath, 'databases');
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  const dbName = companyId ? `company_${companyId}.db` : 'main.db';
-  return path.join(dbDir, dbName);
+  return path.join(dbDir, 'accounting.db');
 }
 
 export function getDb(): Database.Database {
@@ -20,8 +19,8 @@ export function getDb(): Database.Database {
   return db;
 }
 
-export function initDatabase(companyId?: string): Database.Database {
-  const dbPath = getDbPath(companyId);
+export function initDatabase(): Database.Database {
+  const dbPath = getDbPath();
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -33,13 +32,11 @@ export function initDatabase(companyId?: string): Database.Database {
     db.exec(schema);
   }
 
-  currentCompanyId = companyId || null;
   return db;
 }
 
-export function switchCompany(companyId: string): Database.Database {
-  if (db) db.close();
-  return initDatabase(companyId);
+export function switchCompany(companyId: string): void {
+  currentCompanyId = companyId;
 }
 
 export function getCurrentCompanyId(): string | null {
@@ -64,6 +61,22 @@ export function queryAll(
     } else if (Array.isArray(value)) {
       conditions.push(`${key} IN (${value.map(() => '?').join(',')})`);
       params.push(...value);
+    } else if (key.endsWith('_gte')) {
+      const col = key.slice(0, -4);
+      conditions.push(`${col} >= ?`);
+      params.push(value);
+    } else if (key.endsWith('_lte')) {
+      const col = key.slice(0, -4);
+      conditions.push(`${col} <= ?`);
+      params.push(value);
+    } else if (key.endsWith('_like')) {
+      const col = key.slice(0, -5);
+      conditions.push(`${col} LIKE ?`);
+      params.push(value);
+    } else if (key.endsWith('_ne')) {
+      const col = key.slice(0, -3);
+      conditions.push(`${col} != ?`);
+      params.push(value);
     } else {
       conditions.push(`${key} = ?`);
       params.push(value);

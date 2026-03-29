@@ -127,6 +127,31 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+// ─── Step Indicator (module-level to avoid re-creation) ─
+const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
+  <div className="flex items-center gap-2 mb-6">
+    {[1, 2, 3].map((s) => (
+      <React.Fragment key={s}>
+        <div
+          className={`w-8 h-8 flex items-center justify-center text-xs font-bold border-2 ${
+            currentStep >= s
+              ? 'bg-accent-blue border-accent-blue text-white'
+              : 'border-border-primary text-text-muted'
+          }`}
+          style={{ borderRadius: '2px' }}
+        >
+          {s}
+        </div>
+        {s < 3 && (
+          <div
+            className={`flex-1 h-0.5 ${currentStep > s ? 'bg-accent-blue' : 'bg-border-primary'}`}
+          />
+        )}
+      </React.Fragment>
+    ))}
+  </div>
+);
+
 // ─── Component ──────────────────────────────────────────
 const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => {
   const [step, setStep] = useState(1);
@@ -245,31 +270,6 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     }
   };
 
-  // ─── Step Indicator ───────────────────────────────────
-  const StepIndicator: React.FC = () => (
-    <div className="flex items-center gap-2 mb-6">
-      {[1, 2, 3].map((s) => (
-        <React.Fragment key={s}>
-          <div
-            className={`w-8 h-8 flex items-center justify-center text-xs font-bold border-2 ${
-              step >= s
-                ? 'bg-accent-blue border-accent-blue text-white'
-                : 'border-border-primary text-text-muted'
-            }`}
-            style={{ borderRadius: '2px' }}
-          >
-            {s}
-          </div>
-          {s < 3 && (
-            <div
-              className={`flex-1 h-0.5 ${step > s ? 'bg-accent-blue' : 'bg-border-primary'}`}
-            />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -295,7 +295,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         </div>
       </div>
 
-      <StepIndicator />
+      <StepIndicator currentStep={step} />
 
       {error && (
         <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '2px' }}>

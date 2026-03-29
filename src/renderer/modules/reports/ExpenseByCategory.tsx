@@ -36,7 +36,7 @@ const BAR_COLORS = [
 
 // ─── Component ──────────────────────────────────────────
 const ExpenseByCategory: React.FC = () => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [startDate, setStartDate] = useState(() =>
     format(startOfYear(new Date()), 'yyyy-MM-dd')
   );
@@ -57,7 +57,7 @@ const ExpenseByCategory: React.FC = () => {
         const rows: any[] = await api.rawQuery(
           `SELECT
              COALESCE(a.subtype, 'Uncategorized') AS category,
-             COALESCE(SUM(ABS(jel.debit_amount - jel.credit_amount)), 0) AS amount
+             COALESCE(SUM(ABS(jel.debit - jel.credit)), 0) AS amount
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id

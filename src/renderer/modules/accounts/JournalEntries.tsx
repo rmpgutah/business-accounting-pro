@@ -11,7 +11,7 @@ interface JournalEntry {
   description: string;
   total_debit: number;
   total_credit: number;
-  status: 'posted' | 'unposted';
+  is_posted: number;
   created_at: string;
 }
 
@@ -33,7 +33,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
   onNewEntry,
   onEditEntry,
 }) => {
-  const { activeCompany } = useCompanyStore();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,13 +207,13 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                 <td className="px-4 py-2 text-center">
                   <span
                     className={`inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                      entry.status === 'posted'
+                      entry.is_posted === 1
                         ? 'bg-accent-income/15 text-accent-income'
                         : 'bg-bg-tertiary text-text-muted'
                     }`}
                     style={{ borderRadius: '2px' }}
                   >
-                    {entry.status}
+                    {entry.is_posted === 1 ? 'Posted' : 'Unposted'}
                   </span>
                 </td>
               </tr>

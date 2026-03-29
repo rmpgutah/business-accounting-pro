@@ -30,6 +30,27 @@ const statusBadgeClass: Record<string, string> = {
   prospect: 'block-badge block-badge-blue',
 };
 
+// ─── Column Header (module-level to avoid re-creation) ──
+const SortableHeader: React.FC<{
+  field: SortField;
+  label: string;
+  activeSortField: SortField;
+  onSort: (field: SortField) => void;
+}> = ({ field, label, activeSortField, onSort }) => (
+  <th
+    className="cursor-pointer select-none hover:text-text-primary transition-colors"
+    onClick={() => onSort(field)}
+  >
+    <span className="inline-flex items-center gap-1">
+      {label}
+      <ArrowUpDown
+        size={12}
+        className={activeSortField === field ? 'text-accent-blue' : 'text-text-muted'}
+      />
+    </span>
+  </th>
+);
+
 // ─── Component ──────────────────────────────────────────
 const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -103,22 +124,6 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     return list;
   }, [clients, statusFilter, searchQuery, sortField, sortDir]);
 
-  // ─── Column Header ─────────────────────────────────
-  const SortableHeader: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
-    <th
-      className="cursor-pointer select-none hover:text-text-primary transition-colors"
-      onClick={() => handleSort(field)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        <ArrowUpDown
-          size={12}
-          className={sortField === field ? 'text-accent-blue' : 'text-text-muted'}
-        />
-      </span>
-    </th>
-  );
-
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
@@ -188,11 +193,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           <table className="block-table">
             <thead>
               <tr>
-                <SortableHeader field="name" label="Name" />
-                <SortableHeader field="email" label="Email" />
-                <SortableHeader field="phone" label="Phone" />
-                <SortableHeader field="status" label="Status" />
-                <SortableHeader field="payment_terms" label="Payment Terms" />
+                <SortableHeader field="name" label="Name" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="email" label="Email" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="phone" label="Phone" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="status" label="Status" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} onSort={handleSort} />
                 <th>Tags</th>
               </tr>
             </thead>

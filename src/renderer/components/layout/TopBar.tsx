@@ -5,16 +5,13 @@ import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
 
 const TopBar: React.FC = () => {
-  const {
-    searchOpen,
-    setSearchOpen,
-    searchQuery,
-    setSearchQuery,
-    searchResults,
-    setSearchResults,
-    notificationCount,
-  } = useAppStore();
-  const { activeCompany } = useCompanyStore();
+  const searchOpen = useAppStore((s) => s.searchOpen);
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
+  const setSearchQuery = useAppStore((s) => s.setSearchQuery);
+  const searchResults = useAppStore((s) => s.searchResults);
+  const setSearchResults = useAppStore((s) => s.setSearchResults);
+  const notificationCount = useAppStore((s) => s.notificationCount);
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

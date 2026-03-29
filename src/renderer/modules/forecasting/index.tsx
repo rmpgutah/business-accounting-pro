@@ -88,11 +88,11 @@ const Forecasting: React.FC = () => {
       try {
         // Get last 6 months of invoice revenue by month
         const revenueRows: MonthlyData[] = await api.rawQuery(
-          `SELECT strftime('%Y-%m', invoice_date) as month,
+          `SELECT strftime('%Y-%m', issue_date) as month,
                   COALESCE(SUM(total), 0) as total
            FROM invoices
            WHERE status IN ('paid', 'sent')
-             AND invoice_date >= date('now', '-6 months')
+             AND issue_date >= date('now', '-6 months')
            GROUP BY month
            ORDER BY month ASC`
         );

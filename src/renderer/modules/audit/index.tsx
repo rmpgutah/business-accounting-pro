@@ -73,7 +73,7 @@ const AuditTrail: React.FC = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const rows = await api.query('audit_log', undefined, { field: 'created_at', dir: 'desc' });
+        const rows = await api.query('audit_log', undefined, { field: 'timestamp', dir: 'desc' });
         if (!cancelled) setEntries(Array.isArray(rows) ? rows : []);
       } catch (err) {
         console.error('Failed to load audit log:', err);

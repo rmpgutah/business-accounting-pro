@@ -12,6 +12,8 @@ import {
   Edit,
 } from 'lucide-react';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
+import { FileText as FileTextNav } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -63,6 +65,7 @@ const statusBadgeClass: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────
 const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit }) => {
+  const nav = useNavigation();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('invoices');
@@ -160,13 +163,25 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
           <ArrowLeft size={16} />
           Back to Clients
         </button>
-        <button
-          className="block-btn inline-flex items-center gap-1.5"
-          onClick={() => onEdit(clientId)}
-        >
-          <Edit size={14} />
-          Edit
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="block-btn-primary inline-flex items-center gap-1.5"
+            onClick={() => {
+              sessionStorage.setItem('nav:prefillClientId', clientId);
+              nav.goTo('invoicing');
+            }}
+          >
+            <FileTextNav size={14} />
+            New Invoice
+          </button>
+          <button
+            className="block-btn inline-flex items-center gap-1.5"
+            onClick={() => onEdit(clientId)}
+          >
+            <Edit size={14} />
+            Edit
+          </button>
+        </div>
       </div>
 
       {/* Top Section: Contact Card + Stats */}
