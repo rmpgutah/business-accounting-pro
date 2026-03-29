@@ -1,0 +1,21 @@
+appId: com.bap.businessaccountingpro
+productName: Business Accounting Pro
+copyright: Copyright 2026
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - package.json
+mac:
+  category: public.app-category.finance
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
