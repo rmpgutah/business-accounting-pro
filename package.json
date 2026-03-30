@@ -24,58 +24,6 @@
     "express": "^5.2.1",
     "uuid": "^13.0.0"
   },
-  "build": {
-    "appId": "us.rmpgutah.accounting",
-    "productName": "Business Accounting Pro",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/bindings/**/*",
-      "node_modules/file-uri-to-path/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "src/main/database/schema.sql",
-        "to": "schema.sql"
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.finance",
-      "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] }
-      ],
-      "icon": "build/icon.icns",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "title": "Business Accounting Pro",
-      "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
-      ]
-    },
-    "win": {
-      "target": [
-        { "target": "nsis", "arch": ["x64"] }
-      ],
-      "icon": "build/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "Business Accounting Pro"
-    },
-    "linux": {
-      "target": ["AppImage"],
-      "category": "Office;Finance"
-    }
-  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "@types/better-sqlite3": "^7.6.13",

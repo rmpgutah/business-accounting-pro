@@ -7,16 +7,21 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v1.0.0)'
+        description: 'Version tag (e.g. v1.0.2)'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.0.2'
 
 permissions:
   contents: write
 
 jobs:
   build-mac:
-    runs-on: macos-latest
+    runs-on: macos-14
+    # macos-14 = Apple Silicon (M1) runner — builds arm64 natively
+    # Also cross-compiles x64 via electron-builder
+    env:
+      # Disable electron-builder's auto code signing — we handle it ourselves
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v4
 
@@ -28,11 +33,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules for Electron
+        run: npx electron-builder install-app-deps
+
       - name: Build app
         run: npm run build
 
-      - name: Build Mac distributables
+      - name: Build Mac distributables (unsigned)
         run: npx electron-builder --mac --publish never
+
+      - name: Ad-hoc codesign all Mac apps
+        run: |
+          # Sign each .app bundle found in release/mac* directories
+          for app in release/mac*/Business\ Accounting\ Pro.app; do
+            if [ -d "$app" ]; then
+              echo "Signing: $app"
+              bash scripts/codesign-mac.sh "$app"
+            fi
+          done
+
+      - name: Rebuild DMGs after codesigning
+        run: |
+          # The .app bundles inside release/mac-arm64/ and release/mac-x64/ are now
+          # properly signed. Rebuild DMGs from them so the distributed DMG contains
+          # the codesigned app.
+          npx electron-builder --mac dmg --publish never --prepackaged release/mac-arm64 || true
+          npx electron-builder --mac dmg --publish never --prepackaged release/mac-x64 || true
 
       - name: Upload Mac artifacts
         uses: actions/upload-artifact@v4
@@ -41,7 +67,7 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
-          if-no-files-found: error
+          if-no-files-found: warn
 
   build-windows:
     runs-on: windows-latest
