@@ -15,14 +15,13 @@ interface Invoice {
   issue_date: string;
   due_date: string;
   subtotal: number;
-  tax: number;
-  discount: number;
+  tax_amount: number;
+  discount_amount: number;
   total: number;
   amount_paid: number;
   status: InvoiceStatus;
   terms: string;
   notes: string;
-  terms_text: string;
 }
 
 interface LineItem {

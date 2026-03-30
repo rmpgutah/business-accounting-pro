@@ -92,7 +92,7 @@ const TopBar: React.FC = () => {
           borderRadius: '0px',
           WebkitAppRegion: 'drag' as any,
           /* macOS hiddenInset title bar: pad left for traffic lights */
-          paddingLeft: process.platform === 'darwin' || navigator.userAgent.includes('Mac') ? '80px' : '16px',
+          paddingLeft: navigator.userAgent.includes('Mac') ? '80px' : '16px',
         }}
       >
         {/* Left — Company */}

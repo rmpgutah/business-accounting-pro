@@ -13,7 +13,7 @@ interface Account {
   type: AccountType;
   subtype: string;
   description: string;
-  parent_account_id: string | null;
+  parent_id: string | null;
   is_active: boolean;
   balance: number;
 }
@@ -89,7 +89,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
   const [subtype, setSubtype] = useState(account?.subtype ?? '');
   const [description, setDescription] = useState(account?.description ?? '');
   const [parentAccountId, setParentAccountId] = useState<string>(
-    account?.parent_account_id ?? ''
+    account?.parent_id ?? ''
   );
   const [isActive, setIsActive] = useState(account?.is_active ?? true);
   const [parentOptions, setParentOptions] = useState<ParentOption[]>([]);
@@ -145,7 +145,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
         type,
         subtype: subtype || null,
         description: description.trim() || null,
-        parent_account_id: parentAccountId || null,
+        parent_id: parentAccountId || null,
         is_active: isActive,
       };
 

@@ -67,7 +67,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
         invoice_id: invoiceId,
         amount,
         date,
-        method,
+        payment_method: method,
         reference,
       });
 

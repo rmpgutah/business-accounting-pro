@@ -79,7 +79,7 @@ export function queryAll(
       params.push(value);
     } else {
       conditions.push(`${key} = ?`);
-      params.push(value);
+      params.push(typeof value === 'boolean' ? (value ? 1 : 0) : value);
     }
   }
 
@@ -104,6 +104,8 @@ export function create(table: string, data: Record<string, any>): any {
   for (const [key, value] of Object.entries(record)) {
     if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
       serialized[key] = JSON.stringify(value);
+    } else if (typeof value === 'boolean') {
+      serialized[key] = value ? 1 : 0;
     } else {
       serialized[key] = value;
     }
@@ -128,6 +130,8 @@ export function update(table: string, id: string, data: Record<string, any>): an
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
       serialized[key] = JSON.stringify(value);
+    } else if (typeof value === 'boolean') {
+      serialized[key] = value ? 1 : 0;
     } else {
       serialized[key] = value;
     }
@@ -164,6 +168,10 @@ export function logAudit(
 
 export function runQuery(sql: string, params: any[] = []): any[] {
   return getDb().prepare(sql).all(...params);
+}
+
+export function execQuery(sql: string, params: any[] = []): void {
+  getDb().prepare(sql).run(...params);
 }
 
 // ─── Seed Default Chart of Accounts ──────────────────────

@@ -488,7 +488,7 @@ export function registerIpcHandlers(): void {
     const { hash } = hashPassword(password);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    db.runQuery(
+    db.execQuery(
       'INSERT INTO users (id, email, display_name, password_hash, role, last_login, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [id, email, displayName, hash, isFirst ? 'owner' : 'accountant', now, now, now]
     );
@@ -504,7 +504,7 @@ export function registerIpcHandlers(): void {
     if (!verifyPassword(password, user.password_hash)) throw new Error('Invalid email or password');
 
     // Update last_login
-    db.runQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
+    db.execQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
 
     // Get user's companies
     const companies = db.runQuery(
@@ -528,7 +528,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('auth:link-user-company', (_event, { userId, companyId, role }: { userId: string; companyId: string; role?: string }) => {
-    db.runQuery(
+    db.execQuery(
       'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
       [userId, companyId, role || 'owner']
     );
