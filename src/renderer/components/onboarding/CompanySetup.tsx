@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Building2, ArrowRight } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
 import api from '../../lib/api';
 
 const MONTHS = [
@@ -11,6 +12,7 @@ const MONTHS = [
 const CompanySetup: React.FC = () => {
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
+  const authUser = useAuthStore((s) => s.user);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,6 +46,10 @@ const CompanySetup: React.FC = () => {
         tax_id: taxId.trim(),
         fiscal_year_start: fiscalYearStart,
       });
+      // Link company to current user
+      if (authUser?.id) {
+        await api.linkUserCompany(authUser.id, company.id, 'owner');
+      }
       await api.switchCompany(company.id);
       const companies = await api.listCompanies();
       setCompanies(companies);
@@ -60,6 +66,8 @@ const CompanySetup: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0a0a0a', padding: '24px' }}>
+      {/* Drag region at the top of the window for macOS hiddenInset title bar */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
       <div style={{ width: '100%', maxWidth: '640px', background: '#141414', border: '1px solid #2e2e2e', padding: '32px', borderRadius: '2px' }}>
         {/* Logo & Header */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>

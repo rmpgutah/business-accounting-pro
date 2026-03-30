@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Building2, ChevronDown, Search, Bell, X } from 'lucide-react';
+import { Building2, ChevronDown, Search, Bell, X, LogOut } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
 import api from '../../lib/api';
 
 const TopBar: React.FC = () => {
@@ -12,6 +13,8 @@ const TopBar: React.FC = () => {
   const setSearchResults = useAppStore((s) => s.setSearchResults);
   const notificationCount = useAppStore((s) => s.notificationCount);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,10 +88,15 @@ const TopBar: React.FC = () => {
     <>
       <header
         className="flex items-center justify-between h-12 px-4 bg-bg-secondary border-b border-border-primary shrink-0"
-        style={{ borderRadius: '0px' }}
+        style={{
+          borderRadius: '0px',
+          WebkitAppRegion: 'drag' as any,
+          /* macOS hiddenInset title bar: pad left for traffic lights */
+          paddingLeft: process.platform === 'darwin' || navigator.userAgent.includes('Mac') ? '80px' : '16px',
+        }}
       >
         {/* Left — Company */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
             className="flex items-center gap-2 px-2 py-1 text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
@@ -105,7 +113,7 @@ const TopBar: React.FC = () => {
         <button
           onClick={() => setSearchOpen(true)}
           className="flex items-center gap-2 px-3 py-1.5 w-80 bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-colors"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '2px', WebkitAppRegion: 'no-drag' as any }}
         >
           <Search size={14} />
           <span className="flex-1 text-left">Search...</span>
@@ -117,8 +125,8 @@ const TopBar: React.FC = () => {
           </kbd>
         </button>
 
-        {/* Right — Notifications */}
-        <div className="flex items-center">
+        {/* Right — User + Notifications + Logout */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
@@ -133,6 +141,35 @@ const TopBar: React.FC = () => {
               </span>
             )}
           </button>
+
+          {/* User avatar */}
+          {authUser && (
+            <div
+              className="flex items-center gap-2 px-2 py-1 ml-1"
+              style={{ borderLeft: '1px solid #2e2e2e' }}
+            >
+              <div
+                className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+                style={{
+                  width: '24px', height: '24px', borderRadius: '2px',
+                  background: authUser.avatar_color || '#3b82f6',
+                }}
+              >
+                {authUser.display_name.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-xs text-text-secondary hidden xl:inline max-w-[100px] truncate">
+                {authUser.display_name}
+              </span>
+              <button
+                onClick={logout}
+                className="p-1 text-text-muted hover:text-accent-expense transition-colors"
+                style={{ borderRadius: '2px' }}
+                title="Sign Out"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

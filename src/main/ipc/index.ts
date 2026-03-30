@@ -1,7 +1,22 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
 import * as db from '../database';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+
+// ─── Password Hashing (pbkdf2 — no external deps) ──────
+function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
+  const s = salt || crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, s, 100000, 64, 'sha512').toString('hex');
+  return { hash: `${s}:${hash}`, salt: s };
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const check = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return hash === check;
+}
 
 export function registerIpcHandlers(): void {
   // ─── Generic CRUD ────────────────────────────────────
@@ -270,6 +285,67 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── CSV Export ────────────────────────────────────────
+  // ─── Auth ──────────────────────────────────────────────
+
+  ipcMain.handle('auth:register', (_event, { email, password, displayName }: { email: string; password: string; displayName: string }) => {
+    // Check if any users exist (first user becomes owner)
+    const existing = db.runQuery('SELECT COUNT(*) as count FROM users');
+    const isFirst = existing[0]?.count === 0;
+
+    // Check email uniqueness
+    const dup = db.runQuery('SELECT id FROM users WHERE email = ?', [email]);
+    if (dup.length > 0) throw new Error('An account with this email already exists');
+
+    const { hash } = hashPassword(password);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.runQuery(
+      'INSERT INTO users (id, email, display_name, password_hash, role, last_login, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, email, displayName, hash, isFirst ? 'owner' : 'accountant', now, now, now]
+    );
+
+    return { id, email, display_name: displayName, role: isFirst ? 'owner' : 'accountant', avatar_color: '#3b82f6' };
+  });
+
+  ipcMain.handle('auth:login', (_event, { email, password }: { email: string; password: string }) => {
+    const rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
+    if (rows.length === 0) throw new Error('Invalid email or password');
+
+    const user = rows[0];
+    if (!verifyPassword(password, user.password_hash)) throw new Error('Invalid email or password');
+
+    // Update last_login
+    db.runQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
+
+    // Get user's companies
+    const companies = db.runQuery(
+      'SELECT c.*, uc.role as user_role FROM companies c JOIN user_companies uc ON c.id = uc.company_id WHERE uc.user_id = ?',
+      [user.id]
+    );
+
+    return {
+      user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, avatar_color: user.avatar_color },
+      companies,
+    };
+  });
+
+  ipcMain.handle('auth:has-users', () => {
+    const rows = db.runQuery('SELECT COUNT(*) as count FROM users');
+    return rows[0]?.count > 0;
+  });
+
+  ipcMain.handle('auth:list-users', () => {
+    return db.runQuery('SELECT id, email, display_name, role, avatar_color, last_login FROM users ORDER BY created_at');
+  });
+
+  ipcMain.handle('auth:link-user-company', (_event, { userId, companyId, role }: { userId: string; companyId: string; role?: string }) => {
+    db.runQuery(
+      'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
+      [userId, companyId, role || 'owner']
+    );
+    return true;
+  });
+
   ipcMain.handle('export:csv', async (_event, { table, filters }: { table: string; filters?: Record<string, any> }) => {
     const rows = db.queryAll(table, filters || {});
     if (rows.length === 0) return { error: 'No data to export' };

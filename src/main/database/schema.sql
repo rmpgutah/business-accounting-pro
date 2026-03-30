@@ -1,5 +1,27 @@
 -- Business Accounting Pro — Database Schema
 
+-- Users & Authentication (local accounts, hashed passwords)
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT DEFAULT 'owner',   -- owner | admin | accountant | viewer
+  avatar_color TEXT DEFAULT '#3b82f6',
+  last_login TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Maps users to companies (multi-tenant: one user can access multiple companies)
+CREATE TABLE IF NOT EXISTS user_companies (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  role TEXT DEFAULT 'owner',
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, company_id)
+);
+
 CREATE TABLE IF NOT EXISTS companies (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

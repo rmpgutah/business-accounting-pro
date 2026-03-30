@@ -57,6 +57,16 @@ const api = {
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
     window.electronAPI.invoke('dialog:open-file', options),
 
+  // Auth
+  register: (email: string, password: string, displayName: string) =>
+    window.electronAPI.invoke('auth:register', { email, password, displayName }),
+  login: (email: string, password: string) =>
+    window.electronAPI.invoke('auth:login', { email, password }),
+  hasUsers: () => window.electronAPI.invoke('auth:has-users'),
+  listUsers: () => window.electronAPI.invoke('auth:list-users'),
+  linkUserCompany: (userId: string, companyId: string, role?: string) =>
+    window.electronAPI.invoke('auth:link-user-company', { userId, companyId, role }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

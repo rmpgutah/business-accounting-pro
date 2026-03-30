@@ -1,9 +1,11 @@
 import React, { useEffect, lazy, Suspense } from 'react';
 import { useAppStore } from './stores/appStore';
 import { useCompanyStore } from './stores/companyStore';
+import { useAuthStore } from './stores/authStore';
 import api from './lib/api';
 import AppShell from './components/layout/AppShell';
 import CompanySetup from './components/onboarding/CompanySetup';
+import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
@@ -136,14 +138,19 @@ const App: React.FC = () => {
   const companies = useCompanyStore((s) => s.companies);
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const authUser = useAuthStore((s) => s.user);
 
   useEffect(() => {
     const init = async () => {
       try {
-        const list = await api.listCompanies();
-        setCompanies(list ?? []);
-        if (list && list.length > 0) {
-          setActiveCompany(list[0]);
+        // If user just logged in, companies are already set by AuthScreen
+        if (companies.length === 0) {
+          const list = await api.listCompanies();
+          setCompanies(list ?? []);
+          if (list && list.length > 0) {
+            setActiveCompany(list[0]);
+          }
         }
       } catch (err) {
         console.error('Failed to load companies:', err);
@@ -153,7 +160,7 @@ const App: React.FC = () => {
       }
     };
     init();
-  }, []);
+  }, [isAuthenticated]);
 
   if (loading) {
     return (
@@ -163,6 +170,12 @@ const App: React.FC = () => {
     );
   }
 
+  // Auth gate — show login/register if not authenticated
+  if (!isAuthenticated) {
+    return <AuthScreen />;
+  }
+
+  // Company setup — show if user has no companies yet
   if (companies.length === 0) {
     return <CompanySetup />;
   }
