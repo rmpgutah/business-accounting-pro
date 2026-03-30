@@ -68,14 +68,25 @@ find "$APP_PATH" -name "*.so" -print0 | while IFS= read -r -d '' so; do
 done
 
 # Step 5: Sign Electron Framework specifically (the versioned bundle)
-echo "  Signing Electron Framework..."
+# The framework contains nested helpers and binaries that must ALL be signed
+# before signing the framework bundle itself.
+echo "  Signing Electron Framework internals..."
 EF_PATH="$APP_PATH/Contents/Frameworks/Electron Framework.framework"
 if [ -d "$EF_PATH" ]; then
-  # Sign the actual binary inside Versions/A/ first
+  # 5a: Sign ALL executables inside the framework (crashpad handler, etc.)
+  find "$EF_PATH" -type f -perm +111 ! -name "*.dylib" -print0 | while IFS= read -r -d '' bin; do
+    echo "    $bin"
+    codesign --force --sign - --timestamp=none "$bin"
+  done
+
+  # 5b: Sign the main framework binary
   if [ -f "$EF_PATH/Versions/A/Electron Framework" ]; then
+    echo "    $EF_PATH/Versions/A/Electron Framework"
     codesign --force --sign - --timestamp=none "$EF_PATH/Versions/A/Electron Framework"
   fi
-  # Then sign the framework bundle
+
+  # 5c: Sign the framework bundle
+  echo "    $EF_PATH (bundle)"
   codesign --force --sign - --timestamp=none "$EF_PATH"
 fi
 

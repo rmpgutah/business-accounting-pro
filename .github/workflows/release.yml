@@ -54,26 +54,37 @@ jobs:
             fi
           done
 
+      - name: List packaged directories
+        run: find release -name "*.app" -maxdepth 3 -type d 2>/dev/null || echo "No .app found"
+
       - name: Create DMGs from signed apps (hdiutil)
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
 
-          for arch in arm64 x64; do
-            APPDIR="release/mac-${arch}"
-            APP="$APPDIR/Business Accounting Pro.app"
+          # electron-builder dir target outputs to:
+          #   release/mac-arm64/ for arm64
+          #   release/mac/ for universal or default arch
+          #   release/mac-x64/ for x64 (cross-compiled)
+          for appdir in release/mac*; do
+            APP="$appdir/Business Accounting Pro.app"
             if [ -d "$APP" ]; then
-              DMG_NAME="Business-Accounting-Pro-${VERSION}-mac-${arch}.dmg"
-              echo "Creating $DMG_NAME..."
+              # Determine arch from directory name
+              case "$appdir" in
+                *arm64*) ARCH="arm64" ;;
+                *x64*)   ARCH="x64" ;;
+                *)       ARCH="arm64" ;;  # macos-14 runner is ARM, so default = arm64
+              esac
 
-              # Create a temporary DMG directory with the app and Applications symlink
-              STAGING="/tmp/dmg-staging-${arch}"
+              DMG_NAME="Business-Accounting-Pro-${VERSION}-mac-${ARCH}.dmg"
+              echo "Creating $DMG_NAME from $APP..."
+
+              STAGING="/tmp/dmg-staging-${ARCH}"
               rm -rf "$STAGING"
               mkdir -p "$STAGING"
               cp -R "$APP" "$STAGING/"
               ln -s /Applications "$STAGING/Applications"
 
-              # Create DMG
               hdiutil create -volname "Business Accounting Pro" \
                 -srcfolder "$STAGING" \
                 -ov -format UDZO \
