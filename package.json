@@ -14,13 +14,20 @@
     "dist:win": "npm run build && electron-builder --win",
     "start": "electron ."
   },
-  "keywords": ["accounting", "business", "finance", "payroll", "invoicing"],
+  "keywords": [
+    "accounting",
+    "business",
+    "finance",
+    "payroll",
+    "invoicing"
+  ],
   "author": "RMPG",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.3",
     "express": "^5.2.1",
     "uuid": "^13.0.0"
   },

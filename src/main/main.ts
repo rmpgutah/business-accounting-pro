@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu } from 'electron';
 import path from 'path';
 import { initDatabase } from './database';
 import { registerIpcHandlers } from './ipc';
+import { autoUpdater } from 'electron-updater';
 
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
@@ -90,6 +91,63 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// ── Auto-updater ──────────────────────────────────────────────
+function setupAutoUpdater() {
+  if (isDev) return; // Skip in dev mode
+
+  // Don't download automatically — ask user first
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    dialog
+      .showMessageBox(mainWindow!, {
+        type: 'info',
+        title: 'Update Available',
+        message: `Version ${info.version} is available.`,
+        detail: 'Would you like to download and install it? The app will restart when the update is ready.',
+        buttons: ['Download Update', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          autoUpdater.downloadUpdate();
+          // Notify the renderer to show a progress indicator
+          mainWindow?.webContents.send('update:downloading');
+        }
+      });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog
+      .showMessageBox(mainWindow!, {
+        type: 'info',
+        title: 'Update Ready',
+        message: 'Update has been downloaded.',
+        detail: 'The application will restart to apply the update.',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          autoUpdater.quitAndInstall();
+        }
+      });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update error:', err);
+    // Don't bother the user with update errors — just log them
+  });
+
+  // Check for updates 3 seconds after launch (non-blocking)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 3000);
+}
+
 app.whenReady().then(() => {
   try {
     initDatabase();
@@ -100,6 +158,7 @@ app.whenReady().then(() => {
   }
   buildMenu();
   createWindow();
+  setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => {

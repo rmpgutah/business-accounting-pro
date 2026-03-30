@@ -67,6 +67,8 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+            release/*.yml
+            release/*.yaml
           if-no-files-found: warn
 
   build-windows:
@@ -94,6 +96,9 @@ jobs:
           name: windows-build
           path: |
             release/*.exe
+            release/*.yml
+            release/*.yaml
+            release/*.blockmap
           if-no-files-found: error
 
   release:

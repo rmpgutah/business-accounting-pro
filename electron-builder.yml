@@ -1,6 +1,11 @@
 appId: us.rmpgutah.accounting
 productName: Business Accounting Pro
 copyright: Copyright 2026 RMPG
+# electron-updater reads latest-mac.yml / latest.yml from GitHub Releases
+publish:
+  provider: github
+  owner: rmpgutah
+  repo: business-accounting-pro
 directories:
   output: release
   buildResources: build
