@@ -94,60 +94,40 @@ function buildMenu() {
 }
 
 // ── Auto-updater ──────────────────────────────────────────────
+// Silent auto-update: downloads in background, installs on quit.
+// No prompts, no interruptions. User always gets the latest version.
 function setupAutoUpdater() {
-  if (isDev) return; // Skip in dev mode
+  if (isDev) return;
 
-  // Don't download automatically — ask user first
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
-    dialog
-      .showMessageBox(mainWindow!, {
-        type: 'info',
-        title: 'Update Available',
-        message: `Version ${info.version} is available.`,
-        detail: 'Would you like to download and install it? The app will restart when the update is ready.',
-        buttons: ['Download Update', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.downloadUpdate();
-          // Notify the renderer to show a progress indicator
-          mainWindow?.webContents.send('update:downloading');
-        }
-      });
+    console.log(`Update available: v${info.version} — downloading silently...`);
+    mainWindow?.webContents.send('update:downloading', info.version);
   });
 
-  autoUpdater.on('update-downloaded', () => {
-    dialog
-      .showMessageBox(mainWindow!, {
-        type: 'info',
-        title: 'Update Ready',
-        message: 'Update has been downloaded.',
-        detail: 'The application will restart to apply the update.',
-        buttons: ['Restart Now', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update:progress', Math.round(progress.percent));
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`Update v${info.version} downloaded — will install on next quit.`);
+    mainWindow?.webContents.send('update:ready', info.version);
   });
 
   autoUpdater.on('error', (err) => {
     console.error('Auto-update error:', err);
-    // Don't bother the user with update errors — just log them
   });
 
-  // Check for updates 3 seconds after launch (non-blocking)
+  // Check on launch (after 3s), then every 2 hours
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch(() => {});
   }, 3000);
+
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 2 * 60 * 60 * 1000);
 }
 
 // ── Background Services ────────────────────────────────────

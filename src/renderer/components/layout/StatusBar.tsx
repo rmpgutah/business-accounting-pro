@@ -1,8 +1,39 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCompanyStore } from '../../stores/companyStore';
 
 const StatusBar: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'downloading' | 'ready'>('idle');
+  const [updateVersion, setUpdateVersion] = useState('');
+  const [downloadPercent, setDownloadPercent] = useState(0);
+
+  useEffect(() => {
+    const onDownloading = (_e: any, version: string) => {
+      setUpdateStatus('downloading');
+      setUpdateVersion(version || '');
+    };
+    const onProgress = (_e: any, percent: number) => {
+      setDownloadPercent(percent);
+    };
+    const onReady = (_e: any, version: string) => {
+      setUpdateStatus('ready');
+      setUpdateVersion(version || '');
+    };
+
+    // Listen for update events from main process
+    // electronAPI.on() returns a cleanup function
+    const api = (window as any).electronAPI;
+    const cleanups: Array<() => void> = [];
+    if (api?.on) {
+      cleanups.push(api.on('update:downloading', onDownloading));
+      cleanups.push(api.on('update:progress', onProgress));
+      cleanups.push(api.on('update:ready', onReady));
+    }
+
+    return () => {
+      cleanups.forEach((fn) => fn());
+    };
+  }, []);
 
   const fiscalYear = activeCompany?.fiscal_year_end
     ? `FY ${activeCompany.fiscal_year_end}`
@@ -22,7 +53,25 @@ const StatusBar: React.FC = () => {
           </>
         )}
       </div>
-      <span>Business Accounting Pro v1.0.0</span>
+
+      <div className="flex items-center gap-3">
+        {updateStatus === 'downloading' && (
+          <span className="text-accent-blue flex items-center gap-1.5">
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full bg-accent-blue"
+              style={{ animation: 'pulse 1.5s infinite' }}
+            />
+            Updating{downloadPercent > 0 ? ` ${downloadPercent}%` : '...'}
+          </span>
+        )}
+        {updateStatus === 'ready' && (
+          <span className="text-accent-income flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-income" />
+            v{updateVersion} ready — restart to apply
+          </span>
+        )}
+        <span>Business Accounting Pro v1.1.0</span>
+      </div>
     </footer>
   );
 };
