@@ -117,6 +117,12 @@ export function create(table: string, data: Record<string, any>): any {
   return getById(table, id);
 }
 
+// Tables that do NOT have an updated_at column
+const tablesWithoutUpdatedAt = new Set([
+  'invoice_line_items', 'journal_entry_lines', 'pay_stubs',
+  'budget_lines', 'bank_reconciliation_matches',
+]);
+
 export function update(table: string, id: string, data: Record<string, any>): any {
   const serialized: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
@@ -128,7 +134,8 @@ export function update(table: string, id: string, data: Record<string, any>): an
   }
 
   const sets = Object.keys(serialized).map(k => `${k} = ?`).join(', ');
-  const sql = `UPDATE ${table} SET ${sets}, updated_at = datetime('now') WHERE id = ?`;
+  const updatedAtClause = tablesWithoutUpdatedAt.has(table) ? '' : ", updated_at = datetime('now')";
+  const sql = `UPDATE ${table} SET ${sets}${updatedAtClause} WHERE id = ?`;
 
   getDb().prepare(sql).run(...Object.values(serialized), id);
   return getById(table, id);

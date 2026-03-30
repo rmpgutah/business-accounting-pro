@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Receipt, Plus, Search, Filter, DollarSign } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download } from 'lucide-react';
 import api from '../../lib/api';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -52,6 +53,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +100,72 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
     [filtered]
   );
 
+  // ─── Selection Helpers ──────────────────────────────────
+  const allSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(e => e.id)));
+    }
+  }, [allSelected, filtered]);
+
+  // Clear selection when filters change
+  useEffect(() => { setSelectedIds(new Set()); }, [search, categoryFilter, dateFrom, dateTo]);
+
+  // ─── Batch Actions ──────────────────────────────────────
+  const reload = useCallback(async () => {
+    const expData = await api.query('expenses');
+    setExpenses(Array.isArray(expData) ? expData : []);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBatchApprove = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('expenses', Array.from(selectedIds), { status: 'approved' });
+      await reload();
+    } catch (err) { console.error('Batch approve failed:', err); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  const handleBatchDelete = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchDelete('expenses', Array.from(selectedIds));
+      await reload();
+    } catch (err) { console.error('Batch delete failed:', err); }
+    finally { setBatchLoading(false); setShowDeleteConfirm(false); }
+  }, [selectedIds, reload]);
+
+  const handleExportSelected = useCallback(() => {
+    const selected = filtered.filter(e => selectedIds.has(e.id));
+    const exportData = selected.map(e => ({
+      date: e.date,
+      description: e.description,
+      category: e.category_name || '',
+      vendor: e.vendor_name || '',
+      amount: e.amount,
+      tax_amount: e.tax_amount || 0,
+      status: e.status,
+      billable: e.is_billable ? 'Yes' : 'No',
+      payment_method: e.payment_method || '',
+      reference: e.reference || '',
+    }));
+    downloadCSVBlob(exportData, 'expenses-export.csv');
+  }, [filtered, selectedIds]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-text-muted text-sm">
@@ -105,7 +175,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -190,6 +260,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           <table className="block-table">
             <thead>
               <tr>
+                <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <th>Date</th>
                 <th>Description</th>
                 <th>Category</th>
@@ -200,44 +279,57 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((exp) => (
-                <tr
-                  key={exp.id}
-                  className="cursor-pointer"
-                  onClick={() => onEdit(exp.id)}
-                >
-                  <td className="font-mono text-text-secondary text-xs">
-                    {exp.date}
-                  </td>
-                  <td className="text-text-primary font-medium">
-                    {exp.description || '(no description)'}
-                  </td>
-                  <td className="text-text-secondary">
-                    {exp.category_name || '-'}
-                  </td>
-                  <td className="text-text-secondary">
-                    {exp.vendor_name || '-'}
-                  </td>
-                  <td className="text-right font-mono text-accent-expense">
-                    {fmt.format(exp.amount)}
-                  </td>
-                  <td>
-                    <span className={statusBadge[exp.status] || 'block-badge'}>
-                      {exp.status}
-                    </span>
-                  </td>
-                  <td className="text-center">
-                    {exp.is_billable ? (
-                      <span className="text-accent-income">&#10003;</span>
-                    ) : (
-                      <span className="text-text-muted">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((exp) => {
+                const isSelected = selectedIds.has(exp.id);
+                return (
+                  <tr
+                    key={exp.id}
+                    className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
+                    onClick={() => onEdit(exp.id)}
+                  >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(exp.id)}
+                        className="cursor-pointer"
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                    </td>
+                    <td className="font-mono text-text-secondary text-xs">
+                      {exp.date}
+                    </td>
+                    <td className="text-text-primary font-medium">
+                      {exp.description || '(no description)'}
+                    </td>
+                    <td className="text-text-secondary">
+                      {exp.category_name || '-'}
+                    </td>
+                    <td className="text-text-secondary">
+                      {exp.vendor_name || '-'}
+                    </td>
+                    <td className="text-right font-mono text-accent-expense">
+                      {fmt.format(exp.amount)}
+                    </td>
+                    <td>
+                      <span className={statusBadge[exp.status] || 'block-badge'}>
+                        {exp.status}
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      {exp.is_billable ? (
+                        <span className="text-accent-income">&#10003;</span>
+                      ) : (
+                        <span className="text-text-muted">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
+                <td />
                 <td
                   colSpan={4}
                   className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider"
@@ -251,6 +343,70 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* ─── Floating Batch Action Bar ─────────────────────── */}
+      {someSelected && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
+          style={{
+            background: 'var(--bg-secondary, #1e1e2e)',
+            borderRadius: '2px',
+            minWidth: '420px',
+          }}
+        >
+          <span className="text-xs font-semibold text-text-muted mr-2">
+            {selectedIds.size} of {filtered.length} selected
+          </span>
+
+          <button
+            className="block-btn-primary flex items-center gap-1.5 text-xs"
+            onClick={handleBatchApprove}
+            disabled={batchLoading}
+          >
+            <CheckCircle size={13} />
+            Approve Selected
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleExportSelected}
+            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
+
+          {!showDeleteConfirm ? (
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold"
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <Trash2 size={13} />
+              Delete
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-accent-expense font-semibold">Confirm?</span>
+              <button
+                className="text-xs font-semibold"
+                onClick={handleBatchDelete}
+                disabled={batchLoading}
+                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Yes, Delete
+              </button>
+              <button
+                className="text-xs font-semibold text-text-muted"
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

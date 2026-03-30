@@ -89,7 +89,7 @@ const ReconcileView: React.FC = () => {
       // Load unmatched bank transactions
       const bankData = await api.query('bank_transactions', {
         bank_account_id: selectedBankId,
-        status: 'unmatched',
+        status: 'pending',
       });
       setBankTxns(Array.isArray(bankData) ? bankData : []);
 
@@ -110,11 +110,11 @@ const ReconcileView: React.FC = () => {
            WHERE jel.account_id = ?
              AND je.company_id = ?
              AND jel.id NOT IN (
-               SELECT book_entry_id FROM bank_reconciliation_matches
-               WHERE bank_account_id = ?
+               SELECT journal_entry_line_id FROM bank_reconciliation_matches
+               WHERE journal_entry_line_id IS NOT NULL
              )
            ORDER BY je.date DESC`,
-          [accountId, activeCompany.id, selectedBankId]
+          [accountId, activeCompany.id]
         );
         setBookEntries(bookData ?? []);
       } else {
@@ -205,11 +205,9 @@ const ReconcileView: React.FC = () => {
       for (const pair of matchedPairs) {
         // Create reconciliation match record
         await api.create('bank_reconciliation_matches', {
-          bank_account_id: selectedBankId,
           bank_transaction_id: pair.bank.id,
-          book_entry_id: pair.book.id,
-          matched_at: new Date().toISOString(),
-          company_id: activeCompany?.id,
+          journal_entry_line_id: pair.book.id,
+          match_type: 'manual',
         });
 
         // Update bank transaction status

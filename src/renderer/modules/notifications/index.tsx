@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  Bell, CheckCheck, AlertTriangle, Info, FileText, DollarSign, Clock,
-  Users, Mail,
+  Bell, CheckCheck, AlertTriangle, FileText, DollarSign, Clock,
+  RefreshCw, BarChart3, Landmark, X, Settings, Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
 
 // ─── Types ──────────────────────────────────────────────
 interface Notification {
@@ -19,38 +20,75 @@ interface Notification {
 }
 
 type ViewFilter = 'all' | 'unread';
+type CategoryFilter = '' | 'payment' | 'overdue' | 'recurring' | 'report' | 'budget_alert' | 'reconciliation';
 
-// ─── Icon Map ───────────────────────────────────────────
-const typeIcons: Record<string, React.FC<{ size?: number; className?: string }>> = {
-  invoice: FileText,
-  payment: DollarSign,
-  expense: DollarSign,
-  reminder: Clock,
-  alert: AlertTriangle,
-  client: Users,
-  email: Mail,
-  info: Info,
+// ─── Category Config ────────────────────────────────────
+interface CategoryConfig {
+  label: string;
+  icon: React.FC<{ size?: number; className?: string }>;
+  color: string;
+  emoji: string;
+}
+
+const categoryConfig: Record<string, CategoryConfig> = {
+  payment: {
+    label: 'Payment Received',
+    icon: DollarSign,
+    color: 'text-accent-income',
+    emoji: '\uD83D\uDCB0',
+  },
+  overdue: {
+    label: 'Invoice Overdue',
+    icon: Clock,
+    color: 'text-accent-expense',
+    emoji: '\u23F0',
+  },
+  recurring: {
+    label: 'Recurring Created',
+    icon: RefreshCw,
+    color: 'text-accent-blue',
+    emoji: '\uD83D\uDCCB',
+  },
+  report: {
+    label: 'Report Ready',
+    icon: BarChart3,
+    color: 'text-accent-purple',
+    emoji: '\uD83D\uDCCA',
+  },
+  budget_alert: {
+    label: 'Budget Threshold',
+    icon: AlertTriangle,
+    color: 'text-accent-warning',
+    emoji: '\u26A0\uFE0F',
+  },
+  reconciliation: {
+    label: 'Reconciliation Needed',
+    icon: Landmark,
+    color: 'text-accent-blue',
+    emoji: '\uD83C\uDFE6',
+  },
 };
 
-const typeColors: Record<string, string> = {
-  invoice: 'text-accent-income',
-  payment: 'text-accent-income',
-  expense: 'text-accent-expense',
-  reminder: 'text-accent-warning',
-  alert: 'text-accent-expense',
-  client: 'text-accent-blue',
-  email: 'text-accent-purple',
-  info: 'text-accent-blue',
+const defaultCategory: CategoryConfig = {
+  label: 'Notification',
+  icon: Bell,
+  color: 'text-text-muted',
+  emoji: '',
 };
 
 // ─── Component ──────────────────────────────────────────
 const Notifications: React.FC = () => {
+  const nav = useNavigation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ViewFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('');
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState<Record<string, boolean>>({});
+  const [prefsLoading, setPrefsLoading] = useState(false);
 
   // ─── Load ─────────────────────────────────────────────
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       const rows = await api.listNotifications(filter === 'unread' ? true : undefined);
       setNotifications(Array.isArray(rows) ? rows : []);
@@ -59,18 +97,54 @@ const Notifications: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  }, [filter]);
+
+  const loadPreferences = async () => {
+    setPrefsLoading(true);
+    try {
+      const prefs = await api.getNotificationPreferences();
+      setPreferences(prefs || {});
+    } catch (err) {
+      console.error('Failed to load preferences:', err);
+    } finally {
+      setPrefsLoading(false);
+    }
   };
 
   useEffect(() => {
     setLoading(true);
     loadNotifications();
-  }, [filter]);
+  }, [filter, loadNotifications]);
+
+  useEffect(() => {
+    if (showPreferences) loadPreferences();
+  }, [showPreferences]);
 
   // ─── Stats ────────────────────────────────────────────
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.is_read).length,
     [notifications],
   );
+
+  // ─── Filtered by Category ─────────────────────────────
+  const displayed = useMemo(() => {
+    let list = filter === 'unread'
+      ? notifications.filter((n) => !n.is_read)
+      : notifications;
+    if (categoryFilter) {
+      list = list.filter((n) => n.type === categoryFilter);
+    }
+    return list;
+  }, [notifications, filter, categoryFilter]);
+
+  // ─── Category counts ──────────────────────────────────
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const n of notifications) {
+      counts[n.type] = (counts[n.type] || 0) + 1;
+    }
+    return counts;
+  }, [notifications]);
 
   // ─── Mark Read ────────────────────────────────────────
   const markAsRead = async (id: string) => {
@@ -94,11 +168,44 @@ const Notifications: React.FC = () => {
     }
   };
 
-  // ─── Displayed ────────────────────────────────────────
-  const displayed = useMemo(() => {
-    if (filter === 'unread') return notifications.filter((n) => !n.is_read);
-    return notifications;
-  }, [notifications, filter]);
+  // ─── Dismiss / Clear ─────────────────────────────────
+  const dismissNotification = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await api.dismissNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch (err) {
+      console.error('Failed to dismiss notification:', err);
+    }
+  };
+
+  const clearAllRead = async () => {
+    try {
+      await api.clearAllNotifications();
+      setNotifications((prev) => prev.filter((n) => !n.is_read));
+    } catch (err) {
+      console.error('Failed to clear notifications:', err);
+    }
+  };
+
+  // ─── Click-Through Navigation ─────────────────────────
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.is_read) markAsRead(n.id);
+    if (n.entity_type && n.entity_id) {
+      nav.goToEntity(n.entity_type, n.entity_id);
+    }
+  };
+
+  // ─── Save Preferences ────────────────────────────────
+  const togglePreference = async (key: string) => {
+    const updated = { ...preferences, [key]: !preferences[key] };
+    setPreferences(updated);
+    try {
+      await api.updateNotificationPreferences(updated);
+    } catch (err) {
+      console.error('Failed to update preferences:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -170,7 +277,105 @@ const Notifications: React.FC = () => {
               Mark all read
             </button>
           )}
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={clearAllRead}
+            title="Clear all read notifications"
+          >
+            <Trash2 size={14} />
+            Clear Read
+          </button>
+          <button
+            className={`block-btn flex items-center gap-1.5 text-xs ${showPreferences ? 'bg-bg-elevated text-text-primary' : ''}`}
+            onClick={() => setShowPreferences(!showPreferences)}
+            title="Notification preferences"
+          >
+            <Settings size={14} />
+          </button>
         </div>
+      </div>
+
+      {/* Preferences Panel */}
+      {showPreferences && (
+        <div className="block-card-elevated p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-text-primary">Notification Preferences</h3>
+            <button
+              className="text-text-muted hover:text-text-primary"
+              onClick={() => setShowPreferences(false)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+          {prefsLoading ? (
+            <p className="text-xs text-text-muted">Loading preferences...</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {Object.entries(categoryConfig).map(([key, config]) => (
+                <label
+                  key={key}
+                  className="flex items-center gap-3 p-2 border border-border-primary cursor-pointer hover:bg-bg-hover transition-colors"
+                  style={{ borderRadius: '2px' }}
+                >
+                  <div
+                    className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                      preferences[key] !== false ? 'bg-accent-income' : 'bg-bg-tertiary border border-border-primary'
+                    }`}
+                    onClick={(e) => { e.preventDefault(); togglePreference(key); }}
+                  >
+                    <div
+                      className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                        preferences[key] !== false ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                      style={{ borderRadius: '2px' }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 flex-1">
+                    <config.icon size={14} className={config.color} />
+                    <span className="text-xs text-text-secondary">{config.label}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Category Filter Chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          className={`px-3 py-1 text-xs font-medium border transition-colors ${
+            categoryFilter === ''
+              ? 'bg-bg-elevated text-text-primary border-border-primary'
+              : 'text-text-muted border-transparent hover:text-text-secondary'
+          }`}
+          style={{ borderRadius: '2px' }}
+          onClick={() => setCategoryFilter('')}
+        >
+          All Types
+        </button>
+        {Object.entries(categoryConfig).map(([key, config]) => {
+          const count = categoryCounts[key] || 0;
+          if (count === 0 && categoryFilter !== key) return null;
+          return (
+            <button
+              key={key}
+              className={`px-3 py-1 text-xs font-medium border transition-colors flex items-center gap-1.5 ${
+                categoryFilter === key
+                  ? 'bg-bg-elevated text-text-primary border-border-primary'
+                  : 'text-text-muted border-transparent hover:text-text-secondary'
+              }`}
+              style={{ borderRadius: '2px' }}
+              onClick={() => setCategoryFilter(categoryFilter === key ? '' : key as CategoryFilter)}
+            >
+              <config.icon size={12} className={config.color} />
+              {config.label}
+              {count > 0 && (
+                <span className="text-[10px] text-text-muted ml-0.5">({count})</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Notification List */}
@@ -191,16 +396,17 @@ const Notifications: React.FC = () => {
       ) : (
         <div className="space-y-1">
           {displayed.map((n) => {
-            const IconComponent = typeIcons[n.type] || Info;
-            const iconColor = typeColors[n.type] || 'text-text-muted';
+            const config = categoryConfig[n.type] || defaultCategory;
+            const IconComponent = config.icon;
+            const iconColor = config.color;
 
             return (
               <div
                 key={n.id}
-                className={`block-card flex items-start gap-3 cursor-pointer transition-colors hover:bg-bg-hover ${
+                className={`block-card flex items-start gap-3 cursor-pointer transition-colors hover:bg-bg-hover group ${
                   !n.is_read ? 'border-l-2 border-l-accent-blue' : ''
                 }`}
-                onClick={() => !n.is_read && markAsRead(n.id)}
+                onClick={() => handleNotificationClick(n)}
               >
                 {/* Icon */}
                 <div
@@ -213,6 +419,7 @@ const Notifications: React.FC = () => {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-text-muted">{config.emoji}</span>
                     <span
                       className={`text-sm font-medium ${
                         n.is_read ? 'text-text-secondary' : 'text-text-primary'
@@ -228,14 +435,28 @@ const Notifications: React.FC = () => {
                     )}
                   </div>
                   <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{n.message}</p>
+                  {n.entity_type && (
+                    <span className="text-[10px] text-accent-blue mt-1 inline-block">
+                      Click to view {n.entity_type.replace(/_/g, ' ')}
+                    </span>
+                  )}
                 </div>
 
-                {/* Time */}
-                <span className="text-[11px] text-text-muted whitespace-nowrap shrink-0 mt-0.5">
-                  {n.created_at
-                    ? formatDistanceToNow(parseISO(n.created_at), { addSuffix: true })
-                    : ''}
-                </span>
+                {/* Time + Dismiss */}
+                <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                  <span className="text-[11px] text-text-muted whitespace-nowrap">
+                    {n.created_at
+                      ? formatDistanceToNow(parseISO(n.created_at), { addSuffix: true })
+                      : ''}
+                  </span>
+                  <button
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-text-muted hover:text-accent-expense"
+                    onClick={(e) => dismissNotification(e, n.id)}
+                    title="Dismiss"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             );
           })}

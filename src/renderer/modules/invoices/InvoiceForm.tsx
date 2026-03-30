@@ -148,11 +148,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             due_date: inv.due_date ?? thirtyDaysLater(),
             terms: inv.terms ?? 'Net 30',
             subtotal: inv.subtotal ?? 0,
-            tax: inv.tax ?? 0,
-            discount: inv.discount ?? 0,
+            tax: inv.tax_amount ?? 0,
+            discount: inv.discount_amount ?? 0,
             total: inv.total ?? 0,
             notes: inv.notes ?? '',
-            terms_text: inv.terms_text ?? '',
+            terms_text: '',
             status: inv.status ?? 'draft',
           });
 
@@ -262,11 +262,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         due_date: form.due_date,
         terms: form.terms,
         subtotal,
-        tax: taxTotal,
-        discount: form.discount,
+        tax_amount: taxTotal,
+        discount_amount: form.discount,
         total,
         notes: form.notes,
-        terms_text: form.terms_text,
         status,
         amount_paid: 0,
       };

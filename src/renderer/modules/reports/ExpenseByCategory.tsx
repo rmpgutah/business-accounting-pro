@@ -61,7 +61,7 @@ const ExpenseByCategory: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.entry_date BETWEEN ? AND ?
+           WHERE je.date BETWEEN ? AND ?
              AND je.company_id = ?
              AND a.type = 'expense'
            GROUP BY a.subtype

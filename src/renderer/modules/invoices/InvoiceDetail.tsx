@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer } from 'lucide-react';
 import api from '../../lib/api';
+import { generateInvoiceHTML } from '../../lib/print-templates';
+import { useCompanyStore } from '../../stores/companyStore';
 import PaymentRecorder from './PaymentRecorder';
 
 // ─── Types ──────────────────────────────────────────────
@@ -75,6 +77,7 @@ interface InvoiceDetailProps {
 }
 
 const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [lines, setLines] = useState<LineItem[]>([]);
@@ -82,6 +85,29 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [sending, setSending] = useState(false);
+
+  const buildHTML = () => {
+    if (!invoice) return '';
+    return generateInvoiceHTML(invoice, activeCompany, client, lines);
+  };
+
+  const handlePreview = async () => {
+    const html = buildHTML();
+    if (!html) return;
+    await api.printPreview(html, `Invoice ${invoice?.invoice_number || ''}`);
+  };
+
+  const handlePrint = async () => {
+    const html = buildHTML();
+    if (!html) return;
+    await api.print(html);
+  };
+
+  const handleSavePDF = async () => {
+    const html = buildHTML();
+    if (!html) return;
+    await api.saveToPDF(html, `Invoice-${invoice?.invoice_number || ''}`);
+  };
 
   const loadData = async () => {
     try {
@@ -118,8 +144,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     if (!invoice || invoice.status === 'paid') return;
     setSending(true);
     try {
-      await api.update('invoices', invoiceId, { status: 'sent' });
-      setInvoice((prev) => (prev ? { ...prev, status: 'sent' } : prev));
+      const result = await api.sendInvoiceEmail(invoiceId);
+      if (result?.error) {
+        console.error('Send invoice failed:', result.error);
+      } else if (result?.newStatus) {
+        setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+      }
     } catch (err) {
       console.error('Failed to send invoice:', err);
     } finally {
@@ -158,15 +188,24 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         <div className="module-actions">
           <button
             className="block-btn flex items-center gap-2"
-            onClick={async () => {
-              try {
-                const result = await api.exportInvoicePdf(invoiceId);
-                if (result?.error) console.error(result.error);
-              } catch (err) { console.error('PDF export failed:', err); }
-            }}
+            onClick={handlePreview}
+          >
+            <Eye size={14} />
+            Preview
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={handlePrint}
+          >
+            <Printer size={14} />
+            Print
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={handleSavePDF}
           >
             <Download size={14} />
-            Export PDF
+            Save PDF
           </button>
           {invoice.status === 'draft' && (
             <button
@@ -180,11 +219,11 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           {invoice.status !== 'paid' && (
             <>
               <button
-                className="block-btn flex items-center gap-2"
+                className="block-btn-primary flex items-center gap-2"
                 onClick={handleSendInvoice}
-                disabled={sending || invoice.status === 'sent'}
+                disabled={sending}
               >
-                <Send size={14} />
+                <Mail size={14} />
                 {sending ? 'Sending...' : 'Send Invoice'}
               </button>
               <button

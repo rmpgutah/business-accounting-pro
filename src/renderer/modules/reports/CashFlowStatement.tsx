@@ -132,8 +132,8 @@ const CashFlowStatement: React.FC = () => {
 
         // Investing: asset purchases from inventory (is_asset = 1)
         const investRows: any[] = await api.rawQuery(
-          `SELECT COALESCE(SUM(cost * quantity), 0) as total
-           FROM inventory
+          `SELECT COALESCE(SUM(unit_cost * quantity), 0) as total
+           FROM inventory_items
            WHERE company_id = ? AND is_asset = 1 AND created_at BETWEEN ? AND ?`,
           [activeCompany.id, startDate, endDate]
         );
@@ -145,7 +145,7 @@ const CashFlowStatement: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.company_id = ? AND je.entry_date BETWEEN ? AND ?
+           WHERE je.company_id = ? AND je.date BETWEEN ? AND ?
              AND a.type = 'equity' AND a.subtype LIKE '%contributed%'`,
           [activeCompany.id, startDate, endDate]
         );
@@ -157,7 +157,7 @@ const CashFlowStatement: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.company_id = ? AND je.entry_date BETWEEN ? AND ?
+           WHERE je.company_id = ? AND je.date BETWEEN ? AND ?
              AND a.type = 'equity' AND a.subtype LIKE '%draw%'`,
           [activeCompany.id, startDate, endDate]
         );
@@ -169,7 +169,7 @@ const CashFlowStatement: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.company_id = ? AND je.entry_date < ?
+           WHERE je.company_id = ? AND je.date < ?
              AND a.type = 'asset' AND (a.subtype LIKE '%cash%' OR a.subtype LIKE '%bank%')`,
           [activeCompany.id, startDate]
         );

@@ -132,7 +132,7 @@ const BalanceSheet: React.FC = () => {
            FROM accounts a
            LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
            LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-             AND je.entry_date <= ?
+             AND je.date <= ?
              AND je.company_id = ?
            WHERE a.company_id = ?
              AND a.type IN ('asset', 'liability', 'equity')
@@ -160,7 +160,7 @@ const BalanceSheet: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.entry_date <= ?
+           WHERE je.date <= ?
              AND je.company_id = ?
              AND a.type IN ('revenue', 'expense')`,
           [asOfDate, activeCompany.id]

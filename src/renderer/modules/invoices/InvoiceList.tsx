@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { FileText, Plus, Search } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
-// ─── Types ──────────────────────────────────────────────
+// ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
 
 interface Invoice {
@@ -33,7 +34,7 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-// ─── Status Badge Map ───────────────────────────────────
+// ─── Status Badge Map ──────────────���────────────────────
 const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
   sent: { label: 'Sent', className: 'block-badge block-badge-warning' },
@@ -42,7 +43,7 @@ const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> 
   partial: { label: 'Partial', className: 'block-badge block-badge-purple' },
 };
 
-// ─── Status Tabs ────────────────────────────────────────
+// ─── Status Tabs ──────────────��─────────────────────────
 const TABS: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'draft', label: 'Draft' },
@@ -51,7 +52,7 @@ const TABS: { key: StatusTab; label: string }[] = [
   { key: 'overdue', label: 'Overdue' },
 ];
 
-// ─── Component ──────────────────────────────────────────
+// ─── Component ──────��───────────────────────────────────
 interface InvoiceListProps {
   onNewInvoice: () => void;
   onViewInvoice: (id: string) => void;
@@ -69,6 +70,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Fetch data
   useEffect(() => {
@@ -121,6 +125,86 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     return list;
   }, [invoices, activeTab, search, clientMap]);
 
+  // ─── Selection Helpers ──────────────────────────────────
+  const allSelected = filtered.length > 0 && filtered.every(inv => selectedIds.has(inv.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(inv => inv.id)));
+    }
+  }, [allSelected, filtered]);
+
+  // Clear selection when filters change
+  useEffect(() => { setSelectedIds(new Set()); }, [activeTab, search]);
+
+  // ─── Batch Actions ──────────────────────────────────────
+  const reload = useCallback(async () => {
+    const invoiceData = await api.query('invoices');
+    setInvoices(invoiceData ?? []);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBatchMarkSent = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('invoices', Array.from(selectedIds), { status: 'sent' });
+      await reload();
+    } catch (err) { console.error('Batch mark sent failed:', err); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  const handleBatchMarkPaid = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      // For "Mark as Paid", set status and amount_paid = total for each
+      for (const id of ids) {
+        const inv = invoices.find(i => i.id === id);
+        if (inv) {
+          await api.update('invoices', id, { status: 'paid', amount_paid: inv.total });
+        }
+      }
+      await reload();
+    } catch (err) { console.error('Batch mark paid failed:', err); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, invoices, reload]);
+
+  const handleBatchDelete = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchDelete('invoices', Array.from(selectedIds));
+      await reload();
+    } catch (err) { console.error('Batch delete failed:', err); }
+    finally { setBatchLoading(false); setShowDeleteConfirm(false); }
+  }, [selectedIds, reload]);
+
+  const handleExportSelected = useCallback(() => {
+    const selected = filtered.filter(inv => selectedIds.has(inv.id));
+    const exportData = selected.map(inv => ({
+      invoice_number: inv.invoice_number,
+      client: clientMap.get(inv.client_id) ?? '',
+      issue_date: inv.issue_date,
+      due_date: inv.due_date,
+      total: inv.total,
+      amount_paid: inv.amount_paid,
+      balance_due: inv.total - inv.amount_paid,
+      status: inv.status,
+    }));
+    downloadCSVBlob(exportData, 'invoices-export.csv');
+  }, [filtered, selectedIds, clientMap]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -130,7 +214,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   }
 
   return (
-    <div className="p-6 space-y-5 overflow-y-auto h-full">
+    <div className="p-6 space-y-5 overflow-y-auto h-full" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Invoices</h1>
@@ -197,6 +281,15 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           <table className="block-table">
             <thead>
               <tr>
+                <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <th>Invoice #</th>
                 <th>Client Name</th>
                 <th>Issue Date</th>
@@ -211,12 +304,22 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               {filtered.map((inv) => {
                 const balance = inv.total - inv.amount_paid;
                 const badge = STATUS_BADGE[inv.status] ?? STATUS_BADGE.draft;
+                const isSelected = selectedIds.has(inv.id);
                 return (
                   <tr
                     key={inv.id}
-                    className="cursor-pointer"
+                    className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onViewInvoice(inv.id)}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(inv.id)}
+                        className="cursor-pointer"
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                    </td>
                     <td className="font-mono text-accent-blue">{inv.invoice_number}</td>
                     <td>
                       <button
@@ -248,6 +351,80 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ─── Floating Batch Action Bar ─────────────────────── */}
+      {someSelected && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
+          style={{
+            background: 'var(--bg-secondary, #1e1e2e)',
+            borderRadius: '2px',
+            minWidth: '500px',
+          }}
+        >
+          <span className="text-xs font-semibold text-text-muted mr-2">
+            {selectedIds.size} of {filtered.length} selected
+          </span>
+
+          <button
+            className="block-btn-primary flex items-center gap-1.5 text-xs"
+            onClick={handleBatchMarkSent}
+            disabled={batchLoading}
+          >
+            <Send size={13} />
+            Mark as Sent
+          </button>
+
+          <button
+            className="block-btn-success flex items-center gap-1.5 text-xs"
+            onClick={handleBatchMarkPaid}
+            disabled={batchLoading}
+            style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            <CheckCircle size={13} />
+            Mark as Paid
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleExportSelected}
+            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
+
+          {!showDeleteConfirm ? (
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold"
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <Trash2 size={13} />
+              Delete
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-accent-expense font-semibold">Confirm?</span>
+              <button
+                className="text-xs font-semibold"
+                onClick={handleBatchDelete}
+                disabled={batchLoading}
+                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Yes, Delete
+              </button>
+              <button
+                className="text-xs font-semibold text-text-muted"
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

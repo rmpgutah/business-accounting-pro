@@ -53,6 +53,14 @@ const api = {
   exportCsv: (table: string, filters?: Record<string, any>) =>
     window.electronAPI.invoke('export:csv', { table, filters }),
 
+  // Invoice PDF & Email
+  generateInvoicePDF: (invoiceId: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:generate-pdf', invoiceId),
+  previewInvoicePDF: (invoiceId: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:preview-pdf', invoiceId),
+  sendInvoiceEmail: (invoiceId: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
+    window.electronAPI.invoke('invoice:send-email', invoiceId),
+
   // File dialog
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
     window.electronAPI.invoke('dialog:open-file', options),
@@ -66,6 +74,46 @@ const api = {
   listUsers: () => window.electronAPI.invoke('auth:list-users'),
   linkUserCompany: (userId: string, companyId: string, role?: string) =>
     window.electronAPI.invoke('auth:link-user-company', { userId, companyId, role }),
+
+  // Recurring Processing
+  processRecurringNow: () => window.electronAPI.invoke('recurring:process-now'),
+  getLastProcessed: () => window.electronAPI.invoke('recurring:last-processed'),
+  getRecurringHistory: (templateId?: string) =>
+    window.electronAPI.invoke('recurring:history', { templateId }),
+
+  // Notification Engine
+  runNotificationChecks: () => window.electronAPI.invoke('notification:run-checks'),
+  clearAllNotifications: () => window.electronAPI.invoke('notification:clear-all'),
+  dismissNotification: (id: string) => window.electronAPI.invoke('notification:dismiss', id),
+  getNotificationPreferences: () => window.electronAPI.invoke('notification:preferences'),
+  updateNotificationPreferences: (prefs: Record<string, boolean>) =>
+    window.electronAPI.invoke('notification:update-preferences', prefs),
+
+  // Enhanced Dashboard Activity
+  dashboardActivity: (entityType?: string, limit?: number) =>
+    window.electronAPI.invoke('dashboard:activity', { entityType, limit }),
+
+  // Batch Operations
+  batchUpdate: (table: string, ids: string[], data: Record<string, any>) =>
+    window.electronAPI.invoke('batch:update', { table, ids, data }),
+  batchDelete: (table: string, ids: string[]) =>
+    window.electronAPI.invoke('batch:delete', { table, ids }),
+
+  // Import / Export
+  importPreviewCSV: () =>
+    window.electronAPI.invoke('import:preview-csv'),
+  importExecute: (filePath: string, columnMapping: Record<string, string>, targetTable: string) =>
+    window.electronAPI.invoke('import:execute', { filePath, columnMapping, targetTable }),
+  exportFullBackup: () =>
+    window.electronAPI.invoke('export:full-backup'),
+
+  // Print / Preview
+  printPreview: (html: string, title: string): Promise<{ success?: boolean }> =>
+    window.electronAPI.invoke('print:preview', { html, title }),
+  saveToPDF: (html: string, title: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('print:save-pdf', { html, title }),
+  print: (html: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('print:print', { html }),
 
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),

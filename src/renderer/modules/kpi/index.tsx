@@ -6,7 +6,19 @@ import {
   Users,
   BarChart3,
   Percent,
+  Flame,
+  Shield,
+  RefreshCw,
+  Scale,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import api from '../../lib/api';
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -17,16 +29,47 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+const fmtCompact = (value: number) => {
+  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+  return fmt.format(value);
+};
+
 // ─── Types ──────────────────────────────────────────────
 interface ClientRevenue {
   client_name: string;
   total_revenue: number;
 }
 
-interface MonthlyRevenue {
+interface GrossMarginPoint {
   month: string;
-  total_revenue: number;
+  margin: number;
+  revenue: number;
+  cogs: number;
 }
+
+// ─── Custom Tooltip ─────────────────────────────────────
+const MarginTooltip: React.FC<any> = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      className="text-xs px-3 py-2"
+      style={{
+        backgroundColor: '#1a1a1a',
+        border: '1px solid #2e2e2e',
+        borderRadius: '2px',
+      }}
+    >
+      <p className="text-text-muted mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} style={{ color: p.color }} className="font-mono">
+          {p.dataKey === 'margin' ? 'Gross Margin' : p.dataKey}:{' '}
+          {p.dataKey === 'margin' ? `${p.value.toFixed(1)}%` : fmt.format(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+};
 
 // ─── KPI Dashboard Component ────────────────────────────
 const KPIDashboard: React.FC = () => {
@@ -36,7 +79,16 @@ const KPIDashboard: React.FC = () => {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [topClients, setTopClients] = useState<ClientRevenue[]>([]);
-  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
+  const [grossMarginTrend, setGrossMarginTrend] = useState<GrossMarginPoint[]>([]);
+  const [revenuePerEmployee, setRevenuePerEmployee] = useState(0);
+  const [employeeCount, setEmployeeCount] = useState(0);
+  const [arTurnover, setArTurnover] = useState(0);
+  const [currentRatio, setCurrentRatio] = useState(0);
+  const [currentAssets, setCurrentAssets] = useState(0);
+  const [currentLiabilities, setCurrentLiabilities] = useState(0);
+  const [monthlyBurnRate, setMonthlyBurnRate] = useState(0);
+  const [runway, setRunway] = useState(0);
+  const [cashOnHand, setCashOnHand] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,48 +96,112 @@ const KPIDashboard: React.FC = () => {
 
     const load = async () => {
       try {
-        // Revenue per billable hour
-        const [revenueResult] = await api.rawQuery(
-          `SELECT COALESCE(SUM(total), 0) as total_revenue FROM invoices WHERE status IN ('paid', 'sent')`
-        );
-        const [hoursResult] = await api.rawQuery(
-          `SELECT COALESCE(SUM(duration_minutes), 0) as total_billable_minutes FROM time_entries WHERE is_billable = 1`
-        );
-        const [totalHoursResult] = await api.rawQuery(
-          `SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries`
-        );
-        const [expenseResult] = await api.rawQuery(
-          `SELECT COALESCE(SUM(amount), 0) as total_expenses FROM expenses`
-        );
-
-        // Top 5 clients by revenue
-        const clientResults = await api.rawQuery(
-          `SELECT c.name as client_name, COALESCE(SUM(i.total), 0) as total_revenue
-           FROM invoices i
-           JOIN clients c ON i.client_id = c.id
-           WHERE i.status IN ('paid', 'sent')
-           GROUP BY c.id, c.name
-           ORDER BY total_revenue DESC
-           LIMIT 5`
-        );
-
-        // Monthly revenue trend (last 6 months)
-        const monthlyResults = await api.rawQuery(
-          `SELECT strftime('%Y-%m', issue_date) as month,
-                  COALESCE(SUM(total), 0) as total_revenue
-           FROM invoices
-           WHERE status IN ('paid', 'sent')
-             AND issue_date >= date('now', '-6 months')
-           GROUP BY month
-           ORDER BY month ASC`
-        );
+        const [
+          revenueResult,
+          hoursResult,
+          totalHoursResult,
+          expenseResult,
+          clientResults,
+          grossMarginData,
+          employeeCountData,
+          arData,
+          avgReceivablesData,
+          assetData,
+          liabilityData,
+          cashData,
+          last6MonthExpenses,
+        ] = await Promise.all([
+          // Revenue per billable hour
+          api.rawQuery(
+            `SELECT COALESCE(SUM(total), 0) as total_revenue FROM invoices WHERE status IN ('paid', 'sent')`
+          ),
+          api.rawQuery(
+            `SELECT COALESCE(SUM(duration_minutes), 0) as total_billable_minutes FROM time_entries WHERE is_billable = 1`
+          ),
+          api.rawQuery(
+            `SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries`
+          ),
+          api.rawQuery(
+            `SELECT COALESCE(SUM(amount), 0) as total_expenses FROM expenses`
+          ),
+          // Top 5 clients by revenue
+          api.rawQuery(
+            `SELECT c.name as client_name, COALESCE(SUM(i.total), 0) as total_revenue
+             FROM invoices i
+             JOIN clients c ON i.client_id = c.id
+             WHERE i.status IN ('paid', 'sent')
+             GROUP BY c.id, c.name
+             ORDER BY total_revenue DESC
+             LIMIT 5`
+          ),
+          // Gross margin by month (last 6 months) — revenue vs expenses as proxy for COGS
+          api.rawQuery(
+            `SELECT
+               r.month,
+               COALESCE(r.rev, 0) as revenue,
+               COALESCE(e.exp, 0) as cogs
+             FROM (
+               SELECT strftime('%Y-%m', issue_date) as month, SUM(total) as rev
+               FROM invoices WHERE status IN ('paid','sent') AND issue_date >= date('now', '-6 months')
+               GROUP BY month
+             ) r
+             LEFT JOIN (
+               SELECT strftime('%Y-%m', date) as month, SUM(amount) as exp
+               FROM expenses WHERE date >= date('now', '-6 months')
+               GROUP BY month
+             ) e ON r.month = e.month
+             ORDER BY r.month ASC`
+          ),
+          // Employee count
+          api.rawQuery(
+            `SELECT COUNT(*) as cnt FROM employees WHERE status = 'active'`
+          ),
+          // Net credit sales (last 12 months) for AR turnover
+          api.rawQuery(
+            `SELECT COALESCE(SUM(total), 0) as net_credit_sales
+             FROM invoices
+             WHERE status IN ('paid','sent','partial','overdue')
+               AND issue_date >= date('now', '-12 months')`
+          ),
+          // Average accounts receivable
+          api.rawQuery(
+            `SELECT COALESCE(SUM(total - amount_paid), 0) as avg_receivables
+             FROM invoices
+             WHERE status IN ('sent','partial','overdue')`
+          ),
+          // Current assets (from accounts table)
+          api.rawQuery(
+            `SELECT COALESCE(SUM(balance), 0) as total
+             FROM accounts WHERE type = 'asset' AND is_active = 1`
+          ),
+          // Current liabilities
+          api.rawQuery(
+            `SELECT COALESCE(SUM(balance), 0) as total
+             FROM accounts WHERE type = 'liability' AND is_active = 1`
+          ),
+          // Cash on hand (bank accounts)
+          api.rawQuery(
+            `SELECT COALESCE(SUM(current_balance), 0) as cash FROM bank_accounts`
+          ),
+          // Last 6 months total expenses for burn rate
+          api.rawQuery(
+            `SELECT COALESCE(SUM(amount), 0) as total, COUNT(DISTINCT strftime('%Y-%m', date)) as months
+             FROM expenses WHERE date >= date('now', '-6 months')`
+          ),
+        ]);
 
         if (cancelled) return;
 
-        const revenue = revenueResult?.total_revenue ?? 0;
-        const billableMinutes = hoursResult?.total_billable_minutes ?? 0;
-        const totalMinutes = totalHoursResult?.total_minutes ?? 0;
-        const expenses = expenseResult?.total_expenses ?? 0;
+        // Basic KPIs
+        const rev1 = Array.isArray(revenueResult) ? revenueResult[0] : revenueResult;
+        const hrs1 = Array.isArray(hoursResult) ? hoursResult[0] : hoursResult;
+        const thrs = Array.isArray(totalHoursResult) ? totalHoursResult[0] : totalHoursResult;
+        const exp1 = Array.isArray(expenseResult) ? expenseResult[0] : expenseResult;
+
+        const revenue = rev1?.total_revenue ?? 0;
+        const billableMinutes = hrs1?.total_billable_minutes ?? 0;
+        const totalMinutes = thrs?.total_minutes ?? 0;
+        const expenses = exp1?.total_expenses ?? 0;
 
         const billableHours = billableMinutes / 60;
         const totalHours = totalMinutes / 60;
@@ -96,7 +212,51 @@ const KPIDashboard: React.FC = () => {
         setUtilizationRate(totalHours > 0 ? (billableMinutes / totalMinutes) * 100 : 0);
         setProfitMargin(revenue > 0 ? ((revenue - expenses) / revenue) * 100 : 0);
         setTopClients(clientResults ?? []);
-        setMonthlyRevenue(monthlyResults ?? []);
+
+        // Gross Margin Trend
+        if (grossMarginData && Array.isArray(grossMarginData)) {
+          const trend: GrossMarginPoint[] = grossMarginData.map((r: any) => ({
+            month: r.month,
+            revenue: r.revenue || 0,
+            cogs: r.cogs || 0,
+            margin: r.revenue > 0 ? ((r.revenue - r.cogs) / r.revenue) * 100 : 0,
+          }));
+          setGrossMarginTrend(trend);
+        }
+
+        // Revenue per Employee
+        const empCount = Array.isArray(employeeCountData) ? employeeCountData[0]?.cnt : employeeCountData?.cnt;
+        const ec = empCount || 0;
+        setEmployeeCount(ec);
+        setRevenuePerEmployee(ec > 0 ? revenue / ec : 0);
+
+        // AR Turnover
+        const arSales = Array.isArray(arData) ? arData[0] : arData;
+        const arAvg = Array.isArray(avgReceivablesData) ? avgReceivablesData[0] : avgReceivablesData;
+        const netCreditSales = arSales?.net_credit_sales ?? 0;
+        const avgAR = arAvg?.avg_receivables ?? 0;
+        setArTurnover(avgAR > 0 ? netCreditSales / avgAR : 0);
+
+        // Current Ratio
+        const assets = Array.isArray(assetData) ? assetData[0] : assetData;
+        const liabilities = Array.isArray(liabilityData) ? liabilityData[0] : liabilityData;
+        const ca = Math.abs(assets?.total ?? 0);
+        const cl = Math.abs(liabilities?.total ?? 0);
+        setCurrentAssets(ca);
+        setCurrentLiabilities(cl);
+        setCurrentRatio(cl > 0 ? ca / cl : ca > 0 ? Infinity : 0);
+
+        // Monthly Burn Rate & Runway
+        const cashRow = Array.isArray(cashData) ? cashData[0] : cashData;
+        const cash = cashRow?.cash ?? 0;
+        setCashOnHand(cash);
+
+        const burnRow = Array.isArray(last6MonthExpenses) ? last6MonthExpenses[0] : last6MonthExpenses;
+        const totalExp6m = burnRow?.total ?? 0;
+        const monthCount = burnRow?.months ?? 1;
+        const burn = monthCount > 0 ? totalExp6m / monthCount : 0;
+        setMonthlyBurnRate(burn);
+        setRunway(burn > 0 ? cash / burn : 0);
       } catch (err) {
         console.error('KPI data load failed:', err);
       } finally {
@@ -105,7 +265,9 @@ const KPIDashboard: React.FC = () => {
     };
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const utilizationColor =
@@ -115,13 +277,29 @@ const KPIDashboard: React.FC = () => {
         ? 'var(--color-accent-warning)'
         : 'var(--color-accent-expense)';
 
-  const maxClientRevenue = topClients.length > 0
-    ? Math.max(...topClients.map((c) => c.total_revenue))
-    : 1;
+  const maxClientRevenue =
+    topClients.length > 0
+      ? Math.max(...topClients.map((c) => c.total_revenue))
+      : 1;
 
-  const maxMonthlyRevenue = monthlyRevenue.length > 0
-    ? Math.max(...monthlyRevenue.map((m) => m.total_revenue))
-    : 1;
+  const burnRateColor =
+    monthlyBurnRate <= 0
+      ? 'var(--color-accent-income)'
+      : 'var(--color-accent-expense)';
+
+  const runwayColor =
+    runway >= 12
+      ? 'var(--color-accent-income)'
+      : runway >= 6
+        ? 'var(--color-accent-warning)'
+        : 'var(--color-accent-expense)';
+
+  const currentRatioColor =
+    currentRatio >= 2
+      ? 'var(--color-accent-income)'
+      : currentRatio >= 1
+        ? 'var(--color-accent-warning)'
+        : 'var(--color-accent-expense)';
 
   if (loading) {
     return (
@@ -141,7 +319,7 @@ const KPIDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stat Cards — 3-column grid */}
+      {/* ─── Row 1: Core Financial KPIs (3 cols) ─── */}
       <div className="grid grid-cols-3 gap-4">
         {/* Revenue per Billable Hour */}
         <div className="stat-card border-l-2 border-l-accent-income">
@@ -164,7 +342,6 @@ const KPIDashboard: React.FC = () => {
           <p className="stat-value" style={{ color: utilizationColor }}>
             {utilizationRate.toFixed(1)}%
           </p>
-          {/* Progress bar */}
           <div
             style={{
               width: '100%',
@@ -191,9 +368,10 @@ const KPIDashboard: React.FC = () => {
         <div
           className="stat-card border-l-2"
           style={{
-            borderLeftColor: profitMargin >= 0
-              ? 'var(--color-accent-blue)'
-              : 'var(--color-accent-expense)',
+            borderLeftColor:
+              profitMargin >= 0
+                ? 'var(--color-accent-blue)'
+                : 'var(--color-accent-expense)',
           }}
         >
           <div className="flex items-center gap-2 mb-1">
@@ -203,9 +381,10 @@ const KPIDashboard: React.FC = () => {
           <p
             className="stat-value"
             style={{
-              color: profitMargin >= 0
-                ? 'var(--color-accent-blue)'
-                : 'var(--color-accent-expense)',
+              color:
+                profitMargin >= 0
+                  ? 'var(--color-accent-blue)'
+                  : 'var(--color-accent-expense)',
             }}
           >
             {profitMargin.toFixed(1)}%
@@ -216,101 +395,221 @@ const KPIDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Top 5 Clients by Revenue */}
-        <div className="block-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Users size={14} className="text-accent-purple" />
-            <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-              Top 5 Clients by Revenue
-            </h2>
+      {/* ─── Gross Margin Trend Chart ─── */}
+      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={14} className="text-accent-income" />
+          <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+            Gross Margin Trend (Last 6 Months)
+          </h2>
+        </div>
+        {grossMarginTrend.length === 0 ? (
+          <div className="flex items-center justify-center" style={{ minHeight: 260 }}>
+            <span className="text-xs text-text-muted">No historical data available</span>
           </div>
-          {topClients.length === 0 ? (
-            <div className="empty-state py-8">
-              <span className="text-text-muted text-sm">No client revenue data yet</span>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {topClients.map((client, i) => (
-                <div key={i}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-text-primary truncate" style={{ maxWidth: '60%' }}>
-                      {client.client_name}
-                    </span>
-                    <span className="text-sm font-mono text-text-secondary">
-                      {fmt.format(client.total_revenue)}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '8px',
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      borderRadius: '2px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${(client.total_revenue / maxClientRevenue) * 100}%`,
-                        height: '100%',
-                        backgroundColor: 'var(--color-accent-purple)',
-                        borderRadius: '2px',
-                        transition: 'width 0.4s ease',
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        ) : (
+          <div style={{ width: '100%', minHeight: 260 }}>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={grossMarginTrend}>
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[0, 100]}
+                  tickFormatter={(v: number) => `${v}%`}
+                />
+                <Tooltip content={<MarginTooltip />} />
+                <Line
+                  type="monotone"
+                  dataKey="margin"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: '#22c55e', stroke: '#0a0a0a', strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: '#22c55e' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Row 2: Advanced KPIs (3 cols) ─── */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Revenue per Employee */}
+        <div className="stat-card border-l-2 border-l-accent-purple">
+          <div className="flex items-center gap-2 mb-1">
+            <Users size={14} className="text-accent-purple" />
+            <span className="stat-label">Revenue per Employee</span>
+          </div>
+          <p className="stat-value text-accent-purple">
+            {fmt.format(revenuePerEmployee)}
+          </p>
+          <span className="text-xs text-text-muted">
+            {employeeCount} active employee{employeeCount !== 1 ? 's' : ''}
+          </span>
         </div>
 
-        {/* Monthly Revenue Trend */}
-        <div className="block-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={14} className="text-accent-income" />
-            <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-              Monthly Revenue Trend (Last 6 Months)
-            </h2>
+        {/* AR Turnover */}
+        <div className="stat-card border-l-2 border-l-accent-blue">
+          <div className="flex items-center gap-2 mb-1">
+            <RefreshCw size={14} className="text-accent-blue" />
+            <span className="stat-label">AR Turnover Ratio</span>
           </div>
-          {monthlyRevenue.length === 0 ? (
-            <div className="empty-state py-8">
-              <span className="text-text-muted text-sm">No monthly revenue data yet</span>
-            </div>
-          ) : (
-            <div className="flex items-end gap-2" style={{ height: '180px' }}>
-              {monthlyRevenue.map((month, i) => {
-                const barHeight = maxMonthlyRevenue > 0
-                  ? (month.total_revenue / maxMonthlyRevenue) * 160
-                  : 0;
-                return (
-                  <div
-                    key={i}
-                    className="flex flex-col items-center flex-1"
-                    style={{ height: '100%', justifyContent: 'flex-end' }}
-                  >
-                    <span className="text-xs font-mono text-text-secondary mb-1">
-                      {fmt.format(month.total_revenue)}
-                    </span>
-                    <div
-                      style={{
-                        width: '100%',
-                        height: `${Math.max(barHeight, 4)}px`,
-                        backgroundColor: 'var(--color-accent-income)',
-                        borderRadius: '2px',
-                        transition: 'height 0.4s ease',
-                      }}
-                    />
-                    <span className="text-[10px] text-text-muted mt-1">
-                      {month.month}
-                    </span>
-                  </div>
-                );
-              })}
+          <p className="stat-value text-accent-blue">
+            {arTurnover.toFixed(1)}x
+          </p>
+          <span className="text-xs text-text-muted">
+            {arTurnover > 0
+              ? `~${Math.round(365 / arTurnover)} days to collect`
+              : 'No receivables data'}
+          </span>
+        </div>
+
+        {/* Current Ratio */}
+        <div className="stat-card border-l-2" style={{ borderLeftColor: currentRatioColor }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Scale size={14} style={{ color: currentRatioColor }} />
+            <span className="stat-label">Current Ratio</span>
+          </div>
+          <p className="stat-value" style={{ color: currentRatioColor }}>
+            {currentRatio === Infinity ? 'N/A' : currentRatio.toFixed(2)}
+          </p>
+          <span className="text-xs text-text-muted">
+            {fmtCompact(currentAssets)} assets / {fmtCompact(currentLiabilities)} liabilities
+          </span>
+          {currentRatio !== Infinity && currentRatio > 0 && (
+            <div
+              style={{
+                width: '100%',
+                height: '6px',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                borderRadius: '2px',
+                marginTop: '0.5rem',
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(currentRatio / 3, 1) * 100}%`,
+                  height: '100%',
+                  backgroundColor: currentRatioColor,
+                  borderRadius: '2px',
+                  transition: 'width 0.4s ease',
+                }}
+              />
             </div>
           )}
         </div>
+      </div>
+
+      {/* ─── Row 3: Burn Rate & Runway (2 cols) ─── */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Monthly Burn Rate */}
+        <div className="stat-card border-l-2" style={{ borderLeftColor: burnRateColor }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Flame size={14} style={{ color: burnRateColor }} />
+            <span className="stat-label">Monthly Burn Rate</span>
+          </div>
+          <p className="stat-value" style={{ color: burnRateColor }}>
+            {fmt.format(monthlyBurnRate)}
+          </p>
+          <span className="text-xs text-text-muted">
+            Average of last 6 months expenses
+          </span>
+        </div>
+
+        {/* Runway */}
+        <div className="stat-card border-l-2" style={{ borderLeftColor: runwayColor }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Shield size={14} style={{ color: runwayColor }} />
+            <span className="stat-label">Runway</span>
+          </div>
+          <p className="stat-value" style={{ color: runwayColor }}>
+            {runway === Infinity || monthlyBurnRate <= 0
+              ? 'Infinite'
+              : `${runway.toFixed(1)} months`}
+          </p>
+          <span className="text-xs text-text-muted">
+            {fmtCompact(cashOnHand)} cash / {fmtCompact(monthlyBurnRate)} monthly burn
+          </span>
+          {runway > 0 && runway !== Infinity && monthlyBurnRate > 0 && (
+            <div
+              style={{
+                width: '100%',
+                height: '6px',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                borderRadius: '2px',
+                marginTop: '0.5rem',
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(runway / 24, 1) * 100}%`,
+                  height: '100%',
+                  backgroundColor: runwayColor,
+                  borderRadius: '2px',
+                  transition: 'width 0.4s ease',
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Bottom Row: Top Clients ─── */}
+      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="flex items-center gap-2 mb-4">
+          <Users size={14} className="text-accent-purple" />
+          <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+            Top 5 Clients by Revenue
+          </h2>
+        </div>
+        {topClients.length === 0 ? (
+          <div className="empty-state py-8">
+            <span className="text-text-muted text-sm">No client revenue data yet</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {topClients.map((client, i) => (
+              <div key={i}>
+                <div className="flex justify-between items-center mb-1">
+                  <span
+                    className="text-sm text-text-primary truncate"
+                    style={{ maxWidth: '60%' }}
+                  >
+                    {client.client_name}
+                  </span>
+                  <span className="text-sm font-mono text-text-secondary">
+                    {fmt.format(client.total_revenue)}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    borderRadius: '2px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${(client.total_revenue / maxClientRevenue) * 100}%`,
+                      height: '100%',
+                      backgroundColor: 'var(--color-accent-purple)',
+                      borderRadius: '2px',
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

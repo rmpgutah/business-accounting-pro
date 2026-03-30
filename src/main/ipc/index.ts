@@ -1,8 +1,81 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import * as db from '../database';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { generateInvoicePDF, generateInvoiceHTML } from '../services/pdf-generator';
+import { sendInvoiceEmail } from '../services/email-sender';
+import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
+import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
+import { openPrintPreview, saveHTMLAsPDF, printHTML } from '../services/print-preview';
+
+// ─── CSV Helpers (shared by import/export handlers) ──────
+function escapeCSVField(val: any): string {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  return str.includes(',') || str.includes('"') || str.includes('\n')
+    ? `"${str.replace(/"/g, '""')}"`
+    : str;
+}
+
+function rowsToCSV(rows: any[]): string {
+  if (rows.length === 0) return '';
+  const headers = Object.keys(rows[0]);
+  return [
+    headers.join(','),
+    ...rows.map(row => headers.map(h => escapeCSVField(row[h])).join(',')),
+  ].join('\n');
+}
+
+function parseCSV(text: string): { headers: string[]; rows: string[][] } {
+  const lines: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === '\n' && !inQuotes) {
+      lines.push(current);
+      current = '';
+    } else if (ch === '\r' && !inQuotes) {
+      // skip carriage returns
+    } else {
+      current += ch;
+    }
+  }
+  if (current) lines.push(current);
+
+  const splitLine = (line: string): string[] => {
+    const fields: string[] = [];
+    let field = '';
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (q && line[i + 1] === '"') { field += '"'; i++; }
+        else q = !q;
+      } else if (c === ',' && !q) {
+        fields.push(field);
+        field = '';
+      } else {
+        field += c;
+      }
+    }
+    fields.push(field);
+    return fields;
+  };
+
+  const headers = lines.length > 0 ? splitLine(lines[0]) : [];
+  const rows = lines.slice(1).filter(l => l.trim()).map(splitLine);
+  return { headers, rows };
+}
 
 // ─── Password Hashing (pbkdf2 — no external deps) ──────
 function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
@@ -28,9 +101,19 @@ export function registerIpcHandlers(): void {
     return db.getById(table, id);
   });
 
+  // Tables that do NOT have a company_id column
+  const tablesWithoutCompanyId = new Set([
+    'invoice_line_items', 'journal_entry_lines', 'pay_stubs',
+    'budget_lines', 'bank_transactions', 'bank_reconciliation_matches',
+    'payments', 'categories', 'users', 'user_companies',
+  ]);
+
   ipcMain.handle('db:create', (_event, { table, data }) => {
     const companyId = db.getCurrentCompanyId();
-    const record = db.create(table, { ...data, company_id: companyId });
+    const payload = tablesWithoutCompanyId.has(table)
+      ? { ...data }
+      : { ...data, company_id: companyId };
+    const record = db.create(table, payload);
     if (companyId) db.logAudit(companyId, table, record.id, 'create');
     return record;
   });
@@ -241,7 +324,7 @@ export function registerIpcHandlers(): void {
     return { path: filePath, name: path.basename(filePath), size: stats.size };
   });
 
-  // ─── PDF Export (Invoice) ──────────────────────────────
+  // ─── PDF Export (Invoice) — Download ────────────────────
   ipcMain.handle('export:invoice-pdf', async (_event, invoiceId: string) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
@@ -256,32 +339,138 @@ export function registerIpcHandlers(): void {
       'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
     ).all(invoiceId) as any[];
 
-    // Build HTML for PDF
-    const html = buildInvoiceHTML(company, client, invoice, lineItems);
+    const { filePath } = await dialog.showSaveDialog({
+      defaultPath: `Invoice-${invoice.invoice_number}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
 
-    // Create hidden window for printing
-    const win = new BrowserWindow({ show: false, width: 800, height: 1100 });
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    if (!filePath) return { cancelled: true };
+
+    try {
+      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      fs.writeFileSync(filePath, pdfBuffer);
+      return { path: filePath };
+    } catch (err: any) {
+      return { error: err?.message || 'PDF generation failed' };
+    }
+  });
+
+  // ─── PDF Generate (Invoice) — same as export ──────────
+  ipcMain.handle('invoice:generate-pdf', async (_event, invoiceId: string) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No company selected' };
+
+    const dbInstance = db.getDb();
+    const invoice = db.getById('invoices', invoiceId);
+    if (!invoice) return { error: 'Invoice not found' };
+
+    const client = db.getById('clients', invoice.client_id);
+    const company = db.getById('companies', companyId);
+    const lineItems = dbInstance.prepare(
+      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
+    ).all(invoiceId) as any[];
 
     const { filePath } = await dialog.showSaveDialog({
       defaultPath: `Invoice-${invoice.invoice_number}.pdf`,
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     });
 
-    if (!filePath) {
-      win.close();
-      return { cancelled: true };
-    }
+    if (!filePath) return { cancelled: true };
 
-    const pdfData = await win.webContents.printToPDF({
-      pageSize: 'Letter',
-      margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
-      printBackground: true,
+    try {
+      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      fs.writeFileSync(filePath, pdfBuffer);
+      return { path: filePath };
+    } catch (err: any) {
+      return { error: err?.message || 'PDF generation failed' };
+    }
+  });
+
+  // ─── PDF Preview (Invoice) — Opens in new window ───────
+  ipcMain.handle('invoice:preview-pdf', async (_event, invoiceId: string) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No company selected' };
+
+    const dbInstance = db.getDb();
+    const invoice = db.getById('invoices', invoiceId);
+    if (!invoice) return { error: 'Invoice not found' };
+
+    const client = db.getById('clients', invoice.client_id);
+    const company = db.getById('companies', companyId);
+    const lineItems = dbInstance.prepare(
+      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
+    ).all(invoiceId) as any[];
+
+    const html = generateInvoiceHTML(invoice, company, client, lineItems);
+
+    const previewWin = new BrowserWindow({
+      width: 820,
+      height: 1060,
+      title: `Invoice ${invoice.invoice_number} — Preview`,
+      autoHideMenuBar: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
     });
 
-    fs.writeFileSync(filePath, pdfData);
-    win.close();
-    return { path: filePath };
+    await previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    return { success: true };
+  });
+
+  // ─── Email Invoice ─────────────────────────────────────
+  ipcMain.handle('invoice:send-email', async (_event, invoiceId: string) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No company selected' };
+
+    const dbInstance = db.getDb();
+    const invoice = db.getById('invoices', invoiceId);
+    if (!invoice) return { error: 'Invoice not found' };
+
+    const client = db.getById('clients', invoice.client_id);
+    const company = db.getById('companies', companyId);
+    const lineItems = dbInstance.prepare(
+      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
+    ).all(invoiceId) as any[];
+
+    try {
+      // Generate PDF to temp location
+      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      const tmpDir = os.tmpdir();
+      const pdfPath = path.join(tmpDir, `Invoice-${invoice.invoice_number}.pdf`);
+      fs.writeFileSync(pdfPath, pdfBuffer);
+
+      // Open email client with pre-filled content
+      const emailResult = await sendInvoiceEmail(invoice, company, client);
+
+      if (emailResult.success) {
+        // Update invoice status to sent if still draft
+        if (invoice.status === 'draft') {
+          db.update('invoices', invoiceId, { status: 'sent' });
+        }
+
+        // Log the email
+        const emailId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        dbInstance.prepare(
+          'INSERT INTO email_log (id, company_id, recipient, subject, body_preview, entity_type, entity_id, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(
+          emailId,
+          companyId,
+          client?.email || '',
+          `Invoice ${invoice.invoice_number} from ${company?.name || ''}`,
+          'Invoice email opened in mail client',
+          'invoice',
+          invoiceId,
+          'sent',
+          now
+        );
+
+        // Reveal the PDF in filesystem so user can attach it
+        shell.showItemInFolder(pdfPath);
+      }
+
+      return { ...emailResult, pdfPath, newStatus: invoice.status === 'draft' ? 'sent' : invoice.status };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to send email' };
+    }
   });
 
   // ─── CSV Export ────────────────────────────────────────
@@ -350,20 +539,7 @@ export function registerIpcHandlers(): void {
     const rows = db.queryAll(table, filters || {});
     if (rows.length === 0) return { error: 'No data to export' };
 
-    const headers = Object.keys(rows[0]);
-    const csvLines = [
-      headers.join(','),
-      ...rows.map(row =>
-        headers.map(h => {
-          const val = row[h];
-          if (val === null || val === undefined) return '';
-          const str = String(val);
-          return str.includes(',') || str.includes('"') || str.includes('\n')
-            ? `"${str.replace(/"/g, '""')}"`
-            : str;
-        }).join(',')
-      ),
-    ];
+    const csv = rowsToCSV(rows);
 
     const { filePath } = await dialog.showSaveDialog({
       defaultPath: `${table}-export.csv`,
@@ -371,107 +547,281 @@ export function registerIpcHandlers(): void {
     });
 
     if (!filePath) return { cancelled: true };
-    fs.writeFileSync(filePath, csvLines.join('\n'), 'utf-8');
+    fs.writeFileSync(filePath, csv, 'utf-8');
     return { path: filePath };
+  });
+
+  // ─── Batch Update ──────────────────────────────────────
+  ipcMain.handle('batch:update', (_event, { table, ids, data }: { table: string; ids: string[]; data: Record<string, any> }) => {
+    const companyId = db.getCurrentCompanyId();
+    const results: any[] = [];
+    for (const id of ids) {
+      const record = db.update(table, id, data);
+      if (companyId) db.logAudit(companyId, table, id, 'update', data);
+      results.push(record);
+    }
+    return results;
+  });
+
+  // ─── Batch Delete ──────────────────────────────────────
+  ipcMain.handle('batch:delete', (_event, { table, ids }: { table: string; ids: string[] }) => {
+    const companyId = db.getCurrentCompanyId();
+    for (const id of ids) {
+      if (companyId) db.logAudit(companyId, table, id, 'delete');
+      db.remove(table, id);
+    }
+    return { deleted: ids.length };
+  });
+
+  // ─── CSV Import: Preview ──────────────────────────────
+  ipcMain.handle('import:preview-csv', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+
+    const importPath = result.filePaths[0];
+    const content = fs.readFileSync(importPath, 'utf-8');
+    const { headers, rows } = parseCSV(content);
+
+    return {
+      filePath: importPath,
+      fileName: path.basename(importPath),
+      headers,
+      previewRows: rows.slice(0, 5),
+      totalRows: rows.length,
+    };
+  });
+
+  // ─── CSV Import: Execute ──────────────────────────────
+  ipcMain.handle('import:execute', (_event, {
+    filePath: importFilePath,
+    columnMapping,
+    targetTable,
+  }: {
+    filePath: string;
+    columnMapping: Record<string, string>;
+    targetTable: string;
+  }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No company selected' };
+
+    const content = fs.readFileSync(importFilePath, 'utf-8');
+    const { headers, rows } = parseCSV(content);
+
+    let imported = 0;
+    let skipped = 0;
+    const importErrors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const row = rows[i];
+        const record: Record<string, any> = { company_id: companyId };
+
+        for (const [csvCol, dbCol] of Object.entries(columnMapping)) {
+          if (!dbCol || dbCol === '(skip)') continue;
+          const idx = headers.indexOf(csvCol);
+          if (idx === -1) continue;
+          record[dbCol] = row[idx] ?? '';
+        }
+
+        const hasData = Object.values(record).some(v => v !== '' && v !== companyId);
+        if (!hasData) { skipped++; continue; }
+
+        db.create(targetTable, record);
+        imported++;
+      } catch (err: any) {
+        skipped++;
+        importErrors.push(`Row ${i + 2}: ${err.message || 'Unknown error'}`);
+      }
+    }
+
+    return { imported, skipped, errors: importErrors.slice(0, 20), total: rows.length };
+  });
+
+  // ─── Full Backup: Export all tables as ZIP ─────────────
+  ipcMain.handle('export:full-backup', async () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No company selected' };
+
+    const { filePath: zipPath } = await dialog.showSaveDialog({
+      defaultPath: `backup-${new Date().toISOString().slice(0, 10)}.zip`,
+      filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+    });
+
+    if (!zipPath) return { cancelled: true };
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bap-backup-'));
+
+    const backupTables = [
+      'clients', 'invoices', 'invoice_line_items', 'expenses', 'vendors',
+      'accounts', 'journal_entries', 'journal_entry_lines', 'projects',
+      'employees', 'time_entries', 'categories', 'payments', 'budgets',
+      'budget_lines', 'bank_accounts', 'bank_transactions', 'documents',
+      'recurring_templates', 'tax_categories', 'tax_payments', 'inventory_items',
+    ];
+
+    const exportedFiles: string[] = [];
+
+    for (const tbl of backupTables) {
+      try {
+        const tblRows = db.queryAll(tbl, { company_id: companyId });
+        if (tblRows.length === 0) continue;
+        const csvContent = rowsToCSV(tblRows);
+        const csvFilePath = path.join(tmpDir, `${tbl}.csv`);
+        fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
+        exportedFiles.push(csvFilePath);
+      } catch {
+        try {
+          const tblRows = db.queryAll(tbl);
+          if (tblRows.length === 0) continue;
+          const csvContent = rowsToCSV(tblRows);
+          const csvFilePath = path.join(tmpDir, `${tbl}.csv`);
+          fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
+          exportedFiles.push(csvFilePath);
+        } catch {
+          // Skip entirely
+        }
+      }
+    }
+
+    if (exportedFiles.length === 0) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      return { error: 'No data to export' };
+    }
+
+    try {
+      const { execFileSync } = require('child_process');
+      const fileNames = exportedFiles.map(f => path.basename(f));
+      execFileSync('zip', ['-j', zipPath, ...fileNames], { cwd: tmpDir });
+    } catch {
+      const fallbackDir = zipPath.replace('.zip', '-csvs');
+      if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
+      for (const f of exportedFiles) {
+        fs.copyFileSync(f, path.join(fallbackDir, path.basename(f)));
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      return { path: fallbackDir, format: 'folder' };
+    }
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return { path: zipPath, format: 'zip', tableCount: exportedFiles.length };
+  });
+
+  // ─── Recurring Transaction Processing ────────────────
+  ipcMain.handle('recurring:process-now', () => {
+    const companyId = db.getCurrentCompanyId();
+    return processRecurringTemplates(companyId || undefined);
+  });
+
+  ipcMain.handle('recurring:last-processed', () => {
+    return getLastProcessedAt();
+  });
+
+  ipcMain.handle('recurring:history', (_event, opts?: { templateId?: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return getRecurringHistory(companyId, opts?.templateId);
+  });
+
+  // ─── Notification Engine ─────────────────────────────
+  ipcMain.handle('notification:run-checks', () => {
+    const companyId = db.getCurrentCompanyId();
+    return runNotificationChecks(companyId || undefined);
+  });
+
+  ipcMain.handle('notification:clear-all', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return;
+    const dbInstance = db.getDb();
+    dbInstance.prepare(
+      "DELETE FROM notifications WHERE company_id = ? AND is_read = 1"
+    ).run(companyId);
+  });
+
+  ipcMain.handle('notification:dismiss', (_event, id: string) => {
+    db.remove('notifications', id);
+  });
+
+  ipcMain.handle('notification:preferences', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return {};
+    return getNotificationPreferences(companyId);
+  });
+
+  ipcMain.handle('notification:update-preferences', (_event, prefs: Record<string, boolean>) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return;
+    updateNotificationPreferences(companyId, prefs);
+  });
+
+  // ─── Enhanced Dashboard Activity ─────────────────────
+  ipcMain.handle('dashboard:activity', (_event, opts?: { entityType?: string; limit?: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+
+    let sql = `
+      SELECT al.*,
+        CASE
+          WHEN al.entity_type = 'invoices' THEN (
+            SELECT json_object('invoice_number', i.invoice_number, 'total', i.total, 'client_name', c.name)
+            FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = al.entity_id
+          )
+          WHEN al.entity_type = 'expenses' THEN (
+            SELECT json_object('description', e.description, 'amount', e.amount, 'vendor_name', v.name)
+            FROM expenses e LEFT JOIN vendors v ON e.vendor_id = v.id WHERE e.id = al.entity_id
+          )
+          WHEN al.entity_type = 'clients' THEN (
+            SELECT json_object('name', cl.name, 'email', cl.email)
+            FROM clients cl WHERE cl.id = al.entity_id
+          )
+          WHEN al.entity_type = 'payments' THEN (
+            SELECT json_object('amount', p.amount, 'invoice_number', i.invoice_number)
+            FROM payments p LEFT JOIN invoices i ON p.invoice_id = i.id WHERE p.id = al.entity_id
+          )
+          ELSE NULL
+        END as entity_details
+      FROM audit_log al
+      WHERE al.company_id = ?
+    `;
+    const params: any[] = [companyId];
+
+    if (opts?.entityType && opts.entityType !== 'all') {
+      sql += ' AND al.entity_type = ?';
+      params.push(opts.entityType);
+    }
+
+    sql += ' ORDER BY al.timestamp DESC LIMIT ?';
+    params.push(opts?.limit || 15);
+
+    return dbInstance.prepare(sql).all(...params);
+  });
+
+  // ─── Print / Preview System ─────────────────────────────
+  ipcMain.handle('print:preview', (_event, { html, title }: { html: string; title: string }) => {
+    openPrintPreview(html, title);
+    return { success: true };
+  });
+
+  ipcMain.handle('print:save-pdf', async (_event, { html, title }: { html: string; title: string }) => {
+    try {
+      const savedPath = await saveHTMLAsPDF(html, title);
+      if (!savedPath) return { cancelled: true };
+      return { path: savedPath };
+    } catch (err: any) {
+      return { error: err?.message || 'PDF save failed' };
+    }
+  });
+
+  ipcMain.handle('print:print', async (_event, { html }: { html: string }) => {
+    try {
+      await printHTML(html);
+      return { success: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Print failed' };
+    }
   });
 }
 
-// ─── Invoice HTML Template ──────────────────────────────
-function buildInvoiceHTML(company: any, client: any, invoice: any, lines: any[]): string {
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
-  const companyName = company?.name || 'Company';
-  const clientName = client?.name || 'Client';
-  const clientEmail = client?.email || '';
-  const clientAddr = [client?.address_line1, client?.city, client?.state, client?.zip].filter(Boolean).join(', ');
-
-  const lineRows = lines.map(l => `
-    <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #e5e5e5;">${l.description || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e5e5e5;text-align:right;">${l.quantity || 1}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e5e5e5;text-align:right;">${fmt(l.unit_price)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e5e5e5;text-align:right;">${fmt(l.amount)}</td>
-    </tr>
-  `).join('');
-
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><style>
-  body { font-family: -apple-system, 'Helvetica Neue', sans-serif; color: #1a1a1a; margin: 0; padding: 40px; font-size: 13px; line-height: 1.5; }
-  .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
-  .company-name { font-size: 22px; font-weight: 700; color: #111; }
-  .invoice-title { font-size: 28px; font-weight: 700; color: #3b82f6; text-align: right; }
-  .invoice-number { font-size: 14px; color: #666; text-align: right; margin-top: 4px; }
-  .addresses { display: flex; justify-content: space-between; margin-bottom: 30px; }
-  .address-block h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; }
-  .address-block p { margin: 2px 0; }
-  .meta { display: flex; gap: 40px; margin-bottom: 30px; }
-  .meta-item label { display: block; font-size: 11px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; }
-  .meta-item span { font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-  th { padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #666; border-bottom: 2px solid #111; letter-spacing: 0.5px; }
-  th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: right; }
-  .totals { margin-left: auto; width: 260px; }
-  .totals .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
-  .totals .total { border-top: 2px solid #111; font-weight: 700; font-size: 16px; padding-top: 10px; margin-top: 4px; }
-  .status-badge { display: inline-block; padding: 4px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; border-radius: 2px; }
-  .status-paid { background: #dcfce7; color: #166534; }
-  .status-sent { background: #dbeafe; color: #1e40af; }
-  .status-overdue { background: #fee2e2; color: #991b1b; }
-  .status-draft { background: #f3f4f6; color: #4b5563; }
-  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 12px; color: #999; }
-</style></head>
-<body>
-  <div class="header">
-    <div>
-      <div class="company-name">${companyName}</div>
-      <div style="color:#666;font-size:12px;margin-top:4px;">
-        ${company?.email || ''}${company?.phone ? ' · ' + company.phone : ''}
-      </div>
-    </div>
-    <div>
-      <div class="invoice-title">INVOICE</div>
-      <div class="invoice-number">#${invoice.invoice_number}</div>
-    </div>
-  </div>
-
-  <div class="addresses">
-    <div class="address-block">
-      <h4>Bill To</h4>
-      <p style="font-weight:600;">${clientName}</p>
-      ${clientEmail ? `<p>${clientEmail}</p>` : ''}
-      ${clientAddr ? `<p>${clientAddr}</p>` : ''}
-    </div>
-    <div class="address-block" style="text-align:right;">
-      <h4>Status</h4>
-      <span class="status-badge status-${invoice.status}">${invoice.status}</span>
-    </div>
-  </div>
-
-  <div class="meta">
-    <div class="meta-item"><label>Issue Date</label><span>${invoice.issue_date}</span></div>
-    <div class="meta-item"><label>Due Date</label><span>${invoice.due_date}</span></div>
-    <div class="meta-item"><label>Terms</label><span>${invoice.terms || 'Net 30'}</span></div>
-  </div>
-
-  <table>
-    <thead>
-      <tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>
-    </thead>
-    <tbody>${lineRows}</tbody>
-  </table>
-
-  <div class="totals">
-    <div class="row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
-    ${invoice.tax_amount ? `<div class="row"><span>Tax</span><span>${fmt(invoice.tax_amount)}</span></div>` : ''}
-    ${invoice.discount_amount ? `<div class="row"><span>Discount</span><span>-${fmt(invoice.discount_amount)}</span></div>` : ''}
-    <div class="row total"><span>Total</span><span>${fmt(invoice.total)}</span></div>
-    ${invoice.amount_paid > 0 ? `
-      <div class="row" style="color:#999;"><span>Paid</span><span>${fmt(invoice.amount_paid)}</span></div>
-      <div class="row" style="font-weight:600;"><span>Balance Due</span><span>${fmt(invoice.total - invoice.amount_paid)}</span></div>
-    ` : ''}
-  </div>
-
-  ${invoice.notes ? `<div class="footer"><strong>Notes:</strong> ${invoice.notes}</div>` : ''}
-</body>
-</html>`;
-}

@@ -172,11 +172,10 @@ const ImportTransactions: React.FC = () => {
       for (const row of toImport) {
         await api.create('bank_transactions', {
           bank_account_id: selectedBankId,
-          transaction_date: row.date,
+          date: row.date,
           description: row.description,
           amount: row.amount,
-          status: 'unmatched',
-          company_id: activeCompany?.id,
+          status: 'pending',
         });
         imported++;
       }

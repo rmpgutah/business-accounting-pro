@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Printer, Download } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { generateReportHTML } from '../../lib/print-templates';
+import type { ReportColumn, ReportSummary } from '../../lib/print-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -127,7 +129,7 @@ const ProfitAndLoss: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.entry_date BETWEEN ? AND ?
+           WHERE je.date BETWEEN ? AND ?
              AND je.company_id = ?
              AND a.type IN ('revenue', 'expense')
            GROUP BY a.id, a.name, a.code, a.type, a.subtype
@@ -232,6 +234,87 @@ const ProfitAndLoss: React.FC = () => {
   );
   const netIncome = netOperatingIncome + totalOtherIncome - totalOtherExpenses;
 
+  // ─── Build P&L report HTML for printing ────────────────
+  const buildPnLHTML = useCallback(() => {
+    const companyName = activeCompany?.name || 'Company';
+    const dateRange = `${format(new Date(startDate), 'MMM d, yyyy')} \u2013 ${format(new Date(endDate), 'MMM d, yyyy')}`;
+
+    const columns: ReportColumn[] = [
+      { key: 'name', label: 'Account', align: 'left', format: 'text' },
+      { key: 'amount', label: 'Amount', align: 'right', format: 'currency' },
+    ];
+
+    const rows: Record<string, any>[] = [];
+
+    // Revenue section
+    rows.push({ name: 'REVENUE', amount: '', _bold: true, _highlight: true });
+    for (const r of data.revenue) {
+      rows.push({ name: `    ${r.account_name}`, amount: r.total });
+    }
+    rows.push({ name: 'Total Revenue', amount: totalRevenue, _bold: true, _separator: true });
+    rows.push({ name: '', amount: '' });
+
+    // Cost of Services
+    if (data.costOfServices.length > 0) {
+      rows.push({ name: 'COST OF GOODS / SERVICES', amount: '', _bold: true, _highlight: true });
+      for (const r of data.costOfServices) {
+        rows.push({ name: `    ${r.account_name}`, amount: Math.abs(r.total) });
+      }
+      rows.push({ name: 'Total Cost of Services', amount: totalCOS, _bold: true, _separator: true });
+      rows.push({ name: '', amount: '' });
+    }
+
+    rows.push({ name: 'Gross Profit', amount: grossProfit, _bold: true, _separator: true });
+    rows.push({ name: '', amount: '' });
+
+    // Operating Expenses
+    rows.push({ name: 'OPERATING EXPENSES', amount: '', _bold: true, _highlight: true });
+    for (const [subtype, items] of Object.entries(data.operatingExpenses).sort(([a], [b]) => a.localeCompare(b))) {
+      rows.push({ name: `  ${subtype}`, amount: '', _bold: true });
+      for (const r of items) {
+        rows.push({ name: `      ${r.account_name}`, amount: r.total });
+      }
+    }
+    rows.push({ name: 'Total Operating Expenses', amount: totalOpex, _bold: true, _separator: true });
+    rows.push({ name: '', amount: '' });
+
+    rows.push({ name: 'Net Operating Income', amount: netOperatingIncome, _bold: true, _separator: true });
+    rows.push({ name: '', amount: '' });
+
+    // Other Income/Expenses
+    if (data.otherIncome.length > 0 || data.otherExpenses.length > 0) {
+      rows.push({ name: 'OTHER INCOME & EXPENSES', amount: '', _bold: true, _highlight: true });
+      for (const r of data.otherIncome) {
+        rows.push({ name: `    ${r.account_name}`, amount: r.total });
+      }
+      for (const r of data.otherExpenses) {
+        rows.push({ name: `    ${r.account_name}`, amount: -r.total });
+      }
+      rows.push({ name: 'Total Other Income/Expenses', amount: totalOtherIncome - totalOtherExpenses, _bold: true, _separator: true });
+      rows.push({ name: '', amount: '' });
+    }
+
+    const summary: ReportSummary[] = [
+      {
+        label: 'Net Income',
+        value: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(netIncome),
+        accent: netIncome >= 0 ? 'green' : 'red',
+      },
+    ];
+
+    return generateReportHTML('Profit & Loss Statement', companyName, dateRange, columns, rows, summary);
+  }, [data, activeCompany, startDate, endDate, totalRevenue, totalCOS, grossProfit, totalOpex, netOperatingIncome, totalOtherIncome, totalOtherExpenses, netIncome]);
+
+  const handlePrintReport = async () => {
+    const html = buildPnLHTML();
+    await api.print(html);
+  };
+
+  const handleSaveReportPDF = async () => {
+    const html = buildPnLHTML();
+    await api.saveToPDF(html, `ProfitAndLoss-${startDate}-to-${endDate}`);
+  };
+
   // ─── Quick date presets ─────────────────────────────────
   const setPreset = (label: string) => {
     const now = new Date();
@@ -292,14 +375,16 @@ const ProfitAndLoss: React.FC = () => {
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
-            title="Print"
+            title="Print Report"
+            onClick={handlePrintReport}
           >
             <Printer size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
-            title="Export"
+            title="Save PDF"
+            onClick={handleSaveReportPDF}
           >
             <Download size={15} />
           </button>

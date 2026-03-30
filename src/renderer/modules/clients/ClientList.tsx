@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { UserCircle, Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { UserCircle, Plus, Search, Filter, ArrowUpDown, Download, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import api from '../../lib/api';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -59,6 +60,9 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -124,9 +128,81 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     return list;
   }, [clients, statusFilter, searchQuery, sortField, sortDir]);
 
+  // ─── Selection Helpers ──────────────────────────────
+  const allSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(c.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  }, [allSelected, filtered]);
+
+  // Clear selection when filters change
+  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, statusFilter]);
+
+  // ─── Batch Actions ──────────────────────────────────
+  const reload = useCallback(async () => {
+    const rows = await api.query('clients');
+    setClients(Array.isArray(rows) ? rows : []);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBatchSetActive = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('clients', Array.from(selectedIds), { status: 'active' });
+      await reload();
+    } catch (err) { console.error('Batch set active failed:', err); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  const handleBatchSetInactive = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('clients', Array.from(selectedIds), { status: 'inactive' });
+      await reload();
+    } catch (err) { console.error('Batch set inactive failed:', err); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  const handleBatchDelete = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchDelete('clients', Array.from(selectedIds));
+      await reload();
+    } catch (err) { console.error('Batch delete failed:', err); }
+    finally { setBatchLoading(false); setShowDeleteConfirm(false); }
+  }, [selectedIds, reload]);
+
+  const handleExportSelected = useCallback(() => {
+    const selected = filtered.filter(c => selectedIds.has(c.id));
+    const exportData = selected.map(c => ({
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      status: c.status,
+      type: c.type,
+      payment_terms: c.payment_terms ? `Net ${c.payment_terms}` : '',
+      tags: c.tags || '',
+    }));
+    downloadCSVBlob(exportData, 'clients-export.csv');
+  }, [filtered, selectedIds]);
+
   // ─── Render ─────────────────────────────────────────
   return (
-    <div className="p-6 space-y-4 overflow-y-auto h-full">
+    <div className="p-6 space-y-4 overflow-y-auto h-full" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
@@ -193,6 +269,15 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           <table className="block-table">
             <thead>
               <tr>
+                <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <SortableHeader field="name" label="Name" activeSortField={sortField} onSort={handleSort} />
                 <SortableHeader field="email" label="Email" activeSortField={sortField} onSort={handleSort} />
                 <SortableHeader field="phone" label="Phone" activeSortField={sortField} onSort={handleSort} />
@@ -202,46 +287,58 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               </tr>
             </thead>
             <tbody>
-              {filtered.map((client) => (
-                <tr
-                  key={client.id}
-                  className="cursor-pointer"
-                  onClick={() => onSelectClient(client.id)}
-                >
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <UserCircle size={16} className="text-text-muted shrink-0" />
-                      <span className="text-text-primary font-medium">{client.name}</span>
-                    </div>
-                  </td>
-                  <td className="text-text-secondary">{client.email || '--'}</td>
-                  <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>
-                  <td>
-                    <span className={statusBadgeClass[client.status] ?? 'block-badge'}>
-                      {client.status}
-                    </span>
-                  </td>
-                  <td className="text-text-secondary font-mono">
-                    {client.payment_terms ? `Net ${client.payment_terms}` : '--'}
-                  </td>
-                  <td>
-                    {client.tags ? (
-                      <div className="flex flex-wrap gap-1">
-                        {client.tags.split(',').map((tag, i) => (
-                          <span
-                            key={i}
-                            className="block-badge block-badge-purple text-[10px]"
-                          >
-                            {tag.trim()}
-                          </span>
-                        ))}
+              {filtered.map((client) => {
+                const isSelected = selectedIds.has(client.id);
+                return (
+                  <tr
+                    key={client.id}
+                    className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
+                    onClick={() => onSelectClient(client.id)}
+                  >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(client.id)}
+                        className="cursor-pointer"
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <UserCircle size={16} className="text-text-muted shrink-0" />
+                        <span className="text-text-primary font-medium">{client.name}</span>
                       </div>
-                    ) : (
-                      <span className="text-text-muted">--</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="text-text-secondary">{client.email || '--'}</td>
+                    <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>
+                    <td>
+                      <span className={statusBadgeClass[client.status] ?? 'block-badge'}>
+                        {client.status}
+                      </span>
+                    </td>
+                    <td className="text-text-secondary font-mono">
+                      {client.payment_terms ? `Net ${client.payment_terms}` : '--'}
+                    </td>
+                    <td>
+                      {client.tags ? (
+                        <div className="flex flex-wrap gap-1">
+                          {client.tags.split(',').map((tag, i) => (
+                            <span
+                              key={i}
+                              className="block-badge block-badge-purple text-[10px]"
+                            >
+                              {tag.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-text-muted">--</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -251,6 +348,80 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       {!loading && filtered.length > 0 && (
         <div className="text-xs text-text-muted">
           Showing {filtered.length} of {clients.length} client{clients.length !== 1 ? 's' : ''}
+        </div>
+      )}
+
+      {/* ─── Floating Batch Action Bar ─────────────────────── */}
+      {someSelected && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
+          style={{
+            background: 'var(--bg-secondary, #1e1e2e)',
+            borderRadius: '2px',
+            minWidth: '460px',
+          }}
+        >
+          <span className="text-xs font-semibold text-text-muted mr-2">
+            {selectedIds.size} of {filtered.length} selected
+          </span>
+
+          <button
+            className="block-btn-primary flex items-center gap-1.5 text-xs"
+            onClick={handleBatchSetActive}
+            disabled={batchLoading}
+          >
+            <CheckCircle size={13} />
+            Set Active
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBatchSetInactive}
+            disabled={batchLoading}
+            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <XCircle size={13} />
+            Set Inactive
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleExportSelected}
+            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
+
+          {!showDeleteConfirm ? (
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold"
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <Trash2 size={13} />
+              Delete
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-accent-expense font-semibold">Confirm?</span>
+              <button
+                className="text-xs font-semibold"
+                onClick={handleBatchDelete}
+                disabled={batchLoading}
+                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Yes, Delete
+              </button>
+              <button
+                className="text-xs font-semibold text-text-muted"
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

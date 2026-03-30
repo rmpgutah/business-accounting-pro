@@ -3,6 +3,8 @@ import path from 'path';
 import { initDatabase } from './database';
 import { registerIpcHandlers } from './ipc';
 import { autoUpdater } from 'electron-updater';
+import { processRecurringTemplates } from './services/recurring-processor';
+import { runNotificationChecks } from './services/notification-engine';
 
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
@@ -148,6 +150,58 @@ function setupAutoUpdater() {
   }, 3000);
 }
 
+// ── Background Services ────────────────────────────────────
+let recurringInterval: ReturnType<typeof setInterval> | null = null;
+let notificationInterval: ReturnType<typeof setInterval> | null = null;
+
+function startBackgroundServices() {
+  // Run immediately on startup (non-blocking)
+  setTimeout(() => {
+    try {
+      const recurResult = processRecurringTemplates();
+      console.log(`Recurring processor: ${recurResult.processed} templates processed, ${recurResult.invoicesCreated} invoices, ${recurResult.expensesCreated} expenses`);
+    } catch (err) {
+      console.error('Recurring processor startup error:', err);
+    }
+
+    try {
+      const notifResult = runNotificationChecks();
+      console.log(`Notification engine: ${notifResult.overdueNotifications} overdue, ${notifResult.budgetAlerts} budget alerts, ${notifResult.reconciliationAlerts} reconciliation alerts`);
+    } catch (err) {
+      console.error('Notification engine startup error:', err);
+    }
+  }, 2000);
+
+  // Recurring templates: check every 60 minutes
+  recurringInterval = setInterval(() => {
+    try {
+      processRecurringTemplates();
+    } catch (err) {
+      console.error('Recurring processor interval error:', err);
+    }
+  }, 60 * 60 * 1000);
+
+  // Notification checks: every 30 minutes
+  notificationInterval = setInterval(() => {
+    try {
+      runNotificationChecks();
+    } catch (err) {
+      console.error('Notification engine interval error:', err);
+    }
+  }, 30 * 60 * 1000);
+}
+
+function stopBackgroundServices() {
+  if (recurringInterval) {
+    clearInterval(recurringInterval);
+    recurringInterval = null;
+  }
+  if (notificationInterval) {
+    clearInterval(notificationInterval);
+    notificationInterval = null;
+  }
+}
+
 app.whenReady().then(() => {
   try {
     initDatabase();
@@ -159,9 +213,11 @@ app.whenReady().then(() => {
   buildMenu();
   createWindow();
   setupAutoUpdater();
+  startBackgroundServices();
 });
 
 app.on('window-all-closed', () => {
+  stopBackgroundServices();
   if (process.platform !== 'darwin') app.quit();
 });
 

@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   RefreshCw, Plus, Search, Filter, X, Play, Pause,
+  Zap, Clock, History, FileText, Receipt,
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
 
 // ─── Types ──────────────────────────────────────────────
 interface RecurringTemplate {
@@ -14,13 +16,27 @@ interface RecurringTemplate {
   next_date: string;
   end_date?: string;
   is_active: boolean;
+  last_generated?: string;
+  template_data?: string;
   amount?: number;
   description?: string;
   created_at: string;
 }
 
+interface HistoryRecord {
+  record_type: 'invoice' | 'expense';
+  id: string;
+  reference: string;
+  amount: number;
+  date: string;
+  status: string;
+  client_name?: string;
+  template_name?: string;
+}
+
 type TypeFilter = '' | 'invoice' | 'expense';
 type StatusFilter = '' | 'active' | 'paused';
+type TabView = 'templates' | 'history';
 
 // ─── Empty Form ─────────────────────────────────────────
 const emptyForm = {
@@ -46,8 +62,32 @@ const frequencyLabel: Record<string, string> = {
   annually: 'Annually',
 };
 
+// ─── Currency Formatter ─────────────────────────────────
+const fmtCurrency = (value: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
+
+// ─── Next Due Color ─────────────────────────────────────
+function nextDueColor(nextDate: string): string {
+  if (!nextDate) return 'text-text-muted';
+  const d = parseISO(nextDate);
+  const today = startOfDay(new Date());
+  if (isBefore(d, today)) return 'text-accent-expense'; // overdue — red
+  if (isToday(d)) return 'text-accent-warning'; // due today — yellow
+  return 'text-accent-income'; // future — green
+}
+
+function nextDueBg(nextDate: string): string {
+  if (!nextDate) return '';
+  const d = parseISO(nextDate);
+  const today = startOfDay(new Date());
+  if (isBefore(d, today)) return 'bg-accent-expense/10';
+  if (isToday(d)) return 'bg-accent-warning/10';
+  return '';
+}
+
 // ─── Component ──────────────────────────────────────────
 const RecurringTransactions: React.FC = () => {
+  const nav = useNavigation();
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -56,6 +96,11 @@ const RecurringTransactions: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [lastProcessed, setLastProcessed] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabView>('templates');
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // ─── Load ─────────────────────────────────────────────
   const loadTemplates = async () => {
@@ -69,9 +114,35 @@ const RecurringTransactions: React.FC = () => {
     }
   };
 
+  const loadLastProcessed = async () => {
+    try {
+      const ts = await api.getLastProcessed();
+      setLastProcessed(ts);
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const rows = await api.getRecurringHistory();
+      setHistory(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadTemplates();
+    loadLastProcessed();
   }, []);
+
+  useEffect(() => {
+    if (tab === 'history') loadHistory();
+  }, [tab]);
 
   // ─── Filtered ─────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -127,6 +198,24 @@ const RecurringTransactions: React.FC = () => {
     }
   };
 
+  // ─── Process Now ──────────────────────────────────────
+  const handleProcessNow = async () => {
+    setProcessing(true);
+    try {
+      const result = await api.processRecurringNow();
+      await loadTemplates();
+      await loadLastProcessed();
+      if (tab === 'history') await loadHistory();
+      if (result.processed > 0) {
+        console.log(`Processed ${result.processed} templates: ${result.invoicesCreated} invoices, ${result.expensesCreated} expenses`);
+      }
+    } catch (err) {
+      console.error('Failed to process recurring:', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">
@@ -151,20 +240,64 @@ const RecurringTransactions: React.FC = () => {
             <p className="text-xs text-text-muted mt-0.5">
               {filtered.length} template{filtered.length !== 1 ? 's' : ''} &middot;{' '}
               {templates.filter((t) => t.is_active).length} active
+              {lastProcessed && (
+                <>
+                  {' '}&middot; Last processed:{' '}
+                  <span className="text-text-secondary font-mono">
+                    {format(parseISO(lastProcessed), 'MMM d, h:mm a')}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={handleProcessNow}
+            disabled={processing}
+          >
+            <Zap size={14} className={processing ? 'animate-spin' : ''} />
+            {processing ? 'Processing...' : 'Process Now'}
+          </button>
+          <button
+            className="block-btn-primary flex items-center gap-2"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus size={16} />
+            New Template
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center border border-border-primary" style={{ borderRadius: '2px', width: 'fit-content' }}>
         <button
-          className="block-btn-primary flex items-center gap-2"
-          onClick={() => setShowForm(true)}
+          className={`px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${
+            tab === 'templates'
+              ? 'bg-bg-elevated text-text-primary'
+              : 'text-text-muted hover:text-text-secondary'
+          }`}
+          onClick={() => setTab('templates')}
         >
-          <Plus size={16} />
-          New Template
+          <Clock size={12} />
+          Templates
+        </button>
+        <button
+          className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-border-primary flex items-center gap-1.5 ${
+            tab === 'history'
+              ? 'bg-bg-elevated text-text-primary'
+              : 'text-text-muted hover:text-text-secondary'
+          }`}
+          onClick={() => setTab('history')}
+        >
+          <History size={12} />
+          History
         </button>
       </div>
 
       {/* Form */}
-      {showForm && (
+      {showForm && tab === 'templates' && (
         <div className="block-card-elevated space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">New Recurring Template</h3>
@@ -277,118 +410,216 @@ const RecurringTransactions: React.FC = () => {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="block-card p-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Search templates..."
-              className="block-input pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      {/* Templates Tab */}
+      {tab === 'templates' && (
+        <>
+          {/* Filters */}
+          <div className="block-card p-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search templates..."
+                  className="block-input pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Filter size={14} className="text-text-muted" />
+                <select
+                  className="block-select"
+                  style={{ width: 'auto', minWidth: '130px' }}
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+                >
+                  <option value="">All Types</option>
+                  <option value="invoice">Invoice</option>
+                  <option value="expense">Expense</option>
+                </select>
+              </div>
+              <select
+                className="block-select"
+                style={{ width: 'auto', minWidth: '130px' }}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              >
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-text-muted" />
-            <select
-              className="block-select"
-              style={{ width: 'auto', minWidth: '130px' }}
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            >
-              <option value="">All Types</option>
-              <option value="invoice">Invoice</option>
-              <option value="expense">Expense</option>
-            </select>
-          </div>
-          <select
-            className="block-select"
-            style={{ width: 'auto', minWidth: '130px' }}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          >
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-          </select>
-        </div>
-      </div>
 
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <RefreshCw size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-secondary font-medium">No recurring templates found</p>
-          <p className="text-xs text-text-muted mt-1">
-            Create a template to automate recurring invoices or expenses.
-          </p>
-        </div>
-      ) : (
-        <div className="block-card p-0 overflow-hidden">
-          <table className="block-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Frequency</th>
-                <th>Next Date</th>
-                <th>End Date</th>
-                <th>Status</th>
-                <th className="text-center">Toggle</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => (
-                <tr key={t.id}>
-                  <td className="text-text-primary font-medium">{t.name}</td>
-                  <td>
-                    <span className={typeBadge[t.type] || 'block-badge'}>{t.type}</span>
-                  </td>
-                  <td className="text-text-secondary">
-                    {frequencyLabel[t.frequency] || t.frequency}
-                  </td>
-                  <td className="font-mono text-text-secondary text-xs">
-                    {t.next_date ? format(parseISO(t.next_date), 'MMM d, yyyy') : '-'}
-                  </td>
-                  <td className="font-mono text-text-muted text-xs">
-                    {t.end_date ? format(parseISO(t.end_date), 'MMM d, yyyy') : '-'}
-                  </td>
-                  <td>
-                    {t.is_active ? (
-                      <span className="block-badge block-badge-income">active</span>
-                    ) : (
-                      <span className="block-badge block-badge-warning">paused</span>
-                    )}
-                  </td>
-                  <td className="text-center">
-                    <button
-                      className={`p-1 rounded-sm transition-colors ${
-                        t.is_active
-                          ? 'text-accent-warning hover:bg-accent-warning-bg'
-                          : 'text-accent-income hover:bg-accent-income-bg'
-                      }`}
-                      onClick={() => toggleActive(t)}
-                      title={t.is_active ? 'Pause' : 'Resume'}
-                    >
-                      {t.is_active ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {/* Table */}
+          {filtered.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <RefreshCw size={24} className="text-text-muted" />
+              </div>
+              <p className="text-sm text-text-secondary font-medium">No recurring templates found</p>
+              <p className="text-xs text-text-muted mt-1">
+                Create a template to automate recurring invoices or expenses.
+              </p>
+            </div>
+          ) : (
+            <div className="block-card p-0 overflow-hidden">
+              <table className="block-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Frequency</th>
+                    <th>Next Due</th>
+                    <th>Last Generated</th>
+                    <th>End Date</th>
+                    <th>Status</th>
+                    <th className="text-center">Toggle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((t) => (
+                    <tr key={t.id}>
+                      <td className="text-text-primary font-medium">{t.name}</td>
+                      <td>
+                        <span className={typeBadge[t.type] || 'block-badge'}>{t.type}</span>
+                      </td>
+                      <td className="text-text-secondary">
+                        {frequencyLabel[t.frequency] || t.frequency}
+                      </td>
+                      <td>
+                        <span
+                          className={`font-mono text-xs px-2 py-0.5 ${nextDueColor(t.next_date)} ${nextDueBg(t.next_date)}`}
+                          style={{ borderRadius: '2px' }}
+                        >
+                          {t.next_date ? format(parseISO(t.next_date), 'MMM d, yyyy') : '-'}
+                        </span>
+                      </td>
+                      <td className="font-mono text-text-muted text-xs">
+                        {t.last_generated ? format(parseISO(t.last_generated), 'MMM d, yyyy') : 'Never'}
+                      </td>
+                      <td className="font-mono text-text-muted text-xs">
+                        {t.end_date ? format(parseISO(t.end_date), 'MMM d, yyyy') : '-'}
+                      </td>
+                      <td>
+                        {t.is_active ? (
+                          <span className="block-badge block-badge-income">active</span>
+                        ) : (
+                          <span className="block-badge block-badge-warning">paused</span>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        <button
+                          className={`p-1 rounded-sm transition-colors ${
+                            t.is_active
+                              ? 'text-accent-warning hover:bg-accent-warning-bg'
+                              : 'text-accent-income hover:bg-accent-income-bg'
+                          }`}
+                          onClick={() => toggleActive(t)}
+                          title={t.is_active ? 'Pause' : 'Resume'}
+                        >
+                          {t.is_active ? <Pause size={16} /> : <Play size={16} />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Footer */}
+          {filtered.length > 0 && (
+            <div className="text-xs text-text-muted">
+              Showing {filtered.length} of {templates.length} template{templates.length !== 1 ? 's' : ''}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Footer */}
-      {filtered.length > 0 && (
-        <div className="text-xs text-text-muted">
-          Showing {filtered.length} of {templates.length} template{templates.length !== 1 ? 's' : ''}
-        </div>
+      {/* History Tab */}
+      {tab === 'history' && (
+        <>
+          {historyLoading ? (
+            <div className="flex items-center justify-center h-32 text-text-muted text-sm font-mono">
+              Loading history...
+            </div>
+          ) : history.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <History size={24} className="text-text-muted" />
+              </div>
+              <p className="text-sm text-text-secondary font-medium">No auto-generated records yet</p>
+              <p className="text-xs text-text-muted mt-1">
+                Records created by recurring templates will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="block-card p-0 overflow-hidden">
+              <table className="block-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Reference</th>
+                    <th>Template</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Client / Vendor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr
+                      key={h.id}
+                      className="cursor-pointer hover:bg-bg-hover transition-colors"
+                      onClick={() => {
+                        if (h.record_type === 'invoice') nav.goToInvoice(h.id);
+                        else nav.goToExpense(h.id);
+                      }}
+                    >
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          {h.record_type === 'invoice' ? (
+                            <FileText size={14} className="text-accent-income" />
+                          ) : (
+                            <Receipt size={14} className="text-accent-expense" />
+                          )}
+                          <span className={typeBadge[h.record_type] || 'block-badge'}>
+                            {h.record_type}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-text-primary font-medium font-mono text-xs">{h.reference || '-'}</td>
+                      <td className="text-text-secondary text-xs">{h.template_name || '-'}</td>
+                      <td className="font-mono text-text-primary text-xs">{fmtCurrency(h.amount)}</td>
+                      <td className="font-mono text-text-muted text-xs">
+                        {h.date ? format(parseISO(h.date), 'MMM d, yyyy') : '-'}
+                      </td>
+                      <td>
+                        <span className={`block-badge ${
+                          h.status === 'paid' || h.status === 'approved' ? 'block-badge-income' :
+                          h.status === 'overdue' ? 'block-badge-expense' :
+                          'block-badge-warning'
+                        }`}>
+                          {h.status}
+                        </span>
+                      </td>
+                      <td className="text-text-secondary text-xs">{h.client_name || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {history.length > 0 && (
+            <div className="text-xs text-text-muted">
+              Showing {history.length} auto-generated record{history.length !== 1 ? 's' : ''}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

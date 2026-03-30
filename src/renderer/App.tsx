@@ -7,6 +7,7 @@ import AppShell from './components/layout/AppShell';
 import CompanySetup from './components/onboarding/CompanySetup';
 import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
+import { registerKeyboardShortcuts, MODULE_ORDER } from './lib/keyboard-shortcuts';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
@@ -135,6 +136,9 @@ const ModuleView: React.FC = () => {
 const App: React.FC = () => {
   const loading = useAppStore((s) => s.loading);
   const setLoading = useAppStore((s) => s.setLoading);
+  const setModule = useAppStore((s) => s.setModule);
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
+  const currentModule = useAppStore((s) => s.currentModule);
   const companies = useCompanyStore((s) => s.companies);
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
@@ -161,6 +165,42 @@ const App: React.FC = () => {
     };
     init();
   }, [isAuthenticated]);
+
+  // ─── Global Keyboard Shortcuts ──────────────────────────
+  useEffect(() => {
+    const cleanup = registerKeyboardShortcuts({
+      newItem: () => {
+        // Dispatch a custom event that modules can listen for
+        window.dispatchEvent(new CustomEvent('app:new-item', { detail: { module: currentModule } }));
+      },
+      exportView: () => {
+        // Export current module's data
+        const tableMap: Record<string, string> = {
+          invoicing: 'invoices',
+          expenses: 'expenses',
+          clients: 'clients',
+          accounts: 'accounts',
+          projects: 'projects',
+          payroll: 'employees',
+        };
+        const table = tableMap[currentModule];
+        if (table) api.exportCsv(table);
+      },
+      focusSearch: () => {
+        setSearchOpen(true);
+      },
+      switchModule: (index: number) => {
+        if (index < MODULE_ORDER.length) {
+          setModule(MODULE_ORDER[index]);
+        }
+      },
+      openSettings: () => {
+        setModule('settings');
+      },
+    });
+
+    return cleanup;
+  }, [currentModule, setModule, setSearchOpen]);
 
   if (loading) {
     return (

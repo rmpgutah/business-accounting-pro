@@ -162,7 +162,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         payment_method: form.payment_method || null,
         project_id: form.project_id || null,
         client_id: form.client_id || null,
-        is_billable: form.is_billable,
+        is_billable: form.is_billable ? 1 : 0,
         reference: form.reference || null,
         receipt_path: receiptPath || null,
         tags: form.tags
@@ -489,10 +489,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     const result = await api.openFileDialog({
                       filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'pdf'] }],
                     });
-                    if (result && typeof result === 'string') {
-                      setReceiptPath(result);
-                    } else if (Array.isArray(result) && result.length > 0) {
-                      setReceiptPath(result[0]);
+                    if (result && result.path) {
+                      setReceiptPath(result.path);
                     }
                   } catch (err) {
                     console.error('Failed to open file dialog:', err);

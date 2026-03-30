@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, FileText } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
+import { generatePayStubHTML } from '../../lib/print-templates';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface PayStub {
@@ -44,6 +46,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Component ──────────────────────────────────────────
 const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [stub, setStub] = useState<PayStub | null>(null);
   const [ytd, setYtd] = useState<YtdTotals>({
     gross_pay: 0,
@@ -109,6 +112,23 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     return () => { cancelled = true; };
   }, [payStubId]);
 
+  const buildStubHTML = () => {
+    if (!stub) return '';
+    return generatePayStubHTML(stub, ytd, activeCompany);
+  };
+
+  const handlePrintStub = async () => {
+    const html = buildStubHTML();
+    if (!html) return;
+    await api.print(html);
+  };
+
+  const handleSaveStubPDF = async () => {
+    const html = buildStubHTML();
+    if (!html) return;
+    await api.saveToPDF(html, `PayStub-${stub?.employee_name || 'Employee'}-${stub?.pay_date || ''}`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -135,16 +155,34 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary"
-          onClick={onBack}
-        >
-          <ArrowLeft size={16} />
-        </button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary"
+            onClick={onBack}
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div className="flex items-center gap-2">
+            <FileText size={20} className="text-text-muted" />
+            <h1 className="text-lg font-bold text-text-primary">Pay Stub</h1>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          <FileText size={20} className="text-text-muted" />
-          <h1 className="text-lg font-bold text-text-primary">Pay Stub</h1>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={handlePrintStub}
+          >
+            <Printer size={14} />
+            Print
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={handleSaveStubPDF}
+          >
+            <Download size={14} />
+            Save PDF
+          </button>
         </div>
       </div>
 

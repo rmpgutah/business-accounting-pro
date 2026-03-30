@@ -230,14 +230,14 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     try {
       // Create payroll run record
       const run = await api.create('payroll_runs', {
-        period_start: periodStart,
-        period_end: periodEnd,
+        pay_period_start: periodStart,
+        pay_period_end: periodEnd,
         pay_date: payDate,
         status: 'processed',
         total_gross: totals.gross_pay,
         total_taxes: totals.federal_tax + totals.state_tax + totals.social_security + totals.medicare,
+        total_deductions: 0,
         total_net: totals.net_pay,
-        employee_count: calculations.length,
       });
 
       const runId = run?.id ?? run;
@@ -247,17 +247,18 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         await api.create('pay_stubs', {
           payroll_run_id: typeof runId === 'object' ? runId.id : runId,
           employee_id: calc.employee.id,
-          employee_name: calc.employee.name,
-          period_start: periodStart,
-          period_end: periodEnd,
-          pay_date: payDate,
-          hours: calc.hours,
+          hours_regular: calc.hours,
+          hours_overtime: 0,
           gross_pay: calc.gross_pay,
           federal_tax: calc.federal_tax,
           state_tax: calc.state_tax,
           social_security: calc.social_security,
           medicare: calc.medicare,
+          other_deductions: 0,
           net_pay: calc.net_pay,
+          ytd_gross: 0,
+          ytd_taxes: 0,
+          ytd_net: 0,
         });
       }
 

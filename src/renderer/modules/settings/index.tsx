@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
-  Database, Download, Upload, Save, HardDrive,
+  Database, Save, HardDrive,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ImportExport from './ImportExport';
 
 // ─── Types ──────────────────────────────────────────────
 interface SettingsMap {
@@ -194,23 +195,6 @@ export default function SettingsModule() {
       console.error('Backup failed:', err);
     } finally {
       setSavingSection('');
-    }
-  };
-
-  // ─── Import / Export ──────────────────────────────────
-  const handleImportCSV = async () => {
-    try {
-      await window.electronAPI.invoke('data:import-csv');
-    } catch (err) {
-      console.error('Import failed:', err);
-    }
-  };
-
-  const handleExportAll = async () => {
-    try {
-      await window.electronAPI.invoke('data:export-all');
-    } catch (err) {
-      console.error('Export failed:', err);
     }
   };
 
@@ -602,31 +586,7 @@ export default function SettingsModule() {
       </SectionCard>
 
       {/* ── Data Import / Export ────────────────────────── */}
-      <SectionCard
-        icon={Database}
-        title="Data"
-        description="Import and export your accounting data"
-      >
-        <div className="flex items-center gap-3">
-          <button
-            className="block-btn flex items-center gap-1.5"
-            onClick={handleImportCSV}
-          >
-            <Upload size={14} />
-            Import CSV
-          </button>
-          <button
-            className="block-btn flex items-center gap-1.5"
-            onClick={handleExportAll}
-          >
-            <Download size={14} />
-            Export All Data
-          </button>
-        </div>
-        <p className="text-xs text-text-muted mt-3">
-          Import supports CSV files for clients, invoices, and expenses. Export creates a ZIP archive of all your data.
-        </p>
-      </SectionCard>
+      <ImportExport />
     </div>
   );
 }
