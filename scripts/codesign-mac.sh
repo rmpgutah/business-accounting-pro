@@ -69,24 +69,28 @@ done
 
 # Step 5: Sign Electron Framework specifically (the versioned bundle)
 # The framework contains nested helpers and binaries that must ALL be signed
-# before signing the framework bundle itself.
+# BEFORE the main framework binary, because codesign validates subcomponents.
 echo "  Signing Electron Framework internals..."
 EF_PATH="$APP_PATH/Contents/Frameworks/Electron Framework.framework"
 if [ -d "$EF_PATH" ]; then
-  # 5a: Sign ALL executables inside the framework (crashpad handler, etc.)
-  find "$EF_PATH" -type f -perm +111 ! -name "*.dylib" -print0 | while IFS= read -r -d '' bin; do
-    echo "    $bin"
-    codesign --force --sign - --timestamp=none "$bin"
+  # 5a: Sign helper executables FIRST (chrome_crashpad_handler, etc.)
+  # These MUST be signed before the Electron Framework binary.
+  find "$EF_PATH" -type f -perm +111 \
+    ! -name "Electron Framework" \
+    ! -name "*.dylib" \
+    -print0 | while IFS= read -r -d '' helper; do
+    echo "    [helper] $helper"
+    codesign --force --sign - --timestamp=none "$helper"
   done
 
-  # 5b: Sign the main framework binary
+  # 5b: Now sign the main Electron Framework binary
   if [ -f "$EF_PATH/Versions/A/Electron Framework" ]; then
-    echo "    $EF_PATH/Versions/A/Electron Framework"
+    echo "    [framework binary] Electron Framework"
     codesign --force --sign - --timestamp=none "$EF_PATH/Versions/A/Electron Framework"
   fi
 
-  # 5c: Sign the framework bundle
-  echo "    $EF_PATH (bundle)"
+  # 5c: Sign the framework bundle (outermost)
+  echo "    [framework bundle] Electron Framework.framework"
   codesign --force --sign - --timestamp=none "$EF_PATH"
 fi
 
