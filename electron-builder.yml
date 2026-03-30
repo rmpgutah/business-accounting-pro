@@ -25,17 +25,15 @@ mac:
   category: public.app-category.finance
   icon: build/icon.icns
   darkModeSupport: true
+  # Build dir targets only — we create DMGs manually after codesigning
   target:
-    - target: dmg
+    - target: dir
       arch:
         - arm64
         - x64
-    - target: zip
-      arch:
-        - arm64
-        - x64
-  # When CSC_IDENTITY_AUTO_DISCOVERY=false, electron-builder skips signing.
-  # The workflow's afterBuild step handles consistent ad-hoc codesigning.
+  # CRITICAL: Set identity to null so electron-builder does NOT sign at all.
+  # Our scripts/codesign-mac.sh handles consistent ad-hoc signing after packaging.
+  identity: null
   hardenedRuntime: false
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist

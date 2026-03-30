@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v1.0.2)'
+        description: 'Version tag (e.g. v1.0.3)'
         required: true
-        default: 'v1.0.2'
+        default: 'v1.0.3'
 
 permissions:
   contents: write
@@ -17,10 +17,9 @@ permissions:
 jobs:
   build-mac:
     runs-on: macos-14
-    # macos-14 = Apple Silicon (M1) runner — builds arm64 natively
-    # Also cross-compiles x64 via electron-builder
+    # macos-14 = Apple Silicon (M1) runner — native arm64
     env:
-      # Disable electron-builder's auto code signing — we handle it ourselves
+      # Disable electron-builder auto code signing — we do it ourselves
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v4
@@ -39,26 +38,51 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Build Mac distributables (unsigned)
-        run: npx electron-builder --mac --publish never
+      - name: Package Mac (arm64 + x64) — unsigned
+        run: npx electron-builder --mac --arm64 --x64 --publish never
 
       - name: Ad-hoc codesign all Mac apps
         run: |
-          # Sign each .app bundle found in release/mac* directories
-          for app in release/mac*/Business\ Accounting\ Pro.app; do
-            if [ -d "$app" ]; then
-              echo "Signing: $app"
-              bash scripts/codesign-mac.sh "$app"
+          chmod +x scripts/codesign-mac.sh
+          for appdir in release/mac*; do
+            APP="$appdir/Business Accounting Pro.app"
+            if [ -d "$APP" ]; then
+              echo "──────────────────────────────────────"
+              echo "Signing: $APP"
+              bash scripts/codesign-mac.sh "$APP"
+              echo ""
             fi
           done
 
-      - name: Rebuild DMGs after codesigning
+      - name: Create DMGs from signed apps (hdiutil)
         run: |
-          # The .app bundles inside release/mac-arm64/ and release/mac-x64/ are now
-          # properly signed. Rebuild DMGs from them so the distributed DMG contains
-          # the codesigned app.
-          npx electron-builder --mac dmg --publish never --prepackaged release/mac-arm64 || true
-          npx electron-builder --mac dmg --publish never --prepackaged release/mac-x64 || true
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+
+          for arch in arm64 x64; do
+            APPDIR="release/mac-${arch}"
+            APP="$APPDIR/Business Accounting Pro.app"
+            if [ -d "$APP" ]; then
+              DMG_NAME="Business-Accounting-Pro-${VERSION}-mac-${arch}.dmg"
+              echo "Creating $DMG_NAME..."
+
+              # Create a temporary DMG directory with the app and Applications symlink
+              STAGING="/tmp/dmg-staging-${arch}"
+              rm -rf "$STAGING"
+              mkdir -p "$STAGING"
+              cp -R "$APP" "$STAGING/"
+              ln -s /Applications "$STAGING/Applications"
+
+              # Create DMG
+              hdiutil create -volname "Business Accounting Pro" \
+                -srcfolder "$STAGING" \
+                -ov -format UDZO \
+                "release/$DMG_NAME"
+
+              rm -rf "$STAGING"
+              echo "  ✓ Created release/$DMG_NAME"
+            fi
+          done
 
       - name: Upload Mac artifacts
         uses: actions/upload-artifact@v4
@@ -66,9 +90,6 @@ jobs:
           name: mac-build
           path: |
             release/*.dmg
-            release/*.zip
-            release/*.yml
-            release/*.yaml
           if-no-files-found: warn
 
   build-windows:
