@@ -1918,5 +1918,61 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('categories:seed-defaults', (_event, { company_id }: { company_id: string }) => {
     return seedDefaultCategories(company_id);
   });
+
+  // ─── Automation Rules ──────────────────────────────
+  ipcMain.handle('automations:list', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.getDb().prepare(
+      `SELECT * FROM automation_rules WHERE company_id = ? ORDER BY created_at DESC`
+    ).all(companyId);
+  });
+
+  ipcMain.handle('automations:toggle', (_e, ruleId: string) => {
+    db.getDb().prepare(
+      `UPDATE automation_rules SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?`
+    ).run(ruleId);
+  });
+
+  ipcMain.handle('automations:run-log', (_e, ruleId: string) =>
+    db.getDb().prepare(
+      `SELECT * FROM automation_run_log WHERE rule_id = ? ORDER BY ran_at DESC LIMIT 50`
+    ).all(ruleId)
+  );
+
+  // ─── Financial Intelligence ─────────────────────────
+  ipcMain.handle('intelligence:anomalies', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.getDb().prepare(
+      `SELECT * FROM financial_anomalies WHERE company_id = ? AND dismissed = 0 ORDER BY detected_at DESC LIMIT 20`
+    ).all(companyId);
+  });
+
+  ipcMain.handle('intelligence:dismiss-anomaly', (_e, id: string) => {
+    db.getDb().prepare(`UPDATE financial_anomalies SET dismissed = 1 WHERE id = ?`).run(id);
+  });
+
+  ipcMain.handle('intelligence:cash-projection', (_e, { days }: { days: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { inflow: [], outflow: [] };
+    const d = Math.min(Math.max(Number(days), 1), 90);
+    const dbInstance = db.getDb();
+    const inflow = dbInstance.prepare(`
+      SELECT SUM(total) as amount, due_date
+      FROM invoices
+      WHERE company_id = ? AND status NOT IN ('paid','void','draft')
+        AND due_date BETWEEN date('now') AND date('now', '+${d} days')
+      GROUP BY due_date ORDER BY due_date
+    `).all(companyId);
+    const outflow = dbInstance.prepare(`
+      SELECT SUM(total_amount) as amount, due_date
+      FROM bills
+      WHERE company_id = ? AND status NOT IN ('paid','void','draft')
+        AND due_date BETWEEN date('now') AND date('now', '+${d} days')
+      GROUP BY due_date ORDER BY due_date
+    `).all(companyId);
+    return { inflow, outflow };
+  });
 }
 

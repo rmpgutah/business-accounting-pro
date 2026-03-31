@@ -40,6 +40,7 @@ const SettingsModule = lazy(() => import('./modules/settings'));
 const BillsModule = lazy(() => import('./modules/bills'));
 const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
 const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
+const AutomationsModule = lazy(() => import('./modules/automations'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -118,6 +119,7 @@ const ModuleView: React.FC = () => {
       case 'bills': return <BillsModule />;
       case 'purchase-orders': return <PurchaseOrdersModule />;
       case 'fixed-assets': return <FixedAssetsModule />;
+      case 'automations': return <AutomationsModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">

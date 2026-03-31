@@ -215,6 +215,22 @@ const api = {
   categoriesSeedDefaults: (company_id: string) =>
     window.electronAPI.invoke('categories:seed-defaults', { company_id }),
 
+  // Automations
+  listAutomations: (): Promise<any[]> =>
+    window.electronAPI.invoke('automations:list'),
+  toggleAutomation: (ruleId: string): Promise<void> =>
+    window.electronAPI.invoke('automations:toggle', ruleId),
+  automationRunLog: (ruleId: string): Promise<any[]> =>
+    window.electronAPI.invoke('automations:run-log', ruleId),
+
+  // Financial Intelligence
+  listAnomalies: (): Promise<any[]> =>
+    window.electronAPI.invoke('intelligence:anomalies'),
+  dismissAnomaly: (id: string): Promise<void> =>
+    window.electronAPI.invoke('intelligence:dismiss-anomaly', id),
+  cashProjection: (days: number): Promise<{ inflow: any[]; outflow: any[] }> =>
+    window.electronAPI.invoke('intelligence:cash-projection', { days }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };
