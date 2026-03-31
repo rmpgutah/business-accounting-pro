@@ -859,3 +859,60 @@ CREATE INDEX IF NOT EXISTS idx_dimensions_company ON dimensions(company_id);
 CREATE INDEX IF NOT EXISTS idx_employee_deductions_employee ON employee_deductions(employee_id);
 CREATE INDEX IF NOT EXISTS idx_federal_brackets_year ON federal_tax_brackets(tax_year, filing_status);
 CREATE INDEX IF NOT EXISTS idx_state_tax_year ON state_tax_rates(tax_year, state_code);
+
+-- ─── Sync & Intelligence Tables ──────────────────────────
+-- Sync queue (offline support)
+CREATE TABLE IF NOT EXISTS sync_queue (
+  id TEXT PRIMARY KEY,
+  table_name TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK(operation IN ('create','update','delete')),
+  record_id TEXT NOT NULL,
+  company_id TEXT,
+  payload TEXT NOT NULL,
+  queued_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+
+-- Invoice tokens (portal links)
+CREATE TABLE IF NOT EXISTS invoice_tokens (
+  id TEXT PRIMARY KEY,
+  invoice_id TEXT NOT NULL UNIQUE,
+  company_id TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+-- Automation rules
+CREATE TABLE IF NOT EXISTS automation_rules (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  trigger_type TEXT NOT NULL,
+  trigger_config TEXT NOT NULL DEFAULT '{}',
+  conditions TEXT NOT NULL DEFAULT '[]',
+  actions TEXT NOT NULL DEFAULT '[]',
+  last_run_at INTEGER,
+  run_count INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE TABLE IF NOT EXISTS automation_run_log (
+  id TEXT PRIMARY KEY,
+  rule_id TEXT NOT NULL,
+  ran_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  status TEXT NOT NULL CHECK(status IN ('pass','fail','skip')),
+  detail TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financial_anomalies (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  anomaly_type TEXT NOT NULL,
+  description TEXT NOT NULL,
+  amount REAL,
+  category TEXT,
+  detected_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  dismissed INTEGER NOT NULL DEFAULT 0
+);
