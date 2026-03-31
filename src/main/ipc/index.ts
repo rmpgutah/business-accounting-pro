@@ -110,7 +110,8 @@ export function registerIpcHandlers(): void {
     'budget_lines', 'bank_transactions', 'bank_reconciliation_matches',
     'users', 'user_companies',
     // Enterprise v2 child tables — no company_id column in schema
-    'bill_line_items', 'bill_payments', 'po_line_items',
+    // NOTE: bill_payments DOES have company_id, so it is NOT listed here
+    'bill_line_items', 'po_line_items',
     'asset_depreciation_entries', 'credit_note_items',
   ]);
 

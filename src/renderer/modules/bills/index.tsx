@@ -980,9 +980,10 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
       // Reload data to reflect new payment
       setLoading(true);
       await loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to record payment:', err);
-      setPayErrors(['Failed to record payment. Please try again.']);
+      const msg = err?.message || String(err) || 'Unknown error';
+      setPayErrors([`Failed to record payment: ${msg}`]);
     } finally {
       setPayLoading(false);
     }
