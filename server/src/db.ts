@@ -6,6 +6,13 @@ import { v4 as uuidv4 } from 'uuid';
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+function sanitizeIdentifier(name: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(`Invalid SQL identifier: "${name}"`);
+  }
+  return name;
+}
+
 export let db: Database.Database;
 
 export function initDb() {
@@ -80,38 +87,51 @@ export function applySync(payload: {
 }) {
   const { table, operation, id, data } = payload;
 
-  ensureTable(table, data);
+  const applyTransaction = db.transaction(() => {
+    ensureTable(table, data);
 
-  if (operation === 'delete') {
-    db.prepare(`DELETE FROM "${table}" WHERE id = ?`).run(id);
-    return;
-  }
+    const safeTable = sanitizeIdentifier(table);
 
-  const cols = Object.keys(data);
-  if (cols.length === 0) return;
+    if (operation === 'delete') {
+      db.prepare(`DELETE FROM "${safeTable}" WHERE id = ?`).run(id);
+      db.prepare(
+        `INSERT INTO sync_log (id, table_name, operation, record_id, company_id, payload)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(uuidv4(), table, 'delete', id, payload.companyId, JSON.stringify({ id }));
+      return;
+    }
 
-  if (operation === 'create') {
-    const placeholders = cols.map(() => '?').join(', ');
+    const cols = Object.keys(data);
+    if (cols.length === 0) return;
+
+    if (operation === 'create') {
+      const safeCols = cols.map(c => sanitizeIdentifier(c));
+      const placeholders = safeCols.map(() => '?').join(', ');
+      db.prepare(
+        `INSERT OR REPLACE INTO "${safeTable}" (${safeCols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`
+      ).run(...cols.map(c => data[c] as any));
+    } else {
+      const safeCols = cols.filter(c => c !== 'id').map(c => sanitizeIdentifier(c));
+      const sets = safeCols.map(c => `"${c}" = ?`).join(', ');
+      const vals = cols.filter(c => c !== 'id').map(c => data[c]);
+      db.prepare(`UPDATE "${safeTable}" SET ${sets} WHERE id = ?`).run(...vals, id);
+    }
+
     db.prepare(
-      `INSERT OR REPLACE INTO "${table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`
-    ).run(...cols.map(c => data[c] as any));
-  } else {
-    const sets = cols.filter(c => c !== 'id').map(c => `"${c}" = ?`).join(', ');
-    const vals = cols.filter(c => c !== 'id').map(c => data[c]);
-    db.prepare(`UPDATE "${table}" SET ${sets} WHERE id = ?`).run(...vals, id);
-  }
+      `INSERT INTO sync_log (id, table_name, operation, record_id, company_id, payload)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(uuidv4(), table, operation, id, payload.companyId, JSON.stringify(data));
+  });
 
-  db.prepare(
-    `INSERT INTO sync_log (id, table_name, operation, record_id, company_id, payload)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(uuidv4(), table, operation, id, payload.companyId, JSON.stringify(data));
+  applyTransaction();
 }
 
 const createdTables = new Set<string>();
 
 function ensureTable(table: string, sample: Record<string, unknown>) {
+  sanitizeIdentifier(table); // throws if invalid
   if (createdTables.has(table)) return;
-  const cols = Object.keys(sample).map(c => `"${c}" TEXT`).join(', ');
+  const cols = Object.keys(sample).map(c => `"${sanitizeIdentifier(c)}" TEXT`).join(', ');
   db.exec(`CREATE TABLE IF NOT EXISTS "${table}" (${cols || '"id" TEXT PRIMARY KEY'})`);
   createdTables.add(table);
 }
