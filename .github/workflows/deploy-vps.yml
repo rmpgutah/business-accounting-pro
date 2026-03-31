@@ -1,0 +1,105 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'landing-page/**'
+      - 'deploy/nginx.conf'
+      - '.github/workflows/deploy-vps.yml'
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force full re-deploy even if no changes'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  deploy:
+    name: Deploy landing page to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. SSH agent setup ───────────────────────────
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      # ── 3. Add VPS to known hosts ────────────────────
+      - name: Trust VPS host key
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      # ── 4. Deploy landing page via rsync ─────────────
+      - name: Sync landing page to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='CNAME' \
+            landing-page/ \
+            "${VPS_USER}@${VPS_HOST}:/var/www/accounting.rmpgutah.us/"
+
+      # ── 5. Set correct file permissions on VPS ───────
+      - name: Fix permissions on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh "${VPS_USER}@${VPS_HOST}" \
+            "find /var/www/accounting.rmpgutah.us -type d -exec chmod 755 {} \; && \
+             find /var/www/accounting.rmpgutah.us -type f -exec chmod 644 {} \; && \
+             echo 'Permissions OK'"
+
+      # ── 6. Reload Nginx gracefully ───────────────────
+      - name: Reload Nginx
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh "${VPS_USER}@${VPS_HOST}" \
+            "sudo nginx -t && sudo nginx -s reload && echo 'Nginx reloaded'"
+
+      # ── 7. Health check ──────────────────────────────
+      - name: Verify site is live
+        run: |
+          STATUS=$(curl -sSo /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            --retry 3 \
+            --retry-delay 3 \
+            "https://accounting.rmpgutah.us/")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Site health check failed — HTTP $STATUS"
+            exit 1
+          fi
+          echo "✓ Site is live at https://accounting.rmpgutah.us"
+
+      # ── 8. Summary ───────────────────────────────────
+      - name: Deployment summary
+        if: success()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "## ✅ Deployment Successful" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Site | https://accounting.rmpgutah.us |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`${COMMIT_SHA:0:8}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | \`${REF_NAME}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Triggered by | ${ACTOR} |" >> "$GITHUB_STEP_SUMMARY"
