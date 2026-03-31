@@ -209,6 +209,10 @@ const api = {
   taxAutoSeedCurrentYear: () =>
     window.electronAPI.invoke('tax:auto-seed-current-year'),
 
+  // Categories
+  categoriesSeedDefaults: (company_id: string) =>
+    window.electronAPI.invoke('categories:seed-defaults', { company_id }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

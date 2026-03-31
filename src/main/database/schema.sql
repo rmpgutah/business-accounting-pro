@@ -500,7 +500,10 @@ CREATE TABLE IF NOT EXISTS categories (
   company_id TEXT NOT NULL REFERENCES companies(id),
   name TEXT NOT NULL,
   type TEXT DEFAULT 'expense' CHECK(type IN ('income','expense')),
+  color TEXT DEFAULT '#6b7280',
+  icon TEXT DEFAULT '',
   description TEXT DEFAULT '',
+  is_active INTEGER DEFAULT 1,
   parent_id TEXT REFERENCES categories(id),
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))

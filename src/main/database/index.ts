@@ -32,6 +32,16 @@ export function initDatabase(): Database.Database {
     db.exec(schema);
   }
 
+  // ─── Column migrations (safe — catch errors for already-existing columns) ──
+  const migrations: string[] = [
+    "ALTER TABLE categories ADD COLUMN color TEXT DEFAULT '#6b7280'",
+    "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''",
+    "ALTER TABLE categories ADD COLUMN is_active INTEGER DEFAULT 1",
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
+  }
+
   return db;
 }
 

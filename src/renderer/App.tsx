@@ -163,6 +163,15 @@ const App: React.FC = () => {
           setCompanies(list ?? []);
           if (list && list.length > 0) {
             setActiveCompany(list[0]);
+            // Seed default categories for all companies (safe — no-op if already seeded)
+            for (const company of list) {
+              api.categoriesSeedDefaults(company.id).catch(() => {});
+            }
+          }
+        } else {
+          // Companies already loaded — still ensure categories are seeded
+          for (const company of companies) {
+            api.categoriesSeedDefaults(company.id).catch(() => {});
           }
         }
       } catch (err) {
