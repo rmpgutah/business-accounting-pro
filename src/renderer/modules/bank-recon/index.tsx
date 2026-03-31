@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Landmark, Building, Upload, GitMerge } from 'lucide-react';
+import { Landmark, Building, Upload, GitMerge, Shield } from 'lucide-react';
 import BankAccountList, { type BankAccount } from './BankAccountList';
 import BankAccountForm from './BankAccountForm';
 import ImportTransactions from './ImportTransactions';
 import ReconcileView from './ReconcileView';
+import BankRules from './BankRules';
 
 // ─── Tab Types ──────────────────────────────────────────
-type TabId = 'accounts' | 'import' | 'reconcile';
+type TabId = 'accounts' | 'import' | 'reconcile' | 'rules';
 
 interface Tab {
   id: TabId;
@@ -18,6 +19,7 @@ const TABS: Tab[] = [
   { id: 'accounts', label: 'Accounts', icon: <Building size={14} /> },
   { id: 'import', label: 'Import', icon: <Upload size={14} /> },
   { id: 'reconcile', label: 'Reconcile', icon: <GitMerge size={14} /> },
+  { id: 'rules', label: 'Bank Rules', icon: <Shield size={14} /> },
 ];
 
 // ─── Component ──────────────────────────────────────────
@@ -68,6 +70,10 @@ const BankReconModule: React.FC = () => {
 
     if (activeTab === 'reconcile') {
       return <ReconcileView />;
+    }
+
+    if (activeTab === 'rules') {
+      return <BankRules />;
     }
 
     return null;

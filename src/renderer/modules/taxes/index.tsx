@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { BarChart3, Tag, CreditCard } from 'lucide-react';
+import { BarChart3, Tag, CreditCard, Settings } from 'lucide-react';
 import TaxDashboard from './TaxDashboard';
 import TaxCategories from './TaxCategories';
 import TaxPayments from './TaxPayments';
+import TaxConfiguration from './TaxConfiguration';
 
-type Tab = 'dashboard' | 'categories' | 'payments';
+type Tab = 'dashboard' | 'categories' | 'payments' | 'configuration';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={15} /> },
   { key: 'categories', label: 'Categories', icon: <Tag size={15} /> },
   { key: 'payments', label: 'Payments', icon: <CreditCard size={15} /> },
+  { key: 'configuration', label: 'Tax Configuration', icon: <Settings size={15} /> },
 ];
 
 const TaxModule: React.FC = () => {
@@ -43,6 +45,7 @@ const TaxModule: React.FC = () => {
       {activeTab === 'dashboard' && <TaxDashboard />}
       {activeTab === 'categories' && <TaxCategories />}
       {activeTab === 'payments' && <TaxPayments />}
+      {activeTab === 'configuration' && <TaxConfiguration />}
     </div>
   );
 };

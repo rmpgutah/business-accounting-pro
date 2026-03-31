@@ -138,6 +138,76 @@ const api = {
   setSetting: (key: string, value: string): Promise<void> =>
     window.electronAPI.invoke('settings:set', { key, value }),
 
+  // ─── Financial Reports ─────────────────────────────
+  reportProfitLoss: (startDate: string, endDate: string) =>
+    window.electronAPI.invoke('reports:profit-loss', { startDate, endDate }),
+  reportBalanceSheet: (asOfDate: string) =>
+    window.electronAPI.invoke('reports:balance-sheet', { asOfDate }),
+  reportTrialBalance: (startDate: string, endDate: string) =>
+    window.electronAPI.invoke('reports:trial-balance', { startDate, endDate }),
+  reportArAging: (asOfDate: string) =>
+    window.electronAPI.invoke('reports:ar-aging', { asOfDate }),
+  reportApAging: (asOfDate: string) =>
+    window.electronAPI.invoke('reports:ap-aging', { asOfDate }),
+  reportGeneralLedger: (startDate: string, endDate: string, accountId?: string) =>
+    window.electronAPI.invoke('reports:general-ledger', { startDate, endDate, accountId }),
+  reportCashFlow: (startDate: string, endDate: string) =>
+    window.electronAPI.invoke('reports:cash-flow', { startDate, endDate }),
+
+  // ─── Bills / Accounts Payable ──────────────────────
+  billsNextNumber: (): Promise<string> =>
+    window.electronAPI.invoke('bills:next-number'),
+  billsPay: (billId: string, amount: number, paymentDate: string, paymentMethod: string, accountId: string, reference?: string) =>
+    window.electronAPI.invoke('bills:pay', { billId, amount, paymentDate, paymentMethod, accountId, reference }),
+  billsStats: (): Promise<{ total_unpaid: number; overdue: number; due_soon: number; paid_this_month: number }> =>
+    window.electronAPI.invoke('bills:stats'),
+  billsOverdueCheck: () =>
+    window.electronAPI.invoke('bills:overdue-check'),
+
+  // ─── Purchase Orders ───────────────────────────────
+  poNextNumber: (): Promise<string> =>
+    window.electronAPI.invoke('po:next-number'),
+  poApprove: (poId: string) =>
+    window.electronAPI.invoke('po:approve', { poId }),
+  poConvertBill: (poId: string) =>
+    window.electronAPI.invoke('po:convert-bill', { poId }),
+
+  // ─── Fixed Assets ──────────────────────────────────
+  assetsNextCode: (): Promise<string> =>
+    window.electronAPI.invoke('assets:next-code'),
+  assetsSchedule: (assetId: string) =>
+    window.electronAPI.invoke('assets:schedule', { assetId }),
+  assetsRunDepreciation: (periodDate: string) =>
+    window.electronAPI.invoke('assets:run-depreciation', { periodDate }),
+
+  // ─── Bank Rules ────────────────────────────────────
+  bankRulesApply: () =>
+    window.electronAPI.invoke('bank-rules:apply'),
+
+  // ─── Credit Notes ──────────────────────────────────
+  creditNotesNextNumber: (): Promise<string> =>
+    window.electronAPI.invoke('credit-notes:next-number'),
+  creditNotesApply: (creditNoteId: string, invoiceId: string) =>
+    window.electronAPI.invoke('credit-notes:apply', { creditNoteId, invoiceId }),
+
+  // ─── Tax Configuration ─────────────────────────────
+  taxSeedYear: (year: number) =>
+    window.electronAPI.invoke('tax:seed-year', { year }),
+  taxGetBrackets: (year: number, filingStatus: string) =>
+    window.electronAPI.invoke('tax:get-brackets', { year, filingStatus }),
+  taxCalculateWithholding: (params: {
+    gross_pay: number;
+    pay_frequency: string;
+    filing_status: string;
+    allowances: number;
+    additional_withholding: number;
+    year: number;
+  }) => window.electronAPI.invoke('tax:calculate-withholding', params),
+  taxAvailableYears: (): Promise<number[]> =>
+    window.electronAPI.invoke('tax:available-years'),
+  taxAutoSeedCurrentYear: () =>
+    window.electronAPI.invoke('tax:auto-seed-current-year'),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

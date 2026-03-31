@@ -6,6 +6,9 @@ import {
   Clock,
   PieChart,
   Calculator,
+  BookOpen,
+  CreditCard,
+  List,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -15,6 +18,9 @@ export type ReportType =
   | 'balance-sheet'
   | 'cash-flow'
   | 'ar-aging'
+  | 'ap-aging'
+  | 'trial-balance'
+  | 'general-ledger'
   | 'expense-by-category'
   | 'tax-summary';
 
@@ -63,6 +69,30 @@ const REPORTS: ReportCard[] = [
       'Outstanding invoices grouped by age: Current, 1-30, 31-60, 61-90, and 90+ days.',
     icon: Clock,
     accentClass: 'border-l-accent-expense',
+  },
+  {
+    id: 'trial-balance',
+    title: 'Trial Balance',
+    description:
+      'All account balances with total debits and credits. Confirms the books are in balance.',
+    icon: List,
+    accentClass: 'border-l-[#06b6d4]',
+  },
+  {
+    id: 'ap-aging',
+    title: 'Accounts Payable Aging',
+    description:
+      'Outstanding bills grouped by age: Current, 1-30, 31-60, 61-90, and 90+ days.',
+    icon: CreditCard,
+    accentClass: 'border-l-[#f97316]',
+  },
+  {
+    id: 'general-ledger',
+    title: 'General Ledger',
+    description:
+      'Complete transaction history for every account with running balances.',
+    icon: BookOpen,
+    accentClass: 'border-l-[#8b5cf6]',
   },
   {
     id: 'expense-by-category',

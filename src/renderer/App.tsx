@@ -37,6 +37,9 @@ const ApiModule = lazy(() => import('./modules/api'));
 const PortalModule = lazy(() => import('./modules/portal'));
 const MobileModule = lazy(() => import('./modules/mobile'));
 const SettingsModule = lazy(() => import('./modules/settings'));
+const BillsModule = lazy(() => import('./modules/bills'));
+const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
+const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -67,6 +70,9 @@ const MODULE_NAMES: Record<string, string> = {
   'client-portal': 'Client Portal',
   mobile: 'Mobile',
   settings: 'Settings',
+  bills: 'Bills & Accounts Payable',
+  'purchase-orders': 'Purchase Orders',
+  'fixed-assets': 'Fixed Assets',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -109,6 +115,9 @@ const ModuleView: React.FC = () => {
       case 'client-portal': return <PortalModule />;
       case 'mobile': return <MobileModule />;
       case 'settings': return <SettingsModule />;
+      case 'bills': return <BillsModule />;
+      case 'purchase-orders': return <PurchaseOrdersModule />;
+      case 'fixed-assets': return <FixedAssetsModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">

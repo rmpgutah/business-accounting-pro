@@ -29,6 +29,9 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  FileInput,
+  ClipboardList,
+  Boxes,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -62,6 +65,7 @@ const sections: NavSection[] = [
       { id: 'time-tracking', label: 'Time Tracking', icon: Clock },
       { id: 'projects', label: 'Projects', icon: FolderKanban },
       { id: 'inventory', label: 'Inventory', icon: Package },
+      { id: 'fixed-assets', label: 'Fixed Assets', icon: Boxes },
     ],
   },
   {
@@ -71,6 +75,8 @@ const sections: NavSection[] = [
       { id: 'budgets', label: 'Budgets', icon: PiggyBank },
       { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
       { id: 'stripe-sync', label: 'Stripe Sync', icon: CreditCard },
+      { id: 'bills', label: 'Bills (AP)', icon: FileInput },
+      { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
     ],
   },
   {

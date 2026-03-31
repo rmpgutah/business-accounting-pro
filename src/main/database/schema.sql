@@ -546,3 +546,313 @@ CREATE INDEX IF NOT EXISTS idx_notifications_company_read ON notifications(compa
 CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_bank_transactions_account ON bank_transactions(bank_account_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_transactions_company ON stripe_transactions(company_id);
+
+-- ═══════════════════════════════════════════════════════
+-- ENTERPRISE ADDITIONS v2.0
+-- ═══════════════════════════════════════════════════════
+
+-- Accounts Payable: Vendor Bills
+CREATE TABLE IF NOT EXISTS bills (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  vendor_id TEXT REFERENCES vendors(id),
+  bill_number TEXT NOT NULL,
+  status TEXT DEFAULT 'received' CHECK(status IN ('draft','received','approved','partial','paid','overdue','void')),
+  issue_date TEXT NOT NULL,
+  due_date TEXT,
+  subtotal REAL DEFAULT 0,
+  tax_amount REAL DEFAULT 0,
+  discount_amount REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  amount_paid REAL DEFAULT 0,
+  notes TEXT DEFAULT '',
+  reference TEXT DEFAULT '',
+  account_id TEXT REFERENCES accounts(id),
+  custom_fields TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(company_id, bill_number)
+);
+
+CREATE TABLE IF NOT EXISTS bill_line_items (
+  id TEXT PRIMARY KEY,
+  bill_id TEXT NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+  description TEXT DEFAULT '',
+  quantity REAL DEFAULT 1,
+  unit_price REAL DEFAULT 0,
+  amount REAL DEFAULT 0,
+  tax_rate REAL DEFAULT 0,
+  account_id TEXT REFERENCES accounts(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS bill_payments (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  bill_id TEXT NOT NULL REFERENCES bills(id),
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  payment_method TEXT DEFAULT 'check',
+  reference TEXT DEFAULT '',
+  account_id TEXT REFERENCES accounts(id),
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Purchase Orders
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  vendor_id TEXT REFERENCES vendors(id),
+  po_number TEXT NOT NULL,
+  status TEXT DEFAULT 'draft' CHECK(status IN ('draft','sent','approved','partial','received','cancelled')),
+  issue_date TEXT NOT NULL,
+  expected_date TEXT,
+  subtotal REAL DEFAULT 0,
+  tax_amount REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  notes TEXT DEFAULT '',
+  terms TEXT DEFAULT '',
+  approved_by TEXT DEFAULT '',
+  approved_at TEXT,
+  custom_fields TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(company_id, po_number)
+);
+
+CREATE TABLE IF NOT EXISTS po_line_items (
+  id TEXT PRIMARY KEY,
+  po_id TEXT NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  description TEXT DEFAULT '',
+  quantity REAL DEFAULT 1,
+  unit_price REAL DEFAULT 0,
+  amount REAL DEFAULT 0,
+  quantity_received REAL DEFAULT 0,
+  account_id TEXT REFERENCES accounts(id),
+  item_id TEXT REFERENCES inventory_items(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Fixed Assets & Depreciation
+CREATE TABLE IF NOT EXISTS fixed_assets (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  asset_code TEXT DEFAULT '',
+  category TEXT DEFAULT 'equipment',
+  description TEXT DEFAULT '',
+  purchase_date TEXT NOT NULL,
+  purchase_price REAL DEFAULT 0,
+  salvage_value REAL DEFAULT 0,
+  useful_life_years REAL DEFAULT 5,
+  depreciation_method TEXT DEFAULT 'straight_line' CHECK(depreciation_method IN ('straight_line','double_declining','sum_of_years_digits','units_of_production')),
+  asset_account_id TEXT REFERENCES accounts(id),
+  depreciation_account_id TEXT REFERENCES accounts(id),
+  accumulated_depreciation_account_id TEXT REFERENCES accounts(id),
+  current_book_value REAL DEFAULT 0,
+  accumulated_depreciation REAL DEFAULT 0,
+  status TEXT DEFAULT 'active' CHECK(status IN ('active','disposed','fully_depreciated')),
+  serial_number TEXT DEFAULT '',
+  location TEXT DEFAULT '',
+  disposal_date TEXT,
+  disposal_amount REAL DEFAULT 0,
+  notes TEXT DEFAULT '',
+  custom_fields TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS asset_depreciation_entries (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
+  period_date TEXT NOT NULL,
+  period_label TEXT DEFAULT '',
+  depreciation_amount REAL DEFAULT 0,
+  accumulated_depreciation REAL DEFAULT 0,
+  book_value REAL DEFAULT 0,
+  journal_entry_id TEXT REFERENCES journal_entries(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Bank Auto-Categorization Rules
+CREATE TABLE IF NOT EXISTS bank_rules (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  is_active INTEGER DEFAULT 1,
+  priority INTEGER DEFAULT 0,
+  match_type TEXT DEFAULT 'contains' CHECK(match_type IN ('contains','starts_with','ends_with','exact','regex')),
+  match_field TEXT DEFAULT 'description' CHECK(match_field IN ('description','amount','reference')),
+  match_value TEXT NOT NULL,
+  amount_min REAL,
+  amount_max REAL,
+  transaction_type TEXT DEFAULT '' CHECK(transaction_type IN ('debit','credit','')),
+  action_account_id TEXT REFERENCES accounts(id),
+  action_category_id TEXT REFERENCES categories(id),
+  action_vendor_id TEXT REFERENCES vendors(id),
+  action_description TEXT DEFAULT '',
+  times_applied INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Tax Rate Library
+CREATE TABLE IF NOT EXISTS tax_rates (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  rate REAL NOT NULL,
+  type TEXT DEFAULT 'sales' CHECK(type IN ('sales','purchase','compound','vat')),
+  is_default INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  description TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Credit Notes
+CREATE TABLE IF NOT EXISTS credit_notes (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  client_id TEXT REFERENCES clients(id),
+  invoice_id TEXT REFERENCES invoices(id),
+  credit_number TEXT NOT NULL,
+  status TEXT DEFAULT 'open' CHECK(status IN ('draft','open','applied','void')),
+  issue_date TEXT NOT NULL,
+  subtotal REAL DEFAULT 0,
+  tax_amount REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  amount_applied REAL DEFAULT 0,
+  notes TEXT DEFAULT '',
+  reason TEXT DEFAULT '',
+  custom_fields TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(company_id, credit_number)
+);
+
+CREATE TABLE IF NOT EXISTS credit_note_items (
+  id TEXT PRIMARY KEY,
+  credit_note_id TEXT NOT NULL REFERENCES credit_notes(id) ON DELETE CASCADE,
+  description TEXT DEFAULT '',
+  quantity REAL DEFAULT 1,
+  unit_price REAL DEFAULT 0,
+  amount REAL DEFAULT 0,
+  tax_rate REAL DEFAULT 0,
+  account_id TEXT REFERENCES accounts(id),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Departments / Cost Centers (Dimensional Analysis)
+CREATE TABLE IF NOT EXISTS dimensions (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  code TEXT NOT NULL,
+  type TEXT DEFAULT 'department' CHECK(type IN ('department','cost_center','location','project_type','region')),
+  parent_id TEXT REFERENCES dimensions(id),
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(company_id, code)
+);
+
+-- Employee Deductions & Benefits
+CREATE TABLE IF NOT EXISTS employee_deductions (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  employee_id TEXT NOT NULL REFERENCES employees(id),
+  name TEXT NOT NULL,
+  type TEXT DEFAULT 'deduction' CHECK(type IN ('deduction','benefit','garnishment','retirement')),
+  calculation TEXT DEFAULT 'fixed' CHECK(calculation IN ('fixed','percentage')),
+  amount REAL DEFAULT 0,
+  is_pretax INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  effective_date TEXT,
+  end_date TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Dynamic Federal Tax Brackets (multi-year, auto-updating)
+CREATE TABLE IF NOT EXISTS federal_tax_brackets (
+  id TEXT PRIMARY KEY,
+  tax_year INTEGER NOT NULL,
+  filing_status TEXT NOT NULL CHECK(filing_status IN ('single','married_jointly','married_separately','head_of_household')),
+  bracket_min REAL NOT NULL,
+  bracket_max REAL,  -- NULL = no upper limit
+  rate REAL NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(tax_year, filing_status, bracket_min)
+);
+
+-- Federal Payroll Constants (FICA, FUTA, standard deductions by year)
+CREATE TABLE IF NOT EXISTS federal_payroll_constants (
+  id TEXT PRIMARY KEY,
+  tax_year INTEGER NOT NULL UNIQUE,
+  ss_wage_base REAL NOT NULL,
+  ss_rate REAL NOT NULL DEFAULT 0.062,
+  medicare_rate REAL NOT NULL DEFAULT 0.0145,
+  medicare_additional_rate REAL NOT NULL DEFAULT 0.009,
+  medicare_additional_threshold_single REAL NOT NULL DEFAULT 200000,
+  medicare_additional_threshold_married REAL NOT NULL DEFAULT 250000,
+  futa_rate REAL NOT NULL DEFAULT 0.006,
+  futa_wage_base REAL NOT NULL DEFAULT 7000,
+  standard_deduction_single REAL NOT NULL,
+  standard_deduction_married REAL NOT NULL,
+  standard_deduction_hoh REAL NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- State Tax Rates
+CREATE TABLE IF NOT EXISTS state_tax_rates (
+  id TEXT PRIMARY KEY,
+  tax_year INTEGER NOT NULL,
+  state_code TEXT NOT NULL,
+  state_name TEXT NOT NULL,
+  rate REAL NOT NULL,
+  flat_rate INTEGER DEFAULT 0,  -- 1 if flat rate, 0 if progressive
+  wage_base REAL,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(tax_year, state_code)
+);
+
+-- Report Templates (saved configurations)
+CREATE TABLE IF NOT EXISTS report_templates (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  report_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  config TEXT DEFAULT '{}',
+  is_default INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Exchange Rates
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  id TEXT PRIMARY KEY,
+  from_currency TEXT NOT NULL,
+  to_currency TEXT NOT NULL,
+  rate REAL NOT NULL,
+  effective_date TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(from_currency, to_currency, effective_date)
+);
+
+-- ─── Enterprise Indexes ─────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_bills_company_status ON bills(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_bills_vendor ON bills(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_bill_payments_bill ON bill_payments(bill_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_fixed_assets_company ON fixed_assets(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_asset_depreciation_asset ON asset_depreciation_entries(asset_id);
+CREATE INDEX IF NOT EXISTS idx_bank_rules_company ON bank_rules(company_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_credit_notes_company ON credit_notes(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_credit_notes_client ON credit_notes(client_id);
+CREATE INDEX IF NOT EXISTS idx_dimensions_company ON dimensions(company_id);
+CREATE INDEX IF NOT EXISTS idx_employee_deductions_employee ON employee_deductions(employee_id);
+CREATE INDEX IF NOT EXISTS idx_federal_brackets_year ON federal_tax_brackets(tax_year, filing_status);
+CREATE INDEX IF NOT EXISTS idx_state_tax_year ON state_tax_rates(tax_year, state_code);
