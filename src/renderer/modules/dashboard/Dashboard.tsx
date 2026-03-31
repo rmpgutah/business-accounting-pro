@@ -412,6 +412,7 @@ const Dashboard: React.FC = () => {
     topClientName: '--',
     topClientRevenue: 0,
   });
+  const [anomalies, setAnomalies] = useState<any[]>([]);
 
   const { start, end } = useMemo(() => dateRange(period), [period]);
 
@@ -677,6 +678,9 @@ const Dashboard: React.FC = () => {
           topClientName: topClient?.name || '--',
           topClientRevenue: topClient?.total || 0,
         });
+
+        const anomalyData = await api.listAnomalies();
+        setAnomalies(anomalyData || []);
       } catch (err) {
         console.error('Dashboard data load failed:', err);
       }
@@ -1282,6 +1286,34 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ─── Intelligence Alerts ─── */}
+      {anomalies.length > 0 && (
+        <div className="col-span-full border-2 border-orange-500 bg-orange-50 p-5" style={{ borderRadius: '2px' }}>
+          <h2 className="text-xs font-black uppercase tracking-wider text-orange-700 mb-3">
+            Intelligence Alerts
+          </h2>
+          <div className="space-y-2">
+            {anomalies.map((a: any) => (
+              <div key={a.id} className="flex items-start justify-between gap-4 bg-white border border-orange-300 p-3">
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{a.anomaly_type?.replace(/_/g, ' ').toUpperCase()}</p>
+                  <p className="text-sm text-gray-600 mt-0.5">{a.description}</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    await api.dismissAnomaly(a.id);
+                    setAnomalies(prev => prev.filter(x => x.id !== a.id));
+                  }}
+                  className="flex-shrink-0 text-xs font-black text-gray-400 hover:text-gray-900 border border-gray-300 px-2 py-1 hover:border-gray-900 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
