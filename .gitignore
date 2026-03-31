@@ -4,3 +4,5 @@ release/
 .DS_Store
 *.db
 *.db-journal
+.env
+deploy/vps.env

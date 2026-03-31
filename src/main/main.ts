@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { app, BrowserWindow, dialog, Menu } from 'electron';
 import path from 'path';
 import { initDatabase } from './database';
