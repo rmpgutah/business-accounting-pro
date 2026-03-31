@@ -62,6 +62,8 @@ const api = {
     window.electronAPI.invoke('invoice:preview-pdf', invoiceId),
   sendInvoiceEmail: (invoiceId: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
     window.electronAPI.invoke('invoice:send-email', invoiceId),
+  generateInvoiceToken: (invoiceId: string): Promise<{ token: string }> =>
+    window.electronAPI.invoke('invoice:generate-token', invoiceId),
 
   // File dialog
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>

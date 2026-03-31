@@ -84,6 +84,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [sending, setSending] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const buildHTML = () => {
     if (!invoice) return '';
@@ -156,6 +157,18 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     }
   };
 
+  const handleCopyPortalLink = async () => {
+    try {
+      const { token } = await api.generateInvoiceToken(invoice!.id);
+      const url = `https://accounting.rmpgutah.us/portal/${token}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy portal link:', err);
+    }
+  };
+
   const handlePaymentSaved = () => {
     setShowPaymentModal(false);
     // Reload all data to get fresh payment state
@@ -205,6 +218,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           >
             <Download size={14} />
             Save PDF
+          </button>
+          <button
+            onClick={handleCopyPortalLink}
+            className="px-3 py-1.5 border-2 border-gray-900 text-xs font-bold uppercase tracking-wider hover:bg-gray-900 hover:text-white transition-colors"
+          >
+            {copied ? 'Copied!' : 'Copy Portal Link'}
           </button>
           {invoice.status === 'draft' && (
             <button

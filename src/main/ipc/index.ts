@@ -579,6 +579,30 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Invoice Portal Token ──────────────────────────────
+  ipcMain.handle('invoice:generate-token', (_event, invoiceId: string) => {
+    const dbInstance = db.getDb();
+    const existing = dbInstance.prepare(
+      `SELECT token FROM invoice_tokens WHERE invoice_id = ?`
+    ).get(invoiceId) as any;
+    if (existing) return { token: existing.token };
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const invoice = dbInstance.prepare(`SELECT due_date FROM invoices WHERE id = ?`).get(invoiceId) as any;
+    const dueTs = invoice?.due_date
+      ? new Date(invoice.due_date).getTime()
+      : Date.now();
+    const expiresAt = Math.floor(dueTs / 1000) + 90 * 86400;
+    const companyId = db.getCurrentCompanyId() ?? '';
+
+    dbInstance.prepare(`
+      INSERT INTO invoice_tokens (id, invoice_id, company_id, token, expires_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(uuid(), invoiceId, companyId, token, expiresAt);
+
+    return { token };
+  });
+
   // ─── CSV Export ────────────────────────────────────────
   // ─── Auth ──────────────────────────────────────────────
 
