@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import { v4 as uuid } from 'uuid';
 import * as db from '../database';
 import crypto from 'crypto';
+import { syncPush } from '../sync';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -246,6 +247,7 @@ export function registerIpcHandlers(): void {
       : { ...data, company_id: companyId };
     const record = db.create(table, payload);
     if (companyId) db.logAudit(companyId, table, record.id, 'create');
+    syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
     return record;
   });
 
@@ -262,6 +264,7 @@ export function registerIpcHandlers(): void {
       }
       db.logAudit(companyId, table, id, 'update', changes);
     }
+    syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
     return record;
   });
 
@@ -269,6 +272,7 @@ export function registerIpcHandlers(): void {
     const companyId = db.getCurrentCompanyId();
     if (companyId) db.logAudit(companyId, table, id, 'delete');
     db.remove(table, id);
+    syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
   });
 
   // ─── Raw Query (for reports/aggregations) ────────────

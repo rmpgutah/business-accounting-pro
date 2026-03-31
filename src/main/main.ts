@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipc';
 import { autoUpdater } from 'electron-updater';
 import { processRecurringTemplates } from './services/recurring-processor';
 import { runNotificationChecks } from './services/notification-engine';
+import { initQueue, connectWebSocket } from './sync';
 
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
@@ -194,6 +195,28 @@ app.whenReady().then(() => {
   createWindow();
   setupAutoUpdater();
   startBackgroundServices();
+
+  // Sync client
+  const dbInstance = require('./database').getDb();
+  initQueue(dbInstance);
+  connectWebSocket((event) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return;
+
+    if (event.type === 'invoice:paid') {
+      const { invoiceId, companyId, amount, stripePaymentId } = event as any;
+      try {
+        dbInstance.prepare(`UPDATE invoices SET status = 'paid' WHERE id = ?`).run(invoiceId);
+        win.webContents.send('sync:invoice-paid', { invoiceId, companyId, amount, stripePaymentId });
+      } catch (e) {
+        console.error('Failed to apply remote payment:', e);
+      }
+    }
+
+    if (event.type === 'notification:create') {
+      win.webContents.send('notification:push', event);
+    }
+  });
 });
 
 app.on('window-all-closed', () => {
