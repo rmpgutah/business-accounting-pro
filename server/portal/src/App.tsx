@@ -52,6 +52,7 @@ export default function App() {
       });
       const json = await res.json();
       if (json.error) { setError(json.error); setLoading(false); return; }
+      if (!json.url) { setError('Unable to start payment session.'); setLoading(false); return; }
       window.location.href = json.url;
     } catch (e: any) {
       setError(e.message);
