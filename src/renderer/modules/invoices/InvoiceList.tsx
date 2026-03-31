@@ -3,6 +3,7 @@ import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download } from 'luc
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -65,6 +66,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   onEditInvoice,
 }) => {
   const nav = useNavigation();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
@@ -79,10 +81,11 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     let cancelled = false;
 
     const load = async () => {
+      if (!activeCompany) return;
       try {
         const [invoiceData, clientData] = await Promise.all([
-          api.query('invoices'),
-          api.query('clients'),
+          api.query('invoices', { company_id: activeCompany.id }),
+          api.query('clients', { company_id: activeCompany.id }),
         ]);
         if (cancelled) return;
         setInvoices(invoiceData ?? []);
@@ -96,7 +99,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // Client name lookup
   const clientMap = useMemo(() => {

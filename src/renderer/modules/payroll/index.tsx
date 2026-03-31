@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Users, DollarSign, FileText, Calculator, Plus } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 import EmployeeList from './EmployeeList';
 import EmployeeForm from './EmployeeForm';
 import PayrollRunner from './PayrollRunner';
@@ -40,6 +41,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Component ──────────────────────────────────────────
 const PayrollModule: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [activeTab, setActiveTab] = useState<Tab>('employees');
 
   // Employee sub-views
@@ -60,9 +62,10 @@ const PayrollModule: React.FC = () => {
 
   // ─── Load history ─────────────────────────────────────
   const loadHistory = useCallback(async () => {
+    if (!activeCompany) return;
     setHistoryLoading(true);
     try {
-      const rows = await api.query('payroll_runs', undefined, { field: 'pay_date', dir: 'desc' });
+      const rows = await api.query('payroll_runs', { company_id: activeCompany.id }, { field: 'pay_date', dir: 'desc' });
       setRuns(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Failed to load payroll history:', err);
@@ -70,7 +73,7 @@ const PayrollModule: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     if (activeTab === 'history') {

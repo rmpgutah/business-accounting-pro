@@ -15,29 +15,26 @@ export default function ApiModule() {
   const [webhookSaved, setWebhookSaved] = useState(false);
 
   const loadSettings = useCallback(async () => {
+    if (!activeCompany) return;
     try {
-      // Load API key
-      const keyRows = await api.rawQuery("SELECT value FROM settings WHERE key = 'api_key' LIMIT 1");
-      if (keyRows && keyRows.length > 0) {
-        setApiKey(keyRows[0].value);
-      } else if (activeCompany) {
-        // Generate and save a new key
+      // Bug fix: replace unscoped rawQuery on settings with scoped getSetting.
+      const storedKey = await api.getSetting('api_key');
+      if (storedKey) {
+        setApiKey(storedKey);
+      } else {
+        // Generate and save a new key scoped to this company.
         const newKey = 'bap_' + crypto.randomUUID().replace(/-/g, '');
-        await api.create('settings', { company_id: activeCompany.id, key: 'api_key', value: newKey });
+        await api.setSetting('api_key', newKey);
         setApiKey(newKey);
       }
 
-      // Load webhook URL
-      const urlRows = await api.rawQuery("SELECT value FROM settings WHERE key = 'webhook_url' LIMIT 1");
-      if (urlRows && urlRows.length > 0) {
-        setWebhookUrl(urlRows[0].value);
-      }
+      const storedUrl = await api.getSetting('webhook_url');
+      if (storedUrl) setWebhookUrl(storedUrl);
 
-      // Load webhook events
-      const evtRows = await api.rawQuery("SELECT value FROM settings WHERE key = 'webhook_events' LIMIT 1");
-      if (evtRows && evtRows.length > 0) {
+      const storedEvts = await api.getSetting('webhook_events');
+      if (storedEvts) {
         try {
-          setWebhookEvents(JSON.parse(evtRows[0].value));
+          setWebhookEvents(JSON.parse(storedEvts));
         } catch { /* invalid JSON, ignore */ }
       }
     } catch (err) {
@@ -61,12 +58,7 @@ export default function ApiModule() {
     if (!activeCompany) return;
     try {
       const newKey = 'bap_' + crypto.randomUUID().replace(/-/g, '');
-      const existing = await api.rawQuery("SELECT id FROM settings WHERE key = 'api_key' LIMIT 1");
-      if (existing && existing.length > 0) {
-        await api.update('settings', existing[0].id, { value: newKey });
-      } else {
-        await api.create('settings', { company_id: activeCompany.id, key: 'api_key', value: newKey });
-      }
+      await api.setSetting('api_key', newKey);
       setApiKey(newKey);
     } catch (err) {
       console.error('Failed to regenerate API key:', err);
@@ -82,23 +74,8 @@ export default function ApiModule() {
   const saveWebhookConfig = async () => {
     if (!activeCompany) return;
     try {
-      // Save webhook URL
-      const urlRows = await api.rawQuery("SELECT id FROM settings WHERE key = 'webhook_url' LIMIT 1");
-      if (urlRows && urlRows.length > 0) {
-        await api.update('settings', urlRows[0].id, { value: webhookUrl });
-      } else {
-        await api.create('settings', { company_id: activeCompany.id, key: 'webhook_url', value: webhookUrl });
-      }
-
-      // Save webhook events
-      const evtRows = await api.rawQuery("SELECT id FROM settings WHERE key = 'webhook_events' LIMIT 1");
-      const eventsJson = JSON.stringify(webhookEvents);
-      if (evtRows && evtRows.length > 0) {
-        await api.update('settings', evtRows[0].id, { value: eventsJson });
-      } else {
-        await api.create('settings', { company_id: activeCompany.id, key: 'webhook_events', value: eventsJson });
-      }
-
+      await api.setSetting('webhook_url', webhookUrl);
+      await api.setSetting('webhook_events', JSON.stringify(webhookEvents));
       setWebhookSaved(true);
       setTimeout(() => setWebhookSaved(false), 2000);
     } catch (err) {

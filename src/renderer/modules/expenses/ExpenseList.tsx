@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -46,6 +47,7 @@ const statusBadge: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────
 const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
@@ -60,10 +62,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
         const [expData, catData] = await Promise.all([
-          api.query('expenses'),
-          api.query('categories'),
+          api.query('expenses', { company_id: activeCompany.id }),
+          api.query('categories', { company_id: activeCompany.id }),
         ]);
         if (cancelled) return;
         setExpenses(Array.isArray(expData) ? expData : []);
@@ -76,7 +79,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   const filtered = useMemo(() => {
     return expenses.filter((e) => {

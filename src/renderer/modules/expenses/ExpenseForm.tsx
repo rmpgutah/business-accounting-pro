@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Receipt, DollarSign, Paperclip, X } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -59,6 +60,7 @@ const emptyForm: ExpenseFormData = {
 
 // ─── Component ──────────────────────────────────────────
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [form, setForm] = useState<ExpenseFormData>({ ...emptyForm });
   const [categories, setCategories] = useState<DropdownOption[]>([]);
   const [accounts, setAccounts] = useState<DropdownOption[]>([]);
@@ -75,13 +77,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
+        // Bug fix #11: all 5 reference queries were missing company_id —
+        // showed cross-company data in dropdowns.
+        const cid = activeCompany.id;
         const [catData, accData, venData, projData, cliData] = await Promise.all([
-          api.query('categories'),
-          api.query('accounts', { type: 'expense' }),
-          api.query('vendors'),
-          api.query('projects'),
-          api.query('clients'),
+          api.query('categories', { company_id: cid }),
+          api.query('accounts', { company_id: cid, type: 'expense' }),
+          api.query('vendors', { company_id: cid }),
+          api.query('projects', { company_id: cid }),
+          api.query('clients', { company_id: cid }),
         ]);
         if (cancelled) return;
 
@@ -120,7 +126,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     };
     load();
     return () => { cancelled = true; };
-  }, [expenseId]);
+  }, [expenseId, activeCompany]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>

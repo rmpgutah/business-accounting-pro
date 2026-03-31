@@ -74,8 +74,16 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   const [reference, setReference] = useState(entry?.reference ?? '');
   const [lines, setLines] = useState<LineItem[]>([emptyLine(), emptyLine()]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [entryNumber, setEntryNumber] = useState<string>(entry?.entry_number ?? '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Fetch next entry number for new entries
+  // Bug fix #13: entry_number is NOT NULL UNIQUE — must be set before insert.
+  useEffect(() => {
+    if (isEdit) return;
+    api.nextJournalNumber().then(setEntryNumber).catch(() => setEntryNumber('JE-1001'));
+  }, [isEdit]);
 
   // Load accounts for dropdown
   useEffect(() => {
@@ -207,10 +215,12 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
       const entryPayload = {
         company_id: activeCompany.id,
+        entry_number: isEdit ? entry!.entry_number : entryNumber,
         date,
         description: description.trim(),
         reference: reference.trim() || null,
         is_posted: 0,
+        is_adjusting: 0,
       };
 
       let entryId: string;

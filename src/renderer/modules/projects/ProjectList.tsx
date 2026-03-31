@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { FolderKanban, Plus, Clock, Search } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -106,6 +107,7 @@ const fmtDate = (dateStr: string | null | undefined): string => {
 
 // ─── Component ──────────────────────────────────────────
 const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [expenses, setExpenses] = useState<Record<string, number>>({});
@@ -118,13 +120,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
         setLoading(true);
         const [projectRows, clientRows, expenseRows, timeRows] = await Promise.all([
-          api.query('projects'),
-          api.query('clients'),
-          api.query('expenses'),
-          api.query('time_entries'),
+          api.query('projects', { company_id: activeCompany.id }),
+          api.query('clients', { company_id: activeCompany.id }),
+          api.query('expenses', { company_id: activeCompany.id }),
+          api.query('time_entries', { company_id: activeCompany.id }),
         ]);
         if (cancelled) return;
 
@@ -161,7 +164,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // ─── Client lookup ────────────────────────────────────
   const clientMap = useMemo(() => {

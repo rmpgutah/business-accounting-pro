@@ -119,10 +119,31 @@ export function create(table: string, data: Record<string, any>): any {
   return getById(table, id);
 }
 
-// Tables that do NOT have an updated_at column
+// Tables that do NOT have an updated_at column.
+// Adding a table missing from this set causes every update() call on it
+// to append ", updated_at = datetime('now')" → immediate SQLite crash.
 const tablesWithoutUpdatedAt = new Set([
-  'invoice_line_items', 'journal_entry_lines', 'pay_stubs',
-  'budget_lines', 'bank_reconciliation_matches',
+  // Child / junction tables (original)
+  'invoice_line_items',
+  'journal_entry_lines',
+  'pay_stubs',
+  'budget_lines',
+  'bank_reconciliation_matches',
+  // Financial record tables (append-only by design)
+  'payments',          // has created_at only
+  'tax_payments',      // has created_at only
+  'tax_categories',    // has created_at only
+  // Transaction / log tables (immutable after insert)
+  'bank_transactions', // has imported_at only
+  'audit_log',         // has timestamp only
+  'email_log',         // has sent_at only
+  'stripe_transactions', // has synced_at only
+  // Metadata / reference tables
+  'documents',         // has uploaded_at only
+  'notifications',     // has created_at only
+  'custom_field_defs', // has created_at only
+  'saved_views',       // has created_at only
+  'user_companies',    // has created_at only
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

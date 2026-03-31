@@ -40,6 +40,7 @@ import {
 } from 'date-fns';
 import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Stats {
@@ -384,6 +385,7 @@ const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onClick }) => (
 // ─── Dashboard Component ────────────────────────────────
 const Dashboard: React.FC = () => {
   const setModule = useAppStore((s) => s.setModule);
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [period, setPeriod] = useState<Period>('MTD');
   const [stats, setStats] = useState<Stats>({
     revenue: 0,
@@ -417,6 +419,8 @@ const Dashboard: React.FC = () => {
     let cancelled = false;
 
     const load = async () => {
+      if (!activeCompany) return;
+      const cid = activeCompany.id;
       try {
         const [
           statsData,
@@ -440,27 +444,31 @@ const Dashboard: React.FC = () => {
           api.rawQuery(
             `SELECT i.*, c.name as client_name FROM invoices i
              LEFT JOIN clients c ON i.client_id = c.id
-             WHERE i.status IN ('sent','partial') AND i.due_date <= date('now', '+7 days') AND i.due_date >= date('now')
-             ORDER BY i.due_date ASC LIMIT 5`
+             WHERE i.company_id = ? AND i.status IN ('sent','partial') AND i.due_date <= date('now', '+7 days') AND i.due_date >= date('now')
+             ORDER BY i.due_date ASC LIMIT 5`,
+            [cid]
           ),
           api.rawQuery(
             `SELECT c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
              FROM clients c
              LEFT JOIN invoices i ON i.client_id = c.id AND i.issue_date >= date('now', '-90 days')
+             WHERE c.company_id = ?
              GROUP BY c.id
              HAVING total_paid > 0
              ORDER BY total_paid DESC
-             LIMIT 5`
+             LIMIT 5`,
+            [cid]
           ),
           // Revenue by client (top 5 + Other) for PieChart
           api.rawQuery(
             `SELECT c.name, COALESCE(SUM(i.total), 0) as value
              FROM invoices i
              JOIN clients c ON i.client_id = c.id
-             WHERE i.status IN ('paid', 'sent', 'partial')
+             WHERE i.company_id = ? AND i.status IN ('paid', 'sent', 'partial')
                AND i.issue_date >= date('now', '-12 months')
              GROUP BY c.id
-             ORDER BY value DESC`
+             ORDER BY value DESC`,
+            [cid]
           ),
           // Expenses by category for Treemap
           api.rawQuery(
@@ -471,35 +479,39 @@ const Dashboard: React.FC = () => {
                COALESCE(SUM(e.amount), 0) as size
              FROM expenses e
              LEFT JOIN categories cat ON e.category_id = cat.id
-             WHERE e.date >= date('now', '-12 months')
+             WHERE e.company_id = ? AND e.date >= date('now', '-12 months')
              GROUP BY name
              HAVING size > 0
-             ORDER BY size DESC`
+             ORDER BY size DESC`,
+            [cid]
           ),
           // Last 12 months revenue for AreaChart
           api.rawQuery(
             `SELECT strftime('%Y-%m', issue_date) as month,
                     COALESCE(SUM(total), 0) as total
              FROM invoices
-             WHERE status IN ('paid', 'sent', 'partial')
+             WHERE company_id = ? AND status IN ('paid', 'sent', 'partial')
                AND issue_date >= date('now', '-12 months')
              GROUP BY month
-             ORDER BY month ASC`
+             ORDER BY month ASC`,
+            [cid]
           ),
           // Last 12 months expenses for AreaChart
           api.rawQuery(
             `SELECT strftime('%Y-%m', date) as month,
                     COALESCE(SUM(amount), 0) as total
              FROM expenses
-             WHERE date >= date('now', '-12 months')
+             WHERE company_id = ? AND date >= date('now', '-12 months')
              GROUP BY month
-             ORDER BY month ASC`
+             ORDER BY month ASC`,
+            [cid]
           ),
           // Invoices sent this month
           api.rawQuery(
             `SELECT COUNT(*) as cnt FROM invoices
-             WHERE status IN ('sent','paid','partial','overdue')
-               AND issue_date >= date('now', 'start of month')`
+             WHERE company_id = ? AND status IN ('sent','paid','partial','overdue')
+               AND issue_date >= date('now', 'start of month')`,
+            [cid]
           ),
           // Avg days to payment
           api.rawQuery(
@@ -507,31 +519,35 @@ const Dashboard: React.FC = () => {
                CASE WHEN amount_paid >= total THEN updated_at ELSE date('now') END
              ) - julianday(issue_date)) as avg_days
              FROM invoices
-             WHERE status = 'paid' AND issue_date >= date('now', '-6 months')`
+             WHERE company_id = ? AND status = 'paid' AND issue_date >= date('now', '-6 months')`,
+            [cid]
           ),
           // This month revenue
           api.rawQuery(
             `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
-             WHERE status IN ('paid','sent','partial')
-               AND issue_date >= date('now', 'start of month')`
+             WHERE company_id = ? AND status IN ('paid','sent','partial')
+               AND issue_date >= date('now', 'start of month')`,
+            [cid]
           ),
           // Last month revenue
           api.rawQuery(
             `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
-             WHERE status IN ('paid','sent','partial')
+             WHERE company_id = ? AND status IN ('paid','sent','partial')
                AND issue_date >= date('now', 'start of month', '-1 month')
-               AND issue_date < date('now', 'start of month')`
+               AND issue_date < date('now', 'start of month')`,
+            [cid]
           ),
           // Top client this month
           api.rawQuery(
             `SELECT c.name, COALESCE(SUM(i.total), 0) as total
              FROM invoices i
              JOIN clients c ON i.client_id = c.id
-             WHERE i.status IN ('paid','sent','partial')
+             WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
                AND i.issue_date >= date('now', 'start of month')
              GROUP BY c.id
              ORDER BY total DESC
-             LIMIT 1`
+             LIMIT 1`,
+            [cid]
           ),
         ]);
 
@@ -670,7 +686,7 @@ const Dashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [start, end]);
+  }, [start, end, activeCompany]);
 
   // ─── Reload activity when filter changes ──────────────
   useEffect(() => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 import TimerWidget from './TimerWidget';
 import TimeEntryList from './TimeEntryList';
 import TimeEntryForm from './TimeEntryForm';
@@ -53,6 +54,7 @@ function weekDateRange(weekStart: Date): { start: string; end: string } {
 
 // ─── Component ──────────────────────────────────────────
 const TimeTracking: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -64,10 +66,11 @@ const TimeTracking: React.FC = () => {
   // Load clients and projects once
   useEffect(() => {
     const loadRefs = async () => {
+      if (!activeCompany) return;
       try {
         const [clientData, projectData] = await Promise.all([
-          api.query('clients'),
-          api.query('projects'),
+          api.query('clients', { company_id: activeCompany.id }),
+          api.query('projects', { company_id: activeCompany.id }),
         ]);
         if (Array.isArray(clientData)) setClients(clientData);
         if (Array.isArray(projectData)) setProjects(projectData);
@@ -76,16 +79,17 @@ const TimeTracking: React.FC = () => {
       }
     };
     loadRefs();
-  }, []);
+  }, [activeCompany]);
 
   // Load entries for current week
   const loadEntries = useCallback(async () => {
+    if (!activeCompany) return;
     setLoading(true);
     const { start, end } = weekDateRange(weekStart);
     try {
       const data = await api.rawQuery(
-        'SELECT * FROM time_entries WHERE date >= ? AND date <= ? ORDER BY date DESC',
-        [start, end]
+        'SELECT * FROM time_entries WHERE company_id = ? AND date >= ? AND date <= ? ORDER BY date DESC',
+        [activeCompany.id, start, end]
       );
       if (Array.isArray(data)) {
         setEntries(data);
@@ -95,7 +99,7 @@ const TimeTracking: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [weekStart]);
+  }, [weekStart, activeCompany]);
 
   useEffect(() => {
     loadEntries();

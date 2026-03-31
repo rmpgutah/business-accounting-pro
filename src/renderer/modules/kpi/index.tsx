@@ -20,6 +20,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -73,6 +74,7 @@ const MarginTooltip: React.FC<any> = ({ active, payload, label }) => {
 
 // ─── KPI Dashboard Component ────────────────────────────
 const KPIDashboard: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [revenuePerHour, setRevenuePerHour] = useState(0);
   const [utilizationRate, setUtilizationRate] = useState(0);
   const [profitMargin, setProfitMargin] = useState(0);
@@ -95,6 +97,8 @@ const KPIDashboard: React.FC = () => {
     let cancelled = false;
 
     const load = async () => {
+      if (!activeCompany) return;
+      const cid = activeCompany.id;
       try {
         const [
           revenueResult,
@@ -113,26 +117,31 @@ const KPIDashboard: React.FC = () => {
         ] = await Promise.all([
           // Revenue per billable hour
           api.rawQuery(
-            `SELECT COALESCE(SUM(total), 0) as total_revenue FROM invoices WHERE status IN ('paid', 'sent')`
+            `SELECT COALESCE(SUM(total), 0) as total_revenue FROM invoices WHERE company_id = ? AND status IN ('paid', 'sent')`,
+            [cid]
           ),
           api.rawQuery(
-            `SELECT COALESCE(SUM(duration_minutes), 0) as total_billable_minutes FROM time_entries WHERE is_billable = 1`
+            `SELECT COALESCE(SUM(duration_minutes), 0) as total_billable_minutes FROM time_entries WHERE company_id = ? AND is_billable = 1`,
+            [cid]
           ),
           api.rawQuery(
-            `SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries`
+            `SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM time_entries WHERE company_id = ?`,
+            [cid]
           ),
           api.rawQuery(
-            `SELECT COALESCE(SUM(amount), 0) as total_expenses FROM expenses`
+            `SELECT COALESCE(SUM(amount), 0) as total_expenses FROM expenses WHERE company_id = ?`,
+            [cid]
           ),
           // Top 5 clients by revenue
           api.rawQuery(
             `SELECT c.name as client_name, COALESCE(SUM(i.total), 0) as total_revenue
              FROM invoices i
              JOIN clients c ON i.client_id = c.id
-             WHERE i.status IN ('paid', 'sent')
+             WHERE i.company_id = ? AND i.status IN ('paid', 'sent')
              GROUP BY c.id, c.name
              ORDER BY total_revenue DESC
-             LIMIT 5`
+             LIMIT 5`,
+            [cid]
           ),
           // Gross margin by month (last 6 months) — revenue vs expenses as proxy for COGS
           api.rawQuery(
@@ -142,51 +151,59 @@ const KPIDashboard: React.FC = () => {
                COALESCE(e.exp, 0) as cogs
              FROM (
                SELECT strftime('%Y-%m', issue_date) as month, SUM(total) as rev
-               FROM invoices WHERE status IN ('paid','sent') AND issue_date >= date('now', '-6 months')
+               FROM invoices WHERE company_id = ? AND status IN ('paid','sent') AND issue_date >= date('now', '-6 months')
                GROUP BY month
              ) r
              LEFT JOIN (
                SELECT strftime('%Y-%m', date) as month, SUM(amount) as exp
-               FROM expenses WHERE date >= date('now', '-6 months')
+               FROM expenses WHERE company_id = ? AND date >= date('now', '-6 months')
                GROUP BY month
              ) e ON r.month = e.month
-             ORDER BY r.month ASC`
+             ORDER BY r.month ASC`,
+            [cid, cid]
           ),
           // Employee count
           api.rawQuery(
-            `SELECT COUNT(*) as cnt FROM employees WHERE status = 'active'`
+            `SELECT COUNT(*) as cnt FROM employees WHERE company_id = ? AND status = 'active'`,
+            [cid]
           ),
           // Net credit sales (last 12 months) for AR turnover
           api.rawQuery(
             `SELECT COALESCE(SUM(total), 0) as net_credit_sales
              FROM invoices
-             WHERE status IN ('paid','sent','partial','overdue')
-               AND issue_date >= date('now', '-12 months')`
+             WHERE company_id = ? AND status IN ('paid','sent','partial','overdue')
+               AND issue_date >= date('now', '-12 months')`,
+            [cid]
           ),
           // Average accounts receivable
           api.rawQuery(
             `SELECT COALESCE(SUM(total - amount_paid), 0) as avg_receivables
              FROM invoices
-             WHERE status IN ('sent','partial','overdue')`
+             WHERE company_id = ? AND status IN ('sent','partial','overdue')`,
+            [cid]
           ),
           // Current assets (from accounts table)
           api.rawQuery(
             `SELECT COALESCE(SUM(balance), 0) as total
-             FROM accounts WHERE type = 'asset' AND is_active = 1`
+             FROM accounts WHERE company_id = ? AND type = 'asset' AND is_active = 1`,
+            [cid]
           ),
           // Current liabilities
           api.rawQuery(
             `SELECT COALESCE(SUM(balance), 0) as total
-             FROM accounts WHERE type = 'liability' AND is_active = 1`
+             FROM accounts WHERE company_id = ? AND type = 'liability' AND is_active = 1`,
+            [cid]
           ),
           // Cash on hand (bank accounts)
           api.rawQuery(
-            `SELECT COALESCE(SUM(current_balance), 0) as cash FROM bank_accounts`
+            `SELECT COALESCE(SUM(current_balance), 0) as cash FROM bank_accounts WHERE company_id = ?`,
+            [cid]
           ),
           // Last 6 months total expenses for burn rate
           api.rawQuery(
             `SELECT COALESCE(SUM(amount), 0) as total, COUNT(DISTINCT strftime('%Y-%m', date)) as months
-             FROM expenses WHERE date >= date('now', '-6 months')`
+             FROM expenses WHERE company_id = ? AND date >= date('now', '-6 months')`,
+            [cid]
           ),
         ]);
 
@@ -268,7 +285,7 @@ const KPIDashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeCompany]);
 
   const utilizationColor =
     utilizationRate >= 75

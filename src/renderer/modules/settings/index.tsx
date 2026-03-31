@@ -94,7 +94,9 @@ export default function SettingsModule() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.query('settings');
+        // Bug fix #16: api.query('settings') returned ALL companies' settings.
+        // Use the dedicated scoped handler instead.
+        const data = await api.listSettings();
         const map: SettingsMap = {};
         if (Array.isArray(data)) {
           for (const s of data) map[s.key] = s.value;
@@ -141,12 +143,8 @@ export default function SettingsModule() {
   // ─── Save helpers ─────────────────────────────────────
   const saveSetting = useCallback(async (key: string, value: string) => {
     try {
-      const existing = await api.query('settings', { key });
-      if (Array.isArray(existing) && existing.length > 0) {
-        await api.update('settings', existing[0].id, { value });
-      } else {
-        await api.create('settings', { key, value });
-      }
+      // Bug fix #16b: use scoped setSetting instead of generic query/update/create.
+      await api.setSetting(key, value);
     } catch (err) {
       console.error(`Failed to save setting ${key}:`, err);
     }

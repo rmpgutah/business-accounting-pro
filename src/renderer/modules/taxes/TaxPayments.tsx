@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CreditCard, Plus, X } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface TaxPayment {
@@ -51,6 +52,7 @@ const typeBadge: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────
 const TaxPayments: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [payments, setPayments] = useState<TaxPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -68,8 +70,10 @@ const TaxPayments: React.FC = () => {
   });
 
   const loadPayments = async () => {
+    if (!activeCompany) return;
     try {
-      const data = await api.query('tax_payments', undefined, { field: 'date', dir: 'desc' });
+      // Bug fix #8: was fetching all companies' tax payments — scoped to active company.
+      const data = await api.query('tax_payments', { company_id: activeCompany.id }, { field: 'date', dir: 'desc' });
       setPayments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load tax payments:', err);

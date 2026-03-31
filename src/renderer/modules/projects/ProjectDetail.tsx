@@ -11,6 +11,7 @@ import {
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { Plus } from 'lucide-react';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -140,6 +141,7 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass }) 
 // ─── Component ──────────────────────────────────────────
 const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit }) => {
   const nav = useNavigation();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [project, setProject] = useState<Project | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -153,13 +155,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
         setLoading(true);
+        const cid = activeCompany.id;
         const [proj, allTimeEntries, allExpenses, allInvoices, allLineItems] = await Promise.all([
           api.get('projects', projectId),
-          api.query('time_entries'),
-          api.query('expenses'),
-          api.query('invoices'),
+          api.query('time_entries', { company_id: cid, project_id: projectId }),
+          api.query('expenses', { company_id: cid, project_id: projectId }),
+          api.query('invoices', { company_id: cid }),
           api.query('invoice_line_items'),
         ]);
         if (cancelled) return;
@@ -206,7 +210,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
     };
     load();
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, activeCompany]);
 
   // ─── Computed Stats ───────────────────────────────────
   const stats = useMemo(() => {

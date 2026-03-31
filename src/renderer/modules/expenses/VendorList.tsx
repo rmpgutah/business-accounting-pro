@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Building2, Plus, Search } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Vendor {
@@ -19,13 +20,15 @@ interface VendorListProps {
 
 // ─── Component ──────────────────────────────────────────
 const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadVendors = async () => {
+    if (!activeCompany) return;
     try {
-      const data = await api.query('vendors');
+      const data = await api.query('vendors', { company_id: activeCompany.id });
       setVendors(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load vendors:', err);
@@ -36,7 +39,7 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
 
   useEffect(() => {
     loadVendors();
-  }, []);
+  }, [activeCompany]);
 
   const filtered = search
     ? vendors.filter((v) => {

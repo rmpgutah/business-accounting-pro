@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface InventoryItem {
@@ -43,6 +44,7 @@ const emptyForm = {
 
 // ─── Component ──────────────────────────────────────────
 const Inventory: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -53,8 +55,10 @@ const Inventory: React.FC = () => {
 
   // ─── Load ─────────────────────────────────────────────
   const loadItems = async () => {
+    if (!activeCompany) return;
     try {
-      const rows = await api.query('inventory_items');
+      // Bug fix #13: was fetching all companies' inventory — scoped to active company.
+      const rows = await api.query('inventory_items', { company_id: activeCompany.id });
       setItems(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Failed to load inventory:', err);
@@ -65,7 +69,7 @@ const Inventory: React.FC = () => {
 
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [activeCompany]);
 
   // ─── Categories ───────────────────────────────────────
   const categories = useMemo(() => {

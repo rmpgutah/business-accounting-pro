@@ -9,6 +9,7 @@ import {
   Clock,
 } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface QuarterPayment {
@@ -100,6 +101,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accentClass, su
 
 // ─── Component ──────────────────────────────────────────
 const TaxDashboard: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [ytdIncome, setYtdIncome] = useState(0);
   const [ytdExpenses, setYtdExpenses] = useState(0);
   const [taxPayments, setTaxPayments] = useState<any[]>([]);
@@ -113,17 +115,19 @@ const TaxDashboard: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
+        // Bug fix #7: rawQuery calls were missing company_id — showed all-company totals.
         const [incomeData, expenseData, payments] = await Promise.all([
           api.rawQuery(
-            `SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE status = 'paid' AND issue_date BETWEEN ? AND ?`,
-            [yearStart, yearEnd]
+            `SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE company_id = ? AND status = 'paid' AND issue_date BETWEEN ? AND ?`,
+            [activeCompany.id, yearStart, yearEnd]
           ),
           api.rawQuery(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date BETWEEN ? AND ?`,
-            [yearStart, yearEnd]
+            `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date BETWEEN ? AND ?`,
+            [activeCompany.id, yearStart, yearEnd]
           ),
-          api.query('tax_payments', { year: currentYear }),
+          api.query('tax_payments', { company_id: activeCompany.id, year: currentYear }),
         ]);
         if (cancelled) return;
         setYtdIncome(incomeData?.[0]?.total ?? 0);
@@ -137,7 +141,7 @@ const TaxDashboard: React.FC = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [currentYear, yearStart, yearEnd]);
+  }, [activeCompany, currentYear, yearStart, yearEnd]);
 
   const netIncome = useMemo(() => Math.max(0, ytdIncome - ytdExpenses), [ytdIncome, ytdExpenses]);
   const federalTax = useMemo(() => calcFederalTax(netIncome), [netIncome]);

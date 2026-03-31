@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileBarChart, Plus, Play, Download, Save, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 const AVAILABLE_FIELDS: Record<string, string[]> = {
   invoices: ['invoice_number', 'client_id', 'status', 'issue_date', 'due_date', 'subtotal', 'tax_amount', 'total', 'amount_paid'],
@@ -40,6 +41,7 @@ const defaultConfig: ReportConfig = {
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 export default function CustomReportsModule() {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [config, setConfig] = useState<ReportConfig>({ ...defaultConfig });
   const [results, setResults] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -103,21 +105,22 @@ export default function CustomReportsModule() {
       return;
     }
 
+    if (!activeCompany) return;
     setLoading(true);
     try {
       const selectFields = config.fields.length > 0 ? config.fields.join(', ') : '*';
       let sql = `SELECT ${selectFields} FROM ${config.table}`;
 
-      const params: any[] = [];
-      if (config.filters.length > 0) {
-        const conditions = config.filters
-          .filter((f) => f.value)
-          .map((f) => {
-            params.push(f.value);
-            return `${f.field} ${f.operator} ?`;
-          });
-        if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`;
-      }
+      // Always scope to active company
+      const params: any[] = [activeCompany.id];
+      const conditions: string[] = ['company_id = ?'];
+      config.filters
+        .filter((f) => f.value)
+        .forEach((f) => {
+          params.push(f.value);
+          conditions.push(`${f.field} ${f.operator} ?`);
+        });
+      sql += ` WHERE ${conditions.join(' AND ')}`;
 
       if (config.groupBy) sql += ` GROUP BY ${config.groupBy}`;
       if (config.sortField) sql += ` ORDER BY ${config.sortField} ${config.sortDir.toUpperCase()}`;

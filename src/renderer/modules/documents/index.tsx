@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Document {
@@ -46,6 +47,7 @@ const entityBadgeClass: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────
 const Documents: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -55,8 +57,10 @@ const Documents: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
-        const rows = await api.query('documents');
+        // Bug fix #15: was fetching all companies' documents — scoped to active company.
+        const rows = await api.query('documents', { company_id: activeCompany.id });
         if (!cancelled) setDocuments(Array.isArray(rows) ? rows : []);
       } catch (err) {
         console.error('Failed to load documents:', err);
@@ -66,7 +70,7 @@ const Documents: React.FC = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   const handleUpload = async () => {
     try {

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { UserCircle, Plus, Search, Filter, ArrowUpDown, Download, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -54,6 +55,7 @@ const SortableHeader: React.FC<{
 
 // ─── Component ──────────────────────────────────────────
 const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,9 +70,10 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
         setLoading(true);
-        const rows = await api.query('clients');
+        const rows = await api.query('clients', { company_id: activeCompany.id });
         if (!cancelled) {
           setClients(Array.isArray(rows) ? rows : []);
         }
@@ -83,7 +86,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // ─── Sort Handler ───────────────────────────────────
   const handleSort = (field: SortField) => {

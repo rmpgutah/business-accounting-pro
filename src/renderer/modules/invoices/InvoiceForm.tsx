@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -58,10 +59,13 @@ const newLineItem = (): LineItem => ({
   account_id: '',
 });
 
-const fetchNextInvoiceNumber = async (): Promise<string> => {
+// Bug fix #12a: scope invoice number generation to the active company so
+// numbers don't collide across companies or reference another company's data.
+const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
   try {
     const rows = await api.rawQuery(
-      'SELECT invoice_number FROM invoices ORDER BY created_at DESC LIMIT 1'
+      'SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
+      [companyId]
     );
     if (rows && rows.length > 0) {
       const last = rows[0].invoice_number as string;
@@ -92,6 +96,7 @@ interface InvoiceFormProps {
 }
 
 const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const isEdit = !!invoiceId;
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -122,17 +127,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     let cancelled = false;
 
     const load = async () => {
+      if (!activeCompany) return;
       try {
+        // Bug fix #12b: clients and accounts queries were missing company_id.
+        const cid = activeCompany.id;
         const [clientData, accountData] = await Promise.all([
-          api.query('clients'),
-          api.query('accounts', { type: 'revenue' }),
+          api.query('clients', { company_id: cid }),
+          api.query('accounts', { company_id: cid, type: 'revenue' }),
         ]);
         if (cancelled) return;
         setClients(clientData ?? []);
         setAccounts(accountData ?? []);
 
         if (!invoiceId) {
-          const nextNum = await fetchNextInvoiceNumber();
+          const nextNum = await fetchNextInvoiceNumber(cid);
           if (!cancelled) {
             setForm((prev) => ({ ...prev, invoice_number: nextNum }));
           }
@@ -180,7 +188,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
     load();
     return () => { cancelled = true; };
-  }, [invoiceId]);
+  }, [invoiceId, activeCompany]);
 
   // ─── Line item calculations ──────────────────────────
   const lineAmounts = useMemo(
@@ -255,7 +263,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     setSaving(true);
     try {
       const status = sendAfterSave ? 'sent' : 'draft';
-      const invoiceData = {
+      // Bug fix #12c: do NOT reset amount_paid on edit — this would wipe
+      // any recorded partial or full payments against the invoice.
+      const invoiceData: Record<string, any> = {
         client_id: form.client_id,
         invoice_number: form.invoice_number,
         issue_date: form.issue_date,
@@ -267,8 +277,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         total,
         notes: form.notes,
         status,
-        amount_paid: 0,
       };
+      if (!isEdit) {
+        invoiceData.amount_paid = 0;
+      }
 
       let savedId: string;
 

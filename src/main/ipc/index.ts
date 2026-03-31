@@ -800,6 +800,92 @@ export function registerIpcHandlers(): void {
     return dbInstance.prepare(sql).all(...params);
   });
 
+  // ─── Journal Entry Auto-Number ───────────────────────────
+  // Bug fix: journal_entries.entry_number is NOT NULL + UNIQUE; nothing in
+  // the generic db:create path generates it, so every create crashed.
+  ipcMain.handle('journal:next-number', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return 'JE-1001';
+    const dbInstance = db.getDb();
+    const row = dbInstance.prepare(
+      "SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(companyId) as any;
+    if (row?.entry_number) {
+      const match = row.entry_number.match(/(\d+)$/);
+      if (match) {
+        const next = parseInt(match[1], 10) + 1;
+        const prefix = row.entry_number.slice(0, row.entry_number.length - match[1].length);
+        return `${prefix}${String(next).padStart(match[1].length, '0')}`;
+      }
+    }
+    return 'JE-1001';
+  });
+
+  // ─── Payroll YTD Totals ───────────────────────────────────
+  // Bug fix: PayrollRunner always set ytd_gross/taxes/net to 0 because
+  // there was no backend call to fetch cumulative YTD from existing stubs.
+  ipcMain.handle('payroll:ytd-totals', (_event, { employeeId, year }: { employeeId: string; year: number }) => {
+    const dbInstance = db.getDb();
+    const yearStart = `${year}-01-01`;
+    const yearEnd = `${year}-12-31`;
+    const row = dbInstance.prepare(`
+      SELECT
+        COALESCE(SUM(ps.gross_pay), 0) AS ytd_gross,
+        COALESCE(SUM(ps.federal_tax + ps.state_tax + ps.social_security + ps.medicare), 0) AS ytd_taxes,
+        COALESCE(SUM(ps.net_pay), 0) AS ytd_net
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      WHERE ps.employee_id = ?
+        AND pr.pay_date >= ?
+        AND pr.pay_date <= ?
+        AND pr.status != 'draft'
+    `).get(employeeId, yearStart, yearEnd) as any;
+    return {
+      ytd_gross: row?.ytd_gross ?? 0,
+      ytd_taxes: row?.ytd_taxes ?? 0,
+      ytd_net: row?.ytd_net ?? 0,
+    };
+  });
+
+  // ─── Settings get / set ───────────────────────────────────
+  // Bug fix: settings module queried all companies' settings because
+  // api.query('settings') had no company_id filter; also needed
+  // a key-value interface to read/write individual settings cleanly.
+  ipcMain.handle('settings:get', (_event, key: string) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+    const row = dbInstance.prepare(
+      "SELECT value FROM settings WHERE company_id = ? AND key = ?"
+    ).get(companyId, key) as any;
+    return row?.value ?? null;
+  });
+
+  ipcMain.handle('settings:set', (_event, { key, value }: { key: string; value: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return;
+    const dbInstance = db.getDb();
+    const existing = dbInstance.prepare(
+      "SELECT id FROM settings WHERE company_id = ? AND key = ?"
+    ).get(companyId, key) as any;
+    if (existing) {
+      dbInstance.prepare(
+        "UPDATE settings SET value = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(value, existing.id);
+    } else {
+      db.create('settings', { company_id: companyId, key, value });
+    }
+  });
+
+  // ─── Settings list (company-scoped) ──────────────────────
+  // Bug fix: api.query('settings') returned all companies' settings.
+  // This handler scopes to the current company.
+  ipcMain.handle('settings:list', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.queryAll('settings', { company_id: companyId });
+  });
+
   // ─── Print / Preview System ─────────────────────────────
   ipcMain.handle('print:preview', (_event, { html, title }: { html: string; title: string }) => {
     openPrintPreview(html, title);

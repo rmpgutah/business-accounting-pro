@@ -66,9 +66,10 @@ export default function EmailModule() {
 
   const loadTemplates = async () => {
     try {
-      const rows = await api.rawQuery("SELECT value FROM settings WHERE key = 'email_templates' LIMIT 1");
-      if (rows && rows.length > 0) {
-        const parsed = JSON.parse(rows[0].value);
+      // Bug fix: use scoped getSetting instead of unscoped rawQuery on settings.
+      const value = await api.getSetting('email_templates');
+      if (value) {
+        const parsed = JSON.parse(value);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setTemplates(parsed);
         }
@@ -78,13 +79,7 @@ export default function EmailModule() {
 
   const saveTemplates = async (updated: EmailTemplate[]) => {
     try {
-      const existing = await api.rawQuery("SELECT id FROM settings WHERE key = 'email_templates' LIMIT 1");
-      const value = JSON.stringify(updated);
-      if (existing && existing.length > 0) {
-        await api.update('settings', existing[0].id, { value });
-      } else {
-        await api.create('settings', { key: 'email_templates', value });
-      }
+      await api.setSetting('email_templates', JSON.stringify(updated));
     } catch (err) {
       console.error('Failed to save email templates:', err);
     }
@@ -99,7 +94,8 @@ export default function EmailModule() {
 
   const loadSmtpConfig = async () => {
     try {
-      const settings = await api.query('settings');
+      // Bug fix: use scoped listSettings instead of unscoped api.query('settings').
+      const settings = await api.listSettings();
       const config: Record<string, string> = {};
       for (const s of settings) {
         if (s.key.startsWith('smtp_')) config[s.key.replace('smtp_', '')] = s.value;
@@ -113,12 +109,7 @@ export default function EmailModule() {
   const saveSmtpConfig = async () => {
     for (const [key, value] of Object.entries(smtpConfig)) {
       try {
-        const existing = await api.query('settings', { key: `smtp_${key}` });
-        if (existing.length > 0) {
-          await api.update('settings', existing[0].id, { value: String(value) });
-        } else {
-          await api.create('settings', { key: `smtp_${key}`, value: String(value) });
-        }
+        await api.setSetting(`smtp_${key}`, String(value));
       } catch { /* empty */ }
     }
   };

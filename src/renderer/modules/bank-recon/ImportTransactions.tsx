@@ -170,12 +170,16 @@ const ImportTransactions: React.FC = () => {
     try {
       let imported = 0;
       for (const row of toImport) {
+        // Bug fix #10: add type (debit/credit) derived from amount sign and
+        // set is_matched default so bank reconciliation queries work correctly.
         await api.create('bank_transactions', {
           bank_account_id: selectedBankId,
-          date: row.date,
+          transaction_date: row.date,
           description: row.description,
           amount: row.amount,
+          type: row.amount >= 0 ? 'credit' : 'debit',
           status: 'pending',
+          is_matched: 0,
         });
         imported++;
       }

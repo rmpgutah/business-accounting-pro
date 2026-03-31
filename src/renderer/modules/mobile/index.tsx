@@ -11,15 +11,14 @@ export default function MobileModule() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const rows = await api.rawQuery("SELECT value FROM settings WHERE key = 'mobile_port' LIMIT 1");
-      if (rows && rows.length > 0) {
-        setPort(rows[0].value);
-      }
+      // Bug fix: use scoped getSetting instead of unscoped rawQuery on settings.
+      const value = await api.getSetting('mobile_port');
+      if (value) setPort(value);
     } catch { /* use default */ }
     finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     loadSettings();
@@ -28,12 +27,7 @@ export default function MobileModule() {
   const savePort = async () => {
     if (!activeCompany) return;
     try {
-      const existing = await api.rawQuery("SELECT id FROM settings WHERE key = 'mobile_port' LIMIT 1");
-      if (existing && existing.length > 0) {
-        await api.update('settings', existing[0].id, { value: port });
-      } else {
-        await api.create('settings', { company_id: activeCompany.id, key: 'mobile_port', value: port });
-      }
+      await api.setSetting('mobile_port', port);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {

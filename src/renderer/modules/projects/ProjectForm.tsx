@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -42,6 +43,7 @@ const INITIAL_FORM: ProjectFormData = {
 
 // ─── Component ──────────────────────────────────────────
 const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [form, setForm] = useState<ProjectFormData>(INITIAL_FORM);
   const [clients, setClients] = useState<Client[]>([]);
   const [saving, setSaving] = useState(false);
@@ -53,8 +55,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
-        const clientRows = await api.query('clients');
+        const clientRows = await api.query('clients', { company_id: activeCompany.id });
         if (!cancelled && Array.isArray(clientRows)) {
           setClients(clientRows);
         }
@@ -82,7 +85,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
     };
     load();
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, activeCompany]);
 
   // ─── Field Handlers ───────────────────────────────
   const set = (field: keyof ProjectFormData, value: any) => {

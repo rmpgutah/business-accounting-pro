@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -47,6 +48,7 @@ function progressColor(pct: number): string {
 
 // ─── Component ──────────────────────────────────────────
 const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [lines, setLines] = useState<BudgetLine[]>([]);
   const [actuals, setActuals] = useState<Record<string, number>>({});
@@ -68,14 +70,14 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
         setLines(linesList);
 
         // Query actual expenses per category within budget date range
-        if (b && linesList.length > 0) {
+        if (b && linesList.length > 0 && activeCompany) {
           const expenseData = await api.rawQuery(
             `SELECT c.name as category, COALESCE(SUM(e.amount), 0) as total
              FROM expenses e
              LEFT JOIN categories c ON e.category_id = c.id
-             WHERE e.date BETWEEN ? AND ?
+             WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
              GROUP BY c.name`,
-            [b.start_date, b.end_date]
+            [activeCompany.id, b.start_date, b.end_date]
           );
           if (cancelled) return;
           const map: Record<string, number> = {};

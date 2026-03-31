@@ -6,6 +6,7 @@ import {
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface RecurringTemplate {
@@ -88,6 +89,7 @@ function nextDueBg(nextDate: string): string {
 // ─── Component ──────────────────────────────────────────
 const RecurringTransactions: React.FC = () => {
   const nav = useNavigation();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -104,8 +106,10 @@ const RecurringTransactions: React.FC = () => {
 
   // ─── Load ─────────────────────────────────────────────
   const loadTemplates = async () => {
+    if (!activeCompany) return;
     try {
-      const rows = await api.query('recurring_templates');
+      // Bug fix #14: was fetching all companies' templates — scoped to active company.
+      const rows = await api.query('recurring_templates', { company_id: activeCompany.id });
       setTemplates(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Failed to load recurring templates:', err);
@@ -138,7 +142,7 @@ const RecurringTransactions: React.FC = () => {
   useEffect(() => {
     loadTemplates();
     loadLastProcessed();
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     if (tab === 'history') loadHistory();

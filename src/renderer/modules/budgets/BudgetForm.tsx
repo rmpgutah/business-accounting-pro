@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface BudgetLineInput {
@@ -28,6 +29,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Component ──────────────────────────────────────────
 const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [step, setStep] = useState<'budget' | 'lines'>('budget');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
@@ -44,15 +46,16 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
   useEffect(() => {
     const loadAccounts = async () => {
+      if (!activeCompany) return;
       try {
-        const data = await api.query('accounts');
+        const data = await api.query('accounts', { company_id: activeCompany.id });
         setAccounts(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error('Failed to load accounts:', err);
       }
     };
     loadAccounts();
-  }, []);
+  }, [activeCompany]);
 
   const handleCreateBudget = async (e: React.FormEvent) => {
     e.preventDefault();

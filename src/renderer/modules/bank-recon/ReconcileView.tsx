@@ -210,15 +210,17 @@ const ReconcileView: React.FC = () => {
           match_type: 'manual',
         });
 
-        // Update bank transaction status
+        // Bug fix #9a: also mark the bank transaction as matched so it
+        // doesn't reappear in the unmatched list after reconciliation.
         await api.update('bank_transactions', pair.bank.id, {
           status: 'matched',
+          is_matched: 1,
         });
       }
 
-      // Update last_reconciled on bank account
+      // Bug fix #9b: schema column is last_reconciled_date, not last_reconciled.
       await api.update('bank_accounts', selectedBankId, {
-        last_reconciled: new Date().toISOString().split('T')[0],
+        last_reconciled_date: new Date().toISOString().split('T')[0],
       });
 
       setSaveResult(

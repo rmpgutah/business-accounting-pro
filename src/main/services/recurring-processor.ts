@@ -93,7 +93,14 @@ export function processRecurringTemplates(companyId?: string): ProcessingResult 
 
       if (template.type === 'invoice') {
         const invoiceNumber = getNextInvoiceNumber(template.company_id);
-        const clientId = templateData.client_id || '';
+        // Bug fix #18: || '' produced an empty-string FK reference → SQLite FK violation.
+        // Use null so DB accepts it (client_id is nullable on invoices).
+        // Guard: skip templates that require a client but have none configured.
+        const clientId = templateData.client_id || null;
+        if (!clientId) {
+          result.errors.push(`Template "${template.name}" skipped — no client_id configured`);
+          continue;
+        }
         const paymentTerms = templateData.payment_terms || 30;
         const dueDate = new Date(today);
         dueDate.setDate(dueDate.getDate() + paymentTerms);

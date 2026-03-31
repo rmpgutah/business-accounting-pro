@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Calculator, DollarSign, ArrowLeft, FileText } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -154,6 +155,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
 
 // ─── Component ──────────────────────────────────────────
 const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [step, setStep] = useState(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,9 +174,11 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
         setLoading(true);
-        const rows = await api.query('employees', { status: 'active' });
+        // Bug fix #17: was missing company_id — showed all companies' employees.
+        const rows = await api.query('employees', { company_id: activeCompany.id, status: 'active' });
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }
@@ -186,7 +190,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // ─── Calculations ─────────────────────────────────────
   const calculations = useMemo(() => {
@@ -242,10 +246,15 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
 
       const runId = run?.id ?? run;
 
-      // Create individual pay stubs
+      // Bug fix #17b: fetch real YTD values from prior pay stubs instead
+      // of hardcoding 0 — which produces incorrect W2/payroll reports.
+      const year = new Date(payDate).getFullYear();
+      const resolvedRunId = typeof runId === 'object' ? (runId as any).id : runId;
+
       for (const calc of calculations) {
+        const ytd = await api.payrollYtd(calc.employee.id, year);
         await api.create('pay_stubs', {
-          payroll_run_id: typeof runId === 'object' ? runId.id : runId,
+          payroll_run_id: resolvedRunId,
           employee_id: calc.employee.id,
           hours_regular: calc.hours,
           hours_overtime: 0,
@@ -256,9 +265,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
           medicare: calc.medicare,
           other_deductions: 0,
           net_pay: calc.net_pay,
-          ytd_gross: 0,
-          ytd_taxes: 0,
-          ytd_net: 0,
+          ytd_gross: ytd.ytd_gross + calc.gross_pay,
+          ytd_taxes: ytd.ytd_taxes + calc.federal_tax + calc.state_tax + calc.social_security + calc.medicare,
+          ytd_net: ytd.ytd_net + calc.net_pay,
         });
       }
 

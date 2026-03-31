@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Users, Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -62,6 +63,7 @@ const SortableHeader: React.FC<{
 
 // ─── Component ──────────────────────────────────────────
 const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmployee }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,9 +76,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
         setLoading(true);
-        const rows = await api.query('employees');
+        const rows = await api.query('employees', { company_id: activeCompany.id });
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }
@@ -89,7 +92,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // ─── Sort Handler ───────────────────────────────────
   const handleSort = (field: SortField) => {

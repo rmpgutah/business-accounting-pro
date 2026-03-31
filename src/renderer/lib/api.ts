@@ -49,7 +49,9 @@ const api = {
   markNotificationRead: (id: string) => window.electronAPI.invoke('notification:mark-read', id),
 
   // Export
-  exportInvoicePdf: (invoiceId: string) => window.electronAPI.invoke('export:invoice-pdf', invoiceId),
+  // Bug fix #3: export:invoice-pdf handler was removed in v1.1.1 dedup cleanup;
+  // routes to the canonical invoice:generate-pdf channel to avoid "No handler" crash.
+  exportInvoicePdf: (invoiceId: string) => window.electronAPI.invoke('invoice:generate-pdf', invoiceId),
   exportCsv: (table: string, filters?: Record<string, any>) =>
     window.electronAPI.invoke('export:csv', { table, filters }),
 
@@ -114,6 +116,27 @@ const api = {
     window.electronAPI.invoke('print:save-pdf', { html, title }),
   print: (html: string): Promise<{ success?: boolean; error?: string }> =>
     window.electronAPI.invoke('print:print', { html }),
+
+  // Journal Entry Utilities
+  // Bug fix #13/#49: journal_entries.entry_number is NOT NULL + UNIQUE;
+  // this fetches the next sequential number scoped to the active company.
+  nextJournalNumber: (): Promise<string> =>
+    window.electronAPI.invoke('journal:next-number'),
+
+  // Payroll YTD
+  // Bug fix #37-39: YTD values are now calculated from actual prior pay stubs.
+  payrollYtd: (employeeId: string, year: number): Promise<{ ytd_gross: number; ytd_taxes: number; ytd_net: number }> =>
+    window.electronAPI.invoke('payroll:ytd-totals', { employeeId, year }),
+
+  // Settings (company-scoped)
+  // Bug fix #51: api.query('settings') returned all companies' records;
+  // these handlers scope all operations to the current active company.
+  listSettings: (): Promise<Array<{ key: string; value: string }>> =>
+    window.electronAPI.invoke('settings:list'),
+  getSetting: (key: string): Promise<string | null> =>
+    window.electronAPI.invoke('settings:get', key),
+  setSetting: (key: string, value: string): Promise<void> =>
+    window.electronAPI.invoke('settings:set', { key, value }),
 
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),

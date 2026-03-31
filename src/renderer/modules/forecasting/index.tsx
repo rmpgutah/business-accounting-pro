@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -158,6 +159,7 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
 
 // ─── Forecasting Component ──────────────────────────────
 const Forecasting: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [projections, setProjections] = useState<Record<Scenario, Projection[]>>({
     conservative: [],
     moderate: [],
@@ -178,30 +180,36 @@ const Forecasting: React.FC = () => {
     let cancelled = false;
 
     const load = async () => {
+      if (!activeCompany) return;
       try {
+        // Bug fix: add company_id to all rawQuery calls — was showing all-company data.
+        const cid = activeCompany.id;
         const [revenueRows, expenseRows, avgInvoiceData] = await Promise.all([
           api.rawQuery(
             `SELECT strftime('%Y-%m', issue_date) as month,
                     COALESCE(SUM(total), 0) as total
              FROM invoices
-             WHERE status IN ('paid', 'sent')
+             WHERE company_id = ? AND status IN ('paid', 'sent')
                AND issue_date >= date('now', '-6 months')
              GROUP BY month
-             ORDER BY month ASC`
+             ORDER BY month ASC`,
+            [cid]
           ),
           api.rawQuery(
             `SELECT strftime('%Y-%m', date) as month,
                     COALESCE(SUM(amount), 0) as total
              FROM expenses
-             WHERE date >= date('now', '-6 months')
+             WHERE company_id = ? AND date >= date('now', '-6 months')
              GROUP BY month
-             ORDER BY month ASC`
+             ORDER BY month ASC`,
+            [cid]
           ),
           api.rawQuery(
             `SELECT COALESCE(AVG(total), 0) as avg_invoice
              FROM invoices
-             WHERE status IN ('paid','sent')
-               AND issue_date >= date('now', '-6 months')`
+             WHERE company_id = ? AND status IN ('paid','sent')
+               AND issue_date >= date('now', '-6 months')`,
+            [cid]
           ),
         ]);
 
@@ -280,7 +288,7 @@ const Forecasting: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeCompany]);
 
   // ─── What-If Calculation ────────────────────────────────
   const whatIfRevenue = useMemo(() => {
