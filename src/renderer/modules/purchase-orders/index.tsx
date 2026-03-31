@@ -20,7 +20,7 @@ interface PurchaseOrder {
   company_id: string;
   po_number: string;
   vendor_id: string;
-  order_date: string;
+  issue_date: string;
   expected_date: string;
   status: POStatus;
   subtotal: number;
@@ -38,7 +38,7 @@ interface POLineItem {
   unit_price: number;
   amount: number;
   account_id: string;
-  received_qty: number;
+  quantity_received: number;
 }
 
 interface Vendor {
@@ -300,7 +300,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                 <tr key={po.id} className="hover:bg-bg-secondary transition-colors cursor-pointer" onClick={() => onView(po.id)}>
                   <td className="font-mono text-xs text-accent-blue">{po.po_number}</td>
                   <td className="text-xs text-text-primary">{vendors[po.vendor_id]?.name ?? '—'}</td>
-                  <td className="font-mono text-xs text-text-secondary">{fmtDate(po.order_date)}</td>
+                  <td className="font-mono text-xs text-text-secondary">{fmtDate(po.issue_date)}</td>
                   <td className="font-mono text-xs text-text-secondary">{fmtDate(po.expected_date)}</td>
                   <td className="font-mono text-xs text-right text-text-primary">{fmt(po.total)}</td>
                   <td>
@@ -382,7 +382,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
         if (po) {
           setPoNumber(po.po_number || '');
           setVendorId(po.vendor_id || '');
-          setOrderDate(po.order_date || today());
+          setOrderDate(po.issue_date || today());
           setExpectedDate(po.expected_date || '');
           setNotes(po.notes || '');
           // Derive tax pct from subtotal/tax_amount if possible
@@ -454,7 +454,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
         company_id: activeCompany!.id,
         po_number: poNumber.trim(),
         vendor_id: vendorId,
-        order_date: orderDate,
+        issue_date: orderDate,
         expected_date: expectedDate || null,
         status: 'draft' as POStatus,
         subtotal,
@@ -486,7 +486,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
             unit_price: parseFloat(l.unit_price) || 0,
             amount: l.amount,
             account_id: l.account_id || null,
-            received_qty: 0,
+            quantity_received: 0,
           })
         )
       );
@@ -924,7 +924,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
             )}
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Order Date</span>
-              <span className="text-xs font-mono text-text-secondary">{fmtDate(po.order_date)}</span>
+              <span className="text-xs font-mono text-text-secondary">{fmtDate(po.issue_date)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Expected Date</span>
@@ -996,14 +996,14 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
                     <td className="text-xs font-mono text-right">
                       <span
                         className={
-                          (line.received_qty ?? 0) >= line.quantity
+                          (line.quantity_received ?? 0) >= line.quantity
                             ? 'text-accent-income'
-                            : (line.received_qty ?? 0) > 0
+                            : (line.quantity_received ?? 0) > 0
                             ? 'text-accent-warning'
                             : 'text-text-muted'
                         }
                       >
-                        {line.received_qty ?? 0} / {line.quantity}
+                        {line.quantity_received ?? 0} / {line.quantity}
                       </span>
                     </td>
                   </tr>

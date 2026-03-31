@@ -31,8 +31,8 @@ interface FixedAsset {
   location: string;
   notes: string;
   asset_account_id: string;
-  depreciation_expense_account_id: string;
-  accumulated_dep_account_id: string;
+  depreciation_account_id: string;
+  accumulated_depreciation_account_id: string;
   created_at: string;
 }
 
@@ -380,8 +380,8 @@ const emptyForm = {
   location: '',
   notes: '',
   asset_account_id: '',
-  depreciation_expense_account_id: '',
-  accumulated_dep_account_id: '',
+  depreciation_account_id: '',
+  accumulated_depreciation_account_id: '',
 };
 
 const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
@@ -415,8 +415,8 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
           location: asset.location ?? '',
           notes: asset.notes ?? '',
           asset_account_id: asset.asset_account_id ?? '',
-          depreciation_expense_account_id: asset.depreciation_expense_account_id ?? '',
-          accumulated_dep_account_id: asset.accumulated_dep_account_id ?? '',
+          depreciation_account_id: asset.depreciation_account_id ?? '',
+          accumulated_depreciation_account_id: asset.accumulated_depreciation_account_id ?? '',
         });
       } else {
         // Auto-generate asset code
@@ -577,8 +577,8 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
             <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2">GL Accounts</h3>
             {[
               { key: 'asset_account_id', label: 'Asset Account' },
-              { key: 'depreciation_expense_account_id', label: 'Depreciation Expense Account' },
-              { key: 'accumulated_dep_account_id', label: 'Accumulated Depreciation Account' },
+              { key: 'depreciation_account_id', label: 'Depreciation Expense Account' },
+              { key: 'accumulated_depreciation_account_id', label: 'Accumulated Depreciation Account' },
             ].map(({ key, label }) => (
               <F key={key} label={label}>
                 <select

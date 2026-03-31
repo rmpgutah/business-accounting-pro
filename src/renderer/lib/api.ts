@@ -157,8 +157,9 @@ const api = {
   // ─── Bills / Accounts Payable ──────────────────────
   billsNextNumber: (): Promise<string> =>
     window.electronAPI.invoke('bills:next-number'),
-  billsPay: (billId: string, amount: number, paymentDate: string, paymentMethod: string, accountId: string, reference?: string) =>
-    window.electronAPI.invoke('bills:pay', { billId, amount, paymentDate, paymentMethod, accountId, reference }),
+  // NOTE: IPC handler destructures `date` (not `paymentDate`) — must match exactly
+  billsPay: (billId: string, amount: number, date: string, paymentMethod: string, accountId: string, reference?: string) =>
+    window.electronAPI.invoke('bills:pay', { billId, amount, date, paymentMethod, accountId, reference }),
   billsStats: (): Promise<{ total_unpaid: number; overdue: number; due_soon: number; paid_this_month: number }> =>
     window.electronAPI.invoke('bills:stats'),
   billsOverdueCheck: () =>
@@ -195,13 +196,13 @@ const api = {
     window.electronAPI.invoke('tax:seed-year', { year }),
   taxGetBrackets: (year: number, filingStatus: string) =>
     window.electronAPI.invoke('tax:get-brackets', { year, filingStatus }),
+  // NOTE: IPC handler expects camelCase field names — grossPay, filingStatus, ytdGross
   taxCalculateWithholding: (params: {
-    gross_pay: number;
-    pay_frequency: string;
-    filing_status: string;
+    grossPay: number;
+    filingStatus: string;
     allowances: number;
-    additional_withholding: number;
     year: number;
+    ytdGross: number;
   }) => window.electronAPI.invoke('tax:calculate-withholding', params),
   taxAvailableYears: (): Promise<number[]> =>
     window.electronAPI.invoke('tax:available-years'),

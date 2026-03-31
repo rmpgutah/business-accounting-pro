@@ -910,6 +910,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
   const [payErrors, setPayErrors] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
+    if (!activeCompany) return;
     try {
       const b = await api.get('bills', billId);
       if (!b) return;

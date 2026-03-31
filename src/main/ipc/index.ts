@@ -109,6 +109,9 @@ export function registerIpcHandlers(): void {
     'invoice_line_items', 'journal_entry_lines', 'pay_stubs',
     'budget_lines', 'bank_transactions', 'bank_reconciliation_matches',
     'users', 'user_companies',
+    // Enterprise v2 child tables — no company_id column in schema
+    'bill_line_items', 'bill_payments', 'po_line_items',
+    'asset_depreciation_entries', 'credit_note_items',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -1343,17 +1346,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('bills:stats', () => {
     const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { total_outstanding: 0, total_overdue: 0, due_this_week: 0, bill_count: 0 };
+    if (!companyId) return { total_unpaid: 0, overdue: 0, due_soon: 0, paid_this_month: 0 };
     const dbInstance = db.getDb();
 
-    return dbInstance.prepare(`
+    const row = dbInstance.prepare(`
       SELECT
-        COUNT(*) as bill_count,
-        COALESCE(SUM(total - amount_paid), 0) as total_outstanding,
-        COALESCE(SUM(CASE WHEN due_date < date('now') AND status NOT IN ('paid','void') THEN total - amount_paid ELSE 0 END), 0) as total_overdue,
-        COALESCE(SUM(CASE WHEN due_date BETWEEN date('now') AND date('now', '+7 days') THEN total - amount_paid ELSE 0 END), 0) as due_this_week
-      FROM bills WHERE company_id = ? AND status NOT IN ('paid','void','draft')
+        COALESCE(SUM(CASE WHEN status NOT IN ('paid','void','draft') THEN total - amount_paid ELSE 0 END), 0) as total_unpaid,
+        COALESCE(SUM(CASE WHEN due_date < date('now') AND status NOT IN ('paid','void','draft') THEN total - amount_paid ELSE 0 END), 0) as overdue,
+        COALESCE(SUM(CASE WHEN due_date BETWEEN date('now') AND date('now', '+7 days') AND status NOT IN ('paid','void','draft') THEN total - amount_paid ELSE 0 END), 0) as due_soon,
+        COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as paid_this_month
+      FROM bills WHERE company_id = ?
     `).get(companyId);
+    return row;
   });
 
   ipcMain.handle('bills:overdue-check', () => {
@@ -1362,7 +1366,7 @@ export function registerIpcHandlers(): void {
     const dbInstance = db.getDb();
     const result = dbInstance.prepare(`
       UPDATE bills SET status = 'overdue', updated_at = datetime('now')
-      WHERE company_id = ? AND status IN ('received','approved','partial')
+      WHERE company_id = ? AND status IN ('pending','received','approved','partial')
         AND due_date < date('now')
     `).run(companyId);
     return result.changes;
@@ -1382,10 +1386,10 @@ export function registerIpcHandlers(): void {
     return `PO-${String(next).padStart(4, '0')}`;
   });
 
-  ipcMain.handle('po:approve', (_event, { poId, approvedBy }: { poId: string; approvedBy: string }) => {
+  ipcMain.handle('po:approve', (_event, { poId, approvedBy }: { poId: string; approvedBy?: string }) => {
     const dbInstance = db.getDb();
     dbInstance.prepare(`UPDATE purchase_orders SET status = 'approved', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`)
-      .run(approvedBy, poId);
+      .run(approvedBy || '', poId);
     return { success: true };
   });
 

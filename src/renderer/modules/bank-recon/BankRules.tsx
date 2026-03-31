@@ -212,7 +212,7 @@ const BankRules: React.FC = () => {
   const handleApply = async () => {
     setApplying(true);
     try {
-      const result = await window.electronAPI.invoke('bank-rules:apply', {});
+      const result = await api.bankRulesApply();
       showToast(`Applied to ${result?.applied ?? 0} transaction(s).`, true);
       load();
     } catch {

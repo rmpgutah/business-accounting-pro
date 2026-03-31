@@ -104,8 +104,8 @@ const GeneralLedger: React.FC = () => {
              je.date,
              je.description,
              je.reference,
-             jel.type,
-             jel.amount
+             jel.debit,
+             jel.credit
            FROM accounts a
            JOIN journal_entry_lines jel ON jel.account_id = a.id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
@@ -135,6 +135,9 @@ const GeneralLedger: React.FC = () => {
               closing_balance: 0,
             });
           }
+          // Derive type from whichever column is nonzero (schema uses debit/credit columns, not a type enum)
+          const debit = Number(row.debit) || 0;
+          const credit = Number(row.credit) || 0;
           accountMap.get(row.account_id)!.transactions.push({
             line_id: row.line_id,
             entry_id: row.entry_id,
@@ -142,8 +145,8 @@ const GeneralLedger: React.FC = () => {
             date: row.date || '',
             description: row.description || '',
             reference: row.reference || '',
-            type: row.type,
-            amount: Number(row.amount) || 0,
+            type: debit > 0 ? 'debit' : 'credit',
+            amount: debit > 0 ? debit : credit,
           });
         }
 
