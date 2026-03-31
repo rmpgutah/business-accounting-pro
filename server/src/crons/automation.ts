@@ -2,6 +2,13 @@ import { db } from '../db';
 import { pushToDesktop } from '../ws';
 import { v4 as uuidv4 } from 'uuid';
 
+/** Clamp a value to a safe integer for SQL date arithmetic (1–365). */
+function safeDays(value: unknown, defaultVal: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return defaultVal;
+  return Math.min(Math.floor(n), 365);
+}
+
 export async function runAutomations() {
   const rules = db.prepare(`SELECT * FROM automation_rules WHERE is_active = 1`).all() as any[];
 
@@ -34,16 +41,16 @@ export async function runAutomations() {
 async function evaluateTrigger(type: string, config: any): Promise<boolean> {
   switch (type) {
     case 'invoice_overdue': {
-      const days = config.days_overdue ?? 1;
+      const days = safeDays(config.days_overdue, 1);
       const row = db.prepare(
-        `SELECT COUNT(*) as n FROM invoices WHERE status NOT IN ('paid','void') AND due_date < date('now', '-${Number(days)} days')`
+        `SELECT COUNT(*) as n FROM invoices WHERE status NOT IN ('paid','void') AND due_date < date('now', '-${days} days')`
       ).get() as any;
       return row.n > 0;
     }
     case 'bill_due_soon': {
-      const days = config.days_ahead ?? 3;
+      const days = safeDays(config.days_ahead, 3);
       const row = db.prepare(
-        `SELECT COUNT(*) as n FROM bills WHERE status NOT IN ('paid','void') AND due_date BETWEEN date('now') AND date('now', '+${Number(days)} days')`
+        `SELECT COUNT(*) as n FROM bills WHERE status NOT IN ('paid','void') AND due_date BETWEEN date('now') AND date('now', '+${days} days')`
       ).get() as any;
       return row.n > 0;
     }
