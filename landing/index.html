@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Business Accounting Pro</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0e0e14;
+      --surface:  #16161f;
+      --border:   #2a2a3a;
+      --accent:   #6366f1;
+      --accent2:  #818cf8;
+      --text:     #e8e8f0;
+      --muted:    #7070a0;
+      --green:    #22c55e;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── NAV ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      height: 64px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .nav-logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .nav-logo-text {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .nav-version {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 100px 40px 80px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 24px;
+    }
+
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: var(--accent);
+    }
+
+    h1 {
+      font-size: clamp(36px, 5vw, 58px);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -1.5px;
+      color: #fff;
+      margin-bottom: 24px;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 17px;
+      color: var(--muted);
+      max-width: 480px;
+      margin-bottom: 40px;
+      line-height: 1.7;
+    }
+
+    .dl-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--accent2); }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn svg { flex-shrink: 0; }
+
+    /* ── HERO CARD ── */
+    .hero-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 32px;
+    }
+
+    .hero-card-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .stat-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stat-item:last-child { border-bottom: none; }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .stat-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-value.green { color: var(--green); }
+    .stat-value.accent { color: var(--accent2); }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      background: var(--green);
+      margin-right: 6px;
+    }
+
+    /* ── FEATURES GRID ── */
+    .section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 40px;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 900;
+      letter-spacing: -0.8px;
+      color: #fff;
+      margin-bottom: 48px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .feature-card {
+      background: var(--surface);
+      padding: 32px;
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 18px;
+    }
+
+    .feature-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+      letter-spacing: -0.2px;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ── PLATFORM ROW ── */
+    .platform-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .platform-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 28px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .platform-info h3 {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .platform-info p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .footer-left {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-right {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-right a {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .footer-right a:hover { color: var(--accent2); }
+
+    @media (max-width: 800px) {
+      .hero { grid-template-columns: 1fr; gap: 48px; padding: 60px 24px 48px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .platform-row { grid-template-columns: 1fr; }
+      nav { padding: 0 24px; }
+      .section { padding: 60px 24px; }
+      footer { padding: 24px; flex-direction: column; gap: 16px; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-logo" href="#">
+      <div class="nav-logo-icon">$</div>
+      <span class="nav-logo-text">Business Accounting Pro</span>
+    </a>
+    <span class="nav-version">v1.1.1</span>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-eyebrow">Desktop Accounting Software</div>
+      <h1>Full accounting.<br><span>Zero subscriptions.</span></h1>
+      <p class="hero-sub">
+        Invoicing, payroll, expenses, taxes, bank reconciliation, and financial reporting — all running locally on your machine with cloud sync.
+      </p>
+      <div class="dl-buttons">
+        <a class="btn btn-primary" href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.1.1/Business-Accounting-Pro-1.1.1-mac-arm64.dmg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M8 12l4 4 4-4M12 8v8"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.1.1/BusinessAccountingPro-Setup-1.1.1.exe">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M8 12l4 4 4-4M12 8v8"/></svg>
+          Download for Windows
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-card">
+      <div class="hero-card-label">System Status</div>
+      <div class="stat-row">
+        <div class="stat-item">
+          <span class="stat-label">Sync Server</span>
+          <span class="stat-value green"><span class="status-dot"></span>Online</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Current Version</span>
+          <span class="stat-value accent">v1.1.1</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Auto-Updates</span>
+          <span class="stat-value green">Enabled</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Client Portal</span>
+          <span class="stat-value green">Active</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Platform</span>
+          <span class="stat-value">Mac · Windows</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section">
+    <div class="section-label">What's included</div>
+    <div class="section-title">Everything your business needs</div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🧾</div>
+        <div class="feature-title">Invoicing</div>
+        <div class="feature-desc">Create, send, and track invoices. Shareable client portal with Stripe payment integration.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <div class="feature-title">Payroll</div>
+        <div class="feature-desc">Full payroll processing with tax withholding, pay stubs, and employee records.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">Financial Reports</div>
+        <div class="feature-desc">P&L, balance sheet, cash flow, and tax reports. Export-ready for your accountant.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏦</div>
+        <div class="feature-title">Bank Reconciliation</div>
+        <div class="feature-desc">Import bank statements and reconcile transactions with a few clicks.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">Workflow Automation</div>
+        <div class="feature-desc">Automate overdue reminders, recurring entries, and scheduled reports.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔎</div>
+        <div class="feature-title">Financial Intelligence</div>
+        <div class="feature-desc">Anomaly detection flags unusual expenses. Cash flow projections keep you ahead.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section class="section">
+    <div class="section-label">Download</div>
+    <div class="section-title">Available on Mac &amp; Windows</div>
+    <div class="platform-row">
+      <div class="platform-card">
+        <div class="platform-info">
+          <h3>macOS</h3>
+          <p>Apple Silicon · v1.1.1 · Requires macOS 12+</p>
+        </div>
+        <a class="btn btn-primary" href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.1.1/Business-Accounting-Pro-1.1.1-mac-arm64.dmg">
+          Download DMG
+        </a>
+      </div>
+      <div class="platform-card">
+        <div class="platform-info">
+          <h3>Windows</h3>
+          <p>x64 installer · v1.1.1 · Requires Windows 10+</p>
+        </div>
+        <a class="btn btn-secondary" href="https://github.com/rmpgutah/business-accounting-pro/releases/download/v1.1.1/BusinessAccountingPro-Setup-1.1.1.exe">
+          Download EXE
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <div style="border-top: 1px solid var(--border);">
+    <footer>
+      <div class="footer-left">© 2026 RMPG · Business Accounting Pro</div>
+      <div class="footer-right">
+        <a href="https://github.com/rmpgutah/business-accounting-pro/releases">Releases</a>
+        <a href="/api/health">API Status</a>
+      </div>
+    </footer>
+  </div>
+
+</body>
+</html>
