@@ -227,6 +227,27 @@ echo "0 3 * * * root certbot renew --quiet --post-hook 'nginx -s reload'" \
 info "  Certbot auto-renewal cron installed."
 
 # ─────────────────────────────────────────────────────────
+info "7b/8 — Node.js 20 LTS and PM2 setup..."
+
+# Install Node.js 20 LTS if not present
+if ! command -v node >/dev/null 2>&1; then
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
+  info "  Node.js $(node --version) installed."
+else
+  info "  Node.js already installed: $(node --version)"
+fi
+
+# Install PM2 globally
+npm install -g pm2 --quiet
+pm2 startup systemd -u "${DEPLOY_USER}" --hp "/home/${DEPLOY_USER}" | tail -1 | bash || true
+
+# Create server directory
+mkdir -p /opt/bap-server
+chown "${DEPLOY_USER}:${DEPLOY_USER}" /opt/bap-server
+info "  PM2 and /opt/bap-server ready."
+
+# ─────────────────────────────────────────────────────────
 info "8/8 — Final permissions and Nginx restart..."
 chown -R "${DEPLOY_USER}:www-data" "${WEB_ROOT}"
 chmod -R 755 "${WEB_ROOT}"
@@ -251,4 +272,10 @@ echo "     VPS_HOST        = <your VPS IP or hostname>"
 echo "     VPS_USER        = ${DEPLOY_USER}"
 echo "     VPS_SSH_KEY     = <your GitHub Actions private SSH key>"
 echo "  3. Push to main — the deploy workflow fires automatically."
+echo "  4. Create /opt/bap-server/.env with:"
+echo "     PORT=3001"
+echo "     SYNC_SECRET=\$(openssl rand -hex 32)"
+echo "     STRIPE_SECRET_KEY=sk_live_..."
+echo "     STRIPE_WEBHOOK_SECRET=whsec_..."
+echo "     DESKTOP_WS_TOKEN=\$(openssl rand -hex 16)"
 echo ""

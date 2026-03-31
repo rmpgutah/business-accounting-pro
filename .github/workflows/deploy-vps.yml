@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'landing-page/**'
+      - 'server/**'
       - 'deploy/nginx.conf'
       - '.github/workflows/deploy-vps.yml'
   workflow_dispatch:
@@ -63,6 +64,24 @@ jobs:
              find /var/www/accounting.rmpgutah.us -type f -exec chmod 644 {} \; && \
              echo 'Permissions OK'"
 
+      # ── 5b. Deploy sync server ───────────────────────
+      - name: Deploy sync server
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='.env' \
+            --exclude='data' \
+            --exclude='portal/dist' \
+            --exclude='portal/node_modules' \
+            server/ \
+            "$VPS_USER@$VPS_HOST:/opt/bap-server/"
+          ssh "$VPS_USER@$VPS_HOST" \
+            'cd /opt/bap-server && npm ci --omit=dev && npm run build && cd portal && npm ci && npm run build && cd .. && (pm2 restart bap-server || pm2 start dist/index.js --name bap-server) && pm2 save && echo "Sync server deployed"'
+
       # ── 6. Reload Nginx gracefully ───────────────────
       - name: Reload Nginx
         env:
@@ -86,6 +105,15 @@ jobs:
             exit 1
           fi
           echo "✓ Site is live at https://accounting.rmpgutah.us"
+          SERVER_STATUS=$(curl -sSo /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            "https://accounting.rmpgutah.us/api/health" || echo "000")
+          echo "Sync server health: $SERVER_STATUS"
+          if [ "$SERVER_STATUS" != "200" ]; then
+            echo "::warning::Sync server health check failed — HTTP $SERVER_STATUS (may not be deployed yet)"
+          else
+            echo "✓ Sync server is live"
+          fi
 
       # ── 8. Summary ───────────────────────────────────
       - name: Deployment summary
