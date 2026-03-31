@@ -114,8 +114,16 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       setError('Name is required.');
       return;
     }
-    if (!form.pay_rate || isNaN(Number(form.pay_rate)) || Number(form.pay_rate) <= 0) {
-      setError('Pay rate must be a positive number.');
+    if (!form.pay_rate.trim()) {
+      setError('Pay rate is required.');
+      return;
+    }
+    if (isNaN(Number(form.pay_rate))) {
+      setError('Pay rate must be a number.');
+      return;
+    }
+    if (Number(form.pay_rate) <= 0) {
+      setError('Pay rate must be greater than zero.');
       return;
     }
 

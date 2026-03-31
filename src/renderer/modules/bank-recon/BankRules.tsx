@@ -151,6 +151,16 @@ const BankRules: React.FC = () => {
     if (!form.name.trim()) e.name = 'Rule name is required.';
     if (!form.match_value.trim()) e.match_value = 'Match value is required.';
     if (!form.action_account_id) e.action_account_id = 'Action account is required.';
+    if (form.amount_min !== '' && isNaN(parseFloat(form.amount_min))) {
+      e.amount_min = 'Must be a valid number.';
+    }
+    if (form.amount_max !== '' && isNaN(parseFloat(form.amount_max))) {
+      e.amount_max = 'Must be a valid number.';
+    }
+    const priorityInt = parseInt(form.priority, 10);
+    if (form.priority.trim() === '' || isNaN(priorityInt) || priorityInt < 1) {
+      e.priority = 'Priority must be a positive integer.';
+    }
     setFormErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -170,7 +180,7 @@ const BankRules: React.FC = () => {
         transaction_type: form.transaction_type,
         action_account_id: form.action_account_id,
         description_override: form.description_override.trim() || null,
-        priority: parseInt(form.priority) || 10,
+        priority: parseInt(form.priority, 10),
         is_active: form.is_active,
       };
       if (editingId) {
@@ -328,25 +338,23 @@ const BankRules: React.FC = () => {
               />
             </F>
 
-            <F label="Amount Min ($)">
+            <F label="Amount Min ($)" error={formErrors.amount_min}>
               <input
-                type="number"
+                type="text"
                 className="block-input w-full"
                 value={form.amount_min}
                 onChange={(e) => setF('amount_min', e.target.value)}
                 placeholder="Optional"
-                step="0.01"
               />
             </F>
 
-            <F label="Amount Max ($)">
+            <F label="Amount Max ($)" error={formErrors.amount_max}>
               <input
-                type="number"
+                type="text"
                 className="block-input w-full"
                 value={form.amount_max}
                 onChange={(e) => setF('amount_max', e.target.value)}
                 placeholder="Optional"
-                step="0.01"
               />
             </F>
 
@@ -371,14 +379,12 @@ const BankRules: React.FC = () => {
               </select>
             </F>
 
-            <F label="Priority">
+            <F label="Priority" error={formErrors.priority}>
               <input
-                type="number"
+                type="text"
                 className="block-input w-full"
                 value={form.priority}
                 onChange={(e) => setF('priority', e.target.value)}
-                min="1"
-                step="1"
                 placeholder="10"
               />
             </F>

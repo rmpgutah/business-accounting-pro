@@ -99,6 +99,12 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
       return;
     }
 
+    const parsedBalance = parseFloat(balance);
+    if (balance.trim() !== '' && isNaN(parsedBalance)) {
+      setError('Opening balance must be a valid number.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
@@ -108,7 +114,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
         institution: institution.trim(),
         account_number_last4: last4.trim(),
         account_id: accountId || null,
-        current_balance: parseFloat(balance) || 0,
+        current_balance: isNaN(parsedBalance) ? 0 : parsedBalance,
         company_id: activeCompany.id,
       };
 

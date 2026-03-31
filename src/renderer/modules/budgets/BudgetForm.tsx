@@ -34,6 +34,8 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
   const [budgetId, setBudgetId] = useState<string | null>(null);
+  const [budgetError, setBudgetError] = useState('');
+  const [linesError, setLinesError] = useState('');
 
   // Budget fields
   const [name, setName] = useState('');
@@ -59,7 +61,15 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
   const handleCreateBudget = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !startDate || !endDate) return;
+    if (!name.trim()) {
+      setBudgetError('Budget name is required.');
+      return;
+    }
+    if (!startDate || !endDate) {
+      setBudgetError('Start date and end date are required.');
+      return;
+    }
+    setBudgetError('');
     setSaving(true);
     try {
       const result = await api.create('budgets', {
@@ -95,8 +105,21 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
   const handleSaveLines = async () => {
     if (!budgetId) return;
+    // Validate: any filled-in line with empty or non-numeric amount is an error
+    const filledLines = lines.filter((l) => l.category.trim() || l.amount.trim());
+    const invalidLine = filledLines.find(
+      (l) => l.amount.trim() === '' || isNaN(parseFloat(l.amount)) || parseFloat(l.amount) <= 0
+    );
+    if (invalidLine) {
+      setLinesError('Each line item must have a valid amount greater than 0.');
+      return;
+    }
     const validLines = lines.filter((l) => l.category.trim() && parseFloat(l.amount) > 0);
-    if (validLines.length === 0) return;
+    if (validLines.length === 0) {
+      setLinesError('Add at least one line item with a category and amount.');
+      return;
+    }
+    setLinesError('');
 
     setSaving(true);
     try {
@@ -137,6 +160,14 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
         /* ─── Step 1: Budget Details ─────────────────── */
         <div className="block-card p-5" style={{ borderRadius: '2px' }}>
           <form onSubmit={handleCreateBudget} className="space-y-4">
+            {budgetError && (
+              <div
+                className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
+                style={{ borderRadius: '2px' }}
+              >
+                {budgetError}
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">
                 Budget Name *
@@ -270,6 +301,15 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
                 <option key={a.id} value={a.name} />
               ))}
             </datalist>
+
+            {linesError && (
+              <div
+                className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
+                style={{ borderRadius: '2px' }}
+              >
+                {linesError}
+              </div>
+            )}
 
             <div className="flex items-center gap-2 mt-4">
               <button

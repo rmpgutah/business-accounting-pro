@@ -57,6 +57,7 @@ const TaxPayments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const currentYear = new Date().getFullYear();
 
@@ -89,7 +90,16 @@ const TaxPayments: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(formData.amount);
-    if (isNaN(amount) || amount <= 0) return;
+    if (isNaN(amount) || amount <= 0) {
+      setFormError('Amount must be a valid number greater than 0.');
+      return;
+    }
+    const yearStr = String(formData.year);
+    if (!/^\d{4}$/.test(yearStr) || formData.year < 1900 || formData.year > 2100) {
+      setFormError('Tax year must be a valid 4-digit year.');
+      return;
+    }
+    setFormError('');
     setSaving(true);
     try {
       await api.create('tax_payments', {
@@ -108,6 +118,7 @@ const TaxPayments: React.FC = () => {
         year: currentYear,
         confirmation_number: '',
       });
+      setFormError('');
       setShowForm(false);
       await loadPayments();
     } catch (err) {
@@ -168,6 +179,14 @@ const TaxPayments: React.FC = () => {
             </button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-3">
+            {formError && (
+              <div
+                className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
+                style={{ borderRadius: '2px' }}
+              >
+                {formError}
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">
@@ -241,7 +260,7 @@ const TaxPayments: React.FC = () => {
                   className="block-input"
                   value={formData.year}
                   onChange={(e) =>
-                    setFormData({ ...formData, year: parseInt(e.target.value) || currentYear })
+                    setFormData({ ...formData, year: e.target.value === '' ? currentYear : (parseInt(e.target.value, 10) || currentYear) })
                   }
                 />
               </div>

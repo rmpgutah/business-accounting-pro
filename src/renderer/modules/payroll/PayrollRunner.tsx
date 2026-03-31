@@ -406,12 +406,13 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                               min="0"
                               step="0.5"
                               value={hoursMap[calc.employee.id] ?? ''}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const parsed = parseFloat(e.target.value);
                                 setHoursMap((prev) => ({
                                   ...prev,
-                                  [calc.employee.id]: Number(e.target.value),
-                                }))
-                              }
+                                  [calc.employee.id]: isNaN(parsed) ? (prev[calc.employee.id] ?? 0) : parsed,
+                                }));
+                              }}
                             />
                           ) : (
                             <span className="text-text-muted">--</span>
@@ -440,7 +441,19 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
             </button>
             <button
               className="block-btn-primary px-5 py-2 text-sm font-semibold"
-              onClick={() => setStep(3)}
+              onClick={() => {
+                const badHours = employees
+                  .filter((e) => e.pay_type === 'hourly')
+                  .filter((e) => isNaN(hoursMap[e.id]) || hoursMap[e.id] < 0);
+                if (badHours.length > 0) {
+                  setError(
+                    `Invalid hours for: ${badHours.map((e) => e.name).join(', ')}. Please enter a valid number.`
+                  );
+                  return;
+                }
+                setError(null);
+                setStep(3);
+              }}
             >
               Next: Review Totals
             </button>

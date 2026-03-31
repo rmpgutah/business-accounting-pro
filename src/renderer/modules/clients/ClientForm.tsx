@@ -61,6 +61,7 @@ const Field: React.FC<{
 // ─── Component ──────────────────────────────────────────
 const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) => {
   const [data, setData] = useState<ClientData>({ ...EMPTY_CLIENT });
+  const [paymentTermsRaw, setPaymentTermsRaw] = useState<string>(String(EMPTY_CLIENT.payment_terms));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
         setLoading(true);
         const client = await api.get('clients', clientId);
         if (!cancelled && client) {
+          const pt = client.payment_terms ?? 30;
           setData({
             id: client.id,
             name: client.name ?? '',
@@ -88,11 +90,12 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             state: client.state ?? '',
             zip: client.zip ?? '',
             country: client.country ?? 'US',
-            payment_terms: client.payment_terms ?? 30,
+            payment_terms: pt,
             tax_id: client.tax_id ?? '',
             status: client.status ?? 'active',
             notes: client.notes ?? '',
           });
+          setPaymentTermsRaw(String(pt));
         }
       } catch (err) {
         console.error('Failed to load client:', err);
@@ -117,11 +120,17 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       return;
     }
 
+    const parsedTerms = parseInt(paymentTermsRaw, 10);
+    if (isNaN(parsedTerms) || parsedTerms < 0) {
+      setError('Payment terms must be a non-negative whole number.');
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
 
-      const payload: Record<string, any> = { ...data };
+      const payload: Record<string, any> = { ...data, payment_terms: parsedTerms };
       delete payload.id;
 
       if (isEditing && clientId) {
@@ -286,8 +295,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                   className="block-input"
                   type="number"
                   min={0}
-                  value={data.payment_terms}
-                  onChange={(e) => set('payment_terms', parseInt(e.target.value, 10) || 0)}
+                  value={paymentTermsRaw}
+                  onChange={(e) => setPaymentTermsRaw(e.target.value)}
                 />
               </Field>
 

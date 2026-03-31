@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Vite Renderer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "build:renderer"],
+      "port": 5173
+    },
+    {
+      "name": "Vite Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["exec", "--", "vite", "--config", "vite.config.ts"],
+      "port": 5173
+    }
+  ]
+}

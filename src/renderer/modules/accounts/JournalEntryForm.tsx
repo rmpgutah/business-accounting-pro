@@ -179,6 +179,16 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
     if (!date) errs.date = 'Date is required';
     if (!description.trim()) errs.description = 'Description is required';
 
+    // Check for non-numeric debit/credit entries
+    const nanLines = lines.filter(
+      (l) =>
+        (l.debit !== '' && isNaN(parseFloat(l.debit))) ||
+        (l.credit !== '' && isNaN(parseFloat(l.credit)))
+    );
+    if (nanLines.length > 0) {
+      errs.balance = 'Debit and credit amounts must be valid numbers.';
+    }
+
     // Check lines have accounts
     const validLines = lines.filter(
       (l) => l.account_id && (parseAmount(l.debit) > 0 || parseAmount(l.credit) > 0)

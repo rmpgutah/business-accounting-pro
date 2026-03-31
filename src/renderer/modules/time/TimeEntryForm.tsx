@@ -93,6 +93,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   );
   const [billable, setBillable] = useState(entry?.is_billable ?? true);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Auto-calc duration when range changes
   useEffect(() => {
@@ -122,7 +123,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   }, [clientId]);
 
   const handleSave = async () => {
-    setSaving(true);
+    setFormError('');
 
     let finalStartTime: string;
     let finalEndTime: string;
@@ -143,9 +144,10 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     }
 
     if (finalDuration < 1) {
-      setSaving(false);
+      setFormError('Duration must be greater than 0.');
       return;
     }
+    setSaving(true);
 
     const data = {
       date,
@@ -386,6 +388,16 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Error */}
+        {formError && (
+          <div
+            className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-4"
+            style={{ borderRadius: '2px' }}
+          >
+            {formError}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-border-primary">

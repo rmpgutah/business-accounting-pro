@@ -37,6 +37,7 @@ const TaxCategories: React.FC = () => {
     is_deductible: true,
   });
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const loadCategories = async () => {
     try {
@@ -66,11 +67,16 @@ const TaxCategories: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim()) {
+      setFormError('Category name is required.');
+      return;
+    }
+    setFormError('');
     setSaving(true);
     try {
       await api.create('tax_categories', formData);
       setFormData({ name: '', description: '', schedule_c_line: '', is_deductible: true });
+      setFormError('');
       setShowForm(false);
       await loadCategories();
     } catch (err) {
@@ -138,6 +144,14 @@ const TaxCategories: React.FC = () => {
             </button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-3">
+            {formError && (
+              <div
+                className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
+                style={{ borderRadius: '2px' }}
+              >
+                {formError}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">

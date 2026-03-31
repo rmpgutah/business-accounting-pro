@@ -161,7 +161,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         date: form.date,
         amount: parseFloat(form.amount) || 0,
         tax_amount: parseFloat(form.tax_amount) || 0,
-        description: form.description,
+        description: form.description.trim(),
         category_id: form.category_id || null,
         account_id: form.account_id || null,
         vendor_id: form.vendor_id || null,
@@ -169,7 +169,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         project_id: form.project_id || null,
         client_id: form.client_id || null,
         is_billable: form.is_billable ? 1 : 0,
-        reference: form.reference || null,
+        reference: form.reference.trim() || null,
         receipt_path: receiptPath || null,
         tags: form.tags
           ? form.tags.split(',').map((t) => t.trim()).filter(Boolean)

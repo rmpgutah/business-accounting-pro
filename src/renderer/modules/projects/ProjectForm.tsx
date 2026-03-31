@@ -14,9 +14,9 @@ interface ProjectFormData {
   client_id: string;
   description: string;
   status: string;
-  budget: number | '';
+  budget: string;
   budget_type: string;
-  hourly_rate: number | '';
+  hourly_rate: string;
   start_date: string;
   end_date: string;
   tags: string;
@@ -40,6 +40,12 @@ const INITIAL_FORM: ProjectFormData = {
   end_date: '',
   tags: '',
 };
+
+function parseOptionalFloat(value: string): number | null {
+  if (value.trim() === '') return null;
+  const n = parseFloat(value);
+  return isNaN(n) ? null : n;
+}
 
 // ─── Component ──────────────────────────────────────────
 const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }) => {
@@ -70,9 +76,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
               client_id: project.client_id ?? '',
               description: project.description ?? '',
               status: project.status ?? 'active',
-              budget: project.budget ?? '',
+              budget: project.budget != null ? String(project.budget) : '',
               budget_type: project.budget_type ?? 'fixed',
-              hourly_rate: project.hourly_rate ?? '',
+              hourly_rate: project.hourly_rate != null ? String(project.hourly_rate) : '',
               start_date: project.start_date ?? '',
               end_date: project.end_date ?? '',
               tags: project.tags ?? '',
@@ -102,18 +108,30 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
       return;
     }
 
+    if (form.budget.trim() !== '' && isNaN(parseFloat(form.budget))) {
+      setError('Budget must be a valid number.');
+      return;
+    }
+
+    if (form.hourly_rate.trim() !== '' && isNaN(parseFloat(form.hourly_rate))) {
+      setError('Hourly rate must be a valid number.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
     try {
+      const budgetVal = parseOptionalFloat(form.budget);
+      const rateVal = parseOptionalFloat(form.hourly_rate);
       const payload = {
         name: form.name.trim(),
         client_id: form.client_id || null,
         description: form.description.trim(),
         status: form.status,
-        budget: form.budget === '' ? 0 : Number(form.budget),
+        budget: budgetVal !== null ? budgetVal : 0,
         budget_type: form.budget_type,
-        hourly_rate: form.hourly_rate === '' ? 0 : Number(form.hourly_rate),
+        hourly_rate: rateVal !== null ? rateVal : 0,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         tags: form.tags.trim(),
@@ -245,7 +263,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
                 min="0"
                 step="0.01"
                 value={form.budget}
-                onChange={(e) => set('budget', e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) => set('budget', e.target.value)}
                 placeholder="0.00"
               />
             </div>
@@ -276,7 +294,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
               min="0"
               step="0.01"
               value={form.hourly_rate}
-              onChange={(e) => set('hourly_rate', e.target.value === '' ? '' : Number(e.target.value))}
+              onChange={(e) => set('hourly_rate', e.target.value)}
               placeholder="0.00"
             />
           </div>

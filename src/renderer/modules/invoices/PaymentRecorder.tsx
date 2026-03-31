@@ -37,7 +37,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
 }) => {
   const balanceDue = useMemo(() => invoiceTotal - amountPaid, [invoiceTotal, amountPaid]);
 
-  const [amount, setAmount] = useState<number>(balanceDue);
+  const [amount, setAmount] = useState<string>(String(balanceDue));
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [method, setMethod] = useState<string>('transfer');
   const [reference, setReference] = useState<string>('');
@@ -47,11 +47,12 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   const handleSave = async () => {
     setError('');
 
-    if (amount <= 0) {
-      setError('Payment amount must be greater than zero.');
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError('Payment amount must be a valid number greater than zero.');
       return;
     }
-    if (amount > balanceDue) {
+    if (parsedAmount > balanceDue) {
       setError(`Payment cannot exceed the balance due of ${fmt.format(balanceDue)}.`);
       return;
     }
@@ -65,14 +66,14 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       // Record the payment
       await api.create('payments', {
         invoice_id: invoiceId,
-        amount,
+        amount: parsedAmount,
         date,
         payment_method: method,
         reference,
       });
 
       // Update the invoice
-      const newAmountPaid = amountPaid + amount;
+      const newAmountPaid = amountPaid + parsedAmount;
       const newStatus = newAmountPaid >= invoiceTotal ? 'paid' : 'partial';
 
       await api.update('invoices', invoiceId, {
@@ -160,7 +161,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
               max={balanceDue}
               className="block-input font-mono"
               value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              onChange={(e) => setAmount(e.target.value)}
             />
           </div>
 

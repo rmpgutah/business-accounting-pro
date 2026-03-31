@@ -242,18 +242,32 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   // ─── Save ────────────────────────────────────────────
   const handleSave = async (sendAfterSave: boolean) => {
+    const activeLines = lines.filter((l) => l.description.trim() || l.unit_price > 0);
+
+    const lineItemErrors: string[] = [];
+    activeLines.forEach((l, i) => {
+      const num = i + 1;
+      if (!l.description.trim()) {
+        lineItemErrors.push(`Line item ${num}: description cannot be empty.`);
+      }
+      if (isNaN(l.quantity) || l.quantity < 0) {
+        lineItemErrors.push(`Line item ${num}: quantity must be a non-negative number.`);
+      }
+      if (isNaN(l.unit_price) || l.unit_price < 0) {
+        lineItemErrors.push(`Line item ${num}: unit price must be a non-negative number.`);
+      }
+    });
+
     const checks: Array<string | null> = [
       required(form.client_id, 'Client'),
-      lines.every((l) => !l.description && l.unit_price === 0)
+      lines.every((l) => !l.description.trim() && l.unit_price === 0)
         ? 'At least one line item is required'
         : null,
-      ...lines
-        .filter((l) => l.description || l.unit_price > 0)
-        .map((l, i) =>
-          minValue(l.quantity * l.unit_price, 0.01, `Line item ${i + 1} amount`)
-        ),
+      ...activeLines.map((l, i) =>
+        minValue(l.quantity * l.unit_price, 0.01, `Line item ${i + 1} amount`)
+      ),
     ];
-    const validationErrors = validateForm(checks);
+    const validationErrors = [...validateForm(checks), ...lineItemErrors];
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;

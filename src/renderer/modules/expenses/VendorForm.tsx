@@ -36,6 +36,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
   const [form, setForm] = useState<VendorFormData>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!vendorId);
+  const [nameError, setNameError] = useState('');
 
   const isEditing = !!vendorId;
 
@@ -77,11 +78,17 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
+
+    if (!form.name.trim()) {
+      setNameError('Vendor name is required.');
+      return;
+    }
+    setNameError('');
     setSaving(true);
 
     try {
       const payload: Record<string, any> = {
-        name: form.name,
+        name: form.name.trim(),
         email: form.email || null,
         phone: form.phone || null,
         address: form.address || null,
@@ -148,10 +155,15 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   className="block-input"
                   placeholder="Vendor name"
                   value={form.name}
-                  onChange={handleChange}
-                  required
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (nameError) setNameError('');
+                  }}
                   autoFocus
                 />
+                {nameError && (
+                  <p className="mt-1 text-xs text-accent-expense">{nameError}</p>
+                )}
               </div>
 
               {/* Email & Phone */}

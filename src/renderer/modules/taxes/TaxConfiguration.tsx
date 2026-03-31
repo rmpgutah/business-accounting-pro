@@ -75,6 +75,7 @@ const TaxConfiguration: React.FC = () => {
   const [calcYtdGross, setCalcYtdGross] = useState('');
   const [calcResult, setCalcResult] = useState<WithholdingResult | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [calcError, setCalcError] = useState('');
 
   const showToast = (msg: string, ok = true) => {
     const t = { id: ++_tid, msg, ok };
@@ -157,7 +158,11 @@ const TaxConfiguration: React.FC = () => {
 
   const handleCalculate = async () => {
     const gross = parseFloat(calcGross);
-    if (!gross || gross <= 0) return;
+    if (!calcGross.trim() || isNaN(gross) || gross <= 0) {
+      setCalcError('Gross pay must be a valid number greater than 0.');
+      return;
+    }
+    setCalcError('');
     setCalculating(true);
     try {
       const result: WithholdingResult = await window.electronAPI.invoke('tax:calculate-withholding', {
@@ -415,6 +420,15 @@ const TaxConfiguration: React.FC = () => {
                 />
               </div>
             </div>
+
+            {calcError && (
+              <div
+                className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3"
+                style={{ borderRadius: '2px' }}
+              >
+                {calcError}
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <button

@@ -56,6 +56,8 @@ export default function SettingsModule() {
   const [settings, setSettings] = useState<SettingsMap>({});
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState('');
+  const [taxRatesError, setTaxRatesError] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   // ── Company Profile form ──
   const [companyForm, setCompanyForm] = useState<Record<string, any>>({});
@@ -166,6 +168,38 @@ export default function SettingsModule() {
     },
     [saveSetting],
   );
+
+  // ─── Save Tax Rates (validated) ───────────────────────
+  const saveTaxRates = async () => {
+    const fields: [string, string][] = [
+      ['Federal Rate', taxRates.tax_federal_rate],
+      ['State Rate', taxRates.tax_state_rate],
+      ['Self-Employment Rate', taxRates.tax_se_rate],
+    ];
+    for (const [label, value] of fields) {
+      if (value.trim() === '') continue;
+      const n = parseFloat(value);
+      if (isNaN(n) || n < 0 || n > 100) {
+        setTaxRatesError(`${label} must be a number between 0 and 100.`);
+        return;
+      }
+    }
+    setTaxRatesError('');
+    await saveMultiple(taxRates, 'tax');
+  };
+
+  // ─── Save Email Settings (validated) ──────────────────
+  const saveEmailSettings = async () => {
+    if (emailConfig.smtp_port.trim() !== '') {
+      const port = parseInt(emailConfig.smtp_port, 10);
+      if (isNaN(port) || port < 1 || port > 65535) {
+        setEmailError('SMTP port must be a number between 1 and 65535.');
+        return;
+      }
+    }
+    setEmailError('');
+    await saveMultiple(emailConfig, 'email');
+  };
 
   // ─── Save Company ─────────────────────────────────────
   const saveCompany = async () => {
@@ -378,10 +412,18 @@ export default function SettingsModule() {
             />
           </Field>
         </div>
+        {taxRatesError && (
+          <div
+            className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
+            style={{ borderRadius: '2px' }}
+          >
+            {taxRatesError}
+          </div>
+        )}
         <div className="flex justify-end mt-4">
           <button
             className="block-btn-primary flex items-center gap-1.5"
-            onClick={() => saveMultiple(taxRates, 'tax')}
+            onClick={saveTaxRates}
             disabled={savingSection === 'tax'}
           >
             <Save size={14} />
@@ -453,10 +495,18 @@ export default function SettingsModule() {
             />
           </Field>
         </div>
+        {emailError && (
+          <div
+            className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
+            style={{ borderRadius: '2px' }}
+          >
+            {emailError}
+          </div>
+        )}
         <div className="flex justify-end mt-4">
           <button
             className="block-btn-primary flex items-center gap-1.5"
-            onClick={() => saveMultiple(emailConfig, 'email')}
+            onClick={saveEmailSettings}
             disabled={savingSection === 'email'}
           >
             <Save size={14} />
