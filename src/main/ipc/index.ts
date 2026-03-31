@@ -1956,7 +1956,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('intelligence:cash-projection', (_e, { days }: { days: number }) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { inflow: [], outflow: [] };
-    const d = Math.min(Math.max(Number(days), 1), 90);
+    const d = Math.min(Math.max(Number.isFinite(Number(days)) ? Number(days) : 30, 1), 90);
     const dbInstance = db.getDb();
     const inflow = dbInstance.prepare(`
       SELECT SUM(total) as amount, due_date
