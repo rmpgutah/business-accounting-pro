@@ -28,6 +28,7 @@ app.use('/api/sync', syncRouter);
 app.use('/portal', portalRouter);
 app.use('/api/stripe', stripeRouter);
 app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
 initWebSocket(server);
