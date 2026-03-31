@@ -25,4 +25,8 @@ initWebSocket(server);
 startCrons();
 
 const PORT = Number(process.env.PORT) || 3001;
+server.on('error', (err: NodeJS.ErrnoException) => {
+  console.error('Server failed to start:', err.message);
+  process.exit(1);
+});
 server.listen(PORT, () => console.log(`BAP sync server listening on :${PORT}`));
