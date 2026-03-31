@@ -101,11 +101,13 @@ export function registerIpcHandlers(): void {
     return db.getById(table, id);
   });
 
-  // Tables that do NOT have a company_id column
+  // Tables that do NOT have a company_id column (child/junction tables)
+  // WARNING: only list tables whose schema truly has no company_id column.
+  // payments and categories both have company_id NOT NULL — never put them here.
   const tablesWithoutCompanyId = new Set([
     'invoice_line_items', 'journal_entry_lines', 'pay_stubs',
     'budget_lines', 'bank_transactions', 'bank_reconciliation_matches',
-    'payments', 'categories', 'users', 'user_companies',
+    'users', 'user_companies',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -324,38 +326,7 @@ export function registerIpcHandlers(): void {
     return { path: filePath, name: path.basename(filePath), size: stats.size };
   });
 
-  // ─── PDF Export (Invoice) — Download ────────────────────
-  ipcMain.handle('export:invoice-pdf', async (_event, invoiceId: string) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
-
-    const dbInstance = db.getDb();
-    const invoice = db.getById('invoices', invoiceId);
-    if (!invoice) return { error: 'Invoice not found' };
-
-    const client = db.getById('clients', invoice.client_id);
-    const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
-
-    const { filePath } = await dialog.showSaveDialog({
-      defaultPath: `Invoice-${invoice.invoice_number}.pdf`,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-    });
-
-    if (!filePath) return { cancelled: true };
-
-    try {
-      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
-      fs.writeFileSync(filePath, pdfBuffer);
-      return { path: filePath };
-    } catch (err: any) {
-      return { error: err?.message || 'PDF generation failed' };
-    }
-  });
-
-  // ─── PDF Generate (Invoice) — same as export ──────────
+  // ─── PDF Generate (Invoice) — Download via Save Dialog ──
   ipcMain.handle('invoice:generate-pdf', async (_event, invoiceId: string) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
@@ -556,8 +527,17 @@ export function registerIpcHandlers(): void {
     const companyId = db.getCurrentCompanyId();
     const results: any[] = [];
     for (const id of ids) {
+      const old = db.getById(table, id);
       const record = db.update(table, id, data);
-      if (companyId) db.logAudit(companyId, table, id, 'update', data);
+      if (companyId && old) {
+        const changes: Record<string, any> = {};
+        for (const key of Object.keys(data)) {
+          if (old[key] !== record[key]) {
+            changes[key] = { old: old[key], new: record[key] };
+          }
+        }
+        db.logAudit(companyId, table, id, 'update', changes);
+      }
       results.push(record);
     }
     return results;
@@ -654,17 +634,33 @@ export function registerIpcHandlers(): void {
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bap-backup-'));
 
-    const backupTables = [
-      'clients', 'invoices', 'invoice_line_items', 'expenses', 'vendors',
-      'accounts', 'journal_entries', 'journal_entry_lines', 'projects',
-      'employees', 'time_entries', 'categories', 'payments', 'budgets',
-      'budget_lines', 'bank_accounts', 'bank_transactions', 'documents',
+    // Tables with direct company_id column
+    const directTables = [
+      'clients', 'invoices', 'expenses', 'vendors', 'accounts',
+      'journal_entries', 'projects', 'employees', 'time_entries',
+      'categories', 'payments', 'budgets', 'bank_accounts', 'documents',
       'recurring_templates', 'tax_categories', 'tax_payments', 'inventory_items',
     ];
 
-    const exportedFiles: string[] = [];
+    // Child tables without company_id — filter through parent FK
+    const childTableQueries: Record<string, string> = {
+      invoice_line_items: `SELECT li.* FROM invoice_line_items li
+        JOIN invoices i ON li.invoice_id = i.id WHERE i.company_id = ?`,
+      journal_entry_lines: `SELECT jl.* FROM journal_entry_lines jl
+        JOIN journal_entries je ON jl.journal_entry_id = je.id WHERE je.company_id = ?`,
+      pay_stubs: `SELECT ps.* FROM pay_stubs ps
+        JOIN payroll_runs pr ON ps.payroll_run_id = pr.id WHERE pr.company_id = ?`,
+      budget_lines: `SELECT bl.* FROM budget_lines bl
+        JOIN budgets b ON bl.budget_id = b.id WHERE b.company_id = ?`,
+      bank_transactions: `SELECT bt.* FROM bank_transactions bt
+        JOIN bank_accounts ba ON bt.bank_account_id = ba.id WHERE ba.company_id = ?`,
+    };
 
-    for (const tbl of backupTables) {
+    const exportedFiles: string[] = [];
+    const dbInstance = db.getDb();
+
+    // Export direct-company tables
+    for (const tbl of directTables) {
       try {
         const tblRows = db.queryAll(tbl, { company_id: companyId });
         if (tblRows.length === 0) continue;
@@ -673,16 +669,21 @@ export function registerIpcHandlers(): void {
         fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
         exportedFiles.push(csvFilePath);
       } catch {
-        try {
-          const tblRows = db.queryAll(tbl);
-          if (tblRows.length === 0) continue;
-          const csvContent = rowsToCSV(tblRows);
-          const csvFilePath = path.join(tmpDir, `${tbl}.csv`);
-          fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
-          exportedFiles.push(csvFilePath);
-        } catch {
-          // Skip entirely
-        }
+        // Skip tables that error (schema mismatch, etc.)
+      }
+    }
+
+    // Export child tables filtered via parent join
+    for (const [tbl, sql] of Object.entries(childTableQueries)) {
+      try {
+        const tblRows = dbInstance.prepare(sql).all(companyId) as any[];
+        if (tblRows.length === 0) continue;
+        const csvContent = rowsToCSV(tblRows);
+        const csvFilePath = path.join(tmpDir, `${tbl}.csv`);
+        fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
+        exportedFiles.push(csvFilePath);
+      } catch {
+        // Skip on error
       }
     }
 

@@ -177,6 +177,12 @@ export function execQuery(sql: string, params: any[] = []): void {
 // ─── Seed Default Chart of Accounts ──────────────────────
 
 export function seedDefaultAccounts(companyId: string): void {
+  // Guard: skip if accounts already exist for this company (prevents UNIQUE crash on double-call)
+  const existing = getDb()
+    .prepare('SELECT COUNT(*) as count FROM accounts WHERE company_id = ?')
+    .get(companyId) as { count: number };
+  if (existing?.count > 0) return;
+
   const defaults = [
     { code: '1000', name: 'Cash', type: 'asset', subtype: 'current' },
     { code: '1010', name: 'Checking Account', type: 'asset', subtype: 'bank' },
