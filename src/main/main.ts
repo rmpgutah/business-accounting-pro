@@ -191,13 +191,12 @@ app.whenReady().then(() => {
     console.error('Failed to initialize:', err);
     dialog.showErrorBox('Startup Error', err.message || String(err));
   }
+  // Sync client — init queue before createWindow to avoid race with IPC handlers
+  const dbInstance = require('./database').getDb();
   buildMenu();
   createWindow();
   setupAutoUpdater();
   startBackgroundServices();
-
-  // Sync client
-  const dbInstance = require('./database').getDb();
   initQueue(dbInstance);
   connectWebSocket((event) => {
     const win = BrowserWindow.getAllWindows()[0];

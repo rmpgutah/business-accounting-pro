@@ -14,8 +14,8 @@ function sign(body: string): string {
 }
 
 export async function syncPush(item: QueueItem): Promise<void> {
-  const body = JSON.stringify(item);
   try {
+    const body = JSON.stringify(item);
     const res = await fetch(`${SERVER_URL}/api/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bap-signature': sign(body) },
