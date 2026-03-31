@@ -80,7 +80,7 @@ jobs:
             server/ \
             "$VPS_USER@$VPS_HOST:/opt/bap-server/"
           ssh "$VPS_USER@$VPS_HOST" \
-            'cd /opt/bap-server && npm ci --omit=dev && npm run build && cd portal && npm ci && npm run build && cd .. && (pm2 restart bap-server || pm2 start dist/index.js --name bap-server) && pm2 save && echo "Sync server deployed"'
+            'cd /opt/bap-server && npm ci --omit=dev && npm run build && (cd portal && npm ci && npm run build || echo "WARNING: portal build failed") && (pm2 restart bap-server || pm2 start dist/index.js --name bap-server) && pm2 save && echo "Sync server deployed"'
 
       # ── 6. Reload Nginx gracefully ───────────────────
       - name: Reload Nginx
