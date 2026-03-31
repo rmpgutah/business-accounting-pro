@@ -6,6 +6,8 @@ const desktopClients = new Set<WebSocket>();
 export function initWebSocket(server: http.Server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
+  wss.on('error', (err: Error) => console.error('WSS server error:', err.message));
+
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url!, `http://localhost`);
     const token = url.searchParams.get('token');

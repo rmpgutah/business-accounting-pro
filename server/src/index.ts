@@ -9,6 +9,15 @@ import { portalRouter } from './routes/portal';
 import { stripeRouter } from './routes/stripe';
 import { startCrons } from './crons';
 
+// Startup guards — fail fast if required env vars are missing
+const REQUIRED_ENV = ['SYNC_SECRET', 'DESKTOP_WS_TOKEN'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`Missing required env var: ${key}`);
+    process.exit(1);
+  }
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
