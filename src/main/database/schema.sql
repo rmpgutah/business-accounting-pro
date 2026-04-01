@@ -943,7 +943,7 @@ CREATE TABLE IF NOT EXISTS approval_queue (
   company_id TEXT NOT NULL REFERENCES companies(id),
   record_type TEXT NOT NULL CHECK(record_type IN ('invoice','expense','bill')),
   record_id TEXT NOT NULL,
-  rule_id TEXT NOT NULL,
+  rule_id TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
   rule_name TEXT NOT NULL,
   status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
   notes TEXT,
