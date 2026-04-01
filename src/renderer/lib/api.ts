@@ -231,6 +231,26 @@ const api = {
   cashProjection: (days: number): Promise<{ inflow: any[]; outflow: any[] }> =>
     window.electronAPI.invoke('intelligence:cash-projection', { days }),
 
+  // Rules Engine
+  listRules: (company_id: string, category?: string) =>
+    window.electronAPI.invoke('rules:list', { company_id, category }),
+  createRule: (data: Record<string, any>) =>
+    window.electronAPI.invoke('rules:create', data),
+  updateRule: (id: string, data: Record<string, any>) =>
+    window.electronAPI.invoke('rules:update', { id, data }),
+  deleteRule: (id: string) =>
+    window.electronAPI.invoke('rules:delete', id),
+  listApprovals: (company_id: string, status?: string) =>
+    window.electronAPI.invoke('approval:list', { company_id, status }),
+  resolveApproval: (id: string, status: 'approved' | 'rejected', notes?: string) =>
+    window.electronAPI.invoke('approval:resolve', { id, status, notes }),
+  pendingApprovalCount: (company_id: string) =>
+    window.electronAPI.invoke('approval:pending-count', company_id),
+  cloneRecord: (table: string, id: string) =>
+    window.electronAPI.invoke('record:clone', { table, id }),
+  invoiceFromTimeEntries: (project_id: string, company_id: string) =>
+    window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

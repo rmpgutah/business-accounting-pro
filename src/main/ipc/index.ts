@@ -1974,5 +1974,95 @@ export function registerIpcHandlers(): void {
     `).all(companyId);
     return { inflow, outflow };
   });
+
+  // ─── Rules Engine ────────────────────────────────────────
+  ipcMain.handle('rules:list', (_event, { company_id, category }: { company_id: string; category?: string }) => {
+    let sql = `SELECT * FROM rules WHERE company_id = ?`;
+    const params: unknown[] = [company_id];
+    if (category) { sql += ` AND category = ?`; params.push(category); }
+    sql += ` ORDER BY priority ASC`;
+    return db.getDb().prepare(sql).all(...params);
+  });
+
+  ipcMain.handle('rules:create', (_event, data: Record<string, unknown>) => {
+    const id = uuid();
+    const row = { id, ...data, created_at: new Date().toISOString() };
+    db.getDb().prepare(`
+      INSERT INTO rules (id, company_id, category, name, priority, is_active, trigger, conditions, actions, created_at)
+      VALUES (@id, @company_id, @category, @name, @priority, @is_active, @trigger, @conditions, @actions, @created_at)
+    `).run(row);
+    return { id };
+  });
+
+  ipcMain.handle('rules:update', (_event, { id, data }: { id: string; data: Record<string, unknown> }) => {
+    const sets = Object.keys(data).map(k => `${k} = @${k}`).join(', ');
+    db.getDb().prepare(`UPDATE rules SET ${sets} WHERE id = @id`).run({ ...data, id });
+    return { ok: true };
+  });
+
+  ipcMain.handle('rules:delete', (_event, id: string) => {
+    db.getDb().prepare(`DELETE FROM rules WHERE id = ?`).run(id);
+    return { ok: true };
+  });
+
+  ipcMain.handle('approval:list', (_event, { company_id, status }: { company_id: string; status?: string }) => {
+    let sql = `SELECT aq.*, r.category FROM approval_queue aq LEFT JOIN rules r ON aq.rule_id = r.id WHERE aq.company_id = ?`;
+    const params: unknown[] = [company_id];
+    if (status) { sql += ` AND aq.status = ?`; params.push(status); }
+    sql += ` ORDER BY aq.created_at DESC`;
+    return db.getDb().prepare(sql).all(...params);
+  });
+
+  ipcMain.handle('approval:resolve', (_event, { id, status, notes }: { id: string; status: 'approved' | 'rejected'; notes?: string }) => {
+    db.getDb().prepare(`UPDATE approval_queue SET status = ?, notes = ?, resolved_at = datetime('now') WHERE id = ?`).run(status, notes ?? null, id);
+    return { ok: true };
+  });
+
+  ipcMain.handle('approval:pending-count', (_event, company_id: string) => {
+    const row = db.getDb().prepare(`SELECT COUNT(*) as count FROM approval_queue WHERE company_id = ? AND status = 'pending'`).get(company_id) as { count: number };
+    return row.count;
+  });
+
+  ipcMain.handle('record:clone', (_event, { table, id }: { table: string; id: string }) => {
+    const original = db.getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
+    if (!original) return { error: 'Not found' };
+    const newId = uuid();
+    const clone: Record<string, unknown> = { ...original, id: newId, created_at: new Date().toISOString(), status: 'draft', rules_applied: '[]' };
+    if (table === 'invoices') {
+      delete clone.invoice_number;
+      clone.issue_date = new Date().toISOString().split('T')[0];
+      delete clone.paid_date;
+      clone.amount_paid = 0;
+    }
+    if (table === 'expenses') { clone.date = new Date().toISOString().split('T')[0]; }
+    const cols = Object.keys(clone);
+    db.getDb().prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
+    return { id: newId };
+  });
+
+  ipcMain.handle('invoice:from-time-entries', (_event, { project_id, company_id }: { project_id: string; company_id: string }) => {
+    const entries = db.getDb().prepare(`
+      SELECT te.*, e.name as employee_name, e.pay_rate, p.client_id, p.name as project_name
+      FROM time_entries te
+      JOIN employees e ON te.employee_id = e.id
+      JOIN projects p ON te.project_id = p.id
+      WHERE te.project_id = ? AND te.company_id = ? AND te.is_billed = 0
+    `).all(project_id, company_id) as any[];
+    if (entries.length === 0) return { error: 'No unbilled time entries for this project.' };
+    const client_id = entries[0].client_id;
+    const project_name = entries[0].project_name;
+    const byEmployee: Record<string, { name: string; minutes: number; rate: number }> = {};
+    for (const e of entries) {
+      if (!byEmployee[e.employee_id]) byEmployee[e.employee_id] = { name: e.employee_name, minutes: 0, rate: Number(e.pay_rate ?? 0) };
+      byEmployee[e.employee_id].minutes += Number(e.duration_minutes ?? 0);
+    }
+    const lines = Object.values(byEmployee).map(emp => ({
+      description: `${emp.name} — ${project_name}`,
+      quantity: parseFloat((emp.minutes / 60).toFixed(2)),
+      unit_price: emp.rate,
+      tax_rate: 0,
+    }));
+    return { client_id, lines, entry_ids: entries.map((e: any) => e.id) };
+  });
 }
 
