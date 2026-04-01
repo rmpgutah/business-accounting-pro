@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   is_recurring INTEGER DEFAULT 0,
   recurring_template_id TEXT REFERENCES recurring_templates(id),
   custom_fields TEXT DEFAULT '{}',
+  rules_applied TEXT DEFAULT '[]',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(company_id, invoice_number)
@@ -218,6 +219,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   recurring_template_id TEXT REFERENCES recurring_templates(id),
   tags TEXT DEFAULT '[]',
   custom_fields TEXT DEFAULT '{}',
+  rules_applied TEXT DEFAULT '[]',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -916,3 +918,37 @@ CREATE TABLE IF NOT EXISTS financial_anomalies (
   detected_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   dismissed INTEGER NOT NULL DEFAULT 0
 );
+
+-- Rules Engine
+CREATE TABLE IF NOT EXISTS rules (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  category TEXT NOT NULL CHECK(category IN ('bank','automation','pricing','tax','approval','alert')),
+  name TEXT NOT NULL,
+  priority INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  trigger TEXT NOT NULL CHECK(trigger IN ('on_save','scheduled','manual')),
+  conditions TEXT DEFAULT '[]',
+  actions TEXT DEFAULT '[]',
+  applied_count INTEGER DEFAULT 0,
+  last_run_at TEXT,
+  last_alerted_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_rules_company_category ON rules(company_id, category, is_active);
+
+CREATE TABLE IF NOT EXISTS approval_queue (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  record_type TEXT NOT NULL CHECK(record_type IN ('invoice','expense','bill')),
+  record_id TEXT NOT NULL,
+  rule_id TEXT NOT NULL,
+  rule_name TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  resolved_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_approval_queue_company ON approval_queue(company_id, status);
