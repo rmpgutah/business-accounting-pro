@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { useAppStore } from './stores/appStore';
 import { useCompanyStore } from './stores/companyStore';
 import { useAuthStore } from './stores/authStore';
@@ -8,6 +8,7 @@ import CompanySetup from './components/onboarding/CompanySetup';
 import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import { registerKeyboardShortcuts, MODULE_ORDER } from './lib/keyboard-shortcuts';
+import { QuickCreate } from './components/QuickCreate';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
@@ -158,6 +159,19 @@ const App: React.FC = () => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authUser = useAuthStore((s) => s.user);
 
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setQuickCreateOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -245,6 +259,12 @@ const App: React.FC = () => {
   return (
     <AppShell>
       <ModuleView />
+      {quickCreateOpen && (
+        <QuickCreate
+          onNavigate={view => setModule(view as any)}
+          onClose={() => setQuickCreateOpen(false)}
+        />
+      )}
     </AppShell>
   );
 };
