@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
+import { ClientContext } from '../../components/ContextPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -415,6 +416,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 </option>
               ))}
             </select>
+            <ClientContext clientId={form.client_id || null} companyId={activeCompany?.id ?? ''} />
           </div>
 
           {/* Invoice Number */}

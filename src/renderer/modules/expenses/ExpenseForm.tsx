@@ -3,6 +3,7 @@ import { ArrowLeft, Receipt, DollarSign, Paperclip, X } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
+import { CategoryContext } from '../../components/ContextPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -328,6 +329,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <CategoryContext categoryId={form.category_id || null} companyId={activeCompany?.id ?? ''} />
           </div>
 
           {/* Expense Account */}
