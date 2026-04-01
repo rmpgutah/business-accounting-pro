@@ -6,6 +6,7 @@ import { registerIpcHandlers } from './ipc';
 import { autoUpdater } from 'electron-updater';
 import { processRecurringTemplates } from './services/recurring-processor';
 import { runNotificationChecks } from './services/notification-engine';
+import { runAlertRules } from './crons/alerts';
 import { initQueue, connectWebSocket } from './sync';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -135,6 +136,7 @@ function setupAutoUpdater() {
 // ── Background Services ────────────────────────────────────
 let recurringInterval: ReturnType<typeof setInterval> | null = null;
 let notificationInterval: ReturnType<typeof setInterval> | null = null;
+let alertRulesInterval: ReturnType<typeof setInterval> | null = null;
 
 function startBackgroundServices() {
   // Run immediately on startup (non-blocking)
@@ -151,6 +153,13 @@ function startBackgroundServices() {
       console.log(`Notification engine: ${notifResult.overdueNotifications} overdue, ${notifResult.budgetAlerts} budget alerts, ${notifResult.reconciliationAlerts} reconciliation alerts`);
     } catch (err) {
       console.error('Notification engine startup error:', err);
+    }
+
+    try {
+      const { getDb } = require('./database');
+      runAlertRules(getDb());
+    } catch (err) {
+      console.error('Alert rules startup error:', err);
     }
   }, 2000);
 
@@ -171,6 +180,16 @@ function startBackgroundServices() {
       console.error('Notification engine interval error:', err);
     }
   }, 30 * 60 * 1000);
+
+  // Alert rules: every 24 hours (nightly)
+  alertRulesInterval = setInterval(() => {
+    try {
+      const { getDb } = require('./database');
+      runAlertRules(getDb());
+    } catch (err) {
+      console.error('Alert rules interval error:', err);
+    }
+  }, 24 * 60 * 60 * 1000);
 }
 
 function stopBackgroundServices() {
@@ -181,6 +200,10 @@ function stopBackgroundServices() {
   if (notificationInterval) {
     clearInterval(notificationInterval);
     notificationInterval = null;
+  }
+  if (alertRulesInterval) {
+    clearInterval(alertRulesInterval);
+    alertRulesInterval = null;
   }
 }
 
