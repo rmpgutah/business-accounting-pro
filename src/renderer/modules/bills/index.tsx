@@ -10,6 +10,7 @@ import {
   CheckCircle,
   Search,
   Edit,
+  Copy,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -989,6 +990,16 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
     }
   };
 
+  const handleDuplicate = async () => {
+    if (!bill) return;
+    const result = await api.cloneRecord('bills', bill.id);
+    if (result?.error) {
+      console.error('Duplicate bill failed:', result.error);
+      return;
+    }
+    onBack();
+  };
+
   if (loading || !bill) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -1011,6 +1022,12 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           <span className={badge.className}>{badge.label}</span>
         </div>
         <div className="module-actions">
+          <button
+            onClick={handleDuplicate}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+          >
+            <Copy size={14} /> Duplicate
+          </button>
           <button
             className="block-btn flex items-center gap-2"
             style={{ borderRadius: '2px' }}

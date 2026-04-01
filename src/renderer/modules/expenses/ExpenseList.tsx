@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download } from 'lucide-react';
+import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -164,6 +164,16 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
     finally { setBatchLoading(false); setShowDeleteConfirm(false); }
   }, [selectedIds, reload]);
 
+  const handleDuplicate = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const result = await api.cloneRecord('expenses', id);
+    if (result?.error) {
+      console.error('Duplicate expense failed:', result.error);
+      return;
+    }
+    await reload();
+  }, [reload]);
+
   const handleExportSelected = useCallback(() => {
     const selected = filtered.filter(e => selectedIds.has(e.id));
     const exportData = selected.map(e => ({
@@ -300,6 +310,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                 <th className="text-right">Amount</th>
                 <th>Status</th>
                 <th className="text-center">Billable</th>
+                <th style={{ width: '90px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -347,6 +358,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                         <span className="text-text-muted">-</span>
                       )}
                     </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => handleDuplicate(exp.id, e)}
+                        className="flex items-center gap-1 px-2 py-1 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+                        title="Duplicate"
+                      >
+                        <Copy size={12} /> Dup
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -363,7 +383,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                 <td className="text-right font-mono font-bold text-text-primary">
                   {fmt.format(total)}
                 </td>
-                <td colSpan={2} />
+                <td colSpan={3} />
               </tr>
             </tfoot>
           </table>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy } from 'lucide-react';
 import api from '../../lib/api';
 import { generateInvoiceHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -169,6 +169,16 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     }
   };
 
+  const handleDuplicate = async () => {
+    if (!invoice) return;
+    const result = await api.cloneRecord('invoices', invoice.id);
+    if (result?.error) {
+      console.error('Duplicate invoice failed:', result.error);
+      return;
+    }
+    onBack();
+  };
+
   const handlePaymentSaved = () => {
     setShowPaymentModal(false);
     // Reload all data to get fresh payment state
@@ -224,6 +234,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             className="px-3 py-1.5 border-2 border-gray-900 text-xs font-bold uppercase tracking-wider hover:bg-gray-900 hover:text-white transition-colors"
           >
             {copied ? 'Copied!' : 'Copy Portal Link'}
+          </button>
+          <button
+            onClick={handleDuplicate}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+          >
+            <Copy size={14} /> Duplicate
           </button>
           {invoice.status === 'draft' && (
             <button
