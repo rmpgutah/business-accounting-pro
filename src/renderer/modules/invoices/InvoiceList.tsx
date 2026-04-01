@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
+import { SummaryBar } from '../../components/SummaryBar';
 
 // ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -75,6 +76,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
 
   // Fetch data
   useEffect(() => {
@@ -83,13 +85,23 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [invoiceData, clientData] = await Promise.all([
+        const [invoiceData, clientData, summaryResult] = await Promise.all([
           api.query('invoices', { company_id: activeCompany.id }),
           api.query('clients', { company_id: activeCompany.id }),
+          api.rawQuery(
+            `SELECT
+              COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
+              COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
+              COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', paid_date) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
+            FROM invoices WHERE company_id = ?`,
+            [activeCompany.id]
+          ),
         ]);
         if (cancelled) return;
         setInvoices(invoiceData ?? []);
         setClients(clientData ?? []);
+        const summaryRow = Array.isArray(summaryResult) ? summaryResult[0] : summaryResult;
+        setInvoiceSummary(summaryRow ?? null);
       } catch (err) {
         console.error('Failed to load invoices:', err);
       } finally {
@@ -228,6 +240,15 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Summary Bar */}
+      {invoiceSummary && (
+        <SummaryBar items={[
+          { label: 'Outstanding', value: `$${Number(invoiceSummary.outstanding).toFixed(2)}`, accent: 'orange' },
+          { label: 'Overdue', value: `$${Number(invoiceSummary.overdue).toFixed(2)}`, accent: 'red' },
+          { label: 'Collected This Month', value: `$${Number(invoiceSummary.collected_month).toFixed(2)}`, accent: 'green' },
+        ]} />
+      )}
 
       {/* Tabs + Search */}
       <div className="flex items-center justify-between gap-4">

@@ -3,6 +3,7 @@ import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Downloa
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
+import { SummaryBar } from '../../components/SummaryBar';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -58,19 +59,30 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [expenseSummary, setExpenseSummary] = useState<any>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [expData, catData] = await Promise.all([
+        const [expData, catData, expSummaryResult] = await Promise.all([
           api.query('expenses', { company_id: activeCompany.id }),
           api.query('categories', { company_id: activeCompany.id }),
+          api.rawQuery(
+            `SELECT
+              COALESCE(SUM(CASE WHEN strftime('%Y-%m', date) = strftime('%Y-%m', 'now') THEN amount ELSE 0 END), 0) as month_total,
+              (SELECT ec.name FROM expense_categories ec JOIN expenses e2 ON e2.category_id = ec.id WHERE e2.company_id = ? GROUP BY e2.category_id ORDER BY SUM(e2.amount) DESC LIMIT 1) as top_category,
+              (SELECT COUNT(DISTINCT e2.category_id) FROM expenses e2 JOIN budget_lines bl ON bl.category_id = e2.category_id WHERE e2.company_id = ? AND strftime('%Y-%m', e2.date) = strftime('%Y-%m', 'now') GROUP BY e2.category_id HAVING SUM(e2.amount) > bl.amount) as over_budget_count
+            FROM expenses WHERE company_id = ?`,
+            [activeCompany.id, activeCompany.id, activeCompany.id]
+          ),
         ]);
         if (cancelled) return;
         setExpenses(Array.isArray(expData) ? expData : []);
         setCategories(Array.isArray(catData) ? catData : []);
+        const expRow = Array.isArray(expSummaryResult) ? expSummaryResult[0] : expSummaryResult;
+        setExpenseSummary(expRow ?? null);
       } catch (err) {
         console.error('Failed to load expenses:', err);
       } finally {
@@ -200,6 +212,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           New Expense
         </button>
       </div>
+
+      {/* Summary Bar */}
+      {expenseSummary && (
+        <SummaryBar items={[
+          { label: 'This Month', value: `$${Number(expenseSummary.month_total).toFixed(2)}` },
+          { label: 'Top Category', value: expenseSummary.top_category ?? '—' },
+          ...(Number(expenseSummary.over_budget_count) > 0 ? [{ label: 'Over Budget', value: `${expenseSummary.over_budget_count} categories`, accent: 'red' as const }] : []),
+        ]} />
+      )}
 
       {/* Filters */}
       <div className="block-card p-3">

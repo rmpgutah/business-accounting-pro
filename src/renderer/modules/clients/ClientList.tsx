@@ -3,6 +3,7 @@ import { UserCircle, Plus, Search, Filter, ArrowUpDown, Download, Trash2, CheckC
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
+import { SummaryBar } from '../../components/SummaryBar';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -65,6 +66,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [clientSummary, setClientSummary] = useState<any>(null);
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -73,9 +75,20 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       if (!activeCompany) return;
       try {
         setLoading(true);
-        const rows = await api.query('clients', { company_id: activeCompany.id });
+        const [rows, clientSummaryResult] = await Promise.all([
+          api.query('clients', { company_id: activeCompany.id }),
+          api.rawQuery(
+            `SELECT
+              COALESCE(SUM(total - amount_paid), 0) as total_receivables,
+              COUNT(DISTINCT client_id) as overdue_clients
+            FROM invoices WHERE company_id = ? AND status = 'overdue'`,
+            [activeCompany.id]
+          ),
+        ]);
         if (!cancelled) {
           setClients(Array.isArray(rows) ? rows : []);
+          const clientRow = Array.isArray(clientSummaryResult) ? clientSummaryResult[0] : clientSummaryResult;
+          setClientSummary(clientRow ?? null);
         }
       } catch (err) {
         console.error('Failed to load clients:', err);
@@ -216,6 +229,14 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           </button>
         </div>
       </div>
+
+      {/* Summary Bar */}
+      {clientSummary && (
+        <SummaryBar items={[
+          { label: 'Total Receivables', value: `$${Number(clientSummary.total_receivables).toFixed(2)}`, accent: 'orange' },
+          { label: 'Clients Overdue', value: String(clientSummary.overdue_clients ?? 0), accent: Number(clientSummary.overdue_clients) > 0 ? 'red' : 'default' },
+        ]} />
+      )}
 
       {/* Toolbar: Search + Filter */}
       <div className="flex items-center gap-3">
