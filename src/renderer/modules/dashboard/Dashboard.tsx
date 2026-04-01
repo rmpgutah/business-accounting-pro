@@ -413,6 +413,8 @@ const Dashboard: React.FC = () => {
     topClientRevenue: 0,
   });
   const [anomalies, setAnomalies] = useState<any[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [rulesActivity, setRulesActivity] = useState<{ pricing_today: number; approvals_pending: number; alerts_week: number } | null>(null);
 
   const { start, end } = useMemo(() => dateRange(period), [period]);
 
@@ -681,6 +683,20 @@ const Dashboard: React.FC = () => {
 
         const anomalyData = await api.listAnomalies();
         setAnomalies(anomalyData || []);
+
+        const [approvalCount, activityRow] = await Promise.all([
+          api.pendingApprovalCount(activeCompany.id),
+          api.rawQuery(
+            `SELECT
+              (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='pricing' AND date(last_run_at)=date('now')) as pricing_today,
+              (SELECT COUNT(*) FROM approval_queue WHERE company_id = ? AND status='pending') as approvals_pending,
+              (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='alert' AND date(last_run_at)>=date('now','-7 days')) as alerts_week`,
+            [activeCompany.id, activeCompany.id, activeCompany.id]
+          ),
+        ]);
+        setPendingApprovals(approvalCount ?? 0);
+        const rowData = Array.isArray(activityRow) ? activityRow[0] : activityRow;
+        setRulesActivity(rowData ?? null);
       } catch (err) {
         console.error('Dashboard data load failed:', err);
       }
@@ -736,6 +752,21 @@ const Dashboard: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Rules Activity Strip */}
+      {rulesActivity && (rulesActivity.pricing_today > 0 || rulesActivity.approvals_pending > 0 || rulesActivity.alerts_week > 0) && (
+        <div className="border border-indigo-200 bg-indigo-50 px-4 py-2 flex gap-6 text-xs font-bold text-indigo-700 mb-4 flex-wrap">
+          {rulesActivity.pricing_today > 0 && (
+            <span>{rulesActivity.pricing_today} pricing rule{rulesActivity.pricing_today !== 1 ? 's' : ''} applied today</span>
+          )}
+          {rulesActivity.approvals_pending > 0 && (
+            <span className="text-orange-700">{rulesActivity.approvals_pending} approval{rulesActivity.approvals_pending !== 1 ? 's' : ''} pending</span>
+          )}
+          {rulesActivity.alerts_week > 0 && (
+            <span>{rulesActivity.alerts_week} alert{rulesActivity.alerts_week !== 1 ? 's' : ''} fired this week</span>
+          )}
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
