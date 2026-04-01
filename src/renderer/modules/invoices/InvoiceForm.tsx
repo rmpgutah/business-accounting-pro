@@ -145,6 +145,36 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           if (!cancelled) {
             setForm((prev) => ({ ...prev, invoice_number: nextNum }));
           }
+
+          // Read prefill stored by "Create Invoice from Time" flow
+          const prefillRaw = localStorage.getItem('invoiceFormPrefill');
+          if (prefillRaw) {
+            try {
+              const prefill = JSON.parse(prefillRaw);
+              localStorage.removeItem('invoiceFormPrefill');
+              if (!cancelled) {
+                if (prefill.client_id) {
+                  setForm((prev) => ({ ...prev, client_id: prefill.client_id }));
+                }
+                if (Array.isArray(prefill.lines) && prefill.lines.length > 0) {
+                  let lineCount = lineIdCounter;
+                  setLines(
+                    prefill.lines.map((l: any) => ({
+                      id: `new-${++lineCount}`,
+                      description: l.description ?? '',
+                      quantity: Number(l.quantity ?? 1),
+                      unit_price: Number(l.unit_price ?? 0),
+                      tax_rate: Number(l.tax_rate ?? 0),
+                      account_id: l.account_id ?? '',
+                    }))
+                  );
+                  lineIdCounter = lineCount;
+                }
+              }
+            } catch {
+              localStorage.removeItem('invoiceFormPrefill');
+            }
+          }
         }
 
         if (invoiceId) {

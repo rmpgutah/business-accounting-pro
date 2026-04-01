@@ -7,6 +7,7 @@ import {
   Receipt,
   FileText,
   Edit,
+  FilePlus,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
@@ -150,6 +151,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<DetailTab>('time');
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -221,6 +224,27 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
     return { totalRevenue, totalExpenses, totalHours, profitLoss };
   }, [lineItems, expenses, timeEntries]);
 
+  // ─── Create Invoice from Time ─────────────────────────
+  const handleCreateInvoice = async () => {
+    if (!project?.id || !activeCompany) return;
+    setInvoiceError(null);
+    setCreatingInvoice(true);
+    try {
+      const result = await api.invoiceFromTimeEntries(project.id, activeCompany.id);
+      if (result?.error) {
+        setInvoiceError(result.error);
+        return;
+      }
+      localStorage.setItem('invoiceFormPrefill', JSON.stringify(result));
+      sessionStorage.setItem('nav:invoiceNew', '1');
+      nav.goTo('invoicing');
+    } catch (err: any) {
+      setInvoiceError(err?.message ?? 'Failed to create invoice from time entries.');
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
+
   // ─── Loading State ────────────────────────────────────
   if (loading) {
     return (
@@ -280,14 +304,40 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
             <p className="text-xs text-text-secondary mt-2 max-w-xl">{project.description}</p>
           )}
         </div>
-        <button
-          onClick={() => onEdit(project.id)}
-          className="block-btn inline-flex items-center gap-1.5 text-xs"
-        >
-          <Edit size={13} />
-          Edit
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCreateInvoice}
+            disabled={creatingInvoice}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-xs font-bold uppercase hover:bg-indigo-700 disabled:opacity-50"
+            style={{ borderRadius: '2px' }}
+          >
+            <FilePlus size={13} />
+            {creatingInvoice ? 'Building...' : 'Create Invoice from Time'}
+          </button>
+          <button
+            onClick={() => onEdit(project.id)}
+            className="block-btn inline-flex items-center gap-1.5 text-xs"
+          >
+            <Edit size={13} />
+            Edit
+          </button>
+        </div>
       </div>
+
+      {/* Invoice from Time Error */}
+      {invoiceError && (
+        <div
+          className="text-xs px-3 py-2 font-mono"
+          style={{
+            background: '#2a1215',
+            border: '1px solid #ef4444',
+            borderRadius: '2px',
+            color: '#ef4444',
+          }}
+        >
+          {invoiceError}
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-4">

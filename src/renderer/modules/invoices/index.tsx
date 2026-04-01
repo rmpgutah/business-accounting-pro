@@ -12,7 +12,15 @@ type View =
 
 // ─── Module Router ──────────────────────────────────────
 const InvoicingModule: React.FC = () => {
-  const [view, setView] = useState<View>({ type: 'list' });
+  const [view, setView] = useState<View>(() => {
+    // If navigated here from "Create Invoice from Time", open the new form immediately
+    const flag = sessionStorage.getItem('nav:invoiceNew');
+    if (flag) {
+      sessionStorage.removeItem('nav:invoiceNew');
+      return { type: 'new' };
+    }
+    return { type: 'list' };
+  });
 
   const goToList = useCallback(() => setView({ type: 'list' }), []);
   const goToNew = useCallback(() => setView({ type: 'new' }), []);
