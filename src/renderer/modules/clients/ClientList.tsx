@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
+import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -67,6 +68,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [clientSummary, setClientSummary] = useState<any>(null);
+  const [showImport, setShowImport] = useState(false);
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -223,6 +225,9 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
         <div className="module-actions">
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+            Import CSV
+          </button>
           <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>
             <Plus size={14} />
             New Client
@@ -373,6 +378,16 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         <div className="text-xs text-text-muted">
           Showing {filtered.length} of {clients.length} client{clients.length !== 1 ? 's' : ''}
         </div>
+      )}
+
+      {showImport && (
+        <ImportWizard
+          table="clients"
+          requiredFields={['name', 'email', 'phone', 'type']}
+          extraData={{ company_id: activeCompany?.id, status: 'active' }}
+          onDone={() => { setShowImport(false); reload(); }}
+          onCancel={() => setShowImport(false)}
+        />
       )}
 
       {/* ─── Floating Batch Action Bar ─────────────────────── */}

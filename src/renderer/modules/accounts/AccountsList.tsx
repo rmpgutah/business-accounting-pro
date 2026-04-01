@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
 interface Account {
@@ -72,6 +73,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showInactive, setShowInactive] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Fetch accounts
   useEffect(() => {
@@ -98,6 +100,12 @@ const AccountsList: React.FC<AccountsListProps> = ({
     return () => {
       cancelled = true;
     };
+  }, [activeCompany]);
+
+  const reload = useCallback(async () => {
+    if (!activeCompany) return;
+    const data = await api.query('accounts', { company_id: activeCompany.id });
+    setAccounts(Array.isArray(data) ? data : []);
   }, [activeCompany]);
 
   // Group accounts by type
@@ -164,14 +172,19 @@ const AccountsList: React.FC<AccountsListProps> = ({
             Show inactive
           </button>
         </div>
-        <button
-          onClick={onNewAccount}
-          className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-          style={{ borderRadius: '2px' }}
-        >
-          <Plus size={14} />
-          New Account
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+            Import CSV
+          </button>
+          <button
+            onClick={onNewAccount}
+            className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+            style={{ borderRadius: '2px' }}
+          >
+            <Plus size={14} />
+            New Account
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -286,6 +299,16 @@ const AccountsList: React.FC<AccountsListProps> = ({
           </tbody>
         </table>
       </div>
+
+      {showImport && (
+        <ImportWizard
+          table="accounts"
+          requiredFields={['code', 'name', 'type']}
+          extraData={{ company_id: activeCompany?.id }}
+          onDone={() => { setShowImport(false); reload(); }}
+          onCancel={() => setShowImport(false)}
+        />
+      )}
     </div>
   );
 };
