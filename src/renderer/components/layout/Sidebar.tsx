@@ -96,6 +96,7 @@ const sections: NavSection[] = [
       { id: 'email', label: 'Email', icon: Mail },
       { id: 'notifications', label: 'Notifications', icon: Bell },
       { id: 'audit-trail', label: 'Audit Trail', icon: Shield },
+      { id: 'rules', label: 'Rules', icon: Shield },
     ],
   },
   {
