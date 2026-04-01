@@ -11,6 +11,7 @@ import { sendInvoiceEmail } from '../services/email-sender';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
 import { openPrintPreview, saveHTMLAsPDF, printHTML } from '../services/print-preview';
+import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
 
 // ─── CSV Helpers (shared by import/export handlers) ──────
 function escapeCSVField(val: any): string {
@@ -245,6 +246,24 @@ export function registerIpcHandlers(): void {
     const payload = tablesWithoutCompanyId.has(table)
       ? { ...data }
       : { ...data, company_id: companyId };
+    // Apply rules for invoices
+    if (table === 'invoices' && payload.company_id) {
+      const pricingResults = evaluateRules({ category: 'pricing', record: payload, company_id: String(payload.company_id), db: db.getDb() });
+      const taxResults     = evaluateRules({ category: 'tax',     record: payload, company_id: String(payload.company_id), db: db.getDb() });
+      Object.assign(payload, mergePatches([...pricingResults, ...taxResults]));
+      payload.rules_applied = rulesAppliedSummary([...pricingResults, ...taxResults]);
+    }
+    // Apply tax rules for expenses
+    if (table === 'expenses' && payload.company_id) {
+      const taxResults = evaluateRules({ category: 'tax', record: payload, company_id: String(payload.company_id), db: db.getDb() });
+      Object.assign(payload, mergePatches(taxResults));
+      payload.rules_applied = rulesAppliedSummary(taxResults);
+    }
+    // Apply approval rules for invoices, expenses, bills
+    if ((table === 'invoices' || table === 'expenses' || table === 'bills') && payload.company_id) {
+      const approvalResults = evaluateRules({ category: 'approval', record: { ...payload, _type: table }, company_id: String(payload.company_id), db: db.getDb() });
+      if (approvalResults.some(r => r.matched)) payload.status = 'pending_approval';
+    }
     const record = db.create(table, payload);
     if (companyId) db.logAudit(companyId, table, record.id, 'create');
     syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
