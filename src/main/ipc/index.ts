@@ -2024,6 +2024,8 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('record:clone', (_event, { table, id }: { table: string; id: string }) => {
+    const CLONEABLE_TABLES = ['invoices', 'expenses', 'bills'];
+    if (!CLONEABLE_TABLES.includes(table)) return { error: 'Invalid table' };
     const original = db.getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
     if (!original) return { error: 'Not found' };
     const newId = uuid();
