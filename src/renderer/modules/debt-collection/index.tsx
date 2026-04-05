@@ -9,6 +9,7 @@ import {
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
 import DebtDetail from './DebtDetail';
+import PaymentForm from './PaymentForm';
 import CommunicationForm from './CommunicationForm';
 
 // ─── Types ──────────────────────────────────────────────
@@ -215,10 +216,15 @@ const DebtCollectionModule: React.FC = () => {
       )}
 
       {/* Modals — Payment */}
-      {modalState.payment && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          PaymentModal debtId=&quot;{activeDebtId}&quot; onClose onSaved — to be implemented
-        </div>
+      {modalState.payment && activeDebtId && (
+        <PaymentForm
+          debtId={activeDebtId}
+          onClose={() => closeModal('payment')}
+          onSaved={() => {
+            closeModal('payment');
+            setListKey((k) => k + 1);
+          }}
+        />
       )}
 
       {/* Modals — Evidence */}
