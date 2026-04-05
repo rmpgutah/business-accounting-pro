@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { generateInvoiceHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import PaymentRecorder from './PaymentRecorder';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -50,14 +51,6 @@ interface Payment {
   method: string;
   reference: string;
 }
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Status Badge Map ───────────────────────────────────
 const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
@@ -346,13 +339,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <td className="text-text-primary">{line.description}</td>
                 <td className="text-right font-mono text-text-secondary">{line.quantity}</td>
                 <td className="text-right font-mono text-text-secondary">
-                  {fmt.format(line.unit_price)}
+                  {formatCurrency(line.unit_price)}
                 </td>
                 <td className="text-right font-mono text-text-secondary">
                   {line.tax_rate > 0 ? `${line.tax_rate}%` : '--'}
                 </td>
                 <td className="text-right font-mono text-text-primary">
-                  {fmt.format(line.quantity * line.unit_price)}
+                  {formatCurrency(line.quantity * line.unit_price)}
                 </td>
               </tr>
             ))}
@@ -364,19 +357,19 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           <div className="w-72 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Subtotal</span>
-              <span className="font-mono text-text-primary">{fmt.format(invoice.subtotal)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(invoice.subtotal)}</span>
             </div>
             {invoice.tax > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{fmt.format(invoice.tax)}</span>
+                <span className="font-mono text-text-primary">{formatCurrency(invoice.tax)}</span>
               </div>
             )}
             {invoice.discount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Discount</span>
                 <span className="font-mono text-accent-income">
-                  -{fmt.format(invoice.discount)}
+                  -{formatCurrency(invoice.discount)}
                 </span>
               </div>
             )}
@@ -386,13 +379,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             >
               <span className="text-text-primary">Total</span>
               <span className="font-mono text-text-primary text-lg">
-                {fmt.format(invoice.total)}
+                {formatCurrency(invoice.total)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Amount Paid</span>
               <span className="font-mono text-accent-income">
-                {fmt.format(invoice.amount_paid)}
+                {formatCurrency(invoice.amount_paid)}
               </span>
             </div>
             <div
@@ -405,7 +398,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   balance > 0 ? 'text-accent-warning' : 'text-accent-income'
                 }`}
               >
-                {fmt.format(balance)}
+                {formatCurrency(balance)}
               </span>
             </div>
           </div>
@@ -467,7 +460,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   <td className="text-text-secondary capitalize">{p.method}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
-                    {fmt.format(p.amount)}
+                    {formatCurrency(p.amount)}
                   </td>
                 </tr>
               ))}

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 type View = 'list' | 'form' | 'detail';
@@ -85,13 +86,6 @@ interface LineItemDraft {
 }
 
 // ─── Constants ───────────────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 const todayISO = (): string => new Date().toISOString().slice(0, 10);
 
 const thirtyDaysLater = (): string => {
@@ -243,7 +237,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
             <div>
               <div className="stat-label text-text-muted">Total Unpaid</div>
               <div className="stat-value font-mono text-accent-expense">
-                {fmt.format(stats.total_unpaid)}
+                {formatCurrency(stats.total_unpaid)}
               </div>
             </div>
             <DollarSign size={20} className="text-accent-expense opacity-60 mt-1" />
@@ -282,7 +276,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
             <div>
               <div className="stat-label text-text-muted">Paid This Month</div>
               <div className="stat-value font-mono text-accent-income">
-                {fmt.format(stats.paid_this_month)}
+                {formatCurrency(stats.paid_this_month)}
               </div>
             </div>
             <CheckCircle size={20} className="text-accent-income opacity-60 mt-1" />
@@ -374,17 +368,17 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     <td className="font-mono text-text-secondary text-xs">{bill.issue_date}</td>
                     <td className="font-mono text-text-secondary text-xs">{bill.due_date}</td>
                     <td className="text-right font-mono text-text-primary">
-                      {fmt.format(bill.total)}
+                      {formatCurrency(bill.total)}
                     </td>
                     <td className="text-right font-mono text-accent-income">
-                      {fmt.format(bill.amount_paid)}
+                      {formatCurrency(bill.amount_paid)}
                     </td>
                     <td
                       className={`text-right font-mono ${
                         balance > 0 ? 'text-accent-expense' : 'text-text-muted'
                       }`}
                     >
-                      {fmt.format(balance)}
+                      {formatCurrency(balance)}
                     </td>
                     <td>
                       <span className={badge.className}>{badge.label}</span>
@@ -826,7 +820,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                     />
                   </td>
                   <td className="p-1 text-right font-mono text-text-secondary text-xs">
-                    {fmt.format(amount)}
+                    {formatCurrency(amount)}
                   </td>
                   <td className="p-1 text-center">
                     <button
@@ -849,7 +843,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         <div className="block-card w-80 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-text-secondary">Subtotal</span>
-            <span className="font-mono text-text-primary">{fmt.format(subtotal)}</span>
+            <span className="font-mono text-text-primary">{formatCurrency(subtotal)}</span>
           </div>
 
           <div className="flex justify-between text-sm items-center gap-4">
@@ -867,7 +861,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
 
           <div className="flex justify-between text-sm">
             <span className="text-text-secondary">Tax Amount</span>
-            <span className="font-mono text-text-primary">{fmt.format(taxAmount)}</span>
+            <span className="font-mono text-text-primary">{formatCurrency(taxAmount)}</span>
           </div>
 
           <div
@@ -875,7 +869,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
           >
             <span className="text-text-primary">Total</span>
-            <span className="font-mono text-text-primary text-lg">{fmt.format(total)}</span>
+            <span className="font-mono text-text-primary text-lg">{formatCurrency(total)}</span>
           </div>
         </div>
       </div>
@@ -962,7 +956,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
     const errs: string[] = [];
     const amt = parseFloat(payAmount);
     if (!payAmount || isNaN(amt) || amt <= 0) errs.push('Payment amount must be greater than zero.');
-    if (amt > balance + 0.001) errs.push(`Payment amount cannot exceed balance of ${fmt.format(balance)}.`);
+    if (amt > balance + 0.001) errs.push(`Payment amount cannot exceed balance of ${formatCurrency(balance)}.`);
     if (!payDate) errs.push('Payment date is required.');
     if (!payAccountId) errs.push('Account is required.');
     if (errs.length > 0) { setPayErrors(errs); return; }
@@ -1079,12 +1073,12 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-text-secondary">Subtotal</span>
-              <span className="font-mono text-text-primary">{fmt.format(bill.subtotal)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(bill.subtotal)}</span>
             </div>
             {bill.tax_amount > 0 && (
               <div className="flex justify-between">
                 <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{fmt.format(bill.tax_amount)}</span>
+                <span className="font-mono text-text-primary">{formatCurrency(bill.tax_amount)}</span>
               </div>
             )}
             <div
@@ -1092,11 +1086,11 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
               style={{ borderTop: '1px solid var(--color-border-primary)' }}
             >
               <span className="text-text-primary">Total</span>
-              <span className="font-mono text-text-primary text-base">{fmt.format(bill.total)}</span>
+              <span className="font-mono text-text-primary text-base">{formatCurrency(bill.total)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-secondary">Amount Paid</span>
-              <span className="font-mono text-accent-income">{fmt.format(bill.amount_paid)}</span>
+              <span className="font-mono text-accent-income">{formatCurrency(bill.amount_paid)}</span>
             </div>
             <div
               className="flex justify-between font-bold pt-2"
@@ -1108,7 +1102,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                   balance > 0 ? 'text-accent-expense' : 'text-accent-income'
                 }`}
               >
-                {fmt.format(balance)}
+                {formatCurrency(balance)}
               </span>
             </div>
           </div>
@@ -1146,10 +1140,10 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                   </td>
                   <td className="text-right font-mono text-text-secondary">{line.quantity}</td>
                   <td className="text-right font-mono text-text-secondary">
-                    {fmt.format(line.unit_price)}
+                    {formatCurrency(line.unit_price)}
                   </td>
                   <td className="text-right font-mono text-text-primary">
-                    {fmt.format(line.amount)}
+                    {formatCurrency(line.amount)}
                   </td>
                 </tr>
               ))}
@@ -1195,7 +1189,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                     {p.reference || '—'}
                   </td>
                   <td className="text-right font-mono text-accent-income">
-                    {fmt.format(p.amount)}
+                    {formatCurrency(p.amount)}
                   </td>
                 </tr>
               ))}

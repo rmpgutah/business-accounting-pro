@@ -14,6 +14,7 @@ import {
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { FileText as FileTextNav } from 'lucide-react';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -48,13 +49,6 @@ interface ClientDetailProps {
   onBack: () => void;
   onEdit: (id: string) => void;
 }
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-});
 
 // ─── Status Badge ───────────────────────────────────────
 const statusBadgeClass: Record<string, string> = {
@@ -243,15 +237,15 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         <div className="space-y-4">
           <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: '2px' }}>
             <span className="stat-label">Total Invoiced</span>
-            <span className="stat-value text-text-primary">{fmt.format(stats.totalInvoiced)}</span>
+            <span className="stat-value text-text-primary">{formatCurrency(stats.totalInvoiced)}</span>
           </div>
           <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: '2px' }}>
             <span className="stat-label">Total Paid</span>
-            <span className="stat-value text-accent-income">{fmt.format(stats.totalPaid)}</span>
+            <span className="stat-value text-accent-income">{formatCurrency(stats.totalPaid)}</span>
           </div>
           <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: '2px' }}>
             <span className="stat-label">Outstanding</span>
-            <span className="stat-value text-accent-warning">{fmt.format(stats.outstanding)}</span>
+            <span className="stat-value text-accent-warning">{formatCurrency(stats.outstanding)}</span>
           </div>
         </div>
       </div>
@@ -332,8 +326,8 @@ const InvoicesTable: React.FC<{ data: any[] }> = ({ data }) => (
               {inv.status}
             </span>
           </td>
-          <td className="font-mono text-text-primary">{fmt.format(inv.total ?? 0)}</td>
-          <td className="font-mono text-text-secondary">{fmt.format(inv.amount_paid ?? 0)}</td>
+          <td className="font-mono text-text-primary">{formatCurrency(inv.total ?? 0)}</td>
+          <td className="font-mono text-text-secondary">{formatCurrency(inv.amount_paid ?? 0)}</td>
         </tr>
       ))}
     </tbody>
@@ -356,7 +350,7 @@ const ProjectsTable: React.FC<{ data: any[] }> = ({ data }) => (
           <td>
             <span className="block-badge block-badge-blue">{p.status ?? 'active'}</span>
           </td>
-          <td className="font-mono text-text-secondary">{p.budget ? fmt.format(p.budget) : '--'}</td>
+          <td className="font-mono text-text-secondary">{p.budget ? formatCurrency(p.budget) : '--'}</td>
         </tr>
       ))}
     </tbody>

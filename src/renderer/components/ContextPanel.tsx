@@ -1,6 +1,7 @@
 // src/renderer/components/ContextPanel.tsx
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
+import { formatCurrency, formatDate } from '../lib/format';
 
 interface ClientContextProps { clientId: string | null; companyId: string; }
 
@@ -27,15 +28,15 @@ export const ClientContext: React.FC<ClientContextProps> = ({ clientId, companyI
       <div className="font-black uppercase tracking-wider text-indigo-600 text-[10px] mb-2">Client Overview</div>
       <div className="flex justify-between">
         <span className="text-gray-500">Outstanding</span>
-        <span className={`font-bold ${Number(data.outstanding) > 0 ? 'text-orange-600' : 'text-gray-700'}`}>${Number(data.outstanding).toFixed(2)}</span>
+        <span className={`font-bold ${Number(data.outstanding) > 0 ? 'text-orange-600' : 'text-gray-700'}`}>{formatCurrency(data.outstanding)}</span>
       </div>
       <div className="flex justify-between">
         <span className="text-gray-500">Last Payment</span>
-        <span className="font-bold">{data.lastPayment ? new Date(data.lastPayment).toLocaleDateString() : '—'}</span>
+        <span className="font-bold">{formatDate(data.lastPayment)}</span>
       </div>
       <div className="flex justify-between">
         <span className="text-gray-500">Invoiced YTD</span>
-        <span className="font-bold">${Number(data.ytd).toFixed(2)}</span>
+        <span className="font-bold">{formatCurrency(data.ytd)}</span>
       </div>
     </div>
   );
@@ -65,12 +66,12 @@ export const CategoryContext: React.FC<CategoryContextProps> = ({ categoryId, co
       <div className="font-black uppercase tracking-wider text-[10px] mb-2 text-gray-500">Category This Month</div>
       <div className="flex justify-between">
         <span className="text-gray-500">Spent</span>
-        <span className={`font-bold ${over ? 'text-red-600' : ''}`}>${Number(data.month_spend).toFixed(2)}</span>
+        <span className={`font-bold ${over ? 'text-red-600' : ''}`}>{formatCurrency(data.month_spend)}</span>
       </div>
       {Number(data.budget) > 0 && (
         <div className="flex justify-between">
           <span className="text-gray-500">Budget</span>
-          <span className="font-bold">${Number(data.budget).toFixed(2)}</span>
+          <span className="font-bold">{formatCurrency(data.budget)}</span>
         </div>
       )}
       {over && <div className="text-red-600 font-bold text-[10px] uppercase tracking-wider">Over budget</div>}

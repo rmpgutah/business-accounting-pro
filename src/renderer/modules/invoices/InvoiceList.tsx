@@ -29,14 +29,6 @@ interface Client {
 
 type StatusTab = 'all' | InvoiceStatus;
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 // ─── Status Badge Map ──────────────���────────────────────
 const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
@@ -360,13 +352,13 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     <td className="text-text-secondary">{inv.issue_date}</td>
                     <td className="text-text-secondary">{inv.due_date}</td>
                     <td className="text-right font-mono text-text-primary">
-                      {fmt.format(inv.total)}
+                      {formatCurrency(inv.total)}
                     </td>
                     <td className="text-right font-mono text-text-secondary">
-                      {fmt.format(inv.amount_paid)}
+                      {formatCurrency(inv.amount_paid)}
                     </td>
                     <td className="text-right font-mono text-text-primary">
-                      {fmt.format(balance)}
+                      {formatCurrency(balance)}
                     </td>
                     <td>
                       <span className={badge.className}>{badge.label}</span>
