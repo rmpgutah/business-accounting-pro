@@ -11,6 +11,8 @@ import DebtForm from './DebtForm';
 import DebtDetail from './DebtDetail';
 import PaymentForm from './PaymentForm';
 import CommunicationForm from './CommunicationForm';
+import EvidenceForm from './EvidenceForm';
+import ContactForm from './ContactForm';
 import PipelineView from './PipelineView';
 
 // ─── Types ──────────────────────────────────────────────
@@ -227,17 +229,27 @@ const DebtCollectionModule: React.FC = () => {
       )}
 
       {/* Modals — Evidence */}
-      {modalState.evidence && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          EvidenceModal debtId=&quot;{activeDebtId}&quot; onClose — to be implemented
-        </div>
+      {modalState.evidence && activeDebtId && (
+        <EvidenceForm
+          debtId={activeDebtId}
+          onClose={() => closeModal('evidence')}
+          onSaved={() => {
+            closeModal('evidence');
+            setListKey((k) => k + 1);
+          }}
+        />
       )}
 
       {/* Modals — Contact */}
-      {modalState.contact && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          ContactModal debtId=&quot;{activeDebtId}&quot; onClose — to be implemented
-        </div>
+      {modalState.contact && activeDebtId && (
+        <ContactForm
+          debtId={activeDebtId}
+          onClose={() => closeModal('contact')}
+          onSaved={() => {
+            closeModal('contact');
+            setListKey((k) => k + 1);
+          }}
+        />
       )}
     </div>
   );
