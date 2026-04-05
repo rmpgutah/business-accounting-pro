@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { FieldLabel } from '../../components/FieldLabel';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ClientContext } from '../../components/ContextPanel';
@@ -431,9 +432,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           {/* Client */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Client
-            </label>
+            <FieldLabel label="Client" tooltip="The client this invoice will be billed to" required />
             <select
               className="block-select"
               value={form.client_id}
@@ -464,9 +463,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
           {/* Issue Date */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Issue Date
-            </label>
+            <FieldLabel label="Issue Date" tooltip="The date the invoice is created and sent" />
             <input
               type="date"
               className="block-input"
@@ -477,9 +474,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
           {/* Due Date */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Due Date
-            </label>
+            <FieldLabel label="Due Date" tooltip="Payment is expected by this date; overdue status triggers after this date" />
             <input
               type="date"
               className="block-input"
@@ -651,9 +646,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       {/* Notes & Terms */}
       <div className="grid grid-cols-2 gap-6">
         <div>
-          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-            Notes
-          </label>
+          <FieldLabel label="Notes" tooltip="Optional notes printed at the bottom of the invoice PDF" />
           <textarea
             className="block-input"
             rows={4}
