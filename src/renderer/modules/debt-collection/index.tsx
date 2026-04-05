@@ -5,6 +5,7 @@ import {
   GitBranch,
   Gavel,
   BarChart3,
+  Settings,
 } from 'lucide-react';
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
@@ -16,6 +17,7 @@ import ContactForm from './ContactForm';
 import PipelineView from './PipelineView';
 import LegalToolkit from './LegalToolkit';
 import AnalyticsView from './AnalyticsView';
+import AutomationSettings from './AutomationSettings';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -61,6 +63,9 @@ const DebtCollectionModule: React.FC = () => {
   const [activeDebtId, setActiveDebtId] = useState<string | null>(null);
   const [debtFormType, setDebtFormType] = useState<DebtFormType>('receivable');
   const [listKey, setListKey] = useState(0);
+
+  // Settings modal
+  const [showSettings, setShowSettings] = useState(false);
 
   // Modal state
   const [modalState, setModalState] = useState<ModalState>({
@@ -117,7 +122,7 @@ const DebtCollectionModule: React.FC = () => {
   return (
     <div className="p-6 h-full overflow-y-auto">
       {/* Tabs */}
-      <div className="flex border-b border-border-primary mb-6">
+      <div className="flex items-center border-b border-border-primary mb-6">
         <TabBtn
           active={tab === 'receivables'}
           icon={<ArrowDownCircle size={16} />}
@@ -148,6 +153,16 @@ const DebtCollectionModule: React.FC = () => {
           label="Analytics"
           onClick={() => switchTab('analytics')}
         />
+        <div className="ml-auto">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text-primary transition-colors"
+            style={{ borderRadius: '2px' }}
+            title="Escalation Settings"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Content — Detail view (any tab) */}
@@ -250,6 +265,11 @@ const DebtCollectionModule: React.FC = () => {
             setListKey((k) => k + 1);
           }}
         />
+      )}
+
+      {/* Modals — Automation Settings */}
+      {showSettings && (
+        <AutomationSettings onClose={() => setShowSettings(false)} />
       )}
     </div>
   );
