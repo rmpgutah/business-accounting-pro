@@ -14,6 +14,7 @@ import CommunicationForm from './CommunicationForm';
 import EvidenceForm from './EvidenceForm';
 import ContactForm from './ContactForm';
 import PipelineView from './PipelineView';
+import LegalToolkit from './LegalToolkit';
 import AnalyticsView from './AnalyticsView';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -196,9 +197,7 @@ const DebtCollectionModule: React.FC = () => {
       )}
 
       {tab === 'legal' && view === 'list' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          LegalToolkit onViewDebt — to be implemented
-        </div>
+        <LegalToolkit onOpenEvidence={() => openModal('evidence')} />
       )}
 
       {tab === 'analytics' && view === 'list' && (
