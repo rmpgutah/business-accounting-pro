@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { FieldLabel } from '../../components/FieldLabel';
 
 const CONDITION_FIELDS: Record<string, string[]> = {
   pricing:    ['client_id','invoice_total','quantity','line_item_category'],
@@ -70,7 +71,7 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
         <div className="p-4 space-y-4">
           {error && <div className="bg-red-50 border border-red-300 text-red-700 text-xs p-2">{error}</div>}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-1">Rule Name</label>
+            <FieldLabel label="Rule Name" tooltip="A descriptive name shown in the Rules list and in audit logs" />
             <input
               className="block-input"
               value={name}
@@ -79,7 +80,7 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
             />
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-1">Priority (lower = evaluated first)</label>
+            <FieldLabel label="Priority" tooltip="Lower numbers are evaluated first; use 0 for highest priority" />
             <input
               className="block-input w-32"
               value={priority}
@@ -90,7 +91,7 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-xs font-bold uppercase tracking-wider">Conditions (ALL must match)</label>
+              <FieldLabel label="Conditions" tooltip="All conditions must match for the rule to fire (AND logic)" />
               <button onClick={addCondition} className="flex items-center gap-1 text-xs text-indigo-600 font-bold hover:underline"><Plus size={12} /> Add Condition</button>
             </div>
             {conditions.map((c, i) => (
@@ -123,7 +124,7 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-xs font-bold uppercase tracking-wider">Actions</label>
+              <FieldLabel label="Actions" tooltip="What happens when all conditions match" />
               <button onClick={addAction} className="flex items-center gap-1 text-xs text-indigo-600 font-bold hover:underline"><Plus size={12} /> Add Action</button>
             </div>
             {actions.map((a, i) => (

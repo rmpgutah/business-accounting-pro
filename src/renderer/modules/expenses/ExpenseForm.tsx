@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
+import { FieldLabel } from '../../components/FieldLabel';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -244,9 +245,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         <div className="grid grid-cols-3 gap-5">
           {/* Date */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Date <span className="text-accent-expense">*</span>
-            </label>
+            <FieldLabel label="Date" required tooltip="The date the expense was incurred, not necessarily when paid" />
             <input
               type="date"
               name="date"
@@ -259,9 +258,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Amount */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Amount <span className="text-accent-expense">*</span>
-            </label>
+            <FieldLabel label="Amount" required tooltip="Total amount of the expense including any taxes" />
             <div className="relative">
               <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
@@ -300,9 +297,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Description — full width */}
           <div className="col-span-3">
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Description
-            </label>
+            <FieldLabel label="Description" tooltip="Brief description for your records — appears in expense reports" />
             <input
               type="text"
               name="description"
@@ -315,9 +310,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Category */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Category
-            </label>
+            <FieldLabel label="Category" tooltip="Expense category used for reporting and budget tracking" />
             <select
               name="category_id"
               className="block-select"
@@ -334,9 +327,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Expense Account */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Expense Account
-            </label>
+            <FieldLabel label="Expense Account" tooltip="The chart of accounts account this expense is posted to" />
             <select
               name="account_id"
               className="block-select"
@@ -352,9 +343,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Vendor */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Vendor
-            </label>
+            <FieldLabel label="Vendor" tooltip="The supplier or vendor this expense was paid to" />
             <select
               name="vendor_id"
               className="block-select"
@@ -467,9 +456,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Receipt Attachment */}
           <div className="col-span-3">
-            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-              Receipt Attachment
-            </label>
+            <FieldLabel label="Receipt Attachment" tooltip="Attach a photo or scan of the receipt for audit purposes" />
             {receiptPath ? (
               <div
                 className="border border-border-secondary flex items-center justify-between px-4 py-3 bg-bg-tertiary"
