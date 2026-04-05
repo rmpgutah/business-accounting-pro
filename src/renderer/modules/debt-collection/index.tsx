@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
+import DebtDetail from './DebtDetail';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
@@ -141,10 +142,14 @@ const DebtCollectionModule: React.FC = () => {
       </div>
 
       {/* Content — Detail view (any tab) */}
-      {view === 'detail' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          DebtDetail debtId=&quot;{activeDebtId}&quot; onBack onEdit onOpenCommunication onOpenPayment onOpenEvidence onOpenContact — to be implemented
-        </div>
+      {view === 'detail' && activeDebtId && (
+        <DebtDetail
+          debtId={activeDebtId}
+          onBack={handleBack}
+          onEdit={() => handleEditDebt(activeDebtId)}
+          onRefresh={() => setListKey((k) => k + 1)}
+          onOpenModal={openModal}
+        />
       )}
 
       {/* Content — Form view (any tab) */}
