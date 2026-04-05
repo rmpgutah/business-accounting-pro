@@ -15,7 +15,6 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
-import { FileText as FileTextNav } from 'lucide-react';
 import { formatCurrency, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
@@ -160,7 +159,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               nav.goTo('invoicing');
             }}
           >
-            <FileTextNav size={14} />
+            <FileText size={14} />
             New Invoice
           </button>
           <button
