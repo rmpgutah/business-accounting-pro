@@ -271,7 +271,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           <span className="text-sm text-text-muted font-mono">Loading clients...</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">
+        <div className="flex flex-col items-center gap-3">
           <EmptyState icon={Users} message="No clients found" />
           {clients.length === 0 && (
             <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>

@@ -7,10 +7,10 @@ import {
   MapPin,
   FileText,
   FolderKanban,
+  FolderOpen,
   Clock,
   Paperclip,
   Edit,
-  Users,
 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
@@ -271,7 +271,15 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               Loading {activeTab}...
             </div>
           ) : tabData.length === 0 ? (
-            <EmptyState icon={Users} message={`No ${activeTab} found for this client`} />
+            <EmptyState
+              icon={
+                activeTab === 'invoices' ? FileText
+                : activeTab === 'projects' ? FolderOpen
+                : activeTab === 'time' ? Clock
+                : FileText
+              }
+              message={`No ${activeTab} found for this client`}
+            />
           ) : (
             <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
               {activeTab === 'invoices' && <InvoicesTable data={tabData} />}

@@ -315,7 +315,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="empty-state">
+        <div className="flex flex-col items-center gap-3">
           <EmptyState icon={FileText} message="No bills found" />
           <button
             className="block-btn-primary mt-4 flex items-center gap-2"
