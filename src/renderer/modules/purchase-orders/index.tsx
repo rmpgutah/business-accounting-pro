@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -249,13 +250,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
         {loading ? (
           <div className="text-text-muted text-xs font-mono p-6 text-center">Loading...</div>
         ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <ShoppingCart size={32} />
-            </div>
-            <div className="text-text-secondary text-sm">No purchase orders found</div>
-            <div className="text-text-muted text-xs mt-1">Create your first PO to get started</div>
-          </div>
+          <EmptyState icon={ShoppingCart} message="No purchase orders found" />
         ) : (
           <table className="block-table w-full">
             <thead>

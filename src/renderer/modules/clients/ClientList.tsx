@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { UserCircle, Plus, Search, Filter, ArrowUpDown, Download, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { UserCircle, Plus, Search, Filter, ArrowUpDown, Download, Trash2, CheckCircle, XCircle, Users } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -271,15 +272,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <UserCircle size={28} className="text-text-muted" />
-          </div>
-          <p className="text-sm font-semibold text-text-secondary mb-1">No clients found</p>
-          <p className="text-xs text-text-muted mb-4">
-            {clients.length === 0
-              ? 'Get started by adding your first client.'
-              : 'Try adjusting your search or filters.'}
-          </p>
+          <EmptyState icon={Users} message="No clients found" />
           {clients.length === 0 && (
             <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>
               <Plus size={14} />

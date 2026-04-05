@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -276,15 +277,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <DollarSign size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-secondary font-medium">No expenses found</p>
-          <p className="text-xs text-text-muted mt-1">
-            Create your first expense or adjust the filters above.
-          </p>
-        </div>
+        <EmptyState icon={Receipt} message="No expenses found" />
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <table className="block-table">

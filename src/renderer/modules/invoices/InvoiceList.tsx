@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
@@ -272,10 +273,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <FileText size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-muted">No invoices found.</p>
+          <EmptyState icon={FileText} message="No invoices found" />
           <button
             className="block-btn-primary mt-4 flex items-center gap-2"
             onClick={onNewInvoice}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { FolderKanban, Plus, Clock, Search } from 'lucide-react';
+import { FolderKanban, Plus, Clock, Search, FolderOpen } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -230,15 +231,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <FolderKanban size={28} className="text-text-muted" />
-          </div>
-          <p className="text-sm font-semibold text-text-secondary mb-1">No projects found</p>
-          <p className="text-xs text-text-muted mb-4">
-            {projects.length === 0
-              ? 'Get started by creating your first project.'
-              : 'Try adjusting your search or filters.'}
-          </p>
+          <EmptyState icon={FolderOpen} message="No projects found" />
           {projects.length === 0 && (
             <button
               className="block-btn-primary inline-flex items-center gap-1.5"

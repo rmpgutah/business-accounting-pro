@@ -12,6 +12,7 @@ import {
   Edit,
   Copy,
 } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatStatus } from '../../lib/format';
@@ -315,10 +316,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <FileText size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-muted">No bills found.</p>
+          <EmptyState icon={FileText} message="No bills found" />
           <button
             className="block-btn-primary mt-4 flex items-center gap-2"
             onClick={onNew}

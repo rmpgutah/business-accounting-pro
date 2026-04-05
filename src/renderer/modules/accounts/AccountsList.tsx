@@ -5,7 +5,9 @@ import {
   Plus,
   ToggleLeft,
   ToggleRight,
+  BookOpen,
 } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ImportWizard } from '../../components/ImportWizard';
@@ -288,11 +290,8 @@ const AccountsList: React.FC<AccountsListProps> = ({
 
             {accounts.length === 0 && (
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-8 text-center text-sm text-text-muted"
-                >
-                  No accounts found. Create your first account to get started.
+                <td colSpan={6} className="px-4 py-8">
+                  <EmptyState icon={BookOpen} message="No accounts found" />
                 </td>
               </tr>
             )}

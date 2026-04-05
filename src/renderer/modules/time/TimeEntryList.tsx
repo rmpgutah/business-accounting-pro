@@ -7,6 +7,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
@@ -172,15 +173,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
 
       {/* Day Groups */}
       {dayGroups.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <Clock size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-muted">No time entries this week</p>
-          <p className="text-xs text-text-muted mt-1">
-            Start the timer or add a manual entry
-          </p>
-        </div>
+        <EmptyState icon={Clock} message="No time entries this week" />
       )}
 
       {dayGroups.map((group) => (

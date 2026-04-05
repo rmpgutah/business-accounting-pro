@@ -10,7 +10,9 @@ import {
   Clock,
   Paperclip,
   Edit,
+  Users,
 } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { FileText as FileTextNav } from 'lucide-react';
@@ -269,12 +271,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               Loading {activeTab}...
             </div>
           ) : tabData.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                {tabs.find((t) => t.key === activeTab)?.icon}
-              </div>
-              <p className="text-sm text-text-secondary">No {activeTab} found for this client.</p>
-            </div>
+            <EmptyState icon={Users} message={`No ${activeTab} found for this client`} />
           ) : (
             <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
               {activeTab === 'invoices' && <InvoicesTable data={tabData} />}
