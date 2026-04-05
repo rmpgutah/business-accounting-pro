@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
+import { formatCurrency } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
@@ -233,9 +234,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
       {/* Summary Bar */}
       {expenseSummary && (
         <SummaryBar items={[
-          { label: 'This Month', value: `$${Number(expenseSummary.month_total).toFixed(2)}` },
+          { label: 'This Month', value: formatCurrency(expenseSummary.month_total), tooltip: 'Total expenses recorded in the current calendar month' },
           { label: 'Top Category', value: expenseSummary.top_category ?? '—' },
-          ...(Number(expenseSummary.over_budget_count) > 0 ? [{ label: 'Over Budget', value: `${expenseSummary.over_budget_count} categories`, accent: 'red' as const }] : []),
+          ...(Number(expenseSummary.over_budget_count) > 0
+            ? [{ label: 'Over Budget', value: `${expenseSummary.over_budget_count} categories`, accent: 'red' as const, tooltip: 'Categories where spending this month exceeds the budget line' }]
+            : []),
         ]} />
       )}
 

@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
+import { formatCurrency } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
@@ -238,8 +239,8 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       {/* Summary Bar */}
       {clientSummary && (
         <SummaryBar items={[
-          { label: 'Total Receivables', value: `$${Number(clientSummary.total_receivables).toFixed(2)}`, accent: 'orange' },
-          { label: 'Clients Overdue', value: String(clientSummary.overdue_clients ?? 0), accent: Number(clientSummary.overdue_clients) > 0 ? 'red' : 'default' },
+          { label: 'Total Receivables', value: formatCurrency(clientSummary.total_receivables), accent: 'orange', tooltip: 'Sum of all outstanding invoice balances across overdue clients' },
+          { label: 'Clients Overdue', value: String(clientSummary.overdue_clients ?? 0), accent: Number(clientSummary.overdue_clients) > 0 ? 'red' as const : 'default' as const, tooltip: 'Number of clients with at least one overdue invoice' },
         ]} />
       )}
 

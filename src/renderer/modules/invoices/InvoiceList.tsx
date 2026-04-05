@@ -5,6 +5,7 @@ import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -244,9 +245,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       {/* Summary Bar */}
       {invoiceSummary && (
         <SummaryBar items={[
-          { label: 'Outstanding', value: `$${Number(invoiceSummary.outstanding).toFixed(2)}`, accent: 'orange' },
-          { label: 'Overdue', value: `$${Number(invoiceSummary.overdue).toFixed(2)}`, accent: 'red' },
-          { label: 'Collected This Month', value: `$${Number(invoiceSummary.collected_month).toFixed(2)}`, accent: 'green' },
+          { label: 'Outstanding', value: formatCurrency(invoiceSummary.outstanding), accent: 'orange', tooltip: 'Total unpaid invoices not yet overdue' },
+          { label: 'Overdue', value: formatCurrency(invoiceSummary.overdue), accent: 'red', tooltip: 'Invoices past their due date with remaining balance' },
+          { label: 'Collected This Month', value: formatCurrency(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
         ]} />
       )}
 
