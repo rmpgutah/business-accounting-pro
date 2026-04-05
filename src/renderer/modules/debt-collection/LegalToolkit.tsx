@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { FileText, Gavel, Clock, Scale } from 'lucide-react';
+import { FileText, Gavel, Clock, Scale, Package } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatStatus } from '../../lib/format';
 import DemandLetterGenerator from './DemandLetterGenerator';
 import CourtFilingTracker from './CourtFilingTracker';
 import StatuteTracker from './StatuteTracker';
+import BundleExport from './BundleExport';
 
 // ─── Types ──────────────────────────────────────────────
-type SubTab = 'evidence' | 'demand_letters' | 'court_filings' | 'statute_tracker';
+type SubTab = 'evidence' | 'demand_letters' | 'court_filings' | 'statute_tracker' | 'bundle';
 
 interface LegalToolkitProps {
   onOpenEvidence: () => void;
@@ -135,6 +136,12 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
           label="Evidence"
           onClick={() => setSubTab('evidence')}
         />
+        <SubTabBtn
+          active={subTab === 'bundle'}
+          icon={<Package size={14} />}
+          label="Export Bundle"
+          onClick={() => setSubTab('bundle')}
+        />
       </div>
 
       {/* Content */}
@@ -154,7 +161,7 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
         <StatuteTracker companyId={activeCompany.id} />
       )}
 
-      {!selectedDebtId && subTab !== 'evidence' && subTab !== 'statute_tracker' && (
+      {!selectedDebtId && subTab !== 'evidence' && subTab !== 'statute_tracker' && subTab !== 'bundle' && (
         <div className="block-card text-center py-12">
           <Gavel size={32} className="mx-auto text-text-muted mb-3" />
           <p className="text-text-muted text-sm">
@@ -169,6 +176,19 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
 
       {selectedDebtId && subTab === 'court_filings' && (
         <CourtFilingTracker debtId={selectedDebtId} />
+      )}
+
+      {subTab === 'bundle' && !selectedDebtId && (
+        <div className="block-card text-center py-12">
+          <Package size={32} className="mx-auto text-text-muted mb-3" />
+          <p className="text-text-muted text-sm">
+            Select a debt above to generate a court bundle.
+          </p>
+        </div>
+      )}
+
+      {selectedDebtId && subTab === 'bundle' && (
+        <BundleExport debtId={selectedDebtId} />
       )}
     </div>
   );
