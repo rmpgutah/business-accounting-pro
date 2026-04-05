@@ -32,6 +32,7 @@ import {
   FileInput,
   ClipboardList,
   Boxes,
+  Scale,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -77,6 +78,7 @@ const sections: NavSection[] = [
       { id: 'stripe-sync', label: 'Stripe Sync', icon: CreditCard },
       { id: 'bills', label: 'Bills (AP)', icon: FileInput },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
+      { id: 'debt-collection', label: 'Debt Collection', icon: Scale },
     ],
   },
   {
