@@ -11,6 +11,7 @@ import DebtForm from './DebtForm';
 import DebtDetail from './DebtDetail';
 import PaymentForm from './PaymentForm';
 import CommunicationForm from './CommunicationForm';
+import PipelineView from './PipelineView';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
@@ -186,9 +187,7 @@ const DebtCollectionModule: React.FC = () => {
       )}
 
       {tab === 'pipeline' && view === 'list' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          PipelineView onViewDebt — to be implemented
-        </div>
+        <PipelineView onViewDebt={handleViewDebt} />
       )}
 
       {tab === 'legal' && view === 'list' && (
