@@ -37,6 +37,9 @@ export function initDatabase(): Database.Database {
     "ALTER TABLE categories ADD COLUMN color TEXT DEFAULT '#6b7280'",
     "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''",
     "ALTER TABLE categories ADD COLUMN is_active INTEGER DEFAULT 1",
+    // Rules engine additions (2026-04-01)
+    "ALTER TABLE invoices ADD COLUMN rules_applied TEXT DEFAULT '[]'",
+    "ALTER TABLE expenses ADD COLUMN rules_applied TEXT DEFAULT '[]'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
