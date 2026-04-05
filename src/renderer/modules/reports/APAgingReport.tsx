@@ -4,14 +4,8 @@ import { Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { formatCurrency } from '../../lib/format';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Types ──────────────────────────────────────────────
 interface BillRow {
@@ -183,7 +177,7 @@ const APAgingReport: React.FC = () => {
                   {BUCKET_LABELS[key]}
                 </p>
                 <p className="text-lg font-bold font-mono text-text-primary">
-                  {fmt.format(bucketTotals[key])}
+                  {formatCurrency(bucketTotals[key])}
                 </p>
                 <p className="text-[10px] text-text-muted mt-0.5">
                   {entries.filter((e) => e.bucket === key).length} bill
@@ -202,7 +196,7 @@ const APAgingReport: React.FC = () => {
               Total Outstanding Payables
             </span>
             <span className="text-lg font-bold font-mono text-accent-expense">
-              {fmt.format(grandTotal)}
+              {formatCurrency(grandTotal)}
             </span>
           </div>
 
@@ -232,7 +226,7 @@ const APAgingReport: React.FC = () => {
                       </td>
                       <td className="text-text-secondary">{entry.vendorName}</td>
                       <td className="text-right font-mono text-accent-expense">
-                        {fmt.format(entry.amountDue)}
+                        {formatCurrency(entry.amountDue)}
                       </td>
                       <td className="text-right font-mono text-text-secondary">
                         {entry.daysOutstanding}
@@ -251,7 +245,7 @@ const APAgingReport: React.FC = () => {
                       {bucketFilter === 'all' ? 'Total' : `${BUCKET_LABELS[bucketFilter]} Total`}
                     </td>
                     <td className="text-right font-mono font-bold text-accent-expense">
-                      {fmt.format(filtered.reduce((s, e) => s + e.amountDue, 0))}
+                      {formatCurrency(filtered.reduce((s, e) => s + e.amountDue, 0))}
                     </td>
                     <td colSpan={2} />
                   </tr>

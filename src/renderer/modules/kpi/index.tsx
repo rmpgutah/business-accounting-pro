@@ -21,19 +21,12 @@ import {
 } from 'recharts';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+import { formatCurrency } from '../../lib/format';
 
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return fmt.format(value);
+  return formatCurrency(value);
 };
 
 // ─── Types ──────────────────────────────────────────────
@@ -65,7 +58,7 @@ const MarginTooltip: React.FC<any> = ({ active, payload, label }) => {
       {payload.map((p: any) => (
         <p key={p.dataKey} style={{ color: p.color }} className="font-mono">
           {p.dataKey === 'margin' ? 'Gross Margin' : p.dataKey}:{' '}
-          {p.dataKey === 'margin' ? `${p.value.toFixed(1)}%` : fmt.format(p.value)}
+          {p.dataKey === 'margin' ? `${p.value.toFixed(1)}%` : formatCurrency(p.value)}
         </p>
       ))}
     </div>
@@ -344,9 +337,9 @@ const KPIDashboard: React.FC = () => {
             <DollarSign size={14} className="text-accent-income" />
             <span className="stat-label">Revenue per Billable Hour</span>
           </div>
-          <p className="stat-value text-accent-income">{fmt.format(revenuePerHour)}</p>
+          <p className="stat-value text-accent-income">{formatCurrency(revenuePerHour)}</p>
           <span className="text-xs text-text-muted">
-            {fmt.format(totalRevenue)} total revenue
+            {formatCurrency(totalRevenue)} total revenue
           </span>
         </div>
 
@@ -407,7 +400,7 @@ const KPIDashboard: React.FC = () => {
             {profitMargin.toFixed(1)}%
           </p>
           <span className="text-xs text-text-muted">
-            {fmt.format(totalRevenue - totalExpenses)} net profit
+            {formatCurrency(totalRevenue - totalExpenses)} net profit
           </span>
         </div>
       </div>
@@ -465,7 +458,7 @@ const KPIDashboard: React.FC = () => {
             <span className="stat-label">Revenue per Employee</span>
           </div>
           <p className="stat-value text-accent-purple">
-            {fmt.format(revenuePerEmployee)}
+            {formatCurrency(revenuePerEmployee)}
           </p>
           <span className="text-xs text-text-muted">
             {employeeCount} active employee{employeeCount !== 1 ? 's' : ''}
@@ -533,7 +526,7 @@ const KPIDashboard: React.FC = () => {
             <span className="stat-label">Monthly Burn Rate</span>
           </div>
           <p className="stat-value" style={{ color: burnRateColor }}>
-            {fmt.format(monthlyBurnRate)}
+            {formatCurrency(monthlyBurnRate)}
           </p>
           <span className="text-xs text-text-muted">
             Average of last 6 months expenses
@@ -602,7 +595,7 @@ const KPIDashboard: React.FC = () => {
                     {client.client_name}
                   </span>
                   <span className="text-sm font-mono text-text-secondary">
-                    {fmt.format(client.total_revenue)}
+                    {formatCurrency(client.total_revenue)}
                   </span>
                 </div>
                 <div

@@ -17,19 +17,12 @@ import {
 } from 'recharts';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+import { formatCurrency, formatDate } from '../../lib/format';
 
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return fmt.format(value);
+  return formatCurrency(value);
 };
 
 // ─── Types ──────────────────────────────────────────────
@@ -104,7 +97,7 @@ function projectNext(
 function futureMonthLabel(offsetFromNow: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + offsetFromNow);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  return formatDate(d.toISOString());
 }
 
 // ─── Scenario Config ────────────────────────────────────
@@ -150,7 +143,7 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
           {p.dataKey === 'actual'
             ? 'Actual'
             : p.dataKey.charAt(0).toUpperCase() + p.dataKey.slice(1)}
-          : {fmt.format(p.value)}
+          : {formatCurrency(p.value)}
         </p>
       ))}
     </div>
@@ -412,13 +405,13 @@ const Forecasting: React.FC = () => {
             <span className="stat-label">Projected Revenue (Next Quarter)</span>
           </div>
           <p className="stat-value text-accent-income">
-            {fmt.format(totalProjectedRevenue)}
+            {formatCurrency(totalProjectedRevenue)}
           </p>
           <span className="text-xs text-text-muted">
-            ~{fmt.format(totalProjectedRevenue / 3)} / month avg
+            ~{formatCurrency(totalProjectedRevenue / 3)} / month avg
             {whatIfRevenue > 0 && (
               <span className="text-accent-purple ml-1">
-                (includes +{fmt.format(whatIfRevenue)}/mo what-if)
+                (includes +{formatCurrency(whatIfRevenue)}/mo what-if)
               </span>
             )}
           </span>
@@ -430,10 +423,10 @@ const Forecasting: React.FC = () => {
             <span className="stat-label">Projected Expenses (Next Quarter)</span>
           </div>
           <p className="stat-value text-accent-expense">
-            {fmt.format(totalProjectedExpenses)}
+            {formatCurrency(totalProjectedExpenses)}
           </p>
           <span className="text-xs text-text-muted">
-            ~{fmt.format(totalProjectedExpenses / 3)} / month avg
+            ~{formatCurrency(totalProjectedExpenses / 3)} / month avg
           </span>
         </div>
 
@@ -459,7 +452,7 @@ const Forecasting: React.FC = () => {
                   : 'var(--color-accent-expense)',
             }}
           >
-            {fmt.format(totalProjectedCashflow)}
+            {formatCurrency(totalProjectedCashflow)}
           </p>
           <span className="text-xs text-text-muted">Revenue minus expenses</span>
         </div>
@@ -600,7 +593,7 @@ const Forecasting: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-text-secondary">Avg Invoice Value</span>
               <span className="text-sm font-mono text-accent-purple font-semibold">
-                {fmt.format(avgInvoiceValue)}
+                {formatCurrency(avgInvoiceValue)}
               </span>
             </div>
             <input
@@ -641,13 +634,13 @@ const Forecasting: React.FC = () => {
               </span>{' '}
               at{' '}
               <span className="text-accent-purple font-semibold">
-                {fmt.format(avgInvoiceValue)}
+                {formatCurrency(avgInvoiceValue)}
               </span>{' '}
               avg invoice would generate an additional{' '}
               <span className="text-accent-purple font-semibold font-mono">
-                {fmt.format(whatIfRevenue)}
+                {formatCurrency(whatIfRevenue)}
               </span>{' '}
-              per month ({fmt.format(whatIfRevenue * 3)} per quarter).
+              per month ({formatCurrency(whatIfRevenue * 3)} per quarter).
             </p>
           </div>
         )}
@@ -672,10 +665,10 @@ const Forecasting: React.FC = () => {
               <tr key={i}>
                 <td className="font-medium">{row.month}</td>
                 <td className="font-mono text-right text-accent-income">
-                  {fmt.format(row.revenue)}
+                  {formatCurrency(row.revenue)}
                 </td>
                 <td className="font-mono text-right text-accent-expense">
-                  {fmt.format(row.expenses)}
+                  {formatCurrency(row.expenses)}
                 </td>
                 <td
                   className="font-mono text-right font-semibold"
@@ -686,7 +679,7 @@ const Forecasting: React.FC = () => {
                         : 'var(--color-accent-expense)',
                   }}
                 >
-                  {fmt.format(row.net)}
+                  {formatCurrency(row.net)}
                 </td>
               </tr>
             ))}
@@ -694,10 +687,10 @@ const Forecasting: React.FC = () => {
             <tr style={{ borderTop: '2px solid var(--color-border-secondary)' }}>
               <td className="font-bold">Quarter Total</td>
               <td className="font-mono text-right font-bold text-accent-income">
-                {fmt.format(totalProjectedRevenue)}
+                {formatCurrency(totalProjectedRevenue)}
               </td>
               <td className="font-mono text-right font-bold text-accent-expense">
-                {fmt.format(totalProjectedExpenses)}
+                {formatCurrency(totalProjectedExpenses)}
               </td>
               <td
                 className="font-mono text-right font-bold"
@@ -708,7 +701,7 @@ const Forecasting: React.FC = () => {
                       : 'var(--color-accent-expense)',
                 }}
               >
-                {fmt.format(totalProjectedCashflow)}
+                {formatCurrency(totalProjectedCashflow)}
               </td>
             </tr>
           </tbody>
@@ -739,7 +732,7 @@ const Forecasting: React.FC = () => {
                   <tr key={i}>
                     <td>{row.month}</td>
                     <td className="font-mono text-right text-accent-income">
-                      {fmt.format(row.total)}
+                      {formatCurrency(row.total)}
                     </td>
                   </tr>
                 ))}
@@ -770,7 +763,7 @@ const Forecasting: React.FC = () => {
                   <tr key={i}>
                     <td>{row.month}</td>
                     <td className="font-mono text-right text-accent-expense">
-                      {fmt.format(row.total)}
+                      {formatCurrency(row.total)}
                     </td>
                   </tr>
                 ))}

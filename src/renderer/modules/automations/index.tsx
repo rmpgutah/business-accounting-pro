@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, ToggleLeft, ToggleRight, Clock } from 'lucide-react';
 import api from '../../lib/api';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 interface AutomationRule {
@@ -173,7 +174,7 @@ const AutomationsModule: React.FC = () => {
                         <Clock size={11} className={isSelected ? 'text-gray-400' : 'text-gray-400'} />
                         <span className={`text-xs ${isSelected ? 'text-gray-400' : 'text-gray-400'}`}>
                           {rule.last_run_at
-                            ? new Date(rule.last_run_at).toLocaleString()
+                            ? formatDate(rule.last_run_at)
                             : 'Never'}
                         </span>
                       </div>
@@ -297,7 +298,7 @@ const AutomationsModule: React.FC = () => {
                     {runLog.map((entry) => (
                       <tr key={entry.id} className="border-b border-gray-100">
                         <td className="px-4 py-2 text-xs font-mono text-gray-600 whitespace-nowrap">
-                          {new Date(entry.ran_at).toLocaleString()}
+                          {formatDate(entry.ran_at)}
                         </td>
                         <td className="px-4 py-2">
                           <StatusBadge status={entry.status} />

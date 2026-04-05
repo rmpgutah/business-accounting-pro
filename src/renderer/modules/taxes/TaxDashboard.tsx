@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface QuarterPayment {
@@ -20,13 +21,6 @@ interface QuarterPayment {
   paidAmount: number;
 }
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Federal Tax Brackets (Simplified 2024) ─────────────
 const FEDERAL_BRACKETS = [
@@ -191,16 +185,12 @@ const TaxDashboard: React.FC = () => {
               Next Estimated Payment Due
             </span>
             <p className="text-xs text-text-muted mt-0.5">
-              {nextDue.quarter} &mdash; {fmt.format(nextDue.amount)} due by{' '}
-              {new Date(nextDue.dueDate + 'T00:00:00').toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
+              {nextDue.quarter} &mdash; {formatCurrency(nextDue.amount)} due by{' '}
+              {formatDate(nextDue.dueDate)}
             </p>
           </div>
           <span className="text-lg font-mono font-bold text-accent-warning">
-            {fmt.format(nextDue.amount)}
+            {formatCurrency(nextDue.amount)}
           </span>
         </div>
       )}
@@ -209,25 +199,25 @@ const TaxDashboard: React.FC = () => {
       <div className="grid grid-cols-4 gap-4">
         <StatCard
           label="YTD Income"
-          value={fmt.format(ytdIncome)}
+          value={formatCurrency(ytdIncome)}
           icon={<TrendingUp size={16} className="text-accent-income" />}
           accentClass="border-l-accent-income"
         />
         <StatCard
           label="YTD Deductible Expenses"
-          value={fmt.format(ytdExpenses)}
+          value={formatCurrency(ytdExpenses)}
           icon={<DollarSign size={16} className="text-accent-expense" />}
           accentClass="border-l-accent-expense"
         />
         <StatCard
           label="Est. Taxable Income"
-          value={fmt.format(netIncome)}
+          value={formatCurrency(netIncome)}
           icon={<Calculator size={16} className="text-accent-blue" />}
           accentClass="border-l-accent-blue"
         />
         <StatCard
           label="Est. Total Tax Liability"
-          value={fmt.format(totalEstimatedTax)}
+          value={formatCurrency(totalEstimatedTax)}
           icon={<AlertTriangle size={16} className="text-accent-warning" />}
           accentClass="border-l-accent-warning"
           subtitle={`Effective rate: ${effectiveRate.toFixed(1)}%`}
@@ -243,20 +233,20 @@ const TaxDashboard: React.FC = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Federal Income Tax</span>
-              <span className="text-sm font-mono text-text-primary">{fmt.format(federalTax)}</span>
+              <span className="text-sm font-mono text-text-primary">{formatCurrency(federalTax)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">
                 Self-Employment Tax (15.3%)
               </span>
-              <span className="text-sm font-mono text-text-primary">{fmt.format(seTax)}</span>
+              <span className="text-sm font-mono text-text-primary">{formatCurrency(seTax)}</span>
             </div>
             <div
               className="border-t border-border-primary pt-3 flex items-center justify-between"
             >
               <span className="text-sm font-semibold text-text-primary">Total Estimated</span>
               <span className="text-sm font-mono font-bold text-accent-warning">
-                {fmt.format(totalEstimatedTax)}
+                {formatCurrency(totalEstimatedTax)}
               </span>
             </div>
           </div>
@@ -278,10 +268,10 @@ const TaxDashboard: React.FC = () => {
                 <div key={i} className="flex items-center justify-between text-xs">
                   <span className="text-text-muted">
                     {(b.rate * 100).toFixed(0)}% up to{' '}
-                    {b.max === Infinity ? '...' : fmt.format(b.max)}
+                    {b.max === Infinity ? '...' : formatCurrency(b.max)}
                   </span>
                   <span className="font-mono text-text-secondary">
-                    {fmt.format(bracketTaxable)} &rarr; {fmt.format(bracketTax)}
+                    {formatCurrency(bracketTaxable)} &rarr; {formatCurrency(bracketTax)}
                   </span>
                 </div>
               );
@@ -316,20 +306,16 @@ const TaxDashboard: React.FC = () => {
                 <tr key={q.quarter}>
                   <td className="text-text-primary font-medium text-sm">{q.quarter}</td>
                   <td className="font-mono text-text-secondary text-xs">
-                    {new Date(q.dueDate + 'T00:00:00').toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
+                    {formatDate(q.dueDate)}
                   </td>
                   <td className="text-right font-mono text-text-secondary text-sm">
-                    {fmt.format(q.amount)}
+                    {formatCurrency(q.amount)}
                   </td>
                   <td className="text-right font-mono text-accent-income text-sm">
-                    {fmt.format(q.paidAmount)}
+                    {formatCurrency(q.paidAmount)}
                   </td>
                   <td className="text-right font-mono text-text-primary text-sm">
-                    {fmt.format(remaining)}
+                    {formatCurrency(remaining)}
                   </td>
                   <td className="text-center">
                     {q.paid ? (
@@ -356,13 +342,13 @@ const TaxDashboard: React.FC = () => {
                 Total
               </td>
               <td className="text-right font-mono font-bold text-text-primary">
-                {fmt.format(totalEstimatedTax)}
+                {formatCurrency(totalEstimatedTax)}
               </td>
               <td className="text-right font-mono font-bold text-accent-income">
-                {fmt.format(quarters.reduce((s, q) => s + q.paidAmount, 0))}
+                {formatCurrency(quarters.reduce((s, q) => s + q.paidAmount, 0))}
               </td>
               <td className="text-right font-mono font-bold text-text-primary">
-                {fmt.format(
+                {formatCurrency(
                   quarters.reduce((s, q) => s + Math.max(0, q.amount - q.paidAmount), 0)
                 )}
               </td>

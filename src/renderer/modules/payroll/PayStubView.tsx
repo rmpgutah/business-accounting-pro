@@ -3,6 +3,7 @@ import { ArrowLeft, FileText, Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { generatePayStubHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface PayStub {
@@ -36,13 +37,6 @@ interface PayStubViewProps {
   onBack: () => void;
 }
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Component ──────────────────────────────────────────
 const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
@@ -240,14 +234,14 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
                 <td className="py-1.5 text-right font-mono text-text-secondary">
                   {stub.hours > 0 ? stub.hours.toFixed(2) : '--'}
                 </td>
-                <td className="py-1.5 text-right font-mono text-text-primary">{fmt.format(stub.gross_pay)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-primary">{formatCurrency(stub.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.gross_pay)}</td>
               </tr>
               <tr className="border-t border-border-primary font-semibold">
                 <td className="py-1.5 text-text-primary">Gross Pay</td>
                 <td />
-                <td className="py-1.5 text-right font-mono text-text-primary">{fmt.format(stub.gross_pay)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-primary">{formatCurrency(stub.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.gross_pay)}</td>
               </tr>
             </tbody>
           </table>
@@ -267,28 +261,28 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <tbody>
               <tr>
                 <td className="py-1.5 text-text-primary">Federal Income Tax</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.federal_tax)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.federal_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.federal_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.federal_tax)}</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-text-primary">State Income Tax</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.state_tax)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.state_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.state_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.state_tax)}</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-text-primary">Social Security (6.2%)</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.social_security)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.social_security)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.social_security)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.social_security)}</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-text-primary">Medicare (1.45%)</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.medicare)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.medicare)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.medicare)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.medicare)}</td>
               </tr>
               <tr className="border-t border-border-primary font-semibold">
                 <td className="py-1.5 text-text-primary">Total Deductions</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(totalDeductions)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytdTotalDeductions)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(totalDeductions)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytdTotalDeductions)}</td>
               </tr>
             </tbody>
           </table>
@@ -300,13 +294,13 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <div>
               <div className="text-[10px] text-text-muted uppercase tracking-wider">Net Pay</div>
               <div className="text-xl font-bold font-mono text-accent-income mt-1">
-                {fmt.format(stub.net_pay)}
+                {formatCurrency(stub.net_pay)}
               </div>
             </div>
             <div className="text-right">
               <div className="text-[10px] text-text-muted uppercase tracking-wider">YTD Net Pay</div>
               <div className="text-sm font-mono text-text-secondary mt-1">
-                {fmt.format(ytd.net_pay)}
+                {formatCurrency(ytd.net_pay)}
               </div>
             </div>
           </div>

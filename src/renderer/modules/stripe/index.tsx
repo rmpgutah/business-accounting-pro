@@ -10,14 +10,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency, formatDate } from '../../lib/format';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Types ──────────────────────────────────────────────
 interface StripeTransaction {
@@ -268,7 +262,7 @@ const StripeSyncModule: React.FC = () => {
             <DollarSign size={14} className="text-accent-income" />
             <span className="stat-label">Total Synced Payments</span>
           </div>
-          <p className="stat-value text-accent-income">{fmt.format(totalPayments)}</p>
+          <p className="stat-value text-accent-income">{formatCurrency(totalPayments)}</p>
         </div>
 
         <div className="stat-card border-l-2 border-l-accent-warning">
@@ -276,7 +270,7 @@ const StripeSyncModule: React.FC = () => {
             <ArrowDownUp size={14} className="text-accent-warning" />
             <span className="stat-label">Total Fees</span>
           </div>
-          <p className="stat-value text-accent-warning">{fmt.format(totalFees)}</p>
+          <p className="stat-value text-accent-warning">{formatCurrency(totalFees)}</p>
         </div>
 
         <div className="stat-card border-l-2 border-l-accent-blue">
@@ -284,7 +278,7 @@ const StripeSyncModule: React.FC = () => {
             <DollarSign size={14} className="text-accent-blue" />
             <span className="stat-label">Net Revenue</span>
           </div>
-          <p className="stat-value text-accent-blue">{fmt.format(netRevenue)}</p>
+          <p className="stat-value text-accent-blue">{formatCurrency(netRevenue)}</p>
         </div>
       </div>
 
@@ -332,13 +326,13 @@ const StripeSyncModule: React.FC = () => {
                       </span>
                     </td>
                     <td className="font-mono text-right">
-                      {fmt.format(txn.amount ?? 0)}
+                      {formatCurrency(txn.amount ?? 0)}
                     </td>
                     <td className="font-mono text-right text-accent-warning">
-                      {fmt.format(txn.fee ?? 0)}
+                      {formatCurrency(txn.fee ?? 0)}
                     </td>
                     <td className="font-mono text-right text-accent-income">
-                      {fmt.format(txn.net ?? 0)}
+                      {formatCurrency(txn.net ?? 0)}
                     </td>
                     <td className="text-text-secondary">{txn.description || '--'}</td>
                     <td>
@@ -348,7 +342,7 @@ const StripeSyncModule: React.FC = () => {
                     </td>
                     <td className="text-xs text-text-muted">
                       {txn.synced_at
-                        ? new Date(txn.synced_at).toLocaleDateString()
+                        ? formatDate(txn.synced_at)
                         : '--'}
                     </td>
                   </tr>

@@ -4,14 +4,8 @@ import { Printer, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { formatCurrency } from '../../lib/format';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Types ──────────────────────────────────────────────
 interface GLTransaction {
@@ -348,7 +342,7 @@ const GeneralLedger: React.FC = () => {
                   <div className="text-right min-w-[120px]">
                     <span className="text-[10px] text-text-muted block">Closing Balance</span>
                     <span className={`font-mono font-bold text-sm ${acct.closing_balance < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                      {fmt.format(Math.abs(acct.closing_balance))}
+                      {formatCurrency(Math.abs(acct.closing_balance))}
                       <span className="text-[10px] text-text-muted ml-1">
                         {normalSide === 'debit' ? (acct.closing_balance >= 0 ? 'Dr' : 'Cr') : (acct.closing_balance >= 0 ? 'Cr' : 'Dr')}
                       </span>
@@ -380,16 +374,16 @@ const GeneralLedger: React.FC = () => {
                             <td className="text-text-muted text-xs">{txn.reference || '—'}</td>
                             <td className="text-right font-mono text-xs">
                               {txn.type === 'debit'
-                                ? <span className="text-text-primary">{fmt.format(txn.amount)}</span>
+                                ? <span className="text-text-primary">{formatCurrency(txn.amount)}</span>
                                 : <span className="text-text-muted">—</span>}
                             </td>
                             <td className="text-right font-mono text-xs">
                               {txn.type === 'credit'
-                                ? <span className="text-text-primary">{fmt.format(txn.amount)}</span>
+                                ? <span className="text-text-primary">{formatCurrency(txn.amount)}</span>
                                 : <span className="text-text-muted">—</span>}
                             </td>
                             <td className={`text-right font-mono font-semibold text-xs ${(txn.running_balance ?? 0) < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                              {fmt.format(Math.abs(txn.running_balance ?? 0))}
+                              {formatCurrency(Math.abs(txn.running_balance ?? 0))}
                               <span className="text-[10px] text-text-muted ml-1">
                                 {normalSide === 'debit'
                                   ? ((txn.running_balance ?? 0) >= 0 ? 'Dr' : 'Cr')
@@ -405,13 +399,13 @@ const GeneralLedger: React.FC = () => {
                             Period Total
                           </td>
                           <td className="text-right font-mono font-bold text-xs text-text-primary">
-                            {fmt.format(acct.transactions.filter((t) => t.type === 'debit').reduce((s, t) => s + t.amount, 0))}
+                            {formatCurrency(acct.transactions.filter((t) => t.type === 'debit').reduce((s, t) => s + t.amount, 0))}
                           </td>
                           <td className="text-right font-mono font-bold text-xs text-text-primary">
-                            {fmt.format(acct.transactions.filter((t) => t.type === 'credit').reduce((s, t) => s + t.amount, 0))}
+                            {formatCurrency(acct.transactions.filter((t) => t.type === 'credit').reduce((s, t) => s + t.amount, 0))}
                           </td>
                           <td className={`text-right font-mono font-bold text-xs ${acct.closing_balance < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                            {fmt.format(Math.abs(acct.closing_balance))}
+                            {formatCurrency(Math.abs(acct.closing_balance))}
                           </td>
                         </tr>
                       </tfoot>

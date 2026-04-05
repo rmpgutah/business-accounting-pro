@@ -7,6 +7,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface TimeEntry {
@@ -65,16 +66,7 @@ function formatTime(isoString: string): string {
 }
 
 function formatDateHeader(dateStr: string): string {
-  try {
-    const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
+  return formatDate(dateStr);
 }
 
 function formatWeekRange(start: Date): string {

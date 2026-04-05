@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Company {
@@ -303,7 +304,7 @@ const MultiCompany: React.FC = () => {
                       )}
                       {company.created_at && (
                         <span className="text-xs text-text-muted">
-                          Created: {new Date(company.created_at).toLocaleDateString()}
+                          Created: {formatDate(company.created_at)}
                         </span>
                       )}
                     </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -72,15 +73,6 @@ interface DraftLineItem {
 }
 
 // ─── Helpers ─────────────────────────────────────────────
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n ?? 0);
-
-const fmtDate = (d: string) => {
-  if (!d) return '—';
-  const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-};
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -226,7 +218,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
           <div className="stat-label">Open POs</div>
         </div>
         <div className="stat-card block-card">
-          <div className="stat-value font-mono text-accent-income">{fmt(stats.open_value)}</div>
+          <div className="stat-value font-mono text-accent-income">{formatCurrency(stats.open_value)}</div>
           <div className="stat-label">Open PO Value</div>
         </div>
         <div className="stat-card block-card">
@@ -300,9 +292,9 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                 <tr key={po.id} className="hover:bg-bg-secondary transition-colors cursor-pointer" onClick={() => onView(po.id)}>
                   <td className="font-mono text-xs text-accent-blue">{po.po_number}</td>
                   <td className="text-xs text-text-primary">{vendors[po.vendor_id]?.name ?? '—'}</td>
-                  <td className="font-mono text-xs text-text-secondary">{fmtDate(po.issue_date)}</td>
-                  <td className="font-mono text-xs text-text-secondary">{fmtDate(po.expected_date)}</td>
-                  <td className="font-mono text-xs text-right text-text-primary">{fmt(po.total)}</td>
+                  <td className="font-mono text-xs text-text-secondary">{formatDate(po.issue_date)}</td>
+                  <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>
+                  <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>
                   <td>
                     <span className={STATUS_BADGE[po.status] || 'block-badge'}>
                       {STATUS_LABELS[po.status] ?? po.status}
@@ -684,7 +676,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                       />
                     </td>
                     <td className="text-right font-mono text-xs text-text-primary px-2">
-                      {fmt(line.amount)}
+                      {formatCurrency(line.amount)}
                     </td>
                     <td className="text-center">
                       <button
@@ -707,7 +699,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
           <div className="w-64">
             <div className="flex justify-between text-xs py-1 border-b border-border-primary">
               <span className="text-text-muted">Subtotal</span>
-              <span className="font-mono text-text-primary">{fmt(subtotal)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between text-xs py-1 border-b border-border-primary gap-2">
               <span className="text-text-muted whitespace-nowrap">Tax %</span>
@@ -723,11 +715,11 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                   step="any"
                 />
               </div>
-              <span className="font-mono text-text-primary">{fmt(taxAmount)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(taxAmount)}</span>
             </div>
             <div className="flex justify-between text-xs py-1.5">
               <span className="font-semibold text-text-primary">Total</span>
-              <span className="font-mono font-semibold text-accent-income text-sm">{fmt(total)}</span>
+              <span className="font-mono font-semibold text-accent-income text-sm">{formatCurrency(total)}</span>
             </div>
           </div>
         </div>
@@ -924,11 +916,11 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
             )}
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Order Date</span>
-              <span className="text-xs font-mono text-text-secondary">{fmtDate(po.issue_date)}</span>
+              <span className="text-xs font-mono text-text-secondary">{formatDate(po.issue_date)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Expected Date</span>
-              <span className="text-xs font-mono text-text-secondary">{fmtDate(po.expected_date)}</span>
+              <span className="text-xs font-mono text-text-secondary">{formatDate(po.expected_date)}</span>
             </div>
           </div>
         </div>
@@ -941,15 +933,15 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           <div className="space-y-2.5">
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Subtotal</span>
-              <span className="text-xs font-mono text-text-primary">{fmt(po.subtotal)}</span>
+              <span className="text-xs font-mono text-text-primary">{formatCurrency(po.subtotal)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Tax</span>
-              <span className="text-xs font-mono text-text-primary">{fmt(po.tax_amount)}</span>
+              <span className="text-xs font-mono text-text-primary">{formatCurrency(po.tax_amount)}</span>
             </div>
             <div className="flex justify-between border-t border-border-primary pt-2 mt-1">
               <span className="text-[10px] font-semibold text-text-primary uppercase tracking-wide">Total</span>
-              <span className="text-sm font-mono font-semibold text-accent-income">{fmt(po.total)}</span>
+              <span className="text-sm font-mono font-semibold text-accent-income">{formatCurrency(po.total)}</span>
             </div>
           </div>
           {po.notes && (
@@ -991,8 +983,8 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
                       {acct ? (acct.code ? `${acct.code} · ${acct.name}` : acct.name) : '—'}
                     </td>
                     <td className="text-xs font-mono text-right text-text-secondary">{line.quantity}</td>
-                    <td className="text-xs font-mono text-right text-text-secondary">{fmt(line.unit_price)}</td>
-                    <td className="text-xs font-mono text-right text-text-primary">{fmt(line.amount)}</td>
+                    <td className="text-xs font-mono text-right text-text-secondary">{formatCurrency(line.unit_price)}</td>
+                    <td className="text-xs font-mono text-right text-text-primary">{formatCurrency(line.amount)}</td>
                     <td className="text-xs font-mono text-right">
                       <span
                         className={

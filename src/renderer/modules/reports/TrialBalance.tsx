@@ -4,14 +4,8 @@ import { Printer, Download, AlertTriangle, CheckCircle } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { formatCurrency } from '../../lib/format';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Types ──────────────────────────────────────────────
 interface TrialBalanceLine {
@@ -202,16 +196,16 @@ const TrialBalance: React.FC = () => {
           <div className="grid grid-cols-3 gap-3">
             <div className="block-card p-4 text-center" style={{ borderRadius: '2px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Debits</p>
-              <p className="text-lg font-bold font-mono text-text-primary">{fmt.format(totalDebits)}</p>
+              <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalDebits)}</p>
             </div>
             <div className="block-card p-4 text-center" style={{ borderRadius: '2px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Credits</p>
-              <p className="text-lg font-bold font-mono text-text-primary">{fmt.format(totalCredits)}</p>
+              <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalCredits)}</p>
             </div>
             <div className={`block-card p-4 text-center ${isBalanced ? 'border border-accent-income/30' : 'border border-accent-expense/30'}`} style={{ borderRadius: '2px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Difference</p>
               <p className={`text-lg font-bold font-mono ${isBalanced ? 'text-accent-income' : 'text-accent-expense'}`}>
-                {fmt.format(Math.abs(totalDebits - totalCredits))}
+                {formatCurrency(Math.abs(totalDebits - totalCredits))}
               </p>
             </div>
           </div>
@@ -250,13 +244,13 @@ const TrialBalance: React.FC = () => {
                           <td className="font-mono text-text-muted text-xs">{line.account_code}</td>
                           <td className="text-text-secondary">{line.account_name}</td>
                           <td className="text-right font-mono text-text-secondary">
-                            {line.debit_total > 0 ? fmt.format(line.debit_total) : <span className="text-text-muted">—</span>}
+                            {line.debit_total > 0 ? formatCurrency(line.debit_total) : <span className="text-text-muted">—</span>}
                           </td>
                           <td className="text-right font-mono text-text-secondary">
-                            {line.credit_total > 0 ? fmt.format(line.credit_total) : <span className="text-text-muted">—</span>}
+                            {line.credit_total > 0 ? formatCurrency(line.credit_total) : <span className="text-text-muted">—</span>}
                           </td>
                           <td className={`text-right font-mono font-semibold ${line.balance < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                            {fmt.format(Math.abs(line.balance))}
+                            {formatCurrency(Math.abs(line.balance))}
                             {line.balance < 0 ? ' Cr' : line.balance > 0 ? ' Dr' : ''}
                           </td>
                         </tr>
@@ -269,13 +263,13 @@ const TrialBalance: React.FC = () => {
                           </span>
                         </td>
                         <td className="text-right font-mono text-xs font-semibold text-text-secondary">
-                          {fmt.format(grouped[groupType].reduce((s, l) => s + l.debit_total, 0))}
+                          {formatCurrency(grouped[groupType].reduce((s, l) => s + l.debit_total, 0))}
                         </td>
                         <td className="text-right font-mono text-xs font-semibold text-text-secondary">
-                          {fmt.format(grouped[groupType].reduce((s, l) => s + l.credit_total, 0))}
+                          {formatCurrency(grouped[groupType].reduce((s, l) => s + l.credit_total, 0))}
                         </td>
                         <td className="text-right font-mono text-xs font-semibold text-text-primary">
-                          {fmt.format(Math.abs(grouped[groupType].reduce((s, l) => s + l.balance, 0)))}
+                          {formatCurrency(Math.abs(grouped[groupType].reduce((s, l) => s + l.balance, 0)))}
                         </td>
                       </tr>
                     </React.Fragment>
@@ -285,10 +279,10 @@ const TrialBalance: React.FC = () => {
                     <td colSpan={2} className="py-3 px-4 text-right">
                       <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Grand Total</span>
                     </td>
-                    <td className="text-right font-mono font-bold text-text-primary">{fmt.format(totalDebits)}</td>
-                    <td className="text-right font-mono font-bold text-text-primary">{fmt.format(totalCredits)}</td>
+                    <td className="text-right font-mono font-bold text-text-primary">{formatCurrency(totalDebits)}</td>
+                    <td className="text-right font-mono font-bold text-text-primary">{formatCurrency(totalCredits)}</td>
                     <td className={`text-right font-mono font-bold ${isBalanced ? 'text-accent-income' : 'text-accent-expense'}`}>
-                      {isBalanced ? '—' : fmt.format(Math.abs(totalDebits - totalCredits))}
+                      {isBalanced ? '—' : formatCurrency(Math.abs(totalDebits - totalCredits))}
                     </td>
                   </tr>
                 </tbody>

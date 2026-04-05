@@ -3,6 +3,7 @@ import {
   Calculator, ChevronDown, RefreshCw, CheckCircle, Plus,
   DollarSign, Percent, AlertCircle, TrendingUp,
 } from 'lucide-react';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 interface TaxBracket {
@@ -44,7 +45,6 @@ interface WithholdingResult {
 // ─── Helpers ─────────────────────────────────────────────
 const CURRENT_YEAR = 2026;
 
-const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
 
 const FILING_TABS: { key: FilingStatus; label: string }[] = [
@@ -311,15 +311,15 @@ const TaxConfiguration: React.FC = () => {
                     <tr key={i}>
                       <td>
                         <span className="font-semibold text-text-primary">
-                          {fmt.format(b.min)}
-                          {b.max != null ? ` — ${fmt.format(b.max)}` : ' and above'}
+                          {formatCurrency(b.min)}
+                          {b.max != null ? ` — ${formatCurrency(b.max)}` : ' and above'}
                         </span>
                       </td>
                       <td className="text-right">
                         <span className="block-badge block-badge-blue font-mono">{pct(b.rate)}</span>
                       </td>
                       <td className="text-right text-text-secondary">
-                        {b.base_tax != null ? fmt.format(b.base_tax) : '—'}
+                        {b.base_tax != null ? formatCurrency(b.base_tax) : '—'}
                       </td>
                     </tr>
                   ))}
@@ -336,18 +336,18 @@ const TaxConfiguration: React.FC = () => {
               </h3>
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { label: 'SS Wage Base', value: fmt.format(constants.ss_wage_base), icon: <DollarSign size={13} /> },
+                  { label: 'SS Wage Base', value: formatCurrency(constants.ss_wage_base), icon: <DollarSign size={13} /> },
                   { label: 'SS Rate', value: pct(constants.ss_rate), icon: <Percent size={13} /> },
                   { label: 'Medicare Rate', value: pct(constants.medicare_rate), icon: <Percent size={13} /> },
                   { label: 'Additional Medicare', value: pct(constants.additional_medicare_rate), icon: <Percent size={13} /> },
-                  { label: 'Add. Medicare (Single) Threshold', value: fmt.format(constants.additional_medicare_threshold_single), icon: <DollarSign size={13} /> },
-                  { label: 'Add. Medicare (MFJ) Threshold', value: fmt.format(constants.additional_medicare_threshold_mfj), icon: <DollarSign size={13} /> },
+                  { label: 'Add. Medicare (Single) Threshold', value: formatCurrency(constants.additional_medicare_threshold_single), icon: <DollarSign size={13} /> },
+                  { label: 'Add. Medicare (MFJ) Threshold', value: formatCurrency(constants.additional_medicare_threshold_mfj), icon: <DollarSign size={13} /> },
                   { label: 'FUTA Rate', value: pct(constants.futa_rate), icon: <Percent size={13} /> },
-                  { label: 'FUTA Wage Base', value: fmt.format(constants.futa_wage_base), icon: <DollarSign size={13} /> },
-                  { label: 'Standard Deduction (Single)', value: fmt.format(constants.standard_deduction_single), icon: <DollarSign size={13} /> },
-                  { label: 'Standard Deduction (MFJ)', value: fmt.format(constants.standard_deduction_mfj), icon: <DollarSign size={13} /> },
-                  { label: 'Standard Deduction (HoH)', value: fmt.format(constants.standard_deduction_hoh), icon: <DollarSign size={13} /> },
-                  { label: 'Allowance Value', value: fmt.format(constants.allowance_value), icon: <DollarSign size={13} /> },
+                  { label: 'FUTA Wage Base', value: formatCurrency(constants.futa_wage_base), icon: <DollarSign size={13} /> },
+                  { label: 'Standard Deduction (Single)', value: formatCurrency(constants.standard_deduction_single), icon: <DollarSign size={13} /> },
+                  { label: 'Standard Deduction (MFJ)', value: formatCurrency(constants.standard_deduction_mfj), icon: <DollarSign size={13} /> },
+                  { label: 'Standard Deduction (HoH)', value: formatCurrency(constants.standard_deduction_hoh), icon: <DollarSign size={13} /> },
+                  { label: 'Allowance Value', value: formatCurrency(constants.allowance_value), icon: <DollarSign size={13} /> },
                 ].map((c) => (
                   <div key={c.label} className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
                     <span className="text-text-muted mt-0.5">{c.icon}</span>
@@ -443,10 +443,10 @@ const TaxConfiguration: React.FC = () => {
               {calcResult && (
                 <div className="flex items-center gap-4 flex-wrap">
                   {[
-                    { label: 'Federal', value: fmt.format(calcResult.federal), color: 'text-accent-blue' },
-                    { label: 'Social Security', value: fmt.format(calcResult.ss), color: 'text-text-primary' },
-                    { label: 'Medicare', value: fmt.format(calcResult.medicare), color: 'text-text-primary' },
-                    { label: 'Total', value: fmt.format(calcResult.total), color: 'text-accent-expense' },
+                    { label: 'Federal', value: formatCurrency(calcResult.federal), color: 'text-accent-blue' },
+                    { label: 'Social Security', value: formatCurrency(calcResult.ss), color: 'text-text-primary' },
+                    { label: 'Medicare', value: formatCurrency(calcResult.medicare), color: 'text-text-primary' },
+                    { label: 'Total', value: formatCurrency(calcResult.total), color: 'text-accent-expense' },
                   ].map((r) => (
                     <div key={r.label} className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
                       <span className="text-xs text-text-muted">{r.label}:</span>
