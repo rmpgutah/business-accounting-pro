@@ -952,3 +952,188 @@ CREATE TABLE IF NOT EXISTS approval_queue (
 );
 
 CREATE INDEX IF NOT EXISTS idx_approval_queue_company ON approval_queue(company_id, status);
+
+-- ─── Debt Collection ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS debts (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  type TEXT NOT NULL CHECK(type IN ('receivable','payable')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','in_collection','legal','settled','written_off','disputed','bankruptcy')),
+  debtor_id TEXT,
+  debtor_type TEXT DEFAULT 'custom' CHECK(debtor_type IN ('client','vendor','custom')),
+  debtor_name TEXT NOT NULL DEFAULT '',
+  debtor_email TEXT DEFAULT '',
+  debtor_phone TEXT DEFAULT '',
+  debtor_address TEXT DEFAULT '',
+  source_type TEXT DEFAULT 'manual' CHECK(source_type IN ('invoice','bill','manual')),
+  source_id TEXT,
+  original_amount REAL NOT NULL DEFAULT 0,
+  interest_accrued REAL NOT NULL DEFAULT 0,
+  fees_accrued REAL NOT NULL DEFAULT 0,
+  payments_made REAL NOT NULL DEFAULT 0,
+  balance_due REAL NOT NULL DEFAULT 0,
+  interest_rate REAL DEFAULT 0,
+  interest_type TEXT DEFAULT 'simple' CHECK(interest_type IN ('simple','compound')),
+  interest_start_date TEXT,
+  compound_frequency INTEGER DEFAULT 12,
+  due_date TEXT,
+  delinquent_date TEXT,
+  statute_of_limitations_date TEXT,
+  statute_years INTEGER,
+  jurisdiction TEXT DEFAULT '',
+  priority TEXT DEFAULT 'medium' CHECK(priority IN ('low','medium','high','critical')),
+  current_stage TEXT DEFAULT 'reminder' CHECK(current_stage IN ('reminder','warning','final_notice','demand_letter','collections_agency','legal_action','judgment','garnishment')),
+  assigned_to TEXT DEFAULT '',
+  hold INTEGER DEFAULT 0,
+  hold_reason TEXT DEFAULT '',
+  agency_name TEXT DEFAULT '',
+  agency_contact TEXT DEFAULT '',
+  agency_reference TEXT DEFAULT '',
+  agency_commission_rate REAL DEFAULT 0,
+  settlement_amount REAL,
+  write_off_reason TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debts_company_type ON debts(company_id, type);
+CREATE INDEX IF NOT EXISTS idx_debts_company_status ON debts(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_debts_company_stage ON debts(company_id, current_stage);
+CREATE INDEX IF NOT EXISTS idx_debts_debtor ON debts(debtor_id, debtor_type);
+
+CREATE TABLE IF NOT EXISTS debt_contacts (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK(role IN ('debtor','guarantor','attorney','witness','collections_agent','judge','mediator')),
+  name TEXT NOT NULL DEFAULT '',
+  email TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  company TEXT DEFAULT '',
+  bar_number TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_contacts_debt ON debt_contacts(debt_id);
+
+CREATE TABLE IF NOT EXISTS debt_communications (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK(type IN ('email','phone','letter','in_person','legal_filing','text','fax')),
+  direction TEXT NOT NULL CHECK(direction IN ('inbound','outbound')),
+  subject TEXT DEFAULT '',
+  body TEXT DEFAULT '',
+  outcome TEXT DEFAULT '',
+  contact_id TEXT REFERENCES debt_contacts(id),
+  template_used TEXT DEFAULT '',
+  attachments_json TEXT DEFAULT '[]',
+  logged_by TEXT DEFAULT '',
+  logged_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_comms_debt ON debt_communications(debt_id);
+
+CREATE TABLE IF NOT EXISTS debt_payments (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  amount REAL NOT NULL DEFAULT 0,
+  method TEXT DEFAULT 'other' CHECK(method IN ('cash','check','card','wire','ach','garnishment','settlement','other')),
+  reference_number TEXT DEFAULT '',
+  received_date TEXT NOT NULL,
+  applied_to_principal REAL DEFAULT 0,
+  applied_to_interest REAL DEFAULT 0,
+  applied_to_fees REAL DEFAULT 0,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_payments_debt ON debt_payments(debt_id);
+
+CREATE TABLE IF NOT EXISTS debt_pipeline_stages (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  stage TEXT NOT NULL,
+  entered_at TEXT NOT NULL DEFAULT (datetime('now')),
+  exited_at TEXT,
+  auto_advanced INTEGER DEFAULT 0,
+  advanced_by TEXT DEFAULT '',
+  notes TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_stages_debt ON debt_pipeline_stages(debt_id);
+
+CREATE TABLE IF NOT EXISTS debt_evidence (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK(type IN ('contract','invoice','communication','payment_record','delivery_proof','signed_agreement','witness_statement','photo','other')),
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT DEFAULT '',
+  file_path TEXT DEFAULT '',
+  file_name TEXT DEFAULT '',
+  date_of_evidence TEXT,
+  court_relevance TEXT DEFAULT 'medium' CHECK(court_relevance IN ('high','medium','low')),
+  admitted INTEGER DEFAULT 0,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_evidence_debt ON debt_evidence(debt_id);
+
+CREATE TABLE IF NOT EXISTS debt_legal_actions (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL CHECK(action_type IN ('demand_letter','small_claims','civil_suit','arbitration','mediation','garnishment_order','lien')),
+  filing_date TEXT,
+  court_name TEXT DEFAULT '',
+  court_address TEXT DEFAULT '',
+  case_number TEXT DEFAULT '',
+  hearing_date TEXT,
+  hearing_time TEXT DEFAULT '',
+  judge_name TEXT DEFAULT '',
+  status TEXT DEFAULT 'preparing' CHECK(status IN ('preparing','filed','served','hearing_scheduled','in_progress','judgment','appeal','closed')),
+  outcome TEXT DEFAULT '',
+  judgment_amount REAL,
+  judgment_date TEXT,
+  attorney_id TEXT REFERENCES debt_contacts(id),
+  court_costs REAL DEFAULT 0,
+  checklist_json TEXT DEFAULT '[]',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_legal_debt ON debt_legal_actions(debt_id);
+
+CREATE TABLE IF NOT EXISTS debt_automation_rules (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  debt_id TEXT,
+  from_stage TEXT NOT NULL,
+  to_stage TEXT NOT NULL,
+  days_after_entry INTEGER NOT NULL DEFAULT 14,
+  condition_json TEXT DEFAULT '{}',
+  action TEXT NOT NULL DEFAULT 'advance_stage' CHECK(action IN ('advance_stage','send_template','create_notification','flag_review')),
+  template_name TEXT DEFAULT '',
+  require_review INTEGER DEFAULT 0,
+  enabled INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_auto_company ON debt_automation_rules(company_id);
+
+CREATE TABLE IF NOT EXISTS debt_templates (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK(type IN ('reminder','warning','final_notice','demand_letter','custom')),
+  subject TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  severity TEXT DEFAULT 'formal' CHECK(severity IN ('friendly','formal','final')),
+  is_default INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_debt_templates_company ON debt_templates(company_id);
