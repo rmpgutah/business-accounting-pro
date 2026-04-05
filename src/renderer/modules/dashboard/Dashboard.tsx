@@ -41,6 +41,7 @@ import {
 import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Stats {
@@ -112,20 +113,10 @@ interface QuickMetrics {
 
 type Period = 'MTD' | 'QTD' | 'YTD';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const fmtCurrency = (value: number) => fmt.format(value);
-
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return fmt.format(value);
+  return formatCurrency(value);
 };
 
 // ─── Period Helpers ─────────────────────────────────────
@@ -197,7 +188,7 @@ const AreaTooltip: React.FC<any> = ({ active, payload, label }) => {
       <p className="text-text-muted mb-1">{label}</p>
       {payload.map((p: any) => (
         <p key={p.dataKey} style={{ color: p.color }} className="font-mono">
-          {p.dataKey === 'income' ? 'Revenue' : 'Expenses'}: {fmtCurrency(p.value)}
+          {p.dataKey === 'income' ? 'Revenue' : 'Expenses'}: {formatCurrency(p.value)}
         </p>
       ))}
     </div>
@@ -217,7 +208,7 @@ const PieTooltip: React.FC<any> = ({ active, payload }) => {
       }}
     >
       <p className="text-text-primary font-semibold">{name}</p>
-      <p className="font-mono text-accent-income">{fmtCurrency(value)}</p>
+      <p className="font-mono text-accent-income">{formatCurrency(value)}</p>
     </div>
   );
 };
@@ -238,7 +229,7 @@ const ForecastTooltip: React.FC<any> = ({ active, payload, label }) => {
         .filter((p: any) => p.dataKey === 'projected')
         .map((p: any) => (
           <p key={p.dataKey} className="font-mono text-accent-blue">
-            Projected: {fmtCurrency(p.value)}
+            Projected: {formatCurrency(p.value)}
           </p>
         ))}
     </div>
@@ -318,7 +309,7 @@ const StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
         {label}
       </span>
       <p className="text-2xl font-mono text-text-primary mt-1">
-        {fmtCurrency(value)}
+        {formatCurrency(value)}
       </p>
       <span
         className={`text-xs font-mono ${
@@ -649,7 +640,7 @@ const Dashboard: React.FC = () => {
             for (let i = 1; i <= 3; i++) {
               const d = new Date();
               d.setMonth(d.getMonth() + i);
-              const label = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+              const label = formatDate(d.toISOString());
               const projected = slope * (n + i - 1) + intercept;
               runningCash += projected;
               forecast.push({
@@ -869,7 +860,7 @@ const Dashboard: React.FC = () => {
             {quickMetrics.topClientName}
           </p>
           <p className="text-lg font-mono text-accent-purple">
-            {fmtCurrency(quickMetrics.topClientRevenue)}
+            {formatCurrency(quickMetrics.topClientRevenue)}
           </p>
           <span className="text-[10px] text-text-muted">This month</span>
         </div>
@@ -1151,17 +1142,17 @@ const Dashboard: React.FC = () => {
                     if (details) {
                       if (entry.entity_type === 'invoices' && details.invoice_number) {
                         richDescription = `Invoice ${details.invoice_number}`;
-                        if (details.total) richDescription += ` for ${fmtCurrency(details.total)}`;
+                        if (details.total) richDescription += ` for ${formatCurrency(details.total)}`;
                         if (details.client_name) richDescription += ` — ${details.client_name}`;
                       } else if (entry.entity_type === 'expenses' && details.description) {
                         richDescription = details.description;
-                        if (details.amount) richDescription += ` — ${fmtCurrency(details.amount)}`;
+                        if (details.amount) richDescription += ` — ${formatCurrency(details.amount)}`;
                         if (details.vendor_name) richDescription += ` (${details.vendor_name})`;
                       } else if (entry.entity_type === 'clients' && details.name) {
                         richDescription = details.name;
                         if (details.email) richDescription += ` (${details.email})`;
                       } else if (entry.entity_type === 'payments' && details.amount) {
-                        richDescription = `Payment ${fmtCurrency(details.amount)}`;
+                        richDescription = `Payment ${formatCurrency(details.amount)}`;
                         if (details.invoice_number) richDescription += ` on ${details.invoice_number}`;
                       }
                     }
@@ -1245,7 +1236,7 @@ const Dashboard: React.FC = () => {
                             {inv.invoice_number}
                           </span>
                           <span className="text-xs font-mono text-text-primary ml-2">
-                            {fmtCurrency(amountDue)}
+                            {formatCurrency(amountDue)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between mt-0.5">
@@ -1288,7 +1279,7 @@ const Dashboard: React.FC = () => {
                           {client.name}
                         </span>
                         <span className="text-xs font-mono text-text-muted ml-2">
-                          {fmtCurrency(client.total_paid)}
+                          {formatCurrency(client.total_paid)}
                         </span>
                       </div>
                       <div

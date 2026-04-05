@@ -34,14 +34,6 @@ interface ExpenseListProps {
   onEdit: (id: string) => void;
 }
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 const statusBadge: Record<string, string> = {
   pending: 'block-badge block-badge-warning',
   approved: 'block-badge block-badge-blue',
@@ -216,7 +208,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           <div>
             <h2 className="module-title text-text-primary">Expenses</h2>
             <p className="text-xs text-text-muted mt-0.5">
-              {filtered.length} expense{filtered.length !== 1 ? 's' : ''} &middot; {fmt.format(total)} total
+              {filtered.length} expense{filtered.length !== 1 ? 's' : ''} &middot; {formatCurrency(total)} total
             </p>
           </div>
         </div>
@@ -354,7 +346,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                       {exp.vendor_name || '-'}
                     </td>
                     <td className="text-right font-mono text-accent-expense">
-                      {fmt.format(exp.amount)}
+                      {formatCurrency(exp.amount)}
                     </td>
                     <td>
                       <span className={statusBadge[exp.status] || 'block-badge'}>
@@ -391,7 +383,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                   Total
                 </td>
                 <td className="text-right font-mono font-bold text-text-primary">
-                  {fmt.format(total)}
+                  {formatCurrency(total)}
                 </td>
                 <td colSpan={3} />
               </tr>

@@ -13,6 +13,7 @@ import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { Plus } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -98,23 +99,6 @@ const STATUS_LABEL: Record<string, string> = {
   archived: 'Archived',
 };
 
-// ─── Formatters ─────────────────────────────────────────
-const fmtCurrency = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const fmtDate = (dateStr: string | null | undefined): string => {
-  if (!dateStr) return '--';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-};
 
 // ─── Stat Card ──────────────────────────────────────────
 interface StatCardProps {
@@ -298,7 +282,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
             {client && <span>{client.name}</span>}
-            <span>{fmtDate(project.start_date)}{project.end_date ? ` - ${fmtDate(project.end_date)}` : ''}</span>
+            <span>{formatDate(project.start_date)}{project.end_date ? ` - ${formatDate(project.end_date)}` : ''}</span>
           </div>
           {project.description && (
             <p className="text-xs text-text-secondary mt-2 max-w-xl">{project.description}</p>
@@ -344,13 +328,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <StatCard
           icon={<DollarSign size={14} />}
           label="Total Revenue"
-          value={fmtCurrency.format(stats.totalRevenue)}
+          value={formatCurrency(stats.totalRevenue)}
           accentClass="border-l-accent-income"
         />
         <StatCard
           icon={<Receipt size={14} />}
           label="Total Expenses"
-          value={fmtCurrency.format(stats.totalExpenses)}
+          value={formatCurrency(stats.totalExpenses)}
           accentClass="border-l-accent-expense"
         />
         <StatCard
@@ -362,7 +346,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <StatCard
           icon={<TrendingUp size={14} />}
           label="Profit / Loss"
-          value={fmtCurrency.format(stats.profitLoss)}
+          value={formatCurrency(stats.profitLoss)}
           accentClass={stats.profitLoss >= 0 ? 'border-l-accent-income' : 'border-l-accent-expense'}
         />
       </div>
@@ -442,7 +426,7 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
           {entries.map((entry) => (
             <tr key={entry.id}>
               <td className="text-text-secondary font-mono text-xs">
-                {fmtDate(entry.date)}
+                {formatDate(entry.date)}
               </td>
               <td className="text-text-primary text-xs">
                 {entry.description || '--'}
@@ -497,7 +481,7 @@ const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
           {expenses.map((exp) => (
             <tr key={exp.id}>
               <td className="text-text-secondary font-mono text-xs">
-                {fmtDate(exp.date)}
+                {formatDate(exp.date)}
               </td>
               <td className="text-text-primary text-xs">
                 {exp.description || '--'}
@@ -509,7 +493,7 @@ const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
                 {exp.vendor || '--'}
               </td>
               <td className="text-right font-mono text-xs text-accent-expense">
-                {fmtCurrency.format(exp.amount ?? 0)}
+                {formatCurrency(exp.amount ?? 0)}
               </td>
             </tr>
           ))}
@@ -556,10 +540,10 @@ const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
                 {inv.invoice_number || '--'}
               </td>
               <td className="text-text-secondary font-mono text-xs">
-                {fmtDate(inv.date)}
+                {formatDate(inv.date)}
               </td>
               <td className="text-text-secondary font-mono text-xs">
-                {fmtDate(inv.due_date)}
+                {formatDate(inv.due_date)}
               </td>
               <td>
                 <span className={invoiceBadge[inv.status] ?? 'block-badge'}>
@@ -567,7 +551,7 @@ const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
                 </span>
               </td>
               <td className="text-right font-mono text-xs text-text-primary">
-                {fmtCurrency.format(inv.total ?? 0)}
+                {formatCurrency(inv.total ?? 0)}
               </td>
             </tr>
           ))}

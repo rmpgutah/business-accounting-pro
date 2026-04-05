@@ -1,6 +1,7 @@
 // src/renderer/modules/rules/RuleList.tsx
 import React from 'react';
 import { Edit2, Trash2, ToggleLeft, ToggleRight, Plus } from 'lucide-react';
+import { formatDate } from '../../lib/format';
 
 interface Rule {
   id: string; name: string; category: string; trigger: string;
@@ -37,7 +38,7 @@ export const RuleList: React.FC<Props> = ({ rules, onEdit, onDelete, onToggle, o
             <div className="font-bold text-sm">{rule.name}</div>
             <div className="text-xs text-gray-400">
               Priority {rule.priority} · Applied {rule.applied_count}&times;
-              {rule.last_run_at ? ` · Last: ${new Date(rule.last_run_at).toLocaleDateString()}` : ''}
+              {rule.last_run_at ? ` · Last: ${formatDate(rule.last_run_at)}` : ''}
             </div>
           </div>
         </div>

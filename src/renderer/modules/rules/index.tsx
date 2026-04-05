@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatDate } from '../../lib/format';
 import { RuleList } from './RuleList';
 import { RuleForm } from './RuleForm';
 
@@ -78,7 +79,7 @@ const RulesModule: React.FC = () => {
               <div key={a.id} className="flex items-center justify-between bg-white border border-orange-200 px-4 py-3 mb-2">
                 <div>
                   <div className="font-bold text-sm">{a.rule_name}</div>
-                  <div className="text-xs text-gray-400">{a.record_type} · {a.record_id} · {new Date(a.created_at).toLocaleDateString()}</div>
+                  <div className="text-xs text-gray-400">{a.record_type} · {a.record_id} · {formatDate(a.created_at)}</div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleResolve(a.id, 'approved')} className="px-3 py-1 bg-green-600 text-white text-xs font-bold uppercase hover:bg-green-700">Approve</button>

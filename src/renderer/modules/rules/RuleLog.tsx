@@ -1,5 +1,6 @@
 // src/renderer/modules/rules/RuleLog.tsx
 import React from 'react';
+import { formatDate } from '../../lib/format';
 
 interface LogEntry { id: string; ran_at: string; status: string; detail: string; }
 interface Props { entries: LogEntry[]; }
@@ -24,7 +25,7 @@ export const RuleLog: React.FC<Props> = ({ entries }) => {
       <tbody>
         {entries.map(e => (
           <tr key={e.id} className="border-b border-gray-100">
-            <td className="py-2 pr-4 text-gray-400">{new Date(e.ran_at).toLocaleString()}</td>
+            <td className="py-2 pr-4 text-gray-400">{formatDate(e.ran_at)}</td>
             <td className="py-2 pr-4">
               <span className={`px-2 py-0.5 font-bold uppercase text-xs ${STATUS_CLS[e.status] ?? STATUS_CLS.SKIP}`}>{e.status}</span>
             </td>

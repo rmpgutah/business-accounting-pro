@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { FolderKanban, Plus, Clock, Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -53,14 +54,6 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'archived', label: 'Archived' },
 ];
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
 // ─── Budget Progress Bar ────────────────────────────────
 const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget }) => {
   if (!budget || budget <= 0) {
@@ -74,8 +67,8 @@ const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[10px] font-mono">
-        <span className="text-text-secondary">{fmt.format(spent)}</span>
-        <span className="text-text-muted">/ {fmt.format(budget)}</span>
+        <span className="text-text-secondary">{formatCurrency(spent)}</span>
+        <span className="text-text-muted">/ {formatCurrency(budget)}</span>
       </div>
       <div
         className="w-full h-1.5 bg-bg-tertiary overflow-hidden"
@@ -95,16 +88,6 @@ const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget 
 };
 
 // ─── Date Formatter ─────────────────────────────────────
-const fmtDate = (dateStr: string | null | undefined): string => {
-  if (!dateStr) return '--';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-};
-
 // ─── Component ──────────────────────────────────────────
 const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -327,8 +310,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                     <span>{hours.toFixed(1)}h</span>
                   </div>
                   <div className="text-[10px] text-text-muted font-mono">
-                    {fmtDate(project.start_date)}
-                    {project.end_date ? ` - ${fmtDate(project.end_date)}` : ''}
+                    {formatDate(project.start_date)}
+                    {project.end_date ? ` - ${formatDate(project.end_date)}` : ''}
                   </div>
                 </div>
               </div>
