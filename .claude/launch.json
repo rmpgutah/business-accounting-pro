@@ -9,8 +9,8 @@
     },
     {
       "name": "Vite Dev Server",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["exec", "--", "vite", "--config", "vite.config.ts"],
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["/Users/rmpgutah/Business Accounting Pro/node_modules/.bin/vite", "--config", "vite.config.ts"],
       "port": 5173
     }
   ]
