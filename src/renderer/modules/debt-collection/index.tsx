@@ -6,6 +6,7 @@ import {
   Gavel,
   BarChart3,
 } from 'lucide-react';
+import DebtList from './DebtList';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
@@ -154,15 +155,23 @@ const DebtCollectionModule: React.FC = () => {
 
       {/* Content — List views per tab */}
       {tab === 'receivables' && view === 'list' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          DebtList key={listKey} type=&quot;receivable&quot; onView onNew onEdit — to be implemented
-        </div>
+        <DebtList
+          key={listKey}
+          type="receivable"
+          onNew={() => handleNewDebt('receivable')}
+          onView={handleViewDebt}
+          onEdit={handleEditDebt}
+        />
       )}
 
       {tab === 'payables' && view === 'list' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          DebtList key={listKey} type=&quot;payable&quot; onView onNew onEdit — to be implemented
-        </div>
+        <DebtList
+          key={listKey}
+          type="payable"
+          onNew={() => handleNewDebt('payable')}
+          onView={handleViewDebt}
+          onEdit={handleEditDebt}
+        />
       )}
 
       {tab === 'pipeline' && view === 'list' && (
