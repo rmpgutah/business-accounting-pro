@@ -186,6 +186,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       onSaved();
     } catch (err) {
       console.error('Failed to save expense:', err);
+      alert('Failed to save expense. Please try again.');
     } finally {
       setSaving(false);
     }

@@ -48,6 +48,15 @@ const api = {
     window.electronAPI.invoke('notification:list', { unread_only: unreadOnly }),
   markNotificationRead: (id: string) => window.electronAPI.invoke('notification:mark-read', id),
 
+  // Invoice atomic save (header + line items in one DB transaction)
+  saveInvoice: (payload: {
+    invoiceId: string | null;
+    invoiceData: Record<string, any>;
+    lineItems: Array<Record<string, any>>;
+    isEdit: boolean;
+  }): Promise<{ id?: string; error?: string }> =>
+    window.electronAPI.invoke('invoice:save', payload),
+
   // Export
   // Bug fix #3: export:invoice-pdf handler was removed in v1.1.1 dedup cleanup;
   // routes to the canonical invoice:generate-pdf channel to avoid "No handler" crash.

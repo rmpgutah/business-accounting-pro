@@ -242,61 +242,118 @@ export function registerIpcHandlers(): void {
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
-    const companyId = db.getCurrentCompanyId();
-    const payload = tablesWithoutCompanyId.has(table)
-      ? { ...data }
-      : { ...data, company_id: companyId };
-    // Apply rules for invoices
-    if (table === 'invoices' && payload.company_id) {
-      const pricingResults = evaluateRules({ category: 'pricing', record: payload, company_id: String(payload.company_id), db: db.getDb() });
-      const taxResults     = evaluateRules({ category: 'tax',     record: payload, company_id: String(payload.company_id), db: db.getDb() });
-      Object.assign(payload, mergePatches([...pricingResults, ...taxResults]));
-      payload.rules_applied = rulesAppliedSummary([...pricingResults, ...taxResults]);
+    try {
+      const companyId = db.getCurrentCompanyId();
+      const payload = tablesWithoutCompanyId.has(table)
+        ? { ...data }
+        : { ...data, company_id: companyId };
+      // Apply rules for invoices
+      if (table === 'invoices' && payload.company_id) {
+        const pricingResults = evaluateRules({ category: 'pricing', record: payload, company_id: String(payload.company_id), db: db.getDb() });
+        const taxResults     = evaluateRules({ category: 'tax',     record: payload, company_id: String(payload.company_id), db: db.getDb() });
+        Object.assign(payload, mergePatches([...pricingResults, ...taxResults]));
+        payload.rules_applied = rulesAppliedSummary([...pricingResults, ...taxResults]);
+      }
+      // Apply tax rules for expenses
+      if (table === 'expenses' && payload.company_id) {
+        const taxResults = evaluateRules({ category: 'tax', record: payload, company_id: String(payload.company_id), db: db.getDb() });
+        Object.assign(payload, mergePatches(taxResults));
+        payload.rules_applied = rulesAppliedSummary(taxResults);
+      }
+      // Apply approval rules for invoices, expenses, bills
+      if ((table === 'invoices' || table === 'expenses' || table === 'bills') && payload.company_id) {
+        const approvalResults = evaluateRules({ category: 'approval', record: { ...payload, _type: table }, company_id: String(payload.company_id), db: db.getDb() });
+        if (approvalResults.some(r => r.matched)) payload.status = 'pending_approval';
+      }
+      const record = db.create(table, payload);
+      if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+      return record;
+    } catch (err) {
+      console.error(`db:create [${table}] failed:`, err);
+      return { error: err instanceof Error ? err.message : String(err) };
     }
-    // Apply tax rules for expenses
-    if (table === 'expenses' && payload.company_id) {
-      const taxResults = evaluateRules({ category: 'tax', record: payload, company_id: String(payload.company_id), db: db.getDb() });
-      Object.assign(payload, mergePatches(taxResults));
-      payload.rules_applied = rulesAppliedSummary(taxResults);
-    }
-    // Apply approval rules for invoices, expenses, bills
-    if ((table === 'invoices' || table === 'expenses' || table === 'bills') && payload.company_id) {
-      const approvalResults = evaluateRules({ category: 'approval', record: { ...payload, _type: table }, company_id: String(payload.company_id), db: db.getDb() });
-      if (approvalResults.some(r => r.matched)) payload.status = 'pending_approval';
-    }
-    const record = db.create(table, payload);
-    if (companyId) db.logAudit(companyId, table, record.id, 'create');
-    syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
-    return record;
   });
 
   ipcMain.handle('db:update', (_event, { table, id, data }) => {
-    const old = db.getById(table, id);
-    const record = db.update(table, id, data);
-    const companyId = db.getCurrentCompanyId();
-    if (companyId && old) {
-      const changes: Record<string, any> = {};
-      for (const key of Object.keys(data)) {
-        if (old[key] !== record[key]) {
-          changes[key] = { old: old[key], new: record[key] };
+    try {
+      const old = db.getById(table, id);
+      const record = db.update(table, id, data);
+      const companyId = db.getCurrentCompanyId();
+      if (companyId && old) {
+        const changes: Record<string, any> = {};
+        for (const key of Object.keys(data)) {
+          if (old[key] !== record[key]) {
+            changes[key] = { old: old[key], new: record[key] };
+          }
         }
+        db.logAudit(companyId, table, id, 'update', changes);
       }
-      db.logAudit(companyId, table, id, 'update', changes);
+      syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+      return record;
+    } catch (err) {
+      console.error(`db:update [${table}:${id}] failed:`, err);
+      return { error: err instanceof Error ? err.message : String(err) };
     }
-    syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
-    return record;
   });
 
   ipcMain.handle('db:delete', (_event, { table, id }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (companyId) db.logAudit(companyId, table, id, 'delete');
-    db.remove(table, id);
-    syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (companyId) db.logAudit(companyId, table, id, 'delete');
+      db.remove(table, id);
+      syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+    } catch (err) {
+      console.error(`db:delete [${table}:${id}] failed:`, err);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   // ─── Raw Query (for reports/aggregations) ────────────
   ipcMain.handle('db:raw-query', (_event, { sql, params }) => {
     return db.runQuery(sql, params);
+  });
+
+  // ─── Atomic invoice save (header + line items in one transaction) ─────────
+  // Prevents orphaned invoice headers when a line item insert fails.
+  ipcMain.handle('invoice:save', (_event, { invoiceId, invoiceData, lineItems, isEdit }: {
+    invoiceId: string | null;
+    invoiceData: Record<string, any>;
+    lineItems: Array<Record<string, any>>;
+    isEdit: boolean;
+  }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      const rawDb = db.getDb();
+
+      const saveFn = rawDb.transaction(() => {
+        let savedId: string;
+
+        if (isEdit && invoiceId) {
+          db.update('invoices', invoiceId, invoiceData);
+          savedId = invoiceId;
+          // Replace line items atomically
+          const oldLines = db.queryAll('invoice_line_items', { invoice_id: invoiceId });
+          for (const ol of oldLines) db.remove('invoice_line_items', ol.id);
+        } else {
+          const record = db.create('invoices', { ...invoiceData, company_id: companyId });
+          savedId = record.id;
+        }
+
+        for (const line of lineItems) {
+          db.create('invoice_line_items', { ...line, invoice_id: savedId });
+        }
+
+        return savedId;
+      });
+
+      const savedId = saveFn();
+      if (companyId) db.logAudit(companyId, 'invoices', savedId, isEdit ? 'update' : 'create');
+      return { id: savedId };
+    } catch (err) {
+      console.error('invoice:save failed:', err);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   // ─── Company Management ──────────────────────────────

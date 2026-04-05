@@ -328,39 +328,26 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         invoiceData.amount_paid = 0;
       }
 
-      let savedId: string;
-
-      if (isEdit && invoiceId) {
-        await api.update('invoices', invoiceId, invoiceData);
-        savedId = invoiceId;
-
-        // Remove old line items then re-create
-        const oldLines = await api.query('invoice_line_items', { invoice_id: invoiceId });
-        if (oldLines) {
-          for (const ol of oldLines) {
-            await api.remove('invoice_line_items', ol.id);
-          }
-        }
-      } else {
-        const result = await api.create('invoices', invoiceData);
-        savedId = result?.id ?? result;
-      }
-
-      // Create line items
-      for (const line of lines) {
-        if (!line.description && line.unit_price === 0) continue;
-        await api.create('invoice_line_items', {
-          invoice_id: savedId,
+      const lineItems = lines
+        .filter(line => line.description || line.unit_price !== 0)
+        .map(line => ({
           description: line.description,
           quantity: line.quantity,
           unit_price: line.unit_price,
           tax_rate: line.tax_rate,
           account_id: line.account_id || null,
           amount: line.quantity * line.unit_price,
-        });
-      }
+        }));
 
-      onSaved(savedId);
+      const result = await api.saveInvoice({
+        invoiceId: isEdit ? invoiceId : null,
+        invoiceData,
+        lineItems,
+        isEdit,
+      });
+
+      if (result?.error) throw new Error(result.error);
+      onSaved(result.id!);
     } catch (err) {
       console.error('Failed to save invoice:', err);
       alert('Failed to save invoice. Please try again.');

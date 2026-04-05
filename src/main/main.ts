@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { app, BrowserWindow, dialog, Menu } from 'electron';
 import path from 'path';
-import { initDatabase } from './database';
+import { initDatabase, getDb } from './database';
 import { registerIpcHandlers } from './ipc';
 import { autoUpdater } from 'electron-updater';
 import { processRecurringTemplates } from './services/recurring-processor';
@@ -245,6 +245,19 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   stopBackgroundServices();
   if (process.platform !== 'darwin') app.quit();
+});
+
+// Flush WAL and close DB cleanly before the process exits (covers macOS Cmd+Q
+// and Windows/Linux close — fires before window-all-closed on quit).
+app.on('before-quit', () => {
+  try {
+    const db = getDb();
+    db.pragma('optimize');
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    db.close();
+  } catch (_) {
+    // DB may already be closed or not yet initialized — safe to ignore
+  }
 });
 
 app.on('activate', () => {
