@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download } from 'lucide-react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale } from 'lucide-react';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import { SummaryBar } from '../../components/SummaryBar';
 
 // ─── Types ─────��────────────���───────────────────────────
@@ -68,6 +69,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 }) => {
   const nav = useNavigation();
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const setModule = useAppStore((s) => s.setModule);
+
+  const sendToCollections = useCallback((invoiceId: string) => {
+    sessionStorage.setItem('nav:source_invoice', invoiceId);
+    setModule('debt-collection');
+  }, [setModule]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
@@ -322,6 +329,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 <th className="text-right">Amount Paid</th>
                 <th className="text-right">Balance Due</th>
                 <th>Status</th>
+                <th style={{ width: '60px' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -369,6 +377,17 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     </td>
                     <td>
                       <span className={badge.className}>{badge.label}</span>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {inv.status === 'overdue' && (
+                        <button
+                          onClick={() => sendToCollections(inv.id)}
+                          className="block-btn text-xs"
+                          title="Send to Collections"
+                        >
+                          <Scale size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

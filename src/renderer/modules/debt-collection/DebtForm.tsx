@@ -97,6 +97,36 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
 
   const isEditing = !!debtId;
 
+  // ── Pre-fill from invoice navigation ──
+  useEffect(() => {
+    const sourceInvoice = sessionStorage.getItem('nav:source_invoice');
+    if (sourceInvoice && !debtId) {
+      sessionStorage.removeItem('nav:source_invoice');
+      setForm(prev => ({ ...prev, source_type: 'invoice', source_id: sourceInvoice }));
+      api.get('invoices', sourceInvoice).then((inv: any) => {
+        if (inv) {
+          const balance = (inv.total || inv.amount || 0) - (inv.amount_paid || 0);
+          setForm(prev => ({ ...prev, original_amount: balance.toFixed(2) }));
+          if (inv.client_id) {
+            api.get('clients', inv.client_id).then((client: any) => {
+              if (client) {
+                setForm(prev => ({
+                  ...prev,
+                  debtor_type: 'client',
+                  debtor_id: inv.client_id,
+                  debtor_name: client.name || '',
+                  debtor_email: client.email || '',
+                  debtor_phone: client.phone || '',
+                  debtor_address: [client.address_line1, client.city, client.state, client.zip].filter(Boolean).join(', '),
+                }));
+              }
+            });
+          }
+        }
+      });
+    }
+  }, []);
+
   // ── Load data ──
   useEffect(() => {
     let cancelled = false;

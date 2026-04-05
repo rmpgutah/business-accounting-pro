@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale } from 'lucide-react';
 import api from '../../lib/api';
 import { generateInvoiceHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import PaymentRecorder from './PaymentRecorder';
 
 // ─── Types ──────────────────────────────────────────────
@@ -77,6 +78,12 @@ interface InvoiceDetailProps {
 
 const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const setModule = useAppStore((s) => s.setModule);
+
+  const sendToCollections = (id: string) => {
+    sessionStorage.setItem('nav:source_invoice', id);
+    setModule('debt-collection');
+  };
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [lines, setLines] = useState<LineItem[]>([]);
@@ -268,6 +275,16 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 Record Payment
               </button>
             </>
+          )}
+          {invoice.status === 'overdue' && (
+            <button
+              onClick={() => sendToCollections(invoice.id)}
+              className="block-btn text-xs flex items-center gap-2"
+              title="Send to Collections"
+            >
+              <Scale size={14} />
+              Send to Collections
+            </button>
           )}
         </div>
       </div>

@@ -221,6 +221,7 @@ const App: React.FC = () => {
           accounts: 'accounts',
           projects: 'projects',
           payroll: 'employees',
+          'debt-collection': 'debts',
         };
         const table = tableMap[currentModule];
         if (table) api.exportCsv(table);

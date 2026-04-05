@@ -19,6 +19,7 @@ const MODULE_ORDER = [
   'time-tracking',
   'projects',
   'reports',
+  'debt-collection',
 ];
 
 export function registerKeyboardShortcuts(actions: ShortcutActions): () => void {
