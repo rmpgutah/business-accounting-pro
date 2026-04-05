@@ -2085,5 +2085,345 @@ export function registerIpcHandlers(): void {
     }));
     return { client_id, lines, entry_ids: entries.map((e: any) => e.id) };
   });
+
+  // ─── Debt Collection ────────────────────────────────────
+
+  const DEBT_STAGE_ORDER = ['reminder','warning','final_notice','demand_letter','collections_agency','legal_action','judgment','garnishment'];
+
+  function calculateDebtInterest(principal: number, rate: number, type: string, startDate: string, compoundFreq: number): number {
+    if (!startDate || rate <= 0) return 0;
+    const days = Math.max(0, Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000));
+    if (days === 0) return 0;
+    if (type === 'compound') {
+      const years = days / 365;
+      return principal * (Math.pow(1 + rate / compoundFreq, compoundFreq * years) - 1);
+    }
+    return principal * rate * (days / 365);
+  }
+
+  ipcMain.handle('debt:stats', (_event, { companyId }: { companyId: string }) => {
+    const row = db.getDb().prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN status NOT IN ('settled','written_off') THEN balance_due ELSE 0 END), 0) as total_outstanding,
+        COALESCE(SUM(CASE WHEN status = 'in_collection' THEN 1 ELSE 0 END), 0) as in_collection,
+        COALESCE(SUM(CASE WHEN status = 'legal' THEN 1 ELSE 0 END), 0) as legal_active,
+        COALESCE((SELECT SUM(dp.amount) FROM debt_payments dp JOIN debts d ON dp.debt_id = d.id WHERE d.company_id = ? AND strftime('%Y-%m', dp.received_date) = strftime('%Y-%m', 'now')), 0) as collected_this_month,
+        COALESCE(SUM(CASE WHEN status = 'written_off' AND strftime('%Y', updated_at) = strftime('%Y', 'now') THEN original_amount ELSE 0 END), 0) as writeoffs_ytd
+      FROM debts WHERE company_id = ?
+    `).get(companyId, companyId) as any;
+    return row;
+  });
+
+  ipcMain.handle('debt:calculate-interest', (_event, { debtId }: { debtId: string }) => {
+    const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
+    if (!debt) return { interest: 0, total: 0 };
+    const interest = calculateDebtInterest(
+      debt.original_amount, debt.interest_rate, debt.interest_type,
+      debt.interest_start_date, debt.compound_frequency
+    );
+    const rounded = Math.round(interest * 100) / 100;
+    db.getDb().prepare('UPDATE debts SET interest_accrued = ?, balance_due = original_amount + ? + fees_accrued - payments_made, updated_at = datetime(\'now\') WHERE id = ?').run(rounded, rounded, debtId);
+    return { interest: rounded, total: debt.original_amount + rounded + debt.fees_accrued - debt.payments_made };
+  });
+
+  ipcMain.handle('debt:advance-stage', (_event, { debtId, notes }: { debtId: string; notes?: string }) => {
+    const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
+    if (!debt) throw new Error('Debt not found');
+    const currentIdx = DEBT_STAGE_ORDER.indexOf(debt.current_stage);
+    if (currentIdx < 0 || currentIdx >= DEBT_STAGE_ORDER.length - 1) return;
+    const nextStage = DEBT_STAGE_ORDER[currentIdx + 1];
+    // Close current stage
+    db.getDb().prepare('UPDATE debt_pipeline_stages SET exited_at = datetime(\'now\') WHERE debt_id = ? AND stage = ? AND exited_at IS NULL').run(debtId, debt.current_stage);
+    // Open next stage
+    db.getDb().prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage, notes) VALUES (?, ?, ?, ?)').run(uuid(), debtId, nextStage, notes || '');
+    // Update debt
+    const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
+    db.getDb().prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debtId);
+  });
+
+  ipcMain.handle('debt:hold-toggle', (_event, { debtId, hold, reason }: { debtId: string; hold: boolean; reason?: string }) => {
+    db.getDb().prepare('UPDATE debts SET hold = ?, hold_reason = ?, updated_at = datetime(\'now\') WHERE id = ?').run(hold ? 1 : 0, reason || '', debtId);
+  });
+
+  ipcMain.handle('debt:import-overdue', (_event, { companyId, daysThreshold }: { companyId: string; daysThreshold: number }) => {
+    const overdue = db.getDb().prepare(`
+      SELECT i.*, c.name as client_name, c.email as client_email, c.phone as client_phone,
+             c.address_line1 || ' ' || c.city || ' ' || c.state || ' ' || c.zip as client_address
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.company_id = ? AND i.status = 'overdue'
+      AND julianday('now') - julianday(i.due_date) >= ?
+      AND i.id NOT IN (SELECT source_id FROM debts WHERE source_type = 'invoice' AND company_id = ?)
+    `).all(companyId, daysThreshold, companyId) as any[];
+    let imported = 0;
+    for (const inv of overdue) {
+      const id = uuid();
+      const balance = (inv.total || inv.amount || 0) - (inv.amount_paid || 0);
+      db.getDb().prepare(`
+        INSERT INTO debts (id, company_id, type, status, debtor_id, debtor_type, debtor_name, debtor_email, debtor_phone, debtor_address, source_type, source_id, original_amount, balance_due, due_date, delinquent_date, current_stage)
+        VALUES (?, ?, 'receivable', 'active', ?, 'client', ?, ?, ?, ?, 'invoice', ?, ?, ?, ?, ?, 'reminder')
+      `).run(id, companyId, inv.client_id || '', inv.client_name || 'Unknown', inv.client_email || '', inv.client_phone || '', inv.client_address || '', inv.id, balance, balance, inv.due_date || '', inv.due_date || '');
+      // Create initial pipeline stage
+      db.getDb().prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage) VALUES (?, ?, ?)').run(uuid(), id, 'reminder');
+      imported++;
+    }
+    return { imported };
+  });
+
+  ipcMain.handle('debt:generate-demand-letter', (_event, { debtId, templateId }: { debtId: string; templateId: string }) => {
+    const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
+    const template = db.getDb().prepare('SELECT * FROM debt_templates WHERE id = ?').get(templateId) as any;
+    if (!debt || !template) return { html: '' };
+    const company = db.getDb().prepare('SELECT * FROM companies WHERE id = ?').get(debt.company_id) as any;
+    const total = debt.original_amount + debt.interest_accrued + debt.fees_accrued - debt.payments_made;
+    const daysOverdue = debt.delinquent_date ? Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86400000) : 0;
+    const demandDeadline = new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0];
+    const fields: Record<string, string> = {
+      '{{debtor_name}}': debt.debtor_name || '',
+      '{{debtor_address}}': debt.debtor_address || '',
+      '{{original_amount}}': `$${(debt.original_amount || 0).toFixed(2)}`,
+      '{{interest_accrued}}': `$${(debt.interest_accrued || 0).toFixed(2)}`,
+      '{{fees_accrued}}': `$${(debt.fees_accrued || 0).toFixed(2)}`,
+      '{{total_due}}': `$${total.toFixed(2)}`,
+      '{{due_date}}': debt.due_date || '',
+      '{{demand_deadline}}': demandDeadline,
+      '{{days_overdue}}': String(daysOverdue),
+      '{{company_name}}': company?.name || '',
+      '{{company_address}}': [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '),
+      '{{company_phone}}': company?.phone || '',
+      '{{company_email}}': company?.email || '',
+    };
+    let body = template.body || '';
+    let subject = template.subject || '';
+    for (const [key, val] of Object.entries(fields)) {
+      body = body.split(key).join(val);
+      subject = subject.split(key).join(val);
+    }
+    return { html: `<h2>${subject}</h2>${body.replace(/\n/g, '<br>')}` };
+  });
+
+  ipcMain.handle('debt:export-bundle', async (_event, { debtId }: { debtId: string }) => {
+    const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
+    if (!debt) return { error: 'Debt not found' };
+    const company = db.getDb().prepare('SELECT * FROM companies WHERE id = ?').get(debt.company_id) as any;
+    const payments = db.getDb().prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY received_date').all(debtId) as any[];
+    const comms = db.getDb().prepare('SELECT * FROM debt_communications WHERE debt_id = ? ORDER BY logged_at').all(debtId) as any[];
+    const evidence = db.getDb().prepare('SELECT * FROM debt_evidence WHERE debt_id = ? ORDER BY date_of_evidence').all(debtId) as any[];
+    const legalActions = db.getDb().prepare('SELECT * FROM debt_legal_actions WHERE debt_id = ? ORDER BY created_at').all(debtId) as any[];
+    const stages = db.getDb().prepare('SELECT * FROM debt_pipeline_stages WHERE debt_id = ? ORDER BY entered_at').all(debtId) as any[];
+
+    const total = debt.original_amount + debt.interest_accrued + debt.fees_accrued - debt.payments_made;
+
+    let html = `<html><head><style>
+      body { font-family: Arial, sans-serif; color: #111; padding: 40px; }
+      h1 { font-size: 22px; border-bottom: 2px solid #111; padding-bottom: 8px; }
+      h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #999; padding-bottom: 4px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+      th { background: #f5f5f5; font-weight: bold; }
+      .label { font-weight: bold; width: 180px; }
+      .meta { color: #666; font-size: 12px; }
+    </style></head><body>`;
+
+    // Cover
+    html += `<h1>Debt Collection Case File</h1>`;
+    html += `<p><strong>Debtor:</strong> ${debt.debtor_name}</p>`;
+    html += `<p><strong>Company:</strong> ${company?.name || ''}</p>`;
+    html += `<p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>`;
+    html += `<p><strong>Total Due:</strong> $${total.toFixed(2)}</p>`;
+
+    // Debt Summary
+    html += `<h2>1. Debt Summary</h2><table>`;
+    const summaryRows: [string, any][] = [
+      ['Type', debt.type], ['Status', debt.status], ['Original Amount', `$${(debt.original_amount||0).toFixed(2)}`],
+      ['Interest Accrued', `$${(debt.interest_accrued||0).toFixed(2)}`], ['Fees', `$${(debt.fees_accrued||0).toFixed(2)}`],
+      ['Payments Made', `$${(debt.payments_made||0).toFixed(2)}`], ['Balance Due', `$${total.toFixed(2)}`],
+      ['Due Date', debt.due_date || '\u2014'], ['Delinquent Date', debt.delinquent_date || '\u2014'],
+      ['Interest Rate', `${((debt.interest_rate||0)*100).toFixed(2)}% (${debt.interest_type})`],
+      ['Jurisdiction', debt.jurisdiction || '\u2014'], ['Current Stage', debt.current_stage],
+    ];
+    for (const [label, value] of summaryRows) html += `<tr><td class="label">${label}</td><td>${value}</td></tr>`;
+    html += `</table>`;
+
+    // Payment History
+    html += `<h2>2. Payment History</h2>`;
+    if (payments.length === 0) { html += `<p>No payments recorded.</p>`; }
+    else {
+      html += `<table><tr><th>Date</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th></tr>`;
+      for (const p of payments) html += `<tr><td>${p.received_date}</td><td>$${(p.amount||0).toFixed(2)}</td><td>${p.method}</td><td>${p.reference_number||''}</td><td>${p.notes||''}</td></tr>`;
+      html += `</table>`;
+    }
+
+    // Communication Log
+    html += `<h2>3. Communication Log</h2>`;
+    if (comms.length === 0) { html += `<p>No communications recorded.</p>`; }
+    else {
+      for (const c of comms) {
+        html += `<div style="margin-bottom:16px;border-bottom:1px solid #eee;padding-bottom:8px;">`;
+        html += `<p class="meta">${c.logged_at} | ${c.type} | ${c.direction}</p>`;
+        html += `<p><strong>${c.subject || '(No subject)'}</strong></p>`;
+        html += `<p>${(c.body || '').replace(/\n/g, '<br>')}</p>`;
+        if (c.outcome) html += `<p><em>Outcome: ${c.outcome}</em></p>`;
+        html += `</div>`;
+      }
+    }
+
+    // Evidence Timeline
+    html += `<h2>4. Evidence Timeline</h2>`;
+    if (evidence.length === 0) { html += `<p>No evidence items.</p>`; }
+    else {
+      html += `<table><tr><th>Date</th><th>Type</th><th>Title</th><th>Description</th><th>Relevance</th></tr>`;
+      for (const e of evidence) html += `<tr><td>${e.date_of_evidence||'\u2014'}</td><td>${e.type}</td><td>${e.title}</td><td>${e.description||''}</td><td>${e.court_relevance}</td></tr>`;
+      html += `</table>`;
+    }
+
+    // Interest Breakdown
+    html += `<h2>5. Interest Calculation</h2>`;
+    html += `<p>Type: ${debt.interest_type} | Rate: ${((debt.interest_rate||0)*100).toFixed(2)}% | Start: ${debt.interest_start_date||'\u2014'}</p>`;
+    html += `<p>Accrued: $${(debt.interest_accrued||0).toFixed(2)}</p>`;
+
+    // Legal Actions
+    html += `<h2>6. Legal Actions</h2>`;
+    if (legalActions.length === 0) { html += `<p>No legal actions.</p>`; }
+    else {
+      for (const la of legalActions) {
+        html += `<div style="margin-bottom:12px;">`;
+        html += `<p><strong>${la.action_type}</strong> \u2014 Status: ${la.status} | Case: ${la.case_number||'\u2014'}</p>`;
+        if (la.hearing_date) html += `<p>Hearing: ${la.hearing_date} ${la.hearing_time||''}</p>`;
+        if (la.judgment_amount) html += `<p>Judgment: $${la.judgment_amount.toFixed(2)}</p>`;
+        html += `</div>`;
+      }
+    }
+
+    // Pipeline History
+    html += `<h2>7. Pipeline History</h2>`;
+    html += `<table><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Auto</th><th>Notes</th></tr>`;
+    for (const s of stages) html += `<tr><td>${s.stage}</td><td>${s.entered_at}</td><td>${s.exited_at||'\u2014'}</td><td>${s.auto_advanced?'Yes':'No'}</td><td>${s.notes||''}</td></tr>`;
+    html += `</table>`;
+
+    html += `</body></html>`;
+
+    return saveHTMLAsPDF(html, `Debt Case File \u2014 ${debt.debtor_name}`);
+  });
+
+  ipcMain.handle('debt:seed-automation', (_event, { companyId }: { companyId: string }) => {
+    const existing = db.getDb().prepare('SELECT COUNT(*) as cnt FROM debt_automation_rules WHERE company_id = ?').get(companyId) as any;
+    if (existing.cnt > 0) return;
+    const defaults: Array<{ from: string; to: string; days: number; action: string; review: number }> = [
+      { from: 'reminder', to: 'warning', days: 14, action: 'advance_stage', review: 0 },
+      { from: 'warning', to: 'final_notice', days: 14, action: 'advance_stage', review: 0 },
+      { from: 'final_notice', to: 'demand_letter', days: 7, action: 'advance_stage', review: 0 },
+      { from: 'demand_letter', to: 'collections_agency', days: 14, action: 'flag_review', review: 1 },
+      { from: 'collections_agency', to: 'legal_action', days: 30, action: 'flag_review', review: 1 },
+    ];
+    const stmt = db.getDb().prepare('INSERT INTO debt_automation_rules (id, company_id, from_stage, to_stage, days_after_entry, action, require_review) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const d of defaults) stmt.run(uuid(), companyId, d.from, d.to, d.days, d.action, d.review);
+  });
+
+  ipcMain.handle('debt:seed-templates', (_event, { companyId }: { companyId: string }) => {
+    const existing = db.getDb().prepare('SELECT COUNT(*) as cnt FROM debt_templates WHERE company_id = ?').get(companyId) as any;
+    if (existing.cnt > 0) return;
+    const templates = [
+      {
+        name: 'Friendly Reminder', type: 'reminder', severity: 'friendly',
+        subject: 'Friendly Reminder \u2014 Payment Due',
+        body: 'Dear {{debtor_name}},\n\nThis is a friendly reminder that your payment of {{total_due}} was due on {{due_date}}. If you have already sent your payment, please disregard this notice.\n\nIf you have any questions about your balance, please don\'t hesitate to contact us at {{company_phone}} or {{company_email}}.\n\nThank you for your prompt attention to this matter.\n\nSincerely,\n{{company_name}}'
+      },
+      {
+        name: 'Formal Warning', type: 'warning', severity: 'formal',
+        subject: 'Important Notice \u2014 Past Due Balance of {{total_due}}',
+        body: 'Dear {{debtor_name}},\n\nDespite our previous correspondence, your account remains past due in the amount of {{total_due}}. This balance has been outstanding for {{days_overdue}} days.\n\nPlease be advised that interest continues to accrue on this balance at the applicable rate. The current interest charged is {{interest_accrued}}.\n\nWe request immediate payment within 14 days of this notice. Failure to remit payment may result in further collection action.\n\nPlease direct payment or inquiries to:\n{{company_name}}\n{{company_address}}\n{{company_phone}}\n{{company_email}}'
+      },
+      {
+        name: 'Final Demand', type: 'demand_letter', severity: 'final',
+        subject: 'FINAL DEMAND \u2014 Immediate Payment Required',
+        body: 'RE: Past Due Account \u2014 {{total_due}}\n\nDear {{debtor_name}},\n\nThis letter serves as FINAL DEMAND for payment of the outstanding balance of {{total_due}}, which includes:\n\n  Original Amount: {{original_amount}}\n  Accrued Interest: {{interest_accrued}}\n  Fees: {{fees_accrued}}\n\nThis amount has been past due since {{due_date}} ({{days_overdue}} days).\n\nYOU MUST REMIT FULL PAYMENT BY {{demand_deadline}}.\n\nFailure to pay by this date will result in this matter being referred for legal action, which may include filing a lawsuit to recover the full amount owed plus court costs, attorney fees, and any additional interest permitted by law.\n\nThis is not a threat but a statement of our intent to pursue all available legal remedies.\n\n{{company_name}}\n{{company_address}}\n{{company_phone}}'
+      },
+    ];
+    const stmt = db.getDb().prepare('INSERT INTO debt_templates (id, company_id, name, type, subject, body, severity, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, 1)');
+    for (const t of templates) stmt.run(uuid(), companyId, t.name, t.type, t.subject, t.body, t.severity);
+  });
+
+  ipcMain.handle('debt:run-escalation', (_event, { companyId }: { companyId: string }) => {
+    const rules = db.getDb().prepare('SELECT * FROM debt_automation_rules WHERE company_id = ? AND enabled = 1 AND debt_id IS NULL').all(companyId) as any[];
+    let advanced = 0, flagged = 0;
+    for (const rule of rules) {
+      const debts = db.getDb().prepare(`
+        SELECT d.id FROM debts d
+        JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL
+        WHERE d.company_id = ? AND d.current_stage = ? AND d.hold = 0
+        AND d.status NOT IN ('settled','written_off','bankruptcy')
+        AND julianday('now') - julianday(dps.entered_at) >= ?
+      `).all(companyId, rule.from_stage, rule.days_after_entry) as any[];
+      for (const debt of debts) {
+        if (rule.require_review) {
+          flagged++;
+        } else {
+          // Auto-advance
+          const currentDebt = db.getDb().prepare('SELECT current_stage FROM debts WHERE id = ?').get(debt.id) as any;
+          const currentIdx = DEBT_STAGE_ORDER.indexOf(currentDebt.current_stage);
+          if (currentIdx >= 0 && currentIdx < DEBT_STAGE_ORDER.length - 1) {
+            const nextStage = DEBT_STAGE_ORDER[currentIdx + 1];
+            db.getDb().prepare('UPDATE debt_pipeline_stages SET exited_at = datetime(\'now\') WHERE debt_id = ? AND stage = ? AND exited_at IS NULL').run(debt.id, currentDebt.current_stage);
+            db.getDb().prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage, auto_advanced) VALUES (?, ?, ?, 1)').run(uuid(), debt.id, nextStage);
+            const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
+            db.getDb().prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debt.id);
+            advanced++;
+          }
+        }
+      }
+    }
+    return { advanced, flagged };
+  });
+
+  ipcMain.handle('debt:analytics', (_event, { companyId, startDate, endDate }: { companyId: string; startDate: string; endDate: string }) => {
+    // Collection rate by month
+    const collectionByMonth = db.getDb().prepare(`
+      SELECT strftime('%Y-%m', dp.received_date) as month, SUM(dp.amount) as total
+      FROM debt_payments dp JOIN debts d ON dp.debt_id = d.id
+      WHERE d.company_id = ? AND dp.received_date BETWEEN ? AND ?
+      GROUP BY month ORDER BY month
+    `).all(companyId, startDate, endDate);
+
+    // Aging breakdown
+    const aging = db.getDb().prepare(`
+      SELECT
+        CASE
+          WHEN julianday('now') - julianday(delinquent_date) <= 30 THEN '0-30'
+          WHEN julianday('now') - julianday(delinquent_date) <= 60 THEN '31-60'
+          WHEN julianday('now') - julianday(delinquent_date) <= 90 THEN '61-90'
+          WHEN julianday('now') - julianday(delinquent_date) <= 120 THEN '91-120'
+          WHEN julianday('now') - julianday(delinquent_date) <= 180 THEN '121-180'
+          ELSE '180+'
+        END as bucket,
+        COUNT(*) as count, SUM(balance_due) as total
+      FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') AND delinquent_date IS NOT NULL
+      GROUP BY bucket
+    `).all(companyId);
+
+    // Recovery by stage
+    const recoveryByStage = db.getDb().prepare(`
+      SELECT current_stage as stage, COUNT(*) as count
+      FROM debts WHERE company_id = ? AND status IN ('settled','written_off')
+      GROUP BY current_stage
+    `).all(companyId);
+
+    // Top debtors
+    const topDebtors = db.getDb().prepare(`
+      SELECT debtor_name, SUM(balance_due) as total
+      FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off')
+      GROUP BY debtor_name ORDER BY total DESC LIMIT 10
+    `).all(companyId);
+
+    // Pipeline velocity
+    const velocity = db.getDb().prepare(`
+      SELECT stage, AVG(julianday(exited_at) - julianday(entered_at)) as avg_days
+      FROM debt_pipeline_stages WHERE exited_at IS NOT NULL
+      AND debt_id IN (SELECT id FROM debts WHERE company_id = ?)
+      GROUP BY stage
+    `).all(companyId);
+
+    return { collectionByMonth, aging, recoveryByStage, topDebtors, velocity };
+  });
 }
 
