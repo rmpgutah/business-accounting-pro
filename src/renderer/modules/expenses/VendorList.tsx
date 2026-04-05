@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Building2, Plus, Search } from 'lucide-react';
 import api from '../../lib/api';
+import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -59,17 +60,6 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
       setVendors((prev) => prev.filter((v) => v.id !== id));
     } catch (err) {
       console.error('Failed to delete vendor:', err);
-    }
-  };
-
-  const statusBadge = (status?: string) => {
-    switch (status) {
-      case 'active':
-        return 'block-badge block-badge-income';
-      case 'inactive':
-        return 'block-badge block-badge-warning';
-      default:
-        return 'block-badge block-badge-blue';
     }
   };
 
@@ -150,8 +140,8 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
                   <td className="text-text-secondary">{v.email || '-'}</td>
                   <td className="text-text-secondary font-mono text-xs">{v.phone || '-'}</td>
                   <td>
-                    <span className={statusBadge(v.status)}>
-                      {v.status || 'active'}
+                    <span className={formatStatus(v.status).className}>
+                      {formatStatus(v.status).label}
                     </span>
                   </td>
                   <td className="text-text-secondary">{v.payment_terms || '-'}</td>

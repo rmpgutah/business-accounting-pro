@@ -4,7 +4,7 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
@@ -33,12 +33,6 @@ interface ExpenseListProps {
   onNew: () => void;
   onEdit: (id: string) => void;
 }
-
-const statusBadge: Record<string, string> = {
-  pending: 'block-badge block-badge-warning',
-  approved: 'block-badge block-badge-blue',
-  paid: 'block-badge block-badge-income',
-};
 
 // ─── Component ──────────────────────────────────────────
 const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
@@ -349,8 +343,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                       {formatCurrency(exp.amount)}
                     </td>
                     <td>
-                      <span className={statusBadge[exp.status] || 'block-badge'}>
-                        {exp.status}
+                      <span className={formatStatus(exp.status).className}>
+                        {formatStatus(exp.status).label}
                       </span>
                     </td>
                     <td className="text-center">

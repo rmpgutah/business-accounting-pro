@@ -4,7 +4,7 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
@@ -27,13 +27,6 @@ interface ClientListProps {
   onSelectClient: (id: string) => void;
   onNewClient: () => void;
 }
-
-// ─── Status Badge ───────────────────────────────────────
-const statusBadgeClass: Record<string, string> = {
-  active: 'block-badge block-badge-income',
-  inactive: 'block-badge block-badge-expense',
-  prospect: 'block-badge block-badge-blue',
-};
 
 // ─── Column Header (module-level to avoid re-creation) ──
 const SortableHeader: React.FC<{
@@ -343,8 +336,8 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     <td className="text-text-secondary">{client.email || '--'}</td>
                     <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>
                     <td>
-                      <span className={statusBadgeClass[client.status] ?? 'block-badge'}>
-                        {client.status}
+                      <span className={formatStatus(client.status).className}>
+                        {formatStatus(client.status).label}
                       </span>
                     </td>
                     <td className="text-text-secondary font-mono">

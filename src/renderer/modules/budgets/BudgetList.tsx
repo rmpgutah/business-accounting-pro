@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Wallet, Plus } from 'lucide-react';
 import api from '../../lib/api';
+import { formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -16,12 +17,6 @@ interface BudgetListProps {
   onNew: () => void;
   onSelect: (id: string) => void;
 }
-
-const statusBadge: Record<string, string> = {
-  draft: 'block-badge block-badge-warning',
-  active: 'block-badge block-badge-income',
-  closed: 'block-badge',
-};
 
 const periodLabel: Record<string, string> = {
   monthly: 'Monthly',
@@ -119,8 +114,8 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                   <td className="font-mono text-text-secondary text-xs">{b.start_date}</td>
                   <td className="font-mono text-text-secondary text-xs">{b.end_date}</td>
                   <td className="text-center">
-                    <span className={statusBadge[b.status] || 'block-badge'}>
-                      {b.status}
+                    <span className={formatStatus(b.status).className}>
+                      {formatStatus(b.status).label}
                     </span>
                   </td>
                 </tr>

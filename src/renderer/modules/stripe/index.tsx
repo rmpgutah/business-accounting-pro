@@ -10,7 +10,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -39,20 +39,6 @@ function typeBadgeClass(type: string): string {
       return 'block-badge block-badge-warning';
     default:
       return 'block-badge block-badge-purple';
-  }
-}
-
-function statusBadgeClass(status: string): string {
-  switch (status?.toLowerCase()) {
-    case 'succeeded':
-    case 'paid':
-      return 'block-badge block-badge-income';
-    case 'pending':
-      return 'block-badge block-badge-warning';
-    case 'failed':
-      return 'block-badge block-badge-expense';
-    default:
-      return 'block-badge block-badge-blue';
   }
 }
 
@@ -336,8 +322,8 @@ const StripeSyncModule: React.FC = () => {
                     </td>
                     <td className="text-text-secondary">{txn.description || '--'}</td>
                     <td>
-                      <span className={statusBadgeClass(txn.status)}>
-                        {txn.status}
+                      <span className={formatStatus(txn.status).className}>
+                        {formatStatus(txn.status).label}
                       </span>
                     </td>
                     <td className="text-xs text-text-muted">

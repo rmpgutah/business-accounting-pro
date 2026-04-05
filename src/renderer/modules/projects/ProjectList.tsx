@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { FolderKanban, Plus, Clock, Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -30,21 +30,6 @@ interface ProjectListProps {
   onSelectProject: (id: string) => void;
   onNewProject: () => void;
 }
-
-// ─── Status Config ──────────────────────────────────────
-const STATUS_BADGE: Record<string, string> = {
-  active: 'block-badge block-badge-income',
-  completed: 'block-badge block-badge-blue',
-  on_hold: 'block-badge block-badge-warning',
-  archived: 'block-badge block-badge-expense',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  active: 'Active',
-  completed: 'Completed',
-  on_hold: 'On Hold',
-  archived: 'Archived',
-};
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -289,8 +274,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                         {clientName}
                       </p>
                     </div>
-                    <span className={STATUS_BADGE[project.status] ?? 'block-badge'}>
-                      {STATUS_LABEL[project.status] ?? project.status}
+                    <span className={formatStatus(project.status).className}>
+                      {formatStatus(project.status).label}
                     </span>
                   </div>
 

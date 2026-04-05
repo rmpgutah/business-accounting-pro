@@ -13,7 +13,7 @@ import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { Plus } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -83,22 +83,6 @@ interface ProjectDetailProps {
   onBack: () => void;
   onEdit: (id: string) => void;
 }
-
-// ─── Status Config ──────────────────────────────────────
-const STATUS_BADGE: Record<string, string> = {
-  active: 'block-badge block-badge-income',
-  completed: 'block-badge block-badge-blue',
-  on_hold: 'block-badge block-badge-warning',
-  archived: 'block-badge block-badge-expense',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  active: 'Active',
-  completed: 'Completed',
-  on_hold: 'On Hold',
-  archived: 'Archived',
-};
-
 
 // ─── Stat Card ──────────────────────────────────────────
 interface StatCardProps {
@@ -276,8 +260,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-text-primary">{project.name}</h1>
-            <span className={STATUS_BADGE[project.status] ?? 'block-badge'}>
-              {STATUS_LABEL[project.status] ?? project.status}
+            <span className={formatStatus(project.status).className}>
+              {formatStatus(project.status).label}
             </span>
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">

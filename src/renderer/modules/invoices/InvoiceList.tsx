@@ -5,7 +5,7 @@ import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 
 // ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -28,15 +28,6 @@ interface Client {
 }
 
 type StatusTab = 'all' | InvoiceStatus;
-
-// ─── Status Badge Map ──────────────���────────────────────
-const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
-  draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
-  sent: { label: 'Sent', className: 'block-badge block-badge-warning' },
-  paid: { label: 'Paid', className: 'block-badge block-badge-income' },
-  overdue: { label: 'Overdue', className: 'block-badge block-badge-expense' },
-  partial: { label: 'Partial', className: 'block-badge block-badge-purple' },
-};
 
 // ─── Status Tabs ──────────────��─────────────────────────
 const TABS: { key: StatusTab; label: string }[] = [
@@ -320,7 +311,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <tbody>
               {filtered.map((inv) => {
                 const balance = inv.total - inv.amount_paid;
-                const badge = STATUS_BADGE[inv.status] ?? STATUS_BADGE.draft;
+                const badge = formatStatus(inv.status);
                 const isSelected = selectedIds.has(inv.id);
                 return (
                   <tr

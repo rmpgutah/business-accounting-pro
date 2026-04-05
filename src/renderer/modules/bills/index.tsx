@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 type View = 'list' | 'form' | 'detail';
@@ -104,15 +104,6 @@ const newLineDraft = (): LineItemDraft => ({
   unit_price: 0,
   account_id: '',
 });
-
-const STATUS_BADGE: Record<BillStatus, { label: string; className: string }> = {
-  draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
-  pending: { label: 'Pending', className: 'block-badge block-badge-warning' },
-  approved: { label: 'Approved', className: 'block-badge block-badge-income' },
-  partial: { label: 'Partial', className: 'block-badge block-badge-purple' },
-  paid: { label: 'Paid', className: 'block-badge block-badge-income' },
-  overdue: { label: 'Overdue', className: 'block-badge block-badge-expense' },
-};
 
 const STATUS_TABS: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -355,7 +346,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
             <tbody>
               {filtered.map((bill) => {
                 const balance = bill.total - bill.amount_paid;
-                const badge = STATUS_BADGE[bill.status] ?? STATUS_BADGE.draft;
+                const badge = formatStatus(bill.status);
                 const vendorName = vendorMap.get(bill.vendor_id) ?? '—';
                 return (
                   <tr
@@ -1002,7 +993,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
     );
   }
 
-  const badge = STATUS_BADGE[bill.status] ?? STATUS_BADGE.draft;
+  const badge = formatStatus(bill.status);
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">

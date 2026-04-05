@@ -14,7 +14,7 @@ import {
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { FileText as FileTextNav } from 'lucide-react';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -49,13 +49,6 @@ interface ClientDetailProps {
   onBack: () => void;
   onEdit: (id: string) => void;
 }
-
-// ─── Status Badge ───────────────────────────────────────
-const statusBadgeClass: Record<string, string> = {
-  active: 'block-badge block-badge-income',
-  inactive: 'block-badge block-badge-expense',
-  prospect: 'block-badge block-badge-blue',
-};
 
 // ─── Component ──────────────────────────────────────────
 const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit }) => {
@@ -192,8 +185,8 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-lg font-bold text-text-primary truncate">{client.name}</h2>
-                <span className={statusBadgeClass[client.status] ?? 'block-badge'}>
-                  {client.status}
+                <span className={formatStatus(client.status).className}>
+                  {formatStatus(client.status).label}
                 </span>
               </div>
               <p className="text-xs text-text-muted uppercase tracking-wider mb-3">

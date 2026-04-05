@@ -4,7 +4,7 @@ import api from '../../lib/api';
 import { generateInvoiceHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -51,15 +51,6 @@ interface Payment {
   method: string;
   reference: string;
 }
-
-// ─── Status Badge Map ───────────────────────────────────
-const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
-  draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
-  sent: { label: 'Sent', className: 'block-badge block-badge-warning' },
-  paid: { label: 'Paid', className: 'block-badge block-badge-income' },
-  overdue: { label: 'Overdue', className: 'block-badge block-badge-expense' },
-  partial: { label: 'Partial', className: 'block-badge block-badge-purple' },
-};
 
 // ─── Component ──────────────────────────────────────────
 interface InvoiceDetailProps {
@@ -187,7 +178,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     );
   }
 
-  const badge = STATUS_BADGE[invoice.status] ?? STATUS_BADGE.draft;
+  const badge = formatStatus(invoice.status);
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">

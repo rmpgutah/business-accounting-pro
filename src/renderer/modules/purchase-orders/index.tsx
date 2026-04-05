@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -78,24 +78,6 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 let _tempId = 0;
 const newTempId = () => `tmp-${++_tempId}`;
-
-const STATUS_LABELS: Record<POStatus, string> = {
-  draft: 'Draft',
-  sent: 'Sent',
-  approved: 'Approved',
-  partially_received: 'Partially Received',
-  received: 'Received',
-  cancelled: 'Cancelled',
-};
-
-const STATUS_BADGE: Record<POStatus, string> = {
-  draft: 'block-badge block-badge-blue',
-  sent: 'block-badge block-badge-warning',
-  approved: 'block-badge block-badge-income',
-  partially_received: 'block-badge block-badge-purple',
-  received: 'block-badge block-badge-income',
-  cancelled: 'block-badge block-badge-expense',
-};
 
 // ─── POList ──────────────────────────────────────────────
 
@@ -296,8 +278,8 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                   <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>
                   <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>
                   <td>
-                    <span className={STATUS_BADGE[po.status] || 'block-badge'}>
-                      {STATUS_LABELS[po.status] ?? po.status}
+                    <span className={formatStatus(po.status).className}>
+                      {formatStatus(po.status).label}
                     </span>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
@@ -851,8 +833,8 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           <div>
             <h1 className="module-title flex items-center gap-2">
               <span className="font-mono">{po.po_number}</span>
-              <span className={STATUS_BADGE[po.status] || 'block-badge'}>
-                {STATUS_LABELS[po.status] ?? po.status}
+              <span className={formatStatus(po.status).className}>
+                {formatStatus(po.status).label}
               </span>
             </h1>
             <p className="text-text-muted text-xs mt-0.5">Purchase Order Detail</p>
@@ -1047,8 +1029,8 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <Package size={14} />
             This purchase order is{' '}
-            <span className={STATUS_BADGE[po.status] || 'block-badge'}>
-              {STATUS_LABELS[po.status]}
+            <span className={formatStatus(po.status).className}>
+              {formatStatus(po.status).label}
             </span>{' '}
             and no further actions are available.
           </div>
