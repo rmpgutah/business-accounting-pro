@@ -14,6 +14,8 @@ import CommunicationForm from './CommunicationForm';
 import EvidenceForm from './EvidenceForm';
 import ContactForm from './ContactForm';
 import PipelineView from './PipelineView';
+import AnalyticsView from './AnalyticsView';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
@@ -50,6 +52,7 @@ const TabBtn: React.FC<{
 
 // ─── Main Module ────────────────────────────────────────
 const DebtCollectionModule: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [tab, setTab] = useState<Tab>('receivables');
 
   // View state
@@ -199,9 +202,7 @@ const DebtCollectionModule: React.FC = () => {
       )}
 
       {tab === 'analytics' && view === 'list' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          AnalyticsView — to be implemented
-        </div>
+        <AnalyticsView companyId={activeCompany?.id || ''} />
       )}
 
       {/* Modals — Communication */}
