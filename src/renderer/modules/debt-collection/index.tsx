@@ -7,6 +7,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import DebtList from './DebtList';
+import DebtForm from './DebtForm';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
@@ -148,9 +149,12 @@ const DebtCollectionModule: React.FC = () => {
 
       {/* Content — Form view (any tab) */}
       {view === 'form' && (
-        <div className="text-text-muted text-sm p-8 text-center">
-          DebtForm debtId=&quot;{activeDebtId}&quot; type=&quot;{debtFormType}&quot; onBack onSaved — to be implemented
-        </div>
+        <DebtForm
+          debtId={activeDebtId}
+          debtType={debtFormType}
+          onBack={handleBack}
+          onSaved={handleSaved}
+        />
       )}
 
       {/* Content — List views per tab */}
