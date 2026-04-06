@@ -2614,7 +2614,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('project:profitability', (_event, { projectId }: { projectId: string }) => {
     const dbI = db.getDb();
 
-    const revenue = dbI.prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE project_id = ?').get(projectId) as any;
+    // Revenue = sum of line item amounts on invoices linked to this project
+    // (invoices don't have project_id; the link is via invoice_line_items.project_id)
+    const revenue = dbI.prepare(`
+      SELECT COALESCE(SUM(ili.amount), 0) as total
+      FROM invoice_line_items ili
+      JOIN invoices i ON i.id = ili.invoice_id
+      WHERE ili.project_id = ?
+        AND i.status IN ('sent', 'paid', 'partial')
+    `).get(projectId) as any;
     const costs = dbI.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE project_id = ?').get(projectId) as any;
     const timeCost = dbI.prepare(`
       SELECT COALESCE(SUM(te.duration_minutes / 60.0 * COALESCE(e.pay_rate, 0)), 0) as total
