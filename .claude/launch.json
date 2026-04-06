@@ -13,5 +13,12 @@
       "runtimeArgs": ["/Users/rmpgutah/Business Accounting Pro/node_modules/.bin/vite", "--config", "vite.config.ts"],
       "port": 5173
     }
+  ,
+    {
+      "name": "Landing Page",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["-e", "require('http').createServer((req,res)=>{const fs=require('fs'),path=require('path');let f=path.join('/Users/rmpgutah/Business Accounting Pro/landing-page',req.url==='/'?'index.html':req.url);fs.readFile(f,(e,d)=>{if(e){res.writeHead(404);res.end();}else{const ext=path.extname(f);const ct={'html':'text/html','svg':'image/svg+xml'}[ext.slice(1)]||'text/plain';res.writeHead(200,{'Content-Type':ct});res.end(d);}});}).listen(8080)"],
+      "port": 8080
+    }
   ]
 }

@@ -130,7 +130,7 @@ const AuthScreen: React.FC = () => {
   };
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '14px 16px', fontSize: '14px',
-    background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '8px', color: '#fff', outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   };
@@ -151,12 +151,12 @@ const AuthScreen: React.FC = () => {
   };
   const glassCard: React.CSSProperties = {
     width: '100%', maxWidth: '440px',
-    background: 'rgba(30,32,40,0.65)',
-    backdropFilter: 'blur(24px) saturate(1.5)',
-    WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    padding: '40px', borderRadius: '16px',
-    boxShadow: '0 24px 64px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
+    background: 'rgba(20,23,30,0.82)',
+    backdropFilter: 'blur(32px) saturate(1.6)',
+    WebkitBackdropFilter: 'blur(32px) saturate(1.6)',
+    border: '1px solid rgba(255,255,255,0.10)',
+    padding: '44px', borderRadius: '14px',
+    boxShadow: '0 32px 80px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06) inset',
   };
   const linkBtn: React.CSSProperties = {
     background: 'none', border: 'none', color: '#ef4444',
@@ -174,8 +174,12 @@ const AuthScreen: React.FC = () => {
 
   if (hasExisting === null) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#08090c' }}>
-        <div style={{ color: '#9a9db0', fontSize: '14px' }}>Loading...</div>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.40)), url(${BG_IMAGE})`,
+        backgroundSize: 'cover', backgroundPosition: 'center',
+      }}>
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Loading...</div>
       </div>
     );
   }
@@ -183,7 +187,7 @@ const AuthScreen: React.FC = () => {
   return (
     <div style={{
       display: 'flex', minHeight: '100vh', width: '100%',
-      backgroundImage: `linear-gradient(rgba(8,9,12,0.55), rgba(8,9,12,0.65)), url(${BG_IMAGE})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.40)), url(${BG_IMAGE})`,
       backgroundSize: 'cover', backgroundPosition: 'center',
       fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
     }}>
@@ -193,12 +197,16 @@ const AuthScreen: React.FC = () => {
       {/* ── Left branding panel ───────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px', minWidth: '300px' }}>
         <div style={{
-          width: '56px', height: '56px', borderRadius: '12px',
-          background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))',
+          width: '64px', height: '64px', borderRadius: '50%',
+          background: 'rgba(20,23,30,0.75)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '2px solid rgba(239,68,68,0.6)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '24px', fontWeight: 800, color: 'white', marginBottom: '32px',
-          boxShadow: '0 8px 24px rgba(59,130,246,0.3)',
-        }}>B</div>
+          fontSize: '22px', fontWeight: 800, color: '#ef4444', marginBottom: '32px',
+          boxShadow: '0 4px 20px rgba(239,68,68,0.2)',
+          letterSpacing: '-0.5px',
+        }}>BAP</div>
 
         <h1 style={{ fontSize: '48px', fontWeight: 800, color: 'white', lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: '16px' }}>
           Business<br />Accounting<br />Pro
