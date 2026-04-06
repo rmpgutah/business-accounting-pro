@@ -19,7 +19,9 @@ const SAVED_EMAIL_KEY = 'bap-saved-email';
 const SAVED_NAME_KEY  = 'bap-saved-name';
 const REMEMBER_KEY    = 'bap-remember';
 
+// Mountain landscape — loads from Unsplash with CSS gradient fallback
 const BG_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80&auto=format';
+const BG_FALLBACK = 'linear-gradient(160deg, #0a1628 0%, #0f1d32 25%, #162640 50%, #1a3050 70%, #0e1a2e 100%)';
 
 const AuthScreen: React.FC = () => {
   const setUser      = useAuthStore((s) => s.setUser);
@@ -176,9 +178,8 @@ const AuthScreen: React.FC = () => {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.40)), url(${BG_IMAGE})`,
-        backgroundSize: 'cover', backgroundPosition: 'center',
-      }}>
+        background: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.45)), url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
+        }}>
         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Loading...</div>
       </div>
     );
@@ -187,8 +188,7 @@ const AuthScreen: React.FC = () => {
   return (
     <div style={{
       display: 'flex', minHeight: '100vh', width: '100%',
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.40)), url(${BG_IMAGE})`,
-      backgroundSize: 'cover', backgroundPosition: 'center',
+      background: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.45)), url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
       fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
     }}>
       {/* Drag region for macOS hiddenInset title bar */}
