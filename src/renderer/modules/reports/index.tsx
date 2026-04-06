@@ -11,6 +11,7 @@ const TaxSummary = React.lazy(() => import('./TaxSummary'));
 const TrialBalance = React.lazy(() => import('./TrialBalance'));
 const APAgingReport = React.lazy(() => import('./APAgingReport'));
 const GeneralLedger = React.lazy(() => import('./GeneralLedger'));
+const FinancialStatements = React.lazy(() => import('./FinancialStatements'));
 
 // ─── Report title map ───────────────────────────────────
 const REPORT_TITLES: Record<ReportType, string> = {
@@ -23,6 +24,7 @@ const REPORT_TITLES: Record<ReportType, string> = {
   'general-ledger': 'General Ledger',
   'expense-by-category': 'Expense by Category',
   'tax-summary': 'Tax Summary',
+  'financial-statements': 'Financial Statements',
 };
 
 // ─── Lazy loading fallback ───────────────────────────────
@@ -56,6 +58,8 @@ const ReportsModule: React.FC = () => {
         return <Suspense fallback={<LazyFallback />}><GeneralLedger /></Suspense>;
       case 'tax-summary':
         return <Suspense fallback={<LazyFallback />}><TaxSummary /></Suspense>;
+      case 'financial-statements':
+        return <Suspense fallback={<LazyFallback />}><FinancialStatements /></Suspense>;
       default:
         return null;
     }

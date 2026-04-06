@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell } from 'lucide-react';
 import api from '../../lib/api';
 import { generateInvoiceHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency, formatStatus } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -76,6 +76,8 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [schedulingReminders, setSchedulingReminders] = useState(false);
 
   const buildHTML = () => {
     if (!invoice) return '';
@@ -106,15 +108,17 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       if (!inv) return;
       setInvoice(inv);
 
-      const [clientData, lineData, paymentData] = await Promise.all([
+      const [clientData, lineData, paymentData, reminderData] = await Promise.all([
         api.get('clients', inv.client_id),
         api.query('invoice_line_items', { invoice_id: invoiceId }),
         api.query('payments', { invoice_id: invoiceId }),
+        api.invoiceListReminders(invoiceId),
       ]);
 
       setClient(clientData ?? null);
       setLines(lineData ?? []);
       setPayments(paymentData ?? []);
+      setReminders(reminderData ?? []);
     } catch (err) {
       console.error('Failed to load invoice detail:', err);
     } finally {
@@ -168,6 +172,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       return;
     }
     onBack();
+  };
+
+  const handleScheduleReminders = async () => {
+    if (!invoice) return;
+    setSchedulingReminders(true);
+    try {
+      await api.invoiceScheduleReminders(invoiceId);
+      const updated = await api.invoiceListReminders(invoiceId);
+      setReminders(updated ?? []);
+    } catch (err) {
+      console.error('Failed to schedule reminders:', err);
+    } finally {
+      setSchedulingReminders(false);
+    }
   };
 
   const handlePaymentSaved = () => {
@@ -472,6 +490,79 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Reminders */}
+      <div className="block-card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell size={14} className="text-text-muted" />
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Reminders
+            </span>
+          </div>
+          {invoice.status !== 'paid' && (
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handleScheduleReminders}
+              disabled={schedulingReminders}
+            >
+              <Bell size={12} />
+              {schedulingReminders ? 'Scheduling...' : 'Schedule Reminders'}
+            </button>
+          )}
+        </div>
+        {reminders.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-text-muted">No reminders scheduled.</p>
+            {invoice.status !== 'paid' && (
+              <p className="text-xs text-text-muted mt-1">
+                Click "Schedule Reminders" to auto-create reminders based on the due date.
+              </p>
+            )}
+          </div>
+        ) : (
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Scheduled Date</th>
+                <th>Status</th>
+                <th>Sent At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reminders.map((r: any) => {
+                const typeLabels: Record<string, string> = {
+                  before_due: '3 Days Before Due',
+                  on_due: 'On Due Date',
+                  overdue_7: '7 Days Overdue',
+                  overdue_14: '14 Days Overdue',
+                  overdue_30: '30 Days Overdue',
+                  overdue_60: '60 Days Overdue',
+                  custom: 'Custom',
+                };
+                const statusBadge = formatStatus(r.status);
+                return (
+                  <tr key={r.id}>
+                    <td className="text-text-primary text-sm">
+                      {typeLabels[r.reminder_type] || r.reminder_type}
+                    </td>
+                    <td className="text-text-secondary text-sm">
+                      {formatDate(r.scheduled_date)}
+                    </td>
+                    <td>
+                      <span className={statusBadge.className}>{statusBadge.label}</span>
+                    </td>
+                    <td className="text-text-muted text-sm font-mono">
+                      {r.sent_at ? formatDate(r.sent_at) : '--'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

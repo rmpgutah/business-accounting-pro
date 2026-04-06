@@ -9,6 +9,7 @@ import {
   BookOpen,
   CreditCard,
   List,
+  FileSpreadsheet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -22,7 +23,8 @@ export type ReportType =
   | 'trial-balance'
   | 'general-ledger'
   | 'expense-by-category'
-  | 'tax-summary';
+  | 'tax-summary'
+  | 'financial-statements';
 
 interface ReportCard {
   id: ReportType;
@@ -109,6 +111,14 @@ const REPORTS: ReportCard[] = [
       'Tax collected, tax paid, and net tax liability for the selected period.',
     icon: Calculator,
     accentClass: 'border-l-[#f59e0b]',
+  },
+  {
+    id: 'financial-statements',
+    title: 'Financial Statements',
+    description:
+      'Formatted, print-ready Profit & Loss, Balance Sheet, and Cash Flow statements.',
+    icon: FileSpreadsheet,
+    accentClass: 'border-l-accent-income',
   },
 ];
 
