@@ -28,8 +28,8 @@ const AuthScreen: React.FC = () => {
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
 
-  // Login is always the default / dominant view
-  const [mode, setMode]             = useState<Mode>('login');
+  // Default to register — useEffect will switch to login if users exist
+  const [mode, setMode]             = useState<Mode>('register');
   const [users, setUsers]           = useState<UserEntry[]>([]);
   const [hasExisting, setHasExisting] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
