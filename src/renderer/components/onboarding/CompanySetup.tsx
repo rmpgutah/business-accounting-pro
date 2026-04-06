@@ -20,11 +20,11 @@ const CompanySetup: React.FC = () => {
   const [name, setName] = useState('');
   const [legalName, setLegalName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [zip, setZip] = useState('');
+  const [phone, setPhone] = useState('(801) 888-2257');
+  const [address, setAddress] = useState('2966 S 200 E');
+  const [city, setCity] = useState('South Salt Lake');
+  const [state, setState] = useState('UT');
+  const [zip, setZip] = useState('84115');
   const [taxId, setTaxId] = useState('');
   const [fiscalYearStart, setFiscalYearStart] = useState(1);
 
