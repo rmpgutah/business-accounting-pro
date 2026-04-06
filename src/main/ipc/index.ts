@@ -12,6 +12,118 @@ import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } fr
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
 import { openPrintPreview, saveHTMLAsPDF, printHTML } from '../services/print-preview';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
+import http from 'http';
+import https from 'https';
+
+// ─── Server Sync Config ──────────────────────────────────
+const SYNC_SERVER = process.env.SYNC_SERVER_URL || 'https://accounting.rmpgutah.us';
+
+// Debounced auto-backup: waits 30s after last write, then uploads DB to server
+let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleAutoBackup() {
+  if (autoBackupTimer) clearTimeout(autoBackupTimer);
+  autoBackupTimer = setTimeout(async () => {
+    try {
+      const dbPath = db.getDbPath();
+      if (!fs.existsSync(dbPath)) return;
+      try { db.getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+
+      const fileData = fs.readFileSync(dbPath);
+      const email = getLastLoginEmail();
+      if (!email) return;
+
+      const secret = process.env.SYNC_SECRET || 'bap-sync-default';
+      const signature = crypto.createHmac('sha256', secret).update(fileData).digest('hex');
+
+      const url = new URL(`${SYNC_SERVER}/api/backup/upload`);
+      const isHttps = url.protocol === 'https:';
+      const transport = isHttps ? https : http;
+
+      const req = transport.request({
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': fileData.length,
+          'x-bap-signature': signature,
+          'x-bap-email': email,
+        },
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk: string) => body += chunk);
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            console.log('Auto-backup uploaded successfully');
+          } else {
+            console.warn('Auto-backup response:', res.statusCode, body);
+          }
+        });
+      });
+      req.on('error', (err) => console.warn('Auto-backup failed (network):', err.message));
+      req.write(fileData);
+      req.end();
+    } catch (err) {
+      console.warn('Auto-backup error:', err);
+    }
+  }, 30000); // 30 second debounce
+}
+
+let _lastLoginEmail: string | null = null;
+function setLastLoginEmail(email: string) { _lastLoginEmail = email; }
+function getLastLoginEmail(): string | null { return _lastLoginEmail; }
+
+// Helper: download backup from server
+function downloadBackup(email: string): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    const url = new URL(`${SYNC_SERVER}/api/backup/download/${encodeURIComponent(email)}`);
+    const isHttps = url.protocol === 'https:';
+    const transport = isHttps ? https : http;
+
+    const req = transport.request({
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname,
+      method: 'GET',
+    }, (res) => {
+      if (res.statusCode !== 200) { resolve(null); return; }
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+// Helper: register user on server (fire-and-forget)
+function serverRegister(email: string, password: string, displayName: string, userId: string) {
+  try {
+    const payload = JSON.stringify({ email, password, displayName, userId });
+    const url = new URL(`${SYNC_SERVER}/api/auth/register`);
+    const isHttps = url.protocol === 'https:';
+    const transport = isHttps ? https : http;
+
+    const req = transport.request({
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    }, (res) => {
+      let body = '';
+      res.on('data', (c: string) => body += c);
+      res.on('end', () => console.log('Server register:', res.statusCode, body));
+    });
+    req.on('error', (err) => console.warn('Server register failed:', err.message));
+    req.write(payload);
+    req.end();
+  } catch (err) {
+    console.warn('Server register error:', err);
+  }
+}
 
 // ─── CSV Helpers (shared by import/export handlers) ──────
 function escapeCSVField(val: any): string {
@@ -320,6 +432,7 @@ export function registerIpcHandlers(): void {
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
       syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+      scheduleAutoBackup();
       return record;
     } catch (err) {
       console.error(`db:create [${table}] failed:`, err);
@@ -342,6 +455,7 @@ export function registerIpcHandlers(): void {
         db.logAudit(companyId, table, id, 'update', changes);
       }
       syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+      scheduleAutoBackup();
       return record;
     } catch (err) {
       console.error(`db:update [${table}:${id}] failed:`, err);
@@ -355,6 +469,7 @@ export function registerIpcHandlers(): void {
       if (companyId) db.logAudit(companyId, table, id, 'delete');
       db.remove(table, id);
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+      scheduleAutoBackup();
     } catch (err) {
       console.error(`db:delete [${table}:${id}] failed:`, err);
       return { error: err instanceof Error ? err.message : String(err) };
@@ -785,11 +900,35 @@ export function registerIpcHandlers(): void {
       [id, email, displayName, hash, isFirst ? 'owner' : 'accountant', now, now, now]
     );
 
+    // Also register on server (non-blocking)
+    setLastLoginEmail(email);
+    serverRegister(email, password, displayName, id);
+    scheduleAutoBackup();
+
     return { id, email, display_name: displayName, role: isFirst ? 'owner' : 'accountant', avatar_color: '#3b82f6' };
   });
 
-  ipcMain.handle('auth:login', (_event, { email, password }: { email: string; password: string }) => {
-    const rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
+  ipcMain.handle('auth:login', async (_event, { email, password }: { email: string; password: string }) => {
+    let rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
+
+    // If user not found locally, try restoring from server backup
+    if (rows.length === 0) {
+      console.log('User not found locally, checking server for backup...');
+      const backup = await downloadBackup(email);
+      if (backup && backup.length > 1000) {
+        // Restore the backup
+        const dbPath = db.getDbPath();
+        try {
+          db.getDb().pragma('wal_checkpoint(TRUNCATE)');
+        } catch (_) {}
+        fs.writeFileSync(dbPath, backup);
+        console.log(`Restored ${backup.length} byte backup from server for ${email}`);
+        // Reinitialize database
+        db.reinitDatabase();
+        rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
+      }
+    }
+
     if (rows.length === 0) throw new Error('Invalid email or password');
 
     const user = rows[0];
@@ -797,12 +936,16 @@ export function registerIpcHandlers(): void {
 
     // Update last_login
     db.execQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
+    setLastLoginEmail(email);
 
     // Get user's companies
     const companies = db.runQuery(
       'SELECT c.*, uc.role as user_role FROM companies c JOIN user_companies uc ON c.id = uc.company_id WHERE uc.user_id = ?',
       [user.id]
     );
+
+    // Upload current DB to server (non-blocking)
+    scheduleAutoBackup();
 
     return {
       user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, avatar_color: user.avatar_color },

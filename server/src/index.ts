@@ -7,14 +7,22 @@ import { initWebSocket } from './ws';
 import { syncRouter } from './routes/sync';
 import { portalRouter } from './routes/portal';
 import { stripeRouter } from './routes/stripe';
+import { authRouter } from './routes/auth';
+import { backupRouter } from './routes/backup';
 import { startCrons } from './crons';
 
 // Startup guards — fail fast if required env vars are missing
-const REQUIRED_ENV = ['SYNC_SECRET', 'DESKTOP_WS_TOKEN', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
+const REQUIRED_ENV = ['SYNC_SECRET', 'DESKTOP_WS_TOKEN'];
+const OPTIONAL_ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     console.error(`Missing required env var: ${key}`);
     process.exit(1);
+  }
+}
+for (const key of OPTIONAL_ENV) {
+  if (!process.env[key]) {
+    console.warn(`Optional env var missing: ${key} — some features disabled`);
   }
 }
 
@@ -25,6 +33,8 @@ app.use(express.json());
 initDb();
 
 app.use('/api/sync', syncRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/backup', backupRouter);
 app.use('/portal', portalRouter);
 app.use('/api/stripe', stripeRouter);
 app.get('/health', (_req, res) => res.json({ ok: true }));

@@ -48,6 +48,14 @@ export function initDatabase(): Database.Database {
   return db;
 }
 
+// Reinitialize database (used after restoring from backup)
+export function reinitDatabase(): Database.Database {
+  if (db) {
+    try { db.close(); } catch (_) {}
+  }
+  return initDatabase();
+}
+
 export function switchCompany(companyId: string): void {
   currentCompanyId = companyId;
 }
