@@ -73,6 +73,10 @@ const api = {
     window.electronAPI.invoke('invoice:send-email', invoiceId),
   generateInvoiceToken: (invoiceId: string): Promise<{ token: string }> =>
     window.electronAPI.invoke('invoice:generate-token', invoiceId),
+  invoiceScheduleReminders: (invoiceId: string): Promise<{ scheduled: number }> =>
+    window.electronAPI.invoke('invoice:schedule-reminders', { invoiceId }),
+  invoiceListReminders: (invoiceId: string): Promise<any[]> =>
+    window.electronAPI.invoke('invoice:list-reminders', { invoiceId }),
 
   // File dialog
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
@@ -300,6 +304,20 @@ const api = {
 
   debtAnalytics: (companyId: string, startDate: string, endDate: string): Promise<any> =>
     window.electronAPI.invoke('debt:analytics', { companyId, startDate, endDate }),
+
+  // ─── Quotes ────────────────────────────────────────
+  quotesNextNumber: (): Promise<string> =>
+    window.electronAPI.invoke('quotes:next-number'),
+  quotesConvertToInvoice: (quoteId: string): Promise<{ invoice_id: string }> =>
+    window.electronAPI.invoke('quotes:convert-to-invoice', { quoteId }),
+
+  // ─── Client Insights ──────────────────────────────────
+  clientInsights: (clientId: string): Promise<any> =>
+    window.electronAPI.invoke('client:insights', { clientId }),
+
+  // ─── Project Profitability ────────────────────────────
+  projectProfitability: (projectId: string): Promise<any> =>
+    window.electronAPI.invoke('project:profitability', { projectId }),
 
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),

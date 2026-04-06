@@ -69,6 +69,10 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   written_off:      { label: 'Written Off',      className: 'block-badge' },
   disputed:         { label: 'Disputed',         className: 'block-badge block-badge-purple' },
   bankruptcy:       { label: 'Bankruptcy',       className: 'block-badge block-badge-expense' },
+  // Quotes
+  accepted:         { label: 'Accepted',         className: 'block-badge block-badge-income' },
+  expired:          { label: 'Expired',          className: 'block-badge' },
+  converted:        { label: 'Converted',        className: 'block-badge block-badge-purple' },
   // Debt Pipeline Stages
   reminder:         { label: 'Reminder',         className: 'block-badge block-badge-blue' },
   warning:          { label: 'Warning',          className: 'block-badge block-badge-warning' },

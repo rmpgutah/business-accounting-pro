@@ -14,6 +14,7 @@ import { useNavigation } from '../../lib/navigation';
 import { Plus } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import ProjectProfitability from './ProjectProfitability';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -334,6 +335,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           accentClass={stats.profitLoss >= 0 ? 'border-l-accent-income' : 'border-l-accent-expense'}
         />
       </div>
+
+      {/* Project Profitability */}
+      <ProjectProfitability projectId={projectId} />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border-primary pb-0">

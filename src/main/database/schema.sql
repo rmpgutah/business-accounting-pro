@@ -1137,3 +1137,54 @@ CREATE TABLE IF NOT EXISTS debt_templates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_debt_templates_company ON debt_templates(company_id);
+
+-- ─── Quotes / Estimates ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS quotes (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  quote_number TEXT NOT NULL,
+  client_id TEXT REFERENCES clients(id),
+  client_name TEXT DEFAULT '',
+  status TEXT DEFAULT 'draft' CHECK(status IN ('draft','sent','accepted','rejected','expired','converted')),
+  issue_date TEXT NOT NULL,
+  valid_until TEXT,
+  subtotal REAL DEFAULT 0,
+  tax_amount REAL DEFAULT 0,
+  discount_amount REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  notes TEXT DEFAULT '',
+  terms TEXT DEFAULT '',
+  converted_invoice_id TEXT REFERENCES invoices(id),
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_company ON quotes(company_id, status);
+
+CREATE TABLE IF NOT EXISTS quote_line_items (
+  id TEXT PRIMARY KEY,
+  quote_id TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  description TEXT NOT NULL DEFAULT '',
+  quantity REAL DEFAULT 1,
+  unit_price REAL DEFAULT 0,
+  tax_rate REAL DEFAULT 0,
+  amount REAL DEFAULT 0,
+  sort_order INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_quote_lines_quote ON quote_line_items(quote_id);
+
+-- Invoice Reminders
+CREATE TABLE IF NOT EXISTS invoice_reminders (
+  id TEXT PRIMARY KEY,
+  invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  reminder_type TEXT NOT NULL CHECK(reminder_type IN ('before_due','on_due','overdue_7','overdue_14','overdue_30','overdue_60','custom')),
+  scheduled_date TEXT NOT NULL,
+  sent_at TEXT,
+  status TEXT DEFAULT 'pending' CHECK(status IN ('pending','sent','skipped','failed')),
+  message TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_reminders_invoice ON invoice_reminders(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_reminders_status ON invoice_reminders(status, scheduled_date);

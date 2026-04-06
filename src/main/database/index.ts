@@ -160,6 +160,9 @@ const tablesWithoutUpdatedAt = new Set([
   // Debt collection child tables — created_at only
   'debt_contacts', 'debt_communications', 'debt_payments',
   'debt_pipeline_stages', 'debt_evidence',
+  'quote_line_items',
+  // Invoice reminders — created_at only
+  'invoice_reminders',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

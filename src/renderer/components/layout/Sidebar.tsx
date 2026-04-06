@@ -33,6 +33,7 @@ import {
   ClipboardList,
   Boxes,
   Scale,
+  FileCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -57,6 +58,7 @@ const sections: NavSection[] = [
       { id: 'invoicing', label: 'Invoicing', icon: FileText },
       { id: 'expenses', label: 'Expenses', icon: Receipt },
       { id: 'clients', label: 'Clients', icon: UserCircle },
+      { id: 'quotes', label: 'Quotes', icon: FileCheck },
     ],
   },
   {

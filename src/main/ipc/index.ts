@@ -242,6 +242,9 @@ export function registerIpcHandlers(): void {
     // Debt collection child tables — company_id lives on parent `debts` table
     'debt_contacts', 'debt_communications', 'debt_payments',
     'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
+    'quote_line_items',
+    // Invoice reminders — company_id lives on parent `invoices` table
+    'invoice_reminders',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -686,6 +689,34 @@ export function registerIpcHandlers(): void {
     `).run(uuid(), invoiceId, companyId, token, expiresAt);
 
     return { token };
+  });
+
+  // ─── Invoice Reminders ────────────────────────────────
+  ipcMain.handle('invoice:schedule-reminders', (_event, { invoiceId }: { invoiceId: string }) => {
+    const invoice = db.getDb().prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
+    if (!invoice || !invoice.due_date) return { scheduled: 0 };
+
+    const dueDate = new Date(invoice.due_date);
+    const reminders = [
+      { type: 'before_due', date: new Date(dueDate.getTime() - 3 * 86400000) },
+      { type: 'on_due', date: dueDate },
+      { type: 'overdue_7', date: new Date(dueDate.getTime() + 7 * 86400000) },
+      { type: 'overdue_14', date: new Date(dueDate.getTime() + 14 * 86400000) },
+      { type: 'overdue_30', date: new Date(dueDate.getTime() + 30 * 86400000) },
+    ].filter(r => r.date >= new Date());
+
+    // Clear existing pending reminders
+    db.getDb().prepare("DELETE FROM invoice_reminders WHERE invoice_id = ? AND status = 'pending'").run(invoiceId);
+
+    const stmt = db.getDb().prepare('INSERT INTO invoice_reminders (id, invoice_id, reminder_type, scheduled_date) VALUES (?, ?, ?, ?)');
+    for (const r of reminders) {
+      stmt.run(uuid(), invoiceId, r.type, r.date.toISOString().split('T')[0]);
+    }
+    return { scheduled: reminders.length };
+  });
+
+  ipcMain.handle('invoice:list-reminders', (_event, { invoiceId }: { invoiceId: string }) => {
+    return db.getDb().prepare('SELECT * FROM invoice_reminders WHERE invoice_id = ? ORDER BY scheduled_date').all(invoiceId);
   });
 
   // ─── CSV Export ────────────────────────────────────────
@@ -2515,6 +2546,101 @@ export function registerIpcHandlers(): void {
     `).all(companyId);
 
     return { collectionByMonth, aging, recoveryByStage, topDebtors, velocity };
+  });
+
+  // ─── Quotes ──────────────────────────────────────────────
+  ipcMain.handle('quotes:next-number', () => {
+    const companyId = db.getCurrentCompanyId();
+    const row = db.getDb().prepare('SELECT COUNT(*) as cnt FROM quotes WHERE company_id = ?').get(companyId) as any;
+    return `QT-${String((row?.cnt || 0) + 1).padStart(4, '0')}`;
+  });
+
+  ipcMain.handle('quotes:convert-to-invoice', (_event, { quoteId }: { quoteId: string }) => {
+    const quote = db.getDb().prepare('SELECT * FROM quotes WHERE id = ?').get(quoteId) as any;
+    if (!quote) throw new Error('Quote not found');
+    const lines = db.getDb().prepare('SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order').all(quoteId) as any[];
+
+    // Generate invoice number
+    const row = db.getDb().prepare('SELECT COUNT(*) as cnt FROM invoices WHERE company_id = ?').get(quote.company_id) as any;
+    const invoiceNumber = `INV-${String((row?.cnt || 0) + 1).padStart(4, '0')}`;
+
+    const invoiceId = uuid();
+    db.getDb().prepare(`INSERT INTO invoices (id, company_id, invoice_number, client_id, issue_date, due_date, subtotal, tax_amount, discount_amount, total, notes, terms, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`).run(
+      invoiceId, quote.company_id, invoiceNumber, quote.client_id, new Date().toISOString().split('T')[0],
+      new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      quote.subtotal, quote.tax_amount, quote.discount_amount, quote.total, quote.notes, quote.terms
+    );
+
+    for (const line of lines) {
+      db.getDb().prepare('INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, tax_rate, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+        uuid(), invoiceId, line.description, line.quantity, line.unit_price, line.tax_rate, line.amount, line.sort_order
+      );
+    }
+
+    db.getDb().prepare("UPDATE quotes SET status = 'converted', converted_invoice_id = ?, updated_at = datetime('now') WHERE id = ?").run(invoiceId, quoteId);
+    return { invoice_id: invoiceId };
+  });
+
+  // ─── Client Insights ─────────────────────────────────────
+  ipcMain.handle('client:insights', (_event, { clientId }: { clientId: string }) => {
+    const dbI = db.getDb();
+
+    const invoiced = dbI.prepare('SELECT COALESCE(SUM(total), 0) as total FROM invoices WHERE client_id = ?').get(clientId) as any;
+    const paid = dbI.prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE client_id = ?').get(clientId) as any;
+    const outstanding = dbI.prepare("SELECT COALESCE(SUM(total - amount_paid), 0) as total FROM invoices WHERE client_id = ? AND status NOT IN ('paid','void','cancelled')").get(clientId) as any;
+    const avgDays = dbI.prepare("SELECT AVG(julianday(updated_at) - julianday(issue_date)) as avg_days FROM invoices WHERE client_id = ? AND status = 'paid'").get(clientId) as any;
+    const statusBreakdown = dbI.prepare('SELECT status, COUNT(*) as count FROM invoices WHERE client_id = ? GROUP BY status').all(clientId);
+    const paymentHistory = dbI.prepare(`
+      SELECT strftime('%Y-%m', updated_at) as month, SUM(amount_paid) as total
+      FROM invoices WHERE client_id = ? AND status = 'paid'
+      GROUP BY month ORDER BY month DESC LIMIT 12
+    `).all(clientId);
+    const projects = dbI.prepare("SELECT COUNT(*) as count FROM projects WHERE client_id = ? AND status != 'completed'").get(clientId) as any;
+    const lifetime = dbI.prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE client_id = ?').get(clientId) as any;
+
+    return {
+      total_invoiced: invoiced?.total || 0,
+      total_paid: paid?.total || 0,
+      outstanding: outstanding?.total || 0,
+      avg_payment_days: Math.round(avgDays?.avg_days || 0),
+      status_breakdown: statusBreakdown,
+      payment_history: paymentHistory,
+      active_projects: projects?.count || 0,
+      lifetime_value: lifetime?.total || 0,
+    };
+  });
+
+  // ─── Project Profitability ───────────────────────────────
+  ipcMain.handle('project:profitability', (_event, { projectId }: { projectId: string }) => {
+    const dbI = db.getDb();
+
+    const revenue = dbI.prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE project_id = ?').get(projectId) as any;
+    const costs = dbI.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE project_id = ?').get(projectId) as any;
+    const timeCost = dbI.prepare(`
+      SELECT COALESCE(SUM(te.duration_minutes / 60.0 * COALESCE(e.pay_rate, 0)), 0) as total
+      FROM time_entries te LEFT JOIN employees e ON te.employee_id = e.id
+      WHERE te.project_id = ?
+    `).get(projectId) as any;
+    const hours = dbI.prepare('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM time_entries WHERE project_id = ?').get(projectId) as any;
+    const project = dbI.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any;
+
+    const totalRevenue = revenue?.total || 0;
+    const totalCosts = (costs?.total || 0) + (timeCost?.total || 0);
+    const profit = totalRevenue - totalCosts;
+    const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+    return {
+      revenue: totalRevenue,
+      direct_costs: costs?.total || 0,
+      labor_costs: timeCost?.total || 0,
+      total_costs: totalCosts,
+      profit,
+      margin: Math.round(margin * 10) / 10,
+      total_hours: Math.round((hours?.total || 0) / 60 * 10) / 10,
+      effective_rate: hours?.total > 0 ? Math.round(totalRevenue / ((hours.total || 1) / 60) * 100) / 100 : 0,
+      budget: project?.budget || 0,
+      budget_used_pct: project?.budget > 0 ? Math.round(totalCosts / project.budget * 1000) / 10 : 0,
+    };
   });
 }
 

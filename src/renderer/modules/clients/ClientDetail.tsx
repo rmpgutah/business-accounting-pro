@@ -16,6 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { formatCurrency, formatStatus } from '../../lib/format';
+import ClientInsights from './ClientInsights';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -243,6 +244,9 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
           </div>
         </div>
       </div>
+
+      {/* Client Insights */}
+      <ClientInsights clientId={clientId} />
 
       {/* Tabs */}
       <div>

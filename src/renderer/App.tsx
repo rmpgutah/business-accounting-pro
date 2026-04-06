@@ -44,6 +44,7 @@ const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
 const RulesModule = lazy(() => import('./modules/rules'));
 const DebtCollectionModule = lazy(() => import('./modules/debt-collection'));
+const QuotesModule = lazy(() => import('./modules/quotes'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -78,6 +79,7 @@ const MODULE_NAMES: Record<string, string> = {
   'purchase-orders': 'Purchase Orders',
   'fixed-assets': 'Fixed Assets',
   'debt-collection': 'Debt Collection',
+  quotes: 'Quotes & Estimates',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -126,6 +128,7 @@ const ModuleView: React.FC = () => {
       case 'automations': return <AutomationsModule />;
       case 'rules': return <RulesModule />;
       case 'debt-collection': return <DebtCollectionModule />;
+      case 'quotes': return <QuotesModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">
