@@ -16,6 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { formatCurrency, formatStatus } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
 import ClientInsights from './ClientInsights';
 
 // ─── Types ──────────────────────────────────────────────
@@ -55,6 +56,7 @@ interface ClientDetailProps {
 // ─── Component ──────────────────────────────────────────
 const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit }) => {
   const nav = useNavigation();
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('invoices');
@@ -72,7 +74,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         if (!cancelled && c) setClient(c);
 
         // Compute summary stats from invoices
-        const invoices = await api.query('invoices', { client_id: clientId });
+        const invoices = await api.query('invoices', { client_id: clientId, company_id: activeCompany?.id });
         if (!cancelled && Array.isArray(invoices)) {
           const totalInvoiced = invoices.reduce((s: number, inv: any) => s + (inv.total ?? 0), 0);
           const totalPaid = invoices.reduce((s: number, inv: any) => s + (inv.amount_paid ?? 0), 0);
@@ -90,7 +92,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
     };
     load();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, activeCompany]);
 
   // ─── Load Tab Data ──────────────────────────────────
   useEffect(() => {
@@ -104,7 +106,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
           time: 'time_entries',
           documents: 'documents',
         };
-        const rows = await api.query(tableMap[activeTab], { client_id: clientId });
+        const rows = await api.query(tableMap[activeTab], { client_id: clientId, company_id: activeCompany?.id });
         if (!cancelled) setTabData(Array.isArray(rows) ? rows : []);
       } catch (err) {
         console.error(`Failed to load ${activeTab}:`, err);
@@ -115,7 +117,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
     };
     loadTab();
     return () => { cancelled = true; };
-  }, [activeTab, clientId]);
+  }, [activeTab, clientId, activeCompany]);
 
   // ─── Tab Definitions ────────────────────────────────
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [

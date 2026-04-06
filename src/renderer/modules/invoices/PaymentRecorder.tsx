@@ -63,24 +63,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
 
     setSaving(true);
     try {
-      // Record the payment
-      await api.create('payments', {
-        invoice_id: invoiceId,
-        amount: parsedAmount,
-        date,
-        payment_method: method,
-        reference,
-      });
-
-      // Update the invoice
-      const newAmountPaid = amountPaid + parsedAmount;
-      const newStatus = newAmountPaid >= invoiceTotal ? 'paid' : 'partial';
-
-      await api.update('invoices', invoiceId, {
-        amount_paid: newAmountPaid,
-        status: newStatus,
-      });
-
+      await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
       onSaved();
     } catch (err) {
       console.error('Failed to record payment:', err);

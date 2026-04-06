@@ -295,6 +295,10 @@
           if (channel === 'debt:run-escalation') return Promise.resolve({ ok: true });
           if (channel === 'debt:stats') return Promise.resolve({ total: 0, active: 0, resolved: 0, total_balance: 0, collected: 0, collection_rate: 0 });
 
+          // ── Invoice / Payroll ─────────────────────────────────────────────
+          if (channel === 'invoice:record-payment') return Promise.resolve({ paymentId: 'mock-pay', newStatus: 'paid', newAmountPaid: args[0]?.amount ?? 0 });
+          if (channel === 'payroll:process') return Promise.resolve({ runId: 'mock-run' });
+
           // ── Fallback ──────────────────────────────────────────────────────
           console.warn('[mock] unhandled IPC channel:', channel, args);
           return Promise.resolve(null);

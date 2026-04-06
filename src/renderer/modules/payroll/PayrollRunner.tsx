@@ -232,44 +232,38 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     setError(null);
     setProcessing(true);
     try {
-      // Create payroll run record
-      const run = await api.create('payroll_runs', {
-        pay_period_start: periodStart,
-        pay_period_end: periodEnd,
-        pay_date: payDate,
-        status: 'processed',
-        total_gross: totals.gross_pay,
-        total_taxes: totals.federal_tax + totals.state_tax + totals.social_security + totals.medicare,
-        total_deductions: 0,
-        total_net: totals.net_pay,
-      });
-
-      const runId = run?.id ?? run;
-
-      // Bug fix #17b: fetch real YTD values from prior pay stubs instead
-      // of hardcoding 0 — which produces incorrect W2/payroll reports.
       const year = new Date(payDate).getFullYear();
-      const resolvedRunId = typeof runId === 'object' ? (runId as any).id : runId;
+      const totalTaxes = totals.federal_tax + totals.state_tax + totals.social_security + totals.medicare;
 
-      for (const calc of calculations) {
-        const ytd = await api.payrollYtd(calc.employee.id, year);
-        await api.create('pay_stubs', {
-          payroll_run_id: resolvedRunId,
-          employee_id: calc.employee.id,
-          hours_regular: calc.hours,
-          hours_overtime: 0,
-          gross_pay: calc.gross_pay,
-          federal_tax: calc.federal_tax,
-          state_tax: calc.state_tax,
-          social_security: calc.social_security,
-          medicare: calc.medicare,
-          other_deductions: 0,
-          net_pay: calc.net_pay,
-          ytd_gross: ytd.ytd_gross + calc.gross_pay,
-          ytd_taxes: ytd.ytd_taxes + calc.federal_tax + calc.state_tax + calc.social_security + calc.medicare,
-          ytd_net: ytd.ytd_net + calc.net_pay,
-        });
-      }
+      // Fetch YTD for each employee first, then submit all in one server-side transaction
+      const stubs = await Promise.all(
+        calculations.map(async (calc) => {
+          const ytd = await api.payrollYtd(calc.employee.id, year);
+          return {
+            employeeId: calc.employee.id,
+            hours: calc.hours,
+            grossPay: calc.gross_pay,
+            federalTax: calc.federal_tax,
+            stateTax: calc.state_tax,
+            ss: calc.social_security,
+            medicare: calc.medicare,
+            netPay: calc.net_pay,
+            ytdGross: ytd.ytd_gross + calc.gross_pay,
+            ytdTaxes: ytd.ytd_taxes + calc.federal_tax + calc.state_tax + calc.social_security + calc.medicare,
+            ytdNet: ytd.ytd_net + calc.net_pay,
+          };
+        })
+      );
+
+      await api.processPayroll({
+        periodStart,
+        periodEnd,
+        payDate,
+        totalGross: totals.gross_pay,
+        totalTaxes,
+        totalNet: totals.net_pay,
+        stubs,
+      });
 
       onComplete();
     } catch (err: any) {

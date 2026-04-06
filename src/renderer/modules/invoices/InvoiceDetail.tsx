@@ -386,10 +386,10 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <span className="text-text-secondary">Subtotal</span>
               <span className="font-mono text-text-primary">{formatCurrency(invoice.subtotal)}</span>
             </div>
-            {invoice.tax > 0 && (
+            {invoice.tax_amount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{formatCurrency(invoice.tax)}</span>
+                <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
               </div>
             )}
             {invoice.discount > 0 && (

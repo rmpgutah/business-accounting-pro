@@ -218,6 +218,52 @@ function seedDefaultCategories(companyId: string): { seeded: boolean; count: num
   return { seeded: true, count: DEFAULT_CATEGORIES.length };
 }
 
+// ─── Journal Entry Auto-Poster ────────────────────────────
+// Posts a balanced journal entry when the required accounts are found.
+// Silently no-ops if any account is missing — best-effort for companies
+// that haven't configured a full chart of accounts.
+function postJournalEntry(
+  dbInstance: ReturnType<typeof db.getDb>,
+  companyId: string,
+  date: string,
+  description: string,
+  lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>
+): void {
+  const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
+  for (const line of lines) {
+    const acct = (dbInstance as any).prepare(
+      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? LIMIT 1`
+    ).get(companyId, `%${line.nameHint}%`) as any;
+    if (!acct) return; // skip whole entry if any account is missing
+    resolved.push({ accountId: acct.id, debit: line.debit, credit: line.credit, note: line.note ?? '' });
+  }
+
+  const lastJE = (dbInstance as any).prepare(
+    `SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`
+  ).get(companyId) as any;
+  let nextNum = 'JE-1001';
+  if (lastJE?.entry_number) {
+    const m = lastJE.entry_number.match(/(\d+)$/);
+    if (m) {
+      const prefix = lastJE.entry_number.slice(0, lastJE.entry_number.length - m[1].length);
+      nextNum = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
+    }
+  }
+
+  const jeId = uuid();
+  (dbInstance as any).prepare(`
+    INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).run(jeId, companyId, nextNum, date, description);
+
+  for (const line of resolved) {
+    (dbInstance as any).prepare(`
+      INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuid(), jeId, line.accountId, line.debit, line.credit, line.note);
+  }
+}
+
 export function registerIpcHandlers(): void {
   // ─── Generic CRUD ────────────────────────────────────
   ipcMain.handle('db:query', (_event, { table, filters, sort, limit, offset }) => {
@@ -1121,6 +1167,41 @@ export function registerIpcHandlers(): void {
     return 'JE-1001';
   });
 
+  // ─── Invoice Record Payment ───────────────────────────────
+  // Consolidated handler: creates payment record, updates invoice status,
+  // and posts DR Cash / CR Accounts Receivable journal entry in one transaction.
+  ipcMain.handle('invoice:record-payment', (_event, { invoiceId, amount, date, method, reference }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) throw new Error('No active company');
+    const dbInstance = db.getDb();
+
+    const tx = (dbInstance as any).transaction(() => {
+      const paymentId = uuid();
+      (dbInstance as any).prepare(`
+        INSERT INTO payments (id, invoice_id, amount, date, payment_method, reference)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(paymentId, invoiceId, amount, date, method || 'transfer', reference || '');
+
+      const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
+      if (!invoice) throw new Error('Invoice not found');
+
+      const newAmountPaid = (invoice.amount_paid || 0) + amount;
+      const newStatus = newAmountPaid >= invoice.total ? 'paid' : 'partial';
+
+      (dbInstance as any).prepare(`UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(newAmountPaid, newStatus, invoiceId);
+
+      postJournalEntry(dbInstance, companyId, date, `Payment received - ${invoice.invoice_number}`, [
+        { nameHint: 'Cash', debit: amount, credit: 0, note: `Cash received for ${invoice.invoice_number}` },
+        { nameHint: 'Receivable', debit: 0, credit: amount, note: `Clear AR for ${invoice.invoice_number}` },
+      ]);
+
+      return { paymentId, newStatus, newAmountPaid };
+    });
+
+    return tx();
+  });
+
   // ─── Payroll YTD Totals ───────────────────────────────────
   // Bug fix: PayrollRunner always set ytd_gross/taxes/net to 0 because
   // there was no backend call to fetch cumulative YTD from existing stubs.
@@ -1145,6 +1226,44 @@ export function registerIpcHandlers(): void {
       ytd_taxes: row?.ytd_taxes ?? 0,
       ytd_net: row?.ytd_net ?? 0,
     };
+  });
+
+  // ─── Payroll Process (with journal entry) ────────────────────
+  // Creates payroll_run + pay_stubs in a transaction and posts
+  // DR Wages/Salary Expense / CR Wages Payable journal entry.
+  ipcMain.handle('payroll:process', (_event, {
+    periodStart, periodEnd, payDate,
+    totalGross, totalTaxes, totalNet,
+    stubs, // Array<{ employeeId, hours, grossPay, federalTax, stateTax, ss, medicare, netPay, ytdGross, ytdTaxes, ytdNet }>
+  }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) throw new Error('No active company');
+    const dbInstance = db.getDb();
+
+    const tx = (dbInstance as any).transaction(() => {
+      const runId = uuid();
+      (dbInstance as any).prepare(`
+        INSERT INTO payroll_runs (id, company_id, pay_period_start, pay_period_end, pay_date, status, total_gross, total_taxes, total_deductions, total_net)
+        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, 0, ?)
+      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet);
+
+      for (const s of stubs) {
+        (dbInstance as any).prepare(`
+          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net)
+          VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+        `).run(uuid(), runId, s.employeeId, s.hours, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet);
+      }
+
+      postJournalEntry(dbInstance, companyId, payDate, `Payroll ${periodStart} to ${periodEnd}`, [
+        { nameHint: 'Wages', debit: totalGross, credit: 0, note: 'Gross wages expense' },
+        { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable to employees' },
+        { nameHint: 'Tax', debit: 0, credit: totalTaxes, note: 'Payroll taxes withheld' },
+      ]);
+
+      return { runId };
+    });
+
+    return tx();
   });
 
   // ─── Settings get / set ───────────────────────────────────
@@ -1633,6 +1752,11 @@ export function registerIpcHandlers(): void {
 
       dbInstance.prepare(`UPDATE bills SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(newAmountPaid, newStatus, billId);
+
+      postJournalEntry(dbInstance, companyId, date, `Bill payment - ${bill.bill_number || billId}`, [
+        { nameHint: 'Payable', debit: amount, credit: 0, note: `AP cleared for bill ${bill.bill_number || billId}` },
+        { nameHint: 'Cash', debit: 0, credit: amount, note: `Cash paid for bill ${bill.bill_number || billId}` },
+      ]);
 
       return { paymentId, newStatus, newAmountPaid };
     });

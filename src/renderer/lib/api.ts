@@ -140,6 +140,20 @@ const api = {
   nextJournalNumber: (): Promise<string> =>
     window.electronAPI.invoke('journal:next-number'),
 
+  // Invoice Record Payment (with journal entry)
+  recordInvoicePayment: (
+    invoiceId: string, amount: number, date: string, method: string, reference: string
+  ): Promise<{ paymentId: string; newStatus: string; newAmountPaid: number }> =>
+    window.electronAPI.invoke('invoice:record-payment', { invoiceId, amount, date, method, reference }),
+
+  // Payroll Process (with journal entry)
+  processPayroll: (args: {
+    periodStart: string; periodEnd: string; payDate: string;
+    totalGross: number; totalTaxes: number; totalNet: number;
+    stubs: Array<{ employeeId: string; hours: number; grossPay: number; federalTax: number; stateTax: number; ss: number; medicare: number; netPay: number; ytdGross: number; ytdTaxes: number; ytdNet: number }>;
+  }): Promise<{ runId: string }> =>
+    window.electronAPI.invoke('payroll:process', args),
+
   // Payroll YTD
   // Bug fix #37-39: YTD values are now calculated from actual prior pay stubs.
   payrollYtd: (employeeId: string, year: number): Promise<{ ytd_gross: number; ytd_taxes: number; ytd_net: number }> =>
