@@ -161,6 +161,7 @@ const App: React.FC = () => {
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
@@ -173,6 +174,20 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Validate persisted auth — if user no longer exists in DB, force logout
+  useEffect(() => {
+    if (isAuthenticated && authUser?.id) {
+      api.rawQuery('SELECT id FROM users WHERE id = ?', [authUser.id]).then((rows: any[]) => {
+        if (!rows || rows.length === 0) {
+          console.warn('Persisted user not found in database — clearing auth state');
+          logout();
+          setCompanies([]);
+          setActiveCompany(null);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
