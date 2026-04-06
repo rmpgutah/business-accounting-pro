@@ -61,7 +61,7 @@ const AuthScreen: React.FC = () => {
         }
       } catch {
         setHasExisting(false);
-        setMode('login');
+        setMode('register');
       }
     })();
   }, []);
