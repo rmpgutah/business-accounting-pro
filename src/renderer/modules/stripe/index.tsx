@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -44,6 +45,7 @@ function typeBadgeClass(type: string): string {
 
 // ─── Stripe Sync Component ──────────────────────────────
 const StripeSyncModule: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [apiKey, setApiKey] = useState('');
   const [savedApiKey, setSavedApiKey] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -59,6 +61,7 @@ const StripeSyncModule: React.FC = () => {
   const [netRevenue, setNetRevenue] = useState(0);
 
   const loadData = useCallback(async () => {
+    if (!activeCompany) return;
     try {
       // Check for API key in settings
       const settingsResult = await api.query('settings', { key: 'stripe_api_key' });
@@ -70,8 +73,8 @@ const StripeSyncModule: React.FC = () => {
       setSavedApiKey(storedKey);
       setIsConnected(!!storedKey);
 
-      // Load transactions
-      const txns: StripeTransaction[] = await api.query('stripe_transactions', undefined, {
+      // Load transactions scoped to the active company
+      const txns: StripeTransaction[] = await api.query('stripe_transactions', { company_id: activeCompany.id }, {
         field: 'synced_at',
         dir: 'desc',
       });
@@ -93,7 +96,7 @@ const StripeSyncModule: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     loadData();

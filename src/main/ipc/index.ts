@@ -2291,19 +2291,51 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('record:clone', (_event, { table, id }: { table: string; id: string }) => {
     const CLONEABLE_TABLES = ['invoices', 'expenses', 'bills'];
     if (!CLONEABLE_TABLES.includes(table)) return { error: 'Invalid table' };
-    const original = db.getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    const dbInstance = db.getDb();
+    const original = dbInstance.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
     if (!original) return { error: 'Not found' };
     const newId = uuid();
+    const today = new Date().toISOString().split('T')[0];
     const clone: Record<string, unknown> = { ...original, id: newId, created_at: new Date().toISOString(), status: 'draft', rules_applied: '[]' };
+
     if (table === 'invoices') {
-      delete clone.invoice_number;
-      clone.issue_date = new Date().toISOString().split('T')[0];
+      // Generate next invoice number to satisfy NOT NULL + UNIQUE constraint
+      const lastInv = dbInstance.prepare(`SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
+      let nextInvNumber = 'INV-1001';
+      if (lastInv?.invoice_number) {
+        const m = lastInv.invoice_number.match(/(\d+)$/);
+        if (m) {
+          const prefix = lastInv.invoice_number.slice(0, lastInv.invoice_number.length - m[1].length);
+          nextInvNumber = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
+        }
+      }
+      clone.invoice_number = nextInvNumber;
+      clone.issue_date = today;
       delete clone.paid_date;
       clone.amount_paid = 0;
     }
-    if (table === 'expenses') { clone.date = new Date().toISOString().split('T')[0]; }
+
+    if (table === 'bills') {
+      // Generate next bill number
+      const lastBill = dbInstance.prepare(`SELECT bill_number FROM bills WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
+      let nextBillNumber = 'BILL-1001';
+      if (lastBill?.bill_number) {
+        const m = lastBill.bill_number.match(/(\d+)$/);
+        if (m) {
+          const prefix = lastBill.bill_number.slice(0, lastBill.bill_number.length - m[1].length);
+          nextBillNumber = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
+        }
+      }
+      clone.bill_number = nextBillNumber;
+      clone.issue_date = today;
+      clone.amount_paid = 0;
+    }
+
+    if (table === 'expenses') { clone.date = today; }
     const cols = Object.keys(clone);
-    db.getDb().prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
+    dbInstance.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
     return { id: newId };
   });
 
@@ -2392,7 +2424,8 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('debt:import-overdue', (_event, { companyId, daysThreshold }: { companyId: string; daysThreshold: number }) => {
-    const overdue = db.getDb().prepare(`
+    const dbInstance = db.getDb();
+    const overdue = dbInstance.prepare(`
       SELECT i.*, c.name as client_name, c.email as client_email, c.phone as client_phone,
              c.address_line1 || ' ' || c.city || ' ' || c.state || ' ' || c.zip as client_address
       FROM invoices i
@@ -2401,19 +2434,23 @@ export function registerIpcHandlers(): void {
       AND julianday('now') - julianday(i.due_date) >= ?
       AND i.id NOT IN (SELECT source_id FROM debts WHERE source_type = 'invoice' AND company_id = ?)
     `).all(companyId, daysThreshold, companyId) as any[];
-    let imported = 0;
-    for (const inv of overdue) {
-      const id = uuid();
-      const balance = (inv.total || inv.amount || 0) - (inv.amount_paid || 0);
-      db.getDb().prepare(`
-        INSERT INTO debts (id, company_id, type, status, debtor_id, debtor_type, debtor_name, debtor_email, debtor_phone, debtor_address, source_type, source_id, original_amount, balance_due, due_date, delinquent_date, current_stage)
-        VALUES (?, ?, 'receivable', 'active', ?, 'client', ?, ?, ?, ?, 'invoice', ?, ?, ?, ?, ?, 'reminder')
-      `).run(id, companyId, inv.client_id || '', inv.client_name || 'Unknown', inv.client_email || '', inv.client_phone || '', inv.client_address || '', inv.id, balance, balance, inv.due_date || '', inv.due_date || '');
-      // Create initial pipeline stage
-      db.getDb().prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage) VALUES (?, ?, ?)').run(uuid(), id, 'reminder');
-      imported++;
-    }
-    return { imported };
+
+    const importTx = dbInstance.transaction(() => {
+      let imported = 0;
+      for (const inv of overdue) {
+        const id = uuid();
+        const balance = (inv.total || inv.amount || 0) - (inv.amount_paid || 0);
+        dbInstance.prepare(`
+          INSERT INTO debts (id, company_id, type, status, debtor_id, debtor_type, debtor_name, debtor_email, debtor_phone, debtor_address, source_type, source_id, original_amount, balance_due, due_date, delinquent_date, current_stage)
+          VALUES (?, ?, 'receivable', 'active', ?, 'client', ?, ?, ?, ?, 'invoice', ?, ?, ?, ?, ?, 'reminder')
+        `).run(id, companyId, inv.client_id || '', inv.client_name || 'Unknown', inv.client_email || '', inv.client_phone || '', inv.client_address || '', inv.id, balance, balance, inv.due_date || '', inv.due_date || '');
+        dbInstance.prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage) VALUES (?, ?, ?)').run(uuid(), id, 'reminder');
+        imported++;
+      }
+      return { imported };
+    });
+
+    return importTx();
   });
 
   ipcMain.handle('debt:generate-demand-letter', (_event, { debtId, templateId }: { debtId: string; templateId: string }) => {
@@ -2675,34 +2712,56 @@ export function registerIpcHandlers(): void {
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();
-    const row = db.getDb().prepare('SELECT COUNT(*) as cnt FROM quotes WHERE company_id = ?').get(companyId) as any;
-    return `QT-${String((row?.cnt || 0) + 1).padStart(4, '0')}`;
+    if (!companyId) return 'QT-1001';
+    // Use last quote_number instead of COUNT to avoid duplicates after deletions
+    const row = db.getDb().prepare(`SELECT quote_number FROM quotes WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
+    if (!row?.quote_number) return 'QT-1001';
+    const match = row.quote_number.match(/(\d+)$/);
+    if (!match) return 'QT-1001';
+    const next = parseInt(match[1], 10) + 1;
+    const prefix = row.quote_number.slice(0, row.quote_number.length - match[1].length);
+    return `${prefix}${String(next).padStart(match[1].length, '0')}`;
   });
 
   ipcMain.handle('quotes:convert-to-invoice', (_event, { quoteId }: { quoteId: string }) => {
-    const quote = db.getDb().prepare('SELECT * FROM quotes WHERE id = ?').get(quoteId) as any;
-    if (!quote) throw new Error('Quote not found');
-    const lines = db.getDb().prepare('SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order').all(quoteId) as any[];
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) throw new Error('No active company');
+    const dbInstance = db.getDb();
 
-    // Generate invoice number
-    const row = db.getDb().prepare('SELECT COUNT(*) as cnt FROM invoices WHERE company_id = ?').get(quote.company_id) as any;
-    const invoiceNumber = `INV-${String((row?.cnt || 0) + 1).padStart(4, '0')}`;
+    const convertTx = dbInstance.transaction(() => {
+      const quote = dbInstance.prepare('SELECT * FROM quotes WHERE id = ?').get(quoteId) as any;
+      if (!quote) throw new Error('Quote not found');
+      const lines = dbInstance.prepare('SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order').all(quoteId) as any[];
 
-    const invoiceId = uuid();
-    db.getDb().prepare(`INSERT INTO invoices (id, company_id, invoice_number, client_id, issue_date, due_date, subtotal, tax_amount, discount_amount, total, notes, terms, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`).run(
-      invoiceId, quote.company_id, invoiceNumber, quote.client_id, new Date().toISOString().split('T')[0],
-      new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-      quote.subtotal, quote.tax_amount, quote.discount_amount, quote.total, quote.notes, quote.terms
-    );
+      // Generate invoice number from last existing number (avoids duplicates on deletion)
+      const lastInv = dbInstance.prepare(`SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(quote.company_id) as any;
+      let invoiceNumber = 'INV-1001';
+      if (lastInv?.invoice_number) {
+        const m = lastInv.invoice_number.match(/(\d+)$/);
+        if (m) {
+          const prefix = lastInv.invoice_number.slice(0, lastInv.invoice_number.length - m[1].length);
+          invoiceNumber = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
+        }
+      }
 
-    for (const line of lines) {
-      db.getDb().prepare('INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, tax_rate, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-        uuid(), invoiceId, line.description, line.quantity, line.unit_price, line.tax_rate, line.amount, line.sort_order
+      const invoiceId = uuid();
+      dbInstance.prepare(`INSERT INTO invoices (id, company_id, invoice_number, client_id, issue_date, due_date, subtotal, tax_amount, discount_amount, total, notes, terms, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`).run(
+        invoiceId, quote.company_id, invoiceNumber, quote.client_id, new Date().toISOString().split('T')[0],
+        new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        quote.subtotal, quote.tax_amount, quote.discount_amount, quote.total, quote.notes, quote.terms
       );
-    }
 
-    db.getDb().prepare("UPDATE quotes SET status = 'converted', converted_invoice_id = ?, updated_at = datetime('now') WHERE id = ?").run(invoiceId, quoteId);
-    return { invoice_id: invoiceId };
+      for (const line of lines) {
+        dbInstance.prepare('INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, tax_rate, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+          uuid(), invoiceId, line.description, line.quantity, line.unit_price, line.tax_rate, line.amount, line.sort_order
+        );
+      }
+
+      dbInstance.prepare("UPDATE quotes SET status = 'converted', converted_invoice_id = ?, updated_at = datetime('now') WHERE id = ?").run(invoiceId, quoteId);
+      return { invoice_id: invoiceId };
+    });
+
+    return convertTx();
   });
 
   // ─── Client Insights ─────────────────────────────────────

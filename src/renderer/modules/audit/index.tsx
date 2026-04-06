@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface AuditEntry {
@@ -60,6 +61,7 @@ const getTimestamp = (entry: AuditEntry): string => entry.timestamp || entry.cre
 
 // ─── Component ──────────────────────────────────────────
 const AuditTrail: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -72,8 +74,9 @@ const AuditTrail: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
-        const rows = await api.query('audit_log', undefined, { field: 'timestamp', dir: 'desc' });
+        const rows = await api.query('audit_log', { company_id: activeCompany.id }, { field: 'timestamp', dir: 'desc' });
         if (!cancelled) setEntries(Array.isArray(rows) ? rows : []);
       } catch (err) {
         console.error('Failed to load audit log:', err);
@@ -83,7 +86,7 @@ const AuditTrail: React.FC = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // ─── Entity Types ─────────────────────────────────────
   const entityTypes = useMemo(() => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 interface EmailLogEntry {
   id: string;
@@ -43,6 +44,7 @@ const DEFAULT_TEMPLATES: EmailTemplate[] = [
 ];
 
 export default function EmailModule() {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [tab, setTab] = useState<'log' | 'templates' | 'settings'>('log');
   const [emailLog, setEmailLog] = useState<EmailLogEntry[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>(DEFAULT_TEMPLATES);
@@ -62,7 +64,7 @@ export default function EmailModule() {
     loadEmailLog();
     loadSmtpConfig();
     loadTemplates();
-  }, []);
+  }, [activeCompany]);
 
   const loadTemplates = async () => {
     try {
@@ -86,8 +88,9 @@ export default function EmailModule() {
   };
 
   const loadEmailLog = async () => {
+    if (!activeCompany) return;
     try {
-      const logs = await api.query('email_log', {}, { field: 'sent_at', dir: 'desc' }, 100);
+      const logs = await api.query('email_log', { company_id: activeCompany.id }, { field: 'sent_at', dir: 'desc' }, 100);
       setEmailLog(logs);
     } catch { /* empty */ }
   };

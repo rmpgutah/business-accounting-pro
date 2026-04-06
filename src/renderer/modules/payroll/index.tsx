@@ -47,6 +47,7 @@ const PayrollModule: React.FC = () => {
   // Employee sub-views
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [employeeListKey, setEmployeeListKey] = useState(0);
 
   // Payroll runner
   const [showRunner, setShowRunner] = useState(false);
@@ -115,9 +116,7 @@ const PayrollModule: React.FC = () => {
   const handleEmployeeSaved = () => {
     setShowEmployeeForm(false);
     setSelectedEmployeeId(null);
-    // Force re-render of EmployeeList by toggling tab
-    setActiveTab('run');
-    setTimeout(() => setActiveTab('employees'), 0);
+    setEmployeeListKey((k) => k + 1);
   };
 
   const handleEmployeeBack = () => {
@@ -208,6 +207,7 @@ const PayrollModule: React.FC = () => {
         {/* Employees Tab */}
         {activeTab === 'employees' && (
           <EmployeeList
+            key={employeeListKey}
             onSelectEmployee={handleSelectEmployee}
             onNewEmployee={handleNewEmployee}
           />
