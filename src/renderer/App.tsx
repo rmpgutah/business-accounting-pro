@@ -193,25 +193,14 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        // If user just logged in, companies are already set by AuthScreen
-        if (companies.length === 0) {
-          const list = await api.listCompanies();
-          setCompanies(list ?? []);
-          if (list && list.length > 0) {
-            setActiveCompany(list[0]);
-            // Tell main process which company is active (keeps currentCompanyId in sync)
-            api.switchCompany(list[0].id).catch(() => {});
-            // Seed default categories for all companies (safe — no-op if already seeded)
-            for (const company of list) {
-              api.categoriesSeedDefaults(company.id).catch(() => {});
-            }
-          }
-        } else {
-          // Companies already loaded — sync active company to main process
-          const active = companies[0];
-          if (active) api.switchCompany(active.id).catch(() => {});
-          // Still ensure categories are seeded
-          for (const company of companies) {
+        // Always verify companies from DB — persisted state may be stale
+        const list = await api.listCompanies();
+        const validList = Array.isArray(list) ? list : [];
+        setCompanies(validList);
+        if (validList.length > 0) {
+          setActiveCompany(validList[0]);
+          api.switchCompany(validList[0].id).catch(() => {});
+          for (const company of validList) {
             api.categoriesSeedDefaults(company.id).catch(() => {});
           }
         }

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
-  Database, Save, HardDrive,
+  Database, Save, HardDrive, Trash2, AlertTriangle, UserX,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
 import ImportExport from './ImportExport';
 
 // ─── Types ──────────────────────────────────────────────
@@ -49,6 +50,170 @@ const Field: React.FC<{
     {hint && <p className="text-[11px] text-text-muted mt-1">{hint}</p>}
   </div>
 );
+
+// ─── Danger Zone ───────────────────────────────────────
+const DangerZone: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const companies = useCompanyStore((s) => s.companies);
+  const setCompanies = useCompanyStore((s) => s.setCompanies);
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
+  const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const [confirmDelete, setConfirmDelete] = useState<'company' | 'account' | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteCompany = async () => {
+    if (!activeCompany || confirmText !== activeCompany.name) return;
+    setDeleting(true);
+    try {
+      // Delete all company data
+      const tables = [
+        'debts', 'debt_automation_rules', 'debt_templates',
+        'rules', 'approval_queue', 'automation_rules', 'automation_run_log', 'financial_anomalies',
+        'invoices', 'expenses', 'clients', 'vendors', 'projects', 'employees',
+        'accounts', 'journal_entries', 'categories', 'budgets',
+        'bank_accounts', 'documents', 'notifications', 'recurring_templates',
+        'bills', 'purchase_orders', 'fixed_assets', 'credit_notes',
+        'time_entries', 'inventory_items',
+      ];
+      for (const table of tables) {
+        await api.rawQuery(`DELETE FROM ${table} WHERE company_id = ?`, [activeCompany.id]).catch(() => {});
+      }
+      // Remove user-company link
+      await api.rawQuery('DELETE FROM user_companies WHERE company_id = ?', [activeCompany.id]).catch(() => {});
+      // Delete the company record
+      await api.remove('companies', activeCompany.id);
+      // Refresh companies list
+      const remaining = await api.listCompanies();
+      setCompanies(remaining ?? []);
+      if (remaining && remaining.length > 0) {
+        setActiveCompany(remaining[0]);
+        await api.switchCompany(remaining[0].id);
+      } else {
+        setActiveCompany(null);
+      }
+      setConfirmDelete(null);
+      setConfirmText('');
+    } catch (err) {
+      console.error('Failed to delete company:', err);
+      alert('Failed to delete company');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!authUser || confirmText !== authUser.email) return;
+    setDeleting(true);
+    try {
+      // Remove all user-company links
+      await api.rawQuery('DELETE FROM user_companies WHERE user_id = ?', [authUser.id]);
+      // Delete the user
+      await api.rawQuery('DELETE FROM users WHERE id = ?', [authUser.id]);
+      // Logout
+      logout();
+      setCompanies([]);
+      setActiveCompany(null);
+    } catch (err) {
+      console.error('Failed to delete account:', err);
+      alert('Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="block-card" style={{ borderColor: 'rgba(248,113,113,0.25)' }}>
+      <div className="flex items-center gap-3 mb-4">
+        <div
+          className="w-8 h-8 flex items-center justify-center shrink-0"
+          style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}
+        >
+          <AlertTriangle size={16} className="text-accent-expense" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-accent-expense">Danger Zone</h3>
+          <p className="text-xs text-text-muted mt-0.5">Irreversible actions</p>
+        </div>
+      </div>
+      <div className="border-t pt-4 space-y-4" style={{ borderColor: 'rgba(248,113,113,0.15)' }}>
+        {/* Delete Company */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-text-primary font-medium">Delete this company</p>
+            <p className="text-xs text-text-muted">Permanently remove {activeCompany?.name || 'this company'} and all its data</p>
+          </div>
+          {confirmDelete !== 'company' ? (
+            <button
+              className="block-btn-danger flex items-center gap-1.5 text-xs"
+              onClick={() => { setConfirmDelete('company'); setConfirmText(''); }}
+            >
+              <Trash2 size={13} /> Delete Company
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                className="block-input text-xs"
+                style={{ width: '180px' }}
+                placeholder={`Type "${activeCompany?.name}" to confirm`}
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                autoFocus
+              />
+              <button
+                className="block-btn-danger text-xs"
+                disabled={confirmText !== activeCompany?.name || deleting}
+                onClick={handleDeleteCompany}
+              >
+                {deleting ? 'Deleting...' : 'Confirm'}
+              </button>
+              <button className="block-btn text-xs" onClick={() => setConfirmDelete(null)}>Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {/* Delete Account */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-text-primary font-medium">Delete your account</p>
+            <p className="text-xs text-text-muted">Permanently remove your user account ({authUser?.email})</p>
+          </div>
+          {confirmDelete !== 'account' ? (
+            <button
+              className="block-btn-danger flex items-center gap-1.5 text-xs"
+              onClick={() => { setConfirmDelete('account'); setConfirmText(''); }}
+            >
+              <UserX size={13} /> Delete Account
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                className="block-input text-xs"
+                style={{ width: '200px' }}
+                placeholder={`Type "${authUser?.email}" to confirm`}
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                autoFocus
+              />
+              <button
+                className="block-btn-danger text-xs"
+                disabled={confirmText !== authUser?.email || deleting}
+                onClick={handleDeleteAccount}
+              >
+                {deleting ? 'Deleting...' : 'Confirm'}
+              </button>
+              <button className="block-btn text-xs" onClick={() => setConfirmDelete(null)}>Cancel</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ─── Component ──────────────────────────────────────────
 export default function SettingsModule() {
@@ -635,6 +800,9 @@ export default function SettingsModule() {
 
       {/* ── Data Import / Export ────────────────────────── */}
       <ImportExport />
+
+      {/* ── Danger Zone ─────────────────────────────────── */}
+      <DangerZone />
     </div>
   );
 }
