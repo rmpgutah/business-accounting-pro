@@ -24,6 +24,11 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       logout: () => set({ user: null, isAuthenticated: false }),
     }),
-    { name: 'bap-auth' }
+    {
+      name: 'bap-auth',
+      // Only persist user metadata (for Remember Me name display).
+      // Never persist isAuthenticated — user must log in each session.
+      partialize: (state) => ({ user: state.user }),
+    }
   )
 );
