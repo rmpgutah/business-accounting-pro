@@ -1,6 +1,7 @@
 {
   "name": "business-accounting-pro",
-  "version": "1.2.0",
+  "version": "1.2.1",
+  "productName": "Business Accounting Pro",
   "description": "Professional business accounting software for income, expenses, taxes, payroll, invoicing and more",
   "main": "dist/main/main/main.js",
   "scripts": {

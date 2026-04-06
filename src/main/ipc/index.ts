@@ -725,12 +725,22 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('auth:has-users', () => {
-    const rows = db.runQuery('SELECT COUNT(*) as count FROM users');
-    return rows[0]?.count > 0;
+    try {
+      const rows = db.runQuery('SELECT COUNT(*) as count FROM users');
+      return rows[0]?.count > 0;
+    } catch (err) {
+      console.error('auth:has-users failed:', err);
+      return false;
+    }
   });
 
   ipcMain.handle('auth:list-users', () => {
-    return db.runQuery('SELECT id, email, display_name, role, avatar_color, last_login FROM users ORDER BY created_at');
+    try {
+      return db.runQuery('SELECT id, email, display_name, role, avatar_color, last_login FROM users ORDER BY created_at');
+    } catch (err) {
+      console.error('auth:list-users failed:', err);
+      return [];
+    }
   });
 
   ipcMain.handle('auth:link-user-company', (_event, { userId, companyId, role }: { userId: string; companyId: string; role?: string }) => {

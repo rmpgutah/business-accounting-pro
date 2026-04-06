@@ -53,9 +53,12 @@ const AuthScreen: React.FC = () => {
         } else {
           setMode('register');
         }
-      } catch {
-        setMode('register');
+      } catch (err) {
+        // Only fall back to register if we genuinely cannot reach the backend.
+        // Log so it's visible in DevTools rather than silently hiding the error.
+        console.error('Failed to check for existing users:', err);
         setHasExisting(false);
+        setMode('register');
       }
     })();
   }, []);
