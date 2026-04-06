@@ -87,7 +87,7 @@ const TopBar: React.FC = () => {
   return (
     <>
       <header
-        className="flex items-center justify-between h-12 px-4 bg-bg-secondary border-b border-border-primary shrink-0"
+        className="flex items-center justify-between h-14 px-4 bg-bg-secondary border-b border-border-primary shrink-0"
         style={{
           borderRadius: '0px',
           WebkitAppRegion: 'drag' as any,
@@ -98,10 +98,10 @@ const TopBar: React.FC = () => {
         {/* Left — Company */}
         <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
-            className="flex items-center gap-2 px-2 py-1 text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            className="flex items-center gap-2 px-2.5 py-1.5 text-text-primary hover:bg-bg-hover transition-all duration-150"
+            style={{ borderRadius: '4px', background: 'var(--color-bg-tertiary)' }}
           >
-            <Building2 size={16} className="text-text-muted shrink-0" />
+            <Building2 size={16} className="text-accent-blue shrink-0" />
             <span className="text-sm font-medium truncate max-w-[200px]">
               {activeCompany?.name ?? 'No Company'}
             </span>
@@ -112,14 +112,14 @@ const TopBar: React.FC = () => {
         {/* Center — Search trigger */}
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 w-80 bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-colors"
-          style={{ borderRadius: '2px', WebkitAppRegion: 'no-drag' as any }}
+          className="flex items-center gap-2 px-3 py-1.5 w-80 bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-all duration-150"
+          style={{ borderRadius: '4px', WebkitAppRegion: 'no-drag' as any }}
         >
           <Search size={14} />
           <span className="flex-1 text-left">Search...</span>
           <kbd
             className="text-[10px] px-1.5 py-0.5 bg-bg-tertiary border border-border-secondary text-text-muted"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '4px' }}
           >
             ⌘K
           </kbd>
@@ -129,41 +129,41 @@ const TopBar: React.FC = () => {
         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '4px' }}
           >
             <Bell size={18} />
             {notificationCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-accent-expense"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '4px' }}
               >
                 {notificationCount > 99 ? '99+' : notificationCount}
               </span>
             )}
           </button>
 
-          {/* User avatar */}
+          {/* User avatar + name */}
           {authUser && (
             <div
-              className="flex items-center gap-2 px-2 py-1 ml-1"
-              style={{ borderLeft: '1px solid #2e2e2e' }}
+              className="flex items-center gap-2 px-2 py-1 ml-2"
+              style={{ borderLeft: '1px solid var(--color-border-primary)' }}
             >
               <div
                 className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                 style={{
-                  width: '24px', height: '24px', borderRadius: '2px',
+                  width: '26px', height: '26px', borderRadius: '4px',
                   background: authUser.avatar_color || '#3b82f6',
                 }}
               >
                 {authUser.display_name.charAt(0).toUpperCase()}
               </div>
-              <span className="text-xs text-text-secondary hidden xl:inline max-w-[100px] truncate">
+              <span className="text-xs text-text-secondary max-w-[120px] truncate font-medium">
                 {authUser.display_name}
               </span>
               <button
                 onClick={logout}
-                className="p-1 text-text-muted hover:text-accent-expense transition-colors"
-                style={{ borderRadius: '2px' }}
+                className="p-1 text-text-muted hover:text-accent-expense transition-all duration-150"
+                style={{ borderRadius: '4px' }}
                 title="Sign Out"
               >
                 <LogOut size={14} />
@@ -181,7 +181,7 @@ const TopBar: React.FC = () => {
         >
           <div
             className="w-full max-w-xl bg-bg-elevated border border-border-primary shadow-2xl"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '4px' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search Input */}
@@ -198,7 +198,7 @@ const TopBar: React.FC = () => {
               <button
                 onClick={closeSearch}
                 className="p-1 text-text-muted hover:text-text-primary"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '4px' }}
               >
                 <X size={14} />
               </button>
@@ -216,7 +216,7 @@ const TopBar: React.FC = () => {
                   <div className="px-4 py-1">
                     <span
                       className="inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '4px' }}
                     >
                       {type}
                     </span>
@@ -244,7 +244,7 @@ const TopBar: React.FC = () => {
             <div className="flex items-center justify-between px-4 py-2 border-t border-border-primary text-[11px] text-text-muted">
               <span>Type to search</span>
               <span>
-                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '2px' }}>
+                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '4px' }}>
                   ESC
                 </kbd>{' '}
                 to close

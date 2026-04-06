@@ -127,33 +127,38 @@ const Sidebar: React.FC = () => {
       style={{ borderRadius: '0px' }}
     >
       {/* App Header */}
-      <div className="flex items-center gap-2 px-3 h-12 border-b border-border-primary shrink-0">
+      <div className="flex items-center gap-2.5 px-3 h-14 border-b border-border-primary shrink-0">
         <div
           className="flex items-center justify-center w-8 h-8 bg-accent-blue text-white font-bold text-sm shrink-0"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '4px' }}
         >
           B
         </div>
         {!sidebarCollapsed && (
-          <div className="flex flex-col leading-none overflow-hidden">
-            <span className="text-[10px] font-semibold text-text-muted tracking-wider">BAP</span>
-            <span className="text-[11px] text-text-secondary truncate">Business Accounting Pro</span>
+          <div className="flex flex-col leading-tight overflow-hidden">
+            <span className="text-[11px] font-semibold text-text-primary tracking-tight">BAP</span>
+            <span className="text-[10px] text-text-muted truncate">Accounting Pro</span>
           </div>
         )}
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-1">
+        {sections.map((section, sectionIdx) => (
+          <div key={section.title}>
+            {/* Section divider (except first) */}
+            {sectionIdx > 0 && !sidebarCollapsed && (
+              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'var(--color-border-primary)' }} />
+            )}
+            {sectionIdx > 0 && sidebarCollapsed && <div className="my-1" style={{ height: '1px', background: 'var(--color-border-primary)', margin: '4px 8px' }} />}
             {!sidebarCollapsed && (
-              <div className="px-4 pt-3 pb-1">
-                <span className="text-[10px] font-semibold text-text-muted tracking-wider">
+              <div className="px-4 pt-2.5 pb-1">
+                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
                   {section.title}
                 </span>
               </div>
             )}
-            {sidebarCollapsed && <div className="pt-2" />}
+            {sidebarCollapsed && <div className="pt-1" />}
             {section.items.map((item) => {
               const Icon = item.icon;
               const isActive = currentModule === item.id;
@@ -162,8 +167,8 @@ const Sidebar: React.FC = () => {
                 <button
                   key={item.id}
                   onClick={() => setModule(item.id)}
-                  className={`flex items-center gap-2.5 w-full text-left transition-colors duration-100 ${
-                    sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-1.5'
+                  className={`flex items-center gap-2.5 w-full text-left transition-all duration-150 ${
+                    sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-2'
                   } ${
                     isActive
                       ? 'bg-accent-blue/10 text-accent-blue border-r-2 border-accent-blue'
@@ -187,8 +192,8 @@ const Sidebar: React.FC = () => {
       <div className="border-t border-border-primary px-2 py-2 shrink-0">
         <button
           onClick={toggleSidebar}
-          className="flex items-center justify-center w-full py-1.5 text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-colors"
-          style={{ borderRadius: '2px' }}
+          className="flex items-center justify-center w-full py-1.5 text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150"
+          style={{ borderRadius: '4px' }}
         >
           {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>
