@@ -333,6 +333,12 @@ const api = {
   projectProfitability: (projectId: string): Promise<any> =>
     window.electronAPI.invoke('project:profitability', { projectId }),
 
+  // VPS Backup
+  backupToVps: (): Promise<{ success?: boolean; error?: string; size?: number; timestamp?: string }> =>
+    window.electronAPI.invoke('backup:to-vps'),
+  restoreFromVps: (): Promise<{ success?: boolean; error?: string; message?: string }> =>
+    window.electronAPI.invoke('backup:restore-from-vps'),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

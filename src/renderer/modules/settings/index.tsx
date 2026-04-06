@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
-  Database, Save, HardDrive, Trash2, AlertTriangle, UserX,
+  Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
@@ -50,6 +50,78 @@ const Field: React.FC<{
     {hint && <p className="text-[11px] text-text-muted mt-1">{hint}</p>}
   </div>
 );
+
+// ─── VPS Cloud Backup ──────────────────────────────────
+const VpsBackup: React.FC = () => {
+  const [backing, setBacking] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [result, setResult] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const handleBackup = async () => {
+    setBacking(true);
+    setResult(null);
+    try {
+      const res = await api.backupToVps();
+      if (res.success) {
+        const sizeMB = ((res.size || 0) / 1024 / 1024).toFixed(1);
+        setResult({ type: 'success', msg: `Backed up ${sizeMB} MB to VPS at ${res.timestamp}` });
+      } else {
+        setResult({ type: 'error', msg: res.error || 'Backup failed' });
+      }
+    } catch (err: any) {
+      setResult({ type: 'error', msg: err?.message || 'Backup failed' });
+    } finally {
+      setBacking(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!window.confirm('This will replace your local database with the latest VPS backup. A local backup will be saved first. Continue?')) return;
+    setRestoring(true);
+    setResult(null);
+    try {
+      const res = await api.restoreFromVps();
+      if (res.success) {
+        setResult({ type: 'success', msg: res.message || 'Restored. Restart the app.' });
+      } else {
+        setResult({ type: 'error', msg: res.error || 'Restore failed' });
+      }
+    } catch (err: any) {
+      setResult({ type: 'error', msg: err?.message || 'Restore failed' });
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <SectionCard icon={Cloud} title="Cloud Backup" description="Sync your database to your secure VPS">
+      {result && (
+        <div style={{
+          padding: '10px 14px', marginBottom: '12px', borderRadius: '6px',
+          background: result.type === 'success' ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+          border: `1px solid ${result.type === 'success' ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`,
+          color: result.type === 'success' ? '#34d399' : '#f87171',
+          fontSize: '13px',
+        }}>
+          {result.msg}
+        </div>
+      )}
+      <div className="flex items-center gap-3">
+        <button className="block-btn-primary flex items-center gap-1.5" onClick={handleBackup} disabled={backing || restoring}>
+          <Cloud size={14} />
+          {backing ? 'Uploading...' : 'Backup to VPS'}
+        </button>
+        <button className="block-btn flex items-center gap-1.5" onClick={handleRestore} disabled={backing || restoring}>
+          <Download size={14} />
+          {restoring ? 'Restoring...' : 'Restore from VPS'}
+        </button>
+      </div>
+      <p className="text-xs text-text-muted mt-3">
+        Backups are stored at accounting.rmpgutah.us/backups. Last 30 backups are kept.
+      </p>
+    </SectionCard>
+  );
+};
 
 // ─── Danger Zone ───────────────────────────────────────
 const DangerZone: React.FC = () => {
@@ -810,6 +882,9 @@ export default function SettingsModule() {
           </div>
         </div>
       </SectionCard>
+
+      {/* ── Cloud Backup (VPS) ──────────────────────────── */}
+      <VpsBackup />
 
       {/* ── Data Import / Export ────────────────────────── */}
       <ImportExport />

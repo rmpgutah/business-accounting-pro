@@ -2833,5 +2833,67 @@ export function registerIpcHandlers(): void {
       budget_used_pct: project?.budget > 0 ? Math.round(totalCosts / project.budget * 1000) / 10 : 0,
     };
   });
+
+  // ─── Database Backup to VPS ────────────────────────────
+  ipcMain.handle('backup:to-vps', async () => {
+    try {
+      const dbPath = db.getDbPath();
+      if (!fs.existsSync(dbPath)) return { error: 'Database file not found' };
+
+      // Checkpoint WAL to ensure all data is in the main file
+      try { db.getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T').join('_');
+      const remotePath = `/var/www/accounting.rmpgutah.us/backups/accounting_${timestamp}.db`;
+      const latestPath = `/var/www/accounting.rmpgutah.us/backups/accounting_latest.db`;
+      const sshKey = path.join(os.homedir(), '.ssh', 'id_ed25519_deploy');
+      const vpsHost = '194.113.64.90';
+      const vpsUser = 'root';
+
+      const { execFileSync } = require('child_process');
+
+      // Ensure remote backup directory exists
+      execFileSync('ssh', ['-i', sshKey, '-o', 'StrictHostKeyChecking=no', `${vpsUser}@${vpsHost}`, 'mkdir -p /var/www/accounting.rmpgutah.us/backups'], { timeout: 10000 });
+
+      // Upload timestamped backup
+      execFileSync('scp', ['-i', sshKey, '-o', 'StrictHostKeyChecking=no', dbPath, `${vpsUser}@${vpsHost}:${remotePath}`], { timeout: 30000 });
+
+      // Copy as "latest" for easy restore
+      execFileSync('ssh', ['-i', sshKey, '-o', 'StrictHostKeyChecking=no', `${vpsUser}@${vpsHost}`, `cp '${remotePath}' '${latestPath}'`], { timeout: 10000 });
+
+      // Clean old backups (keep last 30)
+      execFileSync('ssh', ['-i', sshKey, '-o', 'StrictHostKeyChecking=no', `${vpsUser}@${vpsHost}`, 'cd /var/www/accounting.rmpgutah.us/backups && ls -t accounting_*.db | tail -n +31 | xargs -r rm --'], { timeout: 10000 });
+
+      const stats = fs.statSync(dbPath);
+      return { success: true, size: stats.size, timestamp, remotePath };
+    } catch (err: any) {
+      console.error('VPS backup failed:', err);
+      return { error: err?.message || 'Backup failed' };
+    }
+  });
+
+  ipcMain.handle('backup:restore-from-vps', async () => {
+    try {
+      const dbPath = db.getDbPath();
+      const sshKey = path.join(os.homedir(), '.ssh', 'id_ed25519_deploy');
+      const vpsHost = '194.113.64.90';
+      const vpsUser = 'root';
+      const remotePath = `/var/www/accounting.rmpgutah.us/backups/accounting_latest.db`;
+      const localBackup = dbPath + '.pre-restore-backup';
+
+      const { execFileSync } = require('child_process');
+
+      // Make local backup first
+      if (fs.existsSync(dbPath)) fs.copyFileSync(dbPath, localBackup);
+
+      // Download latest from VPS
+      execFileSync('scp', ['-i', sshKey, '-o', 'StrictHostKeyChecking=no', `${vpsUser}@${vpsHost}:${remotePath}`, dbPath], { timeout: 30000 });
+
+      return { success: true, message: 'Database restored from VPS. Restart app to apply.' };
+    } catch (err: any) {
+      console.error('VPS restore failed:', err);
+      return { error: err?.message || 'Restore failed' };
+    }
+  });
 }
 
