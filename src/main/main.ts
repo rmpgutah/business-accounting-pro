@@ -261,5 +261,5 @@ app.on('before-quit', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) createWindow();
+  if (mainWindow === null && app.isReady()) createWindow();
 });
