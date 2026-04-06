@@ -11,16 +11,27 @@ export interface SummaryItem {
 
 export const SummaryBar: React.FC<{ items: SummaryItem[] }> = ({ items }) => {
   const accentCls: Record<string, string> = {
-    red: 'text-red-600', orange: 'text-orange-600', green: 'text-green-600', default: 'text-gray-900',
+    red: 'text-accent-expense',
+    orange: 'text-accent-warning',
+    green: 'text-accent-income',
+    default: 'text-text-primary',
   };
   return (
-    <div className="flex gap-6 bg-white border-b border-gray-200 px-6 py-2.5 flex-wrap">
+    <div
+      className="flex gap-6 px-6 py-3 flex-wrap"
+      style={{
+        background: 'rgba(18, 19, 24, 0.60)',
+        backdropFilter: 'blur(12px) saturate(1.3)',
+        WebkitBackdropFilter: 'blur(12px) saturate(1.3)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
       {items.map((item, i) => (
         <div key={i} className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">{item.label}</span>
+          <span className="text-[10px] uppercase tracking-widest font-bold text-text-muted">{item.label}</span>
           {item.tooltip ? (
             <Tooltip content={item.tooltip}>
-              <span className={`text-sm font-black cursor-help underline decoration-dotted decoration-gray-300 ${accentCls[item.accent ?? 'default']}`}>
+              <span className={`text-sm font-black cursor-help underline decoration-dotted decoration-text-muted/30 ${accentCls[item.accent ?? 'default']}`}>
                 {item.value}
               </span>
             </Tooltip>

@@ -121,13 +121,19 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className={`flex flex-col h-full bg-bg-secondary border-r border-border-primary transition-all duration-200 ${
+      className={`flex flex-col h-full border-r transition-all duration-200 ${
         sidebarCollapsed ? 'w-16' : 'w-56'
       }`}
-      style={{ borderRadius: '0px' }}
+      style={{
+        borderRadius: '0px',
+        background: 'rgba(14, 15, 20, 0.85)',
+        backdropFilter: 'blur(20px) saturate(1.5)',
+        WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+        borderColor: 'rgba(255,255,255,0.06)',
+      }}
     >
       {/* App Header */}
-      <div className="flex items-center gap-2.5 px-3 h-14 border-b border-border-primary shrink-0">
+      <div className="flex items-center gap-2.5 px-3 h-14 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div
           className="flex items-center justify-center w-8 h-8 bg-accent-blue text-white font-bold text-sm shrink-0"
           style={{ borderRadius: '4px' }}
@@ -148,9 +154,9 @@ const Sidebar: React.FC = () => {
           <div key={section.title}>
             {/* Section divider (except first) */}
             {sectionIdx > 0 && !sidebarCollapsed && (
-              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'var(--color-border-primary)' }} />
+              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
             )}
-            {sectionIdx > 0 && sidebarCollapsed && <div className="my-1" style={{ height: '1px', background: 'var(--color-border-primary)', margin: '4px 8px' }} />}
+            {sectionIdx > 0 && sidebarCollapsed && <div className="my-1" style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 8px' }} />}
             {!sidebarCollapsed && (
               <div className="px-4 pt-2.5 pb-1">
                 <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>

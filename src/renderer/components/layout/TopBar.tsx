@@ -87,19 +87,24 @@ const TopBar: React.FC = () => {
   return (
     <>
       <header
-        className="flex items-center justify-between h-14 px-4 bg-bg-secondary border-b border-border-primary shrink-0"
+        className="flex items-center justify-between h-14 px-4 shrink-0"
         style={{
           borderRadius: '0px',
+          background: 'rgba(14, 15, 20, 0.80)',
+          backdropFilter: 'blur(20px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
           WebkitAppRegion: 'drag' as any,
-          /* macOS hiddenInset title bar: pad left for traffic lights */
           paddingLeft: navigator.userAgent.includes('Mac') ? '80px' : '16px',
         }}
       >
         {/* Left — Company */}
         <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
-            className="flex items-center gap-2 px-2.5 py-1.5 text-text-primary hover:bg-bg-hover transition-all duration-150"
-            style={{ borderRadius: '4px', background: 'var(--color-bg-tertiary)' }}
+            className="flex items-center gap-2 px-2.5 py-1.5 text-text-primary transition-all duration-150"
+            style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
           >
             <Building2 size={16} className="text-accent-blue shrink-0" />
             <span className="text-sm font-medium truncate max-w-[200px]">
@@ -112,8 +117,10 @@ const TopBar: React.FC = () => {
         {/* Center — Search trigger */}
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 w-80 bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-all duration-150"
-          style={{ borderRadius: '4px', WebkitAppRegion: 'no-drag' as any }}
+          className="flex items-center gap-2 px-3 py-1.5 w-80 text-text-muted text-sm transition-all duration-150"
+          style={{ borderRadius: '6px', WebkitAppRegion: 'no-drag' as any, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
         >
           <Search size={14} />
           <span className="flex-1 text-left">Search...</span>
@@ -180,8 +187,15 @@ const TopBar: React.FC = () => {
           onClick={closeSearch}
         >
           <div
-            className="w-full max-w-xl bg-bg-elevated border border-border-primary shadow-2xl"
-            style={{ borderRadius: '4px' }}
+            className="w-full max-w-xl"
+            style={{
+              borderRadius: '10px',
+              background: 'rgba(20, 22, 30, 0.90)',
+              backdropFilter: 'blur(24px) saturate(1.5)',
+              WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search Input */}

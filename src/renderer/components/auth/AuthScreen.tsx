@@ -131,7 +131,7 @@ const AuthScreen: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen" style={{ background: '#0c0c0e', padding: '24px' }}>
+    <div className="flex flex-col items-center justify-center min-h-screen" style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(59,130,246,0.06) 0%, #08090c 70%)', padding: '24px' }}>
       {/* Drag region for macOS */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
 
@@ -140,7 +140,7 @@ const AuthScreen: React.FC = () => {
         <div className="flex items-center gap-3 mb-3">
           <div
             className="flex items-center justify-center text-white font-bold text-lg"
-            style={{ width: '40px', height: '40px', background: '#3b82f6', borderRadius: '6px' }}
+            style={{ width: '42px', height: '42px', background: 'linear-gradient(135deg, rgba(96,165,250,0.9), rgba(59,130,246,0.95))', borderRadius: '10px', boxShadow: '0 4px 12px rgba(59,130,246,0.25)' }}
           >
             B
           </div>
@@ -154,9 +154,13 @@ const AuthScreen: React.FC = () => {
       {/* ── Pick User Screen ────────────────────────── */}
       {mode === 'pick-user' && (
         <div style={{
-          width: '100%', maxWidth: '460px', background: '#151518',
-          border: '1px solid #2a2a30', padding: '40px', borderRadius: '6px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          width: '100%', maxWidth: '460px',
+          background: 'rgba(18, 20, 28, 0.75)',
+          backdropFilter: 'blur(24px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          padding: '40px', borderRadius: '12px',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset',
         }}>
           <div className="flex flex-col items-center mb-6">
             <div className="flex items-center justify-center mb-3" style={{ width: '52px', height: '52px', background: 'rgba(59,130,246,0.12)', borderRadius: '8px' }}>
@@ -173,11 +177,11 @@ const AuthScreen: React.FC = () => {
                 onClick={() => handlePickUser(u)}
                 className="flex items-center gap-3 w-full text-left transition-all duration-150"
                 style={{
-                  padding: '14px', background: '#1c1c20', border: '1px solid #2a2a30',
-                  borderRadius: '4px', cursor: 'pointer',
+                  padding: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '8px', cursor: 'pointer',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#50505a'; e.currentTarget.style.background = '#232328'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a2a30'; e.currentTarget.style.background = '#1c1c20'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
               >
                 <div
                   className="flex items-center justify-center text-white font-bold shrink-0"
@@ -197,9 +201,9 @@ const AuthScreen: React.FC = () => {
           <button
             onClick={() => { setMode('register'); setError(''); }}
             className="w-full flex items-center justify-center gap-2 text-sm transition-all duration-150"
-            style={{ padding: '10px', background: 'transparent', border: '1px solid #2a2a30', borderRadius: '4px', color: '#9e9eab', cursor: 'pointer' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#50505a'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a2a30'; }}
+            style={{ padding: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', color: '#9a9db0', cursor: 'pointer' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
           >
             <UserPlus size={14} />
             Create New Account
@@ -210,9 +214,13 @@ const AuthScreen: React.FC = () => {
       {/* ── Login Screen ─────────────────────────────── */}
       {mode === 'login' && (
         <div style={{
-          width: '100%', maxWidth: '460px', background: '#151518',
-          border: '1px solid #2a2a30', padding: '40px', borderRadius: '6px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          width: '100%', maxWidth: '460px',
+          background: 'rgba(18, 20, 28, 0.75)',
+          backdropFilter: 'blur(24px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          padding: '40px', borderRadius: '12px',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset',
         }}>
           <div className="flex flex-col items-center mb-6">
             <div className="flex items-center justify-center mb-3" style={{ width: '52px', height: '52px', background: 'rgba(59,130,246,0.12)', borderRadius: '8px' }}>
@@ -232,7 +240,7 @@ const AuthScreen: React.FC = () => {
           </div>
 
           {error && (
-            <div className="text-sm mb-4" style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', borderRadius: '4px' }}>
+            <div className="text-sm mb-4" style={{ padding: '10px 14px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#f87171', borderRadius: '6px' }}>
               {error}
             </div>
           )}
@@ -312,9 +320,13 @@ const AuthScreen: React.FC = () => {
       {/* ── Register Screen ──────────────────────────── */}
       {mode === 'register' && (
         <div style={{
-          width: '100%', maxWidth: '460px', background: '#151518',
-          border: '1px solid #2a2a30', padding: '40px', borderRadius: '6px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          width: '100%', maxWidth: '460px',
+          background: 'rgba(18, 20, 28, 0.75)',
+          backdropFilter: 'blur(24px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          padding: '40px', borderRadius: '12px',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset',
         }}>
           <div className="flex flex-col items-center mb-6">
             <div className="flex items-center justify-center mb-3" style={{ width: '52px', height: '52px', background: 'rgba(34,197,94,0.12)', borderRadius: '8px' }}>
@@ -329,7 +341,7 @@ const AuthScreen: React.FC = () => {
           </div>
 
           {error && (
-            <div className="text-sm mb-4" style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', borderRadius: '4px' }}>
+            <div className="text-sm mb-4" style={{ padding: '10px 14px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#f87171', borderRadius: '6px' }}>
               {error}
             </div>
           )}

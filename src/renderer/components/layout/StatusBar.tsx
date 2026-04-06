@@ -41,8 +41,14 @@ const StatusBar: React.FC = () => {
 
   return (
     <footer
-      className="flex items-center justify-between h-6 px-3 bg-bg-tertiary border-t border-border-primary text-[11px] text-text-muted shrink-0 select-none"
-      style={{ borderRadius: '0px' }}
+      className="flex items-center justify-between h-6 px-3 text-[11px] text-text-muted shrink-0 select-none"
+      style={{
+        borderRadius: '0px',
+        background: 'rgba(14, 15, 20, 0.70)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+      }}
     >
       <div className="flex items-center gap-3">
         <span>{fiscalYear}</span>
