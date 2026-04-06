@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface AppState {
   currentModule: string;
@@ -18,20 +19,31 @@ interface AppState {
   setLoading: (loading: boolean) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  currentModule: 'dashboard',
-  sidebarCollapsed: false,
-  searchQuery: '',
-  searchResults: [],
-  searchOpen: false,
-  notificationCount: 0,
-  loading: true,
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      currentModule: 'dashboard',
+      sidebarCollapsed: false,
+      searchQuery: '',
+      searchResults: [],
+      searchOpen: false,
+      notificationCount: 0,
+      loading: true,
 
-  setModule: (module) => set({ currentModule: module }),
-  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  setSearchQuery: (query) => set({ searchQuery: query }),
-  setSearchResults: (results) => set({ searchResults: results }),
-  setSearchOpen: (open) => set({ searchOpen: open }),
-  setNotificationCount: (count) => set({ notificationCount: count }),
-  setLoading: (loading) => set({ loading }),
-}));
+      setModule: (module) => set({ currentModule: module }),
+      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setSearchQuery: (query) => set({ searchQuery: query }),
+      setSearchResults: (results) => set({ searchResults: results }),
+      setSearchOpen: (open) => set({ searchOpen: open }),
+      setNotificationCount: (count) => set({ notificationCount: count }),
+      setLoading: (loading) => set({ loading }),
+    }),
+    {
+      name: 'bap-app',
+      partialize: (state) => ({
+        currentModule: state.currentModule,
+        sidebarCollapsed: state.sidebarCollapsed,
+      }),
+    }
+  )
+);
