@@ -43,6 +43,7 @@ const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
 const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
 const RulesModule = lazy(() => import('./modules/rules'));
+const DebtCollectionModule = lazy(() => import('./modules/debt-collection'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -76,6 +77,7 @@ const MODULE_NAMES: Record<string, string> = {
   bills: 'Bills & Accounts Payable',
   'purchase-orders': 'Purchase Orders',
   'fixed-assets': 'Fixed Assets',
+  'debt-collection': 'Debt Collection',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -123,6 +125,7 @@ const ModuleView: React.FC = () => {
       case 'fixed-assets': return <FixedAssetsModule />;
       case 'automations': return <AutomationsModule />;
       case 'rules': return <RulesModule />;
+      case 'debt-collection': return <DebtCollectionModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">
@@ -218,6 +221,7 @@ const App: React.FC = () => {
           accounts: 'accounts',
           projects: 'projects',
           payroll: 'employees',
+          'debt-collection': 'debts',
         };
         const table = tableMap[currentModule];
         if (table) api.exportCsv(table);

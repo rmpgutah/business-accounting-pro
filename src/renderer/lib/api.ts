@@ -260,6 +260,45 @@ const api = {
   invoiceFromTimeEntries: (project_id: string, company_id: string) =>
     window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
 
+  // ─── Debt Collection ─────────────────────────
+  debtStats: (companyId: string): Promise<{
+    total_outstanding: number;
+    in_collection: number;
+    legal_active: number;
+    collected_this_month: number;
+    writeoffs_ytd: number;
+  }> => window.electronAPI.invoke('debt:stats', { companyId }),
+
+  debtCalculateInterest: (debtId: string): Promise<{ interest: number; total: number }> =>
+    window.electronAPI.invoke('debt:calculate-interest', { debtId }),
+
+  debtAdvanceStage: (debtId: string, notes?: string): Promise<void> =>
+    window.electronAPI.invoke('debt:advance-stage', { debtId, notes }),
+
+  debtHoldToggle: (debtId: string, hold: boolean, reason?: string): Promise<void> =>
+    window.electronAPI.invoke('debt:hold-toggle', { debtId, hold, reason }),
+
+  debtImportOverdueInvoices: (companyId: string, daysThreshold: number): Promise<{ imported: number }> =>
+    window.electronAPI.invoke('debt:import-overdue', { companyId, daysThreshold }),
+
+  debtGenerateDemandLetter: (debtId: string, templateId: string): Promise<{ html: string }> =>
+    window.electronAPI.invoke('debt:generate-demand-letter', { debtId, templateId }),
+
+  debtExportBundle: (debtId: string): Promise<{ path?: string; cancelled?: boolean }> =>
+    window.electronAPI.invoke('debt:export-bundle', { debtId }),
+
+  debtSeedDefaultAutomation: (companyId: string): Promise<void> =>
+    window.electronAPI.invoke('debt:seed-automation', { companyId }),
+
+  debtSeedDefaultTemplates: (companyId: string): Promise<void> =>
+    window.electronAPI.invoke('debt:seed-templates', { companyId }),
+
+  debtRunEscalation: (companyId: string): Promise<{ advanced: number; flagged: number }> =>
+    window.electronAPI.invoke('debt:run-escalation', { companyId }),
+
+  debtAnalytics: (companyId: string, startDate: string, endDate: string): Promise<any> =>
+    window.electronAPI.invoke('debt:analytics', { companyId, startDate, endDate }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

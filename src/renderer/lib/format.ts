@@ -62,6 +62,28 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   closed:           { label: 'Closed',           className: 'block-badge' },
   in_progress:      { label: 'In Progress',      className: 'block-badge block-badge-warning' },
   completed:        { label: 'Completed',        className: 'block-badge block-badge-income' },
+  // Debt Collection
+  in_collection:    { label: 'In Collection',    className: 'block-badge block-badge-warning' },
+  legal:            { label: 'Legal',            className: 'block-badge block-badge-expense' },
+  settled:          { label: 'Settled',          className: 'block-badge block-badge-income' },
+  written_off:      { label: 'Written Off',      className: 'block-badge' },
+  disputed:         { label: 'Disputed',         className: 'block-badge block-badge-purple' },
+  bankruptcy:       { label: 'Bankruptcy',       className: 'block-badge block-badge-expense' },
+  // Debt Pipeline Stages
+  reminder:         { label: 'Reminder',         className: 'block-badge block-badge-blue' },
+  warning:          { label: 'Warning',          className: 'block-badge block-badge-warning' },
+  final_notice:     { label: 'Final Notice',     className: 'block-badge block-badge-expense' },
+  demand_letter:    { label: 'Demand Letter',    className: 'block-badge block-badge-expense' },
+  collections_agency: { label: 'Collections',    className: 'block-badge block-badge-purple' },
+  legal_action:     { label: 'Legal Action',     className: 'block-badge block-badge-expense' },
+  judgment:         { label: 'Judgment',         className: 'block-badge block-badge-income' },
+  garnishment:      { label: 'Garnishment',      className: 'block-badge block-badge-warning' },
+  // Legal Action Status
+  preparing:        { label: 'Preparing',        className: 'block-badge block-badge-blue' },
+  filed:            { label: 'Filed',            className: 'block-badge block-badge-warning' },
+  served:           { label: 'Served',           className: 'block-badge block-badge-warning' },
+  hearing_scheduled:{ label: 'Hearing Set',      className: 'block-badge block-badge-purple' },
+  appeal:           { label: 'Appeal',           className: 'block-badge block-badge-expense' },
 };
 
 export function formatStatus(status: string | null | undefined): { label: string; className: string } {

@@ -12,6 +12,7 @@ const COMMANDS = [
   { label: 'New Bill',          view: 'bills',         hint: 'bil' },
   { label: 'New Project',       view: 'projects',      hint: 'pro' },
   { label: 'New Time Entry',    view: 'time-tracking', hint: 'tim' },
+  { label: 'New Debt',          view: 'debt-collection', hint: 'dbt' },
 ];
 
 interface Props { onNavigate: (view: string) => void; onClose: () => void; }
