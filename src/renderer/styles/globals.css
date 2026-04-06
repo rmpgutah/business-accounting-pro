@@ -354,11 +354,17 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 .module-title {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  background: linear-gradient(135deg, #e8eaf0, #9a9db0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 .module-actions {
   display: flex;
@@ -371,8 +377,13 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 0;
+  padding: 5rem 0;
   text-align: center;
+  color: var(--color-text-muted);
+}
+.empty-state p {
+  max-width: 320px;
+  line-height: 1.6;
 }
 .empty-state-icon {
   width: 4rem;

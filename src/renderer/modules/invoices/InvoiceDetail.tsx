@@ -23,6 +23,7 @@ interface Invoice {
   amount_paid: number;
   status: InvoiceStatus;
   terms: string;
+  terms_text: string;
   notes: string;
 }
 

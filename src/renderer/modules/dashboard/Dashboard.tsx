@@ -41,7 +41,15 @@ import {
 import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, formatDate } from '../../lib/format';
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 // ─── Types ──────────────────────────────────────────────
 interface Stats {
@@ -377,6 +385,7 @@ const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onClick }) => (
 const Dashboard: React.FC = () => {
   const setModule = useAppStore((s) => s.setModule);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const authUser = useAuthStore((s) => s.user);
   const [period, setPeriod] = useState<Period>('MTD');
   const [stats, setStats] = useState<Stats>({
     revenue: 0,
@@ -725,7 +734,14 @@ const Dashboard: React.FC = () => {
     <div className="p-6 space-y-6 overflow-y-auto h-full">
       {/* Header & Period Selector */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-text-primary">Dashboard</h1>
+        <div>
+          <h1 className="text-lg font-bold text-text-primary">
+            {getGreeting()}{authUser?.display_name ? `, ${authUser.display_name.split(' ')[0]}` : ''}
+          </h1>
+          <p className="text-xs text-text-muted mt-0.5">
+            {activeCompany?.name || 'Dashboard'} &middot; {format(new Date(), 'EEEE, MMMM d, yyyy')}
+          </p>
+        </div>
         <div className="flex gap-1" style={{ borderRadius: '6px' }}>
           {periodButtons.map((p) => (
             <button
@@ -746,7 +762,7 @@ const Dashboard: React.FC = () => {
 
       {/* Rules Activity Strip */}
       {rulesActivity && (rulesActivity.pricing_today > 0 || rulesActivity.approvals_pending > 0 || rulesActivity.alerts_week > 0) && (
-        <div className="border border-indigo-200 bg-indigo-50 px-4 py-2 flex gap-6 text-xs font-bold text-indigo-700 mb-4 flex-wrap">
+        <div className="glass-subtle px-4 py-2.5 flex gap-6 text-xs font-bold text-accent-blue flex-wrap" style={{ borderRadius: '8px' }}>
           {rulesActivity.pricing_today > 0 && (
             <span>{rulesActivity.pricing_today} pricing rule{rulesActivity.pricing_today !== 1 ? 's' : ''} applied today</span>
           )}

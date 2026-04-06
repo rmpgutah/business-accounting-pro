@@ -18,7 +18,12 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
         <TopBar />
 
         {/* Content */}
-        <main className="flex-1 overflow-auto bg-bg-primary">
+        <main
+          className="flex-1 overflow-auto"
+          style={{
+            background: 'linear-gradient(160deg, #08090c 0%, #0c0e14 40%, #0e1018 100%)',
+          }}
+        >
           {children}
         </main>
 

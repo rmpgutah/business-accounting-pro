@@ -175,13 +175,19 @@ const Sidebar: React.FC = () => {
                 <button
                   key={item.id}
                   onClick={() => setModule(item.id)}
-                  className={`flex items-center gap-2.5 w-full text-left transition-all duration-150 ${
+                  className={`flex items-center gap-2.5 w-full text-left transition-all duration-200 ${
                     sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-2'
                   } ${
                     isActive
-                      ? 'bg-accent-blue/10 text-accent-blue border-r-2 border-accent-blue'
-                      : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary border-r-2 border-transparent'
+                      ? 'text-accent-blue border-r-2 border-accent-blue'
+                      : 'text-text-secondary hover:text-text-primary border-r-2 border-transparent'
                   }`}
+                  style={isActive ? {
+                    background: 'linear-gradient(90deg, transparent, rgba(96,165,250,0.08))',
+                    boxShadow: 'inset -2px 0 8px rgba(96,165,250,0.06)',
+                  } : {}}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
                   title={sidebarCollapsed ? item.label : undefined}
                   style={{ borderRadius: '0px' }}
                 >
