@@ -753,11 +753,26 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('auth:link-user-company', (_event, { userId, companyId, role }: { userId: string; companyId: string; role?: string }) => {
-    db.execQuery(
-      'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
-      [userId, companyId, role || 'owner']
-    );
+    // SQLite's INSERT OR IGNORE does NOT suppress FOREIGN KEY violations — catch explicitly.
+    // If the user doesn't exist in the DB (stale localStorage), skip the link gracefully.
+    try {
+      db.execQuery(
+        'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
+        [userId, companyId, role || 'owner']
+      );
+    } catch (_) {
+      // FOREIGN KEY failure: user not in DB (stale session). Company still usable.
+    }
     return true;
+  });
+
+  ipcMain.handle('auth:validate-session', (_event, { userId }: { userId: string }) => {
+    try {
+      const rows = db.runQuery('SELECT id, email, display_name, role, avatar_color FROM users WHERE id = ?', [userId]);
+      return rows.length > 0 ? rows[0] : null;
+    } catch {
+      return null;
+    }
   });
 
   ipcMain.handle('export:csv', async (_event, { table, filters }: { table: string; filters?: Record<string, any> }) => {

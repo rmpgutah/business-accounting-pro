@@ -27,9 +27,10 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
-    // Ignore when typing in inputs (unless it's a shortcut we specifically want)
     const target = e.target as HTMLElement;
     const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+    // Never hijack shortcuts while the user is typing in a form field
+    if (isInput) return;
 
     // Cmd/Ctrl + N — New item
     if (e.key === 'n' && !e.shiftKey) {
@@ -45,7 +46,7 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
       return;
     }
 
-    // Cmd/Ctrl + F — Focus search (only override if not already in an input)
+    // Cmd/Ctrl + F — Focus search
     if (e.key === 'f' && !e.shiftKey) {
       e.preventDefault();
       actions.focusSearch();

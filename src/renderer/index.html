@@ -147,6 +147,7 @@
           if (channel === 'auth:login')      return Promise.resolve({ success: true, user: _usr });
           if (channel === 'auth:register')   return Promise.resolve({ success: true, user: _usr });
           if (channel === 'auth:link-user-company') return Promise.resolve({ ok: true });
+          if (channel === 'auth:validate-session') return Promise.resolve(_usr);
 
           // ── Invoice atomic save ───────────────────────────────────────────
           if (channel === 'invoice:save') {

@@ -179,16 +179,17 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        // Step 1: Validate persisted auth BEFORE doing anything else
+        // Step 1: Validate persisted auth — clears stale localStorage sessions
+        // (e.g. after reinstall, or browser mock user in real Electron app)
         if (isAuthenticated && authUser?.id) {
-          const rows = await api.rawQuery('SELECT id FROM users WHERE id = ?', [authUser.id]);
-          if (!rows || (rows as any[]).length === 0) {
+          const dbUser = await api.validateSession(authUser.id).catch(() => null);
+          if (!dbUser) {
             console.warn('Persisted user not found in database — clearing auth state');
             logout();
             setCompanies([]);
             setActiveCompany(null);
             setLoading(false);
-            return; // Will re-render with isAuthenticated=false → show AuthScreen
+            return;
           }
         }
 

@@ -87,6 +87,8 @@ const api = {
   listUsers: () => window.electronAPI.invoke('auth:list-users'),
   linkUserCompany: (userId: string, companyId: string, role?: string) =>
     window.electronAPI.invoke('auth:link-user-company', { userId, companyId, role }),
+  validateSession: (userId: string) =>
+    window.electronAPI.invoke('auth:validate-session', { userId }),
 
   // Recurring Processing
   processRecurringNow: () => window.electronAPI.invoke('recurring:process-now'),
