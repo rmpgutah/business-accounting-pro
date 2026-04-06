@@ -76,7 +76,7 @@ const StatusBar: React.FC = () => {
             v{updateVersion} ready — restart to apply
           </span>
         )}
-        <span>Business Accounting Pro v1.1.1</span>
+        <span>Business Accounting Pro v1.3.0</span>
       </div>
     </footer>
   );
