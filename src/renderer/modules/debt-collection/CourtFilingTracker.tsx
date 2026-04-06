@@ -546,11 +546,11 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
                 </div>
                 <div
                   className="w-full h-2 bg-bg-tertiary overflow-hidden"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <div
                     className="h-full bg-emerald-500 transition-all"
-                    style={{ width: `${progressPct}%`, borderRadius: '2px' }}
+                    style={{ width: `${progressPct}%`, borderRadius: '6px' }}
                   />
                 </div>
               </div>
@@ -563,7 +563,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
                   <label
                     key={idx}
                     className="flex items-center gap-2 px-2 py-1.5 hover:bg-bg-hover cursor-pointer text-xs"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <input
                       type="checkbox"

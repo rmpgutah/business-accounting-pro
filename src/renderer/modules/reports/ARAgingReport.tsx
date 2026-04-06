@@ -135,7 +135,7 @@ const ARAgingReport: React.FC = () => {
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <div className="flex items-center gap-3">
           <span className="text-xs text-text-muted font-semibold uppercase tracking-wider">
@@ -145,14 +145,14 @@ const ARAgingReport: React.FC = () => {
         <div className="flex gap-2">
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Print"
           >
             <Printer size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Export"
           >
             <Download size={15} />
@@ -172,7 +172,7 @@ const ARAgingReport: React.FC = () => {
               <div
                 key={key}
                 className="block-card p-4 text-center"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
                   {BUCKET_LABELS[key]}
@@ -191,7 +191,7 @@ const ARAgingReport: React.FC = () => {
           {/* Grand total */}
           <div
             className="block-card p-4 flex items-center justify-between"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
               Total Outstanding
@@ -203,7 +203,7 @@ const ARAgingReport: React.FC = () => {
 
           {/* Detail table */}
           {entries.length === 0 ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
               <p className="text-sm text-text-secondary font-medium">
                 No outstanding invoices
               </p>
@@ -214,7 +214,7 @@ const ARAgingReport: React.FC = () => {
           ) : (
             <div
               className="block-card p-0 overflow-hidden"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <table className="block-table">
                 <thead>

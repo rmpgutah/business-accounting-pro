@@ -122,7 +122,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           style={{
             backgroundColor: 'var(--color-bg-tertiary)',
             border: '1px solid var(--color-border-primary)',
-            borderRadius: '2px',
+            borderRadius: '6px',
           }}
         >
           <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -140,7 +140,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
             style={{
               backgroundColor: 'var(--color-accent-expense-bg)',
               border: '1px solid var(--color-accent-expense)',
-              borderRadius: '2px',
+              borderRadius: '6px',
             }}
           >
             {error}

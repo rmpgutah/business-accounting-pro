@@ -54,7 +54,7 @@ const CHART_TICK_FILL = '#8a8a8a';
 const TOOLTIP_STYLE = {
   backgroundColor: '#1a1a1a',
   border: '1px solid #2e2e2e',
-  borderRadius: '2px',
+  borderRadius: '6px',
 };
 
 function toISODate(d: Date): string {
@@ -155,7 +155,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
       {/* ── Date Range Selector ── */}
       <div
         className="block-card p-4 flex items-center gap-4 flex-wrap"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <label className="text-text-secondary text-sm flex items-center gap-2">
           From
@@ -164,7 +164,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="block-input px-2 py-1 text-sm"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           />
         </label>
         <label className="text-text-secondary text-sm flex items-center gap-2">
@@ -174,14 +174,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             className="block-input px-2 py-1 text-sm"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           />
         </label>
         <button
           onClick={loadData}
           disabled={loading}
           className="block-btn block-btn-primary px-3 py-1 text-sm flex items-center gap-1"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -203,7 +203,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
       {!loading && hasData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* ── 1. Collection Rate Over Time (AreaChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Collection Rate Over Time
             </h3>
@@ -238,7 +238,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 2. Aging Breakdown (BarChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Aging Breakdown
             </h3>
@@ -273,7 +273,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 3. Recovery by Stage (Horizontal BarChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Recovery by Stage
             </h3>
@@ -307,7 +307,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 4. Top Debtors (Horizontal BarChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Top Debtors
             </h3>
@@ -345,30 +345,30 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 5. Summary Stats ── */}
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Summary
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="stat-card block-card" style={{ borderRadius: '2px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
                 <div className="stat-value font-mono text-accent-expense">
                   {formatCurrency(stats?.total_outstanding ?? 0)}
                 </div>
                 <div className="stat-label">Total Outstanding</div>
               </div>
-              <div className="stat-card block-card" style={{ borderRadius: '2px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
                 <div className="stat-value font-mono text-accent-income">
                   {formatCurrency(stats?.collected_this_month ?? 0)}
                 </div>
                 <div className="stat-label">Collected This Month</div>
               </div>
-              <div className="stat-card block-card" style={{ borderRadius: '2px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
                 <div className="stat-value font-mono text-text-muted">
                   {formatCurrency(stats?.writeoffs_ytd ?? 0)}
                 </div>
                 <div className="stat-label">Write-offs YTD</div>
               </div>
-              <div className="stat-card block-card" style={{ borderRadius: '2px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
                 <div className="stat-value font-mono text-accent-blue">
                   {stats?.in_collection ?? 0}
                 </div>
@@ -378,7 +378,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 6. Pipeline Velocity ── */}
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Pipeline Velocity
             </h3>
@@ -396,7 +396,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <div
                     key={v.stage}
                     className="grid grid-cols-2 gap-2 text-sm px-2 py-2 hover:bg-bg-hover"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <span className="text-text-secondary capitalize">
                       {v.stage.replace(/_/g, ' ')}

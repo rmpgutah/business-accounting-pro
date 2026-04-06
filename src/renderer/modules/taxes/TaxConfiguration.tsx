@@ -192,7 +192,7 @@ const TaxConfiguration: React.FC = () => {
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {toast.msg}
         </div>
@@ -201,7 +201,7 @@ const TaxConfiguration: React.FC = () => {
       {/* Header + Year Selector */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
+          <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
             <Calculator size={15} className="text-accent-blue" />
           </div>
           <div>
@@ -212,13 +212,13 @@ const TaxConfiguration: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {autoSeeded && (
-            <div className="flex items-center gap-1.5 text-xs text-accent-income px-2 py-1 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
+            <div className="flex items-center gap-1.5 text-xs text-accent-income px-2 py-1 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
               <CheckCircle size={12} />
               Auto-seeded {CURRENT_YEAR}
             </div>
           )}
 
-          <div className="flex items-center border border-border-primary" style={{ borderRadius: '2px' }}>
+          <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px' }}>
             {availableYears.length === 0 ? (
               <span className="text-xs text-text-muted px-3 py-1.5">Loading years...</span>
             ) : (
@@ -254,7 +254,7 @@ const TaxConfiguration: React.FC = () => {
       </div>
 
       {yearNotSeeded && (
-        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-border-primary text-xs text-text-secondary" style={{ borderRadius: '2px' }}>
+        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-border-primary text-xs text-text-secondary" style={{ borderRadius: '6px' }}>
           <AlertCircle size={14} className="text-accent-blue shrink-0" />
           Tax data for {selectedYear} has not been seeded. Click "Seed {selectedYear}" to initialize with default federal tax rates.
         </div>
@@ -349,7 +349,7 @@ const TaxConfiguration: React.FC = () => {
                   { label: 'Standard Deduction (HoH)', value: formatCurrency(constants.standard_deduction_hoh), icon: <DollarSign size={13} /> },
                   { label: 'Allowance Value', value: formatCurrency(constants.allowance_value), icon: <DollarSign size={13} /> },
                 ].map((c) => (
-                  <div key={c.label} className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
+                  <div key={c.label} className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
                     <span className="text-text-muted mt-0.5">{c.icon}</span>
                     <div>
                       <p className="text-xs text-text-muted leading-tight">{c.label}</p>
@@ -424,7 +424,7 @@ const TaxConfiguration: React.FC = () => {
             {calcError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {calcError}
               </div>
@@ -448,7 +448,7 @@ const TaxConfiguration: React.FC = () => {
                     { label: 'Medicare', value: formatCurrency(calcResult.medicare), color: 'text-text-primary' },
                     { label: 'Total', value: formatCurrency(calcResult.total), color: 'text-accent-expense' },
                   ].map((r) => (
-                    <div key={r.label} className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
+                    <div key={r.label} className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
                       <span className="text-xs text-text-muted">{r.label}:</span>
                       <span className={`text-sm font-bold ${r.color}`}>{r.value}</span>
                     </div>

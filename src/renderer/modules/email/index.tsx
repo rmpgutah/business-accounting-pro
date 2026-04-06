@@ -144,7 +144,7 @@ export default function EmailModule() {
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-elevated text-text-secondary hover:bg-bg-hover border border-border-primary'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <Icon size={14} />
               {t.label}

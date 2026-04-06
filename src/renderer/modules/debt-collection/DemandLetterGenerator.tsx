@@ -221,7 +221,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                     ? 'ring-2 ring-accent-blue bg-bg-tertiary'
                     : 'hover:bg-bg-hover'
                 }`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <FileText size={14} className="text-text-muted" />
@@ -231,7 +231,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                 </div>
                 <span
                   className={`inline-block text-[10px] px-1.5 py-0.5 font-semibold uppercase ${sevStyle}`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   {tpl.severity}
                 </span>
@@ -254,7 +254,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
           </h4>
           <div
             className="block-card bg-bg-primary p-4 font-mono text-sm text-text-secondary space-y-3"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <div>
               <span className="text-text-muted text-xs uppercase">Subject:</span>
@@ -290,7 +290,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
           {successMsg && (
             <div
               className="flex items-center gap-2 mt-3 px-3 py-2 bg-emerald-500/10 text-emerald-400 text-xs font-semibold"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <Check size={14} />
               {successMsg}

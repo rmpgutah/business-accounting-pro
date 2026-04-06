@@ -278,7 +278,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 bg-black/50">
       <div
         className="bg-bg-elevated border border-border-primary w-full max-w-3xl shadow-xl"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
@@ -298,7 +298,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           {errors._form && (
             <div
               className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {errors._form}
             </div>
@@ -318,7 +318,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                 className={`block-input w-full px-3 py-2 text-sm bg-bg-primary border ${
                   errors.date ? 'border-accent-expense' : 'border-border-primary'
                 } text-text-primary focus:outline-none focus:border-accent-blue`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               />
               {errors.date && (
                 <p className="text-[10px] text-accent-expense mt-1">
@@ -342,7 +342,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                     ? 'border-accent-expense'
                     : 'border-border-primary'
                 } text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               />
               {errors.description && (
                 <p className="text-[10px] text-accent-expense mt-1">
@@ -362,7 +362,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                 onChange={(e) => setReference(e.target.value)}
                 placeholder="e.g. INV-001"
                 className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               />
             </div>
           </div>
@@ -390,7 +390,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
             <div
               className="border border-border-primary overflow-hidden"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <table className="w-full text-sm">
                 <thead>
@@ -423,7 +423,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                             updateLine(line.key, 'account_id', e.target.value)
                           }
                           className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         >
                           <option value="">Select account...</option>
                           {accounts.map((a) => (
@@ -444,7 +444,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           }
                           placeholder="0.00"
                           className="block-input w-full px-2 py-1 text-xs text-right font-mono bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         />
                       </td>
                       <td className="px-2 py-1.5">
@@ -458,7 +458,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           }
                           placeholder="0.00"
                           className="block-input w-full px-2 py-1 text-xs text-right font-mono bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         />
                       </td>
                       <td className="px-2 py-1.5">
@@ -470,7 +470,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           }
                           placeholder="Line memo"
                           className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         />
                       </td>
                       <td className="px-2 py-1.5 text-center">
@@ -520,7 +520,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           {errors.balance && (
             <div
               className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2 flex items-center gap-2"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <AlertTriangle size={14} />
               {errors.balance}
@@ -533,7 +533,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           <button
             onClick={onClose}
             className="px-4 py-1.5 text-xs font-semibold text-text-secondary bg-bg-tertiary border border-border-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             Cancel
           </button>
@@ -541,7 +541,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
             onClick={handleSave}
             disabled={saving || !isBalanced}
             className="block-btn-primary flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {saving ? (
               <Loader2 size={14} className="animate-spin" />

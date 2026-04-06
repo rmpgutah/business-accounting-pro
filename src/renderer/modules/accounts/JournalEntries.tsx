@@ -120,7 +120,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search entries..."
               className="block-input w-full pl-8 pr-3 py-1.5 text-xs bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             />
           </div>
 
@@ -131,7 +131,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               className="block-input px-2 py-1.5 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             />
             <span className="text-text-muted text-xs">to</span>
             <input
@@ -139,7 +139,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               className="block-input px-2 py-1.5 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             />
           </div>
         </div>
@@ -147,7 +147,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
         <button
           onClick={onNewEntry}
           className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <Plus size={14} />
           New Entry
@@ -157,7 +157,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
       {/* Table */}
       <div
         className="block-table bg-bg-secondary border border-border-primary overflow-hidden"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <table className="w-full text-sm">
           <thead>
@@ -211,7 +211,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                         ? 'bg-accent-income/15 text-accent-income'
                         : 'bg-bg-tertiary text-text-muted'
                     }`}
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     {entry.is_posted === 1 ? 'Posted' : 'Unposted'}
                   </span>

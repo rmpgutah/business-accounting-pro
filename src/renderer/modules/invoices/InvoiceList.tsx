@@ -254,7 +254,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {tab.label}
             </button>
@@ -384,8 +384,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'var(--bg-secondary, #1e1e2e)',
-            borderRadius: '2px',
+            background: 'rgba(18,20,28,0.80)',
+            borderRadius: '6px',
             minWidth: '500px',
           }}
         >
@@ -406,7 +406,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             className="block-btn-success flex items-center gap-1.5 text-xs"
             onClick={handleBatchMarkPaid}
             disabled={batchLoading}
-            style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
           >
             <CheckCircle size={13} />
             Mark as Paid
@@ -415,7 +415,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -425,7 +425,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -437,14 +437,14 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

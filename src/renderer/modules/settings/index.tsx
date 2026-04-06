@@ -24,7 +24,7 @@ const SectionCard: React.FC<{
     <div className="flex items-center gap-3">
       <div
         className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <Icon size={16} className="text-accent-blue" />
       </div>
@@ -245,7 +245,7 @@ export default function SettingsModule() {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <SettingsIcon size={18} className="text-accent-blue" />
           </div>
@@ -415,7 +415,7 @@ export default function SettingsModule() {
         {taxRatesError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {taxRatesError}
           </div>
@@ -498,7 +498,7 @@ export default function SettingsModule() {
         {emailError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {emailError}
           </div>
@@ -546,7 +546,7 @@ export default function SettingsModule() {
                 className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
                   stripeConfig.stripe_test_mode ? 'translate-x-5' : 'translate-x-0'
                 }`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               />
             </div>
             <span className="text-sm text-text-secondary">
@@ -602,7 +602,7 @@ export default function SettingsModule() {
                   className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
                     backupConfig.auto_backup ? 'translate-x-5' : 'translate-x-0'
                   }`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 />
               </div>
               <span className="text-sm text-text-secondary">

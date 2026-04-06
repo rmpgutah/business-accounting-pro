@@ -265,7 +265,7 @@ const MultiCompany: React.FC = () => {
                         ? 'var(--color-accent-blue-bg)'
                         : 'var(--color-bg-tertiary)',
                       border: '1px solid var(--color-border-primary)',
-                      borderRadius: '2px',
+                      borderRadius: '6px',
                     }}
                   >
                     <Building2

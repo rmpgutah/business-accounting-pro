@@ -175,12 +175,12 @@ const EvidenceTimeline: React.FC<EvidenceTimelineProps> = ({ debtId, onAdd, onEd
                 key={item.id}
                 onClick={() => onEdit(item.id)}
                 className="w-full text-left flex items-start gap-3 px-3 py-3 hover:bg-bg-tertiary transition-colors border-b border-border-primary last:border-b-0"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {/* Color dot */}
                 <div
                   className={`w-2.5 h-2.5 mt-1.5 flex-shrink-0 ${dotColor}`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 />
 
                 {/* Content */}
@@ -191,13 +191,13 @@ const EvidenceTimeline: React.FC<EvidenceTimelineProps> = ({ debtId, onAdd, onEd
                     </span>
                     <span
                       className="block-badge text-[10px] px-1.5 py-0.5"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       {typeLabel(item.type)}
                     </span>
                     <span
                       className={`text-[10px] px-1.5 py-0.5 font-semibold ${relStyle}`}
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       {item.court_relevance}
                     </span>

@@ -57,7 +57,7 @@ export default function MobileModule() {
               <Smartphone size={16} className="text-accent-blue" />
               <h3 className="text-sm font-semibold">Mobile Web Interface</h3>
             </div>
-            <div className="bg-bg-primary border border-border-primary p-3 flex items-start gap-2" style={{ borderRadius: '2px' }}>
+            <div className="bg-bg-primary border border-border-primary p-3 flex items-start gap-2" style={{ borderRadius: '6px' }}>
               <Info size={14} className="text-accent-blue mt-0.5 shrink-0" />
               <p className="text-xs text-text-secondary">
                 The mobile companion is available when running the optional web server.
@@ -102,27 +102,27 @@ export default function MobileModule() {
           <h3 className="text-sm font-semibold">How to Start</h3>
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '2px' }}>1</span>
+              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '6px' }}>1</span>
               <p className="text-xs text-text-secondary">
                 Go to <span className="text-text-primary font-medium">Settings &gt; Integrations</span> and enable the companion web server.
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '2px' }}>2</span>
+              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '6px' }}>2</span>
               <p className="text-xs text-text-secondary">
                 The server will start on port <code className="text-accent-blue font-mono">{port}</code>.
                 Your local network address will be shown in the settings panel.
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '2px' }}>3</span>
+              <span className="w-5 h-5 flex items-center justify-center bg-accent-blue text-white text-xs font-bold shrink-0" style={{ borderRadius: '6px' }}>3</span>
               <p className="text-xs text-text-secondary">
                 Open the displayed URL on your phone or tablet browser. Both devices must be on the same network.
               </p>
             </div>
           </div>
 
-          <div className="bg-bg-primary border border-border-primary p-3" style={{ borderRadius: '2px' }}>
+          <div className="bg-bg-primary border border-border-primary p-3" style={{ borderRadius: '6px' }}>
             <p className="text-xs text-text-muted">
               Start the companion server via <span className="text-text-primary font-medium">Settings &gt; Integrations</span>.
               A QR code will be generated once the server is running.

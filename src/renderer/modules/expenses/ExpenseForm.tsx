@@ -34,6 +34,134 @@ interface ExpenseFormProps {
   onSaved: () => void;
 }
 
+// ─── Category-Specific Detail Fields ───────────────────
+interface DetailField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'textarea';
+  placeholder?: string;
+  options?: string[];
+}
+
+const CATEGORY_DETAIL_FIELDS: Record<string, DetailField[]> = {
+  // Electronics / Technology
+  electronics: [
+    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
+    { key: 'imei', label: 'IMEI', type: 'text', placeholder: 'IMEI number' },
+    { key: 'model', label: 'Model / Product Name', type: 'text', placeholder: 'e.g. MacBook Pro 16"' },
+    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
+    { key: 'condition', label: 'Condition', type: 'select', options: ['new', 'used', 'refurbished'] },
+  ],
+  technology: [
+    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
+    { key: 'imei', label: 'IMEI', type: 'text', placeholder: 'IMEI number' },
+    { key: 'model', label: 'Model / Product Name', type: 'text', placeholder: 'e.g. iPhone 16 Pro' },
+    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
+    { key: 'condition', label: 'Condition', type: 'select', options: ['new', 'used', 'refurbished'] },
+  ],
+  // Food / Meals / Entertainment
+  food: [
+    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
+    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'e.g. Client dinner, team lunch' },
+    { key: 'restaurant', label: 'Restaurant / Venue', type: 'text', placeholder: 'Name of establishment' },
+    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
+  ],
+  meals: [
+    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
+    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'e.g. Client dinner, team lunch' },
+    { key: 'restaurant', label: 'Restaurant / Venue', type: 'text', placeholder: 'Name of establishment' },
+    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
+  ],
+  entertainment: [
+    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
+    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'Purpose of entertainment' },
+    { key: 'restaurant', label: 'Venue', type: 'text', placeholder: 'Name of venue' },
+    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
+  ],
+  // Travel / Transportation
+  travel: [
+    { key: 'destination', label: 'Destination', type: 'text', placeholder: 'City, state or address' },
+    { key: 'departure_date', label: 'Departure Date', type: 'date' },
+    { key: 'return_date', label: 'Return Date', type: 'date' },
+    { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '0' },
+    { key: 'trip_purpose', label: 'Trip Purpose', type: 'text', placeholder: 'e.g. Client visit, conference' },
+  ],
+  transportation: [
+    { key: 'destination', label: 'Destination', type: 'text', placeholder: 'City, state or address' },
+    { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '0' },
+    { key: 'trip_purpose', label: 'Trip Purpose', type: 'text', placeholder: 'Reason for travel' },
+  ],
+  // Office Supplies / Equipment
+  'office supplies': [
+    { key: 'item_name', label: 'Item Name', type: 'text', placeholder: 'e.g. Printer paper, toner' },
+    { key: 'quantity', label: 'Quantity', type: 'number', placeholder: '1' },
+    { key: 'unit_cost', label: 'Unit Cost', type: 'number', placeholder: '0.00' },
+    { key: 'supplier', label: 'Supplier / Store', type: 'text', placeholder: 'e.g. Staples, Amazon' },
+  ],
+  equipment: [
+    { key: 'item_name', label: 'Item Name', type: 'text', placeholder: 'Equipment description' },
+    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
+    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
+    { key: 'supplier', label: 'Supplier', type: 'text', placeholder: 'Purchased from' },
+  ],
+  // Professional Services
+  'professional services': [
+    { key: 'service_provider', label: 'Service Provider', type: 'text', placeholder: 'Name of provider' },
+    { key: 'contract_number', label: 'Contract / Agreement #', type: 'text', placeholder: 'Contract reference' },
+    { key: 'service_start', label: 'Service Period Start', type: 'date' },
+    { key: 'service_end', label: 'Service Period End', type: 'date' },
+    { key: 'scope_of_work', label: 'Scope of Work', type: 'textarea', placeholder: 'Description of services rendered' },
+  ],
+  services: [
+    { key: 'service_provider', label: 'Service Provider', type: 'text', placeholder: 'Name of provider' },
+    { key: 'contract_number', label: 'Contract / Agreement #', type: 'text', placeholder: 'Contract reference' },
+    { key: 'service_start', label: 'Service Period Start', type: 'date' },
+    { key: 'service_end', label: 'Service Period End', type: 'date' },
+    { key: 'scope_of_work', label: 'Scope of Work', type: 'textarea', placeholder: 'Description of services rendered' },
+  ],
+  // Vehicle / Auto
+  vehicle: [
+    { key: 'license_plate', label: 'License Plate', type: 'text', placeholder: 'Plate number' },
+    { key: 'vin', label: 'VIN', type: 'text', placeholder: 'Vehicle identification number' },
+    { key: 'odometer', label: 'Odometer Reading', type: 'number', placeholder: '0' },
+    { key: 'service_type', label: 'Service Type', type: 'select', options: ['fuel', 'maintenance', 'repair', 'insurance', 'registration'] },
+  ],
+  auto: [
+    { key: 'license_plate', label: 'License Plate', type: 'text', placeholder: 'Plate number' },
+    { key: 'vin', label: 'VIN', type: 'text', placeholder: 'Vehicle identification number' },
+    { key: 'odometer', label: 'Odometer Reading', type: 'number', placeholder: '0' },
+    { key: 'service_type', label: 'Service Type', type: 'select', options: ['fuel', 'maintenance', 'repair', 'insurance', 'registration'] },
+  ],
+  // Rent / Utilities
+  rent: [
+    { key: 'property_address', label: 'Property Address', type: 'text', placeholder: 'Address' },
+    { key: 'billing_period', label: 'Billing Period', type: 'text', placeholder: 'e.g. March 2026' },
+    { key: 'account_number', label: 'Account Number', type: 'text', placeholder: 'Utility account #' },
+  ],
+  utilities: [
+    { key: 'property_address', label: 'Property Address', type: 'text', placeholder: 'Address' },
+    { key: 'billing_period', label: 'Billing Period', type: 'text', placeholder: 'e.g. March 2026' },
+    { key: 'account_number', label: 'Account Number', type: 'text', placeholder: 'Utility account #' },
+    { key: 'meter_reading', label: 'Meter Reading', type: 'number', placeholder: '0' },
+  ],
+};
+
+// Fallback detail fields for any category not explicitly mapped
+const DEFAULT_DETAIL_FIELDS: DetailField[] = [
+  { key: 'receipt_items', label: 'Receipt Items', type: 'textarea', placeholder: 'List items from receipt (one per line)' },
+  { key: 'detail_notes', label: 'Additional Notes', type: 'textarea', placeholder: 'Any additional details' },
+];
+
+function getDetailFieldsForCategory(categoryName: string): DetailField[] {
+  const key = categoryName.toLowerCase().trim();
+  // Try exact match first, then partial match
+  if (CATEGORY_DETAIL_FIELDS[key]) return CATEGORY_DETAIL_FIELDS[key];
+  for (const [k, fields] of Object.entries(CATEGORY_DETAIL_FIELDS)) {
+    if (key.includes(k) || k.includes(key)) return fields;
+  }
+  return DEFAULT_DETAIL_FIELDS;
+}
+
 const PAYMENT_METHODS = [
   { value: '', label: 'Select method...' },
   { value: 'cash', label: 'Cash' },
@@ -73,8 +201,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [receiptPath, setReceiptPath] = useState<string>('');
+  const [details, setDetails] = useState<Record<string, string>>({});
 
   const isEditing = !!expenseId;
+
+  // Determine which detail fields to show based on selected category
+  const selectedCategory = categories.find(c => c.id === form.category_id);
+  const detailFields = selectedCategory ? getDetailFieldsForCategory(selectedCategory.name) : [];
+
+  const handleDetailChange = (key: string, value: string) => {
+    setDetails(prev => ({ ...prev, [key]: value }));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +240,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           const existing = await api.get('expenses', expenseId);
           if (existing && !cancelled) {
             setReceiptPath(existing.receipt_path || '');
+            // Restore custom_fields details
+            try {
+              const cf = typeof existing.custom_fields === 'string' ? JSON.parse(existing.custom_fields) : (existing.custom_fields || {});
+              setDetails(cf);
+            } catch { setDetails({}); }
             setForm({
               date: existing.date || emptyForm.date,
               amount: existing.amount?.toString() || '',
@@ -176,6 +318,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         tags: form.tags
           ? form.tags.split(',').map((t) => t.trim()).filter(Boolean)
           : [],
+        custom_fields: JSON.stringify(details),
       };
 
       if (isEditing && expenseId) {
@@ -225,9 +368,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       {errors.length > 0 && (
         <div
           style={{
-            background: '#2a1215',
+            background: 'rgba(248,113,113,0.08)',
             border: '1px solid #ef4444',
-            borderRadius: '2px',
+            borderRadius: '6px',
             padding: '12px 16px',
           }}
         >
@@ -455,13 +598,62 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             </label>
           </div>
 
+          {/* ─── Category-Specific Details ──────────────── */}
+          {detailFields.length > 0 && (
+            <div className="col-span-3 glass-detail-section">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs font-semibold text-accent-blue uppercase tracking-wider">
+                  {selectedCategory?.name || 'Category'} Details
+                </span>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {detailFields.map((field) => (
+                  <div key={field.key} className={field.type === 'textarea' ? 'col-span-2' : ''}>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                      {field.label}
+                    </label>
+                    {field.type === 'select' ? (
+                      <select
+                        className="block-select"
+                        value={details[field.key] || ''}
+                        onChange={(e) => handleDetailChange(field.key, e.target.value)}
+                      >
+                        <option value="">Select...</option>
+                        {field.options?.map((opt) => (
+                          <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                        ))}
+                      </select>
+                    ) : field.type === 'textarea' ? (
+                      <textarea
+                        className="block-input"
+                        rows={3}
+                        placeholder={field.placeholder || ''}
+                        value={details[field.key] || ''}
+                        onChange={(e) => handleDetailChange(field.key, e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        type={field.type}
+                        className="block-input"
+                        placeholder={field.placeholder || ''}
+                        value={details[field.key] || ''}
+                        onChange={(e) => handleDetailChange(field.key, e.target.value)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Receipt Attachment */}
           <div className="col-span-3">
             <FieldLabel label="Receipt Attachment" tooltip="Attach a photo or scan of the receipt for audit purposes" />
             {receiptPath ? (
               <div
                 className="border border-border-secondary flex items-center justify-between px-4 py-3 bg-bg-tertiary"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <div className="flex items-center gap-2 text-sm text-text-secondary truncate">
                   <Paperclip size={14} className="text-accent-blue shrink-0" />
@@ -479,7 +671,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             ) : (
               <div
                 className="border border-dashed border-border-secondary flex items-center justify-center py-8 text-text-muted text-sm cursor-pointer hover:border-border-focus hover:bg-bg-hover transition-colors"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
                 onClick={async () => {
                   try {
                     const result = await api.openFileDialog({

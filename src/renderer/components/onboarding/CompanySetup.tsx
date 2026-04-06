@@ -68,10 +68,10 @@ const CompanySetup: React.FC = () => {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0a0a0a', padding: '24px' }}>
       {/* Drag region at the top of the window for macOS hiddenInset title bar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
-      <div style={{ width: '100%', maxWidth: '640px', background: '#141414', border: '1px solid #2e2e2e', padding: '32px', borderRadius: '2px' }}>
+      <div style={{ width: '100%', maxWidth: '640px', background: '#141414', border: '1px solid #2e2e2e', padding: '32px', borderRadius: '6px' }}>
         {/* Logo & Header */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', background: '#3b82f6', marginBottom: '16px', borderRadius: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', background: '#3b82f6', marginBottom: '16px', borderRadius: '6px' }}>
             <Building2 size={28} color="white" />
           </div>
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#f0f0f0' }}>Business Accounting Pro</h1>
@@ -79,7 +79,7 @@ const CompanySetup: React.FC = () => {
         </div>
 
         {error && (
-          <div style={{ padding: '8px 12px', marginBottom: '16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '13px', borderRadius: '2px' }}>
+          <div style={{ padding: '8px 12px', marginBottom: '16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '13px', borderRadius: '6px' }}>
             {error}
           </div>
         )}

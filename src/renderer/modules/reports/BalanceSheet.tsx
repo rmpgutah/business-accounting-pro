@@ -267,7 +267,7 @@ const BalanceSheet: React.FC = () => {
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <div className="flex items-center gap-3">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">
@@ -285,7 +285,7 @@ const BalanceSheet: React.FC = () => {
               setAsOfDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
             }
             className="px-2 py-1 text-[10px] font-semibold bg-bg-tertiary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             Today
           </button>
@@ -299,14 +299,14 @@ const BalanceSheet: React.FC = () => {
           )}
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Print"
           >
             <Printer size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Export"
           >
             <Download size={15} />
@@ -322,7 +322,7 @@ const BalanceSheet: React.FC = () => {
       ) : (
         <div
           className="block-card overflow-hidden"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {/* Report header */}
           <div className="px-6 py-4 border-b border-border-primary bg-bg-tertiary/50 text-center">

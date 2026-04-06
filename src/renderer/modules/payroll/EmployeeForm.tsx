@@ -188,13 +188,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
 
       {/* Error */}
       {error && (
-        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '2px' }}>
+        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '6px' }}>
           {error}
         </div>
       )}
 
       {/* Form */}
-      <div className="block-card p-6 space-y-6" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-6 space-y-6" style={{ borderRadius: '6px' }}>
         {/* Basic Info */}
         <div>
           <h2 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-4">Basic Information</h2>

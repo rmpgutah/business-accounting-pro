@@ -171,9 +171,9 @@ export default function CustomReportsModule() {
       {error && (
         <div
           style={{
-            background: '#2a1215',
+            background: 'rgba(248,113,113,0.08)',
             border: '1px solid #ef4444',
-            borderRadius: '2px',
+            borderRadius: '6px',
             padding: '12px 16px',
             marginBottom: '16px',
           }}
@@ -219,7 +219,7 @@ export default function CustomReportsModule() {
                       ? 'bg-accent-blue text-white'
                       : 'bg-bg-tertiary text-text-secondary hover:bg-bg-hover border border-border-primary'
                   }`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   {f}
                 </button>

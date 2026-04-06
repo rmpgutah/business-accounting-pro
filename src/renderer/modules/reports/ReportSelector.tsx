@@ -133,12 +133,12 @@ const ReportSelector: React.FC<ReportSelectorProps> = ({ onSelect }) => {
               key={report.id}
               onClick={() => onSelect(report.id)}
               className={`block-card p-5 border-l-2 ${report.accentClass} text-left hover:bg-bg-hover transition-colors cursor-pointer group`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <div className="flex items-start gap-3">
                 <div
                   className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <Icon
                     size={18}

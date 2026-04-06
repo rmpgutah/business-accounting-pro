@@ -85,7 +85,7 @@ const BankReconModule: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <Landmark size={18} className="text-accent-blue" />
         </div>

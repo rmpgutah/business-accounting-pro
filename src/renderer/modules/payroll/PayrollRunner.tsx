@@ -139,7 +139,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
               ? 'bg-accent-blue border-accent-blue text-white'
               : 'border-border-primary text-text-muted'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {s}
         </div>
@@ -308,14 +308,14 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       <StepIndicator currentStep={step} />
 
       {error && (
-        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '2px' }}>
+        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '6px' }}>
           {error}
         </div>
       )}
 
       {/* ─── Step 1: Pay Period ─────────────────────── */}
       {step === 1 && (
-        <div className="block-card p-6 space-y-6" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-6 space-y-6" style={{ borderRadius: '6px' }}>
           <h2 className="text-sm font-bold text-text-primary">Select Pay Period</h2>
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -366,14 +366,14 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       {/* ─── Step 2: Calculation Review ────────────── */}
       {step === 2 && (
         <div className="space-y-4">
-          <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <div className="text-xs text-text-muted mb-1">Pay Period</div>
             <div className="text-sm text-text-primary font-mono">
               {periodStart} to {periodEnd} &mdash; Pay Date: {payDate}
             </div>
           </div>
 
-          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
             <table className="block-table">
               <thead>
                 <tr>
@@ -464,26 +464,26 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       {/* ─── Step 3: Review & Process ─────────────── */}
       {step === 3 && (
         <div className="space-y-4">
-          <div className="block-card p-6 space-y-4" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-6 space-y-4" style={{ borderRadius: '6px' }}>
             <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
               <DollarSign size={16} />
               Payroll Summary
             </h2>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
                 <div className="text-xs text-text-muted mb-1">Pay Period</div>
                 <div className="text-sm text-text-primary font-mono">{periodStart} to {periodEnd}</div>
               </div>
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
                 <div className="text-xs text-text-muted mb-1">Pay Date</div>
                 <div className="text-sm text-text-primary font-mono">{payDate}</div>
               </div>
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
                 <div className="text-xs text-text-muted mb-1">Employees</div>
                 <div className="text-sm text-text-primary font-mono">{calculations.length}</div>
               </div>
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
                 <div className="text-xs text-text-muted mb-1">Total Gross Pay</div>
                 <div className="text-sm text-text-primary font-mono font-semibold">{fmt.format(totals.gross_pay)}</div>
               </div>

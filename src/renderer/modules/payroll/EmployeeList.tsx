@@ -212,7 +212,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
           )}
         </div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
           <table className="block-table">
             <thead>
               <tr>

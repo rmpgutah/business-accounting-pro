@@ -235,7 +235,7 @@ const RecurringTransactions: React.FC = () => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <RefreshCw size={18} className="text-accent-blue" />
           </div>
@@ -275,7 +275,7 @@ const RecurringTransactions: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center border border-border-primary" style={{ borderRadius: '2px', width: 'fit-content' }}>
+      <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px', width: 'fit-content' }}>
         <button
           className={`px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${
             tab === 'templates'
@@ -390,7 +390,7 @@ const RecurringTransactions: React.FC = () => {
                     className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
                       formData.is_active ? 'translate-x-5' : 'translate-x-0'
                     }`}
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   />
                 </div>
                 <span className="text-sm text-text-secondary">
@@ -495,7 +495,7 @@ const RecurringTransactions: React.FC = () => {
                       <td>
                         <span
                           className={`font-mono text-xs px-2 py-0.5 ${nextDueColor(t.next_date)} ${nextDueBg(t.next_date)}`}
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         >
                           {t.next_date ? format(parseISO(t.next_date), 'MMM d, yyyy') : '-'}
                         </span>

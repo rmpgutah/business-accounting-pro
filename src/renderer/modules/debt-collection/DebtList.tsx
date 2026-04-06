@@ -199,7 +199,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Scale size={18} className="text-accent-blue" />
           </div>
@@ -247,7 +247,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       {escalationResult && (
         <div
           className="flex items-center gap-3 px-4 py-2 border border-border-primary text-xs text-text-secondary"
-          style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+          style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
         >
           Escalation complete: {escalationResult.advanced} advanced, {escalationResult.flagged} flagged.
           <button className="text-text-muted underline" onClick={() => setEscalationResult(null)}>Dismiss</button>
@@ -258,7 +258,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       {showImportForm && (
         <div
           className="flex items-center gap-3 px-4 py-3 border border-border-primary"
-          style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+          style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
         >
           <span className="text-xs text-text-secondary font-semibold">Days overdue threshold:</span>
           <input

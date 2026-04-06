@@ -163,7 +163,7 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                     <div
                       key={debt.id}
                       className={`block-card-elevated mb-2 p-3 cursor-pointer hover:bg-bg-hover border-l-4 ${borderClass}`}
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                       onClick={() => onViewDebt(debt.id)}
                     >
                       <p className="text-sm font-bold text-text-primary truncate">
@@ -180,7 +180,7 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                       {debt.hold === 1 && (
                         <span
                           className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600/40"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         >
                           HOLD
                         </span>

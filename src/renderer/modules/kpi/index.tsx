@@ -51,7 +51,7 @@ const MarginTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: '#1a1a1a',
         border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -357,7 +357,7 @@ const KPIDashboard: React.FC = () => {
               width: '100%',
               height: '6px',
               backgroundColor: 'var(--color-bg-tertiary)',
-              borderRadius: '2px',
+              borderRadius: '6px',
               marginTop: '0.5rem',
             }}
           >
@@ -366,7 +366,7 @@ const KPIDashboard: React.FC = () => {
                 width: `${Math.min(utilizationRate, 100)}%`,
                 height: '100%',
                 backgroundColor: utilizationColor,
-                borderRadius: '2px',
+                borderRadius: '6px',
                 transition: 'width 0.4s ease',
               }}
             />
@@ -406,7 +406,7 @@ const KPIDashboard: React.FC = () => {
       </div>
 
       {/* ─── Gross Margin Trend Chart ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={14} className="text-accent-income" />
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -499,7 +499,7 @@ const KPIDashboard: React.FC = () => {
                 width: '100%',
                 height: '6px',
                 backgroundColor: 'var(--color-bg-tertiary)',
-                borderRadius: '2px',
+                borderRadius: '6px',
                 marginTop: '0.5rem',
               }}
             >
@@ -508,7 +508,7 @@ const KPIDashboard: React.FC = () => {
                   width: `${Math.min(currentRatio / 3, 1) * 100}%`,
                   height: '100%',
                   backgroundColor: currentRatioColor,
-                  borderRadius: '2px',
+                  borderRadius: '6px',
                   transition: 'width 0.4s ease',
                 }}
               />
@@ -553,7 +553,7 @@ const KPIDashboard: React.FC = () => {
                 width: '100%',
                 height: '6px',
                 backgroundColor: 'var(--color-bg-tertiary)',
-                borderRadius: '2px',
+                borderRadius: '6px',
                 marginTop: '0.5rem',
               }}
             >
@@ -562,7 +562,7 @@ const KPIDashboard: React.FC = () => {
                   width: `${Math.min(runway / 24, 1) * 100}%`,
                   height: '100%',
                   backgroundColor: runwayColor,
-                  borderRadius: '2px',
+                  borderRadius: '6px',
                   transition: 'width 0.4s ease',
                 }}
               />
@@ -572,7 +572,7 @@ const KPIDashboard: React.FC = () => {
       </div>
 
       {/* ─── Bottom Row: Top Clients ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
         <div className="flex items-center gap-2 mb-4">
           <Users size={14} className="text-accent-purple" />
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -603,7 +603,7 @@ const KPIDashboard: React.FC = () => {
                     width: '100%',
                     height: '8px',
                     backgroundColor: 'var(--color-bg-tertiary)',
-                    borderRadius: '2px',
+                    borderRadius: '6px',
                   }}
                 >
                   <div
@@ -611,7 +611,7 @@ const KPIDashboard: React.FC = () => {
                       width: `${(client.total_revenue / maxClientRevenue) * 100}%`,
                       height: '100%',
                       backgroundColor: 'var(--color-accent-purple)',
-                      borderRadius: '2px',
+                      borderRadius: '6px',
                       transition: 'width 0.4s ease',
                     }}
                   />

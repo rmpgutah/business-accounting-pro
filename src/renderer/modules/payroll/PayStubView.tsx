@@ -181,7 +181,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
       </div>
 
       {/* Pay Stub Document */}
-      <div className="block-card p-0 overflow-hidden max-w-2xl mx-auto" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-0 overflow-hidden max-w-2xl mx-auto" style={{ borderRadius: '6px' }}>
         {/* Document Header */}
         <div className="bg-bg-tertiary px-6 py-4 border-b border-border-primary">
           <div className="flex justify-between items-start">

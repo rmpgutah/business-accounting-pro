@@ -430,7 +430,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <h2 className="text-xl font-bold text-text-primary">{debt.debtor_name}</h2>
             <div
               className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-gray-500'}`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
               title={`Priority: ${debt.priority}`}
             />
           </div>
@@ -447,7 +447,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {debt.hold ? (
           <div
             className="flex items-center justify-between mt-3 px-4 py-2 border border-yellow-600"
-            style={{ borderRadius: '2px', background: 'rgba(234, 179, 8, 0.1)' }}
+            style={{ borderRadius: '6px', background: 'rgba(234, 179, 8, 0.1)' }}
           >
             <div className="flex items-center gap-2 text-yellow-500 text-sm">
               <Pause size={14} />
@@ -470,7 +470,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         ) : showHoldInput ? (
           <div
             className="flex items-center gap-3 mt-3 px-4 py-2 border border-border-primary"
-            style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+            style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
           >
             <span className="text-xs text-text-secondary font-semibold whitespace-nowrap">Hold reason:</span>
             <input
@@ -553,7 +553,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {showWriteOff && (
           <div
             className="mt-3 p-4 border border-red-700"
-            style={{ borderRadius: '2px', background: '#2a1215' }}
+            style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}
           >
             <p className="text-sm text-red-400 font-semibold mb-2">Write Off Debt</p>
             <textarea
@@ -751,7 +751,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <div
                     key={c.id}
                     className="flex gap-3 p-3 border border-border-primary"
-                    style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+                    style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                   >
                     <div className="flex-shrink-0 text-text-muted mt-0.5">
                       {commIcon[c.type] || <MessageSquare size={14} />}
@@ -823,7 +823,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div
                       key={e.id}
                       className="flex items-center justify-between p-2.5 border border-border-primary"
-                      style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+                      style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className={typeBadge.className}>{typeBadge.label}</span>
@@ -863,7 +863,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div
                       key={la.id}
                       className="p-3 border border-border-primary"
-                      style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+                      style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className={typeBadge.className}>{typeBadge.label}</span>
@@ -900,13 +900,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                           </div>
                           <div
                             className="w-full h-1.5 bg-bg-tertiary"
-                            style={{ borderRadius: '2px' }}
+                            style={{ borderRadius: '6px' }}
                           >
                             <div
                               className="h-full bg-accent-blue"
                               style={{
                                 width: `${checklistPct}%`,
-                                borderRadius: '2px',
+                                borderRadius: '6px',
                                 transition: 'width 0.3s ease',
                               }}
                             />
@@ -942,7 +942,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         <div
                           className={`absolute -left-5 top-1 w-3 h-3 ${dotColor} flex-shrink-0`}
                           style={{
-                            borderRadius: '2px',
+                            borderRadius: '6px',
                             animation: isCurrent ? 'pulse 2s infinite' : undefined,
                           }}
                         />

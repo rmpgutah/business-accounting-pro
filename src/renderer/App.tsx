@@ -129,7 +129,7 @@ const ModuleView: React.FC = () => {
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">
-            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
               <h2 className="text-lg font-bold text-text-primary mb-1">
                 {MODULE_NAMES[currentModule] ?? currentModule}
               </h2>

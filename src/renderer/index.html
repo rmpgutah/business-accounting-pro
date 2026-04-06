@@ -7,6 +7,299 @@
 </head>
 <body class="bg-bg-primary text-text-primary">
   <div id="root"></div>
+  <!-- Browser dev mock: full in-memory IPC backend for running outside Electron -->
+  <script>
+    if (typeof window.electronAPI === 'undefined') {
+      // ── Demo seed data ────────────────────────────────────────────────────
+      var _co  = { id: 'demo-co', name: 'Acme Corp', currency: 'USD', fiscal_year_start: 'January' };
+      var _usr = { id: 'u1', name: 'Demo User', display_name: 'Demo User', email: 'demo@example.com', role: 'owner', avatar_color: '#3b82f6' };
+
+      // ── In-memory store keyed by table name ───────────────────────────────
+      var _db = {
+        companies: [_co],
+        users: [_usr],
+        clients: [],
+        invoices: [],
+        invoice_line_items: [],
+        expenses: [],
+        employees: [],
+        accounts: [],
+        categories: [],
+        projects: [],
+        time_entries: [],
+        bills: [],
+        bill_line_items: [],
+        purchase_orders: [],
+        po_line_items: [],
+        assets: [],
+        debts: [],
+        budgets: [],
+        bank_transactions: [],
+        rules: [],
+        automations: [],
+        journal_entries: [],
+        journal_entry_lines: [],
+        recurring_templates: [],
+        notifications: [],
+        settings: [],
+        documents: [],
+        contacts: [],
+        vendors: [],
+        inventory_items: [],
+        tax_rates: [],
+        payroll_runs: [],
+        pay_stubs: [],
+        credit_notes: [],
+        custom_fields: [],
+      };
+
+      // ── UUID generator ────────────────────────────────────────────────────
+      function _uuid() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          var r = Math.random() * 16 | 0;
+          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+      }
+
+      // ── Generic CRUD helpers ──────────────────────────────────────────────
+      function _list(table, filters) {
+        var rows = _db[table] || [];
+        if (!filters) return rows;
+        return rows.filter(function(row) {
+          return Object.keys(filters).every(function(k) { return row[k] == filters[k]; });
+        });
+      }
+
+      function _get(table, id) {
+        return (_db[table] || []).find(function(r) { return r.id === id; }) || null;
+      }
+
+      function _create(table, data) {
+        if (!_db[table]) _db[table] = [];
+        var row = Object.assign({ id: _uuid(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, data);
+        _db[table].push(row);
+        return row;
+      }
+
+      function _update(table, id, data) {
+        var rows = _db[table] || [];
+        var idx = rows.findIndex(function(r) { return r.id === id; });
+        if (idx === -1) return null;
+        rows[idx] = Object.assign({}, rows[idx], data, { updated_at: new Date().toISOString() });
+        return rows[idx];
+      }
+
+      function _remove(table, id) {
+        if (!_db[table]) return;
+        _db[table] = _db[table].filter(function(r) { return r.id !== id; });
+      }
+
+      function _query(table, filters, sort, limit, offset) {
+        var rows = _list(table, filters);
+        if (sort) {
+          rows = rows.slice().sort(function(a, b) {
+            if (a[sort.field] < b[sort.field]) return sort.dir === 'asc' ? -1 : 1;
+            if (a[sort.field] > b[sort.field]) return sort.dir === 'asc' ? 1 : -1;
+            return 0;
+          });
+        }
+        if (offset) rows = rows.slice(offset);
+        if (limit) rows = rows.slice(0, limit);
+        return rows;
+      }
+
+      // ── Seed localStorage + set auth/company stores ───────────────────────
+      localStorage.setItem('bap-auth',    JSON.stringify({ state: { isAuthenticated: true, user: _usr }, version: 0 }));
+      localStorage.setItem('bap-company', JSON.stringify({ state: { companies: [_co], activeCompany: _co }, version: 0 }));
+
+      // ── electronAPI mock ──────────────────────────────────────────────────
+      window.electronAPI = {
+        on: function() {},
+        removeAllListeners: function() {},
+
+        invoke: function(channel) {
+          var args = Array.prototype.slice.call(arguments, 1);
+          var a0 = args[0];
+
+          // ── Generic CRUD ──────────────────────────────────────────────────
+          if (channel === 'db:list')   return Promise.resolve(_list(a0, args[1]));
+          if (channel === 'db:get')    return Promise.resolve(_get(a0.table, a0.id));
+          if (channel === 'db:create') return Promise.resolve(_create(a0.table, Object.assign({ company_id: 'demo-co' }, a0.data)));
+          if (channel === 'db:update') return Promise.resolve(_update(a0.table, a0.id, a0.data));
+          if (channel === 'db:delete') { _remove(a0.table, a0.id); return Promise.resolve({ ok: true }); }
+
+          if (channel === 'db:query') {
+            var q = a0 || {};
+            return Promise.resolve(_query(q.table, q.filters, q.sort, q.limit, q.offset));
+          }
+          if (channel === 'db:raw-query') return Promise.resolve([]);
+
+          // ── Company ───────────────────────────────────────────────────────
+          if (channel === 'company:list')   return Promise.resolve([_co]);
+          if (channel === 'company:get')    return Promise.resolve(_co);
+          if (channel === 'company:create') { var nc = _create('companies', a0); return Promise.resolve(nc); }
+          if (channel === 'company:update') { _update('companies', a0.id, a0.data); return Promise.resolve(_co); }
+          if (channel === 'company:switch') return Promise.resolve(_co);
+
+          // ── Auth ──────────────────────────────────────────────────────────
+          if (channel === 'auth:has-users')  return Promise.resolve(true);
+          if (channel === 'auth:list-users') return Promise.resolve([_usr]);
+          if (channel === 'auth:login')      return Promise.resolve({ success: true, user: _usr });
+          if (channel === 'auth:register')   return Promise.resolve({ success: true, user: _usr });
+          if (channel === 'auth:link-user-company') return Promise.resolve({ ok: true });
+
+          // ── Invoice atomic save ───────────────────────────────────────────
+          if (channel === 'invoice:save') {
+            var p = a0;
+            var savedId;
+            if (p.isEdit && p.invoiceId) {
+              _update('invoices', p.invoiceId, p.invoiceData);
+              savedId = p.invoiceId;
+              _db.invoice_line_items = _db.invoice_line_items.filter(function(li) { return li.invoice_id !== savedId; });
+            } else {
+              var inv = _create('invoices', Object.assign({ company_id: 'demo-co' }, p.invoiceData));
+              savedId = inv.id;
+            }
+            (p.lineItems || []).forEach(function(li) {
+              _create('invoice_line_items', Object.assign({}, li, { invoice_id: savedId }));
+            });
+            return Promise.resolve({ id: savedId });
+          }
+
+          // ── Dashboard ─────────────────────────────────────────────────────
+          if (channel === 'dashboard:stats') return Promise.resolve({
+            revenue: _db.invoices.filter(function(i){ return i.status==='paid'; }).reduce(function(s,i){ return s+(i.total||0); }, 0),
+            expenses: _db.expenses.reduce(function(s,e){ return s+(e.amount||0); }, 0),
+            net_income: 0,
+            outstanding_invoices: _db.invoices.filter(function(i){ return i.status!=='paid'; }).reduce(function(s,i){ return s+(i.total||0); }, 0),
+            invoices_sent: _db.invoices.length,
+            avg_days_to_payment: 0,
+            revenue_growth: 0,
+            top_client: null,
+          });
+          if (channel === 'dashboard:cashflow')  return Promise.resolve([]);
+          if (channel === 'dashboard:activity')  return Promise.resolve([]);
+
+          // ── Search ────────────────────────────────────────────────────────
+          if (channel === 'search:global') {
+            var q2 = (a0 || '').toLowerCase();
+            var results = [];
+            _db.clients.forEach(function(c) {
+              if ((c.name||'').toLowerCase().includes(q2)) results.push({ id: c.id, type: 'Client', title: c.name });
+            });
+            _db.invoices.forEach(function(i) {
+              if ((i.invoice_number||'').toLowerCase().includes(q2)) results.push({ id: i.id, type: 'Invoice', title: i.invoice_number });
+            });
+            _db.expenses.forEach(function(e) {
+              if ((e.description||e.vendor||'').toLowerCase().includes(q2)) results.push({ id: e.id, type: 'Expense', title: e.description || e.vendor });
+            });
+            return Promise.resolve(results);
+          }
+
+          // ── Categories ────────────────────────────────────────────────────
+          if (channel === 'categories:seed-defaults') return Promise.resolve(true);
+
+          // ── Notifications ─────────────────────────────────────────────────
+          if (channel === 'notification:list')       return Promise.resolve([]);
+          if (channel === 'notification:mark-read')  return Promise.resolve({ ok: true });
+          if (channel === 'notification:run-checks') return Promise.resolve({ ok: true });
+          if (channel === 'notification:clear-all')  return Promise.resolve({ ok: true });
+          if (channel === 'notification:dismiss')    return Promise.resolve({ ok: true });
+          if (channel === 'notification:preferences') return Promise.resolve({});
+          if (channel === 'notification:update-preferences') return Promise.resolve({ ok: true });
+
+          // ── Settings ──────────────────────────────────────────────────────
+          if (channel === 'settings:list') return Promise.resolve(_db.settings);
+          if (channel === 'settings:get') {
+            var s = _db.settings.find(function(r){ return r.key === a0; });
+            return Promise.resolve(s ? s.value : null);
+          }
+          if (channel === 'settings:set') {
+            var s2 = _db.settings.find(function(r){ return r.key === a0.key; });
+            if (s2) s2.value = a0.value; else _db.settings.push({ key: a0.key, value: a0.value });
+            return Promise.resolve();
+          }
+
+          // ── Bills ─────────────────────────────────────────────────────────
+          if (channel === 'bills:next-number') return Promise.resolve('BILL-1001');
+          if (channel === 'bills:pay')    return Promise.resolve({ ok: true });
+          if (channel === 'bills:stats')  return Promise.resolve({ total_unpaid: 0, overdue: 0, due_soon: 0, paid_this_month: 0 });
+          if (channel === 'bills:overdue-check') return Promise.resolve({ ok: true });
+
+          // ── Purchase Orders ───────────────────────────────────────────────
+          if (channel === 'po:next-number')  return Promise.resolve('PO-1001');
+          if (channel === 'po:approve')      return Promise.resolve({ ok: true });
+          if (channel === 'po:convert-bill') return Promise.resolve({ ok: true });
+
+          // ── Fixed Assets ──────────────────────────────────────────────────
+          if (channel === 'assets:next-code')        return Promise.resolve('FA-001');
+          if (channel === 'assets:schedule')         return Promise.resolve([]);
+          if (channel === 'assets:run-depreciation') return Promise.resolve({ ok: true });
+
+          // ── Journal ───────────────────────────────────────────────────────
+          if (channel === 'journal:next-number') return Promise.resolve('JE-' + String(_db.journal_entries.length + 1).padStart(4, '0'));
+
+          // ── Payroll ───────────────────────────────────────────────────────
+          if (channel === 'payroll:ytd-totals') return Promise.resolve({ ytd_gross: 0, ytd_taxes: 0, ytd_net: 0 });
+
+          // ── Reports ───────────────────────────────────────────────────────
+          if (channel === 'reports:profit-loss')    return Promise.resolve({ income: [], expenses: [], net: 0 });
+          if (channel === 'reports:balance-sheet')  return Promise.resolve({ assets: [], liabilities: [], equity: [] });
+          if (channel === 'reports:trial-balance')  return Promise.resolve([]);
+          if (channel === 'reports:ar-aging')       return Promise.resolve({ current: 0, days30: 0, days60: 0, days90: 0 });
+          if (channel === 'reports:ap-aging')       return Promise.resolve({ current: 0, days30: 0, days60: 0, days90: 0 });
+          if (channel === 'reports:general-ledger') return Promise.resolve([]);
+          if (channel === 'reports:cash-flow')      return Promise.resolve([]);
+
+          // ── Recurring ─────────────────────────────────────────────────────
+          if (channel === 'recurring:process-now')   return Promise.resolve({ ok: true });
+          if (channel === 'recurring:last-processed') return Promise.resolve(null);
+          if (channel === 'recurring:history')        return Promise.resolve([]);
+
+          // ── Bank Rules ────────────────────────────────────────────────────
+          if (channel === 'bank-rules:apply') return Promise.resolve({ ok: true });
+
+          // ── Batch ops ─────────────────────────────────────────────────────
+          if (channel === 'batch:update') {
+            (a0.ids || []).forEach(function(id) { _update(a0.table, id, a0.data); });
+            return Promise.resolve({ ok: true });
+          }
+          if (channel === 'batch:delete') {
+            (a0.ids || []).forEach(function(id) { _remove(a0.table, id); });
+            return Promise.resolve({ ok: true });
+          }
+
+          // ── Import / Export ───────────────────────────────────────────────
+          if (channel === 'import:preview-csv')  return Promise.resolve({ headers: [], rows: [] });
+          if (channel === 'import:execute')      return Promise.resolve({ imported: 0 });
+          if (channel === 'export:csv')          return Promise.resolve({ ok: true });
+          if (channel === 'export:full-backup')  return Promise.resolve({ ok: true });
+
+          // ── Invoice PDF / Email ───────────────────────────────────────────
+          if (channel === 'invoice:generate-pdf')  return Promise.resolve({ path: '/tmp/invoice.pdf' });
+          if (channel === 'invoice:preview-pdf')   return Promise.resolve({ success: true });
+          if (channel === 'invoice:send-email')    return Promise.resolve({ success: true });
+          if (channel === 'invoice:generate-token') return Promise.resolve({ token: 'demo-token' });
+
+          // ── Print ─────────────────────────────────────────────────────────
+          if (channel === 'print:preview')  return Promise.resolve({ success: true });
+          if (channel === 'print:save-pdf') return Promise.resolve({ path: '/tmp/doc.pdf' });
+          if (channel === 'print:print')    return Promise.resolve({ success: true });
+
+          // ── File dialog ───────────────────────────────────────────────────
+          if (channel === 'dialog:open-file') return Promise.resolve(null);
+
+          // ── Debt collection ───────────────────────────────────────────────
+          if (channel === 'debt:escalate')      return Promise.resolve({ ok: true });
+          if (channel === 'debt:run-escalation') return Promise.resolve({ ok: true });
+
+          // ── Fallback ──────────────────────────────────────────────────────
+          console.warn('[mock] unhandled IPC channel:', channel, args);
+          return Promise.resolve(null);
+        },
+      };
+    }
+  </script>
   <script type="module" src="./index.tsx"></script>
 </body>
 </html>

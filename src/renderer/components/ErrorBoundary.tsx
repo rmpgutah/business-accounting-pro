@@ -43,7 +43,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             style={{
               background: '#141414',
               border: '1px solid #2e2e2e',
-              borderRadius: '2px',
+              borderRadius: '6px',
               padding: '32px',
               maxWidth: '480px',
               width: '100%',
@@ -74,7 +74,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               style={{
                 background: '#1a1a1a',
                 border: '1px solid #2e2e2e',
-                borderRadius: '2px',
+                borderRadius: '6px',
                 padding: '12px',
                 marginBottom: '20px',
                 overflowX: 'auto',
@@ -98,7 +98,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 background: '#2e2e2e',
                 color: '#e2e2e2',
                 border: '1px solid #3a3a3a',
-                borderRadius: '2px',
+                borderRadius: '6px',
                 padding: '8px 20px',
                 fontSize: '13px',
                 fontWeight: 600,

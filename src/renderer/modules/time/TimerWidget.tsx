@@ -191,7 +191,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
               ? 'bg-accent-income-bg text-accent-income'
               : 'bg-bg-tertiary text-text-muted'
           }`}
-          style={{ borderRadius: '2px', whiteSpace: 'nowrap' }}
+          style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
           disabled={running}
           title={billable ? 'Billable' : 'Non-billable'}
         >
@@ -203,7 +203,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
           <button
             onClick={handleStop}
             className="block-btn-danger flex items-center gap-1.5 px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '2px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
           >
             <Square size={14} />
             Stop
@@ -212,7 +212,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
           <button
             onClick={handleStart}
             className="block-btn-success flex items-center gap-1.5 px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '2px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
           >
             <Play size={14} />
             Start

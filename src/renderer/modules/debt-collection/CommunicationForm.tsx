@@ -120,7 +120,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
               type="button"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <X size={16} />
             </button>

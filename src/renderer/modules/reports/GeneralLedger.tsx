@@ -219,7 +219,7 @@ const GeneralLedger: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: '6px' }}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">From</label>
@@ -261,21 +261,21 @@ const GeneralLedger: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             className="text-xs text-text-muted hover:text-text-primary px-2 py-1"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             onClick={expandAll}
           >
             Expand All
           </button>
           <button
             className="text-xs text-text-muted hover:text-text-primary px-2 py-1"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             onClick={collapseAll}
           >
             Collapse All
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Export CSV"
             onClick={handleExport}
           >
@@ -283,7 +283,7 @@ const GeneralLedger: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Print"
             onClick={() => window.print()}
           >
@@ -307,7 +307,7 @@ const GeneralLedger: React.FC = () => {
           Generating report...
         </div>
       ) : accounts.length === 0 ? (
-        <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
           <p className="text-sm text-text-secondary font-medium">No posted transactions found</p>
           <p className="text-xs text-text-muted mt-1">Adjust the date range or post journal entries to see the ledger.</p>
         </div>
@@ -321,7 +321,7 @@ const GeneralLedger: React.FC = () => {
               <div
                 key={acct.account_id}
                 className="block-card p-0 overflow-hidden"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {/* Account header row */}
                 <button

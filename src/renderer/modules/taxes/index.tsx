@@ -33,7 +33,7 @@ const TaxModule: React.FC = () => {
                 ? 'border-b-accent-blue text-accent-blue'
                 : 'border-b-transparent text-text-muted hover:text-text-primary'
             }`}
-            style={{ borderRadius: '2px 2px 0 0' }}
+            style={{ borderRadius: '6px 6px 0 0' }}
           >
             {tab.icon}
             {tab.label}

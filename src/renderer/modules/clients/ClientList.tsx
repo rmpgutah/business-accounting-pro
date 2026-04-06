@@ -281,7 +281,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           )}
         </div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
           <table className="block-table">
             <thead>
               <tr>
@@ -382,8 +382,8 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'var(--bg-secondary, #1e1e2e)',
-            borderRadius: '2px',
+            background: 'rgba(18,20,28,0.80)',
+            borderRadius: '6px',
             minWidth: '460px',
           }}
         >
@@ -404,7 +404,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBatchSetInactive}
             disabled={batchLoading}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <XCircle size={13} />
             Set Inactive
@@ -413,7 +413,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -423,7 +423,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -435,14 +435,14 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

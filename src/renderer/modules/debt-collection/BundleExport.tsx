@@ -141,7 +141,7 @@ const BundleExport: React.FC<BundleExportProps> = ({ debtId }) => {
       {/* Debtor Info */}
       <div
         className="bg-bg-tertiary px-4 py-3"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <div className="grid grid-cols-3 gap-4 text-xs">
           <div>
@@ -183,7 +183,7 @@ const BundleExport: React.FC<BundleExportProps> = ({ debtId }) => {
               <div
                 key={idx}
                 className="flex items-center gap-2.5 px-3 py-2 text-xs"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {hasRecords ? (
                   <Check size={14} className="text-emerald-400 flex-shrink-0" />
@@ -235,7 +235,7 @@ const BundleExport: React.FC<BundleExportProps> = ({ debtId }) => {
                 ? 'bg-red-500/10 text-red-400'
                 : 'bg-bg-tertiary text-text-muted'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {resultType === 'success' && <Check size={14} />}
           {resultType === 'error' && <AlertTriangle size={14} />}

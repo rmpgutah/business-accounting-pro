@@ -129,7 +129,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-border-primary">
             <div
               className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <Building2 size={16} className="text-accent-purple" />
             </div>

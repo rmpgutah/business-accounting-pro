@@ -50,7 +50,7 @@ export default function PortalModule() {
 
       <div className="block-card mb-6">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 flex items-center justify-center bg-accent-blue-bg" style={{ borderRadius: '2px' }}>
+          <div className="w-10 h-10 flex items-center justify-center bg-accent-blue-bg" style={{ borderRadius: '6px' }}>
             <Globe size={20} className="text-accent-blue" />
           </div>
           <div>

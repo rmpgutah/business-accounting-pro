@@ -248,7 +248,7 @@ const PayrollModule: React.FC = () => {
                   const stubs = runStubs[run.id] ?? [];
 
                   return (
-                    <div key={run.id} className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+                    <div key={run.id} className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
                       {/* Run Header */}
                       <div
                         className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-bg-hover transition-colors"

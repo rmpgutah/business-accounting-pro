@@ -134,14 +134,14 @@ const APAgingReport: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
         <span className="text-xs text-text-muted font-semibold uppercase tracking-wider">
           As of {format(new Date(), 'MMM d, yyyy')}
         </span>
         <div className="flex gap-2">
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Export CSV"
             onClick={handleExport}
           >
@@ -149,7 +149,7 @@ const APAgingReport: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Print"
             onClick={() => window.print()}
           >
@@ -171,7 +171,7 @@ const APAgingReport: React.FC = () => {
                 key={key}
                 onClick={() => setBucketFilter(bucketFilter === key ? 'all' : key)}
                 className={`block-card p-4 text-center transition-colors ${bucketFilter === key ? 'border-accent-blue' : ''}`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
                   {BUCKET_LABELS[key]}
@@ -190,7 +190,7 @@ const APAgingReport: React.FC = () => {
           {/* Grand total */}
           <div
             className="block-card p-4 flex items-center justify-between"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
               Total Outstanding Payables
@@ -202,12 +202,12 @@ const APAgingReport: React.FC = () => {
 
           {/* Detail table */}
           {filtered.length === 0 ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
               <p className="text-sm text-text-secondary font-medium">No outstanding bills</p>
               <p className="text-xs text-text-muted mt-1">All bills are fully paid.</p>
             </div>
           ) : (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
               <table className="block-table">
                 <thead>
                   <tr>

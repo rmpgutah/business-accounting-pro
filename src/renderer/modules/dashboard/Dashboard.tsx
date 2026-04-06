@@ -182,7 +182,7 @@ const AreaTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: '#1a1a1a',
         border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -204,7 +204,7 @@ const PieTooltip: React.FC<any> = ({ active, payload }) => {
       style={{
         backgroundColor: '#1a1a1a',
         border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-primary font-semibold">{name}</p>
@@ -221,7 +221,7 @@ const ForecastTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: '#1a1a1a',
         border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -302,7 +302,7 @@ const StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
       className={`block-card p-4 border-l-2 ${accentClass} ${
         onClick ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''
       }`}
-      style={{ borderRadius: '2px' }}
+      style={{ borderRadius: '6px' }}
       onClick={onClick}
     >
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -366,7 +366,7 @@ const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onClick }) => (
   <button
     onClick={onClick}
     className="block-card flex flex-col items-center justify-center gap-2 p-4 hover:bg-bg-hover transition-colors cursor-pointer"
-    style={{ borderRadius: '2px' }}
+    style={{ borderRadius: '6px' }}
   >
     <span className="text-text-secondary">{icon}</span>
     <span className="text-xs font-semibold text-text-secondary">{label}</span>
@@ -726,7 +726,7 @@ const Dashboard: React.FC = () => {
       {/* Header & Period Selector */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-text-primary">Dashboard</h1>
-        <div className="flex gap-1" style={{ borderRadius: '2px' }}>
+        <div className="flex gap-1" style={{ borderRadius: '6px' }}>
           {periodButtons.map((p) => (
             <button
               key={p}
@@ -736,7 +736,7 @@ const Dashboard: React.FC = () => {
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {p}
             </button>
@@ -796,7 +796,7 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Quick Metrics Row ─── */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center gap-2 mb-2">
             <CalendarCheck size={14} className="text-accent-blue" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -809,7 +809,7 @@ const Dashboard: React.FC = () => {
           <span className="text-[10px] text-text-muted">This month</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center gap-2 mb-2">
             <Timer size={14} className="text-accent-warning" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -823,7 +823,7 @@ const Dashboard: React.FC = () => {
           <span className="text-[10px] text-text-muted">Last 6 months</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center gap-2 mb-2">
             {quickMetrics.revenueGrowthPct >= 0 ? (
               <TrendingUp size={14} className="text-accent-income" />
@@ -849,7 +849,7 @@ const Dashboard: React.FC = () => {
           <span className="text-[10px] text-text-muted">vs. last month</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center gap-2 mb-2">
             <Crown size={14} className="text-accent-purple" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -867,7 +867,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* ─── Revenue vs Expenses AreaChart (12 months) ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
           Revenue vs Expenses (Last 12 Months)
         </h2>
@@ -921,7 +921,7 @@ const Dashboard: React.FC = () => {
       {/* ─── Income Sources Pie + Cash Flow Forecast ─── */}
       <div className="grid grid-cols-2 gap-4">
         {/* Income Sources PieChart */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Income Sources Breakdown
           </h2>
@@ -969,7 +969,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Cash Flow Forecast */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Cash Flow Forecast (Next 3 Months)
           </h2>
@@ -1032,7 +1032,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* ─── Expense Category Treemap ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
           Expense Breakdown by Category
         </h2>
@@ -1087,7 +1087,7 @@ const Dashboard: React.FC = () => {
       {/* ─── Bottom 2-Column Grid: Activity + Due/Clients ─── */}
       <div className="grid grid-cols-2 gap-4">
         {/* Left Column: Recent Activity (Enhanced) */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Activity size={14} className="text-text-muted" />
@@ -1098,7 +1098,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-2">
               <select
                 className="block-select text-[10px] py-0.5 px-2"
-                style={{ width: 'auto', minWidth: '100px', borderRadius: '2px', height: '24px' }}
+                style={{ width: 'auto', minWidth: '100px', borderRadius: '6px', height: '24px' }}
                 value={activityFilter}
                 onChange={(e) => setActivityFilter(e.target.value)}
               >
@@ -1176,7 +1176,7 @@ const Dashboard: React.FC = () => {
                       style={{
                         backgroundColor: badge.bg,
                         color: badge.text,
-                        borderRadius: '2px',
+                        borderRadius: '6px',
                         minWidth: 52,
                         textAlign: 'center',
                       }}
@@ -1199,7 +1199,7 @@ const Dashboard: React.FC = () => {
         {/* Right Column: Upcoming Due + Top Clients stacked */}
         <div className="space-y-4">
           {/* Upcoming Due */}
-          <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle size={14} className="text-text-muted" />
               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -1256,7 +1256,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Top Clients */}
-          <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 size={14} className="text-text-muted" />
               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -1311,7 +1311,7 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Intelligence Alerts ─── */}
       {anomalies.length > 0 && (
-        <div className="col-span-full border-2 border-orange-500 bg-orange-50 p-5" style={{ borderRadius: '2px' }}>
+        <div className="col-span-full border-2 border-orange-500 bg-orange-50 p-5" style={{ borderRadius: '6px' }}>
           <h2 className="text-xs font-black uppercase tracking-wider text-orange-700 mb-3">
             Intelligence Alerts
           </h2>

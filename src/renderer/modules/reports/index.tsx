@@ -69,7 +69,7 @@ const ReportsModule: React.FC = () => {
           <button
             onClick={() => setActiveReport(null)}
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Back to reports"
           >
             <ArrowLeft size={16} className="text-text-secondary" />
@@ -77,7 +77,7 @@ const ReportsModule: React.FC = () => {
         ) : (
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <BarChart3 size={18} className="text-accent-blue" />
           </div>

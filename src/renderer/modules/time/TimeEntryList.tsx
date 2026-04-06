@@ -157,14 +157,14 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
           <button
             onClick={onPrevWeek}
             className="block-btn px-2 py-1"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <ChevronLeft size={16} />
           </button>
           <button
             onClick={onNextWeek}
             className="block-btn px-2 py-1"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <ChevronRight size={16} />
           </button>
@@ -184,7 +184,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
             style={{
               backgroundColor: isToday(group.date) ? 'rgba(59,130,246,0.06)' : '#1e1e1e',
               border: '1px solid #2e2e2e',
-              borderRadius: '2px',
+              borderRadius: '6px',
             }}
           >
             <span className="text-xs font-semibold text-text-primary">
@@ -201,7 +201,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
           {/* Entries */}
           <div
             className="bg-bg-secondary border border-border-primary overflow-hidden mb-3"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {group.entries.map((entry, idx) => (
               <div
@@ -257,7 +257,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                   {entry.is_billable ? (
                     <span
                       className="block-badge-income text-[10px] px-1.5 py-0.5"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       $
                     </span>
@@ -271,14 +271,14 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                   <button
                     onClick={() => onEdit(entry)}
                     className="p-1.5 hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <Pencil size={13} />
                   </button>
                   <button
                     onClick={() => onDelete(entry.id)}
                     className="p-1.5 hover:bg-bg-tertiary transition-colors text-text-muted hover:text-accent-expense"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <Trash2 size={13} />
                   </button>

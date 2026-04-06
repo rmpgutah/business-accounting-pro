@@ -101,7 +101,7 @@ const TaxCategories: React.FC = () => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Tag size={18} className="text-accent-blue" />
           </div>
@@ -133,7 +133,7 @@ const TaxCategories: React.FC = () => {
 
       {/* Add Form */}
       {showForm && (
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-text-primary">New Tax Category</h3>
             <button
@@ -147,7 +147,7 @@ const TaxCategories: React.FC = () => {
             {formError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {formError}
               </div>
@@ -197,7 +197,7 @@ const TaxCategories: React.FC = () => {
                 id="is_deductible"
                 checked={formData.is_deductible}
                 onChange={(e) => setFormData({ ...formData, is_deductible: e.target.checked })}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               />
               <label htmlFor="is_deductible" className="text-sm text-text-secondary">
                 Is Deductible

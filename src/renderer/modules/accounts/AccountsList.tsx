@@ -181,7 +181,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
           <button
             onClick={onNewAccount}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Plus size={14} />
             New Account
@@ -192,7 +192,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
       {/* Table */}
       <div
         className="block-table bg-bg-secondary border border-border-primary overflow-hidden"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <table className="w-full text-sm">
           <thead>
@@ -268,7 +268,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
                         <td className="px-4 py-2 text-xs text-text-primary font-medium">
                           {account.name}
                           {!account.is_active && (
-                            <span className="ml-2 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '2px' }}>
+                            <span className="ml-2 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '6px' }}>
                               Inactive
                             </span>
                           )}

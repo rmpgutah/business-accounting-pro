@@ -203,7 +203,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                 ? 'bg-accent-blue text-white'
                 : 'bg-bg-secondary text-text-muted hover:text-text-primary'
             }`}
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {tab.label}
             <span className="ml-1.5 opacity-60">
@@ -253,7 +253,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
               <div
                 key={project.id}
                 className="block-card p-0 overflow-hidden cursor-pointer hover:bg-bg-hover transition-colors"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
                 onClick={() => onSelectProject(project.id)}
               >
                 {/* Card Header */}

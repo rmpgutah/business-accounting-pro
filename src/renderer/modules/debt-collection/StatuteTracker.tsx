@@ -153,7 +153,7 @@ const StatuteTracker: React.FC<StatuteTrackerProps> = ({ companyId }) => {
                 {isExpired ? (
                   <span
                     className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase bg-red-500/20 text-red-400"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     EXPIRED
                   </span>
@@ -168,11 +168,11 @@ const StatuteTracker: React.FC<StatuteTrackerProps> = ({ companyId }) => {
               <div>
                 <div
                   className="w-full h-2 bg-bg-tertiary overflow-hidden"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <div
                     className={`h-full transition-all ${bgClass}`}
-                    style={{ width: `${pct}%`, borderRadius: '2px' }}
+                    style={{ width: `${pct}%`, borderRadius: '6px' }}
                   />
                 </div>
                 <p className="text-[10px] text-text-muted mt-0.5">

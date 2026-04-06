@@ -154,7 +154,7 @@ const TimeTracking: React.FC = () => {
           <button
             onClick={handleManualEntry}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Plus size={14} />
             Manual Entry

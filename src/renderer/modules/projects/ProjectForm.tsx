@@ -163,7 +163,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
     >
       <div
         className="bg-bg-secondary border border-border-primary w-full max-w-lg max-h-[90vh] overflow-y-auto"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
@@ -183,7 +183,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
           {error && (
             <div
               className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {error}
             </div>

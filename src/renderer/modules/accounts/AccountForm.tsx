@@ -168,7 +168,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
       <div
         className="bg-bg-elevated border border-border-primary w-full max-w-lg shadow-xl"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
@@ -188,7 +188,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
           {errors._form && (
             <div
               className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {errors._form}
             </div>
@@ -207,7 +207,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               className={`block-input w-full px-3 py-2 text-sm bg-bg-primary border ${
                 errors.code ? 'border-accent-expense' : 'border-border-primary'
               } text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             />
             {errors.code && (
               <p className="text-[10px] text-accent-expense mt-1">
@@ -229,7 +229,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               className={`block-input w-full px-3 py-2 text-sm bg-bg-primary border ${
                 errors.name ? 'border-accent-expense' : 'border-border-primary'
               } text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             />
             {errors.name && (
               <p className="text-[10px] text-accent-expense mt-1">
@@ -247,7 +247,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               value={type}
               onChange={(e) => setType(e.target.value as AccountType)}
               className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <option value="asset">Asset</option>
               <option value="liability">Liability</option>
@@ -266,7 +266,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               value={subtype}
               onChange={(e) => setSubtype(e.target.value)}
               className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <option value="">Select subtype...</option>
               {SUBTYPES[type].map((st) => (
@@ -288,7 +288,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               rows={2}
               placeholder="Optional description..."
               className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue resize-none"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             />
           </div>
 
@@ -301,7 +301,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               value={parentAccountId}
               onChange={(e) => setParentAccountId(e.target.value)}
               className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <option value="">None (top-level)</option>
               {parentOptions.map((opt) => (
@@ -322,7 +322,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               {isActive ? (
                 <div
                   className="w-8 h-4 bg-accent-blue flex items-center justify-end px-0.5"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <div
                     className="w-3 h-3 bg-white"
@@ -332,7 +332,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               ) : (
                 <div
                   className="w-8 h-4 bg-bg-tertiary flex items-center justify-start px-0.5"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <div
                     className="w-3 h-3 bg-text-muted"
@@ -350,7 +350,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
           <button
             onClick={onClose}
             className="px-4 py-1.5 text-xs font-semibold text-text-secondary bg-bg-tertiary border border-border-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             Cancel
           </button>
@@ -358,7 +358,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
             onClick={handleSave}
             disabled={saving}
             className="block-btn-primary flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {saving ? (
               <Loader2 size={14} className="animate-spin" />

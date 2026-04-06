@@ -137,7 +137,7 @@ const TrialBalance: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">From</label>
@@ -169,7 +169,7 @@ const TrialBalance: React.FC = () => {
           </div>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Export CSV"
             onClick={handleExport}
           >
@@ -177,7 +177,7 @@ const TrialBalance: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Print"
             onClick={() => window.print()}
           >
@@ -194,15 +194,15 @@ const TrialBalance: React.FC = () => {
         <>
           {/* Summary totals */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="block-card p-4 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Debits</p>
               <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalDebits)}</p>
             </div>
-            <div className="block-card p-4 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Credits</p>
               <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalCredits)}</p>
             </div>
-            <div className={`block-card p-4 text-center ${isBalanced ? 'border border-accent-income/30' : 'border border-accent-expense/30'}`} style={{ borderRadius: '2px' }}>
+            <div className={`block-card p-4 text-center ${isBalanced ? 'border border-accent-income/30' : 'border border-accent-expense/30'}`} style={{ borderRadius: '6px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Difference</p>
               <p className={`text-lg font-bold font-mono ${isBalanced ? 'text-accent-income' : 'text-accent-expense'}`}>
                 {formatCurrency(Math.abs(totalDebits - totalCredits))}
@@ -212,12 +212,12 @@ const TrialBalance: React.FC = () => {
 
           {/* Account table grouped by type */}
           {lines.length === 0 ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
               <p className="text-sm text-text-secondary font-medium">No posted journal entries</p>
               <p className="text-xs text-text-muted mt-1">Post journal entries to see the trial balance.</p>
             </div>
           ) : (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
               <table className="block-table">
                 <thead>
                   <tr>

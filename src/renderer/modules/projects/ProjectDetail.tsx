@@ -95,7 +95,7 @@ interface StatCardProps {
 const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass }) => (
   <div
     className={`block-card p-4 border-l-2 ${accentClass}`}
-    style={{ borderRadius: '2px' }}
+    style={{ borderRadius: '6px' }}
   >
     <div className="flex items-center gap-2 mb-1">
       <span className="text-text-muted">{icon}</span>
@@ -277,7 +277,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
             onClick={handleCreateInvoice}
             disabled={creatingInvoice}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-xs font-bold uppercase hover:bg-indigo-700 disabled:opacity-50"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <FilePlus size={13} />
             {creatingInvoice ? 'Building...' : 'Create Invoice from Time'}
@@ -297,9 +297,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <div
           className="text-xs px-3 py-2 font-mono"
           style={{
-            background: '#2a1215',
+            background: 'rgba(248,113,113,0.08)',
             border: '1px solid #ef4444',
-            borderRadius: '2px',
+            borderRadius: '6px',
             color: '#ef4444',
           }}
         >
@@ -395,7 +395,7 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
   }
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
       <table className="block-table">
         <thead>
           <tr>
@@ -450,7 +450,7 @@ const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
   }
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
       <table className="block-table">
         <thead>
           <tr>
@@ -506,7 +506,7 @@ const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
   };
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
       <table className="block-table">
         <thead>
           <tr>

@@ -158,12 +158,12 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
       {step === 'budget' ? (
         /* ─── Step 1: Budget Details ─────────────────── */
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <form onSubmit={handleCreateBudget} className="space-y-4">
             {budgetError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {budgetError}
               </div>
@@ -231,7 +231,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
       ) : (
         /* ─── Step 2: Line Items Editor ──────────────── */
         <div className="space-y-4">
-          <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-text-primary">
                 Budget Line Items
@@ -305,7 +305,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
             {linesError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {linesError}
               </div>

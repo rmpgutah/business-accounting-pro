@@ -203,7 +203,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {toast.msg}
         </div>
@@ -212,7 +212,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '2px' }}>
+          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
             <Boxes size={18} className="text-accent-blue" />
           </div>
           <div>
@@ -260,7 +260,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Status tabs */}
-        <div className="flex border border-border-primary" style={{ borderRadius: '2px' }}>
+        <div className="flex border border-border-primary" style={{ borderRadius: '6px' }}>
           {STATUS_TABS.map((s) => (
             <button
               key={s}
@@ -657,7 +657,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
 
             {/* Preview */}
             {annualDep > 0 && (
-              <div className="bg-bg-tertiary border border-border-primary p-3 space-y-2" style={{ borderRadius: '2px' }}>
+              <div className="bg-bg-tertiary border border-border-primary p-3 space-y-2" style={{ borderRadius: '6px' }}>
                 <p className="text-xs font-bold text-text-muted uppercase tracking-wider">Depreciation Preview</p>
                 <div className="flex justify-between">
                   <span className="text-xs text-text-secondary">Annual:</span>
@@ -794,7 +794,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {toast.msg}
         </div>
@@ -1025,7 +1025,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
                   contentStyle={{
                     backgroundColor: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border-primary)',
-                    borderRadius: '2px',
+                    borderRadius: '6px',
                     fontSize: '12px',
                   }}
                   formatter={(v: number) => fmt.format(v)}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy } from 'lucide-react';
+import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
@@ -23,6 +23,7 @@ interface Expense {
   is_billable: boolean;
   payment_method?: string;
   reference?: string;
+  custom_fields?: string;
 }
 
 interface Category {
@@ -196,7 +197,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Receipt size={18} className="text-accent-blue" />
           </div>
@@ -324,7 +325,12 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                       {exp.date}
                     </td>
                     <td className="text-text-primary font-medium">
-                      {exp.description || '(no description)'}
+                      <div className="flex items-center gap-1.5">
+                        {exp.description || '(no description)'}
+                        {exp.custom_fields && exp.custom_fields !== '{}' && (
+                          <FileText size={12} className="text-accent-blue shrink-0" title="Has detailed info" />
+                        )}
+                      </div>
                     </td>
                     <td className="text-text-secondary">
                       {exp.category_name || '-'}
@@ -394,8 +400,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'var(--bg-secondary, #1e1e2e)',
-            borderRadius: '2px',
+            background: 'rgba(18,20,28,0.80)',
+            borderRadius: '6px',
             minWidth: '420px',
           }}
         >
@@ -415,7 +421,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -425,7 +431,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -437,14 +443,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

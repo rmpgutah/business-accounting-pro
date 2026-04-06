@@ -171,19 +171,19 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
             Total Budgeted
           </span>
           <p className="text-2xl font-mono text-text-primary mt-1">{fmt.format(totals.budgeted)}</p>
         </div>
-        <div className="block-card p-4 border-l-2 border-l-accent-expense" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-expense" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
             Actual Spent
           </span>
           <p className="text-2xl font-mono text-text-primary mt-1">{fmt.format(totals.actual)}</p>
         </div>
-        <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
             Remaining
           </span>
@@ -191,7 +191,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
             {fmt.format(totals.remaining)}
           </p>
         </div>
-        <div className="block-card p-4 border-l-2 border-l-accent-warning" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-warning" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
             % Used
           </span>
@@ -199,14 +199,14 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
           {/* Overall progress bar */}
           <div
             className="w-full h-2 mt-2 bg-bg-tertiary overflow-hidden"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <div
               style={{
                 width: `${Math.min(100, totalPct)}%`,
                 backgroundColor: progressColor(totalPct),
                 height: '100%',
-                borderRadius: '2px',
+                borderRadius: '6px',
                 transition: 'width 0.3s ease',
               }}
             />
@@ -258,14 +258,14 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
                   <td>
                     <div
                       className="w-full h-3 bg-bg-tertiary overflow-hidden"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       <div
                         style={{
                           width: `${Math.min(100, line.percentUsed)}%`,
                           backgroundColor: progressColor(line.percentUsed),
                           height: '100%',
-                          borderRadius: '2px',
+                          borderRadius: '6px',
                           transition: 'width 0.3s ease',
                         }}
                       />
@@ -298,14 +298,14 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
                 <td>
                   <div
                     className="w-full h-3 bg-bg-tertiary overflow-hidden"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <div
                       style={{
                         width: `${Math.min(100, totalPct)}%`,
                         backgroundColor: progressColor(totalPct),
                         height: '100%',
-                        borderRadius: '2px',
+                        borderRadius: '6px',
                         transition: 'width 0.3s ease',
                       }}
                     />

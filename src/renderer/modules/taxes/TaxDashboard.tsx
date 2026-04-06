@@ -71,7 +71,7 @@ interface StatCardProps {
 const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accentClass, subtitle }) => (
   <div
     className={`block-card p-4 border-l-2 ${accentClass}`}
-    style={{ borderRadius: '2px' }}
+    style={{ borderRadius: '6px' }}
   >
     <div className="flex items-start justify-between">
       <div>
@@ -85,7 +85,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accentClass, su
       </div>
       <div
         className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {icon}
       </div>
@@ -177,7 +177,7 @@ const TaxDashboard: React.FC = () => {
       {nextDue && (
         <div
           className="block-card p-4 border-l-2 border-l-accent-warning flex items-center gap-3"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <AlertTriangle size={18} className="text-accent-warning flex-shrink-0" />
           <div className="flex-1">
@@ -226,7 +226,7 @@ const TaxDashboard: React.FC = () => {
 
       {/* Tax Breakdown */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Tax Breakdown
           </h3>
@@ -252,7 +252,7 @@ const TaxDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Federal Bracket Detail
           </h3>
@@ -281,7 +281,7 @@ const TaxDashboard: React.FC = () => {
       </div>
 
       {/* Quarterly Estimated Payments */}
-      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
         <div className="px-5 py-4 border-b border-border-primary">
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             Quarterly Estimated Payments &mdash; {currentYear}

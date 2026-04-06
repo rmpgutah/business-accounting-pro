@@ -240,7 +240,7 @@ const ReconcileView: React.FC = () => {
       {/* Bank selector */}
       <div
         className="block-card p-4 flex items-center gap-4"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <div className="flex-1">
           <label className="block text-xs text-text-muted font-semibold uppercase tracking-wider mb-1">
@@ -264,7 +264,7 @@ const ReconcileView: React.FC = () => {
             onClick={autoMatch}
             disabled={!selectedBankId || loading}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Zap size={14} />
             Auto-Match
@@ -273,7 +273,7 @@ const ReconcileView: React.FC = () => {
             onClick={loadTransactions}
             disabled={!selectedBankId}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-40"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Refresh"
           >
             <RefreshCw size={14} />
@@ -289,7 +289,7 @@ const ReconcileView: React.FC = () => {
               ? 'text-accent-expense bg-accent-expense/10 border-accent-expense/20'
               : 'text-accent-income bg-accent-income/10 border-accent-income/20'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {saveResult}
         </div>
@@ -310,7 +310,7 @@ const ReconcileView: React.FC = () => {
             {/* LEFT: Bank Transactions */}
             <div
               className="block-card p-0 overflow-hidden"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <div className="px-4 py-2 bg-bg-tertiary border-b border-border-primary flex items-center justify-between">
                 <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -368,7 +368,7 @@ const ReconcileView: React.FC = () => {
             {/* RIGHT: Book Entries */}
             <div
               className="block-card p-0 overflow-hidden"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <div className="px-4 py-2 bg-bg-tertiary border-b border-border-primary flex items-center justify-between">
                 <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -428,7 +428,7 @@ const ReconcileView: React.FC = () => {
           {(selectedBank || selectedBook) && (
             <div
               className="text-center py-2 text-xs text-accent-blue bg-accent-blue/5 border border-accent-blue/20"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <Link2 size={12} className="inline mr-1 -mt-0.5" />
               {selectedBank && !selectedBook
@@ -450,7 +450,7 @@ const ReconcileView: React.FC = () => {
                   onClick={handleSave}
                   disabled={saving}
                   className="block-btn-primary flex items-center gap-1.5 px-4 py-2 text-xs font-semibold disabled:opacity-40"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <Save size={14} />
                   {saving ? 'Saving...' : 'Save Reconciliation'}
@@ -459,7 +459,7 @@ const ReconcileView: React.FC = () => {
 
               <div
                 className="block-card p-0 overflow-hidden"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <table className="w-full text-sm">
                   <thead>

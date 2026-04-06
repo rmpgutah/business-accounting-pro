@@ -105,7 +105,7 @@ const ExpenseByCategory: React.FC = () => {
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <div className="flex items-center gap-3">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">
@@ -132,14 +132,14 @@ const ExpenseByCategory: React.FC = () => {
         <div className="flex gap-2">
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Print"
           >
             <Printer size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Export"
           >
             <Download size={15} />
@@ -160,7 +160,7 @@ const ExpenseByCategory: React.FC = () => {
           {/* Bar Chart */}
           <div
             className="block-card p-6"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
               Expense Distribution
@@ -188,14 +188,14 @@ const ExpenseByCategory: React.FC = () => {
                     </div>
                     <div
                       className="w-full h-5 bg-bg-tertiary overflow-hidden"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       <div
                         className="h-full transition-all duration-500 ease-out"
                         style={{
                           width: `${barWidth}%`,
                           backgroundColor: color,
-                          borderRadius: '2px',
+                          borderRadius: '6px',
                           minWidth: barWidth > 0 ? '2px' : '0',
                         }}
                       />
@@ -209,7 +209,7 @@ const ExpenseByCategory: React.FC = () => {
           {/* Table */}
           <div
             className="block-card overflow-hidden"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <table className="w-full text-sm">
               <thead>

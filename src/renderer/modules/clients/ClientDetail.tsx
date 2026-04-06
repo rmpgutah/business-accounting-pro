@@ -175,11 +175,11 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
       {/* Top Section: Contact Card + Stats */}
       <div className="grid grid-cols-3 gap-4">
         {/* Contact Card */}
-        <div className="col-span-2 block-card" style={{ borderRadius: '2px' }}>
+        <div className="col-span-2 block-card" style={{ borderRadius: '6px' }}>
           <div className="flex items-start gap-4">
             <div
               className="flex items-center justify-center w-12 h-12 bg-bg-tertiary border border-border-primary shrink-0"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <UserCircle size={24} className="text-text-muted" />
             </div>
@@ -229,15 +229,15 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
         {/* Summary Stats */}
         <div className="space-y-4">
-          <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: '2px' }}>
+          <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
             <span className="stat-label">Total Invoiced</span>
             <span className="stat-value text-text-primary">{formatCurrency(stats.totalInvoiced)}</span>
           </div>
-          <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: '2px' }}>
+          <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
             <span className="stat-label">Total Paid</span>
             <span className="stat-value text-accent-income">{formatCurrency(stats.totalPaid)}</span>
           </div>
-          <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: '2px' }}>
+          <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: '6px' }}>
             <span className="stat-label">Outstanding</span>
             <span className="stat-value text-accent-warning">{formatCurrency(stats.outstanding)}</span>
           </div>
@@ -280,7 +280,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               message={`No ${activeTab} found for this client`}
             />
           ) : (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
               {activeTab === 'invoices' && <InvoicesTable data={tabData} />}
               {activeTab === 'projects' && <ProjectsTable data={tabData} />}
               {activeTab === 'time' && <TimeEntriesTable data={tabData} />}

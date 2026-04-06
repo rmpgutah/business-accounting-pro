@@ -224,7 +224,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
         {/* Total Unpaid */}
-        <div className="stat-card" style={{ borderRadius: '2px' }}>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Total Unpaid</div>
@@ -237,7 +237,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
 
         {/* Overdue */}
-        <div className="stat-card" style={{ borderRadius: '2px' }}>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Overdue</div>
@@ -250,7 +250,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
 
         {/* Due Soon */}
-        <div className="stat-card" style={{ borderRadius: '2px' }}>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Due in 7 Days</div>
@@ -263,7 +263,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
 
         {/* Paid This Month */}
-        <div className="stat-card" style={{ borderRadius: '2px' }}>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Paid This Month</div>
@@ -289,7 +289,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {tab.label}
             </button>
@@ -375,7 +375,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     <td onClick={(e) => e.stopPropagation()}>
                       <button
                         className="block-btn text-xs py-1 px-2"
-                        style={{ borderRadius: '2px' }}
+                        style={{ borderRadius: '6px' }}
                         onClick={() => onView(bill.id)}
                       >
                         View
@@ -607,7 +607,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: '2px' }}>
+          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: '6px' }}>
             <ArrowLeft size={16} />
           </button>
           <h1 className="module-title text-text-primary">
@@ -628,9 +628,9 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
       {errors.length > 0 && (
         <div
           style={{
-            background: '#2a1215',
+            background: 'rgba(248,113,113,0.08)',
             border: '1px solid #ef4444',
-            borderRadius: '2px',
+            borderRadius: '6px',
             padding: '12px 16px',
           }}
         >
@@ -734,7 +734,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
           </span>
           <button
             className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             onClick={addLine}
           >
             <Plus size={14} />
@@ -842,7 +842,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               min={0}
               step="0.01"
               className="block-input text-right font-mono w-24"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
               value={form.tax_pct}
               onChange={(e) => updateField('tax_pct', parseFloat(e.target.value) || 0)}
             />
@@ -998,7 +998,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: '2px' }}>
+          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: '6px' }}>
             <ArrowLeft size={16} />
           </button>
           <h1 className="module-title text-text-primary">{bill.bill_number}</h1>
@@ -1013,7 +1013,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           </button>
           <button
             className="block-btn flex items-center gap-2"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             onClick={() => onEdit(billId)}
           >
             <Edit size={14} />
@@ -1198,9 +1198,9 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           {payErrors.length > 0 && (
             <div
               style={{
-                background: '#2a1215',
+                background: 'rgba(248,113,113,0.08)',
                 border: '1px solid #ef4444',
-                borderRadius: '2px',
+                borderRadius: '6px',
                 padding: '10px 14px',
                 marginBottom: '14px',
               }}
@@ -1224,7 +1224,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                 min={0.01}
                 step="0.01"
                 className="block-input font-mono"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
               />
@@ -1236,7 +1236,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
               <input
                 type="date"
                 className="block-input font-mono"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
               />
@@ -1281,7 +1281,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
               <input
                 type="text"
                 className="block-input font-mono"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
                 placeholder="Check #, ACH ID..."
                 value={payReference}
                 onChange={(e) => setPayReference(e.target.value)}
@@ -1292,7 +1292,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           <div className="flex justify-end">
             <button
               className="block-btn-primary flex items-center gap-2"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
               disabled={payLoading}
               onClick={handleRecordPayment}
             >

@@ -113,7 +113,7 @@ const ImportSection: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <Upload size={16} className="text-accent-blue" />
         </div>
@@ -318,7 +318,7 @@ const ExportSection: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <Download size={16} className="text-accent-blue" />
         </div>
@@ -390,7 +390,7 @@ const ExportSection: React.FC = () => {
               className="block-btn-success flex items-center gap-1.5"
               onClick={handleFullBackup}
               disabled={backupLoading}
-              style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
+              style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
             >
               <Archive size={14} />
               {backupLoading ? 'Creating Backup...' : 'Export All Data'}

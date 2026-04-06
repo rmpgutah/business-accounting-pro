@@ -231,7 +231,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
         <div
           className="block-card-elevated w-full max-w-[700px] max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
@@ -242,7 +242,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
               type="button"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <X size={16} />
             </button>
@@ -255,7 +255,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
           ) : (
             <div className="space-y-6">
               {/* ─── Section 1: Pipeline Rules Table ─── */}
-              <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
                 <h4 className="text-sm font-semibold text-text-primary mb-3">
                   Pipeline Rules
                 </h4>
@@ -313,7 +313,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                                 )
                               }
                               className="block-input text-sm text-center"
-                              style={{ width: '60px', borderRadius: '2px' }}
+                              style={{ width: '60px', borderRadius: '6px' }}
                             />
                           </td>
                           <td className="px-2 py-2">
@@ -323,7 +323,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                                 handleRuleChange(rule.id, 'action', e.target.value)
                               }
                               className="block-select text-xs"
-                              style={{ borderRadius: '2px' }}
+                              style={{ borderRadius: '6px' }}
                             >
                               {ACTION_OPTIONS.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
@@ -362,7 +362,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                               />
                               <div
                                 className="w-8 h-4 bg-bg-tertiary rounded-none peer-checked:bg-accent-blue transition-colors relative"
-                                style={{ borderRadius: '2px' }}
+                                style={{ borderRadius: '6px' }}
                               >
                                 <div
                                   className="absolute top-0.5 left-0.5 w-3 h-3 bg-text-muted peer-checked:bg-white transition-transform"
@@ -393,7 +393,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
               </div>
 
               {/* ─── Section 2: Run Escalation ─── */}
-              <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-semibold text-text-primary">
@@ -407,7 +407,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                     onClick={handleRunEscalation}
                     disabled={escalationRunning}
                     className="block-btn block-btn-primary px-4 py-2 text-sm"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     {escalationRunning ? 'Running...' : 'Run Escalation'}
                   </button>
@@ -415,7 +415,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                 {escalationResult && (
                   <div
                     className="mt-3 px-3 py-2 text-xs text-text-secondary bg-bg-tertiary border border-border-primary"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     {escalationResult}
                   </div>
@@ -423,7 +423,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
               </div>
 
               {/* ─── Section 3: Template Management ─── */}
-              <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-semibold text-text-primary">
                     Templates
@@ -431,7 +431,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                   <button
                     onClick={resetTemplates}
                     className="block-btn text-xs px-2 py-1"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     Reset to Defaults
                   </button>
@@ -442,7 +442,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                     <div key={t.id}>
                       <div
                         className="flex items-center justify-between px-3 py-2 bg-bg-tertiary hover:bg-bg-hover"
-                        style={{ borderRadius: '2px' }}
+                        style={{ borderRadius: '6px' }}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-sm text-text-primary truncate">
@@ -450,13 +450,13 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                           </span>
                           <span
                             className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase border ${TYPE_COLORS[t.type] || 'block-badge'}`}
-                            style={{ borderRadius: '2px' }}
+                            style={{ borderRadius: '6px' }}
                           >
                             {t.type.replace(/_/g, ' ')}
                           </span>
                           <span
                             className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase border ${SEVERITY_COLORS[t.severity] || 'block-badge'}`}
-                            style={{ borderRadius: '2px' }}
+                            style={{ borderRadius: '6px' }}
                           >
                             {t.severity}
                           </span>
@@ -468,7 +468,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                               : startEditTemplate(t)
                           }
                           className="block-btn text-xs px-2 py-1 flex-shrink-0"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         >
                           {editingTemplateId === t.id ? 'Cancel' : 'Edit'}
                         </button>
@@ -478,7 +478,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                       {editingTemplateId === t.id && (
                         <div
                           className="mt-1 p-3 bg-bg-secondary border border-border-primary space-y-3"
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         >
                           <div>
                             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -491,7 +491,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                                 setTemplateDraft((prev) => ({ ...prev, name: e.target.value }))
                               }
                               className="block-input text-sm"
-                              style={{ borderRadius: '2px' }}
+                              style={{ borderRadius: '6px' }}
                             />
                           </div>
                           <div>
@@ -505,7 +505,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                                 setTemplateDraft((prev) => ({ ...prev, subject: e.target.value }))
                               }
                               className="block-input text-sm"
-                              style={{ borderRadius: '2px' }}
+                              style={{ borderRadius: '6px' }}
                             />
                           </div>
                           <div>
@@ -519,7 +519,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                                 setTemplateDraft((prev) => ({ ...prev, body: e.target.value }))
                               }
                               className="block-input font-mono text-sm"
-                              style={{ borderRadius: '2px', resize: 'vertical' }}
+                              style={{ borderRadius: '6px', resize: 'vertical' }}
                             />
                           </div>
                           <div className="flex justify-end">
@@ -527,7 +527,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                               onClick={saveTemplate}
                               disabled={savingTemplate}
                               className="block-btn block-btn-primary text-xs px-3 py-1"
-                              style={{ borderRadius: '2px' }}
+                              style={{ borderRadius: '6px' }}
                             >
                               {savingTemplate ? 'Saving...' : 'Save'}
                             </button>
@@ -550,14 +550,14 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                 <button
                   onClick={resetRules}
                   className="block-btn text-xs px-3 py-1.5"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   Reset Pipeline to Defaults
                 </button>
                 <button
                   onClick={onClose}
                   className="block-btn px-4 py-1.5 text-sm"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   Close
                 </button>

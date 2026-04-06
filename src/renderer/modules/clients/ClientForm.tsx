@@ -153,7 +153,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
         className="block-card-elevated w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -176,7 +176,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             {error && (
               <div
                 className="mb-4 p-3 text-sm text-accent-expense bg-accent-expense-bg border border-accent-expense/20"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {error}
               </div>
