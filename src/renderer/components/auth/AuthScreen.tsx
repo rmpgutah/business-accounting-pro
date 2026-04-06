@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogIn, UserPlus, Eye, EyeOff, ArrowRight, Users, Shield, Lock, BarChart3, Phone } from 'lucide-react';
+import { LogIn, UserPlus, Eye, EyeOff, ArrowRight, Shield, Lock, BarChart3 } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore, AuthUser } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -16,32 +16,33 @@ interface UserEntry {
 }
 
 const SAVED_EMAIL_KEY = 'bap-saved-email';
-const SAVED_NAME_KEY = 'bap-saved-name';
-const REMEMBER_KEY = 'bap-remember';
+const SAVED_NAME_KEY  = 'bap-saved-name';
+const REMEMBER_KEY    = 'bap-remember';
 
-// Background image — dark mountain landscape (embedded as gradient fallback + unsplash)
 const BG_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80&auto=format';
 
 const AuthScreen: React.FC = () => {
-  const setUser = useAuthStore((s) => s.setUser);
+  const setUser      = useAuthStore((s) => s.setUser);
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
 
-  const [mode, setMode] = useState<Mode>('login');
-  const [users, setUsers] = useState<UserEntry[]>([]);
+  // Login is always the default / dominant view
+  const [mode, setMode]             = useState<Mode>('login');
+  const [users, setUsers]           = useState<UserEntry[]>([]);
   const [hasExisting, setHasExisting] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(REMEMBER_KEY) === '1');
 
-  const [email, setEmail] = useState(() => localStorage.getItem(SAVED_EMAIL_KEY) || '');
-  const [password, setPassword] = useState('');
+  const [email,       setEmail]       = useState(() => localStorage.getItem(SAVED_EMAIL_KEY) || '');
+  const [password,    setPassword]    = useState('');
   const [displayName, setDisplayName] = useState('');
 
-  const savedName = localStorage.getItem(SAVED_NAME_KEY) || '';
+  const savedName   = localStorage.getItem(SAVED_NAME_KEY) || '';
   const passwordRef = useRef<HTMLInputElement>(null);
 
+  // Check for existing users — always land on login first
   useEffect(() => {
     (async () => {
       try {
@@ -50,14 +51,15 @@ const AuthScreen: React.FC = () => {
         if (has) {
           const userList = await api.listUsers();
           setUsers(userList);
+          // Multiple users → pick-user, single → login. Always login-first.
           setMode(userList.length > 1 ? 'pick-user' : 'login');
         } else {
-          setMode('register');
+          // No users yet — still show login; "Set up" link is prominent below
+          setMode('login');
         }
-      } catch (err) {
-        console.error('Failed to check for existing users:', err);
+      } catch {
         setHasExisting(false);
-        setMode('register');
+        setMode('login');
       }
     })();
   }, []);
@@ -77,8 +79,8 @@ const AuthScreen: React.FC = () => {
       const result = await api.login(email.trim(), password);
       if (rememberMe) {
         localStorage.setItem(SAVED_EMAIL_KEY, email.trim());
-        localStorage.setItem(SAVED_NAME_KEY, result.user.display_name);
-        localStorage.setItem(REMEMBER_KEY, '1');
+        localStorage.setItem(SAVED_NAME_KEY,  result.user.display_name);
+        localStorage.setItem(REMEMBER_KEY,    '1');
       } else {
         localStorage.removeItem(SAVED_EMAIL_KEY);
         localStorage.removeItem(SAVED_NAME_KEY);
@@ -118,31 +120,56 @@ const AuthScreen: React.FC = () => {
     setMode('login');
   };
 
-  const labelStyle: React.CSSProperties = { color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' };
+  const goToSetup  = () => { setMode('register'); setError(''); setPassword(''); };
+  const goToLogin  = () => { setMode(users.length > 1 ? 'pick-user' : 'login'); setError(''); };
 
+  // ── Styles ────────────────────────────────────────────────
+  const labelStyle: React.CSSProperties = {
+    color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600,
+    marginBottom: '6px', display: 'block',
+  };
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '14px 16px', fontSize: '14px',
     background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '8px', color: '#fff', outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   };
-
-  const btnPrimaryStyle: React.CSSProperties = {
+  const inputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)';
+    e.currentTarget.style.boxShadow   = '0 0 0 3px rgba(96,165,250,0.1)';
+  };
+  const inputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+    e.currentTarget.style.boxShadow   = 'none';
+  };
+  const btnPrimary: React.CSSProperties = {
     width: '100%', padding: '14px', fontSize: '15px', fontWeight: 600,
     background: 'linear-gradient(135deg, #ef4444, #dc2626)',
     color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
     transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
   };
-
-  const glassCardStyle: React.CSSProperties = {
+  const glassCard: React.CSSProperties = {
     width: '100%', maxWidth: '440px',
-    background: 'rgba(30, 32, 40, 0.65)',
+    background: 'rgba(30,32,40,0.65)',
     backdropFilter: 'blur(24px) saturate(1.5)',
     WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
     border: '1px solid rgba(255,255,255,0.12)',
     padding: '40px', borderRadius: '16px',
     boxShadow: '0 24px 64px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
+  };
+  const linkBtn: React.CSSProperties = {
+    background: 'none', border: 'none', color: '#ef4444',
+    fontSize: '13px', cursor: 'pointer', fontWeight: 600,
+  };
+  const mutedLinkBtn: React.CSSProperties = {
+    background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+    fontSize: '13px', cursor: 'pointer', transition: 'color 0.2s',
+  };
+  const errorBox: React.CSSProperties = {
+    padding: '12px 14px', marginBottom: '20px',
+    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
+    color: '#f87171', fontSize: '13px', borderRadius: '8px',
   };
 
   if (hasExisting === null) {
@@ -160,73 +187,48 @@ const AuthScreen: React.FC = () => {
       backgroundSize: 'cover', backgroundPosition: 'center',
       fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
     }}>
-      {/* Drag region for macOS */}
+      {/* Drag region for macOS hiddenInset title bar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
 
-      {/* ── Left Panel: Branding ──────────────────────── */}
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
-        padding: '60px', minWidth: '300px',
-      }}>
-        {/* Logo */}
-        <div
-          style={{
-            width: '56px', height: '56px', borderRadius: '12px',
-            background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '24px', fontWeight: 800, color: 'white', marginBottom: '32px',
-            boxShadow: '0 8px 24px rgba(59,130,246,0.3)',
-          }}
-        >
-          B
-        </div>
+      {/* ── Left branding panel ───────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px', minWidth: '300px' }}>
+        <div style={{
+          width: '56px', height: '56px', borderRadius: '12px',
+          background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '24px', fontWeight: 800, color: 'white', marginBottom: '32px',
+          boxShadow: '0 8px 24px rgba(59,130,246,0.3)',
+        }}>B</div>
 
-        <h1 style={{
-          fontSize: '48px', fontWeight: 800, color: 'white', lineHeight: 1.1,
-          letterSpacing: '-0.02em', marginBottom: '16px',
-        }}>
+        <h1 style={{ fontSize: '48px', fontWeight: 800, color: 'white', lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: '16px' }}>
           Business<br />Accounting<br />Pro
         </h1>
-
-        <p style={{
-          fontSize: '16px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6,
-          maxWidth: '400px', marginBottom: '40px',
-        }}>
+        <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, maxWidth: '400px', marginBottom: '40px' }}>
           Complete financial management for your business. Invoicing, payroll, taxes, debt collection, and 34 integrated modules.
         </p>
 
-        {/* Feature bullets */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(59,130,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Shield size={18} color="#60a5fa" />
+          {[
+            { Icon: Shield,   color: '#60a5fa', bg: 'rgba(59,130,246,0.15)',  text: 'Secure, encrypted local storage' },
+            { Icon: BarChart3, color: '#34d399', bg: 'rgba(34,197,94,0.15)',   text: 'Real-time financial analytics' },
+            { Icon: Lock,     color: '#f87171', bg: 'rgba(239,68,68,0.15)',    text: 'Your data never leaves your device' },
+          ].map(({ Icon, color, bg, text }) => (
+            <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={18} color={color} />
+              </div>
+              <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>{text}</span>
             </div>
-            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>Secure, encrypted local storage</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <BarChart3 size={18} color="#34d399" />
-            </div>
-            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>Real-time financial analytics</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Lock size={18} color="#f87171" />
-            </div>
-            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>Your data never leaves your device</span>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Right Panel: Auth Card ────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '40px', minWidth: '480px',
-      }}>
+      {/* ── Right auth card panel ─────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', minWidth: '480px' }}>
 
-        {/* ── Pick User ────────────────────────────────── */}
+        {/* ── Pick User ──────────────────────────────────── */}
         {mode === 'pick-user' && (
-          <div style={glassCardStyle}>
+          <div style={glassCard}>
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>Welcome back</h2>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginBottom: '28px' }}>Select your account</p>
 
@@ -238,18 +240,12 @@ const AuthScreen: React.FC = () => {
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '14px',
                     background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '10px', cursor: 'pointer', textAlign: 'left', width: '100%',
-                    transition: 'all 0.2s',
+                    borderRadius: '10px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.2s',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
                 >
-                  <div style={{
-                    width: '42px', height: '42px', borderRadius: '10px',
-                    background: u.avatar_color || '#3b82f6',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '16px', fontWeight: 700, color: 'white', flexShrink: 0,
-                  }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: u.avatar_color || '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: 'white', flexShrink: 0 }}>
                     {u.display_name.charAt(0).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -261,38 +257,37 @@ const AuthScreen: React.FC = () => {
               ))}
             </div>
 
-            <button
-              onClick={() => { setMode('register'); setError(''); }}
-              style={{
-                width: '100%', padding: '12px', background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px',
-                color: 'rgba(255,255,255,0.5)', fontSize: '13px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
-            >
-              <UserPlus size={14} /> Create New Account
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <button onClick={() => { setMode('login'); setError(''); }} style={mutedLinkBtn}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+              >
+                <LogIn size={13} style={{ display: 'inline', marginRight: '5px', verticalAlign: 'middle' }} />
+                Use email instead
+              </button>
+              <button onClick={goToSetup} style={linkBtn}>
+                <UserPlus size={13} style={{ display: 'inline', marginRight: '5px', verticalAlign: 'middle' }} />
+                New account
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ── Login ─────────────────────────────────────── */}
+        {/* ── Login (dominant / always-first view) ─────────── */}
         {mode === 'login' && (
-          <div style={glassCardStyle}>
+          <div style={glassCard}>
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
-              {savedName && rememberMe ? `Welcome back` : 'Welcome back'}
+              {hasExisting ? 'Welcome back' : 'Sign in'}
             </h2>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginBottom: '28px' }}>
-              {savedName && rememberMe ? `Sign in as ${savedName}` : 'Sign in to your account'}
+              {hasExisting && savedName && rememberMe
+                ? `Sign in as ${savedName}`
+                : hasExisting
+                  ? 'Sign in to your account'
+                  : 'No account yet — sign in or set up below'}
             </p>
 
-            {error && (
-              <div style={{ padding: '12px 14px', marginBottom: '20px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: '13px', borderRadius: '8px' }}>
-                {error}
-              </div>
-            )}
+            {error && <div style={errorBox}>{error}</div>}
 
             <form onSubmit={handleLogin}>
               <div style={{ marginBottom: '20px' }}>
@@ -304,8 +299,8 @@ const AuthScreen: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   autoFocus={!email}
                   style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(96,165,250,0.1)'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  onFocus={inputFocus}
+                  onBlur={inputBlur}
                 />
               </div>
               <div style={{ marginBottom: '20px' }}>
@@ -319,80 +314,67 @@ const AuthScreen: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     autoFocus={!!email}
                     style={{ ...inputStyle, paddingRight: '44px' }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(96,165,250,0.1)'; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    onFocus={inputFocus}
+                    onBlur={inputBlur}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '4px' }}
-                  >
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '4px' }}>
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
 
-              {/* Remember Me */}
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', cursor: 'pointer', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#ef4444', borderRadius: '4px' }}
-                />
+                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: '#ef4444' }} />
                 <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>Remember me</span>
               </label>
 
               <button
                 type="submit"
                 disabled={!email.trim() || !password || loading}
-                style={{ ...btnPrimaryStyle, opacity: (!email.trim() || !password || loading) ? 0.5 : 1 }}
+                style={{ ...btnPrimary, opacity: (!email.trim() || !password || loading) ? 0.5 : 1 }}
                 onMouseEnter={(e) => { if (!loading) e.currentTarget.style.boxShadow = '0 8px 24px rgba(239,68,68,0.4)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(239,68,68,0.3)'; }}
               >
                 {loading ? 'Signing in...' : 'Sign in'}
-                {!loading && <ArrowRight size={16} />}
+                {!loading && <LogIn size={16} />}
               </button>
             </form>
 
-            <div style={{ textAlign: 'center', marginTop: '20px' }}>
-              <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>Don't have an account? </span>
-              <button
-                onClick={() => { setMode('register'); setError(''); }}
-                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}
-              >
-                Sign up
-              </button>
-            </div>
-
-            {users.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <button onClick={() => { setMode('pick-user'); setError(''); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '13px', cursor: 'pointer', transition: 'color 0.2s' }}
+            {/* Bottom links — setup is always surfaced */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              {users.length > 1 ? (
+                <button onClick={() => { setMode('pick-user'); setError(''); }} style={mutedLinkBtn}
                   onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
                 >
-                  Switch Account
+                  Switch account
                 </button>
+              ) : (
+                <span />
+              )}
+              <div>
+                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
+                  {hasExisting ? 'Need another account? ' : 'New here? '}
+                </span>
+                <button onClick={goToSetup} style={linkBtn}>Set up</button>
               </div>
-            )}
+            </div>
           </div>
         )}
 
-        {/* ── Register ──────────────────────────────────── */}
+        {/* ── Setup / Register ─────────────────────────────── */}
         {mode === 'register' && (
-          <div style={glassCardStyle}>
+          <div style={glassCard}>
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
-              {hasExisting ? 'Create account' : 'Get started'}
+              {hasExisting ? 'Create account' : 'Set up'}
             </h2>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginBottom: '28px' }}>
-              {hasExisting ? 'Add a new user to this installation' : 'Set up your first account'}
+              {hasExisting ? 'Add a new user to this installation' : 'Create your account to get started'}
             </p>
 
-            {error && (
-              <div style={{ padding: '12px 14px', marginBottom: '20px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: '13px', borderRadius: '8px' }}>
-                {error}
-              </div>
-            )}
+            {error && <div style={errorBox}>{error}</div>}
 
             <form onSubmit={handleRegister}>
               <div style={{ marginBottom: '20px' }}>
@@ -404,8 +386,8 @@ const AuthScreen: React.FC = () => {
                   onChange={(e) => setDisplayName(e.target.value)}
                   autoFocus
                   style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(96,165,250,0.1)'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  onFocus={inputFocus}
+                  onBlur={inputBlur}
                 />
               </div>
               <div style={{ marginBottom: '20px' }}>
@@ -416,8 +398,8 @@ const AuthScreen: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(96,165,250,0.1)'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  onFocus={inputFocus}
+                  onBlur={inputBlur}
                 />
               </div>
               <div style={{ marginBottom: '28px' }}>
@@ -429,20 +411,17 @@ const AuthScreen: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     style={{ ...inputStyle, paddingRight: '44px' }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(96,165,250,0.1)'; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    onFocus={inputFocus}
+                    onBlur={inputBlur}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '4px' }}
-                  >
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '4px' }}>
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
                 {password.length > 0 && (
                   <div style={{ fontSize: '12px', marginTop: '6px', color: password.length < 6 ? '#fbbf24' : '#34d399' }}>
-                    {password.length < 6 ? 'Too short \u2014 min. 6 characters' : 'Looks good'}
+                    {password.length < 6 ? 'Too short — min. 6 characters' : 'Looks good'}
                   </div>
                 )}
               </div>
@@ -450,7 +429,7 @@ const AuthScreen: React.FC = () => {
               <button
                 type="submit"
                 disabled={!displayName.trim() || !email.trim() || password.length < 6 || loading}
-                style={{ ...btnPrimaryStyle, opacity: (!displayName.trim() || !email.trim() || password.length < 6 || loading) ? 0.5 : 1 }}
+                style={{ ...btnPrimary, opacity: (!displayName.trim() || !email.trim() || password.length < 6 || loading) ? 0.5 : 1 }}
                 onMouseEnter={(e) => { if (!loading) e.currentTarget.style.boxShadow = '0 8px 24px rgba(239,68,68,0.4)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(239,68,68,0.3)'; }}
               >
@@ -459,17 +438,11 @@ const AuthScreen: React.FC = () => {
               </button>
             </form>
 
-            {hasExisting && (
-              <div style={{ textAlign: 'center', marginTop: '20px' }}>
-                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>Already have an account? </span>
-                <button
-                  onClick={() => { setMode(users.length > 1 ? 'pick-user' : 'login'); setError(''); }}
-                  style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}
-                >
-                  Sign in
-                </button>
-              </div>
-            )}
+            {/* Always show "Back to login" */}
+            <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>Already have an account? </span>
+              <button onClick={goToLogin} style={linkBtn}>Sign in</button>
+            </div>
           </div>
         )}
       </div>

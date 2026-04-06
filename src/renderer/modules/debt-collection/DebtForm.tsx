@@ -6,7 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtFormData {
-  debtor_type: 'client' | 'vendor' | 'custom';
+  debtor_type: 'client' | 'vendor' | 'employee' | 'custom';
   debtor_id: string;
   debtor_name: string;
   debtor_email: string;
@@ -89,6 +89,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
   const [form, setForm] = useState<DebtFormData>({ ...emptyForm });
   const [clients, setClients] = useState<DropdownOption[]>([]);
   const [vendors, setVendors] = useState<DropdownOption[]>([]);
+  const [employees, setEmployees] = useState<DropdownOption[]>([]);
   const [invoices, setInvoices] = useState<DropdownOption[]>([]);
   const [bills, setBills] = useState<DropdownOption[]>([]);
   const [saving, setSaving] = useState(false);
@@ -134,9 +135,10 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
       if (!activeCompany) return;
       try {
         const cid = activeCompany.id;
-        const [clientData, vendorData, invoiceData, billData] = await Promise.all([
+        const [clientData, vendorData, employeeData, invoiceData, billData] = await Promise.all([
           api.query('clients', { company_id: cid }),
           api.query('vendors', { company_id: cid }),
+          api.query('employees', { company_id: cid }),
           api.query('invoices', { company_id: cid, status: 'overdue' }),
           api.query('bills', { company_id: cid }),
         ]);
@@ -144,6 +146,13 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
 
         setClients(Array.isArray(clientData) ? clientData : []);
         setVendors(Array.isArray(vendorData) ? vendorData : []);
+        setEmployees((Array.isArray(employeeData) ? employeeData : []).map((emp: any) => ({
+          id: emp.id,
+          name: emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+          email: emp.email || '',
+          phone: emp.phone || '',
+          address: [emp.address_line1, emp.city, emp.state, emp.zip].filter(Boolean).join(', '),
+        })));
         setInvoices(Array.isArray(invoiceData) ? invoiceData : []);
         setBills(Array.isArray(billData) ? billData : []);
 
@@ -195,7 +204,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
   };
 
   const handleDebtorTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as 'client' | 'vendor' | 'custom';
+    const value = e.target.value as 'client' | 'vendor' | 'employee' | 'custom';
     setForm((prev) => ({
       ...prev,
       debtor_type: value,
@@ -209,7 +218,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
 
   const handleDebtorSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
-    const list = form.debtor_type === 'client' ? clients : vendors;
+    const list = form.debtor_type === 'client' ? clients : form.debtor_type === 'employee' ? employees : vendors;
     const selected = list.find((item) => item.id === id);
     if (selected) {
       setForm((prev) => ({
@@ -431,15 +440,16 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               >
                 <option value="client">Client</option>
                 <option value="vendor">Vendor</option>
+                <option value="employee">Employee</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
 
-            {/* Client/Vendor Dropdown */}
+            {/* Client/Vendor/Employee Dropdown */}
             {form.debtor_type !== 'custom' && (
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                  Select {form.debtor_type === 'client' ? 'Client' : 'Vendor'}
+                  Select {form.debtor_type === 'client' ? 'Client' : form.debtor_type === 'employee' ? 'Employee' : 'Vendor'}
                 </label>
                 <select
                   className="block-select"
@@ -447,9 +457,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   onChange={handleDebtorSelect}
                 >
                   <option value="">
-                    Select {form.debtor_type === 'client' ? 'client' : 'vendor'}...
+                    Select {form.debtor_type === 'client' ? 'client' : form.debtor_type === 'employee' ? 'employee' : 'vendor'}...
                   </option>
-                  {(form.debtor_type === 'client' ? clients : vendors).map((item) => (
+                  {(form.debtor_type === 'client' ? clients : form.debtor_type === 'employee' ? employees : vendors).map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>

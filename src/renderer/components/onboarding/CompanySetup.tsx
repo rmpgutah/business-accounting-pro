@@ -14,6 +14,7 @@ const CompanySetup: React.FC = () => {
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const authUser = useAuthStore((s) => s.user);
   const [submitting, setSubmitting] = useState(false);
+  const [skipping, setSkipping] = useState(false);
   const [error, setError] = useState('');
 
   const [name, setName] = useState('');
@@ -71,6 +72,26 @@ const CompanySetup: React.FC = () => {
       setError(err?.message || 'Failed to create company');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (skipping) return;
+    setSkipping(true);
+    setError('');
+    try {
+      const defaultName = authUser?.display_name ? `${authUser.display_name.split(' ')[0]}'s Business` : 'My Company';
+      const company = await api.createCompany({ name: defaultName, fiscal_year_start: 1 });
+      if (authUser?.id) {
+        await api.linkUserCompany(authUser.id, company.id, 'owner').catch(() => {});
+      }
+      await api.switchCompany(company.id);
+      const companies = await api.listCompanies();
+      setCompanies(companies);
+      setActiveCompany(company);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to skip setup');
+      setSkipping(false);
     }
   };
 
@@ -225,14 +246,31 @@ const CompanySetup: React.FC = () => {
 
           <button
             type="submit"
-            disabled={!name.trim() || submitting}
+            disabled={!name.trim() || submitting || skipping}
             className="block-btn-primary"
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: (!name.trim() || submitting) ? 0.5 : 1 }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: (!name.trim() || submitting || skipping) ? 0.5 : 1 }}
           >
             {submitting ? 'Creating...' : 'Create Company & Get Started'}
             {!submitting && <ArrowRight size={16} />}
           </button>
         </form>
+
+        {/* Skip setup — creates a placeholder company and goes straight to the app */}
+        <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #1e1e1e' }}>
+          <span style={{ fontSize: '13px', color: '#5a5a5a' }}>Don't have details handy? </span>
+          <button
+            onClick={handleSkip}
+            disabled={skipping || submitting}
+            style={{ background: 'none', border: 'none', color: '#5a5a5a', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline', opacity: skipping ? 0.5 : 1, transition: 'color 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#a0a0a0'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#5a5a5a'; }}
+          >
+            {skipping ? 'Setting up...' : 'Skip setup'}
+          </button>
+          <span style={{ fontSize: '12px', color: '#3a3a3a', display: 'block', marginTop: '4px' }}>
+            You can fill in company details later in Settings
+          </span>
+        </div>
       </div>
     </div>
   );

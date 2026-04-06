@@ -31,7 +31,7 @@ const StatusBar: React.FC = () => {
     }
 
     return () => {
-      cleanups.forEach((fn) => fn());
+      cleanups.forEach((fn) => typeof fn === 'function' && fn());
     };
   }, []);
 
