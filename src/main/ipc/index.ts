@@ -358,7 +358,13 @@ export function registerIpcHandlers(): void {
 
   // ─── Company Management ──────────────────────────────
   ipcMain.handle('company:list', () => {
-    return db.queryAll('companies');
+    const companies = db.queryAll('companies');
+    // Auto-switch to the first company if currentCompanyId is not yet set
+    // (happens on cold start before renderer calls company:switch)
+    if (!db.getCurrentCompanyId() && companies.length > 0) {
+      db.switchCompany(companies[0].id);
+    }
+    return companies;
   });
 
   ipcMain.handle('company:get', (_event, id) => {

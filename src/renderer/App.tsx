@@ -184,13 +184,18 @@ const App: React.FC = () => {
           setCompanies(list ?? []);
           if (list && list.length > 0) {
             setActiveCompany(list[0]);
+            // Tell main process which company is active (keeps currentCompanyId in sync)
+            api.switchCompany(list[0].id).catch(() => {});
             // Seed default categories for all companies (safe — no-op if already seeded)
             for (const company of list) {
               api.categoriesSeedDefaults(company.id).catch(() => {});
             }
           }
         } else {
-          // Companies already loaded — still ensure categories are seeded
+          // Companies already loaded — sync active company to main process
+          const active = companies[0];
+          if (active) api.switchCompany(active.id).catch(() => {});
+          // Still ensure categories are seeded
           for (const company of companies) {
             api.categoriesSeedDefaults(company.id).catch(() => {});
           }
