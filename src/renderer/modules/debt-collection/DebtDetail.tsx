@@ -17,6 +17,7 @@ import {
   Play,
   Zap,
   Calendar,
+  Receipt,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -28,6 +29,7 @@ interface DebtDetailProps {
   onEdit: () => void;
   onRefresh: () => void;
   onOpenModal: (modal: 'communication' | 'payment' | 'evidence' | 'contact') => void;
+  onInvoice: () => void;
 }
 
 interface Debt {
@@ -217,6 +219,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   onEdit,
   onRefresh,
   onOpenModal,
+  onInvoice,
 }) => {
   // ── State ──
   const [debt, setDebt] = useState<Debt | null>(null);
@@ -539,6 +542,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           >
             <Pencil size={14} />
             Edit
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={onInvoice}
+            title="Generate Statement of Account"
+          >
+            <Receipt size={14} />
+            Statement
           </button>
           <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"

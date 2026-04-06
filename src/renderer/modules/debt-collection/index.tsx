@@ -10,6 +10,7 @@ import {
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
 import DebtDetail from './DebtDetail';
+import DebtInvoiceFormatter from './DebtInvoiceFormatter';
 import PaymentForm from './PaymentForm';
 import CommunicationForm from './CommunicationForm';
 import EvidenceForm from './EvidenceForm';
@@ -22,7 +23,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
-type DebtView = 'list' | 'detail' | 'form';
+type DebtView = 'list' | 'detail' | 'form' | 'invoice';
 type DebtFormType = 'receivable' | 'payable';
 
 interface ModalState {
@@ -97,6 +98,15 @@ const DebtCollectionModule: React.FC = () => {
     setActiveDebtId(null);
   }, []);
 
+  const handleInvoice = useCallback((id: string) => {
+    setActiveDebtId(id);
+    setView('invoice');
+  }, []);
+
+  const handleBackFromInvoice = useCallback(() => {
+    setView('detail');
+  }, []);
+
   const handleSaved = useCallback(() => {
     setView('list');
     setActiveDebtId(null);
@@ -165,6 +175,14 @@ const DebtCollectionModule: React.FC = () => {
         </div>
       </div>
 
+      {/* Content — Invoice Statement view */}
+      {view === 'invoice' && activeDebtId && (
+        <DebtInvoiceFormatter
+          debtId={activeDebtId}
+          onBack={handleBackFromInvoice}
+        />
+      )}
+
       {/* Content — Detail view (any tab) */}
       {view === 'detail' && activeDebtId && (
         <DebtDetail
@@ -173,6 +191,7 @@ const DebtCollectionModule: React.FC = () => {
           onEdit={() => handleEditDebt(activeDebtId)}
           onRefresh={() => setListKey((k) => k + 1)}
           onOpenModal={openModal}
+          onInvoice={() => handleInvoice(activeDebtId)}
         />
       )}
 
