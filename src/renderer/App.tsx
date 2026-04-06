@@ -176,24 +176,23 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Validate persisted auth — if user no longer exists in DB, force logout
-  useEffect(() => {
-    if (isAuthenticated && authUser?.id) {
-      api.rawQuery('SELECT id FROM users WHERE id = ?', [authUser.id]).then((rows: any[]) => {
-        if (!rows || rows.length === 0) {
-          console.warn('Persisted user not found in database — clearing auth state');
-          logout();
-          setCompanies([]);
-          setActiveCompany(null);
-        }
-      }).catch(() => {});
-    }
-  }, []);
-
   useEffect(() => {
     const init = async () => {
       try {
-        // Always verify companies from DB — persisted state may be stale
+        // Step 1: Validate persisted auth BEFORE doing anything else
+        if (isAuthenticated && authUser?.id) {
+          const rows = await api.rawQuery('SELECT id FROM users WHERE id = ?', [authUser.id]);
+          if (!rows || (rows as any[]).length === 0) {
+            console.warn('Persisted user not found in database — clearing auth state');
+            logout();
+            setCompanies([]);
+            setActiveCompany(null);
+            setLoading(false);
+            return; // Will re-render with isAuthenticated=false → show AuthScreen
+          }
+        }
+
+        // Step 2: Load companies from DB (never trust persisted store)
         const list = await api.listCompanies();
         const validList = Array.isArray(list) ? list : [];
         setCompanies(validList);
@@ -205,7 +204,7 @@ const App: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error('Failed to load companies:', err);
+        console.error('Failed to initialize:', err);
         setCompanies([]);
       } finally {
         setLoading(false);

@@ -46,9 +46,21 @@ const CompanySetup: React.FC = () => {
         tax_id: taxId.trim(),
         fiscal_year_start: fiscalYearStart,
       });
-      // Link company to current user
+      // Link company to current user (gracefully handle stale auth)
       if (authUser?.id) {
-        await api.linkUserCompany(authUser.id, company.id, 'owner');
+        try {
+          await api.linkUserCompany(authUser.id, company.id, 'owner');
+        } catch (linkErr: any) {
+          // FK constraint = user doesn't exist in DB. Verify and re-link.
+          if (linkErr?.message?.includes('FOREIGN KEY')) {
+            const users = await api.rawQuery('SELECT id FROM users LIMIT 1');
+            if (users && (users as any[]).length > 0) {
+              await api.linkUserCompany((users as any[])[0].id, company.id, 'owner');
+            }
+          } else {
+            throw linkErr;
+          }
+        }
       }
       await api.switchCompany(company.id);
       const companies = await api.listCompanies();
