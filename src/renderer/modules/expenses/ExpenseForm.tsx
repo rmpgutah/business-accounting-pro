@@ -290,7 +290,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     const checks: Array<string | null> = [
       minValue(parseFloat(form.amount) || 0, 0.01, 'Amount'),
       required(form.date, 'Date'),
+      required(form.category_id, 'Category'),
     ];
+    // Validate tax doesn't exceed amount
+    const amt = parseFloat(form.amount) || 0;
+    const tax = parseFloat(form.tax_amount) || 0;
+    if (tax > amt) checks.push('Tax amount cannot exceed the expense amount');
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);

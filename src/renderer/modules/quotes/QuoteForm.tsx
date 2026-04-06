@@ -3,6 +3,7 @@ import { ArrowLeft, FileCheck, Plus, Trash2, ArrowRightCircle } from 'lucide-rea
 import api from '../../lib/api';
 import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import { FieldLabel } from '../../components/FieldLabel';
 import { formatCurrency } from '../../lib/format';
 
@@ -79,6 +80,7 @@ function emptyLine(): LineItem {
 // ─── Component ──────────────────────────────────────────
 const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const setModule = useAppStore((s) => s.setModule);
   const [form, setForm] = useState<QuoteFormData>({ ...emptyForm });
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -203,7 +205,12 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
     const checks: Array<string | null> = [
       required(form.quote_number, 'Quote number'),
       required(form.issue_date, 'Issue date'),
+      required(form.client_id, 'Client'),
     ];
+    // Date order validation
+    if (form.valid_until && form.issue_date && form.valid_until < form.issue_date) {
+      checks.push('Valid until date must be on or after the issue date');
+    }
     // Ensure at least one line has a description
     const hasLine = lines.some((l) => l.description.trim().length > 0);
     if (!hasLine) checks.push('At least one line item with a description is required');
@@ -285,8 +292,12 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
     try {
       const result = await api.quotesConvertToInvoice(quoteId);
       if (result?.invoice_id) {
-        setConvertSuccess(`Converted to invoice successfully.`);
+        setConvertSuccess('Converted to invoice successfully.');
         setForm((prev) => ({ ...prev, status: 'converted' }));
+        // Offer to navigate to the new invoice
+        if (window.confirm('Quote converted to invoice. Go to Invoicing now?')) {
+          setModule('invoicing');
+        }
       }
     } catch (err) {
       console.error('Convert failed:', err);

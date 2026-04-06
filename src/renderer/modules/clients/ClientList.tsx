@@ -178,7 +178,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     try {
       await api.batchUpdate('clients', Array.from(selectedIds), { status: 'active' });
       await reload();
-    } catch (err) { console.error('Batch set active failed:', err); }
+    } catch (err: any) { console.error('Batch set active failed:', err); alert('Failed to set clients as active: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, reload]);
 
@@ -187,7 +187,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     try {
       await api.batchUpdate('clients', Array.from(selectedIds), { status: 'inactive' });
       await reload();
-    } catch (err) { console.error('Batch set inactive failed:', err); }
+    } catch (err: any) { console.error('Batch set inactive failed:', err); alert('Failed to set clients as inactive: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, reload]);
 
@@ -196,7 +196,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     try {
       await api.batchDelete('clients', Array.from(selectedIds));
       await reload();
-    } catch (err) { console.error('Batch delete failed:', err); }
+    } catch (err: any) { console.error('Batch delete failed:', err); alert('Failed to delete clients: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); setShowDeleteConfirm(false); }
   }, [selectedIds, reload]);
 

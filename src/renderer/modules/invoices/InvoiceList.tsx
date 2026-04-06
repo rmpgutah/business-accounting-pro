@@ -169,7 +169,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     try {
       await api.batchUpdate('invoices', Array.from(selectedIds), { status: 'sent' });
       await reload();
-    } catch (err) { console.error('Batch mark sent failed:', err); }
+    } catch (err: any) { console.error('Batch mark sent failed:', err); alert('Failed to mark invoices as sent: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, reload]);
 
@@ -177,7 +177,6 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     setBatchLoading(true);
     try {
       const ids = Array.from(selectedIds);
-      // For "Mark as Paid", set status and amount_paid = total for each
       for (const id of ids) {
         const inv = invoices.find(i => i.id === id);
         if (inv) {
@@ -185,7 +184,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         }
       }
       await reload();
-    } catch (err) { console.error('Batch mark paid failed:', err); }
+    } catch (err: any) { console.error('Batch mark paid failed:', err); alert('Failed to mark invoices as paid: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, invoices, reload]);
 
@@ -194,7 +193,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     try {
       await api.batchDelete('invoices', Array.from(selectedIds));
       await reload();
-    } catch (err) { console.error('Batch delete failed:', err); }
+    } catch (err: any) { console.error('Batch delete failed:', err); alert('Failed to delete invoices: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); setShowDeleteConfirm(false); }
   }, [selectedIds, reload]);
 

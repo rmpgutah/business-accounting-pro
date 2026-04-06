@@ -69,14 +69,27 @@ const DangerZone: React.FC = () => {
     setDeleting(true);
     try {
       // Delete all company data
+      // Every table with a company_id column — order matters for FK constraints
+      // (child tables first, parent tables last)
       const tables = [
+        // Debt collection
         'debts', 'debt_automation_rules', 'debt_templates',
+        // Rules & automations
         'rules', 'approval_queue', 'automation_rules', 'automation_run_log', 'financial_anomalies',
+        // Quotes
+        'quotes',
+        // Core records
         'invoices', 'expenses', 'clients', 'vendors', 'projects', 'employees',
         'accounts', 'journal_entries', 'categories', 'budgets',
-        'bank_accounts', 'documents', 'notifications', 'recurring_templates',
-        'bills', 'purchase_orders', 'fixed_assets', 'credit_notes',
-        'time_entries', 'inventory_items',
+        // Finance
+        'bank_accounts', 'bank_rules', 'bills', 'purchase_orders', 'fixed_assets', 'credit_notes',
+        'payments', 'bill_payments', 'tax_payments', 'tax_categories', 'tax_rates', 'payroll_runs',
+        // Platform
+        'documents', 'notifications', 'recurring_templates', 'time_entries', 'inventory_items',
+        'audit_log', 'email_log', 'sync_queue', 'invoice_tokens', 'stripe_transactions',
+        // Settings & metadata
+        'settings', 'custom_field_defs', 'dimensions', 'saved_views', 'report_templates',
+        'employee_deductions',
       ];
       for (const table of tables) {
         await api.rawQuery(`DELETE FROM ${table} WHERE company_id = ?`, [activeCompany.id]).catch(() => {});

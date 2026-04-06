@@ -143,7 +143,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
     try {
       await api.batchUpdate('expenses', Array.from(selectedIds), { status: 'approved' });
       await reload();
-    } catch (err) { console.error('Batch approve failed:', err); }
+    } catch (err: any) { console.error('Batch approve failed:', err); alert('Failed to approve expenses: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, reload]);
 
@@ -152,7 +152,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
     try {
       await api.batchDelete('expenses', Array.from(selectedIds));
       await reload();
-    } catch (err) { console.error('Batch delete failed:', err); }
+    } catch (err: any) { console.error('Batch delete failed:', err); alert('Failed to delete expenses: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); setShowDeleteConfirm(false); }
   }, [selectedIds, reload]);
 
