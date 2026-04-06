@@ -157,6 +157,9 @@ const tablesWithoutUpdatedAt = new Set([
   'custom_field_defs', // has created_at only
   'saved_views',       // has created_at only
   'user_companies',    // has created_at only
+  // Debt collection child tables — created_at only
+  'debt_contacts', 'debt_communications', 'debt_payments',
+  'debt_pipeline_stages', 'debt_evidence',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

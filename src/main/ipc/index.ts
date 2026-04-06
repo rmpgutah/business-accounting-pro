@@ -239,6 +239,9 @@ export function registerIpcHandlers(): void {
     // NOTE: bill_payments DOES have company_id, so it is NOT listed here
     'bill_line_items', 'po_line_items',
     'asset_depreciation_entries', 'credit_note_items',
+    // Debt collection child tables — company_id lives on parent `debts` table
+    'debt_contacts', 'debt_communications', 'debt_payments',
+    'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {

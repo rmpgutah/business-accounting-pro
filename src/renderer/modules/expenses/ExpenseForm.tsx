@@ -318,7 +318,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         tags: form.tags
           ? form.tags.split(',').map((t) => t.trim()).filter(Boolean)
           : [],
-        custom_fields: JSON.stringify(details),
+        custom_fields: Object.keys(details).length > 0 ? details : {},
       };
 
       if (isEditing && expenseId) {
