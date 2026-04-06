@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tag, Plus, X } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface TaxCategory {
@@ -27,6 +28,7 @@ const DEFAULT_CATEGORIES: Omit<TaxCategory, 'id'>[] = [
 
 // ─── Component ──────────────────────────────────────────
 const TaxCategories: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [categories, setCategories] = useState<TaxCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -40,8 +42,9 @@ const TaxCategories: React.FC = () => {
   const [formError, setFormError] = useState('');
 
   const loadCategories = async () => {
+    if (!activeCompany) return;
     try {
-      const data = await api.query('tax_categories');
+      const data = await api.query('tax_categories', { company_id: activeCompany.id });
       setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load tax categories:', err);
@@ -52,7 +55,7 @@ const TaxCategories: React.FC = () => {
 
   useEffect(() => {
     loadCategories();
-  }, []);
+  }, [activeCompany]);
 
   const seedDefaults = async () => {
     try {

@@ -167,10 +167,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
 
   // ─── Batch Actions ──────────────────────────────────
   const reload = useCallback(async () => {
-    const rows = await api.query('clients');
+    if (!activeCompany) return;
+    const rows = await api.query('clients', { company_id: activeCompany.id });
     setClients(Array.isArray(rows) ? rows : []);
     setSelectedIds(new Set());
-  }, []);
+  }, [activeCompany]);
 
   const handleBatchSetActive = useCallback(async () => {
     setBatchLoading(true);

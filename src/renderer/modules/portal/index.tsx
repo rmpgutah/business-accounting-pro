@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Link, Copy, CheckCircle, ExternalLink, Users } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 export default function PortalModule() {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [clients, setClients] = useState<any[]>([]);
   const [portalEnabled, setPortalEnabled] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [activeCompany]);
 
   const loadClients = async () => {
+    if (!activeCompany) return;
     try {
-      const data = await api.query('clients', { status: 'active' });
+      const data = await api.query('clients', { company_id: activeCompany.id, status: 'active' });
       setClients(data);
     } catch { /* empty */ }
   };

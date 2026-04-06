@@ -135,7 +135,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           api.query('time_entries', { company_id: cid, project_id: projectId }),
           api.query('expenses', { company_id: cid, project_id: projectId }),
           api.query('invoices', { company_id: cid }),
-          api.query('invoice_line_items'),
+          api.query('invoice_line_items', { project_id: projectId }),
         ]);
         if (cancelled) return;
 

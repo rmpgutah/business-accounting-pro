@@ -132,10 +132,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
 
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
-    const expData = await api.query('expenses');
+    if (!activeCompany) return;
+    const expData = await api.query('expenses', { company_id: activeCompany.id });
     setExpenses(Array.isArray(expData) ? expData : []);
     setSelectedIds(new Set());
-  }, []);
+  }, [activeCompany]);
 
   const handleBatchApprove = useCallback(async () => {
     setBatchLoading(true);

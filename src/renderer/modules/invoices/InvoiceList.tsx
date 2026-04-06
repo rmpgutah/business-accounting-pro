@@ -158,10 +158,11 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
-    const invoiceData = await api.query('invoices');
+    if (!activeCompany) return;
+    const invoiceData = await api.query('invoices', { company_id: activeCompany.id });
     setInvoices(invoiceData ?? []);
     setSelectedIds(new Set());
-  }, []);
+  }, [activeCompany]);
 
   const handleBatchMarkSent = useCallback(async () => {
     setBatchLoading(true);

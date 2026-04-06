@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Wallet, Plus } from 'lucide-react';
 import api from '../../lib/api';
 import { formatStatus } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -26,14 +27,16 @@ const periodLabel: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────
 const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
-        const data = await api.query('budgets', undefined, { field: 'start_date', dir: 'desc' });
+        const data = await api.query('budgets', { company_id: activeCompany.id }, { field: 'start_date', dir: 'desc' });
         if (!cancelled) setBudgets(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error('Failed to load budgets:', err);
@@ -43,7 +46,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   if (loading) {
     return (

@@ -293,6 +293,7 @@
           // ── Debt collection ───────────────────────────────────────────────
           if (channel === 'debt:escalate')      return Promise.resolve({ ok: true });
           if (channel === 'debt:run-escalation') return Promise.resolve({ ok: true });
+          if (channel === 'debt:stats') return Promise.resolve({ total: 0, active: 0, resolved: 0, total_balance: 0, collected: 0, collection_rate: 0 });
 
           // ── Fallback ──────────────────────────────────────────────────────
           console.warn('[mock] unhandled IPC channel:', channel, args);
