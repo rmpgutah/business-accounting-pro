@@ -767,7 +767,7 @@ const Dashboard: React.FC = () => {
             <span>{rulesActivity.pricing_today} pricing rule{rulesActivity.pricing_today !== 1 ? 's' : ''} applied today</span>
           )}
           {rulesActivity.approvals_pending > 0 && (
-            <span className="text-orange-700">{rulesActivity.approvals_pending} approval{rulesActivity.approvals_pending !== 1 ? 's' : ''} pending</span>
+            <span className="text-accent-warning">{rulesActivity.approvals_pending} approval{rulesActivity.approvals_pending !== 1 ? 's' : ''} pending</span>
           )}
           {rulesActivity.alerts_week > 0 && (
             <span>{rulesActivity.alerts_week} alert{rulesActivity.alerts_week !== 1 ? 's' : ''} fired this week</span>
@@ -1327,23 +1327,23 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Intelligence Alerts ─── */}
       {anomalies.length > 0 && (
-        <div className="col-span-full border-2 border-orange-500 bg-orange-50 p-5" style={{ borderRadius: '6px' }}>
-          <h2 className="text-xs font-black uppercase tracking-wider text-orange-700 mb-3">
+        <div className="col-span-full border-2 border-orange-500 bg-accent-warning-bg p-5" style={{ borderRadius: '6px' }}>
+          <h2 className="text-xs font-black uppercase tracking-wider text-accent-warning mb-3">
             Intelligence Alerts
           </h2>
           <div className="space-y-2">
             {anomalies.map((a: any) => (
-              <div key={a.id} className="flex items-start justify-between gap-4 bg-white border border-orange-300 p-3">
+              <div key={a.id} className="flex items-start justify-between gap-4 bg-bg-secondary border border-accent-warning p-3">
                 <div>
-                  <p className="text-sm font-bold text-gray-900">{a.anomaly_type?.replace(/_/g, ' ').toUpperCase()}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">{a.description}</p>
+                  <p className="text-sm font-bold text-text-primary">{a.anomaly_type?.replace(/_/g, ' ').toUpperCase()}</p>
+                  <p className="text-sm text-text-secondary mt-0.5">{a.description}</p>
                 </div>
                 <button
                   onClick={async () => {
                     await api.dismissAnomaly(a.id);
                     setAnomalies(prev => prev.filter(x => x.id !== a.id));
                   }}
-                  className="flex-shrink-0 text-xs font-black text-gray-400 hover:text-gray-900 border border-gray-300 px-2 py-1 hover:border-gray-900 transition-colors"
+                  className="flex-shrink-0 text-xs font-black text-text-muted hover:text-text-primary border border-border-secondary px-2 py-1 hover:border-border-primary transition-colors"
                 >
                   ×
                 </button>

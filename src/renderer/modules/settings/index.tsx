@@ -708,7 +708,7 @@ export default function SettingsModule() {
               }
             >
               <div
-                className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
                   stripeConfig.stripe_test_mode ? 'translate-x-5' : 'translate-x-0'
                 }`}
                 style={{ borderRadius: '6px' }}
@@ -764,7 +764,7 @@ export default function SettingsModule() {
                 }}
               >
                 <div
-                  className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                  className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
                     backupConfig.auto_backup ? 'translate-x-5' : 'translate-x-0'
                   }`}
                   style={{ borderRadius: '6px' }}

@@ -31,13 +31,13 @@ const TYPE_DOT_COLORS: Record<string, string> = {
   payment_record:    'bg-emerald-500',
   delivery_proof:    'bg-emerald-500',
   signed_agreement:  'bg-accent-blue',
-  witness_statement: 'bg-red-500',
+  witness_statement: 'bg-accent-expense-bg0',
   photo:             'bg-purple-500',
-  other:             'bg-gray-500',
+  other:             'bg-bg-secondary0',
 };
 
 const RELEVANCE_STYLES: Record<string, string> = {
-  high:   'bg-red-500/20 text-red-400',
+  high:   'bg-accent-expense-bg0/20 text-red-400',
   medium: 'bg-amber-500/20 text-amber-400',
   low:    'bg-accent-blue/20 text-accent-blue',
 };
@@ -167,7 +167,7 @@ const EvidenceTimeline: React.FC<EvidenceTimelineProps> = ({ debtId, onAdd, onEd
       {items.length > 0 && (
         <div className="space-y-0">
           {items.map((item) => {
-            const dotColor = TYPE_DOT_COLORS[item.type] || 'bg-gray-500';
+            const dotColor = TYPE_DOT_COLORS[item.type] || 'bg-bg-secondary0';
             const relStyle = RELEVANCE_STYLES[item.court_relevance] || RELEVANCE_STYLES.low;
 
             return (

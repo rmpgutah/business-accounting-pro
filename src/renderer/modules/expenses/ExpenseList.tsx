@@ -210,7 +210,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             Import CSV
           </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNew}>
@@ -357,7 +357,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                     <td onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => handleDuplicate(exp.id, e)}
-                        className="flex items-center gap-1 px-2 py-1 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+                        className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
                         title="Duplicate"
                       >
                         <Copy size={12} /> Dup

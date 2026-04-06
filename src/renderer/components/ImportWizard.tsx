@@ -65,20 +65,20 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white w-full max-w-xl border border-gray-200">
-        <div className="flex justify-between items-center p-4 border-b border-gray-200">
+      <div className="bg-bg-secondary w-full max-w-xl border border-border-primary">
+        <div className="flex justify-between items-center p-4 border-b border-border-primary">
           <h2 className="font-black uppercase tracking-wider text-sm">Import {table} — Step {step} of 3</h2>
           <button onClick={onCancel}><X size={18} /></button>
         </div>
         <div className="p-4">
-          {error && <div className="bg-red-50 border border-red-300 text-red-700 text-xs p-2 mb-3">{error}</div>}
+          {error && <div className="bg-accent-expense-bg border border-red-300 text-red-700 text-xs p-2 mb-3">{error}</div>}
 
           {step === 1 && (
             <div className="text-center py-8">
-              <Upload size={32} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-sm text-gray-500 mb-1">Upload a CSV file</p>
-              <p className="text-xs text-gray-400 mb-4">Required columns: <span className="font-bold">{requiredFields.join(', ')}</span></p>
-              <label className="cursor-pointer inline-block bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-indigo-700">
+              <Upload size={32} className="mx-auto text-text-muted mb-4" />
+              <p className="text-sm text-text-muted mb-1">Upload a CSV file</p>
+              <p className="text-xs text-text-muted mb-4">Required columns: <span className="font-bold">{requiredFields.join(', ')}</span></p>
+              <label className="cursor-pointer inline-block bg-accent-blue text-white px-4 py-2 text-xs font-bold uppercase hover:opacity-90">
                 Choose CSV File
                 <input type="file" accept=".csv" className="hidden" onChange={handleFile} />
               </label>
@@ -87,11 +87,11 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
 
           {step === 2 && (
             <div>
-              <p className="text-xs text-gray-500 mb-3">{rows.length} rows found. Map CSV columns to fields:</p>
+              <p className="text-xs text-text-muted mb-3">{rows.length} rows found. Map CSV columns to fields:</p>
               {requiredFields.map(field => (
                 <div key={field} className="flex items-center gap-3 mb-2">
-                  <span className="text-xs font-bold w-36 uppercase text-gray-700">{field}</span>
-                  <select className="border border-gray-300 px-2 py-1.5 text-sm flex-1 focus:outline-none"
+                  <span className="text-xs font-bold w-36 uppercase text-text-secondary">{field}</span>
+                  <select className="border border-border-secondary px-2 py-1.5 text-sm flex-1 focus:outline-none"
                     value={mapping[field] ?? ''}
                     onChange={e => { setMapping(prev => ({ ...prev, [field]: e.target.value })); setError(''); }}>
                     <option value="">— select column —</option>
@@ -100,7 +100,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
                 </div>
               ))}
               {rows[0] && (
-                <div className="mt-3 text-xs text-gray-400 border border-gray-100 bg-gray-50 p-2">
+                <div className="mt-3 text-xs text-text-muted border border-border-primary bg-bg-secondary p-2">
                   Preview row 1: {Object.entries(rows[0]).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
                 </div>
               )}
@@ -109,25 +109,25 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
 
           {step === 3 && result && (
             <div className="text-center py-6">
-              <Check size={32} className="mx-auto text-green-500 mb-3" />
+              <Check size={32} className="mx-auto text-accent-income mb-3" />
               <p className="font-bold text-sm">{result.imported} record{result.imported !== 1 ? 's' : ''} imported successfully</p>
               {result.errors.length > 0 && (
-                <p className="text-xs text-red-600 mt-2">{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}: {result.errors.slice(0, 3).join('; ')}</p>
+                <p className="text-xs text-accent-expense mt-2">{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}: {result.errors.slice(0, 3).join('; ')}</p>
               )}
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+        <div className="flex justify-end gap-3 p-4 border-t border-border-primary">
           {step === 2 && (
             <>
-              <button onClick={() => setStep(1)} className="px-4 py-2 text-xs font-bold uppercase border border-gray-300 hover:border-gray-500">Back</button>
+              <button onClick={() => setStep(1)} className="px-4 py-2 text-xs font-bold uppercase border border-border-secondary hover:border-border-focus">Back</button>
               <button onClick={handleImport} disabled={importing}
-                className="px-4 py-2 text-xs font-bold uppercase bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+                className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90 disabled:opacity-50">
                 {importing ? 'Importing…' : `Import ${rows.length} Row${rows.length !== 1 ? 's' : ''}`}
               </button>
             </>
           )}
-          {step === 3 && <button onClick={onDone} className="px-4 py-2 text-xs font-bold uppercase bg-indigo-600 text-white hover:bg-indigo-700">Done</button>}
+          {step === 3 && <button onClick={onDone} className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90">Done</button>}
         </div>
       </div>
     </div>

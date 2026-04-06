@@ -277,7 +277,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           <button
             onClick={handleCreateInvoice}
             disabled={creatingInvoice}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-xs font-bold uppercase hover:bg-indigo-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-accent-blue text-white text-xs font-bold uppercase hover:opacity-90 disabled:opacity-50"
             style={{ borderRadius: '6px' }}
           >
             <FilePlus size={13} />

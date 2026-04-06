@@ -31,9 +31,9 @@ export const QuickCreate: React.FC<Props> = ({ onNavigate, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center pt-32 z-50" onClick={onClose}>
-      <div className="bg-white w-full max-w-md border border-gray-200 shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200">
-          <Search size={16} className="text-gray-400 flex-shrink-0" />
+      <div className="bg-bg-secondary w-full max-w-md border border-border-primary shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-primary">
+          <Search size={16} className="text-text-muted flex-shrink-0" />
           <input ref={inputRef} className="flex-1 outline-none text-sm bg-transparent"
             placeholder="Create something… (inv, exp, cli…)"
             value={query} onChange={e => setQuery(e.target.value)}
@@ -41,16 +41,16 @@ export const QuickCreate: React.FC<Props> = ({ onNavigate, onClose }) => {
               if (e.key === 'Escape') onClose();
               if (e.key === 'Enter' && filtered.length > 0) select(filtered[0].view);
             }} />
-          <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
+          <button onClick={onClose}><X size={16} className="text-text-muted" /></button>
         </div>
         {filtered.map((c, i) => (
           <button key={i} onClick={() => select(c.view)}
-            className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-indigo-50 border-b border-gray-100 last:border-0 flex items-center justify-between">
+            className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-accent-blue-bg border-b border-border-primary last:border-0 flex items-center justify-between">
             {c.label}
-            <span className="text-xs text-gray-300 font-mono">{c.hint}</span>
+            <span className="text-xs text-text-muted font-mono">{c.hint}</span>
           </button>
         ))}
-        {filtered.length === 0 && <div className="px-4 py-3 text-sm text-gray-400">No matches</div>}
+        {filtered.length === 0 && <div className="px-4 py-3 text-sm text-text-muted">No matches</div>}
       </div>
     </div>
   );

@@ -221,7 +221,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
         <div className="module-actions">
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             Import CSV
           </button>
           <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>

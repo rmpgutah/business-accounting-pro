@@ -21,12 +21,12 @@ interface ContactListProps {
 
 // ─── Role badge colors ──────────────────────────────────
 const ROLE_STYLES: Record<string, string> = {
-  debtor:            'bg-red-500/20 text-red-400',
+  debtor:            'bg-accent-expense-bg0/20 text-red-400',
   guarantor:         'bg-amber-500/20 text-amber-400',
   attorney:          'bg-accent-blue/20 text-accent-blue',
   witness:           'bg-purple-500/20 text-purple-400',
   collections_agent: 'bg-amber-500/20 text-amber-400',
-  judge:             'bg-red-500/20 text-red-400',
+  judge:             'bg-accent-expense-bg0/20 text-red-400',
   mediator:          'bg-emerald-500/20 text-emerald-400',
 };
 
@@ -103,7 +103,7 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
       {contacts.length > 0 && (
         <div className="space-y-0">
           {contacts.map((c) => {
-            const badgeStyle = ROLE_STYLES[c.role] || 'bg-gray-500/20 text-gray-400';
+            const badgeStyle = ROLE_STYLES[c.role] || 'bg-bg-secondary0/20 text-text-muted';
 
             return (
               <div

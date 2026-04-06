@@ -324,7 +324,7 @@ const Notifications: React.FC = () => {
                     onClick={(e) => { e.preventDefault(); togglePreference(key); }}
                   >
                     <div
-                      className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                      className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
                         preferences[key] !== false ? 'translate-x-5' : 'translate-x-0'
                       }`}
                       style={{ borderRadius: '6px' }}

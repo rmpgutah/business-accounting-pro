@@ -57,7 +57,7 @@ function mergeFields(
 const SEVERITY_STYLES: Record<string, string> = {
   low:      'bg-accent-blue/20 text-accent-blue',
   medium:   'bg-amber-500/20 text-amber-400',
-  high:     'bg-red-500/20 text-red-400',
+  high:     'bg-accent-expense-bg0/20 text-red-400',
   critical: 'bg-red-700/20 text-red-300',
 };
 

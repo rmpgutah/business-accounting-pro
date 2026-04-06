@@ -21,7 +21,7 @@ export const Tooltip: React.FC<Props> = ({ content, children, placement = 'top' 
         <span
           className={`
             absolute z-50 left-1/2 -translate-x-1/2 w-max max-w-xs
-            bg-gray-900 text-white text-xs px-2.5 py-1.5 pointer-events-none
+            bg-bg-primary text-white text-xs px-2.5 py-1.5 pointer-events-none
             whitespace-pre-wrap leading-relaxed
             ${placement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}
           `}

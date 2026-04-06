@@ -63,13 +63,13 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200">
-        <div className="flex justify-between items-center p-4 border-b border-gray-200">
+      <div className="bg-bg-secondary w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-border-primary">
+        <div className="flex justify-between items-center p-4 border-b border-border-primary">
           <h2 className="font-black uppercase tracking-wider text-sm">{rule ? 'Edit' : 'New'} {category} Rule</h2>
           <button onClick={onCancel}><X size={18} /></button>
         </div>
         <div className="p-4 space-y-4">
-          {error && <div className="bg-red-50 border border-red-300 text-red-700 text-xs p-2">{error}</div>}
+          {error && <div className="bg-accent-expense-bg border border-red-300 text-red-700 text-xs p-2">{error}</div>}
           <div>
             <FieldLabel label="Rule Name" tooltip="A descriptive name shown in the Rules list and in audit logs" />
             <input
@@ -92,7 +92,7 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
           <div>
             <div className="flex justify-between items-center mb-2">
               <FieldLabel label="Conditions" tooltip="All conditions must match for the rule to fire (AND logic)" />
-              <button onClick={addCondition} className="flex items-center gap-1 text-xs text-indigo-600 font-bold hover:underline"><Plus size={12} /> Add Condition</button>
+              <button onClick={addCondition} className="flex items-center gap-1 text-xs text-accent-blue font-bold hover:underline"><Plus size={12} /> Add Condition</button>
             </div>
             {conditions.map((c, i) => (
               <div key={i} className="flex gap-2 mb-2 items-center">
@@ -119,13 +119,13 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
                 <button onClick={() => setConditions(prev => prev.filter((_, j) => j !== i))}><Trash2 size={14} className="text-red-400" /></button>
               </div>
             ))}
-            {conditions.length === 0 && <p className="text-xs text-gray-400 italic">No conditions — rule will match all records</p>}
+            {conditions.length === 0 && <p className="text-xs text-text-muted italic">No conditions — rule will match all records</p>}
           </div>
 
           <div>
             <div className="flex justify-between items-center mb-2">
               <FieldLabel label="Actions" tooltip="What happens when all conditions match" />
-              <button onClick={addAction} className="flex items-center gap-1 text-xs text-indigo-600 font-bold hover:underline"><Plus size={12} /> Add Action</button>
+              <button onClick={addAction} className="flex items-center gap-1 text-xs text-accent-blue font-bold hover:underline"><Plus size={12} /> Add Action</button>
             </div>
             {actions.map((a, i) => (
               <div key={i} className="flex gap-2 mb-2 items-center">
@@ -159,12 +159,12 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
                 <button onClick={() => setActions(prev => prev.filter((_, j) => j !== i))}><Trash2 size={14} className="text-red-400" /></button>
               </div>
             ))}
-            {actions.length === 0 && <p className="text-xs text-gray-400 italic">No actions added yet</p>}
+            {actions.length === 0 && <p className="text-xs text-text-muted italic">No actions added yet</p>}
           </div>
         </div>
-        <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
-          <button onClick={onCancel} className="px-4 py-2 text-xs font-bold uppercase border border-gray-300 hover:border-gray-500">Cancel</button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-xs font-bold uppercase bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+        <div className="flex justify-end gap-3 p-4 border-t border-border-primary">
+          <button onClick={onCancel} className="px-4 py-2 text-xs font-bold uppercase border border-border-secondary hover:border-border-focus">Cancel</button>
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90 disabled:opacity-50">
             {saving ? 'Saving…' : 'Save Rule'}
           </button>
         </div>

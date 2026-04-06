@@ -387,7 +387,7 @@ const RecurringTransactions: React.FC = () => {
                   onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
                 >
                   <div
-                    className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                    className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
                       formData.is_active ? 'translate-x-5' : 'translate-x-0'
                     }`}
                     style={{ borderRadius: '6px' }}

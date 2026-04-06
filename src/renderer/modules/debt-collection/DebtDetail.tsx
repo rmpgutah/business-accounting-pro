@@ -130,10 +130,10 @@ interface InterestCalc {
 
 // ─── Priority Colors ────────────────────────────────────
 const priorityDot: Record<string, string> = {
-  low: 'bg-green-500',
+  low: 'bg-accent-income-bg0',
   medium: 'bg-blue-500',
-  high: 'bg-orange-500',
-  critical: 'bg-red-500',
+  high: 'bg-accent-warning-bg0',
+  critical: 'bg-accent-expense-bg0',
 };
 
 // ─── Communication Icon Map ─────────────────────────────
@@ -151,11 +151,11 @@ const commIcon: Record<string, React.ReactNode> = {
 const stageColor: Record<string, string> = {
   reminder: 'bg-blue-500',
   warning: 'bg-yellow-500',
-  final_notice: 'bg-orange-500',
-  demand_letter: 'bg-red-500',
+  final_notice: 'bg-accent-warning-bg0',
+  demand_letter: 'bg-accent-expense-bg0',
   collections_agency: 'bg-purple-500',
   legal_action: 'bg-red-600',
-  judgment: 'bg-green-500',
+  judgment: 'bg-accent-income-bg0',
   garnishment: 'bg-yellow-600',
 };
 
@@ -432,7 +432,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             </button>
             <h2 className="text-xl font-bold text-text-primary">{debt.debtor_name}</h2>
             <div
-              className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-gray-500'}`}
+              className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-bg-secondary0'}`}
               style={{ borderRadius: '6px' }}
               title={`Priority: ${debt.priority}`}
             />
@@ -946,7 +946,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   {pipelineStages.map((ps, idx) => {
                     const isCurrent = !ps.exited_at;
                     const stgBadge = formatStatus(ps.stage);
-                    const dotColor = stageColor[ps.stage] || 'bg-gray-500';
+                    const dotColor = stageColor[ps.stage] || 'bg-bg-secondary0';
                     return (
                       <div key={ps.id} className="relative flex gap-3 items-start">
                         {/* Dot */}

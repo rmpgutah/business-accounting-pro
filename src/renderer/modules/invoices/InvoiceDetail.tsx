@@ -241,13 +241,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <button
             onClick={handleCopyPortalLink}
-            className="px-3 py-1.5 border-2 border-gray-900 text-xs font-bold uppercase tracking-wider hover:bg-gray-900 hover:text-white transition-colors"
+            className="px-3 py-1.5 border-2 border-border-primary text-xs font-bold uppercase tracking-wider hover:bg-bg-primary hover:text-white transition-colors"
           >
             {copied ? 'Copied!' : 'Copy Portal Link'}
           </button>
           <button
             onClick={handleDuplicate}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+            className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
           >
             <Copy size={14} /> Duplicate
           </button>

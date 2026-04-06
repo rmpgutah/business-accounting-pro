@@ -62,10 +62,10 @@ function toISODate(d: Date): string {
 }
 
 function velocityColor(days: number): string {
-  if (days < 7) return 'text-green-500';
+  if (days < 7) return 'text-accent-income';
   if (days < 14) return 'text-yellow-500';
   if (days < 30) return 'text-orange-500';
-  return 'text-red-500';
+  return 'text-accent-expense';
 }
 
 // ─── Tooltip Formatters ─────────────────────────────────

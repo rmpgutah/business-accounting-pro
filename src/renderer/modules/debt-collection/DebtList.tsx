@@ -34,10 +34,10 @@ interface DebtListProps {
 
 // ─── Priority Colors ────────────────────────────────────
 const priorityColor: Record<string, string> = {
-  low: 'text-green-500',
+  low: 'text-accent-income',
   medium: 'text-blue-500',
   high: 'text-orange-500',
-  critical: 'text-red-500',
+  critical: 'text-accent-expense',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -422,7 +422,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                   debt.source_type === 'invoice'
                     ? `INV ${(debt.source_id || '').substring(0, 8)}`
                     : 'Manual';
-                const balanceClass = debt.balance_due > 0 ? 'font-bold text-red-500' : 'font-bold';
+                const balanceClass = debt.balance_due > 0 ? 'font-bold text-accent-expense' : 'font-bold';
                 const stageBadge = formatStatus(debt.current_stage);
                 const statusBadge = formatStatus(debt.status);
 

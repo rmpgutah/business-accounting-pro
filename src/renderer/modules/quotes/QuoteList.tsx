@@ -321,7 +321,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => handleDuplicate(q.id, e)}
-                          className="flex items-center gap-1 px-2 py-1 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+                          className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
                           title="Duplicate"
                           style={{ borderRadius: '6px' }}
                         >

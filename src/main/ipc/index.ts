@@ -2189,7 +2189,7 @@ export function registerIpcHandlers(): void {
       FROM time_entries te
       JOIN employees e ON te.employee_id = e.id
       JOIN projects p ON te.project_id = p.id
-      WHERE te.project_id = ? AND te.company_id = ? AND te.is_billed = 0
+      WHERE te.project_id = ? AND te.company_id = ? AND te.is_invoiced = 0
     `).all(project_id, company_id) as any[];
     if (entries.length === 0) return { error: 'No unbilled time entries for this project.' };
     const client_id = entries[0].client_id;

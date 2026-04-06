@@ -1007,7 +1007,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
         <div className="module-actions">
           <button
             onClick={handleDuplicate}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+            className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
           >
             <Copy size={14} /> Duplicate
           </button>

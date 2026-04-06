@@ -24,18 +24,18 @@ export const ClientContext: React.FC<ClientContextProps> = ({ clientId, companyI
   if (!clientId || !data) return null;
 
   return (
-    <div className="border border-indigo-100 bg-indigo-50 p-3 text-xs space-y-1.5 mt-2">
-      <div className="font-black uppercase tracking-wider text-indigo-600 text-[10px] mb-2">Client Overview</div>
+    <div className="border border-accent-blue bg-accent-blue-bg p-3 text-xs space-y-1.5 mt-2">
+      <div className="font-black uppercase tracking-wider text-accent-blue text-[10px] mb-2">Client Overview</div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Outstanding</span>
-        <span className={`font-bold ${Number(data.outstanding) > 0 ? 'text-orange-600' : 'text-gray-700'}`}>{formatCurrency(data.outstanding)}</span>
+        <span className="text-text-muted">Outstanding</span>
+        <span className={`font-bold ${Number(data.outstanding) > 0 ? 'text-accent-warning' : 'text-text-secondary'}`}>{formatCurrency(data.outstanding)}</span>
       </div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Last Payment</span>
+        <span className="text-text-muted">Last Payment</span>
         <span className="font-bold">{formatDate(data.lastPayment)}</span>
       </div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Invoiced YTD</span>
+        <span className="text-text-muted">Invoiced YTD</span>
         <span className="font-bold">{formatCurrency(data.ytd)}</span>
       </div>
     </div>
@@ -62,19 +62,19 @@ export const CategoryContext: React.FC<CategoryContextProps> = ({ categoryId, co
   const over = Number(data.month_spend) > Number(data.budget) && Number(data.budget) > 0;
 
   return (
-    <div className={`border p-3 text-xs space-y-1.5 mt-2 ${over ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
-      <div className="font-black uppercase tracking-wider text-[10px] mb-2 text-gray-500">Category This Month</div>
+    <div className={`border p-3 text-xs space-y-1.5 mt-2 ${over ? 'border-accent-expense bg-accent-expense-bg' : 'border-border-primary bg-bg-secondary'}`}>
+      <div className="font-black uppercase tracking-wider text-[10px] mb-2 text-text-muted">Category This Month</div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Spent</span>
-        <span className={`font-bold ${over ? 'text-red-600' : ''}`}>{formatCurrency(data.month_spend)}</span>
+        <span className="text-text-muted">Spent</span>
+        <span className={`font-bold ${over ? 'text-accent-expense' : ''}`}>{formatCurrency(data.month_spend)}</span>
       </div>
       {Number(data.budget) > 0 && (
         <div className="flex justify-between">
-          <span className="text-gray-500">Budget</span>
+          <span className="text-text-muted">Budget</span>
           <span className="font-bold">{formatCurrency(data.budget)}</span>
         </div>
       )}
-      {over && <div className="text-red-600 font-bold text-[10px] uppercase tracking-wider">Over budget</div>}
+      {over && <div className="text-accent-expense font-bold text-[10px] uppercase tracking-wider">Over budget</div>}
     </div>
   );
 };
