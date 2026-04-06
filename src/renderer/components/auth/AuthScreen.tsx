@@ -54,8 +54,8 @@ const AuthScreen: React.FC = () => {
           // Multiple users → pick-user, single → login. Always login-first.
           setMode(userList.length > 1 ? 'pick-user' : 'login');
         } else {
-          // No users yet — still show login; "Set up" link is prominent below
-          setMode('login');
+          // No users yet — go straight to register
+          setMode('register');
         }
       } catch {
         setHasExisting(false);
