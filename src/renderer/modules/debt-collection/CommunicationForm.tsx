@@ -9,6 +9,8 @@ interface CommunicationFormData {
   subject: string;
   body: string;
   outcome: string;
+  next_action: string;
+  next_action_date: string;
   contact_id: string;
   logged_at: string;
 }
@@ -37,6 +39,8 @@ const emptyForm: CommunicationFormData = {
   subject: '',
   body: '',
   outcome: '',
+  next_action: '',
+  next_action_date: '',
   contact_id: '',
   logged_at: currentDatetimeLocal(),
 };
@@ -83,6 +87,8 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
         subject: form.subject || null,
         body: form.body || null,
         outcome: form.outcome || null,
+        next_action: form.next_action || null,
+        next_action_date: form.next_action_date || null,
         contact_id: form.contact_id || null,
         logged_at: form.logged_at
           ? new Date(form.logged_at).toISOString()
@@ -195,17 +201,49 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
               />
             </div>
 
-            {/* Outcome — full-width */}
+            {/* Outcome, Next Action, Next Action Date — 3 fields */}
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                Result/Outcome
+                Outcome
+              </label>
+              <select
+                name="outcome"
+                className="block-select w-full"
+                value={form.outcome}
+                onChange={handleChange}
+              >
+                <option value="">— None —</option>
+                <option value="answered">Answered</option>
+                <option value="voicemail">Left Voicemail</option>
+                <option value="no_answer">No Answer</option>
+                <option value="disputed">Disputed</option>
+                <option value="promise_to_pay">Promise to Pay</option>
+                <option value="refused">Refused to Pay</option>
+                <option value="payment_received">Payment Received</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                Next Action
               </label>
               <input
                 type="text"
-                name="outcome"
+                name="next_action"
                 className="block-input"
-                placeholder="e.g. Left voicemail, Payment promised by Friday"
-                value={form.outcome}
+                placeholder="e.g. Follow up call"
+                value={form.next_action}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                Next Action Date
+              </label>
+              <input
+                type="date"
+                name="next_action_date"
+                className="block-input"
+                value={form.next_action_date}
                 onChange={handleChange}
               />
             </div>

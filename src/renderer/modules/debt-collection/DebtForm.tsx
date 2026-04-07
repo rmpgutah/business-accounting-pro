@@ -26,6 +26,12 @@ interface DebtFormData {
   interest_start_date: string;
   jurisdiction: string;
   statute_years: string;
+  employer_name: string;
+  employment_status: 'unknown' | 'employed' | 'self-employed' | 'unemployed' | 'retired';
+  monthly_income_estimate: number;
+  best_contact_time: string;
+  debtor_attorney_name: string;
+  debtor_attorney_phone: string;
 }
 
 interface DropdownOption {
@@ -81,6 +87,12 @@ const emptyForm: DebtFormData = {
   interest_start_date: '',
   jurisdiction: '',
   statute_years: '',
+  employer_name: '',
+  employment_status: 'unknown',
+  monthly_income_estimate: 0,
+  best_contact_time: '',
+  debtor_attorney_name: '',
+  debtor_attorney_phone: '',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -182,6 +194,12 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               interest_start_date: existing.interest_start_date || '',
               jurisdiction: existing.jurisdiction || '',
               statute_years: existing.statute_years?.toString() || '',
+              employer_name: existing.employer_name ?? '',
+              employment_status: existing.employment_status ?? 'unknown',
+              monthly_income_estimate: Number(existing.monthly_income_estimate || 0),
+              best_contact_time: existing.best_contact_time ?? '',
+              debtor_attorney_name: existing.debtor_attorney_name ?? '',
+              debtor_attorney_phone: existing.debtor_attorney_phone ?? '',
             });
           }
         }
@@ -330,6 +348,12 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         jurisdiction: form.jurisdiction || null,
         statute_years: form.statute_years ? parseInt(form.statute_years, 10) : null,
         statute_of_limitations_date: statuteDate || null,
+        employer_name: form.employer_name.trim() || null,
+        employment_status: form.employment_status,
+        monthly_income_estimate: form.monthly_income_estimate || null,
+        best_contact_time: form.best_contact_time.trim() || null,
+        debtor_attorney_name: form.debtor_attorney_name.trim() || null,
+        debtor_attorney_phone: form.debtor_attorney_phone.trim() || null,
       };
 
       if (isEditing && debtId) {
@@ -808,6 +832,49 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Section 5 — Debtor Profile */}
+        <div className="block-card p-6 mb-4">
+          <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">
+            Debtor Profile
+          </h3>
+          <div className="grid grid-cols-2 gap-5">
+            {/* Debtor Profile header row — intentionally empty, grid continues below */}
+            <div className="col-span-2 mt-0">
+              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Employment &amp; Contact Preferences</div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Employer</label>
+              <input className="block-input" value={form.employer_name} onChange={(e) => setForm(p => ({...p, employer_name: e.target.value}))} placeholder="Employer name" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Employment Status</label>
+              <select className="block-select w-full" value={form.employment_status} onChange={(e) => setForm(p => ({...p, employment_status: e.target.value as DebtFormData['employment_status']}))}>
+                <option value="unknown">Unknown</option>
+                <option value="employed">Employed</option>
+                <option value="self-employed">Self-Employed</option>
+                <option value="unemployed">Unemployed</option>
+                <option value="retired">Retired</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Est. Monthly Income</label>
+              <input type="number" min={0} step="100" className="block-input" value={form.monthly_income_estimate} onChange={(e) => setForm(p => ({...p, monthly_income_estimate: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Best Contact Time</label>
+              <input className="block-input" value={form.best_contact_time} onChange={(e) => setForm(p => ({...p, best_contact_time: e.target.value}))} placeholder="e.g. Mornings, after 5pm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Debtor Attorney</label>
+              <input className="block-input" value={form.debtor_attorney_name} onChange={(e) => setForm(p => ({...p, debtor_attorney_name: e.target.value}))} placeholder="Attorney name" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Attorney Phone</label>
+              <input className="block-input" value={form.debtor_attorney_phone} onChange={(e) => setForm(p => ({...p, debtor_attorney_phone: e.target.value}))} placeholder="(555) 000-0000" />
+            </div>
           </div>
         </div>
 
