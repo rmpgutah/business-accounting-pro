@@ -257,7 +257,8 @@ export function initDatabase(): Database.Database {
   id TEXT PRIMARY KEY,
   invoice_id TEXT NOT NULL,
   debt_id TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(invoice_id, debt_id)
 )`,
   ];
   for (const sql of migrations) {

@@ -960,7 +960,7 @@ CREATE TABLE IF NOT EXISTS debts (
   type TEXT NOT NULL CHECK(type IN ('receivable','payable')),
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','in_collection','legal','settled','written_off','disputed','bankruptcy')),
   debtor_id TEXT,
-  debtor_type TEXT DEFAULT 'custom' CHECK(debtor_type IN ('client','vendor','custom')),
+  debtor_type TEXT DEFAULT 'custom' CHECK(debtor_type IN ('client','vendor','employee','custom')),
   debtor_name TEXT NOT NULL DEFAULT '',
   debtor_email TEXT DEFAULT '',
   debtor_phone TEXT DEFAULT '',
