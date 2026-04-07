@@ -1004,16 +1004,19 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('client:contacts-save', (_event, { clientId, contacts }: { clientId: string; contacts: any[] }) => {
     try {
-      db.getDb().prepare('DELETE FROM client_contacts WHERE client_id = ?').run(clientId);
-      const inserted = contacts.map((c) => db.create('client_contacts', {
-        id: c.id || undefined,
-        client_id: clientId,
-        name: c.name || '',
-        title: c.title || '',
-        email: c.email || '',
-        phone: c.phone || '',
-        is_primary: c.is_primary ? 1 : 0,
-      }));
+      const saveContacts = db.getDb().transaction(() => {
+        db.getDb().prepare('DELETE FROM client_contacts WHERE client_id = ?').run(clientId);
+        return contacts.map((c) => db.create('client_contacts', {
+          id: c.id || undefined,
+          client_id: clientId,
+          name: c.name || '',
+          title: c.title || '',
+          email: c.email || '',
+          phone: c.phone || '',
+          is_primary: c.is_primary ? 1 : 0,
+        }));
+      });
+      const inserted = saveContacts();
       scheduleAutoBackup();
       return inserted;
     } catch (err) {
@@ -1046,7 +1049,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('debt:promise-update', (_event, { id, kept, notes }: { id: string; kept: boolean; notes?: string }) => {
     try {
-      return db.update('debt_promises', id, { kept: kept ? 1 : 0, notes: notes || '' });
+      const result = db.update('debt_promises', id, { kept: kept ? 1 : 0, notes: notes || '' });
+      scheduleAutoBackup();
+      return result;
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
