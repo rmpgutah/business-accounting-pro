@@ -13,6 +13,19 @@ interface Employee {
   pay_rate: number;
   pay_schedule: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
   status: 'active' | 'inactive';
+  state?: string;
+  state_allowances?: number;
+}
+
+interface EmployeeDeduction {
+  id: string;
+  employee_id: string;
+  name: string;
+  type: 'deduction' | 'benefit' | 'garnishment' | 'retirement';
+  calculation: 'fixed' | 'percentage';
+  amount: number;
+  is_pretax: number; // 1 = pre-tax, 0 = post-tax
+  is_active: number;
 }
 
 interface PayCalc {
@@ -23,6 +36,8 @@ interface PayCalc {
   state_tax: number;
   social_security: number;
   medicare: number;
+  pre_tax_deductions: number;
+  post_tax_deductions: number;
   net_pay: number;
 }
 
@@ -49,7 +64,7 @@ const DEFAULT_HOURS_MAP: Record<string, number> = {
 const SS_RATE = 0.062;
 const SS_WAGE_BASE = 168600;
 const MEDICARE_RATE = 0.0145;
-const STATE_TAX_RATE = 0.05;
+const FALLBACK_STATE_TAX_RATE = 0.05;
 
 // ─── Federal Tax Brackets (2024 Single) ─────────────────
 const FEDERAL_BRACKETS = [
@@ -75,7 +90,12 @@ function calcFederalTaxAnnual(annualIncome: number): number {
   return tax;
 }
 
-function calcPayStub(emp: Employee, hoursOverride?: number): PayCalc {
+function calcPayStub(
+  emp: Employee,
+  hoursOverride?: number,
+  stateTaxOverride?: number,
+  empDeductions?: EmployeeDeduction[]
+): PayCalc {
   const periods = PAY_PERIODS_MAP[emp.pay_schedule] ?? 26;
   const defaultHours = DEFAULT_HOURS_MAP[emp.pay_schedule] ?? 80;
   const hours = emp.pay_type === 'hourly' ? (hoursOverride ?? defaultHours) : 0;
@@ -88,25 +108,52 @@ function calcPayStub(emp: Employee, hoursOverride?: number): PayCalc {
     gross_pay = hours * emp.pay_rate;
   }
 
-  // Annualized gross for tax bracket lookup
-  const annualGross = gross_pay * periods;
+  const deductions = empDeductions ?? [];
 
-  // Federal tax (per period)
-  const federalAnnual = calcFederalTaxAnnual(annualGross);
+  // Pre-tax deductions (reduce taxable income; garnishments are always post-tax)
+  const pre_tax_deductions = deductions
+    .filter((d) => d.is_pretax === 1 && d.type !== 'garnishment')
+    .reduce((sum, d) => {
+      const amt = d.calculation === 'percentage'
+        ? gross_pay * (Number(d.amount) / 100)
+        : Number(d.amount);
+      return sum + amt;
+    }, 0);
+
+  // Taxable gross (after pre-tax deductions)
+  const taxableGross = Math.max(0, gross_pay - pre_tax_deductions);
+
+  // Annualized taxable gross for tax bracket lookup
+  const annualTaxableGross = taxableGross * periods;
+
+  // Federal tax (per period, on taxable gross)
+  const federalAnnual = calcFederalTaxAnnual(annualTaxableGross);
   const federal_tax = federalAnnual / periods;
 
-  // State tax (flat 5%)
-  const state_tax = gross_pay * STATE_TAX_RATE;
+  // State tax: use engine result if provided, else flat fallback on taxable gross
+  const state_tax = stateTaxOverride !== undefined
+    ? stateTaxOverride
+    : taxableGross * FALLBACK_STATE_TAX_RATE;
 
-  // Social Security (6.2% up to wage base)
-  const ssAnnualTaxable = Math.min(annualGross, SS_WAGE_BASE);
+  // Social Security (6.2% up to wage base, on taxable gross)
+  const ssAnnualTaxable = Math.min(annualTaxableGross, SS_WAGE_BASE);
   const social_security = (ssAnnualTaxable * SS_RATE) / periods;
 
-  // Medicare (1.45%)
-  const medicare = gross_pay * MEDICARE_RATE;
+  // Medicare (1.45%, on taxable gross)
+  const medicare = taxableGross * MEDICARE_RATE;
+
+  // Post-tax deductions (garnishments + non-pretax deductions)
+  const post_tax_deductions = deductions
+    .filter((d) => d.is_pretax === 0 || d.type === 'garnishment')
+    .reduce((sum, d) => {
+      const amt = d.calculation === 'percentage'
+        ? gross_pay * (Number(d.amount) / 100)
+        : Number(d.amount);
+      return sum + amt;
+    }, 0);
 
   // Net pay
-  const net_pay = gross_pay - federal_tax - state_tax - social_security - medicare;
+  const net_pay = gross_pay - federal_tax - state_tax - social_security - medicare - pre_tax_deductions - post_tax_deductions;
 
   return {
     employee: emp,
@@ -116,6 +163,8 @@ function calcPayStub(emp: Employee, hoursOverride?: number): PayCalc {
     state_tax,
     social_security,
     medicare,
+    pre_tax_deductions,
+    post_tax_deductions,
     net_pay,
   };
 }
@@ -162,6 +211,10 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Async-computed tax/deduction data
+  const [stateTaxMap, setStateTaxMap] = useState<Record<string, number>>({});
+  const [deductionsByEmployee, setDeductionsByEmployee] = useState<Record<string, EmployeeDeduction[]>>({});
+
   // Step 1: pay period dates
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -170,7 +223,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   // Step 2: hours overrides for hourly employees
   const [hoursMap, setHoursMap] = useState<Record<string, number>>({});
 
-  // ─── Load active employees ────────────────────────────
+  // ─── Load active employees + deductions ──────────────
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -179,8 +232,43 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         setLoading(true);
         // Bug fix #17: was missing company_id — showed all companies' employees.
         const rows = await api.query('employees', { company_id: activeCompany.id, status: 'active' });
+        const emps: Employee[] = Array.isArray(rows) ? rows : [];
+
+        // Load active deductions for all employees in this company
+        const deductionsRaw = await api.query('employee_deductions', { is_active: 1 }).catch(() => []);
+        const deducMap: Record<string, EmployeeDeduction[]> = {};
+        (deductionsRaw ?? []).forEach((d: EmployeeDeduction) => {
+          if (!deducMap[d.employee_id]) deducMap[d.employee_id] = [];
+          deducMap[d.employee_id].push(d);
+        });
+
         if (!cancelled) {
-          setEmployees(Array.isArray(rows) ? rows : []);
+          setEmployees(emps);
+          setDeductionsByEmployee(deducMap);
+        }
+
+        // Pre-fetch state tax for all employees
+        const taxMap: Record<string, number> = {};
+        await Promise.all(emps.map(async (emp) => {
+          const periods = PAY_PERIODS_MAP[emp.pay_schedule] ?? 26;
+          const grossPerPeriod = emp.pay_type === 'salary'
+            ? emp.pay_rate / periods
+            : (DEFAULT_HOURS_MAP[emp.pay_schedule] ?? 80) * emp.pay_rate;
+          try {
+            const result = await api.getStateTaxRate(
+              emp.state || '',
+              grossPerPeriod,
+              Number(emp.state_allowances || 0),
+              periods
+            );
+            taxMap[emp.id] = Number(result?.withholding || 0) + Number(result?.sdi || 0);
+          } catch {
+            taxMap[emp.id] = grossPerPeriod * FALLBACK_STATE_TAX_RATE;
+          }
+        }));
+
+        if (!cancelled) {
+          setStateTaxMap(taxMap);
         }
       } catch (err) {
         console.error('Failed to load employees:', err);
@@ -194,8 +282,10 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
 
   // ─── Calculations ─────────────────────────────────────
   const calculations = useMemo(() => {
-    return employees.map((emp) => calcPayStub(emp, hoursMap[emp.id]));
-  }, [employees, hoursMap]);
+    return employees.map((emp) =>
+      calcPayStub(emp, hoursMap[emp.id], stateTaxMap[emp.id], deductionsByEmployee[emp.id])
+    );
+  }, [employees, hoursMap, stateTaxMap, deductionsByEmployee]);
 
   const totals = useMemo(() => {
     return calculations.reduce(
@@ -205,16 +295,18 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         state_tax: acc.state_tax + c.state_tax,
         social_security: acc.social_security + c.social_security,
         medicare: acc.medicare + c.medicare,
+        pre_tax_deductions: acc.pre_tax_deductions + c.pre_tax_deductions,
+        post_tax_deductions: acc.post_tax_deductions + c.post_tax_deductions,
         net_pay: acc.net_pay + c.net_pay,
       }),
-      { gross_pay: 0, federal_tax: 0, state_tax: 0, social_security: 0, medicare: 0, net_pay: 0 }
+      { gross_pay: 0, federal_tax: 0, state_tax: 0, social_security: 0, medicare: 0, pre_tax_deductions: 0, post_tax_deductions: 0, net_pay: 0 }
     );
   }, [calculations]);
 
   // ─── Step Navigation ──────────────────────────────────
   const canProceedStep1 = periodStart && periodEnd && payDate;
 
-  const handleNextStep1 = () => {
+  const handleNextStep1 = async () => {
     if (!canProceedStep1) return;
     // Initialize default hours for hourly employees
     const defaults: Record<string, number> = {};
@@ -239,6 +331,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       const stubs = await Promise.all(
         calculations.map(async (calc) => {
           const ytd = await api.payrollYtd(calc.employee.id, year);
+          const totalWithholding = calc.federal_tax + calc.state_tax + calc.social_security + calc.medicare;
           return {
             employeeId: calc.employee.id,
             hours: calc.hours,
@@ -249,7 +342,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
             medicare: calc.medicare,
             netPay: calc.net_pay,
             ytdGross: ytd.ytd_gross + calc.gross_pay,
-            ytdTaxes: ytd.ytd_taxes + calc.federal_tax + calc.state_tax + calc.social_security + calc.medicare,
+            ytdTaxes: ytd.ytd_taxes + totalWithholding,
             ytdNet: ytd.ytd_net + calc.net_pay,
           };
         })
@@ -379,6 +472,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                   <th className="text-right">State</th>
                   <th className="text-right">SS</th>
                   <th className="text-right">Medicare</th>
+                  <th className="text-right">Deductions</th>
                   <th className="text-right">Net Pay</th>
                 </tr>
               </thead>
@@ -418,6 +512,11 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                       <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.state_tax)}</td>
                       <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.social_security)}</td>
                       <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.medicare)}</td>
+                      <td className="text-right font-mono text-xs text-accent-expense">
+                        {calc.pre_tax_deductions + calc.post_tax_deductions > 0
+                          ? fmt.format(calc.pre_tax_deductions + calc.post_tax_deductions)
+                          : <span className="text-text-muted">--</span>}
+                      </td>
                       <td className="text-right font-mono text-xs font-semibold text-accent-income">{fmt.format(calc.net_pay)}</td>
                     </tr>
                   );
@@ -504,6 +603,12 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                 <span className="text-text-secondary">Medicare (1.45%)</span>
                 <span className="font-mono text-accent-expense">-{fmt.format(totals.medicare)}</span>
               </div>
+              {(totals.pre_tax_deductions + totals.post_tax_deductions) > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-text-secondary">Employee Deductions</span>
+                  <span className="font-mono text-accent-expense">-{fmt.format(totals.pre_tax_deductions + totals.post_tax_deductions)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-xs border-t border-border-primary pt-2 font-semibold">
                 <span className="text-text-primary">Total Net Pay</span>
                 <span className="font-mono text-accent-income">{fmt.format(totals.net_pay)}</span>
