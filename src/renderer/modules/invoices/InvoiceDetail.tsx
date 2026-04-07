@@ -25,6 +25,12 @@ interface Invoice {
   terms: string;
   terms_text: string;
   notes: string;
+  po_number?: string;
+  job_reference?: string;
+  internal_notes?: string;
+  late_fee_pct?: number;
+  late_fee_grace_days?: number;
+  discount_pct?: number;
 }
 
 interface LineItem {
@@ -81,6 +87,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [schedulingReminders, setSchedulingReminders] = useState(false);
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
   const [paymentSchedule, setPaymentSchedule] = useState<any[]>([]);
+  const [debtLink, setDebtLink] = useState<any>(null);
 
   const buildHTML = () => {
     if (!invoice) return '';
@@ -126,6 +133,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       setReminders(reminderData ?? []);
       setPaymentSchedule(scheduleData ?? []);
       if (settingsData && !settingsData.error) setInvoiceSettings(settingsData);
+      api.getInvoiceDebtLink(invoiceId).then(setDebtLink).catch(() => {});
     } catch (err) {
       console.error('Failed to load invoice detail:', err);
     } finally {
@@ -222,6 +230,11 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <h1 className="module-title text-text-primary">{invoice.invoice_number}</h1>
           <span className={badge.className}>{badge.label}</span>
+          {debtLink && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '2px 8px', borderRadius: 4 }}>
+              In Collections
+            </span>
+          )}
         </div>
         <div className="module-actions">
           <button
@@ -333,6 +346,18 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <span className="text-text-secondary">{invoice.terms}</span>
               </div>
             )}
+            {invoice.po_number && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="text-text-muted" style={{ fontSize: 11 }}>PO#</span>
+                <span className="text-text-primary" style={{ fontSize: 12, fontWeight: 500 }}>{invoice.po_number}</span>
+              </div>
+            )}
+            {invoice.job_reference && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="text-text-muted" style={{ fontSize: 11 }}>Project</span>
+                <span className="text-text-primary" style={{ fontSize: 12, fontWeight: 500 }}>{invoice.job_reference}</span>
+              </div>
+            )}
           </div>
 
           {/* Right: Client info */}
@@ -436,6 +461,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </div>
           </div>
         </div>
+
+        {/* Late Fee Notice */}
+        {invoice.late_fee_pct != null && invoice.late_fee_pct > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>
+            Late fee of {invoice.late_fee_pct}% applies after {invoice.late_fee_grace_days || 0} grace days.
+          </div>
+        )}
 
         {/* Notes & Terms */}
         {(invoice.notes || invoice.terms_text) && (

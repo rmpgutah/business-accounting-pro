@@ -105,6 +105,8 @@ const api = {
     window.electronAPI.invoke('invoice:schedule-reminders', { invoiceId }),
   invoiceListReminders: (invoiceId: string): Promise<any[]> =>
     window.electronAPI.invoke('invoice:list-reminders', { invoiceId }),
+  getInvoiceDebtLink: (invoiceId: string): Promise<any> =>
+    window.electronAPI.invoke('invoice:debt-link', { invoiceId }),
 
   // File dialog
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>

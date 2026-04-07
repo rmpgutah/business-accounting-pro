@@ -897,6 +897,12 @@ export function registerIpcHandlers(): void {
     return db.getDb().prepare('SELECT * FROM invoice_reminders WHERE invoice_id = ? ORDER BY scheduled_date').all(invoiceId);
   });
 
+  ipcMain.handle('invoice:debt-link', (_event, { invoiceId }: { invoiceId: string }) => {
+    try {
+      return db.getDb().prepare('SELECT * FROM invoice_debt_links WHERE invoice_id = ?').get(invoiceId) || null;
+    } catch { return null; }
+  });
+
   // ─── Invoice Settings ──────────────────────────────────
   ipcMain.handle('invoice:get-settings', () => {
     const companyId = db.getCurrentCompanyId();

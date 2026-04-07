@@ -372,7 +372,9 @@ export function generateInvoiceHTML(
 
   const invBlock = `
     <div class="inv-title">Invoice</div>
-    <div class="inv-number">#${invoice.invoice_number || ''}</div>`;
+    <div class="inv-number">#${invoice.invoice_number || ''}</div>
+    ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${invoice.po_number}</div>` : ''}
+    ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${invoice.job_reference}</div>` : ''}`;
 
   let headerHTML = '';
   if (style === 'executive') {
@@ -389,6 +391,8 @@ export function generateInvoiceHTML(
       <div>
         <div class="inv-title">Invoice</div>
         <div class="inv-number">#${invoice.invoice_number || ''}</div>
+        ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${invoice.po_number}</div>` : ''}
+        ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${invoice.job_reference}</div>` : ''}
       </div>
     </div>`;
   } else if (style === 'modern') {
@@ -513,6 +517,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
       <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
       ${taxAmount > 0 ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>` : ''}
       ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>-${fmt(discountAmount)}</span></div>` : ''}
+      ${(invoice.discount_pct && invoice.discount_pct > 0) ? `<div class="totals-row" style="color:#ef4444"><span>Discount (${invoice.discount_pct}%)</span><span>-${fmt(Number(invoice.subtotal || 0) * invoice.discount_pct / 100)}</span></div>` : ''}
       <div class="totals-row totals-total"><span>Total</span><span>${fmt(total)}</span></div>
       ${amountPaid > 0 ? `
         <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
@@ -532,7 +537,10 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     </div>
   </div>` : ''}
 
-  <div class="footer-bottom">${footerText || companyName}</div>
+  <div class="footer-bottom">
+    ${footerText || companyName}
+    ${invoice.late_fee_pct && invoice.late_fee_pct > 0 ? `<p style="font-size:10px;color:#94a3b8;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
+  </div>
 </div>
 </div>
 </body></html>`;
