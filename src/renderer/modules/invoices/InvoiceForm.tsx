@@ -646,16 +646,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <FieldLabel label="Client" tooltip="The client this invoice will be billed to" required />
             <select className="block-select" value={form.client_id} onChange={(e) => {
               const newClientId = e.target.value;
-              updateField('client_id', newClientId);
               const client = clients.find(c => c.id === newClientId);
-              if (client) {
-                if (client.default_payment_terms) {
-                  setForm(prev => ({ ...prev, terms: client.default_payment_terms! }));
-                }
-                if (client.default_late_fee_pct && client.default_late_fee_pct > 0) {
-                  setForm(prev => ({ ...prev, late_fee_pct: client.default_late_fee_pct! }));
-                }
-              }
+              setForm(prev => ({
+                ...prev,
+                client_id: newClientId,
+                ...(client?.default_payment_terms
+                  ? {
+                      terms: client.default_payment_terms,
+                      due_date: addDays(prev.issue_date || todayISO(), TERMS_DAYS[client.default_payment_terms] ?? 30),
+                    }
+                  : {}),
+                ...(client?.default_late_fee_pct && client.default_late_fee_pct > 0
+                  ? { late_fee_pct: client.default_late_fee_pct }
+                  : {}),
+              }));
             }}>
               <option value="">Select a client...</option>
               {clients.map((c) => (
