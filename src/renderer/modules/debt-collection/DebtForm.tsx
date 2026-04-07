@@ -165,8 +165,14 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
           phone: emp.phone || '',
           address: [emp.address_line1, emp.city, emp.state, emp.zip].filter(Boolean).join(', '),
         })));
-        setInvoices(Array.isArray(invoiceData) ? invoiceData : []);
-        setBills(Array.isArray(billData) ? billData : []);
+        setInvoices((Array.isArray(invoiceData) ? invoiceData : []).map((inv: any) => ({
+          ...inv,
+          name: `${inv.invoice_number || inv.id.slice(0, 8)} — $${((inv.total || 0) - (inv.amount_paid || 0)).toFixed(2)} due`,
+        })));
+        setBills((Array.isArray(billData) ? billData : []).map((bill: any) => ({
+          ...bill,
+          name: `${bill.bill_number || bill.id.slice(0, 8)} — $${(bill.amount || 0).toFixed(2)}`,
+        })));
 
         if (debtId) {
           const existing = await api.get('debts', debtId);
@@ -369,7 +375,6 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
           await api.create('debt_pipeline_stages', {
             debt_id: newDebt.id,
             stage: 'reminder',
-            company_id: activeCompany.id,
           });
         }
       }
