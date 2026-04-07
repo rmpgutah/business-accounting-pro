@@ -2,13 +2,15 @@ import React, { useState, useCallback } from 'react';
 import InvoiceList from './InvoiceList';
 import InvoiceForm from './InvoiceForm';
 import InvoiceDetail from './InvoiceDetail';
+import InvoiceSettings from './InvoiceSettings';
 
 // ─── View State ─────────────────────────────────────────
 type View =
   | { type: 'list' }
   | { type: 'new' }
   | { type: 'edit'; invoiceId: string }
-  | { type: 'detail'; invoiceId: string };
+  | { type: 'detail'; invoiceId: string }
+  | { type: 'settings' };
 
 // ─── Module Router ──────────────────────────────────────
 const InvoicingModule: React.FC = () => {
@@ -32,6 +34,7 @@ const InvoicingModule: React.FC = () => {
     (id: string) => setView({ type: 'detail', invoiceId: id }),
     []
   );
+  const goToSettings = useCallback(() => setView({ type: 'settings' }), []);
 
   const handleSaved = useCallback((id: string) => {
     setView({ type: 'detail', invoiceId: id });
@@ -64,6 +67,9 @@ const InvoicingModule: React.FC = () => {
         />
       );
 
+    case 'settings':
+      return <InvoiceSettings onBack={goToList} />;
+
     case 'list':
     default:
       return (
@@ -71,6 +77,7 @@ const InvoicingModule: React.FC = () => {
           onNewInvoice={goToNew}
           onViewInvoice={goToDetail}
           onEditInvoice={goToEdit}
+          onSettings={goToSettings}
         />
       );
   }
