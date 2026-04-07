@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -231,6 +232,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   onOpenModal,
   onInvoice,
 }) => {
+  // ── Store ──
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+
   // ── State ──
   const [debt, setDebt] = useState<Debt | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -603,6 +607,22 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           >
             <Receipt size={14} />
             Statement
+          </button>
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={async () => {
+              const { generateDemandLetterHTML } = await import('../../lib/print-templates');
+              const html = generateDemandLetterHTML(
+                debt,
+                payments,
+                activeCompany,
+                { deadline_days: 10, signatory_name: activeCompany?.name }
+              );
+              await api.printPreview(html, `Demand Letter — ${debt?.debtor_name}`);
+            }}
+          >
+            <FileText size={13} />
+            Demand Letter
           </button>
           <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"

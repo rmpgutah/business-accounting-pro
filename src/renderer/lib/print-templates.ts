@@ -872,3 +872,142 @@ ${baseStyles}
   <tbody>${top10Rows}</tbody></table>
 </div></body></html>`;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// FORMAL DEMAND LETTER
+// ═══════════════════════════════════════════════════════════════
+export function generateDemandLetterHTML(
+  debt: any,
+  payments: any[],
+  company: any,
+  options: {
+    deadline_days?: number;
+    payment_address?: string;
+    online_payment_url?: string;
+    signatory_name?: string;
+    signatory_title?: string;
+  } = {}
+): string {
+  const companyName = company?.name || 'Your Company';
+  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
+  const deadlineDays = options.deadline_days ?? 10;
+  const deadlineDate = new Date(Date.now() + deadlineDays * 86_400_000)
+    .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const fmtDateLocal = (s: string) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const balanceDue = Number(debt.balance_due || 0);
+  const originalAmount = Number(debt.original_amount || 0);
+  const interest = Number(debt.interest_accrued || 0);
+  const fees = Number(debt.fees_accrued || 0);
+
+  const paymentRows = payments.length > 0
+    ? payments.map(p => `<tr>
+        <td>${fmtDateLocal(p.received_date)}</td>
+        <td class="text-right font-mono">${fmt(Number(p.amount || 0))}</td>
+        <td>${p.method || '—'}</td>
+        <td class="text-muted">${p.reference_number || '—'}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="4" style="text-align:center;color:#94a3b8;font-style:italic;">No payments received</td></tr>`;
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Demand Letter — ${debt.debtor_name}</title><style>
+${baseStyles}
+.page { padding: 60px; max-width: 720px; margin: 0 auto; }
+.letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+.company-name { font-size: 20px; font-weight: 800; color: #0f172a; }
+.company-addr { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.6; }
+.date-line { font-size: 12px; color: #334155; text-align: right; }
+.re-block { background: #f8fafc; border-left: 4px solid #0f172a; padding: 12px 16px; margin: 28px 0; }
+.re-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
+.re-value { font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+.body-text { font-size: 12px; color: #334155; line-height: 1.8; margin-bottom: 16px; }
+.balance-box { border: 2px solid #0f172a; border-radius: 4px; padding: 20px 24px; text-align: center; margin: 24px 0; }
+.balance-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
+.balance-amount { font-size: 36px; font-weight: 900; color: #dc2626; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.signature-block { margin-top: 48px; }
+.sig-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 32px; }
+.sig-title { font-size: 12px; color: #64748b; }
+.text-right { text-align: right; }
+.text-muted { color: #94a3b8; }
+.font-mono { font-variant-numeric: tabular-nums; }
+</style></head>
+<body><div class="page">
+  <div class="letterhead">
+    <div>
+      <div class="company-name">${companyName}</div>
+      <div class="company-addr">${companyAddr}</div>
+    </div>
+    <div class="date-line">${todayLong}</div>
+  </div>
+
+  <div style="margin-bottom:28px;">
+    <div style="font-size:12px;color:#334155;font-weight:600;">${debt.debtor_name || 'To Whom It May Concern'}</div>
+    ${debt.debtor_address ? `<div style="font-size:12px;color:#64748b;">${debt.debtor_address}</div>` : ''}
+    ${debt.debtor_email ? `<div style="font-size:12px;color:#64748b;">${debt.debtor_email}</div>` : ''}
+  </div>
+
+  <div class="re-block">
+    <div class="re-label">RE: Formal Demand for Payment</div>
+    <div class="re-value">Account #${(debt.id || '').slice(0, 8).toUpperCase() || 'N/A'} — Balance Due: ${fmt(balanceDue)}</div>
+  </div>
+
+  <p class="body-text">Dear ${debt.debtor_name || 'Account Holder'},</p>
+
+  <p class="body-text">
+    This letter constitutes a formal demand for payment of the outstanding balance owed to <strong>${companyName}</strong>.
+    Our records reflect that an account was established with an original principal of <strong>${fmt(originalAmount)}</strong>.
+    Despite prior notices, this balance remains unpaid as of the date of this letter.
+  </p>
+
+  <div style="margin:20px 0;">
+    <table>
+      <thead><tr><th>Description</th><th class="text-right">Amount</th></tr></thead>
+      <tbody>
+        <tr><td>Original Principal</td><td class="text-right font-mono">${fmt(originalAmount)}</td></tr>
+        ${interest > 0 ? `<tr><td>Accrued Interest</td><td class="text-right font-mono">${fmt(interest)}</td></tr>` : ''}
+        ${fees > 0 ? `<tr><td>Fees &amp; Charges</td><td class="text-right font-mono">${fmt(fees)}</td></tr>` : ''}
+        ${totalPaid > 0 ? `<tr><td style="color:#16a34a;">Payments Received</td><td class="text-right font-mono" style="color:#16a34a;">-${fmt(totalPaid)}</td></tr>` : ''}
+      </tbody>
+    </table>
+  </div>
+
+  ${payments.length > 0 ? `
+  <div class="section-title" style="margin-top:20px;margin-bottom:8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;">Payment History</div>
+  <table>
+    <thead><tr><th>Date</th><th class="text-right">Amount</th><th>Method</th><th>Reference</th></tr></thead>
+    <tbody>${paymentRows}</tbody>
+  </table>` : ''}
+
+  <div class="balance-box">
+    <div class="balance-label">Total Amount Now Due</div>
+    <div class="balance-amount">${fmt(balanceDue)}</div>
+  </div>
+
+  <p class="body-text">
+    <strong>You are hereby demanded to remit payment in full no later than ${deadlineDate}.</strong>
+    ${options.payment_address ? ` Payment by check should be made payable to <strong>${companyName}</strong> and mailed to: <strong>${options.payment_address}</strong>.` : ''}
+    ${options.online_payment_url ? ` Payment may also be submitted online at: <strong>${options.online_payment_url}</strong>.` : ''}
+  </p>
+
+  <p class="body-text">
+    Failure to remit payment by the deadline may result in escalated collection activity, referral to a collection agency,
+    reporting to credit bureaus, and/or legal action to recover the full amount owed, including court costs and attorney fees
+    as permitted by applicable law.
+  </p>
+
+  <p class="body-text">
+    If you believe this amount is in error or wish to discuss a payment arrangement, please contact us immediately at
+    ${company?.email || 'our office'} or ${company?.phone || 'the number on file'}.
+  </p>
+
+  <div class="signature-block">
+    <p class="body-text">Sincerely,</p>
+    <div class="sig-name">${options.signatory_name || companyName}</div>
+    <div class="sig-title">${options.signatory_title || 'Accounts Receivable'}</div>
+    <div style="font-size:12px;color:#64748b;margin-top:2px;">${companyName}</div>
+  </div>
+</div></body></html>`;
+}
