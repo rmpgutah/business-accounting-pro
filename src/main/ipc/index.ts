@@ -417,6 +417,9 @@ export function registerIpcHandlers(): void {
     'invoice_payment_schedule',
     // Track 1 child tables — company_id lives on parent table
     'client_contacts', 'debt_promises',
+    // Debt & Invoice Enhancement child tables — company_id lives on parent table
+    'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
+    'debt_compliance_log', 'invoice_debt_links',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {

@@ -200,6 +200,65 @@ export function initDatabase(): Database.Database {
   notes TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
+  // Debt & Invoice Enhancements (2026-04-07)
+  "ALTER TABLE debts ADD COLUMN assigned_collector_id TEXT DEFAULT NULL",
+  "ALTER TABLE debts ADD COLUMN auto_advance_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN po_number TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN job_reference TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN internal_notes TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN late_fee_pct REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN discount_pct REAL DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
+  "ALTER TABLE clients ADD COLUMN default_payment_terms TEXT DEFAULT ''",
+  "ALTER TABLE clients ADD COLUMN default_late_fee_pct REAL DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS debt_payment_plans (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  installment_amount REAL NOT NULL DEFAULT 0,
+  frequency TEXT NOT NULL DEFAULT 'monthly',
+  start_date TEXT NOT NULL DEFAULT '',
+  total_installments INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'active',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS debt_plan_installments (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES debt_payment_plans(id) ON DELETE CASCADE,
+  due_date TEXT NOT NULL DEFAULT '',
+  amount REAL NOT NULL DEFAULT 0,
+  paid INTEGER NOT NULL DEFAULT 0,
+  paid_date TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS debt_settlements (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  offer_amount REAL NOT NULL DEFAULT 0,
+  offer_pct REAL NOT NULL DEFAULT 0,
+  offered_date TEXT NOT NULL DEFAULT '',
+  response TEXT NOT NULL DEFAULT 'pending',
+  counter_amount REAL DEFAULT 0,
+  accepted_date TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS debt_compliance_log (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL DEFAULT '',
+  event_date TEXT NOT NULL DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS invoice_debt_links (
+  id TEXT PRIMARY KEY,
+  invoice_id TEXT NOT NULL,
+  debt_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -337,6 +396,9 @@ const tablesWithoutUpdatedAt = new Set([
   'client_contacts', 'debt_promises',
   // Track 2 child tables — created_at only
   'state_tax_brackets', 'pto_transactions',
+  // Debt & Invoice Enhancement child tables — created_at only
+  'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
+  'debt_compliance_log', 'invoice_debt_links',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {
