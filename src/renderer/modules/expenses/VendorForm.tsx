@@ -12,6 +12,14 @@ interface VendorFormData {
   payment_terms: string;
   notes: string;
   status: string;
+  w9_status: 'not_collected' | 'collected' | 'on_file';
+  is_1099_eligible: boolean;
+  ach_routing: string;
+  ach_account: string;
+  ach_account_type: 'checking' | 'savings';
+  contract_start: string;
+  contract_end: string;
+  contract_notes: string;
 }
 
 interface VendorFormProps {
@@ -29,6 +37,14 @@ const emptyForm: VendorFormData = {
   payment_terms: '',
   notes: '',
   status: 'active',
+  w9_status: 'not_collected',
+  is_1099_eligible: false,
+  ach_routing: '',
+  ach_account: '',
+  ach_account_type: 'checking',
+  contract_start: '',
+  contract_end: '',
+  contract_notes: '',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -56,6 +72,14 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             payment_terms: data.payment_terms || '',
             notes: data.notes || '',
             status: data.status || 'active',
+            w9_status: data.w9_status ?? 'not_collected',
+            is_1099_eligible: Boolean(data.is_1099_eligible),
+            ach_routing: data.ach_routing ?? '',
+            ach_account: data.ach_account ?? '',
+            ach_account_type: data.ach_account_type ?? 'checking',
+            contract_start: data.contract_start ?? '',
+            contract_end: data.contract_end ?? '',
+            contract_notes: data.contract_notes ?? '',
           });
         }
       } catch (err) {
@@ -96,6 +120,14 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         payment_terms: form.payment_terms || null,
         notes: form.notes || null,
         status: form.status,
+        w9_status: form.w9_status,
+        is_1099_eligible: form.is_1099_eligible ? 1 : 0,
+        ach_routing: form.ach_routing || null,
+        ach_account: form.ach_account || null,
+        ach_account_type: form.ach_account_type,
+        contract_start: form.contract_start || null,
+        contract_end: form.contract_end || null,
+        contract_notes: form.contract_notes || null,
       };
 
       if (isEditing && vendorId) {
@@ -273,6 +305,74 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   <option value="inactive">Inactive</option>
                   <option value="blocked">Blocked</option>
                 </select>
+              </div>
+
+              {/* Compliance */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 mt-4">
+                  <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Compliance</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">W-9 Status</label>
+                  <select className="block-select w-full" value={form.w9_status} onChange={(e) => setForm(p => ({ ...p, w9_status: e.target.value as any }))}>
+                    <option value="not_collected">Not Collected</option>
+                    <option value="collected">Collected</option>
+                    <option value="on_file">On File</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 24 }}>
+                  <input
+                    type="checkbox"
+                    id="is_1099_eligible"
+                    checked={form.is_1099_eligible}
+                    onChange={(e) => setForm(p => ({ ...p, is_1099_eligible: e.target.checked }))}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <label htmlFor="is_1099_eligible" className="text-sm" style={{ color: 'var(--color-text-primary)', cursor: 'pointer' }}>
+                    1099 Eligible
+                  </label>
+                </div>
+              </div>
+
+              {/* ACH Banking */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 mt-4">
+                  <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">ACH / Banking</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Routing Number</label>
+                  <input className="block-input font-mono" value={form.ach_routing} onChange={(e) => setForm(p => ({ ...p, ach_routing: e.target.value }))} placeholder="9 digits" maxLength={9} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Account Number</label>
+                  <input className="block-input font-mono" value={form.ach_account} onChange={(e) => setForm(p => ({ ...p, ach_account: e.target.value }))} placeholder="Account number" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Account Type</label>
+                  <select className="block-select w-full" value={form.ach_account_type} onChange={(e) => setForm(p => ({ ...p, ach_account_type: e.target.value as any }))}>
+                    <option value="checking">Checking</option>
+                    <option value="savings">Savings</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Contract */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 mt-4">
+                  <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Contract</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Contract Start</label>
+                  <input type="date" className="block-input" value={form.contract_start} onChange={(e) => setForm(p => ({ ...p, contract_start: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Contract End</label>
+                  <input type="date" className="block-input" value={form.contract_end} onChange={(e) => setForm(p => ({ ...p, contract_end: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Contract Notes</label>
+                  <textarea className="block-input" rows={3} value={form.contract_notes} onChange={(e) => setForm(p => ({ ...p, contract_notes: e.target.value }))} placeholder="Contract terms, renewal dates, etc." style={{ resize: 'vertical' }} />
+                </div>
               </div>
 
               {/* Actions */}
