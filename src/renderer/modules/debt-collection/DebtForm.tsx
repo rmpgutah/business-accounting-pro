@@ -144,6 +144,18 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   debtor_phone: client.phone || '',
                   debtor_address: [client.address_line1, client.city, client.state, client.zip].filter(Boolean).join(', '),
                 }));
+                setSelectedAccountInfo({
+                  id: inv.client_id,
+                  name: client.name || '',
+                  email: client.email || '',
+                  phone: client.phone || '',
+                  address: [client.address_line1, client.city, client.state, client.zip].filter(Boolean).join(', '),
+                  industry: client.industry,
+                  company_size: client.company_size,
+                  credit_limit: client.credit_limit,
+                  preferred_payment_method: client.preferred_payment_method,
+                  default_payment_terms: client.default_payment_terms,
+                });
               }
             });
           }
@@ -171,10 +183,8 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         setClients(Array.isArray(clientData) ? clientData : []);
         setVendors(Array.isArray(vendorData) ? vendorData : []);
         setEmployees((Array.isArray(employeeData) ? employeeData : []).map((emp: any) => ({
-          id: emp.id,
+          ...emp,
           name: emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
-          email: emp.email || '',
-          phone: emp.phone || '',
           address: [emp.address_line1, emp.city, emp.state, emp.zip].filter(Boolean).join(', '),
         })));
         setInvoices((Array.isArray(invoiceData) ? invoiceData : []).map((inv: any) => ({
@@ -628,7 +638,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                       <div><div className="text-xs text-text-muted">W-9 Status</div><div className="text-xs text-text-primary font-medium" style={{ textTransform: 'capitalize' }}>{selectedAccountInfo.w9_status.replace(/_/g, ' ')}</div></div>
                     )}
                     {selectedAccountInfo.is_1099_eligible ? (
-                      <div><div className="text-xs text-text-muted">1099 Eligible</div><div className="text-xs font-medium" style={{ color: '#22c55e' }}>Yes</div></div>
+                      <div><div className="text-xs text-text-muted">1099 Eligible</div><div className="text-xs font-medium text-accent-revenue">Yes</div></div>
                     ) : null}
                   </>
                 )}
