@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, AlertTriangle, Play } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, AlertTriangle, Play, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
@@ -242,6 +242,20 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               </button>
             </>
           )}
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={async () => {
+              if (!activeCompany) return;
+              const data = await api.getDebtPortfolioReportData(activeCompany.id);
+              if (data?.error) return;
+              const { generateDebtPortfolioReportHTML } = await import('../../lib/print-templates');
+              const html = generateDebtPortfolioReportHTML(data.debts, data.collectedYtd, activeCompany);
+              await api.printPreview(html, 'Debt Portfolio Report');
+            }}
+          >
+            <FileText size={13} />
+            Portfolio Report
+          </button>
           <button className="block-btn flex items-center gap-2" onClick={handleExport}>
             <Download size={14} />
             Export CSV

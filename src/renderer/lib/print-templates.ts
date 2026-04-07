@@ -770,3 +770,105 @@ ${baseStyles}
 </div>
 </body></html>`;
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+// DEBT PORTFOLIO REPORT
+// ═══════════════════════════════════════════════════════════════
+export function generateDebtPortfolioReportHTML(
+  debts: any[],
+  collectedYtd: number,
+  company: any
+): string {
+  const companyName = company?.name || 'Company';
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const now = Date.now();
+  const bucket = (d: any) => {
+    const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
+    if (days <= 30) return '0-30';
+    if (days <= 90) return '31-90';
+    if (days <= 180) return '91-180';
+    return '180+';
+  };
+  const buckets: Record<string, { count: number; amount: number }> = {
+    '0-30': { count: 0, amount: 0 }, '31-90': { count: 0, amount: 0 },
+    '91-180': { count: 0, amount: 0 }, '180+': { count: 0, amount: 0 },
+  };
+  debts.forEach(d => { const b = bucket(d); buckets[b].count++; buckets[b].amount += Number(d.balance_due || 0); });
+
+  const totalBalance = debts.reduce((s, d) => s + Number(d.balance_due || 0), 0);
+  const totalOriginal = debts.reduce((s, d) => s + Number(d.original_amount || 0), 0);
+  const recoveryRate = totalOriginal > 0 ? ((collectedYtd / totalOriginal) * 100).toFixed(1) : '0.0';
+
+  const stages: Record<string, number> = {};
+  debts.forEach(d => { stages[d.current_stage || 'unknown'] = (stages[d.current_stage || 'unknown'] || 0) + 1; });
+
+  const top10 = [...debts].sort((a, b) => Number(b.balance_due) - Number(a.balance_due)).slice(0, 10);
+
+  const agingRows = Object.entries(buckets).map(([label, { count, amount }]) => `
+    <tr>
+      <td>${label} days</td>
+      <td class="text-right">${count}</td>
+      <td class="text-right font-mono">${fmt(amount)}</td>
+      <td class="text-right text-muted">${totalBalance > 0 ? ((amount / totalBalance) * 100).toFixed(1) : '0.0'}%</td>
+    </tr>`).join('');
+
+  const stageRows = Object.entries(stages).map(([stage, count]) => `
+    <tr><td style="text-transform:capitalize;">${stage.replace(/_/g, ' ')}</td><td class="text-right">${count}</td></tr>`).join('');
+
+  const top10Rows = top10.map(d => {
+    const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
+    return `<tr>
+      <td>${d.debtor_name || '—'}</td>
+      <td class="text-right font-mono">${fmt(Number(d.balance_due || 0))}</td>
+      <td class="text-right">${days}d</td>
+      <td style="text-transform:capitalize;">${(d.current_stage || '').replace(/_/g, ' ')}</td>
+    </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Debt Portfolio Report</title><style>
+${baseStyles}
+.page { padding: 48px; }
+.report-header { border-bottom: 3px solid #0f172a; padding-bottom: 16px; margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-end; }
+.report-title { font-size: 22px; font-weight: 800; color: #0f172a; }
+.report-date { font-size: 11px; color: #64748b; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+.stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 14px 16px; }
+.stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 4px; }
+.stat-value { font-size: 20px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #0f172a; margin: 24px 0 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+.text-right { text-align: right; }
+.text-muted { color: #94a3b8; }
+.font-mono { font-variant-numeric: tabular-nums; }
+</style></head>
+<body><div class="page">
+  <div class="report-header">
+    <div>
+      <div class="report-title">Debt Portfolio Report</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;">${companyName}</div>
+    </div>
+    <div class="report-date">Generated ${today}</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-label">Total Accounts</div><div class="stat-value">${debts.length}</div></div>
+    <div class="stat-box"><div class="stat-label">Total Balance</div><div class="stat-value">${fmt(totalBalance)}</div></div>
+    <div class="stat-box"><div class="stat-label">Collected YTD</div><div class="stat-value" style="color:#16a34a">${fmt(collectedYtd)}</div></div>
+    <div class="stat-box"><div class="stat-label">Recovery Rate</div><div class="stat-value">${recoveryRate}%</div></div>
+  </div>
+
+  <div class="section-title">Aging Breakdown</div>
+  <table><thead><tr><th>Bucket</th><th class="text-right">Accounts</th><th class="text-right">Balance</th><th class="text-right">% of Total</th></tr></thead>
+  <tbody>${agingRows}</tbody></table>
+
+  <div class="section-title">Pipeline Stage Breakdown</div>
+  <table><thead><tr><th>Stage</th><th class="text-right">Count</th></tr></thead>
+  <tbody>${stageRows}</tbody></table>
+
+  <div class="section-title">Top 10 Accounts by Balance</div>
+  <table><thead><tr><th>Debtor</th><th class="text-right">Balance</th><th class="text-right">Age</th><th>Stage</th></tr></thead>
+  <tbody>${top10Rows}</tbody></table>
+</div></body></html>`;
+}
