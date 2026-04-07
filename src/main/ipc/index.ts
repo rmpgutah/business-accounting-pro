@@ -3212,6 +3212,121 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Analytics Dashboard ──────────────────────────────
+  ipcMain.handle('analytics:dashboard-data', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const d = db.getDb();
+      const today = new Date();
+      const months = Array.from({ length: 12 }, (_, i) => {
+        const dt = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      });
+      const firstMonth = months[0] + '-01';
+
+      const revenueByMonth = d.prepare(`
+        SELECT strftime('%Y-%m', issue_date) as month, COALESCE(SUM(total),0) as total
+        FROM invoices WHERE company_id = ? AND status IN ('paid','sent','partial')
+        AND issue_date >= ? GROUP BY month`).all(companyId, firstMonth);
+
+      const expenseByMonth = d.prepare(`
+        SELECT strftime('%Y-%m', date) as month, COALESCE(SUM(amount),0) as total
+        FROM expenses WHERE company_id = ? AND date >= ? GROUP BY month`).all(companyId, firstMonth);
+
+      const arAging = d.prepare(`
+        SELECT
+          SUM(CASE WHEN julianday('now') - julianday(due_date) <= 0 THEN total - amount_paid ELSE 0 END) as current_amt,
+          SUM(CASE WHEN julianday('now') - julianday(due_date) BETWEEN 1 AND 30 THEN total - amount_paid ELSE 0 END) as days_1_30,
+          SUM(CASE WHEN julianday('now') - julianday(due_date) BETWEEN 31 AND 60 THEN total - amount_paid ELSE 0 END) as days_31_60,
+          SUM(CASE WHEN julianday('now') - julianday(due_date) > 60 THEN total - amount_paid ELSE 0 END) as days_60_plus
+        FROM invoices WHERE company_id = ? AND status IN ('sent','overdue','partial')`).get(companyId);
+
+      const topClients = d.prepare(`
+        SELECT c.name as client_name, COALESCE(SUM(i.total),0) as total_revenue
+        FROM invoices i JOIN clients c ON i.client_id = c.id
+        WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
+        GROUP BY c.id ORDER BY total_revenue DESC LIMIT 8`).all(companyId);
+
+      const totalInvoiced = d.prepare(`SELECT COALESCE(SUM(total),0) as v FROM invoices WHERE company_id = ? AND status != 'draft'`).get(companyId) as any;
+      const totalPaid = d.prepare(`SELECT COALESCE(SUM(total),0) as v FROM invoices WHERE company_id = ? AND status = 'paid'`).get(companyId) as any;
+      const totalExpenses = d.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM expenses WHERE company_id = ?`).get(companyId) as any;
+      const overdueCount = d.prepare(`SELECT COUNT(*) as v FROM invoices WHERE company_id = ? AND status = 'overdue'`).get(companyId) as any;
+      const sentCount = d.prepare(`SELECT COUNT(*) as v FROM invoices WHERE company_id = ? AND status IN ('sent','overdue','partial')`).get(companyId) as any;
+      const avgDso = d.prepare(`
+        SELECT AVG(julianday(updated_at) - julianday(issue_date)) as v
+        FROM invoices WHERE company_id = ? AND status = 'paid' AND updated_at IS NOT NULL`).get(companyId) as any;
+
+      const collectionRate = totalInvoiced.v > 0 ? totalPaid.v / totalInvoiced.v : 1;
+      const expenseRatio = totalInvoiced.v > 0 ? totalExpenses.v / totalInvoiced.v : 0;
+      const overdueRate = sentCount.v > 0 ? 1 - (overdueCount.v / sentCount.v) : 1;
+      const dso = Number(avgDso.v || 0);
+      const dsoScore = dso <= 30 ? 20 : dso <= 45 ? 15 : dso <= 60 ? 10 : 5;
+      const healthScore = Math.round(
+        Math.min(collectionRate, 1) * 30 +
+        Math.max(0, Math.min(1 - expenseRatio, 1)) * 25 +
+        Math.min(overdueRate, 1) * 25 +
+        dsoScore
+      );
+
+      return { months, revenueByMonth, expenseByMonth, arAging, topClients, healthScore, dso };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── PTO ─────────────────────────────────────────────
+  ipcMain.handle('payroll:pto-policies', (_event, { companyId }: { companyId: string }) => {
+    try { return db.queryAll('pto_policies', { company_id: companyId }); }
+    catch { return []; }
+  });
+
+  ipcMain.handle('payroll:pto-policy-save', (_event, data: Record<string, any>) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (data.id) return db.update('pto_policies', data.id, data);
+      return db.create('pto_policies', { ...data, company_id: companyId });
+    } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
+  });
+
+  ipcMain.handle('payroll:pto-balances', (_event, { companyId }: { companyId: string }) => {
+    try {
+      return db.getDb().prepare(`
+        SELECT pb.*, e.name as employee_name, pp.name as policy_name
+        FROM pto_balances pb
+        JOIN employees e ON pb.employee_id = e.id
+        LEFT JOIN pto_policies pp ON pb.policy_id = pp.id
+        WHERE e.company_id = ?
+        ORDER BY e.name`).all(companyId);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('payroll:pto-adjust', (_event, { employeeId, policyId, hours, note }: { employeeId: string; policyId: string; hours: number; note: string }) => {
+    try {
+      const d = db.getDb();
+      const existing = d.prepare('SELECT * FROM pto_balances WHERE employee_id = ? AND policy_id = ?').get(employeeId, policyId) as any;
+      if (existing) {
+        db.update('pto_balances', existing.id, { balance_hours: Number(existing.balance_hours) + hours });
+      } else {
+        db.create('pto_balances', { employee_id: employeeId, policy_id: policyId, balance_hours: hours, used_hours_ytd: 0, accrued_hours_ytd: Math.max(0, hours) });
+      }
+      db.create('pto_transactions', { employee_id: employeeId, policy_id: policyId, type: 'adjustment', hours, note: note || 'Manual adjustment' });
+      scheduleAutoBackup();
+      return { success: true };
+    } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
+  });
+
+  // ─── State Tax Rate ───────────────────────────────────
+  ipcMain.handle('payroll:state-tax-rate', (_event, { state, grossPay, allowances, periodsPerYear }: { state: string; grossPay: number; allowances: number; periodsPerYear: number }) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { stateTaxEngine } = require('../services/StateTaxEngine');
+      const withholding = stateTaxEngine.getStateWithholding(state, grossPay, allowances, periodsPerYear);
+      const sdi = stateTaxEngine.getSdiWithholding(state, grossPay);
+      return { withholding, sdi, total: withholding + sdi };
+    } catch (err) {
+      return { withholding: grossPay * 0.05, sdi: 0, total: grossPay * 0.05 };
+    }
+  });
+
   ipcMain.handle('backup:restore-from-vps', async () => {
     try {
       const dbPath = db.getDbPath();

@@ -367,6 +367,19 @@ const api = {
   restoreFromVps: (): Promise<{ success?: boolean; error?: string; message?: string }> =>
     window.electronAPI.invoke('backup:restore-from-vps'),
 
+  getDashboardData: (companyId: string): Promise<any> =>
+    window.electronAPI.invoke('analytics:dashboard-data', { companyId }),
+  listPtoPolicies: (companyId: string): Promise<any[]> =>
+    window.electronAPI.invoke('payroll:pto-policies', { companyId }),
+  savePtoPolicy: (data: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('payroll:pto-policy-save', data),
+  listPtoBalances: (companyId: string): Promise<any[]> =>
+    window.electronAPI.invoke('payroll:pto-balances', { companyId }),
+  adjustPto: (employeeId: string, policyId: string, hours: number, note: string): Promise<any> =>
+    window.electronAPI.invoke('payroll:pto-adjust', { employeeId, policyId, hours, note }),
+  getStateTaxRate: (state: string, grossPay: number, allowances: number, periodsPerYear: number): Promise<any> =>
+    window.electronAPI.invoke('payroll:state-tax-rate', { state, grossPay, allowances, periodsPerYear }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

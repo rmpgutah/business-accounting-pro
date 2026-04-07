@@ -100,7 +100,51 @@ export function initDatabase(): Database.Database {
       sort_order INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )`,
-    // Track 1: Data entry expansion (2026-04-07)
+    // Track 2: Enterprise foundations (2026-04-07)
+  "ALTER TABLE employee_deductions ADD COLUMN employer_match REAL DEFAULT 0",
+  "ALTER TABLE employee_deductions ADD COLUMN employer_match_type TEXT DEFAULT 'percent'",
+  `CREATE TABLE IF NOT EXISTS state_tax_brackets (
+  id TEXT PRIMARY KEY,
+  state TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  min_income REAL NOT NULL DEFAULT 0,
+  max_income REAL DEFAULT NULL,
+  rate REAL NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS pto_policies (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  accrual_rate REAL NOT NULL DEFAULT 0,
+  accrual_unit TEXT NOT NULL DEFAULT 'hours_per_pay_period',
+  cap_hours REAL DEFAULT NULL,
+  carry_over_limit REAL DEFAULT 0,
+  available_after_days INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS pto_balances (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  policy_id TEXT NOT NULL,
+  balance_hours REAL NOT NULL DEFAULT 0,
+  used_hours_ytd REAL NOT NULL DEFAULT 0,
+  accrued_hours_ytd REAL NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS pto_transactions (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  policy_id TEXT NOT NULL DEFAULT '',
+  type TEXT NOT NULL DEFAULT 'accrual',
+  hours REAL NOT NULL DEFAULT 0,
+  note TEXT DEFAULT '',
+  payroll_run_id TEXT DEFAULT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  // Track 1: Data entry expansion (2026-04-07)
     "ALTER TABLE employees ADD COLUMN employment_type TEXT DEFAULT 'full-time'",
     "ALTER TABLE employees ADD COLUMN department TEXT DEFAULT ''",
     "ALTER TABLE employees ADD COLUMN job_title TEXT DEFAULT ''",
@@ -291,6 +335,8 @@ const tablesWithoutUpdatedAt = new Set([
   'invoice_payment_schedule',
   // Track 1 child tables — created_at only
   'client_contacts', 'debt_promises',
+  // Track 2 child tables — created_at only
+  'state_tax_brackets', 'pto_transactions',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {
