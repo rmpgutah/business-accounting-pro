@@ -100,6 +100,62 @@ export function initDatabase(): Database.Database {
       sort_order INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )`,
+    // Track 1: Data entry expansion (2026-04-07)
+    "ALTER TABLE employees ADD COLUMN employment_type TEXT DEFAULT 'full-time'",
+    "ALTER TABLE employees ADD COLUMN department TEXT DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN job_title TEXT DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN emergency_contact_name TEXT DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN emergency_contact_phone TEXT DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN routing_number TEXT DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN account_number TEXT DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN account_type TEXT DEFAULT 'checking'",
+    "ALTER TABLE employees ADD COLUMN notes TEXT DEFAULT ''",
+    "ALTER TABLE clients ADD COLUMN industry TEXT DEFAULT ''",
+    "ALTER TABLE clients ADD COLUMN website TEXT DEFAULT ''",
+    "ALTER TABLE clients ADD COLUMN company_size TEXT DEFAULT ''",
+    "ALTER TABLE clients ADD COLUMN credit_limit REAL DEFAULT 0",
+    "ALTER TABLE clients ADD COLUMN preferred_payment_method TEXT DEFAULT ''",
+    "ALTER TABLE clients ADD COLUMN assigned_rep_id TEXT DEFAULT NULL",
+    "ALTER TABLE clients ADD COLUMN internal_notes TEXT DEFAULT ''",
+    "ALTER TABLE clients ADD COLUMN tags TEXT DEFAULT '[]'",
+    `CREATE TABLE IF NOT EXISTS client_contacts (
+  id TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT '',
+  title TEXT DEFAULT '',
+  email TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
+  is_primary INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+    "ALTER TABLE vendors ADD COLUMN w9_status TEXT DEFAULT 'not_collected'",
+    "ALTER TABLE vendors ADD COLUMN is_1099_eligible INTEGER DEFAULT 0",
+    "ALTER TABLE vendors ADD COLUMN ach_routing TEXT DEFAULT ''",
+    "ALTER TABLE vendors ADD COLUMN ach_account TEXT DEFAULT ''",
+    "ALTER TABLE vendors ADD COLUMN ach_account_type TEXT DEFAULT 'checking'",
+    "ALTER TABLE vendors ADD COLUMN contract_start TEXT DEFAULT ''",
+    "ALTER TABLE vendors ADD COLUMN contract_end TEXT DEFAULT ''",
+    "ALTER TABLE vendors ADD COLUMN contract_notes TEXT DEFAULT ''",
+    "ALTER TABLE debts ADD COLUMN employer_name TEXT DEFAULT ''",
+    "ALTER TABLE debts ADD COLUMN employment_status TEXT DEFAULT 'unknown'",
+    "ALTER TABLE debts ADD COLUMN monthly_income_estimate REAL DEFAULT 0",
+    "ALTER TABLE debts ADD COLUMN best_contact_time TEXT DEFAULT ''",
+    "ALTER TABLE debts ADD COLUMN debtor_attorney_name TEXT DEFAULT ''",
+    "ALTER TABLE debts ADD COLUMN debtor_attorney_phone TEXT DEFAULT ''",
+    "ALTER TABLE debt_communications ADD COLUMN outcome TEXT DEFAULT ''",
+    "ALTER TABLE debt_communications ADD COLUMN next_action TEXT DEFAULT ''",
+    "ALTER TABLE debt_communications ADD COLUMN next_action_date TEXT DEFAULT ''",
+    "ALTER TABLE debt_communications ADD COLUMN promise_amount REAL DEFAULT 0",
+    "ALTER TABLE debt_communications ADD COLUMN promise_date TEXT DEFAULT ''",
+    `CREATE TABLE IF NOT EXISTS debt_promises (
+  id TEXT PRIMARY KEY,
+  debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+  promised_date TEXT NOT NULL DEFAULT '',
+  promised_amount REAL NOT NULL DEFAULT 0,
+  kept INTEGER DEFAULT 0,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -233,6 +289,8 @@ const tablesWithoutUpdatedAt = new Set([
   'invoice_reminders',
   // Invoice payment schedule — created_at only
   'invoice_payment_schedule',
+  // Track 1 child tables — created_at only
+  'client_contacts', 'debt_promises',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

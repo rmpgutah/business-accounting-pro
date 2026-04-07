@@ -415,6 +415,8 @@ export function registerIpcHandlers(): void {
     'invoice_settings', 'invoice_catalog_items',
     // Invoice payment schedule — company_id lives on parent `invoices` table
     'invoice_payment_schedule',
+    // Track 1 child tables — company_id lives on parent table
+    'client_contacts', 'debt_promises',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -988,6 +990,83 @@ export function registerIpcHandlers(): void {
       });
       scheduleAutoBackup();
       return inserted;
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Client Contacts ──────────────────────────────────
+  ipcMain.handle('client:contacts-list', (_event, clientId: string) => {
+    try {
+      return db.queryAll('client_contacts', { client_id: clientId }, { field: 'is_primary', dir: 'desc' });
+    } catch { return []; }
+  });
+
+  ipcMain.handle('client:contacts-save', (_event, { clientId, contacts }: { clientId: string; contacts: any[] }) => {
+    try {
+      db.getDb().prepare('DELETE FROM client_contacts WHERE client_id = ?').run(clientId);
+      const inserted = contacts.map((c) => db.create('client_contacts', {
+        id: c.id || undefined,
+        client_id: clientId,
+        name: c.name || '',
+        title: c.title || '',
+        email: c.email || '',
+        phone: c.phone || '',
+        is_primary: c.is_primary ? 1 : 0,
+      }));
+      scheduleAutoBackup();
+      return inserted;
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Debt Promises ────────────────────────────────────
+  ipcMain.handle('debt:promises-list', (_event, debtId: string) => {
+    try {
+      return db.queryAll('debt_promises', { debt_id: debtId }, { field: 'promised_date', dir: 'desc' });
+    } catch { return []; }
+  });
+
+  ipcMain.handle('debt:promise-save', (_event, data: Record<string, any>) => {
+    try {
+      const result = db.create('debt_promises', {
+        debt_id: data.debt_id,
+        promised_date: data.promised_date || '',
+        promised_amount: Number(data.promised_amount || 0),
+        kept: data.kept ? 1 : 0,
+        notes: data.notes || '',
+      });
+      scheduleAutoBackup();
+      return result;
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('debt:promise-update', (_event, { id, kept, notes }: { id: string; kept: boolean; notes?: string }) => {
+    try {
+      return db.update('debt_promises', id, { kept: kept ? 1 : 0, notes: notes || '' });
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Debt Portfolio Report Data ───────────────────────
+  ipcMain.handle('debt:portfolio-report-data', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbConn = db.getDb();
+      const debts = dbConn.prepare(`SELECT * FROM debts WHERE company_id = ? AND status != 'written_off'`).all(companyId);
+      const payments = dbConn.prepare(`
+        SELECT dp.*, d.company_id FROM debt_payments dp
+        JOIN debts d ON dp.debt_id = d.id
+        WHERE d.company_id = ?
+      `).all(companyId);
+      const today = new Date();
+      const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().slice(0, 10);
+      const paymentsYtd = payments.filter((p: any) => p.received_date >= startOfYear);
+      const collectedYtd = paymentsYtd.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      return { debts, payments, collectedYtd };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }

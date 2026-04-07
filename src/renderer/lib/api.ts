@@ -63,6 +63,18 @@ const api = {
     window.electronAPI.invoke('invoice:payment-schedule-list', invoiceId),
   savePaymentSchedule: (invoiceId: string, milestones: any[]): Promise<any> =>
     window.electronAPI.invoke('invoice:payment-schedule-save', { invoiceId, milestones }),
+  listClientContacts: (clientId: string): Promise<any[]> =>
+    window.electronAPI.invoke('client:contacts-list', clientId),
+  saveClientContacts: (clientId: string, contacts: any[]): Promise<any> =>
+    window.electronAPI.invoke('client:contacts-save', { clientId, contacts }),
+  listDebtPromises: (debtId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:promises-list', debtId),
+  saveDebtPromise: (data: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('debt:promise-save', data),
+  updateDebtPromise: (id: string, kept: boolean, notes?: string): Promise<any> =>
+    window.electronAPI.invoke('debt:promise-update', { id, kept, notes }),
+  getDebtPortfolioReportData: (companyId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:portfolio-report-data', { companyId }),
 
   // Invoice atomic save (header + line items in one DB transaction)
   saveInvoice: (payload: {
