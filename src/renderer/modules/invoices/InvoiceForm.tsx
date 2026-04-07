@@ -21,6 +21,8 @@ interface Client {
   city?: string;
   state?: string;
   zip?: string;
+  default_payment_terms?: string;
+  default_late_fee_pct?: number;
 }
 
 interface Account {
@@ -62,6 +64,12 @@ interface InvoiceFormData {
   notes: string;
   terms_text: string;
   status: string;
+  internal_notes: string;
+  po_number: string;
+  job_reference: string;
+  late_fee_pct: number;
+  late_fee_grace_days: number;
+  discount_pct: number;
 }
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -243,6 +251,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     notes: '',
     terms_text: '',
     status: 'draft',
+    internal_notes: '',
+    po_number: '',
+    job_reference: '',
+    late_fee_pct: 0,
+    late_fee_grace_days: 0,
+    discount_pct: 0,
   });
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
@@ -316,6 +330,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             notes: inv.notes ?? '',
             terms_text: inv.terms_text ?? '',
             status: inv.status ?? 'draft',
+            po_number: inv.po_number || '',
+            job_reference: inv.job_reference || '',
+            internal_notes: inv.internal_notes || '',
+            late_fee_pct: inv.late_fee_pct || 0,
+            late_fee_grace_days: inv.late_fee_grace_days || 0,
+            discount_pct: inv.discount_pct || 0,
           });
 
           const [lineData, scheduleData] = await Promise.all([
@@ -557,6 +577,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         notes: form.notes,
         terms_text: form.terms_text,
         status: sendAfterSave ? 'sent' : 'draft',
+        po_number: form.po_number.trim() || null,
+        job_reference: form.job_reference.trim() || null,
+        internal_notes: form.internal_notes.trim() || null,
+        late_fee_pct: form.late_fee_pct || 0,
+        late_fee_grace_days: form.late_fee_grace_days || 0,
+        discount_pct: form.discount_pct || 0,
       };
       if (!isEdit) invoiceData.amount_paid = 0;
 
@@ -618,7 +644,19 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           {/* Client */}
           <div>
             <FieldLabel label="Client" tooltip="The client this invoice will be billed to" required />
-            <select className="block-select" value={form.client_id} onChange={(e) => updateField('client_id', e.target.value)}>
+            <select className="block-select" value={form.client_id} onChange={(e) => {
+              const newClientId = e.target.value;
+              updateField('client_id', newClientId);
+              const client = clients.find(c => c.id === newClientId);
+              if (client) {
+                if (client.default_payment_terms) {
+                  setForm(prev => ({ ...prev, terms: client.default_payment_terms! }));
+                }
+                if (client.default_late_fee_pct && client.default_late_fee_pct > 0) {
+                  setForm(prev => ({ ...prev, late_fee_pct: client.default_late_fee_pct! }));
+                }
+              }
+            }}>
               <option value="">Select a client...</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -963,32 +1001,69 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         )}
       </div>
 
-      {/* Notes & Terms */}
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <FieldLabel label="Notes" tooltip="Optional notes printed at the bottom of the invoice PDF" />
-          <textarea
-            className="block-input"
-            rows={4}
-            placeholder="Notes visible to the client..."
-            value={form.notes}
-            onChange={(e) => updateField('notes', e.target.value)}
-            style={{ resize: 'vertical' }}
-          />
+      {/* Settings & References */}
+      <div className="block-card p-5 mb-4">
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">
+          Settings & References
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">PO Number</label>
+            <input className="block-input" placeholder="Client's purchase order #" value={form.po_number} onChange={e => setForm(p => ({ ...p, po_number: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Job / Project Reference</label>
+            <input className="block-input" placeholder="Internal job or project name" value={form.job_reference} onChange={e => setForm(p => ({ ...p, job_reference: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Invoice Discount %</label>
+            <input type="number" min={0} max={100} step="0.1" className="block-input" placeholder="0" value={form.discount_pct || ''} onChange={e => setForm(p => ({ ...p, discount_pct: parseFloat(e.target.value) || 0 }))} />
+          </div>
+          <div className="flex gap-3">
+            <div style={{ flex: 1 }}>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Late Fee %</label>
+              <input type="number" min={0} step="0.1" className="block-input" placeholder="e.g. 1.5" value={form.late_fee_pct || ''} onChange={e => setForm(p => ({ ...p, late_fee_pct: parseFloat(e.target.value) || 0 }))} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Grace Days</label>
+              <input type="number" min={0} step={1} className="block-input" placeholder="0" value={form.late_fee_grace_days || ''} onChange={e => setForm(p => ({ ...p, late_fee_grace_days: parseInt(e.target.value) || 0 }))} />
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-            Terms &amp; Conditions
-          </label>
-          <textarea
-            className="block-input"
-            rows={4}
-            placeholder="Payment terms, late fees, etc..."
-            value={form.terms_text}
-            onChange={(e) => updateField('terms_text', e.target.value)}
-            style={{ resize: 'vertical' }}
-          />
+      </div>
+
+      {/* Notes */}
+      <div className="block-card p-5 mb-4">
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">Notes</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              Client Notes <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(printed on invoice)</span>
+            </label>
+            <textarea className="block-input" rows={3} placeholder="Notes visible to your client..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              Internal Notes <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(never printed)</span>
+            </label>
+            <textarea className="block-input" rows={3} placeholder="Private notes for your team..." value={form.internal_notes} onChange={e => setForm(p => ({ ...p, internal_notes: e.target.value }))} />
+          </div>
         </div>
+      </div>
+
+      {/* Terms & Conditions */}
+      <div>
+        <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+          Terms &amp; Conditions
+        </label>
+        <textarea
+          className="block-input"
+          rows={4}
+          placeholder="Payment terms, late fees, etc..."
+          value={form.terms_text}
+          onChange={(e) => updateField('terms_text', e.target.value)}
+          style={{ resize: 'vertical' }}
+        />
       </div>
     </div>
   );
