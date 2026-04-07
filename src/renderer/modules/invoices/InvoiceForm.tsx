@@ -52,6 +52,8 @@ interface LineItem {
   item_code: string;
   line_discount: number;
   line_discount_type: 'percent' | 'flat';
+  discount_pct: number;
+  tax_rate_override: number;   // -1 = use invoice rate
 }
 
 interface InvoiceFormData {
@@ -94,6 +96,8 @@ const newLineItem = (rowType: LineRowType = 'item'): LineItem => ({
   item_code: '',
   line_discount: 0,
   line_discount_type: 'percent',
+  discount_pct: 0,
+  tax_rate_override: -1,
 });
 
 const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
@@ -365,6 +369,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 item_code: l.item_code ?? '',
                 line_discount: l.line_discount ?? 0,
                 line_discount_type: l.line_discount_type ?? 'percent',
+                discount_pct: l.discount_pct || 0,
+                tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
               }))
             );
           }
@@ -382,12 +388,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   // ─── Line item calculations (item rows only) ─────────
   const subtotal = useMemo(
-    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => s + l.quantity * l.unit_price, 0),
+    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
+      const baseAmount = l.quantity * l.unit_price;
+      const discountedAmount = baseAmount * (1 - (l.discount_pct || 0) / 100);
+      return s + discountedAmount;
+    }, 0),
     [lines]
   );
 
   const taxTotal = useMemo(
-    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => s + l.quantity * l.unit_price * (l.tax_rate / 100), 0),
+    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
+      const baseAmount = l.quantity * l.unit_price;
+      const discountedAmount = baseAmount * (1 - (l.discount_pct || 0) / 100);
+      const effectiveTaxRate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
+      return s + discountedAmount * (effectiveTaxRate / 100);
+    }, 0),
     [lines]
   );
 
@@ -599,6 +614,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         item_code: l.item_code || '',
         line_discount: l.line_discount || 0,
         line_discount_type: l.line_discount_type || 'percent',
+        discount_pct: l.discount_pct || 0,
+        tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
       }));
 
       const result = await api.saveInvoice({ invoiceId: isEdit ? invoiceId : null, invoiceData, lineItems, isEdit });
@@ -727,7 +744,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               <th style={{ width: '13%' }}>Unit Price</th>
               <th style={{ width: '11%' }} className="text-right">Amount</th>
               <th style={{ width: '9%' }}>Tax %</th>
-              <th style={{ width: '18%' }}>Account</th>
+              <th style={{ width: '7%' }}>Disc%</th>
+              <th style={{ width: '7%' }}>Tax Ovr%</th>
+              <th style={{ width: '14%' }}>Account</th>
               <th style={{ width: '8%' }}></th>
             </tr>
           </thead>
@@ -735,12 +754,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             {lines.map((line, idx) => {
               const rowType = line.row_type || 'item';
               const isItem = rowType === 'item';
-              const amount = line.quantity * line.unit_price;
+              const baseAmount = line.quantity * line.unit_price;
+              const amount = baseAmount * (1 - (line.discount_pct || 0) / 100);
 
               if (rowType === 'spacer') {
                 return (
                   <tr key={line.id} style={{ background: 'var(--color-bg-tertiary)', opacity: 0.5 }}>
-                    <td className="p-1 text-center" colSpan={8}>
+                    <td className="p-1 text-center" colSpan={10}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
                         <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
                         <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={11} /></button>
@@ -756,7 +776,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                       <GripVertical size={12} />
                     </td>
-                    <td colSpan={6} className="p-1">
+                    <td colSpan={8} className="p-1">
                       <input
                         className="block-input font-bold"
                         placeholder="Section heading..."
@@ -778,7 +798,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                       <GripVertical size={12} />
                     </td>
-                    <td colSpan={6} className="p-1">
+                    <td colSpan={8} className="p-1">
                       <input
                         className="block-input"
                         placeholder="Note (italic in PDF)..."
@@ -802,7 +822,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr key={line.id} style={{ borderTop: '1px solid var(--color-border-primary)', background: 'var(--color-bg-tertiary)' }}>
                     <td></td>
-                    <td colSpan={5} className="p-1">
+                    <td colSpan={7} className="p-1">
                       <input
                         className="block-input font-bold"
                         placeholder="Subtotal label..."
@@ -825,7 +845,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                       <GripVertical size={12} />
                     </td>
-                    <td colSpan={5} className="p-1">
+                    <td colSpan={7} className="p-1">
                       <input
                         className="block-input"
                         placeholder="Image URL or base64..."
@@ -909,6 +929,39 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       className="block-input text-right font-mono"
                       value={line.tax_rate}
                       onChange={(e) => updateLine(idx, 'tax_rate', parseFloat(e.target.value) || 0)}
+                    />
+                  </td>
+                  <td className="p-1">
+                    {/* Per-line discount % */}
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.1"
+                      className="block-input text-right font-mono"
+                      style={{ width: 70 }}
+                      placeholder="Disc%"
+                      title="Line discount %"
+                      value={line.discount_pct || ''}
+                      onChange={e => updateLine(idx, 'discount_pct', parseFloat(e.target.value) || 0)}
+                    />
+                  </td>
+                  <td className="p-1">
+                    {/* Per-line tax override */}
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      className="block-input text-right font-mono"
+                      style={{ width: 70 }}
+                      placeholder="Tax%"
+                      title="Tax rate override (blank = invoice rate)"
+                      value={line.tax_rate_override >= 0 ? line.tax_rate_override : ''}
+                      onChange={e => {
+                        const v = e.target.value === '' ? -1 : parseFloat(e.target.value);
+                        updateLine(idx, 'tax_rate_override', v);
+                      }}
                     />
                   </td>
                   <td className="p-1">
