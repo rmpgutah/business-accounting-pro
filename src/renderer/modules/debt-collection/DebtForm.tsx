@@ -43,6 +43,17 @@ interface DropdownOption {
   // invoice/bill fields
   total?: number;
   amount_paid?: number;
+  // Extended context fields
+  industry?: string;
+  company_size?: string;
+  credit_limit?: number;
+  preferred_payment_method?: string;
+  default_payment_terms?: string;
+  job_title?: string;
+  department?: string;
+  employment_type?: string;
+  w9_status?: string;
+  is_1099_eligible?: number;
 }
 
 interface DebtFormProps {
@@ -107,6 +118,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [selectedAccountInfo, setSelectedAccountInfo] = useState<DropdownOption | null>(null);
 
   const isEditing = !!debtId;
 
@@ -238,6 +250,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
       debtor_phone: '',
       debtor_address: '',
     }));
+    setSelectedAccountInfo(null);
   };
 
   const handleDebtorSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -253,6 +266,16 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         debtor_phone: selected.phone || '',
         debtor_address: selected.address || '',
       }));
+      setSelectedAccountInfo(selected);
+
+      // Pre-fill employment fields when selecting an employee
+      if (form.debtor_type === 'employee' && selected) {
+        setForm((prev) => ({
+          ...prev,
+          employer_name: (selected as any).employer || activeCompany?.name || prev.employer_name,
+          employment_status: 'employed',
+        }));
+      }
     } else {
       setForm((prev) => ({
         ...prev,
@@ -262,6 +285,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         debtor_phone: '',
         debtor_address: '',
       }));
+      setSelectedAccountInfo(null);
     }
   };
 
@@ -560,6 +584,57 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               />
             </div>
           </div>
+
+          {/* Account Context — shown when a known entity is selected */}
+          {form.debtor_type !== 'custom' && selectedAccountInfo && (
+            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--color-bg-tertiary)', borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Account Details</div>
+              <div className="grid grid-cols-3 gap-3">
+                {form.debtor_type === 'client' && (
+                  <>
+                    {selectedAccountInfo.industry && (
+                      <div><div className="text-xs text-text-muted">Industry</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.industry}</div></div>
+                    )}
+                    {selectedAccountInfo.company_size && (
+                      <div><div className="text-xs text-text-muted">Company Size</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.company_size}</div></div>
+                    )}
+                    {selectedAccountInfo.credit_limit != null && selectedAccountInfo.credit_limit > 0 && (
+                      <div><div className="text-xs text-text-muted">Credit Limit</div><div className="text-xs text-text-primary font-medium">${selectedAccountInfo.credit_limit.toLocaleString()}</div></div>
+                    )}
+                    {selectedAccountInfo.preferred_payment_method && (
+                      <div><div className="text-xs text-text-muted">Preferred Payment</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.preferred_payment_method}</div></div>
+                    )}
+                    {selectedAccountInfo.default_payment_terms && (
+                      <div><div className="text-xs text-text-muted">Default Terms</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.default_payment_terms}</div></div>
+                    )}
+                  </>
+                )}
+                {form.debtor_type === 'employee' && (
+                  <>
+                    {selectedAccountInfo.job_title && (
+                      <div><div className="text-xs text-text-muted">Job Title</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.job_title}</div></div>
+                    )}
+                    {selectedAccountInfo.department && (
+                      <div><div className="text-xs text-text-muted">Department</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.department}</div></div>
+                    )}
+                    {selectedAccountInfo.employment_type && (
+                      <div><div className="text-xs text-text-muted">Employment Type</div><div className="text-xs text-text-primary font-medium">{selectedAccountInfo.employment_type}</div></div>
+                    )}
+                  </>
+                )}
+                {form.debtor_type === 'vendor' && (
+                  <>
+                    {selectedAccountInfo.w9_status && (
+                      <div><div className="text-xs text-text-muted">W-9 Status</div><div className="text-xs text-text-primary font-medium" style={{ textTransform: 'capitalize' }}>{selectedAccountInfo.w9_status.replace(/_/g, ' ')}</div></div>
+                    )}
+                    {selectedAccountInfo.is_1099_eligible ? (
+                      <div><div className="text-xs text-text-muted">1099 Eligible</div><div className="text-xs font-medium" style={{ color: '#22c55e' }}>Yes</div></div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Section 2 — Debt Details */}
