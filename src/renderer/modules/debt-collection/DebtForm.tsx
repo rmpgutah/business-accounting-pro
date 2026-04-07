@@ -171,7 +171,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         })));
         setBills((Array.isArray(billData) ? billData : []).map((bill: any) => ({
           ...bill,
-          name: `${bill.bill_number || bill.id.slice(0, 8)} — $${(bill.amount || 0).toFixed(2)}`,
+          name: `${bill.bill_number || bill.id.slice(0, 8)} — $${((bill.total || 0) - (bill.amount_paid || 0)).toFixed(2)} due`,
         })));
 
         if (debtId) {
