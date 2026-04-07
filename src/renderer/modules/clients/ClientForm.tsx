@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
+import ClientContacts, { ClientContact } from './ClientContacts';
 
 // ─── Types ──────────────────────────────────────────────
 interface ClientData {
@@ -19,6 +20,16 @@ interface ClientData {
   tax_id: string;
   status: 'active' | 'inactive' | 'prospect';
   notes: string;
+  // Extended profile
+  industry: string;
+  website: string;
+  company_size: string;
+  credit_limit: number;
+  preferred_payment_method: string;
+  assigned_rep_id: string;
+  internal_notes: string;
+  tags: string;
+  tags_input: string;
 }
 
 const EMPTY_CLIENT: ClientData = {
@@ -36,6 +47,16 @@ const EMPTY_CLIENT: ClientData = {
   tax_id: '',
   status: 'active',
   notes: '',
+  // Extended profile
+  industry: '',
+  website: '',
+  company_size: '',
+  credit_limit: 0,
+  preferred_payment_method: '',
+  assigned_rep_id: '',
+  internal_notes: '',
+  tags: '',
+  tags_input: '',
 };
 
 interface ClientFormProps {
@@ -65,6 +86,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<ClientContact[]>([]);
 
   const isEditing = Boolean(clientId);
 
@@ -75,9 +97,22 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     const load = async () => {
       try {
         setLoading(true);
-        const client = await api.get('clients', clientId);
+        const [client, contactData] = await Promise.all([
+          api.get('clients', clientId),
+          api.listClientContacts(clientId),
+        ]);
         if (!cancelled && client) {
           const pt = client.payment_terms ?? 30;
+          // Parse tags JSON array → comma-separated string
+          let tagsInput = '';
+          if (client.tags) {
+            try {
+              const parsed = JSON.parse(client.tags);
+              tagsInput = Array.isArray(parsed) ? parsed.join(', ') : '';
+            } catch {
+              tagsInput = '';
+            }
+          }
           setData({
             id: client.id,
             name: client.name ?? '',
@@ -94,8 +129,19 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             tax_id: client.tax_id ?? '',
             status: client.status ?? 'active',
             notes: client.notes ?? '',
+            // Extended profile
+            industry: client.industry ?? '',
+            website: client.website ?? '',
+            company_size: client.company_size ?? '',
+            credit_limit: client.credit_limit ?? 0,
+            preferred_payment_method: client.preferred_payment_method ?? '',
+            assigned_rep_id: client.assigned_rep_id ?? '',
+            internal_notes: client.internal_notes ?? '',
+            tags: client.tags ?? '',
+            tags_input: tagsInput,
           });
           setPaymentTermsRaw(String(pt));
+          setContacts((contactData ?? []).map((c: any) => ({ ...c, is_primary: Boolean(c.is_primary) })));
         }
       } catch (err) {
         console.error('Failed to load client:', err);
@@ -130,14 +176,29 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       setSaving(true);
       setError(null);
 
-      const payload: Record<string, any> = { ...data, payment_terms: parsedTerms };
-      delete payload.id;
+      // Convert tags_input (comma-separated) → JSON array string
+      const tagsJson = JSON.stringify(
+        data.tags_input.split(',').map(t => t.trim()).filter(Boolean)
+      );
 
+      const payload: Record<string, any> = {
+        ...data,
+        payment_terms: parsedTerms,
+        tags: tagsJson,
+      };
+      delete payload.id;
+      delete payload.tags_input;
+
+      let savedId: string;
       if (isEditing && clientId) {
         await api.update('clients', clientId, payload);
+        savedId = clientId;
       } else {
-        await api.create('clients', payload);
+        const created = await api.create('clients', payload);
+        savedId = created.id;
       }
+
+      await api.saveClientContacts(savedId, contacts.map(c => ({ ...c, client_id: savedId })));
 
       onSaved();
     } catch (err) {
@@ -319,6 +380,59 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                   style={{ resize: 'vertical' }}
                 />
               </Field>
+
+              {/* Extended Profile */}
+              <div className="col-span-2 mt-4">
+                <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Extended Profile</div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Industry</label>
+                <input className="block-input" value={data.industry} onChange={(e) => setData(p => ({ ...p, industry: e.target.value }))} placeholder="e.g. Technology" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Website</label>
+                <input className="block-input" type="url" value={data.website} onChange={(e) => setData(p => ({ ...p, website: e.target.value }))} placeholder="https://" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Company Size</label>
+                <select className="block-select w-full" value={data.company_size} onChange={(e) => setData(p => ({ ...p, company_size: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  <option value="1-10">1–10 employees</option>
+                  <option value="11-50">11–50 employees</option>
+                  <option value="51-200">51–200 employees</option>
+                  <option value="201-1000">201–1,000 employees</option>
+                  <option value="1000+">1,000+ employees</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Credit Limit</label>
+                <input className="block-input" type="number" min={0} step="100" value={data.credit_limit} onChange={(e) => setData(p => ({ ...p, credit_limit: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Preferred Payment</label>
+                <select className="block-select w-full" value={data.preferred_payment_method} onChange={(e) => setData(p => ({ ...p, preferred_payment_method: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  <option value="check">Check</option>
+                  <option value="ach">ACH / Bank Transfer</option>
+                  <option value="credit_card">Credit Card</option>
+                  <option value="wire">Wire Transfer</option>
+                  <option value="cash">Cash</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Tags (comma-separated)</label>
+                <input className="block-input" value={data.tags_input || ''} onChange={(e) => setData(p => ({ ...p, tags_input: e.target.value }))} placeholder="vip, partner, net-30" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Internal Notes</label>
+                <textarea className="block-input" rows={3} value={data.internal_notes} onChange={(e) => setData(p => ({ ...p, internal_notes: e.target.value }))} placeholder="Internal notes (not visible to client)..." style={{ resize: 'vertical' }} />
+              </div>
+
+              {/* Contacts */}
+              <div className="col-span-2 mt-4">
+                <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Contacts</div>
+                <ClientContacts contacts={contacts} onChange={setContacts} />
+              </div>
             </div>
 
             {/* Actions */}
