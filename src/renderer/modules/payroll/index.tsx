@@ -6,9 +6,10 @@ import EmployeeList from './EmployeeList';
 import EmployeeForm from './EmployeeForm';
 import PayrollRunner from './PayrollRunner';
 import PayStubView from './PayStubView';
+import PtoDashboard from './PtoDashboard';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'employees' | 'run' | 'history';
+type Tab = 'employees' | 'run' | 'history' | 'pto';
 
 interface PayrollRun {
   id: string;
@@ -167,6 +168,7 @@ const PayrollModule: React.FC = () => {
     { key: 'employees', label: 'Employees', icon: <Users size={14} /> },
     { key: 'run', label: 'Run Payroll', icon: <Calculator size={14} /> },
     { key: 'history', label: 'History', icon: <FileText size={14} /> },
+    { key: 'pto', label: 'PTO', icon: <DollarSign size={14} /> },
   ];
 
   // ─── Render ─────────────────────────────────────────
@@ -212,6 +214,9 @@ const PayrollModule: React.FC = () => {
             onNewEmployee={handleNewEmployee}
           />
         )}
+
+        {/* PTO Tab */}
+        {activeTab === 'pto' && <PtoDashboard />}
 
         {/* History Tab */}
         {activeTab === 'history' && (
