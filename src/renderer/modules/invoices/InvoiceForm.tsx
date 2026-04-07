@@ -818,7 +818,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 const subtotalAmt = lines
                   .slice(0, idx)
                   .filter(r => (r.row_type || 'item') === 'item')
-                  .reduce((s, r) => s + r.quantity * r.unit_price, 0);
+                  .reduce((s, r) => s + r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100), 0);
                 return (
                   <tr key={line.id} style={{ borderTop: '1px solid var(--color-border-primary)', background: 'var(--color-bg-tertiary)' }}>
                     <td></td>
