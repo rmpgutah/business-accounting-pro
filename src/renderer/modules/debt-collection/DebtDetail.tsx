@@ -245,6 +245,11 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   // Advance stage
   const [advancingSaving, setAdvancingSaving] = useState(false);
 
+  // Promise-to-Pay state
+  const [promises, setPromises] = useState<any[]>([]);
+  const [showPromiseForm, setShowPromiseForm] = useState(false);
+  const [promiseForm, setPromiseForm] = useState({ promised_date: '', promised_amount: 0, notes: '' });
+
   // ── Load All Data ──
   useEffect(() => {
     let cancelled = false;
@@ -258,6 +263,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           legalData,
           stageData,
           interestData,
+          promisesData,
         ] = await Promise.all([
           api.get('debts', debtId),
           api.query('debt_payments', { debt_id: debtId }, { field: 'received_date', dir: 'desc' }),
@@ -272,6 +278,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             [debtId]
           ),
           api.debtCalculateInterest(debtId).catch(() => null),
+          api.listDebtPromises(debtId).catch(() => []),
         ]);
         if (cancelled) return;
         setDebt(debtData ?? null);
@@ -281,6 +288,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setLegalActions(Array.isArray(legalData) ? legalData : []);
         setPipelineStages(Array.isArray(stageData) ? stageData : []);
         setInterestCalc(interestData);
+        setPromises(Array.isArray(promisesData) ? promisesData : []);
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -374,6 +382,29 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       setWriteOffSaving(false);
     }
   }, [debtId, writeOffReason, triggerRefresh]);
+
+  // ── Save Promise ──
+  const savePromise = async () => {
+    if (!promiseForm.promised_date || !promiseForm.promised_amount) return;
+    await api.saveDebtPromise({
+      debt_id: debtId,
+      promised_date: promiseForm.promised_date,
+      promised_amount: promiseForm.promised_amount,
+      kept: false,
+      notes: promiseForm.notes,
+    });
+    setPromiseForm({ promised_date: '', promised_amount: 0, notes: '' });
+    setShowPromiseForm(false);
+    const updated = await api.listDebtPromises(debtId);
+    setPromises(updated || []);
+  };
+
+  // ── Toggle Promise Kept ──
+  const togglePromiseKept = async (id: string, currentKept: boolean) => {
+    await api.updateDebtPromise(id, !currentKept);
+    const updated = await api.listDebtPromises(debtId);
+    setPromises(updated || []);
+  };
 
   // ── Computed ──
   const delinquentDays = useMemo(
@@ -800,6 +831,65 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card 4b — Promise-to-Pay Timeline */}
+          <div className="block-card p-6">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">Promise-to-Pay</div>
+              <button className="block-btn text-xs py-1 px-3" onClick={() => setShowPromiseForm(v => !v)}>
+                + Add Promise
+              </button>
+            </div>
+
+            {showPromiseForm && (
+              <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 1fr auto', gap: 8, marginBottom: 16, alignItems: 'end' }}>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Promise Date</label>
+                  <input type="date" className="block-input" value={promiseForm.promised_date} onChange={(e) => setPromiseForm(p => ({...p, promised_date: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Amount</label>
+                  <input type="number" min={0} step="0.01" className="block-input" value={promiseForm.promised_amount} onChange={(e) => setPromiseForm(p => ({...p, promised_amount: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Notes</label>
+                  <input className="block-input" value={promiseForm.notes} onChange={(e) => setPromiseForm(p => ({...p, notes: e.target.value}))} placeholder="Optional notes" />
+                </div>
+                <button className="block-btn text-xs py-1 px-3" onClick={savePromise}>Save</button>
+              </div>
+            )}
+
+            {promises.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                No promises recorded.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {promises.map((p: any) => {
+                  const isPast = p.promised_date < new Date().toISOString().slice(0, 10);
+                  const badgeColor = p.kept ? '#16a34a' : isPast ? '#ef4444' : '#d97706';
+                  const badgeLabel = p.kept ? 'Kept' : isPast ? 'Broken' : 'Pending';
+                  return (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 90 }}>{p.promised_date}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>${Number(p.promised_amount).toFixed(2)}</div>
+                      {p.notes && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', flex: 1 }}>{p.notes}</div>}
+                      <div style={{ flex: 1 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: badgeColor + '22', color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                        {badgeLabel}
+                      </span>
+                      <button
+                        onClick={() => togglePromiseKept(p.id, Boolean(p.kept))}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+                      >
+                        {p.kept ? 'Mark Broken' : 'Mark Kept'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
