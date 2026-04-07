@@ -1,21 +1,41 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical } from 'lucide-react';
 import api from '../../lib/api';
 import { FieldLabel } from '../../components/FieldLabel';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ClientContext } from '../../components/ContextPanel';
+import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
+import RowTypeToolbar from './RowTypeToolbar';
+import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
+import type { LineRowType } from '../../../shared/types';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
   id: string;
   name: string;
+  email?: string;
+  phone?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 }
 
 interface Account {
   id: string;
   name: string;
   code: string;
+}
+
+interface CatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  unit_price: number;
+  tax_rate: number;
+  account_id: string | null;
 }
 
 interface LineItem {
@@ -25,6 +45,11 @@ interface LineItem {
   unit_price: number;
   tax_rate: number;
   account_id: string;
+  row_type: LineRowType;
+  unit_label: string;
+  item_code: string;
+  line_discount: number;
+  line_discount_type: 'percent' | 'flat';
 }
 
 interface InvoiceFormData {
@@ -33,10 +58,7 @@ interface InvoiceFormData {
   issue_date: string;
   due_date: string;
   terms: string;
-  subtotal: number;
-  tax: number;
   discount: number;
-  total: number;
   notes: string;
   terms_text: string;
   status: string;
@@ -52,17 +74,20 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Helpers ────────────────────────────────────────────
 let lineIdCounter = 0;
-const newLineItem = (): LineItem => ({
+const newLineItem = (rowType: LineRowType = 'item'): LineItem => ({
   id: `new-${++lineIdCounter}`,
   description: '',
   quantity: 1,
   unit_price: 0,
   tax_rate: 0,
   account_id: '',
+  row_type: rowType,
+  unit_label: '',
+  item_code: '',
+  line_discount: 0,
+  line_discount_type: 'percent',
 });
 
-// Bug fix #12a: scope invoice number generation to the active company so
-// numbers don't collide across companies or reference another company's data.
 const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
   try {
     const rows = await api.rawQuery(
@@ -72,22 +97,116 @@ const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
     if (rows && rows.length > 0) {
       const last = rows[0].invoice_number as string;
       const match = last.match(/(\d+)$/);
-      if (match) {
-        return `INV-${parseInt(match[1], 10) + 1}`;
-      }
+      if (match) return `INV-${parseInt(match[1], 10) + 1}`;
     }
-  } catch {
-    /* fall through to default */
-  }
+  } catch { /* fall through */ }
   return 'INV-1001';
 };
 
 const todayISO = (): string => new Date().toISOString().slice(0, 10);
 
-const thirtyDaysLater = (): string => {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
+const addDays = (isoDate: string, days: number): string => {
+  const d = new Date(isoDate + 'T12:00:00');
+  d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
+};
+
+const TERMS_DAYS: Record<string, number> = {
+  'Due on receipt': 0,
+  'Net 15': 15,
+  'Net 30': 30,
+  'Net 45': 45,
+  'Net 60': 60,
+};
+
+// ─── Catalog Dropdown ────────────────────────────────────
+interface CatalogDropdownProps {
+  items: CatalogItem[];
+  onSelect: (item: CatalogItem) => void;
+  onClose: () => void;
+}
+
+const CatalogDropdown: React.FC<CatalogDropdownProps> = ({ items, onSelect, onClose }) => {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return items.slice(0, 10);
+    const q = query.toLowerCase();
+    return items.filter(
+      (i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q)
+    ).slice(0, 10);
+  }, [query, items]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        zIndex: 100,
+        background: 'var(--color-bg-secondary)',
+        border: '1px solid var(--color-border-primary)',
+        borderRadius: '6px',
+        width: '280px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ padding: '8px', borderBottom: '1px solid var(--color-border-primary)', display: 'flex', gap: 6 }}>
+        <input
+          ref={inputRef}
+          className="block-input"
+          placeholder="Search catalog..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ flex: 1, fontSize: '12px', padding: '4px 8px' }}
+        />
+        <button className="block-btn p-1" onClick={onClose} title="Close"><X size={12} /></button>
+      </div>
+      {filtered.length === 0 ? (
+        <div style={{ padding: '12px', color: 'var(--color-text-muted)', fontSize: '12px', textAlign: 'center' }}>
+          No catalog items found
+        </div>
+      ) : (
+        <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+          {filtered.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onSelect(item)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '8px 12px',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--color-border-primary)',
+                color: 'var(--color-text-primary)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ fontSize: '12px', fontWeight: 600 }}>{item.name}</div>
+              {item.description && (
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                  {item.description.slice(0, 60)}{item.description.length > 60 ? '…' : ''}
+                </div>
+              )}
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                {fmt.format(item.unit_price)} · Tax: {item.tax_rate}%
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -103,20 +222,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   const [clients, setClients] = useState<Client[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState<number | null>(null);
+  const [savingToCatalog, setSavingToCatalog] = useState<number | null>(null);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   const [form, setForm] = useState<InvoiceFormData>({
     client_id: '',
     invoice_number: '',
     issue_date: todayISO(),
-    due_date: thirtyDaysLater(),
+    due_date: addDays(todayISO(), 30),
     terms: 'Net 30',
-    subtotal: 0,
-    tax: 0,
     discount: 0,
-    total: 0,
     notes: '',
     terms_text: '',
     status: 'draft',
@@ -131,15 +254,18 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     const load = async () => {
       if (!activeCompany) return;
       try {
-        // Bug fix #12b: clients and accounts queries were missing company_id.
         const cid = activeCompany.id;
-        const [clientData, accountData] = await Promise.all([
+        const [clientData, accountData, catalogData, settingsData] = await Promise.all([
           api.query('clients', { company_id: cid }),
           api.query('accounts', { company_id: cid, type: 'revenue' }),
+          api.listCatalogItems().catch(() => []),
+          api.getInvoiceSettings().catch(() => null),
         ]);
         if (cancelled) return;
         setClients(clientData ?? []);
         setAccounts(accountData ?? []);
+        setCatalogItems(catalogData ?? []);
+        if (settingsData && !settingsData.error) setInvoiceSettings(settingsData);
 
         if (!invoiceId) {
           const nextNum = await fetchNextInvoiceNumber(cid);
@@ -147,7 +273,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             setForm((prev) => ({ ...prev, invoice_number: nextNum }));
           }
 
-          // Read prefill stored by "Create Invoice from Time" flow
           const prefillRaw = localStorage.getItem('invoiceFormPrefill');
           if (prefillRaw) {
             try {
@@ -185,19 +310,27 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             client_id: inv.client_id ?? '',
             invoice_number: inv.invoice_number ?? '',
             issue_date: inv.issue_date ?? todayISO(),
-            due_date: inv.due_date ?? thirtyDaysLater(),
+            due_date: inv.due_date ?? addDays(todayISO(), 30),
             terms: inv.terms ?? 'Net 30',
-            subtotal: inv.subtotal ?? 0,
-            tax: inv.tax_amount ?? 0,
             discount: inv.discount_amount ?? 0,
-            total: inv.total ?? 0,
             notes: inv.notes ?? '',
-            terms_text: '',
+            terms_text: inv.terms_text ?? '',
             status: inv.status ?? 'draft',
           });
 
-          const lineData = await api.query('invoice_line_items', { invoice_id: invoiceId });
+          const [lineData, scheduleData] = await Promise.all([
+            api.query('invoice_line_items', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' }),
+            api.listPaymentSchedule(invoiceId).catch(() => []),
+          ]);
           if (cancelled) return;
+          if (scheduleData && scheduleData.length > 0) {
+            setMilestones(scheduleData.map((m: any) => ({
+              id: m.id, milestone_label: m.milestone_label || '',
+              due_date: m.due_date || '', amount: Number(m.amount || 0),
+              paid: !!m.paid,
+            })));
+            setShowSchedule(true);
+          }
           if (lineData && lineData.length > 0) {
             setLines(
               lineData.map((l: any) => ({
@@ -207,6 +340,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 unit_price: l.unit_price ?? 0,
                 tax_rate: l.tax_rate ?? 0,
                 account_id: l.account_id ?? '',
+                row_type: l.row_type ?? 'item',
+                unit_label: l.unit_label ?? '',
+                item_code: l.item_code ?? '',
+                line_discount: l.line_discount ?? 0,
+                line_discount_type: l.line_discount_type ?? 'percent',
               }))
             );
           }
@@ -222,27 +360,51 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     return () => { cancelled = true; };
   }, [invoiceId, activeCompany]);
 
-  // ─── Line item calculations ──────────────────────────
-  const lineAmounts = useMemo(
-    () => lines.map((l) => l.quantity * l.unit_price),
+  // ─── Line item calculations (item rows only) ─────────
+  const subtotal = useMemo(
+    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => s + l.quantity * l.unit_price, 0),
     [lines]
   );
-
-  const subtotal = useMemo(() => lineAmounts.reduce((s, a) => s + a, 0), [lineAmounts]);
 
   const taxTotal = useMemo(
-    () =>
-      lines.reduce((s, l) => {
-        const amt = l.quantity * l.unit_price;
-        return s + amt * (l.tax_rate / 100);
-      }, 0),
+    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => s + l.quantity * l.unit_price * (l.tax_rate / 100), 0),
     [lines]
   );
 
-  const total = useMemo(
-    () => subtotal + taxTotal - form.discount,
-    [subtotal, taxTotal, form.discount]
-  );
+  const total = useMemo(() => subtotal + taxTotal - form.discount, [subtotal, taxTotal, form.discount]);
+
+  // ─── Live preview HTML ───────────────────────────────
+  const previewHTML = useMemo(() => {
+    if (!showPreview || !activeCompany) return '';
+    const client = clients.find((c) => c.id === form.client_id) || null;
+    const inv = {
+      invoice_number: form.invoice_number || 'PREVIEW',
+      issue_date: form.issue_date,
+      due_date: form.due_date,
+      terms: form.terms,
+      status: form.status,
+      subtotal,
+      tax_amount: taxTotal,
+      discount_amount: form.discount,
+      total,
+      notes: form.notes,
+      terms_text: form.terms_text,
+      amount_paid: 0,
+    };
+    const lineData = lines.map((l) => ({
+      description: l.description,
+      quantity: l.quantity,
+      unit_price: l.unit_price,
+      tax_rate: l.tax_rate,
+      amount: l.quantity * l.unit_price,
+      row_type: l.row_type || 'item',
+      unit_label: l.unit_label,
+      item_code: l.item_code,
+      line_discount: l.line_discount,
+      line_discount_type: l.line_discount_type,
+    }));
+    return generateInvoiceHTML(inv, activeCompany, client, lineData, invoiceSettings || undefined);
+  }, [showPreview, form, lines, subtotal, taxTotal, total, activeCompany, clients, invoiceSettings]);
 
   // ─── Line item helpers ───────────────────────────────
   const updateLine = useCallback(
@@ -256,48 +418,122 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     []
   );
 
-  const addLine = useCallback(() => {
-    setLines((prev) => [...prev, newLineItem()]);
-  }, []);
+  const addLine = useCallback((rowType: LineRowType = 'item') => setLines((prev) => [...prev, newLineItem(rowType)]), []);
 
-  const removeLine = useCallback((index: number) => {
-    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+  const removeLine = useCallback(
+    (index: number) => setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index))),
+    []
+  );
+
+  const moveLine = useCallback((from: number, to: number) => {
+    setLines((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
   }, []);
 
   // ─── Form field helpers ──────────────────────────────
   const updateField = useCallback(
-    (field: keyof InvoiceFormData, value: string | number) => {
-      setForm((prev) => ({ ...prev, [field]: value }));
+    (field: keyof InvoiceFormData, value: string | number) =>
+      setForm((prev) => ({ ...prev, [field]: value })),
+    []
+  );
+
+  // Smart due date: auto-calculate from terms when user changes terms dropdown
+  const handleTermsChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newTerms = e.target.value;
+      setForm((prev) => {
+        const days = TERMS_DAYS[newTerms] ?? 30;
+        return {
+          ...prev,
+          terms: newTerms,
+          due_date: addDays(prev.issue_date || todayISO(), days),
+        };
+      });
     },
     []
   );
 
+  // Also update due date when issue_date changes (maintain the terms offset)
+  const handleIssueDateChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newDate = e.target.value;
+      setForm((prev) => {
+        const days = TERMS_DAYS[prev.terms] ?? 30;
+        return {
+          ...prev,
+          issue_date: newDate,
+          due_date: newDate ? addDays(newDate, days) : prev.due_date,
+        };
+      });
+    },
+    []
+  );
+
+  // ─── Catalog: apply item to line ─────────────────────
+  const applyCatalogItem = useCallback(
+    (lineIndex: number, item: CatalogItem) => {
+      setLines((prev) => {
+        const next = [...prev];
+        next[lineIndex] = {
+          ...next[lineIndex],
+          description: item.name,
+          unit_price: item.unit_price,
+          tax_rate: item.tax_rate,
+          account_id: item.account_id || next[lineIndex].account_id,
+        };
+        return next;
+      });
+      setCatalogOpen(null);
+    },
+    []
+  );
+
+  // Save current line item to catalog
+  const saveLineToCatalog = useCallback(
+    async (lineIndex: number) => {
+      const line = lines[lineIndex];
+      if (!line.description.trim()) return;
+      setSavingToCatalog(lineIndex);
+      try {
+        await api.saveCatalogItem({
+          name: line.description,
+          description: '',
+          unit_price: line.unit_price,
+          tax_rate: line.tax_rate,
+          account_id: line.account_id || null,
+        });
+        const updated = await api.listCatalogItems().catch(() => null);
+        if (updated) setCatalogItems(updated);
+      } catch (err) {
+        console.error('Failed to save to catalog:', err);
+      } finally {
+        setSavingToCatalog(null);
+      }
+    },
+    [lines]
+  );
+
   // ─── Save ────────────────────────────────────────────
   const handleSave = async (sendAfterSave: boolean) => {
-    const activeLines = lines.filter((l) => l.description.trim() || l.unit_price > 0);
+    const activeLines = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description.trim() || l.unit_price > 0));
 
     const lineItemErrors: string[] = [];
     activeLines.forEach((l, i) => {
       const num = i + 1;
-      if (!l.description.trim()) {
-        lineItemErrors.push(`Line item ${num}: description cannot be empty.`);
-      }
-      if (isNaN(l.quantity) || l.quantity < 0) {
-        lineItemErrors.push(`Line item ${num}: quantity must be a non-negative number.`);
-      }
-      if (isNaN(l.unit_price) || l.unit_price < 0) {
-        lineItemErrors.push(`Line item ${num}: unit price must be a non-negative number.`);
-      }
+      if (!l.description.trim()) lineItemErrors.push(`Line item ${num}: description cannot be empty.`);
+      if (isNaN(l.quantity) || l.quantity < 0) lineItemErrors.push(`Line item ${num}: quantity must be a non-negative number.`);
+      if (isNaN(l.unit_price) || l.unit_price < 0) lineItemErrors.push(`Line item ${num}: unit price must be a non-negative number.`);
     });
 
     const checks: Array<string | null> = [
       required(form.client_id, 'Client'),
-      lines.every((l) => !l.description.trim() && l.unit_price === 0)
+      lines.every((l) => (l.row_type || 'item') !== 'item' || (!l.description.trim() && l.unit_price === 0))
         ? 'At least one line item is required'
         : null,
-      ...activeLines.map((l, i) =>
-        minValue(l.quantity * l.unit_price, 0.01, `Line item ${i + 1} amount`)
-      ),
     ];
     const validationErrors = [...validateForm(checks), ...lineItemErrors];
     if (validationErrors.length > 0) {
@@ -305,12 +541,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       return;
     }
     setErrors([]);
-
     setSaving(true);
+
     try {
-      const status = sendAfterSave ? 'sent' : 'draft';
-      // Bug fix #12c: do NOT reset amount_paid on edit — this would wipe
-      // any recorded partial or full payments against the invoice.
       const invoiceData: Record<string, any> = {
         client_id: form.client_id,
         invoice_number: form.invoice_number,
@@ -322,31 +555,32 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         discount_amount: form.discount,
         total,
         notes: form.notes,
-        status,
+        terms_text: form.terms_text,
+        status: sendAfterSave ? 'sent' : 'draft',
       };
-      if (!isEdit) {
-        invoiceData.amount_paid = 0;
-      }
+      if (!isEdit) invoiceData.amount_paid = 0;
 
-      const lineItems = lines
-        .filter(line => line.description || line.unit_price !== 0)
-        .map(line => ({
-          description: line.description,
-          quantity: line.quantity,
-          unit_price: line.unit_price,
-          tax_rate: line.tax_rate,
-          account_id: line.account_id || null,
-          amount: line.quantity * line.unit_price,
-        }));
+      const lineItems = lines.map((l, idx) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        tax_rate: l.tax_rate,
+        account_id: l.account_id || null,
+        amount: (l.row_type || 'item') === 'item' ? l.quantity * l.unit_price : 0,
+        sort_order: idx,
+        row_type: l.row_type || 'item',
+        unit_label: l.unit_label || '',
+        item_code: l.item_code || '',
+        line_discount: l.line_discount || 0,
+        line_discount_type: l.line_discount_type || 'percent',
+      }));
 
-      const result = await api.saveInvoice({
-        invoiceId: isEdit ? invoiceId : null,
-        invoiceData,
-        lineItems,
-        isEdit,
-      });
-
+      const result = await api.saveInvoice({ invoiceId: isEdit ? invoiceId : null, invoiceData, lineItems, isEdit });
       if (result?.error) throw new Error(result.error);
+      // Save payment schedule if active
+      if (showSchedule && milestones.length > 0) {
+        await api.savePaymentSchedule(result.id!, milestones).catch(console.error);
+      }
       onSaved(result.id!);
     } catch (err) {
       console.error('Failed to save invoice:', err);
@@ -364,51 +598,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     );
   }
 
-  return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      {/* Header */}
-      <div className="module-header">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back">
-            <ArrowLeft size={16} />
-          </button>
-          <h1 className="module-title text-text-primary">
-            {isEdit ? 'Edit Invoice' : 'New Invoice'}
-          </h1>
-        </div>
-        <div className="module-actions">
-          <button
-            className="block-btn"
-            disabled={saving}
-            onClick={() => handleSave(false)}
-          >
-            {saving ? 'Saving...' : 'Save as Draft'}
-          </button>
-          <button
-            className="block-btn-primary"
-            disabled={saving}
-            onClick={() => handleSave(true)}
-          >
-            {saving ? 'Saving...' : 'Save & Send'}
-          </button>
-        </div>
-      </div>
-
+  // ─── Form content (shared between single-pane and split-pane) ───
+  const formContent = (
+    <div className="p-6 space-y-6">
       {/* Validation Errors */}
       {errors.length > 0 && (
-        <div
-          style={{
-            background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
-            borderRadius: '6px',
-            padding: '12px 16px',
-          }}
-        >
+        <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid #ef4444', borderRadius: '6px', padding: '12px 16px' }}>
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
-                {err}
-              </li>
+              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>{err}</li>
             ))}
           </ul>
         </div>
@@ -420,16 +618,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           {/* Client */}
           <div>
             <FieldLabel label="Client" tooltip="The client this invoice will be billed to" required />
-            <select
-              className="block-select"
-              value={form.client_id}
-              onChange={(e) => updateField('client_id', e.target.value)}
-            >
+            <select className="block-select" value={form.client_id} onChange={(e) => updateField('client_id', e.target.value)}>
               <option value="">Select a client...</option>
               {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
             <ClientContext clientId={form.client_id || null} companyId={activeCompany?.id ?? ''} />
@@ -437,49 +629,31 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
           {/* Invoice Number */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Invoice Number
-            </label>
-            <input
-              type="text"
-              className="block-input"
-              value={form.invoice_number}
-              onChange={(e) => updateField('invoice_number', e.target.value)}
-            />
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">Invoice Number</label>
+            <input type="text" className="block-input" value={form.invoice_number} onChange={(e) => updateField('invoice_number', e.target.value)} />
           </div>
 
           {/* Issue Date */}
           <div>
-            <FieldLabel label="Issue Date" tooltip="The date the invoice is created and sent" />
-            <input
-              type="date"
-              className="block-input"
-              value={form.issue_date}
-              onChange={(e) => updateField('issue_date', e.target.value)}
-            />
+            <FieldLabel label="Issue Date" tooltip="Date the invoice is issued" />
+            <input type="date" className="block-input" value={form.issue_date} onChange={handleIssueDateChange} />
           </div>
 
           {/* Due Date */}
           <div>
-            <FieldLabel label="Due Date" tooltip="Payment is expected by this date; overdue status triggers after this date" />
-            <input
-              type="date"
-              className="block-input"
-              value={form.due_date}
-              onChange={(e) => updateField('due_date', e.target.value)}
-            />
+            <FieldLabel label="Due Date" tooltip="Auto-set from Terms · can be overridden manually" />
+            <input type="date" className="block-input" value={form.due_date} onChange={(e) => updateField('due_date', e.target.value)} />
           </div>
 
           {/* Terms */}
           <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
               Terms
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>
+                (auto-updates due date)
+              </span>
             </label>
-            <select
-              className="block-select"
-              value={form.terms}
-              onChange={(e) => updateField('terms', e.target.value)}
-            >
+            <select className="block-select" value={form.terms} onChange={handleTermsChange}>
               <option value="Due on receipt">Due on receipt</option>
               <option value="Net 15">Net 15</option>
               <option value="Net 30">Net 30</option>
@@ -493,42 +667,177 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       {/* Line Items */}
       <div className="block-card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
-          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-            Line Items
-          </span>
-          <button
-            className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-            onClick={addLine}
-          >
-            <Plus size={14} />
-            Add Line
-          </button>
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Line Items</span>
+          {catalogItems.length > 0 && (
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+              <BookOpen size={11} style={{ display: 'inline', marginRight: 4 }} />
+              {catalogItems.length} catalog item{catalogItems.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
         <table className="block-table">
           <thead>
             <tr>
+              <th style={{ width: '2%' }}></th>
               <th style={{ width: '30%' }}>Description</th>
-              <th style={{ width: '10%' }}>Qty</th>
-              <th style={{ width: '14%' }}>Unit Price</th>
-              <th style={{ width: '12%' }} className="text-right">Amount</th>
-              <th style={{ width: '10%' }}>Tax %</th>
+              <th style={{ width: '9%' }}>Qty</th>
+              <th style={{ width: '13%' }}>Unit Price</th>
+              <th style={{ width: '11%' }} className="text-right">Amount</th>
+              <th style={{ width: '9%' }}>Tax %</th>
               <th style={{ width: '18%' }}>Account</th>
-              <th style={{ width: '6%' }}></th>
+              <th style={{ width: '8%' }}></th>
             </tr>
           </thead>
           <tbody>
             {lines.map((line, idx) => {
+              const rowType = line.row_type || 'item';
+              const isItem = rowType === 'item';
               const amount = line.quantity * line.unit_price;
+
+              if (rowType === 'spacer') {
+                return (
+                  <tr key={line.id} style={{ background: 'var(--color-bg-tertiary)', opacity: 0.5 }}>
+                    <td className="p-1 text-center" colSpan={8}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
+                        <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={11} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'section') {
+                return (
+                  <tr key={line.id} style={{ background: 'rgba(100,116,139,0.08)' }}>
+                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
+                      <GripVertical size={12} />
+                    </td>
+                    <td colSpan={6} className="p-1">
+                      <input
+                        className="block-input font-bold"
+                        placeholder="Section heading..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%', fontSize: '13px', fontWeight: 700 }}
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'note') {
+                return (
+                  <tr key={line.id} style={{ background: 'var(--color-bg-secondary)' }}>
+                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
+                      <GripVertical size={12} />
+                    </td>
+                    <td colSpan={6} className="p-1">
+                      <input
+                        className="block-input"
+                        placeholder="Note (italic in PDF)..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%', fontStyle: 'italic', color: 'var(--color-text-muted)' }}
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'subtotal') {
+                const subtotalAmt = lines
+                  .slice(0, idx)
+                  .filter(r => (r.row_type || 'item') === 'item')
+                  .reduce((s, r) => s + r.quantity * r.unit_price, 0);
+                return (
+                  <tr key={line.id} style={{ borderTop: '1px solid var(--color-border-primary)', background: 'var(--color-bg-tertiary)' }}>
+                    <td></td>
+                    <td colSpan={5} className="p-1">
+                      <input
+                        className="block-input font-bold"
+                        placeholder="Subtotal label..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </td>
+                    <td className="p-1 text-right font-mono font-bold text-text-primary">{fmt.format(subtotalAmt)}</td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'image') {
+                return (
+                  <tr key={line.id}>
+                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
+                      <GripVertical size={12} />
+                    </td>
+                    <td colSpan={5} className="p-1">
+                      <input
+                        className="block-input"
+                        placeholder="Image URL or base64..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                      <input
+                        className="block-input mt-1"
+                        placeholder="Caption (optional)..."
+                        value={line.unit_label}
+                        onChange={(e) => updateLine(idx, 'unit_label', e.target.value)}
+                        style={{ width: '100%', fontSize: '11px' }}
+                      />
+                    </td>
+                    <td></td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              // Standard item row
               return (
                 <tr key={line.id}>
-                  <td className="p-1">
-                    <input
-                      className="block-input"
-                      placeholder="Item description"
-                      value={line.description}
-                      onChange={(e) => updateLine(idx, 'description', e.target.value)}
-                    />
+                  <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
+                    <GripVertical size={12} />
+                  </td>
+                  <td className="p-1" style={{ position: 'relative' }}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        className="block-input"
+                        placeholder="Item description"
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        className="block-btn p-1"
+                        style={{ flexShrink: 0 }}
+                        onClick={() => setCatalogOpen(catalogOpen === idx ? null : idx)}
+                        title="Pick from catalog"
+                      >
+                        <BookOpen size={13} />
+                      </button>
+                    </div>
+                    {catalogOpen === idx && (
+                      <CatalogDropdown
+                        items={catalogItems}
+                        onSelect={(item) => applyCatalogItem(idx, item)}
+                        onClose={() => setCatalogOpen(null)}
+                      />
+                    )}
                   </td>
                   <td className="p-1">
                     <input
@@ -536,9 +845,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       min={1}
                       className="block-input text-right font-mono"
                       value={line.quantity}
-                      onChange={(e) =>
-                        updateLine(idx, 'quantity', Math.max(1, parseFloat(e.target.value) || 1))
-                      }
+                      onChange={(e) => updateLine(idx, 'quantity', Math.max(1, parseFloat(e.target.value) || 1))}
                     />
                   </td>
                   <td className="p-1">
@@ -548,14 +855,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       step="0.01"
                       className="block-input text-right font-mono"
                       value={line.unit_price}
-                      onChange={(e) =>
-                        updateLine(idx, 'unit_price', parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(e) => updateLine(idx, 'unit_price', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className="p-1 text-right font-mono text-text-secondary">
-                    {fmt.format(amount)}
-                  </td>
+                  <td className="p-1 text-right font-mono text-text-secondary">{fmt.format(amount)}</td>
                   <td className="p-1">
                     <input
                       type="number"
@@ -563,9 +866,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       step="0.01"
                       className="block-input text-right font-mono"
                       value={line.tax_rate}
-                      onChange={(e) =>
-                        updateLine(idx, 'tax_rate', parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(e) => updateLine(idx, 'tax_rate', parseFloat(e.target.value) || 0)}
                     />
                   </td>
                   <td className="p-1">
@@ -576,26 +877,40 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     >
                       <option value="">Select account</option>
                       {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code ? `${a.code} - ${a.name}` : a.name}
-                        </option>
+                        <option key={a.id} value={a.id}>{a.code ? `${a.code} - ${a.name}` : a.name}</option>
                       ))}
                     </select>
                   </td>
                   <td className="p-1 text-center">
-                    <button
-                      className="text-text-muted hover:text-accent-expense transition-colors p-1"
-                      onClick={() => removeLine(idx)}
-                      title="Remove line"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-1"
+                        onClick={() => removeLine(idx)}
+                        title="Remove line"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                      {isItem && line.description.trim() && (
+                        <button
+                          className="text-text-muted hover:text-accent-revenue transition-colors p-1"
+                          onClick={() => saveLineToCatalog(idx)}
+                          title="Save to catalog"
+                          disabled={savingToCatalog === idx}
+                        >
+                          <Star size={13} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+
+        <div className="px-4 py-3 border-t border-border-primary">
+          <RowTypeToolbar onAdd={addLine} />
+        </div>
       </div>
 
       {/* Footer Totals */}
@@ -620,14 +935,32 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
             />
           </div>
-          <div
-            className="flex justify-between text-sm font-bold pt-3"
-            style={{ borderTop: '1px solid var(--color-border-primary)' }}
-          >
+          <div className="flex justify-between text-sm font-bold pt-3" style={{ borderTop: '1px solid var(--color-border-primary)' }}>
             <span className="text-text-primary">Total</span>
             <span className="font-mono text-text-primary text-lg">{fmt.format(total)}</span>
           </div>
         </div>
+      </div>
+
+      {/* Payment Schedule */}
+      <div className="block-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSchedule ? 16 : 0 }}>
+          <div>
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">Payment Schedule</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 2 }}>Split this invoice into milestone payments</div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={showSchedule} onChange={(e) => setShowSchedule(e.target.checked)} style={{ width: 16, height: 16 }} />
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Enable</span>
+          </label>
+        </div>
+        {showSchedule && (
+          <PaymentScheduleEditor
+            milestones={milestones}
+            onChange={setMilestones}
+            totalAmount={total}
+          />
+        )}
       </div>
 
       {/* Notes & Terms */}
@@ -645,7 +978,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         </div>
         <div>
           <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-            Terms & Conditions
+            Terms &amp; Conditions
           </label>
           <textarea
             className="block-input"
@@ -656,6 +989,69 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             style={{ resize: 'vertical' }}
           />
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div
+        className="module-header"
+        style={{ flexShrink: 0, padding: '0 24px', borderBottom: '1px solid var(--color-border-primary)' }}
+      >
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="block-btn p-2" title="Back">
+            <ArrowLeft size={16} />
+          </button>
+          <h1 className="module-title text-text-primary">{isEdit ? 'Edit Invoice' : 'New Invoice'}</h1>
+        </div>
+        <div className="module-actions">
+          <button
+            className="block-btn flex items-center gap-1.5"
+            onClick={() => setShowPreview((v) => !v)}
+            title={showPreview ? 'Hide preview' : 'Show live preview'}
+          >
+            {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showPreview ? 'Hide Preview' : 'Preview'}
+          </button>
+          <button className="block-btn" disabled={saving} onClick={() => handleSave(false)}>
+            {saving ? 'Saving...' : 'Save as Draft'}
+          </button>
+          <button className="block-btn-primary" disabled={saving} onClick={() => handleSave(true)}>
+            {saving ? 'Saving...' : 'Save & Send'}
+          </button>
+        </div>
+      </div>
+
+      {/* Body: single-pane or split-pane */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Form pane */}
+        <div
+          style={{
+            width: showPreview ? '540px' : '100%',
+            flexShrink: 0,
+            overflowY: 'auto',
+            borderRight: showPreview ? '1px solid var(--color-border-primary)' : 'none',
+          }}
+        >
+          {formContent}
+        </div>
+
+        {/* Preview pane */}
+        {showPreview && (
+          <div style={{ flex: 1, overflow: 'hidden', background: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b', fontWeight: 600, background: '#e2e8f0', borderBottom: '1px solid #cbd5e1', flexShrink: 0 }}>
+              LIVE PREVIEW
+            </div>
+            <iframe
+              srcDoc={previewHTML}
+              title="Invoice Preview"
+              style={{ flex: 1, border: 'none', width: '100%', background: '#fff' }}
+              sandbox="allow-same-origin"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

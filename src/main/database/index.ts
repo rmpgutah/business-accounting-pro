@@ -9,9 +9,14 @@ let currentCompanyId: string | null = null;
 
 export function getDbPath(): string {
   const userDataPath = app.getPath('userData');
-  const dbDir = path.join(userDataPath, 'databases');
-  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  return path.join(dbDir, 'accounting.db');
+  // Place DB directly in userData — no subdirectory creation, avoids APFS orphan-inode race
+  const dbPath = path.join(userDataPath, 'accounting.db');
+  // One-time migration: move from old databases/ subdir if it exists and is accessible
+  const legacyPath = path.join(userDataPath, 'databases', 'accounting.db');
+  if (!fs.existsSync(dbPath) && fs.existsSync(legacyPath)) {
+    try { fs.renameSync(legacyPath, dbPath); } catch (_) {}
+  }
+  return dbPath;
 }
 
 export function getDb(): Database.Database {
@@ -40,6 +45,61 @@ export function initDatabase(): Database.Database {
     // Rules engine additions (2026-04-01)
     "ALTER TABLE invoices ADD COLUMN rules_applied TEXT DEFAULT '[]'",
     "ALTER TABLE expenses ADD COLUMN rules_applied TEXT DEFAULT '[]'",
+    // Dynamic invoices (2026-04-06)
+    "ALTER TABLE invoices ADD COLUMN terms_text TEXT DEFAULT ''",
+    `CREATE TABLE IF NOT EXISTS invoice_settings (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL UNIQUE,
+      accent_color TEXT NOT NULL DEFAULT '#2563eb',
+      logo_data TEXT DEFAULT NULL,
+      template_style TEXT NOT NULL DEFAULT 'classic',
+      show_logo INTEGER NOT NULL DEFAULT 1,
+      show_tax_column INTEGER NOT NULL DEFAULT 1,
+      show_payment_terms INTEGER NOT NULL DEFAULT 1,
+      footer_text TEXT DEFAULT '',
+      default_notes TEXT DEFAULT '',
+      default_terms_text TEXT DEFAULT '',
+      default_due_days INTEGER NOT NULL DEFAULT 30,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS invoice_catalog_items (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      unit_price REAL NOT NULL DEFAULT 0,
+      tax_rate REAL NOT NULL DEFAULT 0,
+      account_id TEXT DEFAULT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    // Invoice Studio (2026-04-07) — rich row types, branding, payment schedule
+    "ALTER TABLE invoice_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
+    "ALTER TABLE invoice_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
+    "ALTER TABLE invoice_line_items ADD COLUMN item_code TEXT DEFAULT ''",
+    "ALTER TABLE invoice_line_items ADD COLUMN line_discount REAL DEFAULT 0",
+    "ALTER TABLE invoice_line_items ADD COLUMN line_discount_type TEXT DEFAULT 'percent'",
+    "ALTER TABLE invoice_settings ADD COLUMN secondary_color TEXT DEFAULT '#64748b'",
+    "ALTER TABLE invoice_settings ADD COLUMN watermark_text TEXT DEFAULT ''",
+    "ALTER TABLE invoice_settings ADD COLUMN watermark_opacity REAL DEFAULT 0.06",
+    "ALTER TABLE invoice_settings ADD COLUMN font_family TEXT DEFAULT 'system'",
+    "ALTER TABLE invoice_settings ADD COLUMN header_layout TEXT DEFAULT 'logo-left'",
+    "ALTER TABLE invoice_settings ADD COLUMN column_config TEXT DEFAULT '{}'",
+    "ALTER TABLE invoice_settings ADD COLUMN payment_qr_url TEXT DEFAULT ''",
+    "ALTER TABLE invoice_settings ADD COLUMN show_payment_qr INTEGER DEFAULT 0",
+    "ALTER TABLE invoice_catalog_items ADD COLUMN item_code TEXT DEFAULT ''",
+    "ALTER TABLE invoice_catalog_items ADD COLUMN unit_label TEXT DEFAULT ''",
+    `CREATE TABLE IF NOT EXISTS invoice_payment_schedule (
+      id TEXT PRIMARY KEY,
+      invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      milestone_label TEXT NOT NULL DEFAULT '',
+      due_date TEXT NOT NULL DEFAULT '',
+      amount REAL NOT NULL DEFAULT 0,
+      paid INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -171,6 +231,8 @@ const tablesWithoutUpdatedAt = new Set([
   'quote_line_items',
   // Invoice reminders — created_at only
   'invoice_reminders',
+  // Invoice payment schedule — created_at only
+  'invoice_payment_schedule',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

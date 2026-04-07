@@ -121,6 +121,8 @@ export interface Invoice {
   updated_at: string;
 }
 
+export type LineRowType = 'item' | 'section' | 'note' | 'subtotal' | 'image' | 'spacer';
+
 export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
@@ -132,6 +134,23 @@ export interface InvoiceLineItem {
   account_id: string;
   project_id: string | null;
   time_entry_ids: string[];
+  sort_order: number;
+  row_type: LineRowType;
+  unit_label: string;
+  item_code: string;
+  line_discount: number;
+  line_discount_type: 'percent' | 'flat';
+  created_at: string;
+}
+
+export interface InvoicePaymentMilestone {
+  id: string;
+  invoice_id: string;
+  milestone_label: string;
+  due_date: string;
+  amount: number;
+  paid: boolean;
+  sort_order: number;
   created_at: string;
 }
 

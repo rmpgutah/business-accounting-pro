@@ -89,9 +89,17 @@ function downloadBackup(email: string): Promise<Buffer | null> {
       method: 'GET',
     }, (res) => {
       if (res.statusCode !== 200) { resolve(null); return; }
+      const ct = res.headers['content-type'] || '';
+      if (ct.includes('text/html') || ct.includes('text/plain')) { res.resume(); resolve(null); return; }
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        // Validate SQLite magic header before accepting
+        const SQLITE_MAGIC = Buffer.from('SQLite format 3\0');
+        if (buf.length < 16 || !buf.slice(0, 16).equals(SQLITE_MAGIC)) { resolve(null); return; }
+        resolve(buf);
+      });
     });
     req.on('error', () => resolve(null));
     req.end();
@@ -403,6 +411,10 @@ export function registerIpcHandlers(): void {
     'quote_line_items',
     // Invoice reminders — company_id lives on parent `invoices` table
     'invoice_reminders',
+    // Invoice settings & catalog — company_id injected by their own handlers
+    'invoice_settings', 'invoice_catalog_items',
+    // Invoice payment schedule — company_id lives on parent `invoices` table
+    'invoice_payment_schedule',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -507,8 +519,8 @@ export function registerIpcHandlers(): void {
           savedId = record.id;
         }
 
-        for (const line of lineItems) {
-          db.create('invoice_line_items', { ...line, invoice_id: savedId });
+        for (let i = 0; i < lineItems.length; i++) {
+          db.create('invoice_line_items', { ...lineItems[i], invoice_id: savedId, sort_order: i });
         }
 
         return savedId;
@@ -878,6 +890,107 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('invoice:list-reminders', (_event, { invoiceId }: { invoiceId: string }) => {
     return db.getDb().prepare('SELECT * FROM invoice_reminders WHERE invoice_id = ? ORDER BY scheduled_date').all(invoiceId);
+  });
+
+  // ─── Invoice Settings ──────────────────────────────────
+  ipcMain.handle('invoice:get-settings', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    let row = db.getDb().prepare('SELECT * FROM invoice_settings WHERE company_id = ?').get(companyId) as any;
+    if (!row) {
+      // Auto-create defaults on first access
+      row = db.create('invoice_settings', {
+        company_id: companyId,
+        accent_color: '#2563eb',
+        template_style: 'classic',
+        show_logo: 1,
+        show_tax_column: 1,
+        show_payment_terms: 1,
+        footer_text: '',
+        default_notes: '',
+        default_terms_text: '',
+        default_due_days: 30,
+      });
+    }
+    return row;
+  });
+
+  ipcMain.handle('invoice:save-settings', (_event, data: Record<string, any>) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    try {
+      const existing = db.getDb().prepare('SELECT id FROM invoice_settings WHERE company_id = ?').get(companyId) as any;
+      if (existing) {
+        db.update('invoice_settings', existing.id, data);
+        return db.getDb().prepare('SELECT * FROM invoice_settings WHERE company_id = ?').get(companyId);
+      } else {
+        return db.create('invoice_settings', { ...data, company_id: companyId });
+      }
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Invoice Catalog Items ────────────────────────────
+  ipcMain.handle('invoice:catalog-list', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.getDb().prepare('SELECT * FROM invoice_catalog_items WHERE company_id = ? ORDER BY name').all(companyId);
+  });
+
+  ipcMain.handle('invoice:catalog-save', (_event, data: Record<string, any>) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    try {
+      if (data.id) {
+        db.update('invoice_catalog_items', data.id, data);
+        return db.getById('invoice_catalog_items', data.id);
+      }
+      return db.create('invoice_catalog_items', { ...data, company_id: companyId });
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('invoice:catalog-delete', (_event, id: string) => {
+    try {
+      db.remove('invoice_catalog_items', id);
+      return { success: true };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Invoice Payment Schedule ──────────────────────────
+  ipcMain.handle('invoice:payment-schedule-list', (_event, invoiceId: string) => {
+    try {
+      return db.queryAll('invoice_payment_schedule', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' });
+    } catch (err) {
+      return [];
+    }
+  });
+
+  ipcMain.handle('invoice:payment-schedule-save', (_event, { invoiceId, milestones }: { invoiceId: string; milestones: any[] }) => {
+    try {
+      // Delete existing milestones for this invoice, then re-insert
+      db.getDb().prepare('DELETE FROM invoice_payment_schedule WHERE invoice_id = ?').run(invoiceId);
+      const inserted = milestones.map((m, idx) => {
+        const row = db.create('invoice_payment_schedule', {
+          id: m.id || undefined,
+          invoice_id: invoiceId,
+          milestone_label: m.milestone_label || '',
+          due_date: m.due_date || '',
+          amount: Number(m.amount || 0),
+          paid: m.paid ? 1 : 0,
+          sort_order: idx,
+        });
+        return row;
+      });
+      scheduleAutoBackup();
+      return inserted;
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   // ─── CSV Export ────────────────────────────────────────

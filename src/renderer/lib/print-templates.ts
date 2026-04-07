@@ -8,6 +8,12 @@
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n || 0);
 
+const fmtDate = (d: string) => {
+  if (!d) return '';
+  try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); }
+  catch { return d; }
+};
+
 // ─── Shared base styles ─────────────────────────────────────
 const baseStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,8 +26,7 @@ const baseStyles = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  @page { margin: 0.4in; }
-  .page { padding: 48px; }
+  @page { margin: 0.45in; }
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 8px 12px; text-align: left; }
   th {
@@ -46,80 +51,438 @@ const baseStyles = `
   }
 `;
 
+// ─── Status stamp helper ─────────────────────────────────────
+function statusStampCSS(color: string): string {
+  return `
+  .status-stamp {
+    position: fixed; top: 60px; right: 40px;
+    font-size: 36px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 4px; color: ${color};
+    border: 4px solid ${color}; border-radius: 4px;
+    padding: 6px 16px; opacity: 0.18; transform: rotate(-18deg);
+    pointer-events: none;
+  }
+  @media print { .status-stamp { position: fixed; } }
+  `;
+}
+
+function getStatusStamp(status: string): { label: string; color: string } | null {
+  switch (status) {
+    case 'paid': return { label: 'PAID', color: '#16a34a' };
+    case 'overdue': return { label: 'OVERDUE', color: '#dc2626' };
+    case 'draft': return { label: 'DRAFT', color: '#94a3b8' };
+    case 'cancelled': return { label: 'VOID', color: '#dc2626' };
+    case 'partial': return { label: 'PARTIAL', color: '#d97706' };
+    default: return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // INVOICE TEMPLATE
 // ═══════════════════════════════════════════════════════════════
+
+export type LineRowType = 'item' | 'section' | 'note' | 'subtotal' | 'image' | 'spacer';
+
+export interface InvoiceColumnConfig {
+  key: string;
+  label: string;
+  visible: boolean;
+  order: number;
+}
+
+export interface InvoiceSettings {
+  accent_color?: string;
+  secondary_color?: string;
+  logo_data?: string | null;
+  template_style?: 'classic' | 'modern' | 'minimal' | 'executive' | 'compact';
+  show_logo?: boolean | number;
+  show_tax_column?: boolean | number;
+  show_payment_terms?: boolean | number;
+  footer_text?: string;
+  watermark_text?: string;
+  watermark_opacity?: number;
+  font_family?: 'system' | 'inter' | 'georgia' | 'mono';
+  header_layout?: 'logo-left' | 'logo-center' | 'logo-right';
+  column_config?: InvoiceColumnConfig[] | string;
+  payment_qr_url?: string;
+  show_payment_qr?: boolean | number;
+}
+
+const DEFAULT_COLUMNS: InvoiceColumnConfig[] = [
+  { key: 'item_code',   label: 'Code',        visible: false, order: 0 },
+  { key: 'description', label: 'Description', visible: true,  order: 1 },
+  { key: 'quantity',    label: 'Qty',         visible: true,  order: 2 },
+  { key: 'unit_label',  label: 'Unit',        visible: false, order: 3 },
+  { key: 'unit_price',  label: 'Rate',        visible: true,  order: 4 },
+  { key: 'tax_rate',    label: 'Tax %',       visible: true,  order: 5 },
+  { key: 'amount',      label: 'Amount',      visible: true,  order: 6 },
+];
+
+export { DEFAULT_COLUMNS };
+
+function resolveColumns(raw: InvoiceColumnConfig[] | string | undefined): InvoiceColumnConfig[] {
+  if (!raw) return DEFAULT_COLUMNS;
+  const parsed: InvoiceColumnConfig[] = typeof raw === 'string'
+    ? (() => { try { return JSON.parse(raw); } catch { return []; } })()
+    : raw;
+  if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_COLUMNS;
+  return [...parsed].sort((a, b) => a.order - b.order).filter(c => c.visible);
+}
+
+function fontStack(family: string | undefined): string {
+  switch (family) {
+    case 'inter':   return "'Segoe UI', Optima, Arial, sans-serif";
+    case 'georgia': return "Georgia, 'Times New Roman', serif";
+    case 'mono':    return "'Courier New', Courier, monospace";
+    default:        return "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+  }
+}
+
+function watermarkCSS(text: string, opacity: number): string {
+  if (!text) return '';
+  return `
+  .watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 80px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 8px; color: #000;
+    opacity: ${Math.min(0.15, Math.max(0.02, opacity || 0.06))};
+    pointer-events: none; white-space: nowrap; z-index: 0;
+  }
+  @media print { .watermark { position: fixed; } }`;
+}
+
+// Simple placeholder QR — renders a labeled box. Replace with qrcode-svg for real QR.
+function qrPlaceholder(url: string): string {
+  if (!url) return '';
+  return `
+  <div style="display:inline-block;border:2px solid #334155;padding:8px;text-align:center;border-radius:3px;">
+    <div style="width:72px;height:72px;background:repeating-linear-gradient(45deg,#334155 0px,#334155 2px,#fff 2px,#fff 8px);margin-bottom:4px;"></div>
+    <div style="font-size:8px;color:#64748b;max-width:80px;word-break:break-all;">${url}</div>
+  </div>`;
+}
+
 export function generateInvoiceHTML(
   invoice: any,
   company: any,
   client: any,
-  lineItems: any[]
+  lineItems: any[],
+  settings?: InvoiceSettings,
+  paymentSchedule?: any[]
 ): string {
-  const companyName = company?.name || 'Company';
-  const companyAddr = [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
-    .filter(Boolean).join(', ');
+  const accent    = settings?.accent_color || '#2563eb';
+  const secondary = settings?.secondary_color || '#64748b';
+  const style     = settings?.template_style || 'classic';
+  const showLogo  = settings?.show_logo !== 0 && settings?.show_logo !== false;
+  const logoData  = showLogo ? (settings?.logo_data || null) : null;
+  const footerText = settings?.footer_text || '';
+  const headerLayout = settings?.header_layout || 'logo-left';
+  const wmText    = settings?.watermark_text || '';
+  const wmOpacity = settings?.watermark_opacity ?? 0.06;
+  const showQR    = settings?.show_payment_qr && settings?.show_payment_qr !== 0;
+  const qrUrl     = settings?.payment_qr_url || '';
+  const cols      = resolveColumns(settings?.column_config);
+
+  const companyName  = company?.name || 'Company';
+  const companyAddr  = [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
   const companyEmail = company?.email || '';
   const companyPhone = company?.phone || '';
 
-  const clientName = client?.name || 'Client';
+  const clientName  = client?.name || 'Client';
   const clientEmail = client?.email || '';
-  const clientAddr = [client?.address_line1, client?.address_line2, client?.city, client?.state, client?.zip]
-    .filter(Boolean).join(', ');
+  const clientAddr  = [client?.address_line1, client?.address_line2, client?.city, client?.state, client?.zip].filter(Boolean).join(', ');
   const clientPhone = client?.phone || '';
 
-  const lineRows = lineItems.map(l => `
-    <tr>
-      <td>${l.description || ''}</td>
-      <td class="text-right font-mono">${l.quantity ?? 1}</td>
-      <td class="text-right font-mono">${fmt(l.unit_price)}</td>
-      <td class="text-right font-mono">${l.tax_rate > 0 ? l.tax_rate + '%' : '--'}</td>
-      <td class="text-right font-mono font-bold">${fmt(l.amount || (l.quantity || 1) * (l.unit_price || 0))}</td>
-    </tr>
-  `).join('');
+  const taxAmount      = Number(invoice.tax_amount || 0);
+  const discountAmount = Number(invoice.discount_amount || 0);
+  const amountPaid     = Number(invoice.amount_paid || 0);
+  const total          = Number(invoice.total || 0);
+  const balance        = total - amountPaid;
+  const stamp          = getStatusStamp(invoice.status);
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-${baseStyles}
-.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-.company-name { font-size: 22px; font-weight: 800; color: #0f172a; }
-.company-detail { font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.6; }
-.inv-title { font-size: 28px; font-weight: 800; color: #0f172a; text-transform: uppercase; text-align: right; }
-.inv-number { font-size: 13px; color: #64748b; text-align: right; margin-top: 4px; }
-.addresses { display: flex; justify-content: space-between; margin-bottom: 28px; }
-.addr-block { max-width: 48%; }
-.addr-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 2px; }
-.addr-detail { font-size: 12px; color: #64748b; line-height: 1.5; }
-.meta-row { display: flex; gap: 40px; padding: 14px 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 2px; margin-bottom: 28px; }
-.meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; }
-.meta-value { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px; }
-.totals { display: flex; justify-content: flex-end; margin-top: 8px; }
-.totals-box { width: 260px; }
-.totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; color: #475569; }
-.totals-row span:last-child { font-variant-numeric: tabular-nums; }
-.totals-total { border-top: 2px solid #0f172a; font-weight: 800; font-size: 16px; color: #0f172a; padding-top: 10px; margin-top: 4px; }
-.totals-paid { color: #16a34a; }
-.totals-balance { font-weight: 700; font-size: 14px; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 4px; }
-.footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
-.footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; margin-bottom: 4px; }
-.footer-text { font-size: 11px; color: #64748b; line-height: 1.6; white-space: pre-line; }
-.footer-company { text-align: center; margin-top: 32px; font-size: 10px; color: #cbd5e1; }
-</style></head>
-<body>
-<div class="page">
-  <div class="header">
-    <div>
+  const isCompact = style === 'compact';
+  const baseFontSize = isCompact ? '11px' : '13px';
+
+  // ── Font override in baseStyles ──
+  const bodyFont = fontStack(settings?.font_family);
+  const styledBase = baseStyles.replace(
+    "font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
+    `font-family: ${bodyFont};`
+  ).replace('font-size: 13px;', `font-size: ${baseFontSize};`);
+
+  // ── Column headers ──
+  const colHeaders = cols.map(c => {
+    const right = ['quantity','unit_price','tax_rate','amount'].includes(c.key);
+    return `<th class="${right ? 'text-right' : ''}">${c.label}</th>`;
+  }).join('');
+
+  // ── Calculate running subtotal for subtotal rows ──
+  let runningItemAmt = 0;
+  let lastSubtotalAt = 0;
+
+  // ── Line item rows (rich row types) ──
+  const lineRows = lineItems.map((l, i) => {
+    const rowType: LineRowType = l.row_type || 'item';
+    const colSpan = cols.length;
+
+    if (rowType === 'spacer') {
+      return `<tr><td colspan="${colSpan}" style="height:16px;border:none;"></td></tr>`;
+    }
+
+    if (rowType === 'section') {
+      return `<tr>
+        <td colspan="${colSpan}" style="background:${secondary}22;font-weight:700;font-size:${isCompact?'10px':'11px'};
+          text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;padding:${isCompact?'4px 12px':'6px 12px'};border-bottom:none;">
+          ${l.description || ''}
+        </td>
+      </tr>`;
+    }
+
+    if (rowType === 'note') {
+      return `<tr>
+        <td colspan="${colSpan}" style="font-style:italic;color:#94a3b8;font-size:${isCompact?'10px':'11px'};
+          padding-left:24px;border-bottom:none;">
+          ${l.description || ''}
+        </td>
+      </tr>`;
+    }
+
+    if (rowType === 'image') {
+      const caption = l.unit_label || '';
+      return `<tr>
+        <td colspan="${colSpan}" style="text-align:center;padding:12px;border-bottom:none;">
+          ${l.description ? `<img src="${l.description}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
+          ${caption ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px;">${caption}</div>` : ''}
+        </td>
+      </tr>`;
+    }
+
+    if (rowType === 'subtotal') {
+      const subtotalAmt = lineItems
+        .slice(lastSubtotalAt, i)
+        .filter(r => (r.row_type || 'item') === 'item')
+        .reduce((sum, r) => sum + Number(r.amount || (r.quantity || 1) * (r.unit_price || 0)), 0);
+      lastSubtotalAt = i + 1;
+      return `<tr style="border-top:1px solid #334155;">
+        <td colspan="${colSpan - 1}" style="font-weight:700;font-size:${isCompact?'11px':'12px'};color:#0f172a;">
+          ${l.description || 'Subtotal'}
+        </td>
+        <td class="text-right font-mono font-bold" style="color:#0f172a;">${fmt(subtotalAmt)}</td>
+      </tr>`;
+    }
+
+    // ── Standard item row ──
+    const rowBg = (style === 'modern' || style === 'executive') && i % 2 === 0 ? `background:${secondary}14;` : '';
+    const rowPad = isCompact ? 'padding-top:4px;padding-bottom:4px;' : '';
+    const discountedPrice = (() => {
+      const baseAmt = Number(l.amount || (l.quantity || 1) * (l.unit_price || 0));
+      if (!l.line_discount || l.line_discount === 0) return baseAmt;
+      if (l.line_discount_type === 'flat') return baseAmt - Number(l.line_discount);
+      return baseAmt * (1 - Number(l.line_discount) / 100);
+    })();
+
+    const cells = cols.map(c => {
+      const right = ['quantity','unit_price','tax_rate','amount'].includes(c.key);
+      const cls = `${right ? 'text-right font-mono' : ''} ${c.key === 'amount' ? 'font-bold' : ''}`.trim();
+      let val = '';
+      switch (c.key) {
+        case 'item_code':    val = l.item_code ? `<span style="font-size:9px;background:#f1f5f9;padding:1px 4px;border-radius:2px;color:#64748b;">${l.item_code}</span>` : ''; break;
+        case 'description':  val = l.description || ''; break;
+        case 'quantity':     val = String(l.quantity ?? 1); break;
+        case 'unit_label':   val = l.unit_label || ''; break;
+        case 'unit_price':   val = fmt(l.unit_price || 0); break;
+        case 'tax_rate':     val = l.tax_rate > 0 ? l.tax_rate + '%' : '—'; break;
+        case 'amount':       val = fmt(discountedPrice); break;
+      }
+      return `<td class="${cls}" style="${rowPad}">${val}</td>`;
+    }).join('');
+
+    return `<tr style="${rowBg}">${cells}</tr>`;
+  }).join('');
+
+  // ── Template CSS ──
+  const templateStyles =
+    style === 'modern' ? `
+      .header { display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 0; }
+      .header-left { background: ${accent}; color: #fff; padding: 32px 28px; min-width: 220px; }
+      .header-right { padding: 28px 28px 28px 0; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; }
+      .company-name { font-size: 20px; font-weight: 800; color: #fff; }
+      .company-detail { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 8px; line-height: 1.6; }
+      .inv-title { font-size: 32px; font-weight: 900; color: ${accent}; text-transform: uppercase; text-align: right; }
+      .inv-number { font-size: 14px; color: #64748b; text-align: right; margin-top: 4px; font-weight: 700; }
+      .page { padding: 0; }
+      .content { padding: 32px 28px; }
+      th { background: ${accent}; color: #fff !important; border-bottom: none; }
+      td { border-bottom: 1px solid #e2e8f0; }
+    ` : style === 'minimal' ? `
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; }
+      .company-name { font-size: 18px; font-weight: 700; color: #0f172a; }
+      .company-detail { font-size: 11px; color: #94a3b8; margin-top: 4px; line-height: 1.6; }
+      .inv-title { font-size: 22px; font-weight: 700; color: #0f172a; text-align: right; }
+      .inv-number { font-size: 12px; color: #94a3b8; text-align: right; margin-top: 2px; }
+      .page { padding: 40px; }
+      .content { padding: 0; }
+      th { border-bottom: 1px solid #0f172a; }
+    ` : style === 'executive' ? `
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0; }
+      .header-top { background: ${accent}; padding: 24px 32px 20px; }
+      .header-bottom { background: #fff; padding: 12px 32px 24px; border-bottom: 3px solid ${accent}; display: flex; justify-content: space-between; align-items: flex-end; }
+      .company-name { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+      .company-detail { font-size: 11px; color: rgba(255,255,255,0.8); margin-top: 6px; line-height: 1.7; }
+      .inv-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: ${accent}; }
+      .inv-number { font-size: 28px; font-weight: 900; color: #0f172a; }
+      .page { padding: 0; }
+      .content { padding: 28px 32px; }
+      th { border-bottom: 2px solid ${accent}; color: ${accent} !important; }
+    ` : style === 'compact' ? `
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid ${accent}; }
+      .company-name { font-size: 16px; font-weight: 800; color: #0f172a; }
+      .company-detail { font-size: 10px; color: #64748b; margin-top: 3px; line-height: 1.5; }
+      .inv-title { font-size: 20px; font-weight: 800; color: ${accent}; text-transform: uppercase; text-align: right; }
+      .inv-number { font-size: 11px; color: #64748b; text-align: right; font-weight: 600; }
+      .page { padding: 28px 32px; }
+      .content { padding: 0; }
+      th { border-bottom: 2px solid ${accent}; color: ${accent} !important; font-size: 9px; }
+      td { padding: 4px 12px; font-size: 11px; border-bottom: 1px solid #f1f5f9; }
+      .meta-row { padding: 8px 12px; margin-bottom: 14px; }
+      .addresses { margin-bottom: 12px; }
+    ` : /* classic */ `
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; }
+      .company-name { font-size: 22px; font-weight: 800; color: #0f172a; }
+      .company-detail { font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.6; }
+      .inv-title { font-size: 28px; font-weight: 800; color: ${accent}; text-transform: uppercase; text-align: right; }
+      .inv-number { font-size: 13px; color: #64748b; text-align: right; margin-top: 4px; font-weight: 600; }
+      .page { padding: 48px; }
+      .content { padding: 0; }
+      th { border-bottom: 2px solid ${accent}; color: ${accent} !important; }
+    `;
+
+  const logoHTML = logoData
+    ? `<img src="${logoData}" alt="${companyName}" style="max-height:56px;max-width:180px;object-fit:contain;display:block;margin-bottom:8px;">`
+    : '';
+
+  // ── Header layout variants ──
+  const companyBlock = `
+    ${logoHTML}
+    <div class="company-name">${companyName}</div>
+    <div class="company-detail">
+      ${companyAddr ? companyAddr + '<br>' : ''}
+      ${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}
+    </div>`;
+
+  const invBlock = `
+    <div class="inv-title">Invoice</div>
+    <div class="inv-number">#${invoice.invoice_number || ''}</div>`;
+
+  let headerHTML = '';
+  if (style === 'executive') {
+    headerHTML = `
+    <div class="header-top">
       <div class="company-name">${companyName}</div>
       <div class="company-detail">
         ${companyAddr ? companyAddr + '<br>' : ''}
         ${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}
       </div>
     </div>
-    <div>
-      <div class="inv-title">Invoice</div>
-      <div class="inv-number">#${invoice.invoice_number || ''}</div>
+    <div class="header-bottom">
+      <div>${logoHTML}</div>
+      <div>
+        <div class="inv-title">Invoice</div>
+        <div class="inv-number">#${invoice.invoice_number || ''}</div>
+      </div>
+    </div>`;
+  } else if (style === 'modern') {
+    headerHTML = `
+    <div class="header">
+      <div class="header-left">${companyBlock}</div>
+      <div class="header-right">${invBlock}</div>
+    </div>`;
+  } else if (headerLayout === 'logo-center') {
+    headerHTML = `
+    <div style="text-align:center;margin-bottom:24px;">
+      ${logoHTML}
+      <div class="company-name">${companyName}</div>
+      <div class="company-detail">${companyAddr ? companyAddr + '<br>' : ''}${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}</div>
     </div>
-  </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">${invBlock}</div>`;
+  } else if (headerLayout === 'logo-right') {
+    headerHTML = `
+    <div class="header">
+      <div>${invBlock}</div>
+      <div>${companyBlock}</div>
+    </div>`;
+  } else {
+    headerHTML = `
+    <div class="header">
+      <div>${companyBlock}</div>
+      <div style="text-align:right;">${invBlock}</div>
+    </div>`;
+  }
+
+  // ── Payment schedule ──
+  const scheduleHTML = (() => {
+    if (!paymentSchedule || paymentSchedule.length === 0) return '';
+    const rows = paymentSchedule.map(m => `
+      <tr>
+        <td>${m.milestone_label || ''}</td>
+        <td class="text-right">${fmtDate(m.due_date)}</td>
+        <td class="text-right font-mono">${fmt(Number(m.amount || 0))}</td>
+        <td class="text-right">${m.paid ? '<span style="color:#16a34a;font-weight:700;">PAID</span>' : '<span style="color:#94a3b8;">Due</span>'}</td>
+      </tr>`).join('');
+    return `
+    <div style="margin-top:24px;">
+      <div class="section-label" style="margin-bottom:8px;">Payment Schedule</div>
+      <table>
+        <thead><tr>
+          <th>Milestone</th><th class="text-right">Due Date</th>
+          <th class="text-right">Amount</th><th class="text-right">Status</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  })();
+
+  const qrSection = showQR && qrUrl
+    ? `<div style="margin-top:20px;display:flex;align-items:center;gap:16px;">
+         ${qrPlaceholder(`${qrUrl}/${invoice.invoice_number || ''}`)}
+         <div style="font-size:11px;color:#64748b;">Scan to pay online</div>
+       </div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Invoice ${invoice.invoice_number || ''}</title><style>
+${styledBase}
+${templateStyles}
+${stamp ? statusStampCSS(stamp.color) : ''}
+${wmText ? watermarkCSS(wmText, wmOpacity) : ''}
+.addresses { display: flex; justify-content: space-between; margin-bottom: 24px; }
+.addr-block { max-width: 48%; }
+.addr-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
+.addr-detail { font-size: 12px; color: #64748b; line-height: 1.5; }
+.meta-row { display: flex; gap: 36px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; margin-bottom: 24px; flex-wrap: wrap; }
+.meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; }
+.meta-value { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px; }
+.totals { display: flex; justify-content: flex-end; margin-top: 10px; }
+.totals-box { width: 280px; }
+.totals-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; color: #475569; }
+.totals-row span:last-child { font-variant-numeric: tabular-nums; }
+.totals-total { border-top: 2px solid ${accent}; font-weight: 800; font-size: 16px; color: #0f172a; padding-top: 10px; margin-top: 4px; }
+.totals-paid { color: #16a34a; }
+.totals-balance { font-weight: 700; font-size: 14px; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 4px; color: ${balance > 0.005 ? '#dc2626' : '#16a34a'}; }
+.footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e2e8f0; }
+.footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; margin-bottom: 4px; }
+.footer-text { font-size: 11px; color: #64748b; line-height: 1.6; white-space: pre-line; }
+.footer-bottom { text-align: center; margin-top: 28px; font-size: 10px; color: #cbd5e1; }
+.accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
+</style></head>
+<body>
+${wmText ? `<div class="watermark">${wmText}</div>` : ''}
+${style === 'modern' ? `<div class="accent-bar"></div>` : ''}
+${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
+<div class="page">
+<div class="content">
+  ${headerHTML}
 
   <div class="addresses">
     <div class="addr-block">
@@ -134,34 +497,32 @@ ${baseStyles}
   </div>
 
   <div class="meta-row">
-    <div><div class="meta-label">Invoice Date</div><div class="meta-value">${invoice.issue_date || ''}</div></div>
-    <div><div class="meta-label">Due Date</div><div class="meta-value">${invoice.due_date || ''}</div></div>
+    <div><div class="meta-label">Invoice Date</div><div class="meta-value">${fmtDate(invoice.issue_date)}</div></div>
+    <div><div class="meta-label">Due Date</div><div class="meta-value">${fmtDate(invoice.due_date)}</div></div>
     <div><div class="meta-label">Terms</div><div class="meta-value">${invoice.terms || 'Net 30'}</div></div>
+    <div><div class="meta-label">Status</div><div class="meta-value" style="color:${stamp?.color || '#0f172a'}">${(invoice.status || 'draft').toUpperCase()}</div></div>
   </div>
 
   <table>
-    <thead><tr>
-      <th>Description</th>
-      <th class="text-right">Qty</th>
-      <th class="text-right">Rate</th>
-      <th class="text-right">Tax</th>
-      <th class="text-right">Amount</th>
-    </tr></thead>
+    <thead><tr>${colHeaders}</tr></thead>
     <tbody>${lineRows}</tbody>
   </table>
 
   <div class="totals">
     <div class="totals-box">
       <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
-      ${invoice.tax > 0 ? `<div class="totals-row"><span>Tax</span><span>${fmt(invoice.tax)}</span></div>` : ''}
-      ${invoice.discount > 0 ? `<div class="totals-row"><span>Discount</span><span>-${fmt(invoice.discount)}</span></div>` : ''}
-      <div class="totals-row totals-total"><span>Total</span><span>${fmt(invoice.total)}</span></div>
-      ${invoice.amount_paid > 0 ? `
-        <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(invoice.amount_paid)}</span></div>
-        <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt(invoice.total - invoice.amount_paid)}</span></div>
+      ${taxAmount > 0 ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>` : ''}
+      ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>-${fmt(discountAmount)}</span></div>` : ''}
+      <div class="totals-row totals-total"><span>Total</span><span>${fmt(total)}</span></div>
+      ${amountPaid > 0 ? `
+        <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
+        <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt(Math.max(0, balance))}</span></div>
       ` : ''}
     </div>
   </div>
+
+  ${scheduleHTML}
+  ${qrSection}
 
   ${(invoice.notes || invoice.terms_text) ? `
   <div class="footer">
@@ -171,7 +532,8 @@ ${baseStyles}
     </div>
   </div>` : ''}
 
-  <div class="footer-company">${companyName}</div>
+  <div class="footer-bottom">${footerText || companyName}</div>
+</div>
 </div>
 </body></html>`;
 }

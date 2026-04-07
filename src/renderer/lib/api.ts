@@ -48,6 +48,22 @@ const api = {
     window.electronAPI.invoke('notification:list', { unread_only: unreadOnly }),
   markNotificationRead: (id: string) => window.electronAPI.invoke('notification:mark-read', id),
 
+  // Invoice Settings & Catalog
+  getInvoiceSettings: (): Promise<any> =>
+    window.electronAPI.invoke('invoice:get-settings'),
+  saveInvoiceSettings: (settings: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('invoice:save-settings', settings),
+  listCatalogItems: (): Promise<any[]> =>
+    window.electronAPI.invoke('invoice:catalog-list'),
+  saveCatalogItem: (item: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('invoice:catalog-save', item),
+  deleteCatalogItem: (id: string): Promise<void> =>
+    window.electronAPI.invoke('invoice:catalog-delete', id),
+  listPaymentSchedule: (invoiceId: string): Promise<any[]> =>
+    window.electronAPI.invoke('invoice:payment-schedule-list', invoiceId),
+  savePaymentSchedule: (invoiceId: string, milestones: any[]): Promise<any> =>
+    window.electronAPI.invoke('invoice:payment-schedule-save', { invoiceId, milestones }),
+
   // Invoice atomic save (header + line items in one DB transaction)
   saveInvoice: (payload: {
     invoiceId: string | null;

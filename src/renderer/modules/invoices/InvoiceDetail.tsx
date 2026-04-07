@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell } from 'lucide-react';
 import api from '../../lib/api';
-import { generateInvoiceHTML } from '../../lib/print-templates';
+import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import PaymentRecorder from './PaymentRecorder';
@@ -79,10 +79,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [copied, setCopied] = useState(false);
   const [reminders, setReminders] = useState<any[]>([]);
   const [schedulingReminders, setSchedulingReminders] = useState(false);
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
+  const [paymentSchedule, setPaymentSchedule] = useState<any[]>([]);
 
   const buildHTML = () => {
     if (!invoice) return '';
-    return generateInvoiceHTML(invoice, activeCompany, client, lines);
+    return generateInvoiceHTML(invoice, activeCompany, client, lines, invoiceSettings || undefined, paymentSchedule);
   };
 
   const handlePreview = async () => {
@@ -109,17 +111,21 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       if (!inv) return;
       setInvoice(inv);
 
-      const [clientData, lineData, paymentData, reminderData] = await Promise.all([
+      const [clientData, lineData, paymentData, reminderData, settingsData, scheduleData] = await Promise.all([
         api.get('clients', inv.client_id),
-        api.query('invoice_line_items', { invoice_id: invoiceId }),
+        api.query('invoice_line_items', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' }),
         api.query('payments', { invoice_id: invoiceId }),
         api.invoiceListReminders(invoiceId),
+        api.getInvoiceSettings().catch(() => null),
+        api.listPaymentSchedule(invoiceId).catch(() => []),
       ]);
 
       setClient(clientData ?? null);
       setLines(lineData ?? []);
       setPayments(paymentData ?? []);
       setReminders(reminderData ?? []);
+      setPaymentSchedule(scheduleData ?? []);
+      if (settingsData && !settingsData.error) setInvoiceSettings(settingsData);
     } catch (err) {
       console.error('Failed to load invoice detail:', err);
     } finally {
@@ -392,11 +398,11 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
               </div>
             )}
-            {invoice.discount > 0 && (
+            {invoice.discount_amount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Discount</span>
                 <span className="font-mono text-accent-income">
-                  -{formatCurrency(invoice.discount)}
+                  -{formatCurrency(invoice.discount_amount)}
                 </span>
               </div>
             )}
