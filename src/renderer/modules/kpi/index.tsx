@@ -14,6 +14,8 @@ import {
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -85,6 +87,7 @@ const KPIDashboard: React.FC = () => {
   const [runway, setRunway] = useState(0);
   const [cashOnHand, setCashOnHand] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [dashData, setDashData] = useState<any>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +205,14 @@ const KPIDashboard: React.FC = () => {
 
         if (cancelled) return;
 
+        // Dashboard summary data
+        try {
+          const dd = await api.getDashboardData(cid);
+          if (!cancelled) setDashData(dd);
+        } catch (_) {
+          // non-fatal
+        }
+
         // Basic KPIs
         const rev1 = Array.isArray(revenueResult) ? revenueResult[0] : revenueResult;
         const hrs1 = Array.isArray(hoursResult) ? hoursResult[0] : hoursResult;
@@ -310,6 +321,12 @@ const KPIDashboard: React.FC = () => {
       : currentRatio >= 1
         ? 'var(--color-accent-warning)'
         : 'var(--color-accent-expense)';
+
+  const monthlyChartData = dashData?.months?.map((m: string) => {
+    const rev = dashData.revenueByMonth?.find((r: any) => r.month === m);
+    const exp = dashData.expenseByMonth?.find((e: any) => e.month === m);
+    return { month: m.slice(5), revenue: Number(rev?.total || 0), expenses: Number(exp?.total || 0) };
+  }) || [];
 
   if (loading) {
     return (
@@ -445,6 +462,91 @@ const KPIDashboard: React.FC = () => {
                 />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Revenue vs Expenses BarChart + AR Aging + Health Score + Top Clients ─── */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Revenue vs Expenses — 12 Month */}
+        {dashData && (
+          <div className="block-card" style={{ gridColumn: 'span 2' }}>
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Revenue vs Expenses (12 Months)</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={monthlyChartData} barGap={4}>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Bar dataKey="revenue" fill="#2563eb" radius={[2,2,0,0]} name="Revenue" />
+                <Bar dataKey="expenses" fill="#ef4444" radius={[2,2,0,0]} name="Expenses" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* AR Aging */}
+        {dashData?.arAging && (
+          <div className="block-card">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">AR Aging</div>
+            {(() => {
+              const a = dashData.arAging;
+              const segments = [
+                { label: 'Current',  value: Number(a.current_amt || 0),   color: '#16a34a' },
+                { label: '1–30d',    value: Number(a.days_1_30 || 0),     color: '#d97706' },
+                { label: '31–60d',   value: Number(a.days_31_60 || 0),    color: '#ea580c' },
+                { label: '60d+',     value: Number(a.days_60_plus || 0),  color: '#dc2626' },
+              ];
+              const total = segments.reduce((s, x) => s + x.value, 0);
+              if (total === 0) return (
+                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: 20 }}>No outstanding AR</div>
+              );
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {segments.filter(s => s.value > 0).map(s => (
+                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '2px', background: s.color, flexShrink: 0 }} />
+                      <div style={{ flex: 1, fontSize: '12px', color: 'var(--color-text-secondary)' }}>{s.label}</div>
+                      <div style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: s.color, fontWeight: 600 }}>{formatCurrency(s.value)}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', width: 36, textAlign: 'right' }}>{((s.value/total)*100).toFixed(0)}%</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Financial Health Score */}
+        {dashData && (
+          <div className="block-card" style={{ textAlign: 'center' }}>
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Financial Health Score</div>
+            {(() => {
+              const score = Number(dashData.healthScore ?? 0);
+              const color = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
+              const label = score >= 80 ? 'Healthy' : score >= 60 ? 'Watch' : 'At Risk';
+              return (
+                <div>
+                  <div style={{ fontSize: 56, fontWeight: 900, color, lineHeight: 1 }}>{score}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color, marginTop: 4, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>DSO: {Math.round(Number(dashData.dso || 0))} days</div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Top Clients by Revenue */}
+        {dashData?.topClients?.length > 0 && (
+          <div className="block-card">
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Top Clients by Revenue</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {dashData.topClients.slice(0, 6).map((c: any, i: number) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{c.client_name}</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)', flexShrink: 0 }}>{formatCurrency(Number(c.total_revenue || 0))}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
