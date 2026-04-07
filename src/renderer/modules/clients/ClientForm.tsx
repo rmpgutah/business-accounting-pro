@@ -30,6 +30,9 @@ interface ClientData {
   internal_notes: string;
   tags: string;
   tags_input: string;
+  // Default Invoice Settings
+  default_payment_terms: string;
+  default_late_fee_pct: number;
 }
 
 const EMPTY_CLIENT: ClientData = {
@@ -57,6 +60,9 @@ const EMPTY_CLIENT: ClientData = {
   internal_notes: '',
   tags: '',
   tags_input: '',
+  // Default Invoice Settings
+  default_payment_terms: '',
+  default_late_fee_pct: 0,
 };
 
 interface ClientFormProps {
@@ -139,6 +145,9 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             internal_notes: client.internal_notes ?? '',
             tags: client.tags ?? '',
             tags_input: tagsInput,
+            // Default Invoice Settings
+            default_payment_terms: client.default_payment_terms || '',
+            default_late_fee_pct: client.default_late_fee_pct || 0,
           });
           setPaymentTermsRaw(String(pt));
           setContacts((contactData ?? []).map((c: any) => ({ ...c, is_primary: Boolean(c.is_primary) })));
@@ -185,6 +194,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
         ...data,
         payment_terms: parsedTerms,
         tags: tagsJson,
+        default_payment_terms: data.default_payment_terms.trim() || null,
+        default_late_fee_pct: data.default_late_fee_pct || 0,
       };
       delete payload.id;
       delete payload.tags_input;
@@ -430,6 +441,36 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Internal Notes</label>
                 <textarea className="block-input" rows={3} value={data.internal_notes} onChange={(e) => setData(p => ({ ...p, internal_notes: e.target.value }))} placeholder="Internal notes (not visible to client)..." style={{ resize: 'vertical' }} />
+              </div>
+
+              {/* Default Invoice Settings */}
+              <div className="col-span-2" style={{ marginTop: 16 }}>
+                <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3 pb-2 border-b border-border-primary">
+                  Default Invoice Settings
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Default Payment Terms</label>
+                    <input
+                      className="block-input"
+                      placeholder="e.g. Net 30"
+                      value={data.default_payment_terms || ''}
+                      onChange={e => setData(p => ({ ...p, default_payment_terms: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Default Late Fee %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      className="block-input"
+                      placeholder="e.g. 1.5"
+                      value={data.default_late_fee_pct || ''}
+                      onChange={e => setData(p => ({ ...p, default_late_fee_pct: parseFloat(e.target.value) || 0 }))}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Contacts */}
