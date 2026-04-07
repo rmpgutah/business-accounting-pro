@@ -419,6 +419,10 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                   <option value="cash">Cash</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Assigned Rep ID</label>
+                <input className="block-input" value={data.assigned_rep_id || ''} onChange={(e) => setData(p => ({...p, assigned_rep_id: e.target.value}))} placeholder="Rep ID or name" />
+              </div>
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Tags (comma-separated)</label>
                 <input className="block-input" value={data.tags_input || ''} onChange={(e) => setData(p => ({ ...p, tags_input: e.target.value }))} placeholder="vip, partner, net-30" />
