@@ -32,6 +32,16 @@ interface DebtListProps {
   onEdit: (id: string) => void;
 }
 
+// ─── Aging Badge ────────────────────────────────────────
+const getAgingBadge = (delinquencyDate: string): { label: string; color: string; bg: string } => {
+  if (!delinquencyDate) return { label: '—', color: 'var(--color-text-muted)', bg: 'transparent' };
+  const days = Math.floor((Date.now() - new Date(delinquencyDate).getTime()) / 86400000);
+  if (days <= 30)  return { label: `${days}d`, color: '#16a34a', bg: '#16a34a22' };
+  if (days <= 90)  return { label: `${days}d`, color: '#d97706', bg: '#d9770622' };
+  if (days <= 180) return { label: `${days}d`, color: '#ea580c', bg: '#ea580c22' };
+  return { label: `${days}d`, color: '#dc2626', bg: '#dc262622' };
+};
+
 // ─── Priority Colors ────────────────────────────────────
 const priorityColor: Record<string, string> = {
   low: 'text-accent-income',
@@ -440,8 +450,19 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     <td className={`text-right font-mono ${balanceClass}`}>
                       {formatCurrency(debt.balance_due)}
                     </td>
-                    <td className="text-right font-mono text-text-secondary">
-                      {ageDays(debt.delinquent_date)} days
+                    <td className="text-right">
+                      {(() => {
+                        const badge = getAgingBadge(debt.delinquent_date);
+                        return (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                            background: badge.bg, color: badge.color,
+                            letterSpacing: '0.5px', textTransform: 'uppercase'
+                          }}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td>
                       <span className={stageBadge.className}>{stageBadge.label}</span>

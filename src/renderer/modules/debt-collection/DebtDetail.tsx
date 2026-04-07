@@ -159,6 +159,16 @@ const stageColor: Record<string, string> = {
   garnishment: 'bg-yellow-600',
 };
 
+// ─── Aging Badge ────────────────────────────────────────
+const getAgingBadge = (delinquencyDate: string): { label: string; color: string; bg: string } => {
+  if (!delinquencyDate) return { label: '—', color: 'var(--color-text-muted)', bg: 'transparent' };
+  const days = Math.floor((Date.now() - new Date(delinquencyDate).getTime()) / 86400000);
+  if (days <= 30)  return { label: `${days}d`, color: '#16a34a', bg: '#16a34a22' };
+  if (days <= 90)  return { label: `${days}d`, color: '#d97706', bg: '#d9770622' };
+  if (days <= 180) return { label: `${days}d`, color: '#ea580c', bg: '#ea580c22' };
+  return { label: `${days}d`, color: '#dc2626', bg: '#dc262622' };
+};
+
 // ─── Helpers ────────────────────────────────────────────
 function ageDays(dateStr: string): number {
   if (!dateStr) return 0;
@@ -472,6 +482,18 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <span className="text-xl font-bold text-text-primary font-mono">
               {formatCurrency(debt.balance_due)}
             </span>
+            {(() => {
+              const badge = getAgingBadge(debt.delinquent_date);
+              return (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                  background: badge.bg, color: badge.color,
+                  letterSpacing: '0.5px', textTransform: 'uppercase'
+                }}>
+                  {badge.label}
+                </span>
+              );
+            })()}
             <span className={stageBadge.className}>{stageBadge.label}</span>
             <span className={statusBadge.className}>{statusBadge.label}</span>
           </div>
