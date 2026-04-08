@@ -351,6 +351,13 @@ const api = {
   debtAnalytics: (companyId: string, startDate: string, endDate: string): Promise<any> =>
     window.electronAPI.invoke('debt:analytics', { companyId, startDate, endDate }),
 
+  getPaymentPlan: (debtId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:payment-plan-get', { debtId }),
+  savePaymentPlan: (data: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('debt:payment-plan-save', data),
+  togglePlanInstallment: (installmentId: string, paid: boolean): Promise<any> =>
+    window.electronAPI.invoke('debt:plan-installment-toggle', { installmentId, paid }),
+
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>
     window.electronAPI.invoke('quotes:next-number'),

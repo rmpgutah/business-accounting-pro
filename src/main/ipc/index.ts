@@ -3068,6 +3068,65 @@ export function registerIpcHandlers(): void {
     return { collectionByMonth, aging, recoveryByStage, topDebtors, velocity };
   });
 
+  // ─── Debt Payment Plans ───────────────────────────────────
+  ipcMain.handle('debt:payment-plan-get', (_event, { debtId }) => {
+    try {
+      const plan = db.queryAll('debt_payment_plans', { debt_id: debtId })[0] || null;
+      if (!plan) return null;
+      const installments = db.queryAll('debt_plan_installments', { plan_id: plan.id },
+        { field: 'due_date', dir: 'asc' });
+      return { ...plan, installments };
+    } catch { return null; }
+  });
+
+  ipcMain.handle('debt:payment-plan-save', (_event, data) => {
+    try {
+      const { debt_id, installment_amount, frequency, start_date, total_installments, notes } = data;
+      // Delete existing plan+installments for this debt
+      const existing = db.queryAll('debt_payment_plans', { debt_id })[0];
+      if (existing) {
+        db.getDb().prepare('DELETE FROM debt_plan_installments WHERE plan_id = ?').run(existing.id);
+        db.remove('debt_payment_plans', existing.id);
+      }
+      // Create new plan
+      const plan = db.create('debt_payment_plans', {
+        debt_id, installment_amount, frequency,
+        start_date, total_installments: total_installments || 1,
+        notes: notes || '', status: 'active'
+      });
+      // Generate installments
+      const freqDays: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
+      const days = freqDays[frequency] || 30;
+      let d = new Date(start_date + 'T12:00:00');
+      for (let i = 0; i < (total_installments || 1); i++) {
+        db.create('debt_plan_installments', {
+          plan_id: plan.id,
+          due_date: d.toISOString().slice(0, 10),
+          amount: installment_amount,
+          paid: 0,
+        });
+        d.setDate(d.getDate() + days);
+      }
+      scheduleAutoBackup();
+      return db.queryAll('debt_plan_installments', { plan_id: plan.id }, { field: 'due_date', dir: 'asc' });
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:plan-installment-toggle', (_event, { installmentId, paid }) => {
+    try {
+      db.update('debt_plan_installments', installmentId, {
+        paid: paid ? 1 : 0,
+        paid_date: paid ? new Date().toISOString().slice(0, 10) : '',
+      });
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();
