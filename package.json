@@ -58,7 +58,7 @@
     "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
-    "vite": "^8.0.3",
+    "vite": "^8.0.5",
     "wait-on": "^9.0.4",
     "zustand": "^5.0.12"
   }
