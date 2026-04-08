@@ -42,6 +42,16 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"  # 
 - **Light-mode color leaks**: Never use `bg-white`, `text-gray-*`, `border-gray-*` — use `bg-bg-*`, `text-text-*`, `border-border-*`
 - **borderRadius**: Use `6px` (glass theme), never `2px` (old blocky theme)
 
+## Data Patterns
+
+- **`db:query` returns flat rows** — no JOINs. For vendor_name, category_name etc., use `api.rawQuery()` with explicit JOINs
+- **Table name: `categories` NOT `expense_categories`** — SQL referencing `expense_categories` will crash silently in Promise.all
+- **List refresh after save**: Parent module must increment a `listKey` state and pass as `key` to list component (pattern: `setListKey(k => k + 1)`)
+- **New IPC handlers need `scheduleAutoBackup()`** after any data mutation or backup won't trigger
+- **Filing status mapping**: DB stores `married_jointly`, UI uses `married_filing_jointly` — IPC handlers must map between them
+- **New columns need migration in `database/index.ts`** (try/catch ALTER TABLE) AND listing in `tablesWithoutUpdatedAt` if no `updated_at` column
+- **New modules must be added to BOTH `App.tsx` (MODULE_NAMES + switch case) AND `Sidebar.tsx`** — missing either causes invisible or unroutable modules
+
 ## VPS / Server
 
 - Host: `194.113.64.90` (SSH: `root` with `~/.ssh/id_ed25519_deploy`)
@@ -79,3 +89,11 @@ npm rebuild better-sqlite3
 - `.env` lives at `/opt/bap-server/.env` (never in git); must set `SYNC_SECRET`, `DESKTOP_WS_TOKEN`
 - pm2 started with `--cwd /opt/bap-server` so dotenv finds `.env`
 - After VPS reboot: pm2 should auto-start (run `pm2 startup` once to configure systemd hook)
+
+## Deploy Gotchas
+
+- **VPS needs `npm install` (not `--production`)** before `npm run build` — TypeScript is a devDependency
+- **pm2 loses process after `pm2 delete`** — deploy script uses fallback: `pm2 restart ... || pm2 start dist/index.js --name bap-server`
+- **Always build + install locally after code changes**: `npm run build && npx electron-builder --mac --arm64 && bash scripts/codesign-mac.sh ... && rm -rf /Applications/... && cp -R ... && xattr -cr ... && npm rebuild better-sqlite3`
+- **GitHub Actions Node.js deprecation**: All workflows use `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` env var
+- **express-rate-limit** installed on server — all API routes rate-limited (300/15min API, 30/15min auth)
