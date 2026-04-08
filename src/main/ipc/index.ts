@@ -2082,8 +2082,49 @@ export function registerIpcHandlers(): void {
     const investingOutflows = assetPurchases?.total || 0;
     const netInvesting = investingInflows - investingOutflows;
 
-    // TODO: financing activities from loan/equity accounts
-    const netFinancing = 0;
+    // Financing: loan proceeds (credits to liability accounts = cash in)
+    const loanProceeds = dbInstance.prepare(`
+      SELECT COALESCE(SUM(jel.credit), 0) as total
+      FROM journal_entry_lines jel
+      JOIN journal_entries je ON jel.journal_entry_id = je.id
+      JOIN accounts a ON jel.account_id = a.id
+      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+        AND a.type IN ('liability') AND a.subtype IN ('long_term_liability','notes_payable','loan')
+    `).get(companyId, startDate, endDate) as any;
+
+    // Financing: loan repayments (debits to liability accounts = cash out)
+    const loanRepayments = dbInstance.prepare(`
+      SELECT COALESCE(SUM(jel.debit), 0) as total
+      FROM journal_entry_lines jel
+      JOIN journal_entries je ON jel.journal_entry_id = je.id
+      JOIN accounts a ON jel.account_id = a.id
+      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+        AND a.type IN ('liability') AND a.subtype IN ('long_term_liability','notes_payable','loan')
+    `).get(companyId, startDate, endDate) as any;
+
+    // Financing: owner contributions (credits to equity = cash in)
+    const equityContributions = dbInstance.prepare(`
+      SELECT COALESCE(SUM(jel.credit), 0) as total
+      FROM journal_entry_lines jel
+      JOIN journal_entries je ON jel.journal_entry_id = je.id
+      JOIN accounts a ON jel.account_id = a.id
+      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+        AND a.type = 'equity' AND a.subtype NOT IN ('retained_earnings','net_income')
+    `).get(companyId, startDate, endDate) as any;
+
+    // Financing: owner distributions (debits to equity = cash out)
+    const equityDistributions = dbInstance.prepare(`
+      SELECT COALESCE(SUM(jel.debit), 0) as total
+      FROM journal_entry_lines jel
+      JOIN journal_entries je ON jel.journal_entry_id = je.id
+      JOIN accounts a ON jel.account_id = a.id
+      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+        AND a.type = 'equity' AND a.subtype NOT IN ('retained_earnings','net_income')
+    `).get(companyId, startDate, endDate) as any;
+
+    const financingInflows = (loanProceeds?.total || 0) + (equityContributions?.total || 0);
+    const financingOutflows = (loanRepayments?.total || 0) + (equityDistributions?.total || 0);
+    const netFinancing = financingInflows - financingOutflows;
 
     const netChange = netOperating + netInvesting + netFinancing;
 
@@ -2108,8 +2149,14 @@ export function registerIpcHandlers(): void {
         net: netInvesting,
       },
       financing: {
-        inflows: [],
-        outflows: [],
+        inflows: [
+          { label: 'Proceeds from loans / borrowings', amount: loanProceeds?.total || 0 },
+          { label: 'Owner / equity contributions', amount: equityContributions?.total || 0 },
+        ],
+        outflows: [
+          { label: 'Loan repayments', amount: loanRepayments?.total || 0 },
+          { label: 'Owner distributions / dividends', amount: equityDistributions?.total || 0 },
+        ],
         net: netFinancing,
       },
       netChange,
@@ -2614,6 +2661,49 @@ export function registerIpcHandlers(): void {
     ).all(ruleId)
   );
 
+  ipcMain.handle('automations:create', (_e, rule: {
+    name: string; trigger_type: string; trigger_config: string;
+    conditions: string; actions: string;
+  }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    try {
+      const record = db.create('automation_rules', {
+        name: rule.name,
+        trigger_type: rule.trigger_type,
+        trigger_config: rule.trigger_config || '{}',
+        conditions: rule.conditions || '[]',
+        actions: rule.actions || '[]',
+        is_active: 1,
+        company_id: companyId,
+      });
+      return record;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('automations:delete', (_e, ruleId: string) => {
+    try {
+      db.getDb().prepare(`DELETE FROM automation_rules WHERE id = ?`).run(ruleId);
+      db.getDb().prepare(`DELETE FROM automation_run_log WHERE rule_id = ?`).run(ruleId);
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('automations:update', (_e, { id, name, trigger_type, trigger_config, conditions, actions }: any) => {
+    try {
+      db.getDb().prepare(
+        `UPDATE automation_rules SET name=?, trigger_type=?, trigger_config=?, conditions=?, actions=? WHERE id=?`
+      ).run(name, trigger_type, trigger_config || '{}', conditions || '[]', actions || '[]', id);
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Financial Intelligence ─────────────────────────
   ipcMain.handle('intelligence:anomalies', () => {
     const companyId = db.getCurrentCompanyId();
@@ -2625,6 +2715,58 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('intelligence:dismiss-anomaly', (_e, id: string) => {
     db.getDb().prepare(`UPDATE financial_anomalies SET dismissed = 1 WHERE id = ?`).run(id);
+  });
+
+  // ─── Inventory Stock Movements ─────────────────────────
+  ipcMain.handle('inventory:movements', (_e, itemId: string) => {
+    return db.getDb().prepare(
+      `SELECT * FROM inventory_movements WHERE item_id = ? ORDER BY created_at DESC LIMIT 100`
+    ).all(itemId);
+  });
+
+  ipcMain.handle('inventory:adjust', (_e, { itemId, type, quantity, unitCost, reference, notes }: {
+    itemId: string; type: string; quantity: number; unitCost: number; reference: string; notes: string;
+  }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    const rawDb = db.getDb();
+    try {
+      const adjust = rawDb.transaction(() => {
+        // Record the movement
+        db.create('inventory_movements', {
+          item_id: itemId,
+          company_id: companyId,
+          type,
+          quantity,
+          unit_cost: unitCost || 0,
+          reference: reference || '',
+          notes: notes || '',
+        });
+
+        // Update the inventory item's quantity
+        const delta = type === 'out' ? -Math.abs(quantity) : Math.abs(quantity);
+        rawDb.prepare(
+          `UPDATE inventory_items SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?`
+        ).run(delta, itemId);
+
+        const item = rawDb.prepare(`SELECT quantity FROM inventory_items WHERE id = ?`).get(itemId) as any;
+        return { ok: true, newQuantity: item?.quantity ?? 0 };
+      });
+      return adjust();
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('inventory:low-stock', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.getDb().prepare(
+      `SELECT id, name, sku, quantity, reorder_point, reorder_qty, unit_cost
+       FROM inventory_items
+       WHERE company_id = ? AND reorder_point > 0 AND quantity <= reorder_point
+       ORDER BY (quantity - reorder_point) ASC`
+    ).all(companyId);
   });
 
   ipcMain.handle('intelligence:cash-projection', (_e, { days }: { days: number }) => {

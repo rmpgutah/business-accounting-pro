@@ -273,6 +273,19 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoices ADD COLUMN shipping_amount REAL DEFAULT 0",
   "ALTER TABLE invoice_line_items ADD COLUMN unit_label_override TEXT DEFAULT ''",
   "ALTER TABLE invoice_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS inventory_movements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    item_id TEXT NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK(type IN ('in','out','adjustment','initial')),
+    quantity REAL NOT NULL,
+    unit_cost REAL DEFAULT 0,
+    reference TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "ALTER TABLE inventory_items ADD COLUMN reorder_qty REAL DEFAULT 0",
   // Debt notes table for quick internal annotations (2026-04-07)
   `CREATE TABLE IF NOT EXISTS debt_notes (
     id TEXT PRIMARY KEY,

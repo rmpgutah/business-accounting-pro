@@ -278,6 +278,14 @@ const api = {
   taxAutoSeedCurrentYear: () =>
     window.electronAPI.invoke('tax:auto-seed-current-year'),
 
+  // Inventory stock movements
+  inventoryMovements: (itemId: string): Promise<any[]> =>
+    window.electronAPI.invoke('inventory:movements', itemId),
+  inventoryAdjust: (payload: { itemId: string; type: string; quantity: number; unitCost: number; reference: string; notes: string }): Promise<any> =>
+    window.electronAPI.invoke('inventory:adjust', payload),
+  inventoryLowStock: (): Promise<any[]> =>
+    window.electronAPI.invoke('inventory:low-stock'),
+
   // Categories
   categoriesSeedDefaults: (company_id: string) =>
     window.electronAPI.invoke('categories:seed-defaults', { company_id }),
@@ -289,6 +297,12 @@ const api = {
     window.electronAPI.invoke('automations:toggle', ruleId),
   automationRunLog: (ruleId: string): Promise<any[]> =>
     window.electronAPI.invoke('automations:run-log', ruleId),
+  createAutomation: (rule: { name: string; trigger_type: string; trigger_config: string; conditions: string; actions: string }): Promise<any> =>
+    window.electronAPI.invoke('automations:create', rule),
+  deleteAutomation: (ruleId: string): Promise<any> =>
+    window.electronAPI.invoke('automations:delete', ruleId),
+  updateAutomation: (rule: { id: string; name: string; trigger_type: string; trigger_config: string; conditions: string; actions: string }): Promise<any> =>
+    window.electronAPI.invoke('automations:update', rule),
 
   // Financial Intelligence
   listAnomalies: (): Promise<any[]> =>

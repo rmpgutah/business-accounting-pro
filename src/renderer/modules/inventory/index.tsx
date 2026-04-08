@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  Package, Plus, Search, Filter, AlertTriangle, X, ChevronDown,
+  Package, Plus, Search, Filter, AlertTriangle, X, ArrowDown, ArrowUp, RefreshCw, History,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -16,8 +15,20 @@ interface InventoryItem {
   quantity: number;
   unit_cost: number;
   reorder_point: number;
+  reorder_qty: number;
   is_asset: boolean;
   purchase_date: string;
+  created_at: string;
+}
+
+interface Movement {
+  id: string;
+  item_id: string;
+  type: string;
+  quantity: number;
+  unit_cost: number;
+  reference: string;
+  notes: string;
   created_at: string;
 }
 
@@ -38,9 +49,34 @@ const emptyForm = {
   quantity: 0,
   unit_cost: 0,
   reorder_point: 0,
+  reorder_qty: 0,
   is_asset: false,
   purchase_date: '',
 };
+
+const emptyAdjust = {
+  type: 'in' as 'in' | 'out' | 'adjustment',
+  quantity: '',
+  unit_cost: '',
+  reference: '',
+  notes: '',
+};
+
+// ─── Movement type badge ──────────────────────────────────
+function MovBadge({ type }: { type: string }) {
+  const map: Record<string, { icon: React.ReactNode; cls: string; label: string }> = {
+    in:          { icon: <ArrowDown size={10} />, cls: 'text-accent-income border-accent-income', label: 'IN' },
+    out:         { icon: <ArrowUp size={10} />,   cls: 'text-accent-expense border-accent-expense', label: 'OUT' },
+    adjustment:  { icon: <RefreshCw size={10} />, cls: 'text-accent-blue border-accent-blue',   label: 'ADJ' },
+    initial:     { icon: <Package size={10} />,   cls: 'text-text-muted border-border-secondary', label: 'INIT' },
+  };
+  const m = map[type] ?? map.adjustment;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold border px-1.5 py-0.5 ${m.cls}`}>
+      {m.icon} {m.label}
+    </span>
+  );
+}
 
 // ─── Component ──────────────────────────────────────────
 const Inventory: React.FC = () => {
@@ -49,15 +85,27 @@ const Inventory: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<'all' | 'low-stock'>('all');
+
+  // Form state
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+
+  // Adjust modal
+  const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
+  const [adjustForm, setAdjustForm] = useState(emptyAdjust);
+  const [adjusting, setAdjusting] = useState(false);
+
+  // History drawer
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // ─── Load ─────────────────────────────────────────────
   const loadItems = async () => {
     if (!activeCompany) return;
     try {
-      // Bug fix #13: was fetching all companies' inventory — scoped to active company.
       const rows = await api.query('inventory_items', { company_id: activeCompany.id });
       setItems(Array.isArray(rows) ? rows : []);
     } catch (err) {
@@ -67,45 +115,37 @@ const Inventory: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadItems();
-  }, [activeCompany]);
+  useEffect(() => { loadItems(); }, [activeCompany]);
 
   // ─── Categories ───────────────────────────────────────
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    items.forEach((i) => { if (i.category) cats.add(i.category); });
+    items.forEach(i => { if (i.category) cats.add(i.category); });
     return Array.from(cats).sort();
   }, [items]);
 
   // ─── Filtered ─────────────────────────────────────────
   const filtered = useMemo(() => {
-    return items.filter((item) => {
-      if (search) {
-        const q = search.toLowerCase();
-        const match =
-          item.name?.toLowerCase().includes(q) ||
-          item.sku?.toLowerCase().includes(q) ||
-          item.description?.toLowerCase().includes(q) ||
-          item.category?.toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      if (categoryFilter && item.category !== categoryFilter) return false;
-      return true;
-    });
-  }, [items, search, categoryFilter]);
+    let list = items;
+    if (activeTab === 'low-stock') list = list.filter(i => i.reorder_point > 0 && i.quantity <= i.reorder_point);
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(i =>
+        i.name?.toLowerCase().includes(q) || i.sku?.toLowerCase().includes(q) ||
+        i.description?.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q)
+      );
+    }
+    if (categoryFilter) list = list.filter(i => i.category === categoryFilter);
+    return list;
+  }, [items, search, categoryFilter, activeTab]);
 
   // ─── Stats ────────────────────────────────────────────
-  const totalValue = useMemo(
-    () => filtered.reduce((sum, i) => sum + (i.quantity || 0) * (i.unit_cost || 0), 0),
-    [filtered],
-  );
-  const lowStockCount = useMemo(
-    () => items.filter((i) => i.quantity <= i.reorder_point).length,
-    [items],
-  );
+  const totalValue = useMemo(() =>
+    items.reduce((sum, i) => sum + (i.quantity || 0) * (i.unit_cost || 0), 0), [items]);
+  const lowStockCount = useMemo(() =>
+    items.filter(i => i.reorder_point > 0 && i.quantity <= i.reorder_point).length, [items]);
 
-  // ─── Submit Form ──────────────────────────────────────
+  // ─── Create Item ──────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
@@ -116,6 +156,7 @@ const Inventory: React.FC = () => {
         quantity: Number(formData.quantity),
         unit_cost: Number(formData.unit_cost),
         reorder_point: Number(formData.reorder_point),
+        reorder_qty: Number(formData.reorder_qty),
         is_asset: formData.is_asset ? 1 : 0,
       });
       setFormData(emptyForm);
@@ -129,7 +170,41 @@ const Inventory: React.FC = () => {
     }
   };
 
-  // ─── Loading ──────────────────────────────────────────
+  // ─── Stock Adjustment ─────────────────────────────────
+  const handleAdjust = async () => {
+    if (!adjustItem || !adjustForm.quantity) return;
+    setAdjusting(true);
+    try {
+      const result = await api.inventoryAdjust({
+        itemId: adjustItem.id,
+        type: adjustForm.type,
+        quantity: Math.abs(parseFloat(adjustForm.quantity) || 0),
+        unitCost: parseFloat(adjustForm.unit_cost) || adjustItem.unit_cost,
+        reference: adjustForm.reference,
+        notes: adjustForm.notes,
+      });
+      if (result?.error) throw new Error(result.error);
+      setAdjustItem(null);
+      setAdjustForm(emptyAdjust);
+      await loadItems();
+    } catch (err) {
+      console.error('Adjustment failed:', err);
+      alert('Failed to adjust stock.');
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
+  // ─── View History ─────────────────────────────────────
+  const handleHistory = async (item: InventoryItem) => {
+    setHistoryItem(item);
+    setLoadingHistory(true);
+    try {
+      const data = await api.inventoryMovements(item.id);
+      setMovements(Array.isArray(data) ? data : []);
+    } catch { setMovements([]); } finally { setLoadingHistory(false); }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">
@@ -143,43 +218,47 @@ const Inventory: React.FC = () => {
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
-          >
+          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
             <Package size={18} className="text-accent-blue" />
           </div>
           <div>
             <h2 className="module-title text-text-primary">Inventory</h2>
             <p className="text-xs text-text-muted mt-0.5">
-              {filtered.length} item{filtered.length !== 1 ? 's' : ''} &middot;{' '}
-              {fmt.format(totalValue)} total value
+              {items.length} items · {fmt.format(totalValue)} total value
               {lowStockCount > 0 && (
-                <span className="text-accent-expense ml-2">
-                  &middot; {lowStockCount} low stock
-                </span>
+                <span className="text-accent-expense ml-2 font-semibold">· {lowStockCount} low stock</span>
               )}
             </p>
           </div>
         </div>
-        <button
-          className="block-btn-primary flex items-center gap-2"
-          onClick={() => setShowForm(true)}
-        >
-          <Plus size={16} />
-          Add Item
+        <button className="block-btn-primary flex items-center gap-2" onClick={() => setShowForm(true)}>
+          <Plus size={16} /> Add Item
         </button>
       </div>
 
-      {/* Form Modal */}
+      {/* Tabs */}
+      <div className="flex gap-0 border-b border-border-primary">
+        {([['all', 'All Items'], ['low-stock', `Low Stock${lowStockCount > 0 ? ` (${lowStockCount})` : ''}`]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key as any)}
+            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
+              activeTab === key
+                ? key === 'low-stock' ? 'border-accent-expense text-accent-expense' : 'border-accent-blue text-accent-blue'
+                : 'border-transparent text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* New Item Form */}
       {showForm && (
-        <div className="block-card-elevated space-y-4">
+        <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">New Inventory Item</h3>
-            <button
-              className="text-text-muted hover:text-text-primary"
-              onClick={() => { setShowForm(false); setFormData(emptyForm); }}
-            >
+            <button className="text-text-muted hover:text-text-primary" onClick={() => { setShowForm(false); setFormData(emptyForm); }}>
               <X size={16} />
             </button>
           </div>
@@ -187,151 +266,207 @@ const Inventory: React.FC = () => {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs text-text-muted mb-1">Name *</label>
-                <input
-                  className="block-input"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Item name"
-                  required
-                />
+                <input className="block-input w-full" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Item name" required />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">SKU</label>
-                <input
-                  className="block-input"
-                  value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  placeholder="SKU-001"
-                />
+                <input className="block-input w-full" value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} placeholder="SKU-001" />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Category</label>
-                <input
-                  className="block-input"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="e.g. Office Supplies"
-                />
+                <input className="block-input w-full" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Office Supplies" />
               </div>
             </div>
             <div>
               <label className="block text-xs text-text-muted mb-1">Description</label>
-              <input
-                className="block-input"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Item description"
-              />
+              <input className="block-input w-full" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="Item description" />
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-5 gap-3">
               <div>
-                <label className="block text-xs text-text-muted mb-1">Quantity</label>
-                <input
-                  type="number"
-                  className="block-input"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                  min={0}
-                />
+                <label className="block text-xs text-text-muted mb-1">Qty</label>
+                <input type="number" className="block-input w-full" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })} min={0} />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Unit Cost</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="block-input"
-                  value={formData.unit_cost}
-                  onChange={(e) => setFormData({ ...formData, unit_cost: Number(e.target.value) })}
-                  min={0}
-                />
+                <input type="number" step="0.01" className="block-input w-full" value={formData.unit_cost} onChange={e => setFormData({ ...formData, unit_cost: Number(e.target.value) })} min={0} />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Reorder Point</label>
-                <input
-                  type="number"
-                  className="block-input"
-                  value={formData.reorder_point}
-                  onChange={(e) => setFormData({ ...formData, reorder_point: Number(e.target.value) })}
-                  min={0}
-                />
+                <input type="number" className="block-input w-full" value={formData.reorder_point} onChange={e => setFormData({ ...formData, reorder_point: Number(e.target.value) })} min={0} />
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Reorder Qty</label>
+                <input type="number" className="block-input w-full" value={formData.reorder_qty} onChange={e => setFormData({ ...formData, reorder_qty: Number(e.target.value) })} min={0} />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Purchase Date</label>
-                <input
-                  type="date"
-                  className="block-input"
-                  value={formData.purchase_date}
-                  onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
-                />
+                <input type="date" className="block-input w-full" value={formData.purchase_date} onChange={e => setFormData({ ...formData, purchase_date: e.target.value })} />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_asset"
-                checked={formData.is_asset}
-                onChange={(e) => setFormData({ ...formData, is_asset: e.target.checked })}
-                className="accent-accent-blue"
-              />
-              <label htmlFor="is_asset" className="text-sm text-text-secondary">
-                Track as fixed asset
-              </label>
+              <input type="checkbox" id="is_asset" checked={formData.is_asset} onChange={e => setFormData({ ...formData, is_asset: e.target.checked })} className="accent-accent-blue" />
+              <label htmlFor="is_asset" className="text-sm text-text-secondary">Track as fixed asset</label>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                className="block-btn"
-                onClick={() => { setShowForm(false); setFormData(emptyForm); }}
-              >
-                Cancel
-              </button>
-              <button type="submit" className="block-btn-primary" disabled={saving}>
-                {saving ? 'Saving...' : 'Create Item'}
-              </button>
+              <button type="button" className="block-btn" onClick={() => { setShowForm(false); setFormData(emptyForm); }}>Cancel</button>
+              <button type="submit" className="block-btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Create Item'}</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="block-card p-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Search inventory..."
-              className="block-input pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-text-muted" />
-            <select
-              className="block-select"
-              style={{ width: 'auto', minWidth: '150px' }}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">All Categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
+      {/* Stock Adjustment Modal */}
+      {adjustItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="block-card p-5 w-96 space-y-4" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-text-primary">Adjust Stock — {adjustItem.name}</h3>
+              <button onClick={() => setAdjustItem(null)}><X size={16} className="text-text-muted" /></button>
+            </div>
+            <p className="text-xs text-text-muted">Current qty: <span className="font-mono font-bold text-text-primary">{adjustItem.quantity}</span></p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['in', 'out', 'adjustment'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setAdjustForm(p => ({ ...p, type: t }))}
+                  className={`py-2 text-xs font-bold uppercase border-2 transition-colors ${
+                    adjustForm.type === t
+                      ? t === 'in' ? 'border-accent-income text-accent-income bg-accent-income/10'
+                        : t === 'out' ? 'border-accent-expense text-accent-expense bg-accent-expense/10'
+                        : 'border-accent-blue text-accent-blue bg-accent-blue/10'
+                      : 'border-border-primary text-text-muted'
+                  }`}
+                  style={{ borderRadius: '4px' }}
+                >
+                  {t === 'in' ? '▼ Receive' : t === 'out' ? '▲ Ship' : '↺ Adjust'}
+                </button>
               ))}
-            </select>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Quantity *</label>
+                <input
+                  type="number" min="0" step="0.01" className="block-input w-full font-mono"
+                  value={adjustForm.quantity} placeholder="0"
+                  onChange={e => setAdjustForm(p => ({ ...p, quantity: e.target.value }))}
+                />
+              </div>
+              {adjustForm.type === 'in' && (
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Unit Cost (optional)</label>
+                  <input
+                    type="number" min="0" step="0.01" className="block-input w-full font-mono"
+                    value={adjustForm.unit_cost} placeholder={String(adjustItem.unit_cost)}
+                    onChange={e => setAdjustForm(p => ({ ...p, unit_cost: e.target.value }))}
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Reference / PO #</label>
+                <input className="block-input w-full" value={adjustForm.reference} onChange={e => setAdjustForm(p => ({ ...p, reference: e.target.value }))} placeholder="PO-1234" />
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Notes</label>
+                <input className="block-input w-full" value={adjustForm.notes} onChange={e => setAdjustForm(p => ({ ...p, notes: e.target.value }))} placeholder="Reason for adjustment..." />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button className="block-btn text-xs px-3 py-2" onClick={() => { setAdjustItem(null); setAdjustForm(emptyAdjust); }}>Cancel</button>
+              <button
+                className="block-btn-primary text-xs px-4 py-2 font-semibold"
+                onClick={handleAdjust}
+                disabled={adjusting || !adjustForm.quantity}
+              >
+                {adjusting ? 'Saving...' : 'Save Adjustment'}
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* History Drawer */}
+      {historyItem && (
+        <div className="fixed inset-0 z-50 flex items-end justify-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setHistoryItem(null)} />
+          <div className="relative bg-bg-secondary border-l-2 border-border-primary h-full w-96 flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-border-primary flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary">Movement History</h3>
+                <p className="text-xs text-text-muted">{historyItem.name}</p>
+              </div>
+              <button onClick={() => setHistoryItem(null)}><X size={16} className="text-text-muted" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {loadingHistory ? (
+                <p className="text-xs text-text-muted italic">Loading...</p>
+              ) : movements.length === 0 ? (
+                <div className="text-center pt-8">
+                  <History size={24} className="text-text-muted mx-auto mb-2" />
+                  <p className="text-xs text-text-muted">No movements recorded yet.</p>
+                </div>
+              ) : (
+                movements.map(m => (
+                  <div key={m.id} className="block-card p-3 flex items-start justify-between gap-2" style={{ borderRadius: '4px' }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <MovBadge type={m.type} />
+                        <span className="text-xs font-mono font-bold text-text-primary">
+                          {m.type === 'out' ? '-' : '+'}{m.quantity}
+                        </span>
+                        {m.unit_cost > 0 && (
+                          <span className="text-xs text-text-muted">@ {fmt.format(m.unit_cost)}</span>
+                        )}
+                      </div>
+                      {m.reference && <p className="text-[10px] text-text-muted">Ref: {m.reference}</p>}
+                      {m.notes && <p className="text-[10px] text-text-secondary truncate">{m.notes}</p>}
+                    </div>
+                    <span className="text-[10px] text-text-muted whitespace-nowrap shrink-0">
+                      {m.created_at?.slice(0, 10)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input type="text" placeholder="Search inventory..." className="block-input pl-9 w-full" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter size={14} className="text-text-muted" />
+          <select className="block-select" style={{ width: 'auto', minWidth: '150px' }} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
       </div>
+
+      {/* Low Stock Alert Banner */}
+      {activeTab === 'all' && lowStockCount > 0 && (
+        <div
+          className="flex items-center gap-2 px-4 py-2 border text-xs"
+          style={{ borderColor: 'var(--color-accent-expense)', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', color: 'var(--color-accent-expense)' }}
+        >
+          <AlertTriangle size={13} />
+          <strong>{lowStockCount} item{lowStockCount !== 1 ? 's' : ''} at or below reorder point.</strong>
+          <button className="ml-2 underline" onClick={() => setActiveTab('low-stock')}>View Low Stock</button>
+        </div>
+      )}
 
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <Package size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-secondary font-medium">No inventory items found</p>
+          <div className="empty-state-icon"><Package size={24} className="text-text-muted" /></div>
+          <p className="text-sm text-text-secondary font-medium">
+            {activeTab === 'low-stock' ? 'No low stock items' : 'No inventory items found'}
+          </p>
           <p className="text-xs text-text-muted mt-1">
-            Add your first item or adjust the filters above.
+            {activeTab === 'low-stock' ? 'All items are stocked above their reorder points.' : 'Add your first item using the button above.'}
           </p>
         </div>
       ) : (
@@ -342,69 +477,69 @@ const Inventory: React.FC = () => {
                 <th>Name</th>
                 <th>SKU</th>
                 <th>Category</th>
-                <th className="text-right">Quantity</th>
+                <th className="text-right">Qty</th>
                 <th className="text-right">Unit Cost</th>
                 <th className="text-right">Total Value</th>
-                <th className="text-right">Reorder Point</th>
+                <th className="text-right">Reorder At</th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => {
-                const isLowStock = item.quantity <= item.reorder_point;
+              {filtered.map(item => {
+                const isLow = item.reorder_point > 0 && item.quantity <= item.reorder_point;
                 return (
-                  <tr key={item.id}>
+                  <tr key={item.id} style={isLow ? { background: 'rgba(239,68,68,0.04)' } : {}}>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-2">
-                        {isLowStock && (
-                          <AlertTriangle size={14} className="text-accent-expense shrink-0" />
-                        )}
+                        {isLow && <AlertTriangle size={12} className="text-accent-expense shrink-0" />}
                         {item.name}
-                        {item.is_asset && (
-                          <span className="block-badge block-badge-purple text-[10px]">Asset</span>
-                        )}
+                        {item.is_asset && <span className="block-badge text-[10px]">Asset</span>}
                       </div>
                     </td>
-                    <td className="font-mono text-text-secondary text-xs">{item.sku || '-'}</td>
-                    <td className="text-text-secondary">{item.category || '-'}</td>
-                    <td
-                      className={`text-right font-mono ${
-                        isLowStock
-                          ? 'text-accent-expense font-bold'
-                          : 'text-text-primary'
-                      }`}
-                    >
+                    <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>
+                    <td className="text-text-secondary text-sm">{item.category || '—'}</td>
+                    <td className={`text-right font-mono font-semibold ${isLow ? 'text-accent-expense' : 'text-text-primary'}`}>
                       {item.quantity}
+                      {isLow && item.reorder_qty > 0 && (
+                        <span className="block text-[10px] text-text-muted font-normal">order {item.reorder_qty}</span>
+                      )}
                     </td>
-                    <td className="text-right font-mono text-text-secondary">
-                      {fmt.format(item.unit_cost)}
+                    <td className="text-right font-mono text-text-secondary text-sm">{fmt.format(item.unit_cost)}</td>
+                    <td className="text-right font-mono text-text-primary font-medium text-sm">{fmt.format(item.quantity * item.unit_cost)}</td>
+                    <td className="text-right font-mono text-text-muted text-sm">{item.reorder_point || '—'}</td>
+                    <td className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1"
+                          onClick={() => { setAdjustItem(item); setAdjustForm(emptyAdjust); }}
+                          title="Adjust stock"
+                        >
+                          <RefreshCw size={10} /> Adjust
+                        </button>
+                        <button
+                          className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1"
+                          onClick={() => handleHistory(item)}
+                          title="View movement history"
+                        >
+                          <History size={10} /> History
+                        </button>
+                      </div>
                     </td>
-                    <td className="text-right font-mono text-text-primary font-medium">
-                      {fmt.format(item.quantity * item.unit_cost)}
-                    </td>
-                    <td className="text-right font-mono text-text-muted">{item.reorder_point}</td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
               <tr>
-                <td
-                  colSpan={5}
-                  className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider"
-                >
-                  Total Value
-                </td>
-                <td className="text-right font-mono font-bold text-text-primary">
-                  {fmt.format(totalValue)}
-                </td>
-                <td />
+                <td colSpan={5} className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider">Total Value</td>
+                <td className="text-right font-mono font-bold text-text-primary">{fmt.format(filtered.reduce((s, i) => s + i.quantity * i.unit_cost, 0))}</td>
+                <td colSpan={2} />
               </tr>
             </tfoot>
           </table>
         </div>
       )}
 
-      {/* Footer */}
       {filtered.length > 0 && (
         <div className="text-xs text-text-muted">
           Showing {filtered.length} of {items.length} item{items.length !== 1 ? 's' : ''}
