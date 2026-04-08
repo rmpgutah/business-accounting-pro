@@ -308,6 +308,20 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_expense_li_expense ON expense_line_items(expense_id)`,
+  // Debt disputes (2026-04-08)
+  `CREATE TABLE IF NOT EXISTS debt_disputes (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    dispute_date TEXT DEFAULT (date('now')),
+    reason TEXT NOT NULL DEFAULT 'other' CHECK(reason IN ('not_my_debt','wrong_amount','already_paid','statute_expired','identity_theft','other')),
+    description TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','investigating','resolved','rejected')),
+    resolution TEXT DEFAULT '',
+    resolved_date TEXT,
+    resolved_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_debt_disputes_debt ON debt_disputes(debt_id)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -448,7 +462,7 @@ const tablesWithoutUpdatedAt = new Set([
   // Debt & Invoice Enhancement child tables — created_at only
   'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
   'debt_compliance_log', 'invoice_debt_links',
-  'expense_line_items',
+  'expense_line_items', 'debt_disputes',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

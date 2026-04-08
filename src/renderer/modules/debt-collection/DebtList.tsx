@@ -90,6 +90,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   const [opSuccess, setOpSuccess] = useState('');
   const [opError, setOpError] = useState('');
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignCollector, setBulkAssignCollector] = useState('');
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // ─── Load Users ─────────────────────────────────────────
   useEffect(() => {
     api.listUsers().then(setUsers).catch(() => {});
@@ -222,6 +227,78 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     }
   }, [reload]);
 
+  // ─── Bulk Actions ──────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(d => d.id)));
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkAssignCollector || selectedIds.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      for (const id of selectedIds) {
+        await api.assignCollector(id, bulkAssignCollector);
+      }
+      setSelectedIds(new Set());
+      setBulkAssignCollector('');
+      await reload();
+      setOpSuccess(`Assigned ${selectedIds.size} debts`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk assign failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkAdvance = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Advance stage for ${selectedIds.size} selected debts?`)) return;
+    setBulkProcessing(true);
+    try {
+      let advanced = 0;
+      for (const id of selectedIds) {
+        await api.debtAdvanceStage(id);
+        advanced++;
+      }
+      setSelectedIds(new Set());
+      await reload();
+      setOpSuccess(`Advanced ${advanced} debts`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk advance failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkHold = async (hold: boolean) => {
+    if (selectedIds.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      for (const id of selectedIds) {
+        await api.debtHoldToggle(id, hold, hold ? 'Bulk hold' : '');
+      }
+      setSelectedIds(new Set());
+      await reload();
+      setOpSuccess(`${hold ? 'Held' : 'Released'} ${selectedIds.size} debts`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk hold failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
   // ─── Age Calculation ────────────────────────────────────
   const ageDays = (delinquentDate: string): number => {
     return Math.floor((Date.now() - new Date(delinquentDate).getTime()) / 86400000);
@@ -306,6 +383,28 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       {/* Feedback Messages */}
       {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
       {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+
+      {/* Bulk Action Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: '6px' }}>
+          <span className="text-xs font-bold text-accent-blue">{selectedIds.size} selected</span>
+          <div className="flex items-center gap-2 ml-2">
+            <select className="block-select text-xs" style={{ width: 'auto', minWidth: 140 }} value={bulkAssignCollector} onChange={(e) => setBulkAssignCollector(e.target.value)}>
+              <option value="">Assign Collector...</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+            {bulkAssignCollector && (
+              <button className="block-btn-primary text-xs py-1 px-3" onClick={handleBulkAssign} disabled={bulkProcessing}>Assign</button>
+            )}
+          </div>
+          {isReceivable && (
+            <button className="block-btn text-xs py-1 px-3" onClick={handleBulkAdvance} disabled={bulkProcessing}>Advance Stage</button>
+          )}
+          <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(true)} disabled={bulkProcessing}>Hold</button>
+          <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(false)} disabled={bulkProcessing}>Release</button>
+          <button className="text-xs text-text-muted ml-auto hover:text-text-primary" onClick={() => setSelectedIds(new Set())}>Clear</button>
+        </div>
+      )}
 
       {/* Escalation Result */}
       {escalationResult && (
@@ -470,6 +569,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <thead>
               {isReceivable ? (
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                  </th>
                   <th>Debtor</th>
                   <th>Source</th>
                   <th className="text-right">Original</th>
@@ -482,6 +584,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                 </tr>
               ) : (
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                  </th>
                   <th>Creditor</th>
                   <th>Source</th>
                   <th className="text-right">Original</th>
@@ -508,6 +613,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
+                    </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{debt.debtor_name}</span>
@@ -522,6 +630,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         )}
                         {!!debt.has_broken_promise && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                        {debt.status === 'disputed' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
                         )}
                       </div>
                     </td>
@@ -600,6 +711,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
+                    </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{debt.debtor_name}</span>
@@ -614,6 +728,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         )}
                         {!!debt.has_broken_promise && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                        {debt.status === 'disputed' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
                         )}
                       </div>
                     </td>

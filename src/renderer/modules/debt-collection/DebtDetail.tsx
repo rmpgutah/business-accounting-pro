@@ -19,6 +19,7 @@ import {
   Calendar,
   Receipt,
   Trash2,
+  Plus,
 } from 'lucide-react';
 import api from '../../lib/api';
 import PaymentPlanCard from './PaymentPlanCard';
@@ -34,7 +35,7 @@ interface DebtDetailProps {
   onBack: () => void;
   onEdit: () => void;
   onRefresh: () => void;
-  onOpenModal: (modal: 'communication' | 'payment' | 'evidence' | 'contact') => void;
+  onOpenModal: (modal: 'communication' | 'payment' | 'evidence' | 'contact', editId?: string) => void;
   onInvoice: () => void;
 }
 
@@ -282,6 +283,21 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const [showPromiseForm, setShowPromiseForm] = useState(false);
   const [promiseForm, setPromiseForm] = useState({ promised_date: '', promised_amount: 0, notes: '' });
 
+  // Add Fee state
+  const [showFeeForm, setShowFeeForm] = useState(false);
+  const [feeForm, setFeeForm] = useState({ amount: '', feeType: 'late_fee', description: '' });
+  const [feeSaving, setFeeSaving] = useState(false);
+
+  // Disputes state
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeForm, setDisputeForm] = useState({ reason: 'other', description: '', status: 'open' });
+  const [editingDisputeId, setEditingDisputeId] = useState<string | null>(null);
+  const [disputeSaving, setDisputeSaving] = useState(false);
+
+  // Letter dropdown
+  const [showLetterMenu, setShowLetterMenu] = useState(false);
+
   // ── Load All Data ──
   useEffect(() => {
     let cancelled = false;
@@ -298,6 +314,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           promisesData,
           invoiceLinkData,
           timelineData,
+          disputesData,
         ] = await Promise.all([
           api.get('debts', debtId),
           api.query('debt_payments', { debt_id: debtId }, { field: 'received_date', dir: 'desc' }),
@@ -315,6 +332,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           api.listDebtPromises(debtId).catch(() => []),
           api.getDebtInvoiceLink(debtId).catch(() => null),
           api.getActivityTimeline(debtId).catch(() => []),
+          api.query('debt_disputes', { debt_id: debtId }).catch(() => []),
         ]);
         api.listUsers().then(setUsers).catch(() => {});
         if (cancelled) return;
@@ -326,6 +344,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setPipelineStages(Array.isArray(stageData) ? stageData : []);
         setInterestCalc(interestData);
         setPromises(Array.isArray(promisesData) ? promisesData : []);
+        setDisputes(Array.isArray(disputesData) ? disputesData : []);
         setInvoiceLink(invoiceLinkData ?? null);
         setTimeline(Array.isArray(timelineData) ? timelineData : []);
       } catch (err) {
@@ -353,6 +372,120 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       triggerRefresh();
     } catch (err) {
       console.error('Failed to delete communication:', err);
+    }
+  };
+
+  const handleDeleteEvidence = async (id: string) => {
+    if (!window.confirm('Delete this evidence item?')) return;
+    try {
+      await api.remove('debt_evidence', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete evidence:', err);
+    }
+  };
+
+  const handleDeleteLegalAction = async (id: string) => {
+    if (!window.confirm('Delete this legal action?')) return;
+    try {
+      await api.remove('debt_legal_actions', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete legal action:', err);
+    }
+  };
+
+  const handleDeletePayment = async (id: string) => {
+    if (!window.confirm('Delete this payment record?')) return;
+    try {
+      await api.remove('debt_payments', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete payment:', err);
+    }
+  };
+
+  const handleDeletePromise = async (id: string) => {
+    if (!window.confirm('Delete this promise-to-pay?')) return;
+    try {
+      await api.remove('debt_promises', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete promise:', err);
+    }
+  };
+
+  // ── Add Fee ──
+  const handleSaveFee = async () => {
+    const amt = parseFloat(feeForm.amount);
+    if (!amt || amt <= 0) return;
+    setFeeSaving(true);
+    try {
+      await api.addDebtFee(debtId, amt, feeForm.feeType, feeForm.description);
+      setShowFeeForm(false);
+      setFeeForm({ amount: '', feeType: 'late_fee', description: '' });
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to add fee:', err);
+    } finally {
+      setFeeSaving(false);
+    }
+  };
+
+  // ── Disputes ──
+  const handleSaveDispute = async () => {
+    if (disputeSaving) return;
+    setDisputeSaving(true);
+    try {
+      const payload = {
+        debt_id: debtId,
+        reason: disputeForm.reason,
+        description: disputeForm.description,
+        status: disputeForm.status,
+      };
+      if (editingDisputeId) {
+        await api.update('debt_disputes', editingDisputeId, payload);
+      } else {
+        await api.create('debt_disputes', payload);
+        // Auto-set debt status to disputed
+        await api.update('debts', debtId, { status: 'disputed' });
+      }
+      setShowDisputeForm(false);
+      setEditingDisputeId(null);
+      setDisputeForm({ reason: 'other', description: '', status: 'open' });
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to save dispute:', err);
+    } finally {
+      setDisputeSaving(false);
+    }
+  };
+
+  const handleEditDispute = (d: any) => {
+    setEditingDisputeId(d.id);
+    setDisputeForm({ reason: d.reason, description: d.description || '', status: d.status });
+    setShowDisputeForm(true);
+  };
+
+  const handleDeleteDispute = async (id: string) => {
+    if (!window.confirm('Delete this dispute?')) return;
+    try {
+      await api.remove('debt_disputes', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete dispute:', err);
+    }
+  };
+
+  // ── Letter Generation ──
+  const handleGenerateLetter = async (type: string) => {
+    setShowLetterMenu(false);
+    try {
+      const { generateCollectionLetterHTML } = await import('../../lib/print-templates');
+      const html = generateCollectionLetterHTML(debt, payments, activeCompany, type);
+      await api.printPreview(html, `${type.replace(/_/g, ' ')} — ${debt?.debtor_name}`);
+    } catch (err) {
+      console.error('Failed to generate letter:', err);
     }
   };
 
@@ -666,6 +799,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           </button>
           <button
             className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => setShowFeeForm(v => !v)}
+          >
+            <DollarSign size={14} />
+            Add Fee
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
             onClick={() => onOpenModal('evidence')}
           >
             <FileText size={14} />
@@ -710,22 +850,37 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <Receipt size={14} />
             Statement
           </button>
-          <button
-            className="block-btn flex items-center gap-1.5 text-xs"
-            onClick={async () => {
-              const { generateDemandLetterHTML } = await import('../../lib/print-templates');
-              const html = generateDemandLetterHTML(
-                debt,
-                payments,
-                activeCompany,
-                { deadline_days: 10, signatory_name: activeCompany?.name }
-              );
-              await api.printPreview(html, `Demand Letter — ${debt?.debtor_name}`);
-            }}
-          >
-            <FileText size={13} />
-            Demand Letter
-          </button>
+          <div className="relative">
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs"
+              onClick={() => setShowLetterMenu(v => !v)}
+            >
+              <FileText size={13} />
+              Generate Letter
+              <ChevronRight size={10} className={`transition-transform ${showLetterMenu ? 'rotate-90' : ''}`} />
+            </button>
+            {showLetterMenu && (
+              <div className="absolute top-full left-0 mt-1 z-30 block-card-elevated p-1 min-w-[180px] space-y-0.5" style={{ borderRadius: '6px' }}>
+                {[
+                  { key: 'reminder', label: 'Reminder Letter' },
+                  { key: 'warning', label: 'Warning Notice' },
+                  { key: 'final_notice', label: 'Final Notice' },
+                  { key: 'demand', label: 'Demand Letter' },
+                  { key: 'settlement_offer', label: 'Settlement Offer' },
+                  { key: 'payment_confirmation', label: 'Payment Confirmation' },
+                ].map(lt => (
+                  <button
+                    key={lt.key}
+                    className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+                    style={{ borderRadius: '4px' }}
+                    onClick={() => handleGenerateLetter(lt.key)}
+                  >
+                    {lt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"
             onClick={() => setShowWriteOff(true)}
@@ -734,6 +889,39 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             Write Off
           </button>
         </div>
+
+        {/* Add Fee Form */}
+        {showFeeForm && (
+          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+            <p className="text-sm font-semibold text-text-primary mb-3">Add Fee</p>
+            <div className="grid grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Amount</label>
+                <input type="number" step="0.01" min="0" className="block-input" placeholder="0.00" value={feeForm.amount} onChange={(e) => setFeeForm(f => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Fee Type</label>
+                <select className="block-select" value={feeForm.feeType} onChange={(e) => setFeeForm(f => ({ ...f, feeType: e.target.value }))}>
+                  <option value="late_fee">Late Fee</option>
+                  <option value="collection_fee">Collection Fee</option>
+                  <option value="admin_fee">Admin Fee</option>
+                  <option value="court_cost">Court Cost</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Description</label>
+                <input className="block-input" placeholder="Optional description" value={feeForm.description} onChange={(e) => setFeeForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div className="flex gap-2">
+                <button className="block-btn-primary text-xs py-2 px-4" onClick={handleSaveFee} disabled={feeSaving}>
+                  {feeSaving ? 'Adding...' : 'Add Fee'}
+                </button>
+                <button className="block-btn text-xs py-2 px-3" onClick={() => setShowFeeForm(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Write Off Confirmation */}
         {showWriteOff && (
@@ -891,6 +1079,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <th>Reference</th>
                     <th>Allocation</th>
                     <th>Notes</th>
+                    <th style={{ width: 60 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -910,6 +1099,24 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         {formatCurrency(p.applied_to_fees)} fees
                       </td>
                       <td className="text-xs text-text-muted">{truncate(p.notes || '', 40)}</td>
+                      <td>
+                        <div className="flex items-center gap-1">
+                          <button
+                            className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                            onClick={() => onOpenModal('payment', p.id)}
+                            title="Edit payment"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                            onClick={() => handleDeletePayment(p.id)}
+                            title="Delete payment"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -964,7 +1171,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                           {formatDate(c.logged_at, { style: 'short' })}
                         </span>
                         <button
-                          className="ml-auto text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          className="ml-auto text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                          onClick={() => onOpenModal('communication', c.id)}
+                          title="Edit communication"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
                           onClick={() => handleDeleteComm(c.id)}
                           title="Delete communication"
                         >
@@ -1043,6 +1257,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       >
                         {p.kept ? 'Mark Broken' : 'Mark Kept'}
                       </button>
+                      <button
+                        onClick={() => handleDeletePromise(p.id)}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+                        title="Delete promise"
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     </div>
                   );
                 })}
@@ -1058,6 +1279,86 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
           {/* Card 4e — FDCPA Compliance Log */}
           <ComplianceLog debtId={debtId} onRefresh={triggerRefresh} />
+
+          {/* Card 4f — Disputes */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Disputes
+              </h3>
+              <button
+                className="block-btn flex items-center gap-1 text-xs"
+                onClick={() => { setEditingDisputeId(null); setDisputeForm({ reason: 'other', description: '', status: 'open' }); setShowDisputeForm(v => !v); }}
+              >
+                <Plus size={12} />
+                File Dispute
+              </button>
+            </div>
+
+            {showDisputeForm && (
+              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Reason</label>
+                    <select className="block-select" value={disputeForm.reason} onChange={(e) => setDisputeForm(f => ({ ...f, reason: e.target.value }))}>
+                      <option value="not_my_debt">Not My Debt</option>
+                      <option value="wrong_amount">Wrong Amount</option>
+                      <option value="already_paid">Already Paid</option>
+                      <option value="statute_expired">Statute Expired</option>
+                      <option value="identity_theft">Identity Theft</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Status</label>
+                    <select className="block-select" value={disputeForm.status} onChange={(e) => setDisputeForm(f => ({ ...f, status: e.target.value }))}>
+                      <option value="open">Open</option>
+                      <option value="investigating">Investigating</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Description</label>
+                  <textarea className="block-input" rows={2} placeholder="Dispute details..." value={disputeForm.description} onChange={(e) => setDisputeForm(f => ({ ...f, description: e.target.value }))} style={{ resize: 'vertical' }} />
+                </div>
+                <div className="flex gap-2">
+                  <button className="block-btn-primary text-xs" onClick={handleSaveDispute} disabled={disputeSaving}>
+                    {disputeSaving ? 'Saving...' : editingDisputeId ? 'Update' : 'Save'}
+                  </button>
+                  <button className="block-btn text-xs" onClick={() => setShowDisputeForm(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {disputes.length === 0 && !showDisputeForm ? (
+              <p className="text-sm text-text-muted">No disputes filed</p>
+            ) : (
+              <div className="space-y-2">
+                {disputes.map((d: any) => {
+                  const statusColor: Record<string, string> = { open: '#d97706', investigating: '#3b82f6', resolved: '#16a34a', rejected: '#ef4444' };
+                  const reasonLabels: Record<string, string> = { not_my_debt: 'Not My Debt', wrong_amount: 'Wrong Amount', already_paid: 'Already Paid', statute_expired: 'Statute Expired', identity_theft: 'Identity Theft', other: 'Other' };
+                  return (
+                    <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: (statusColor[d.status] || '#777') + '22', color: statusColor[d.status] || '#777', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {d.status}
+                        </span>
+                        <span className="text-xs text-text-primary font-medium">{reasonLabels[d.reason] || d.reason}</span>
+                        {d.description && <span className="text-xs text-text-muted truncate ml-1">— {d.description.slice(0, 50)}</span>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-text-muted font-mono">{formatDate(d.dispute_date || d.created_at, { style: 'short' })}</span>
+                        <button className="text-text-muted hover:text-accent-blue transition-colors p-0.5" onClick={() => handleEditDispute(d)} title="Edit"><Pencil size={11} /></button>
+                        <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDeleteDispute(d.id)} title="Delete"><Trash2 size={11} /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Card 5 — Evidence Items */}
           <div className="block-card p-6">
@@ -1102,6 +1403,20 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         <span className="text-[10px] text-text-muted font-mono">
                           {formatDate(e.date_of_evidence || e.created_at, { style: 'short' })}
                         </span>
+                        <button
+                          className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                          onClick={() => onOpenModal('evidence', e.id)}
+                          title="Edit evidence"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          onClick={() => handleDeleteEvidence(e.id)}
+                          title="Delete evidence"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -1139,6 +1454,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                             #{la.case_number}
                           </span>
                         )}
+                        <span className="flex-1" />
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          onClick={() => handleDeleteLegalAction(la.id)}
+                          title="Delete legal action"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                       {la.hearing_date && (
                         <div className="flex items-center gap-2 text-xs text-text-secondary mb-2">

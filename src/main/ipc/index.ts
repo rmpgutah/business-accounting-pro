@@ -420,7 +420,7 @@ export function registerIpcHandlers(): void {
     // Debt & Invoice Enhancement child tables — company_id lives on parent table
     'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
     'debt_compliance_log', 'invoice_debt_links',
-    'expense_line_items',
+    'expense_line_items', 'debt_disputes',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -3592,6 +3592,66 @@ export function registerIpcHandlers(): void {
       return result;
     } catch (err: any) {
       return { error: err.message };
+    }
+  });
+
+  // ─── Debt: Add Fee ────────────────────────────────────────
+  ipcMain.handle('debt:add-fee', (_event, { debtId, amount, feeType, description }: { debtId: string; amount: number; feeType: string; description: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const addFeeTx = dbInstance.transaction(() => {
+        dbInstance.prepare(
+          `UPDATE debts SET fees_accrued = fees_accrued + ?, balance_due = balance_due + ?, updated_at = datetime('now') WHERE id = ?`
+        ).run(amount, amount, debtId);
+        // Log as activity note
+        db.create('debt_notes', {
+          debt_id: debtId,
+          note: `Fee added: $${amount.toFixed(2)} (${feeType}) — ${description || 'No description'}`,
+          created_by: 'system',
+        });
+      });
+      addFeeTx();
+      scheduleAutoBackup();
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Debt: Collector Performance ─────────────────────────
+  ipcMain.handle('debt:collector-performance', (_event, { startDate, endDate }: { startDate?: string; endDate?: string }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return [];
+      const dbInstance = db.getDb();
+      const dateFilter = startDate && endDate
+        ? `AND d.created_at BETWEEN '${startDate}' AND '${endDate}'`
+        : '';
+      const rows = dbInstance.prepare(`
+        SELECT
+          u.id as collector_id,
+          u.name as collector_name,
+          COUNT(DISTINCT d.id) as active_cases,
+          COALESCE(SUM(d.original_amount), 0) as total_owed,
+          COALESCE(SUM(d.payments_made), 0) as total_collected,
+          CASE WHEN SUM(d.original_amount) > 0
+            THEN ROUND(SUM(d.payments_made) * 100.0 / SUM(d.original_amount), 1)
+            ELSE 0 END as recovery_rate,
+          COALESCE(AVG(
+            CASE WHEN d.payments_made > 0
+              THEN CAST(julianday((SELECT MIN(dp.received_date) FROM debt_payments dp WHERE dp.debt_id = d.id)) - julianday(d.delinquent_date) AS INTEGER)
+              ELSE NULL END
+          ), 0) as avg_days_to_first_payment
+        FROM users u
+        INNER JOIN debts d ON d.assigned_collector_id = u.id AND d.company_id = ?
+        ${dateFilter}
+        GROUP BY u.id, u.name
+        ORDER BY total_collected DESC
+      `).all(companyId);
+      return rows;
+    } catch (err: any) {
+      console.error('debt:collector-performance error:', err);
+      return [];
     }
   });
 

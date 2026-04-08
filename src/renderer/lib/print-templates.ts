@@ -1035,6 +1035,111 @@ ${baseStyles}
 
 
 // ═══════════════════════════════════════════════════════════════
+// COLLECTION LETTER GENERATOR (multiple letter types)
+// ═══════════════════════════════════════════════════════════════
+export function generateCollectionLetterHTML(
+  debt: any,
+  payments: any[],
+  company: any,
+  letterType: string,
+): string {
+  const companyName = company?.name || 'Your Company';
+  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
+  const companyPhone = company?.phone || '';
+  const companyEmail = company?.email || '';
+  const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const fmtAmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
+  const debtorName = debt?.debtor_name || 'Account Holder';
+  const debtorAddr = debt?.debtor_address || '';
+  const balanceDue = debt?.balance_due || 0;
+  const originalAmt = debt?.original_amount || 0;
+  const interestAmt = debt?.interest_accrued || 0;
+  const feesAmt = debt?.fees_accrued || 0;
+  const dueDate = debt?.due_date ? new Date(debt.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+  const totalPaid = payments?.reduce((s: number, p: any) => s + (p.amount || 0), 0) || 0;
+  const deadlineDate = new Date(Date.now() + 10 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const thirtyDayDate = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const summaryTable = `<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:12px;">
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Original Amount</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmtAmt(originalAmt)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Interest</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmtAmt(interestAmt)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Fees</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmtAmt(feesAmt)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Payments</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;color:#16a34a;">-${fmtAmt(totalPaid)}</td></tr>
+  <tr style="font-weight:700;"><td style="padding:8px 12px;border:2px solid #111;">Balance Due</td><td style="padding:8px 12px;border:2px solid #111;text-align:right;font-family:monospace;">${fmtAmt(balanceDue)}</td></tr>
+</table>`;
+
+  const LETTERS: Record<string, { title: string; accent: string; body: string }> = {
+    reminder: {
+      title: 'Payment Reminder',
+      accent: '#2563eb',
+      body: `<p>This is a friendly reminder that your account has a past-due balance of <strong>${fmtAmt(balanceDue)}</strong> (due ${dueDate}).</p>
+<p>Please remit payment at your earliest convenience. If you have already sent payment, please disregard this notice.</p>
+<p>Contact us at ${companyPhone || companyEmail || 'the number on file'} for questions or payment arrangements.</p>`,
+    },
+    warning: {
+      title: 'Warning Notice',
+      accent: '#d97706',
+      body: `<p>Despite prior correspondence, your account remains past due.</p>${summaryTable}
+<p>Please pay by <strong>${thirtyDayDate}</strong> to avoid further collection activity, additional fees, and potential credit reporting.</p>`,
+    },
+    final_notice: {
+      title: 'Final Notice Before Legal Action',
+      accent: '#dc2626',
+      body: `<p><strong style="color:#dc2626;">THIS IS YOUR FINAL NOTICE.</strong></p>
+<p>Your account has a delinquent balance of <strong>${fmtAmt(balanceDue)}</strong>.</p>
+<p>Unless payment or a satisfactory arrangement is received by <strong>${deadlineDate}</strong>, we will pursue collections agency referral, credit bureau reporting, and/or legal action including civil complaint and garnishment.</p>${summaryTable}`,
+    },
+    demand: {
+      title: 'Demand for Payment',
+      accent: '#111',
+      body: `<p>This constitutes a formal demand for payment of <strong>${fmtAmt(balanceDue)}</strong> owed to ${companyName}.</p>
+<p>The debt arises from an obligation of <strong>${fmtAmt(originalAmt)}</strong> (due ${dueDate}), plus interest and fees.</p>${summaryTable}
+<p>Pay within <strong>ten (10) days</strong> of this letter or ${companyName} will commence legal proceedings. Under the FDCPA, you may dispute this debt in writing within 30 days.</p>`,
+    },
+    settlement_offer: {
+      title: 'Settlement Offer',
+      accent: '#0891b2',
+      body: `<p>To resolve your outstanding balance of <strong>${fmtAmt(balanceDue)}</strong>, ${companyName} offers a settlement of <strong>${fmtAmt(balanceDue * 0.7)}</strong> (70%) as payment in full, if received by <strong>${thirtyDayDate}</strong>.</p>${summaryTable}
+<p>This offer expires on ${thirtyDayDate}. After that date, the full balance remains due.</p>`,
+    },
+    payment_confirmation: {
+      title: 'Payment Confirmation',
+      accent: '#16a34a',
+      body: `<p>Thank you for your payment${totalPaid > 0 ? ' of <strong>' + fmtAmt(totalPaid) + '</strong>' : ''}.</p>${summaryTable}
+${balanceDue <= 0 ? '<p>Your account is <strong>paid in full</strong>. Thank you.</p>' : '<p>A remaining balance of <strong>' + fmtAmt(balanceDue) + '</strong> is still due.</p>'}`,
+    },
+  };
+
+  const letter = LETTERS[letterType] || LETTERS.reminder;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Georgia,serif; font-size:13px; color:#111; background:#fff; padding:48px; line-height:1.7; }
+  .page { max-width:700px; margin:0 auto; }
+  .hdr { border-bottom:3px solid ${letter.accent}; padding-bottom:20px; margin-bottom:32px; }
+  .co { font-size:20px; font-weight:700; color:${letter.accent}; }
+  .co-info { font-size:11px; color:#555; margin-top:4px; }
+  .dt { text-align:right; font-size:12px; color:#555; margin-bottom:24px; }
+  .addr { margin-bottom:24px; font-size:12px; line-height:1.6; }
+  .ttl { font-size:16px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:${letter.accent}; border-bottom:1px solid #ddd; padding-bottom:8px; margin-bottom:20px; }
+  .bd p { margin-bottom:12px; } .bd ul { margin:12px 0; padding-left:24px; }
+  .sig { margin-top:40px; }
+  .sl { width:200px; border-top:1px solid #333; margin-top:48px; padding-top:4px; }
+  .ft { border-top:1px solid #ddd; margin-top:40px; padding-top:12px; text-align:center; font-size:10px; color:#555; }
+  @media print { body { padding:0; } }
+</style></head><body>
+<div class="page">
+  <div class="hdr"><div class="co">${companyName}</div><div class="co-info">${companyAddr}${companyPhone ? ' · ' + companyPhone : ''}${companyEmail ? ' · ' + companyEmail : ''}</div></div>
+  <div class="dt">${todayLong}</div>
+  <div class="addr"><strong>${debtorName}</strong><br>${debtorAddr || '—'}</div>
+  <div class="ttl">${letter.title}</div>
+  <div class="bd"><p>Dear ${debtorName},</p>${letter.body}</div>
+  <div class="sig"><p>Sincerely,</p><div class="sl"><strong>${companyName}</strong><br><span style="font-size:11px;color:#555;">Collections Department</span></div></div>
+  <div class="ft">This is an attempt to collect a debt. Any information obtained will be used for that purpose.<br>${companyName} · ${todayLong}</div>
+</div></body></html>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // EXPENSE DETAIL REPORT
 // ═══════════════════════════════════════════════════════════════
 export function generateExpenseReportHTML(

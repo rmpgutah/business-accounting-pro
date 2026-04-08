@@ -75,6 +75,11 @@ const DebtCollectionModule: React.FC = () => {
     evidence: false,
     contact: false,
   });
+  const [editIds, setEditIds] = useState<Record<string, string | null>>({
+    communication: null,
+    payment: null,
+    evidence: null,
+  });
 
   // ── Debt handlers ──
   const handleViewDebt = useCallback((id: string) => {
@@ -121,12 +126,14 @@ const DebtCollectionModule: React.FC = () => {
   }, []);
 
   // ── Modal handlers ──
-  const openModal = useCallback((modal: keyof ModalState) => {
+  const openModal = useCallback((modal: keyof ModalState, editId?: string) => {
     setModalState((prev) => ({ ...prev, [modal]: true }));
+    if (editId) setEditIds((prev) => ({ ...prev, [modal]: editId }));
   }, []);
 
   const closeModal = useCallback((modal: keyof ModalState) => {
     setModalState((prev) => ({ ...prev, [modal]: false }));
+    setEditIds((prev) => ({ ...prev, [modal]: null }));
   }, []);
 
   return (
@@ -190,7 +197,7 @@ const DebtCollectionModule: React.FC = () => {
           onBack={handleBack}
           onEdit={() => handleEditDebt(activeDebtId)}
           onRefresh={() => setListKey((k) => k + 1)}
-          onOpenModal={openModal}
+          onOpenModal={(modal, editId) => openModal(modal, editId)}
           onInvoice={() => handleInvoice(activeDebtId)}
         />
       )}
@@ -242,6 +249,7 @@ const DebtCollectionModule: React.FC = () => {
       {modalState.communication && activeDebtId && (
         <CommunicationForm
           debtId={activeDebtId}
+          editId={editIds.communication || undefined}
           onClose={() => closeModal('communication')}
           onSaved={() => {
             closeModal('communication');
@@ -254,6 +262,7 @@ const DebtCollectionModule: React.FC = () => {
       {modalState.payment && activeDebtId && (
         <PaymentForm
           debtId={activeDebtId}
+          editId={editIds.payment || undefined}
           onClose={() => closeModal('payment')}
           onSaved={() => {
             closeModal('payment');
@@ -266,6 +275,7 @@ const DebtCollectionModule: React.FC = () => {
       {modalState.evidence && activeDebtId && (
         <EvidenceForm
           debtId={activeDebtId}
+          evidenceId={editIds.evidence || undefined}
           onClose={() => closeModal('evidence')}
           onSaved={() => {
             closeModal('evidence');

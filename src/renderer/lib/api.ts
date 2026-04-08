@@ -404,6 +404,10 @@ const api = {
     window.electronAPI.invoke('debt:activity-timeline', { debtId }),
   addQuickNote: (debtId: string, note: string): Promise<any> =>
     window.electronAPI.invoke('debt:quick-note', { debtId, note }),
+  addDebtFee: (debtId: string, amount: number, feeType: string, description: string): Promise<any> =>
+    window.electronAPI.invoke('debt:add-fee', { debtId, amount, feeType, description }),
+  collectorPerformance: (startDate?: string, endDate?: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:collector-performance', { startDate, endDate }),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>

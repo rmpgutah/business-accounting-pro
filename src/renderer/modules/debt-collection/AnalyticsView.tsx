@@ -104,6 +104,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [stats, setStats] = useState<DebtStats | null>(null);
+  const [collectorPerf, setCollectorPerf] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ── Data loader ──
@@ -111,12 +112,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
     if (!resolvedId) return;
     setLoading(true);
     try {
-      const [analyticsRes, statsRes] = await Promise.all([
+      const [analyticsRes, statsRes, perfRes] = await Promise.all([
         api.debtAnalytics(resolvedId, startDate, endDate),
         api.debtStats(resolvedId),
+        api.collectorPerformance(startDate, endDate).catch(() => []),
       ]);
       setAnalytics(analyticsRes);
       setStats(statsRes);
+      setCollectorPerf(Array.isArray(perfRes) ? perfRes : []);
     } catch (err) {
       console.error('Failed to load debt analytics', err);
     } finally {
@@ -377,7 +380,44 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
             </div>
           </div>
 
-          {/* ── 6. Pipeline Velocity ── */}
+          {/* ── 6. Collector Performance ── */}
+          {collectorPerf.length > 0 && (
+            <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+              <h3 className="text-text-primary text-sm font-semibold mb-3">
+                Collector Performance
+              </h3>
+              <table className="block-table">
+                <thead>
+                  <tr>
+                    <th>Collector</th>
+                    <th className="text-right">Active Cases</th>
+                    <th className="text-right">Total Owed</th>
+                    <th className="text-right">Collected</th>
+                    <th className="text-right">Recovery Rate</th>
+                    <th className="text-right">Avg Days to 1st Payment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {collectorPerf.map((c: any) => (
+                    <tr key={c.collector_id}>
+                      <td className="text-text-primary font-medium">{c.collector_name}</td>
+                      <td className="text-right font-mono">{c.active_cases}</td>
+                      <td className="text-right font-mono text-text-secondary">{formatCurrency(c.total_owed)}</td>
+                      <td className="text-right font-mono text-accent-income">{formatCurrency(c.total_collected)}</td>
+                      <td className="text-right">
+                        <span className={`font-mono font-bold ${c.recovery_rate >= 50 ? 'text-accent-income' : c.recovery_rate >= 25 ? 'text-yellow-500' : 'text-accent-expense'}`}>
+                          {c.recovery_rate}%
+                        </span>
+                      </td>
+                      <td className="text-right font-mono text-text-secondary">{Math.round(c.avg_days_to_first_payment)}d</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── 7. Pipeline Velocity ── */}
           <div className="block-card p-4" style={{ borderRadius: '6px' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Pipeline Velocity
