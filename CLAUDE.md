@@ -64,11 +64,13 @@ npm run deploy:landing
 rsync -az --delete --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='data' -e "ssh -i ~/.ssh/id_ed25519_deploy" server/ root@194.113.64.90:/opt/bap-server/
 ssh -i ~/.ssh/id_ed25519_deploy root@194.113.64.90 "cd /opt/bap-server && npm run build && pm2 restart bap-server --update-env"
 
-# Mac app install
-npm run build && npm run dist:mac -- --arm64
+# Mac app install (always delete first — cp -R onto existing .app won't replace it)
+npm run build && npx electron-builder --mac --arm64
 bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"
+rm -rf "/Applications/Business Accounting Pro.app"
 cp -R "release/mac-arm64/Business Accounting Pro.app" "/Applications/Business Accounting Pro.app"
 xattr -cr "/Applications/Business Accounting Pro.app"
+npm rebuild better-sqlite3
 ```
 
 ## VPS Server Notes
