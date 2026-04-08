@@ -16,6 +16,9 @@ on:
         default: 'false'
         type: boolean
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     name: Deploy landing page to VPS
@@ -29,7 +32,7 @@ jobs:
 
       # ── 2. SSH agent setup ───────────────────────────
       - name: Set up SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
@@ -80,7 +83,7 @@ jobs:
             server/ \
             "$VPS_USER@$VPS_HOST:/opt/bap-server/"
           ssh "$VPS_USER@$VPS_HOST" \
-            'cd /opt/bap-server && npm ci --omit=dev && npm run build && (cd portal && npm ci && npm run build || echo "WARNING: portal build failed") && (pm2 restart bap-server || pm2 start dist/index.js --name bap-server) && pm2 save && echo "Sync server deployed"'
+            'cd /opt/bap-server && npm install && npm run build && (pm2 restart bap-server --update-env 2>/dev/null || pm2 start dist/index.js --name bap-server --cwd /opt/bap-server --restart-delay 3000 --max-restarts 5) && pm2 save && echo "Sync server deployed"'
 
       # ── 6. Reload Nginx gracefully ───────────────────
       - name: Reload Nginx
