@@ -18,6 +18,6 @@ rsync -az --delete \
   server/ "$VPS:/opt/bap-server/"
 
 echo "==> Building and restarting server on VPS..."
-ssh -i "$SSH_KEY" "$VPS" "cd /opt/bap-server && npx tsc && npx pm2 restart bap-server"
+ssh -i "$SSH_KEY" "$VPS" "cd /opt/bap-server && npm run build && pm2 restart bap-server"
 
 echo "==> Deploy complete."
