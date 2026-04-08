@@ -6,3 +6,4 @@ release/
 *.db-journal
 .env
 deploy/vps.env
+.claude/worktrees/
