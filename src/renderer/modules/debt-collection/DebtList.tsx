@@ -29,6 +29,8 @@ interface Debt {
   has_pending_settlement?: number;
   has_active_promise?: number;
   has_broken_promise?: number;
+  cease_desist_active?: number;
+  do_not_call?: number;
 }
 
 interface DebtListProps {
@@ -634,6 +636,12 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         {debt.status === 'disputed' && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
                         )}
+                        {!!debt.cease_desist_active && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                        )}
+                        {!!debt.do_not_call && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
+                        )}
                       </div>
                     </td>
                     <td className="text-text-secondary text-xs font-mono">{sourceLabel}</td>
@@ -731,6 +739,12 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         )}
                         {debt.status === 'disputed' && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                        )}
+                        {!!debt.cease_desist_active && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                        )}
+                        {!!debt.do_not_call && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                       </div>
                     </td>

@@ -408,6 +408,12 @@ const api = {
     window.electronAPI.invoke('debt:add-fee', { debtId, amount, feeType, description }),
   collectorPerformance: (startDate?: string, endDate?: string): Promise<any[]> =>
     window.electronAPI.invoke('debt:collector-performance', { startDate, endDate }),
+  collectorDashboard: (companyId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:collector-dashboard', { companyId }),
+  upcomingInstallments: (debtId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:upcoming-installments', { debtId }),
+  uploadDebtDocument: (debtId: string, filePath: string, fileName: string, fileSize: number): Promise<any> =>
+    window.electronAPI.invoke('debt:upload-document', { debtId, filePath, fileName, fileSize }),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>

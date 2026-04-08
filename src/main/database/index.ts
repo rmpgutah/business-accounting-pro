@@ -322,6 +322,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_debt_disputes_debt ON debt_disputes(debt_id)`,
+  // Debtor contact preferences (2026-04-08)
+  "ALTER TABLE debts ADD COLUMN preferred_contact_method TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN do_not_call INTEGER DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN cease_desist_active INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

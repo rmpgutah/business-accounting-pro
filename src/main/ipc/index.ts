@@ -3655,6 +3655,93 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Debt: Collector Dashboard ────────────────────────────
+  ipcMain.handle('debt:collector-dashboard', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+      const weekAhead = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+
+      const brokenPromises = dbInstance.prepare(`
+        SELECT dp.*, d.debtor_name, d.balance_due, d.id as debt_id
+        FROM debt_promises dp
+        JOIN debts d ON dp.debt_id = d.id
+        WHERE d.company_id = ? AND dp.kept = 0 AND dp.promised_date < ?
+        ORDER BY dp.promised_date DESC LIMIT 25
+      `).all(companyId, today);
+
+      const overdueInstallments = dbInstance.prepare(`
+        SELECT dpi.*, dpp.debt_id, d.debtor_name, d.balance_due
+        FROM debt_plan_installments dpi
+        JOIN debt_payment_plans dpp ON dpi.plan_id = dpp.id
+        JOIN debts d ON dpp.debt_id = d.id
+        WHERE d.company_id = ? AND dpi.paid = 0 AND dpi.due_date < ?
+        ORDER BY dpi.due_date ASC LIMIT 25
+      `).all(companyId, today);
+
+      const upcomingHearings = dbInstance.prepare(`
+        SELECT dla.*, d.debtor_name, d.balance_due, d.id as debt_id
+        FROM debt_legal_actions dla
+        JOIN debts d ON dla.debt_id = d.id
+        WHERE d.company_id = ? AND dla.hearing_date BETWEEN ? AND ?
+        ORDER BY dla.hearing_date ASC LIMIT 25
+      `).all(companyId, today, weekAhead);
+
+      const followUpsDue = dbInstance.prepare(`
+        SELECT dc.*, d.debtor_name, d.balance_due, d.id as debt_id
+        FROM debt_communications dc
+        JOIN debts d ON dc.debt_id = d.id
+        WHERE d.company_id = ? AND dc.next_action_date <= ? AND dc.next_action_date != ''
+        ORDER BY dc.next_action_date ASC LIMIT 25
+      `).all(companyId, today);
+
+      return { brokenPromises, overdueInstallments, upcomingHearings, followUpsDue };
+    } catch (err: any) {
+      console.error('debt:collector-dashboard error:', err);
+      return { brokenPromises: [], overdueInstallments: [], upcomingHearings: [], followUpsDue: [] };
+    }
+  });
+
+  // ─── Debt: Upcoming Installments ─────────────────────────
+  ipcMain.handle('debt:upcoming-installments', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const rows = dbInstance.prepare(`
+        SELECT dpi.*, dpp.debt_id
+        FROM debt_plan_installments dpi
+        JOIN debt_payment_plans dpp ON dpi.plan_id = dpp.id
+        WHERE dpp.debt_id = ?
+        ORDER BY dpi.due_date ASC
+      `).all(debtId);
+      return rows;
+    } catch (err: any) {
+      return [];
+    }
+  });
+
+  // ─── Debt: Upload Document ───────────────────────────────
+  ipcMain.handle('debt:upload-document', async (_event, { debtId, filePath, fileName, fileSize }: { debtId: string; filePath: string; fileName: string; fileSize: number }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) throw new Error('No active company');
+      const result = db.create('documents', {
+        company_id: companyId,
+        filename: fileName,
+        file_path: filePath,
+        file_size: fileSize || 0,
+        mime_type: '',
+        entity_type: 'debt',
+        entity_id: debtId,
+        tags: '[]',
+        description: '',
+      });
+      scheduleAutoBackup();
+      return result;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();

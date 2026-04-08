@@ -72,6 +72,9 @@ interface Debt {
   hold: number;
   hold_reason: string;
   write_off_reason: string;
+  preferred_contact_method: string;
+  do_not_call: number;
+  cease_desist_active: number;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -298,6 +301,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   // Letter dropdown
   const [showLetterMenu, setShowLetterMenu] = useState(false);
 
+  // Installment calendar
+  const [installments, setInstallments] = useState<any[]>([]);
+
+  // Document attachments
+  const [documents, setDocuments] = useState<any[]>([]);
+
   // ── Load All Data ──
   useEffect(() => {
     let cancelled = false;
@@ -347,6 +356,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setDisputes(Array.isArray(disputesData) ? disputesData : []);
         setInvoiceLink(invoiceLinkData ?? null);
         setTimeline(Array.isArray(timelineData) ? timelineData : []);
+        // Load installments + documents in parallel (non-blocking)
+        api.upcomingInstallments(debtId).then(r => setInstallments(Array.isArray(r) ? r : [])).catch(() => {});
+        api.rawQuery('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC', ['debt', debtId]).then(r => setDocuments(Array.isArray(r) ? r : [])).catch(() => {});
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -474,6 +486,31 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       triggerRefresh();
     } catch (err) {
       console.error('Failed to delete dispute:', err);
+    }
+  };
+
+  // ── Document Upload ──
+  const handleUploadDocument = async () => {
+    try {
+      const result = await api.openFileDialog();
+      if (result && !result.canceled && result.filePaths?.length > 0) {
+        const fullPath = result.filePaths[0];
+        const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
+        await api.uploadDebtDocument(debtId, fullPath, fileName, 0);
+        triggerRefresh();
+      }
+    } catch (err) {
+      console.error('Failed to upload document:', err);
+    }
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await api.remove('documents', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete document:', err);
     }
   };
 
@@ -889,6 +926,37 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             Write Off
           </button>
         </div>
+
+        {/* Cease & Desist / DNC Banner */}
+        {(!!debt.cease_desist_active || !!debt.do_not_call) && (
+          <div className="mt-3 flex items-center gap-3 px-4 py-2.5 border border-red-700/50" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
+            {!!debt.cease_desist_active && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#dc262622', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Cease & Desist Active
+              </span>
+            )}
+            {!!debt.do_not_call && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#d9770622', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Do Not Call
+              </span>
+            )}
+            {debt.preferred_contact_method && (
+              <span className="text-xs text-text-secondary">
+                Preferred: <strong className="capitalize">{debt.preferred_contact_method}</strong>
+              </span>
+            )}
+            <span className="text-xs text-red-400 ml-auto">Outbound contact restricted</span>
+          </div>
+        )}
+
+        {/* Contact Preference Badges (non-restricted) */}
+        {!debt.cease_desist_active && !debt.do_not_call && debt.preferred_contact_method && (
+          <div className="mt-2 flex items-center gap-2">
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#2563eb22', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {debt.preferred_contact_method} preferred
+            </span>
+          </div>
+        )}
 
         {/* Add Fee Form */}
         {showFeeForm && (
@@ -1505,6 +1573,76 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          {/* Card 6b — Installment Calendar */}
+          {installments.length > 0 && (
+            <div className="block-card p-6">
+              <SectionLabel>Payment Installments</SectionLabel>
+              {(() => {
+                const today = new Date().toISOString().slice(0, 10);
+                const paid = installments.filter((i: any) => i.paid);
+                const overdue = installments.filter((i: any) => !i.paid && i.due_date < today);
+                const upcoming = installments.filter((i: any) => !i.paid && i.due_date >= today);
+                return (
+                  <>
+                    <div className="flex gap-3 mb-3 text-xs">
+                      <span className="text-accent-income font-bold">{paid.length} Paid</span>
+                      <span className="text-text-muted">·</span>
+                      <span className="text-accent-blue font-bold">{upcoming.length} Upcoming</span>
+                      <span className="text-text-muted">·</span>
+                      <span className="text-accent-expense font-bold">{overdue.length} Overdue</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                      {installments.map((inst: any, idx: number) => {
+                        const isPaid = !!inst.paid;
+                        const isOverdue = !isPaid && inst.due_date < today;
+                        const color = isPaid ? '#16a34a' : isOverdue ? '#ef4444' : '#3b82f6';
+                        const label = isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Due';
+                        return (
+                          <div key={inst.id || idx} className="flex items-center justify-between px-2.5 py-1.5 border border-border-primary" style={{ borderRadius: '6px', borderLeftWidth: 3, borderLeftColor: color }}>
+                            <span className="text-xs font-mono text-text-secondary">{formatDate(inst.due_date)}</span>
+                            <span className="text-xs font-mono font-bold text-text-primary">{formatCurrency(inst.amount || 0)}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: color + '22', color }}>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Card 6c — Documents & Attachments */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Documents
+              </h3>
+              <button className="block-btn flex items-center gap-1 text-xs" onClick={handleUploadDocument}>
+                <Plus size={12} />
+                Upload
+              </button>
+            </div>
+            {documents.length === 0 ? (
+              <p className="text-sm text-text-muted">No documents attached</p>
+            ) : (
+              <div className="space-y-1.5">
+                {documents.map((doc: any) => (
+                  <div key={doc.id} className="flex items-center justify-between p-2 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={14} className="text-accent-blue flex-shrink-0" />
+                      <span className="text-xs text-text-primary font-medium truncate">{doc.filename}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] text-text-muted font-mono">{formatDate(doc.uploaded_at, { style: 'short' })}</span>
+                      <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDeleteDocument(doc.id)} title="Delete"><Trash2 size={11} /></button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

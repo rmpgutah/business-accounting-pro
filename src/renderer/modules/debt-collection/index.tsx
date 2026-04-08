@@ -6,6 +6,7 @@ import {
   Gavel,
   BarChart3,
   Settings,
+  LayoutDashboard,
 } from 'lucide-react';
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
@@ -19,10 +20,11 @@ import PipelineView from './PipelineView';
 import LegalToolkit from './LegalToolkit';
 import AnalyticsView from './AnalyticsView';
 import AutomationSettings from './AutomationSettings';
+import CollectorDashboard from './CollectorDashboard';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
+type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics' | 'dashboard';
 type DebtView = 'list' | 'detail' | 'form' | 'invoice';
 type DebtFormType = 'receivable' | 'payable';
 
@@ -170,6 +172,12 @@ const DebtCollectionModule: React.FC = () => {
           label="Analytics"
           onClick={() => switchTab('analytics')}
         />
+        <TabBtn
+          active={tab === 'dashboard'}
+          icon={<LayoutDashboard size={16} />}
+          label="Dashboard"
+          onClick={() => switchTab('dashboard')}
+        />
         <div className="ml-auto">
           <button
             onClick={() => setShowSettings(true)}
@@ -243,6 +251,10 @@ const DebtCollectionModule: React.FC = () => {
 
       {tab === 'analytics' && view === 'list' && (
         <AnalyticsView companyId={activeCompany?.id || ''} />
+      )}
+
+      {tab === 'dashboard' && view === 'list' && (
+        <CollectorDashboard onViewDebt={(id) => { setActiveDebtId(id); setView('detail'); }} />
       )}
 
       {/* Modals — Communication */}
