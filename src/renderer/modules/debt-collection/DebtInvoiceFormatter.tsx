@@ -158,7 +158,7 @@ function buildStatementHTML(
 <meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  .page, .page div, .page span, .page p, .page td, .page th, .page tr, .page strong { color: #111; }
+  body, div, span, p, td, th, tr, strong { color: #111; }
   body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 48px; }
   .page { max-width: 800px; margin: 0 auto; color: #111; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; border-bottom: 3px solid #111; padding-bottom: 20px; }
@@ -167,20 +167,20 @@ function buildStatementHTML(
   .doc-title { text-align: right; color: #111; }
   .doc-title h1 { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #111; }
   .doc-title .meta { font-size: 11px; color: #555; margin-top: 6px; line-height: 1.7; }
-  .page .doc-title .meta strong { color: #111; }
+  .doc-title .meta strong { color: #111; }
   .parties { display: flex; gap: 40px; margin-bottom: 28px; padding: 20px; background: #f7f7f7; border-left: 4px solid #111; }
   .party { flex: 1; }
   .party-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
   .party-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: #111; }
   .party-detail { font-size: 11px; color: #444; line-height: 1.6; }
-  .page .party-detail strong { color: #111; }
+  .party-detail strong { color: #111; }
   .summary-box { border: 2px solid #111; margin-bottom: 28px; }
   .summary-box-header { background: #111; color: #fff; padding: 8px 16px; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
   .summary-row { display: flex; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid #e5e5e5; font-size: 12px; color: #111; }
-  .page .summary-row span { color: #111; }
+  .summary-row span { color: #111; }
   .summary-row:last-child { border-bottom: none; }
   .summary-row.total { background: #111; color: #fff; font-weight: 900; font-size: 14px; padding: 12px 16px; }
-  .page .summary-row.total span { color: #fff; }
+  .summary-row.total span { color: #fff; }
   .summary-row.subtotal { border-top: 2px solid #111; font-weight: 700; }
   .amount { font-family: "Courier New", monospace; color: inherit; }
   .section { margin-bottom: 28px; }
@@ -193,12 +193,12 @@ function buildStatementHTML(
   .highlight-row td { background: #f0f0f0; font-weight: 700; color: #111; }
   .interest-box { background: #f9f9f9; border: 1px solid #ddd; padding: 16px; margin-bottom: 28px; color: #111; }
   .interest-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; color: #111; }
-  .page .interest-row span { color: #111; }
+  .interest-row span { color: #111; }
   .interest-formula { font-size: 10px; color: #555; font-style: italic; margin-top: 8px; border-top: 1px solid #ddd; padding-top: 8px; }
   .legal-notice { border: 1px solid #ccc; padding: 16px; margin-bottom: 28px; background: #fffbf0; }
   .legal-notice-title { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #b45309; margin-bottom: 8px; }
   .legal-notice p { font-size: 10px; color: #444; line-height: 1.7; margin-bottom: 4px; }
-  .page .legal-notice strong { color: #222; }
+  .legal-notice strong { color: #222; }
   .notes-box { border: 1px solid #e5e5e5; padding: 14px; background: #fafafa; margin-bottom: 28px; }
   .notes-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
   .footer { border-top: 1px solid #ddd; padding-top: 14px; text-align: center; font-size: 10px; color: #555; margin-top: 32px; }
@@ -494,12 +494,12 @@ const DebtInvoiceFormatter: React.FC<DebtInvoiceFormatterProps> = ({ debtId, onB
             Rendered exactly as the exported PDF
           </span>
         </div>
-        {/* Content is generated entirely server-side from structured DB data; all
-            user-sourced strings are HTML-escaped via esc() before interpolation. */}
-        {/* eslint-disable-next-line react/no-danger */}
-        <div
-          style={{ background: '#fff', color: '#111', minHeight: '600px', overflow: 'auto' }}
-          dangerouslySetInnerHTML={{ __html: html }}
+        {/* iframe isolates the statement CSS so it can't leak into the app */}
+        <iframe
+          srcDoc={html}
+          title="Statement Preview"
+          style={{ width: '100%', minHeight: '900px', border: 'none', background: '#fff' }}
+          sandbox="allow-same-origin"
         />
       </div>
     </div>
