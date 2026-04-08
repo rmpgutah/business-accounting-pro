@@ -72,6 +72,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
 
+  // Overdue → debt conversion
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [converting, setConverting] = useState<Set<string>>(new Set());
+
   // Fetch data
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +85,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [invoiceData, clientData, summaryResult] = await Promise.all([
+        const [invoiceData, clientData, summaryResult, candidateData] = await Promise.all([
           api.query('invoices', { company_id: activeCompany.id }),
           api.query('clients', { company_id: activeCompany.id }),
           api.rawQuery(
@@ -90,12 +96,14 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             FROM invoices WHERE company_id = ?`,
             [activeCompany.id]
           ),
+          api.getOverdueCandidates(activeCompany.id, 30).catch(() => []),
         ]);
         if (cancelled) return;
         setInvoices(invoiceData ?? []);
         setClients(clientData ?? []);
         const summaryRow = Array.isArray(summaryResult) ? summaryResult[0] : summaryResult;
         setInvoiceSummary(summaryRow ?? null);
+        setCandidates(Array.isArray(candidateData) ? candidateData : []);
       } catch (err) {
         console.error('Failed to load invoices:', err);
       } finally {
@@ -199,6 +207,21 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     finally { setBatchLoading(false); setShowDeleteConfirm(false); }
   }, [selectedIds, reload]);
 
+  const handleConvertToDebt = useCallback(async (invoiceId: string) => {
+    if (!activeCompany) return;
+    setConverting(prev => new Set(prev).add(invoiceId));
+    try {
+      const result = await api.convertInvoiceToDebt(invoiceId, activeCompany.id);
+      if (result.error) { console.error('Convert failed:', result.error); return; }
+      setCandidates(prev => prev.filter(c => c.id !== invoiceId));
+      await reload();
+    } catch (err) {
+      console.error('Failed to convert invoice to debt:', err);
+    } finally {
+      setConverting(prev => { const next = new Set(prev); next.delete(invoiceId); return next; });
+    }
+  }, [activeCompany, reload]);
+
   const handleExportSelected = useCallback(() => {
     const selected = filtered.filter(inv => selectedIds.has(inv.id));
     const exportData = selected.map(inv => ({
@@ -248,6 +271,88 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           { label: 'Overdue', value: formatCurrency(invoiceSummary.overdue), accent: 'red', tooltip: 'Invoices past their due date with remaining balance' },
           { label: 'Collected This Month', value: formatCurrency(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
         ]} />
+      )}
+
+      {/* Overdue → Collections Banner */}
+      {candidates.length > 0 && !bannerDismissed && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 16px', background: 'rgba(239,68,68,0.08)',
+          border: '1px solid #ef4444', borderRadius: 6,
+        }}>
+          <span style={{ fontSize: 13, color: '#ef4444', fontWeight: 600 }}>
+            {candidates.length} overdue invoice{candidates.length !== 1 ? 's' : ''} eligible for debt collection
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="block-btn text-xs py-1 px-3"
+              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              onClick={() => setShowConvertModal(true)}
+            >
+              Review
+            </button>
+            <button
+              style={{ fontSize: 12, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setBannerDismissed(true)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Convert Modal */}
+      {showConvertModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="block-card p-6" style={{ width: 560, maxHeight: '80vh', overflowY: 'auto', borderRadius: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 className="text-sm font-bold text-text-primary">Overdue Invoices — Send to Collections</h3>
+              <button className="block-btn text-xs py-1 px-2" onClick={() => setShowConvertModal(false)}>Close</button>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+              These invoices are 30+ days overdue and not yet in debt collection. Converting creates a new receivable debt linked to the invoice.
+            </p>
+            <table className="block-table w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left">Invoice</th>
+                  <th className="text-left">Client</th>
+                  <th className="text-right">Balance Due</th>
+                  <th className="text-right">Due Date</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map(inv => (
+                  <tr key={inv.id}>
+                    <td className="font-mono">{inv.invoice_number}</td>
+                    <td>{inv.client_name || '—'}</td>
+                    <td className="text-right font-mono text-accent-expense">
+                      {formatCurrency((inv.total || 0) - (inv.amount_paid || 0))}
+                    </td>
+                    <td className="text-right text-text-muted">{inv.due_date}</td>
+                    <td className="text-right">
+                      <button
+                        className="block-btn-primary text-xs py-1 px-3"
+                        disabled={converting.has(inv.id)}
+                        onClick={() => handleConvertToDebt(inv.id)}
+                      >
+                        {converting.has(inv.id) ? 'Converting...' : 'Convert'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {candidates.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: 16 }}>
+                      All candidates have been converted.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Tabs + Search */}

@@ -107,6 +107,12 @@ const api = {
     window.electronAPI.invoke('invoice:list-reminders', { invoiceId }),
   getInvoiceDebtLink: (invoiceId: string): Promise<any> =>
     window.electronAPI.invoke('invoice:debt-link', { invoiceId }),
+  getDebtInvoiceLink: (debtId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:invoice-link', { debtId }),
+  getOverdueCandidates: (companyId: string, thresholdDays?: number): Promise<any[]> =>
+    window.electronAPI.invoke('invoice:overdue-candidates', { companyId, thresholdDays }),
+  convertInvoiceToDebt: (invoiceId: string, companyId: string): Promise<{ debt_id?: string; error?: string }> =>
+    window.electronAPI.invoke('invoice:convert-to-debt', { invoiceId, companyId }),
 
   // File dialog
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>

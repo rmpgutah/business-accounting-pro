@@ -903,6 +903,66 @@ export function registerIpcHandlers(): void {
     } catch { return null; }
   });
 
+  ipcMain.handle('debt:invoice-link', (_event, { debtId }: { debtId: string }) => {
+    try {
+      return db.getDb().prepare('SELECT * FROM invoice_debt_links WHERE debt_id = ?').get(debtId) || null;
+    } catch { return null; }
+  });
+
+  ipcMain.handle('invoice:overdue-candidates', (_event, { companyId, thresholdDays = 30 }: { companyId: string; thresholdDays?: number }) => {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - thresholdDays);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      return db.getDb().prepare(`
+        SELECT i.*, c.name as client_name
+        FROM invoices i
+        LEFT JOIN clients c ON c.id = i.client_id
+        WHERE i.company_id = ?
+          AND i.status IN ('overdue', 'sent')
+          AND i.due_date <= ?
+          AND i.id NOT IN (SELECT invoice_id FROM invoice_debt_links)
+      `).all(companyId, cutoffStr);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('invoice:convert-to-debt', (_event, { invoiceId, companyId }: { invoiceId: string; companyId: string }) => {
+    try {
+      const inv = db.getById('invoices', invoiceId) as any;
+      if (!inv) return { error: 'Invoice not found' };
+      const client = inv.client_id ? db.getById('clients', inv.client_id) as any : null;
+      const balance = (inv.total || 0) - (inv.amount_paid || 0);
+
+      const debt = db.create('debts', {
+        company_id: companyId,
+        type: 'receivable',
+        debtor_type: client ? 'client' : 'custom',
+        debtor_id: inv.client_id || null,
+        debtor_name: client?.name || inv.client_name || 'Unknown',
+        debtor_email: client?.email || null,
+        debtor_phone: client?.phone || null,
+        original_amount: balance,
+        balance_due: balance,
+        due_date: inv.due_date,
+        delinquent_date: inv.due_date,
+        source_type: 'invoice',
+        source_id: invoiceId,
+        status: 'active',
+        current_stage: 'reminder',
+        priority: 'medium',
+      }) as any;
+
+      db.create('debt_pipeline_stages', { debt_id: debt.id, stage: 'reminder' });
+      db.create('invoice_debt_links', { invoice_id: invoiceId, debt_id: debt.id });
+      db.update('invoices', invoiceId, { status: 'overdue' });
+
+      scheduleAutoBackup();
+      return { debt_id: debt.id };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Invoice Settings ──────────────────────────────────
   ipcMain.handle('invoice:get-settings', () => {
     const companyId = db.getCurrentCompanyId();

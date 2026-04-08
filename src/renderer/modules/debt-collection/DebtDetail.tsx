@@ -268,6 +268,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   // Advance stage
   const [advancingSaving, setAdvancingSaving] = useState(false);
 
+  // Invoice link
+  const [invoiceLink, setInvoiceLink] = useState<any>(null);
+
   // Promise-to-Pay state
   const [promises, setPromises] = useState<any[]>([]);
   const [showPromiseForm, setShowPromiseForm] = useState(false);
@@ -287,6 +290,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           stageData,
           interestData,
           promisesData,
+          invoiceLinkData,
         ] = await Promise.all([
           api.get('debts', debtId),
           api.query('debt_payments', { debt_id: debtId }, { field: 'received_date', dir: 'desc' }),
@@ -302,6 +306,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           ),
           api.debtCalculateInterest(debtId).catch(() => null),
           api.listDebtPromises(debtId).catch(() => []),
+          api.getDebtInvoiceLink(debtId).catch(() => null),
         ]);
         api.listUsers().then(setUsers).catch(() => {});
         if (cancelled) return;
@@ -313,6 +318,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setPipelineStages(Array.isArray(stageData) ? stageData : []);
         setInterestCalc(interestData);
         setPromises(Array.isArray(promisesData) ? promisesData : []);
+        setInvoiceLink(invoiceLinkData ?? null);
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -749,6 +755,11 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <span className="text-accent-blue">{sourceLabel}</span>
                 ) : (
                   sourceLabel
+                )}
+                {invoiceLink && (
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    Linked invoice
+                  </div>
                 )}
               </InfoRow>
               <InfoRow label="Debtor Type">{debt.debtor_type}</InfoRow>
