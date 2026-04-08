@@ -2523,25 +2523,28 @@ export function registerIpcHandlers(): void {
       2024: {
         constants: { ss_wage_base: 168600, standard_deduction_single: 14600, standard_deduction_married: 29200, standard_deduction_hoh: 21900 },
         brackets: {
-          single: [[0, 11600, 0.10], [11600, 47150, 0.12], [47150, 100525, 0.22], [100525, 191950, 0.24], [191950, 243725, 0.32], [243725, 609350, 0.35], [609350, null, 0.37]],
-          married_jointly: [[0, 23200, 0.10], [23200, 94300, 0.12], [94300, 201050, 0.22], [201050, 383900, 0.24], [383900, 487450, 0.32], [487450, 731200, 0.35], [731200, null, 0.37]],
-          head_of_household: [[0, 16550, 0.10], [16550, 63100, 0.12], [63100, 100500, 0.22], [100500, 191950, 0.24], [191950, 243700, 0.32], [243700, 609350, 0.35], [609350, null, 0.37]],
+          single:             [[0, 11600, 0.10], [11600, 47150, 0.12], [47150, 100525, 0.22], [100525, 191950, 0.24], [191950, 243725, 0.32], [243725, 609350, 0.35], [609350, null, 0.37]],
+          married_jointly:    [[0, 23200, 0.10], [23200, 94300, 0.12], [94300, 201050, 0.22], [201050, 383900, 0.24], [383900, 487450, 0.32], [487450, 731200, 0.35], [731200, null, 0.37]],
+          married_separately: [[0, 11600, 0.10], [11600, 47150, 0.12], [47150, 100525, 0.22], [100525, 191950, 0.24], [191950, 243725, 0.32], [243725, 365675, 0.35], [365675, null, 0.37]],
+          head_of_household:  [[0, 16550, 0.10], [16550, 63100, 0.12], [63100, 100500, 0.22], [100500, 191950, 0.24], [191950, 243700, 0.32], [243700, 609350, 0.35], [609350, null, 0.37]],
         },
       },
       2025: {
         constants: { ss_wage_base: 176100, standard_deduction_single: 15000, standard_deduction_married: 30000, standard_deduction_hoh: 22500 },
         brackets: {
-          single: [[0, 11925, 0.10], [11925, 48475, 0.12], [48475, 103350, 0.22], [103350, 197300, 0.24], [197300, 250525, 0.32], [250525, 626350, 0.35], [626350, null, 0.37]],
-          married_jointly: [[0, 23850, 0.10], [23850, 96950, 0.12], [96950, 206700, 0.22], [206700, 394600, 0.24], [394600, 501050, 0.32], [501050, 751600, 0.35], [751600, null, 0.37]],
-          head_of_household: [[0, 17000, 0.10], [17000, 64850, 0.12], [64850, 103350, 0.22], [103350, 197300, 0.24], [197300, 250500, 0.32], [250500, 626350, 0.35], [626350, null, 0.37]],
+          single:             [[0, 11925, 0.10], [11925, 48475, 0.12], [48475, 103350, 0.22], [103350, 197300, 0.24], [197300, 250525, 0.32], [250525, 626350, 0.35], [626350, null, 0.37]],
+          married_jointly:    [[0, 23850, 0.10], [23850, 96950, 0.12], [96950, 206700, 0.22], [206700, 394600, 0.24], [394600, 501050, 0.32], [501050, 751600, 0.35], [751600, null, 0.37]],
+          married_separately: [[0, 11925, 0.10], [11925, 48475, 0.12], [48475, 103350, 0.22], [103350, 197300, 0.24], [197300, 250525, 0.32], [250525, 375975, 0.35], [375975, null, 0.37]],
+          head_of_household:  [[0, 17000, 0.10], [17000, 64850, 0.12], [64850, 103350, 0.22], [103350, 197300, 0.24], [197300, 250500, 0.32], [250500, 626350, 0.35], [626350, null, 0.37]],
         },
       },
       2026: {
-        constants: { ss_wage_base: 182000, standard_deduction_single: 15700, standard_deduction_married: 31400, standard_deduction_hoh: 23600 },
+        constants: { ss_wage_base: 182100, standard_deduction_single: 15400, standard_deduction_married: 30800, standard_deduction_hoh: 23100 },
         brackets: {
-          single: [[0, 12300, 0.10], [12300, 49850, 0.12], [49850, 106300, 0.22], [106300, 203050, 0.24], [203050, 257750, 0.32], [257750, 644300, 0.35], [644300, null, 0.37]],
-          married_jointly: [[0, 24600, 0.10], [24600, 99700, 0.12], [99700, 212550, 0.22], [212550, 406100, 0.24], [406100, 515500, 0.32], [515500, 773200, 0.35], [773200, null, 0.37]],
-          head_of_household: [[0, 17500, 0.10], [17500, 66700, 0.12], [66700, 106300, 0.22], [106300, 203050, 0.24], [203050, 257725, 0.32], [257725, 644300, 0.35], [644300, null, 0.37]],
+          single:             [[0, 12250, 0.10], [12250, 49800, 0.12], [49800, 106200, 0.22], [106200, 202750, 0.24], [202750, 257500, 0.32], [257500, 643750, 0.35], [643750, null, 0.37]],
+          married_jointly:    [[0, 24500, 0.10], [24500, 99600, 0.12], [99600, 212400, 0.22], [212400, 405500, 0.24], [405500, 515000, 0.32], [515000, 772500, 0.35], [772500, null, 0.37]],
+          married_separately: [[0, 12250, 0.10], [12250, 49800, 0.12], [49800, 106200, 0.22], [106200, 202750, 0.24], [202750, 257500, 0.32], [257500, 386250, 0.35], [386250, null, 0.37]],
+          head_of_household:  [[0, 17500, 0.10], [17500, 66700, 0.12], [66700, 106200, 0.22], [106200, 202750, 0.24], [202750, 257475, 0.32], [257475, 643750, 0.35], [643750, null, 0.37]],
         },
       },
     };
@@ -2562,7 +2565,7 @@ export function registerIpcHandlers(): void {
       }
 
       // Upsert brackets
-      const statusMap: Record<string, string> = { single: 'single', married_jointly: 'married_jointly', head_of_household: 'head_of_household' };
+      const statusMap: Record<string, string> = { single: 'single', married_jointly: 'married_jointly', married_separately: 'married_separately', head_of_household: 'head_of_household' };
       for (const [status, brackets] of Object.entries(data.brackets)) {
         for (const [min, max, rate] of brackets as any[]) {
           const existBracket = dbInstance.prepare('SELECT id FROM federal_tax_brackets WHERE tax_year = ? AND filing_status = ? AND bracket_min = ?').get(year, statusMap[status], min);
@@ -2580,8 +2583,22 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('tax:get-brackets', (_event, { year }: { year: number }) => {
     const dbInstance = db.getDb();
-    const brackets = dbInstance.prepare('SELECT * FROM federal_tax_brackets WHERE tax_year = ? ORDER BY filing_status, bracket_min').all(year);
+    const rawBrackets = dbInstance.prepare('SELECT * FROM federal_tax_brackets WHERE tax_year = ? ORDER BY filing_status, bracket_min').all(year) as any[];
     const constants = dbInstance.prepare('SELECT * FROM federal_payroll_constants WHERE tax_year = ?').get(year);
+
+    // Group brackets by filing status, mapping DB names to UI names
+    const statusToUI: Record<string, string> = {
+      single: 'single',
+      married_jointly: 'married_filing_jointly',
+      married_separately: 'married_filing_separately',
+      head_of_household: 'head_of_household',
+    };
+    const brackets: Record<string, any[]> = {};
+    for (const b of rawBrackets) {
+      const uiKey = statusToUI[b.filing_status] ?? b.filing_status;
+      if (!brackets[uiKey]) brackets[uiKey] = [];
+      brackets[uiKey].push({ min: b.bracket_min, max: b.bracket_max, rate: b.rate });
+    }
     return { brackets, constants };
   });
 

@@ -33,7 +33,7 @@ interface TaxData {
   constants: TaxConstants;
 }
 
-type FilingStatus = 'single' | 'married_filing_jointly' | 'head_of_household';
+type FilingStatus = 'single' | 'married_filing_jointly' | 'married_filing_separately' | 'head_of_household';
 
 interface WithholdingResult {
   federal: number;
@@ -50,6 +50,7 @@ const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
 const FILING_TABS: { key: FilingStatus; label: string }[] = [
   { key: 'single', label: 'Single' },
   { key: 'married_filing_jointly', label: 'Married Filing Jointly' },
+  { key: 'married_filing_separately', label: 'Married Filing Separately' },
   { key: 'head_of_household', label: 'Head of Household' },
 ];
 
@@ -122,16 +123,17 @@ const TaxConfiguration: React.FC = () => {
     }
   }, []);
 
-  // On mount: load years, auto-seed current year if needed
+  // On mount: load years, auto-seed all available years (2024-2026)
   useEffect(() => {
     const init = async () => {
       const years = await loadYears();
-      if (!years.includes(CURRENT_YEAR)) {
-        const ok = await seedYear(CURRENT_YEAR, true);
-        if (ok) {
-          setAutoSeeded(true);
-          await loadYears();
+      const yearsToSeed = [2024, 2025, 2026].filter(y => !years.includes(y));
+      if (yearsToSeed.length > 0) {
+        for (const y of yearsToSeed) {
+          await seedYear(y, true);
         }
+        setAutoSeeded(true);
+        await loadYears();
       }
       await loadTaxData(CURRENT_YEAR);
     };
