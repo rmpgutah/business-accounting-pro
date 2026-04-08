@@ -63,6 +63,9 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(true);
   const [escalationResult, setEscalationResult] = useState<string | null>(null);
   const [escalationRunning, setEscalationRunning] = useState(false);
+  const [autoAdvanceThreshold, setAutoAdvanceThreshold] = useState<number>(
+    () => parseInt(localStorage.getItem('debt_auto_advance_threshold') || '30', 10)
+  );
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateDraft, setTemplateDraft] = useState<{
     name: string;
@@ -118,6 +121,14 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
       cancelled = true;
     };
   }, [loadRules, loadTemplates]);
+
+  // ── Auto-advance on open ──
+  useEffect(() => {
+    if (!companyId) return;
+    api.checkAutoAdvance(companyId, autoAdvanceThreshold).then(r => {
+      if (r.advanced > 0) console.log(`Auto-advanced ${r.advanced} debt(s)`);
+    }).catch(() => {});
+  }, [companyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Rule field update ──
   const handleRuleChange = useCallback(
@@ -420,6 +431,32 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                     {escalationResult}
                   </div>
                 )}
+              </div>
+
+              {/* ─── Section 2b: Auto-advance threshold ─── */}
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <h4 className="text-sm font-semibold text-text-primary mb-1">
+                  Auto-Advance Threshold
+                </h4>
+                <p className="text-xs text-text-muted mb-3">
+                  Per-debt auto-advance moves a debt to the next pipeline stage after this many days of inactivity. Enable per debt in the debt detail view.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    className="block-input"
+                    style={{ width: 80 }}
+                    value={autoAdvanceThreshold}
+                    onChange={e => {
+                      const v = Math.max(1, parseInt(e.target.value, 10) || 30);
+                      setAutoAdvanceThreshold(v);
+                      localStorage.setItem('debt_auto_advance_threshold', String(v));
+                    }}
+                  />
+                  <span className="text-xs text-text-muted">days of inactivity</span>
+                </div>
               </div>
 
               {/* ─── Section 3: Template Management ─── */}

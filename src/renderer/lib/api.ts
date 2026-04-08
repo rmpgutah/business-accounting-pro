@@ -369,6 +369,8 @@ const api = {
     window.electronAPI.invoke('debt:compliance-list', { debtId }),
   saveComplianceEvent: (data: Record<string, any>): Promise<any> =>
     window.electronAPI.invoke('debt:compliance-save', data),
+  checkAutoAdvance: (companyId: string, thresholdDays?: number): Promise<{ advanced: number }> =>
+    window.electronAPI.invoke('debt:check-auto-advance', { companyId, thresholdDays }),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>

@@ -3191,6 +3191,42 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('debt:check-auto-advance', (_event, { companyId, thresholdDays = 30 }) => {
+    try {
+      const STAGE_ORDER = ['reminder', 'warning', 'final_notice', 'demand_letter', 'collections_agency', 'legal_action'];
+      const debts = db.queryAll('debts', { company_id: companyId, auto_advance_enabled: 1 });
+      let advanced = 0;
+      const now = new Date();
+
+      for (const debt of debts) {
+        const stageIdx = STAGE_ORDER.indexOf((debt as any).current_stage);
+        if (stageIdx < 0 || stageIdx >= STAGE_ORDER.length - 1) continue;
+
+        const lastActivity = new Date((debt as any).updated_at || (debt as any).created_at);
+        const daysSince = Math.floor((now.getTime() - lastActivity.getTime()) / 86400000);
+
+        if (daysSince >= thresholdDays) {
+          const nextStage = STAGE_ORDER[stageIdx + 1];
+          db.update('debts', (debt as any).id, { current_stage: nextStage });
+          db.create('debt_pipeline_stages', { debt_id: (debt as any).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
+          db.create('debt_communications', {
+            debt_id: (debt as any).id,
+            type: 'note',
+            date: now.toISOString().slice(0, 10),
+            notes: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
+            outcome: 'auto_advanced',
+          });
+          advanced++;
+        }
+      }
+
+      if (advanced > 0) scheduleAutoBackup();
+      return { advanced };
+    } catch (err: any) {
+      return { error: err.message, advanced: 0 };
+    }
+  });
+
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();

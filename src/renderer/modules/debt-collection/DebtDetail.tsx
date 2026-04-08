@@ -66,6 +66,7 @@ interface Debt {
   current_stage: string;
   assigned_to: string;
   assigned_collector_id: string | null;
+  auto_advance_enabled: number;
   hold: number;
   hold_reason: string;
   write_off_reason: string;
@@ -545,6 +546,22 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 ))}
               </select>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!debt.auto_advance_enabled}
+                onChange={async e => {
+                  try {
+                    await api.update('debts', debt.id, { auto_advance_enabled: e.target.checked ? 1 : 0 });
+                    triggerRefresh();
+                  } catch (err) {
+                    console.error('Failed to update auto-advance:', err);
+                  }
+                }}
+                style={{ width: 14, height: 14 }}
+              />
+              Auto-advance stage
+            </label>
           </div>
         </div>
 
