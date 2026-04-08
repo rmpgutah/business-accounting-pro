@@ -54,12 +54,15 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"  # 
 ## Deploy
 
 ```bash
-# Landing page
-rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519_deploy" landing-page/ root@194.113.64.90:/var/www/accounting.rmpgutah.us/
+# Everything (GitHub push + VPS server deploy)
+npm run deploy
 
-# Sync server
-rsync -az --delete --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='data' server/ root@194.113.64.90:/opt/bap-server/
-ssh root@194.113.64.90 "cd /opt/bap-server && npx tsc && npx pm2 restart bap-server"
+# Landing page only
+npm run deploy:landing
+
+# VPS server manually
+rsync -az --delete --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='data' -e "ssh -i ~/.ssh/id_ed25519_deploy" server/ root@194.113.64.90:/opt/bap-server/
+ssh -i ~/.ssh/id_ed25519_deploy root@194.113.64.90 "cd /opt/bap-server && npm run build && pm2 restart bap-server --update-env"
 
 # Mac app install
 npm run build && npm run dist:mac -- --arm64
@@ -67,3 +70,10 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"
 cp -R "release/mac-arm64/Business Accounting Pro.app" "/Applications/Business Accounting Pro.app"
 xattr -cr "/Applications/Business Accounting Pro.app"
 ```
+
+## VPS Server Notes
+
+- pm2 manages `bap-server` — `pm2 list` to check status
+- `.env` lives at `/opt/bap-server/.env` (never in git); must set `SYNC_SECRET`, `DESKTOP_WS_TOKEN`
+- pm2 started with `--cwd /opt/bap-server` so dotenv finds `.env`
+- After VPS reboot: pm2 should auto-start (run `pm2 startup` once to configure systemd hook)
