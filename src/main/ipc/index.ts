@@ -3175,6 +3175,22 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('debt:compliance-list', (_event, { debtId }) => {
+    try {
+      return db.queryAll('debt_compliance_log', { debt_id: debtId }, { field: 'event_date', dir: 'desc' });
+    } catch { return []; }
+  });
+
+  ipcMain.handle('debt:compliance-save', (_event, data) => {
+    try {
+      const result = db.create('debt_compliance_log', data);
+      scheduleAutoBackup();
+      return result;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();

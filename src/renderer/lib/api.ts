@@ -365,6 +365,10 @@ const api = {
     window.electronAPI.invoke('debt:settlement-respond', { settlementId, response, counter_amount: counterAmount }),
   acceptSettlement: (debtId: string, settlementId: string, offerAmount: number): Promise<any> =>
     window.electronAPI.invoke('debt:settlement-accept', { debtId, settlementId, offer_amount: offerAmount }),
+  listComplianceLog: (debtId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:compliance-list', { debtId }),
+  saveComplianceEvent: (data: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('debt:compliance-save', data),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>
