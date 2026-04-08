@@ -18,6 +18,6 @@ rsync -az --delete \
   server/ "$VPS:/opt/bap-server/"
 
 echo "==> Building and restarting server on VPS..."
-ssh -i "$SSH_KEY" "$VPS" "cd /opt/bap-server && npm install --production && npm run build && (pm2 restart bap-server --update-env 2>/dev/null || pm2 start dist/index.js --name bap-server --cwd /opt/bap-server --restart-delay 3000 --max-restarts 5) && pm2 save"
+ssh -i "$SSH_KEY" "$VPS" "cd /opt/bap-server && npm install && npm run build && (pm2 restart bap-server --update-env 2>/dev/null || pm2 start dist/index.js --name bap-server --cwd /opt/bap-server --restart-delay 3000 --max-restarts 5) && pm2 save"
 
 echo "==> Deploy complete."
