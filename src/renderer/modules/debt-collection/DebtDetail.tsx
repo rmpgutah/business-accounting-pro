@@ -512,8 +512,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 style={{ fontSize: 12, padding: '2px 8px', minWidth: 140 }}
                 value={debt.assigned_collector_id || ''}
                 onChange={async (e) => {
-                  await api.assignCollector(debt.id, e.target.value || null);
-                  onRefresh();
+                  try {
+                    await api.assignCollector(debt.id, e.target.value || null);
+                    onRefresh();
+                  } catch (err) {
+                    console.error('Failed to assign collector:', err);
+                  }
                 }}
               >
                 <option value="">Unassigned</option>

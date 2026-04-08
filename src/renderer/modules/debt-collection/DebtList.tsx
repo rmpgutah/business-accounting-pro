@@ -23,6 +23,7 @@ interface Debt {
   status: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   created_at: string;
+  assigned_collector_id?: string | null;
 }
 
 interface DebtListProps {
@@ -136,7 +137,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       if (priorityFilter && d.priority !== priorityFilter) return false;
       if (dateFrom && d.delinquent_date < dateFrom) return false;
       if (dateTo && d.delinquent_date > dateTo) return false;
-      if (collectorFilter && (d as any).assigned_collector_id !== collectorFilter) return false;
+      if (collectorFilter && d.assigned_collector_id !== collectorFilter) return false;
       return true;
     });
   }, [debts, search, statusFilter, stageFilter, priorityFilter, dateFrom, dateTo, collectorFilter]);

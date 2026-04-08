@@ -14,6 +14,7 @@ interface PipelineDebt {
   priority: 'low' | 'medium' | 'high' | 'critical';
   hold: number;
   stage_entered_at: string | null;
+  assigned_collector_id?: string | null;
 }
 
 interface PipelineViewProps {
@@ -193,8 +194,8 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                       )}
 
                       {/* Collector badge */}
-                      {(debt as any).assigned_collector_id && (() => {
-                        const u = users.find((x: any) => x.id === (debt as any).assigned_collector_id);
+                      {debt.assigned_collector_id && (() => {
+                        const u = users.find((x: any) => x.id === debt.assigned_collector_id);
                         if (!u) return null;
                         const initials = (u.display_name || u.email || '?').slice(0, 2).toUpperCase();
                         return (
