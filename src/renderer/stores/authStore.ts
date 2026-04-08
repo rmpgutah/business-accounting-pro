@@ -26,9 +26,8 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'bap-auth',
-      // Only persist user metadata (for Remember Me name display).
-      // Never persist isAuthenticated — user must log in each session.
-      partialize: (state) => ({ user: state.user }),
+      // Persist both user and isAuthenticated so Cmd+R reloads don't log out the user.
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
     }
   )
 );

@@ -14,9 +14,10 @@ const EVENT_LABELS: Record<string, string> = {
 
 interface Props {
   debtId: string;
+  onRefresh?: () => void;
 }
 
-const ComplianceLog: React.FC<Props> = ({ debtId }) => {
+const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
   const [events, setEvents] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -43,6 +44,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId }) => {
       setShowForm(false);
       setForm({ event_type: 'validation_notice_sent', event_date: '', notes: '' });
       await load();
+      onRefresh?.();
     } catch (err) {
       console.error('Failed to save compliance event:', err);
     } finally {

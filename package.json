@@ -13,7 +13,9 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
-    "start": "electron ."
+    "start": "electron .",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:landing": "rsync -avz --delete -e 'ssh -i ~/.ssh/id_ed25519_deploy' landing-page/ root@194.113.64.90:/var/www/accounting.rmpgutah.us/"
   },
   "keywords": [
     "accounting",

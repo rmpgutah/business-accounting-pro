@@ -266,6 +266,15 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoices ADD COLUMN terms_accepted INTEGER DEFAULT 0",
   "ALTER TABLE invoices ADD COLUMN shipping_amount REAL DEFAULT 0",
   "ALTER TABLE invoice_line_items ADD COLUMN unit_label_override TEXT DEFAULT ''",
+  // Debt notes table for quick internal annotations (2026-04-07)
+  `CREATE TABLE IF NOT EXISTS debt_notes (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    note TEXT NOT NULL DEFAULT '',
+    created_by TEXT DEFAULT 'user',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_debt_notes_debt ON debt_notes(debt_id)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

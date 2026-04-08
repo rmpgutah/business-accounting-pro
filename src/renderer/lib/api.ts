@@ -377,6 +377,10 @@ const api = {
     window.electronAPI.invoke('debt:compliance-save', data),
   checkAutoAdvance: (companyId: string, thresholdDays?: number): Promise<{ advanced: number }> =>
     window.electronAPI.invoke('debt:check-auto-advance', { companyId, thresholdDays }),
+  getActivityTimeline: (debtId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:activity-timeline', { debtId }),
+  addQuickNote: (debtId: string, note: string): Promise<any> =>
+    window.electronAPI.invoke('debt:quick-note', { debtId, note }),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>

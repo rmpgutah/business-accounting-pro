@@ -4,17 +4,23 @@ import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { calcRiskScore, getRiskBadge } from './riskScore';
 
 // ─── Types ──────────────────────────────────────────────
 interface PipelineDebt {
   id: string;
   debtor_name: string;
   balance_due: number;
+  original_amount: number;
+  delinquent_date: string;
   current_stage: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   hold: number;
   stage_entered_at: string | null;
   assigned_collector_id?: string | null;
+  has_plan?: number;
+  has_pending_settlement?: number;
+  has_broken_promise?: number;
 }
 
 interface PipelineViewProps {
@@ -69,7 +75,15 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
       setLoading(true);
       try {
         const data = await api.rawQuery(
-          'SELECT d.*, dps.entered_at as stage_entered_at FROM debts d LEFT JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL WHERE d.company_id = ? AND d.status NOT IN (?, ?) ORDER BY d.priority DESC, d.created_at',
+          `SELECT d.*,
+            dps.entered_at as stage_entered_at,
+            (SELECT COUNT(*) FROM debt_payment_plans WHERE debt_id = d.id) as has_plan,
+            (SELECT COUNT(*) FROM debt_settlements WHERE debt_id = d.id AND response = 'pending') as has_pending_settlement,
+            (SELECT COUNT(*) FROM debt_promises WHERE debt_id = d.id AND kept = 0 AND promised_date < date('now')) as has_broken_promise
+           FROM debts d
+           LEFT JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL
+           WHERE d.company_id = ? AND d.status NOT IN (?, ?)
+           ORDER BY d.priority DESC, d.created_at`,
           [activeCompany.id, 'settled', 'written_off']
         );
         if (cancelled) return;
@@ -179,9 +193,29 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                       <p className="text-xs font-mono text-text-secondary mt-1">
                         {formatCurrency(debt.balance_due)}
                       </p>
-                      <p className="text-[10px] text-text-muted mt-1">
-                        {days}d in stage
-                      </p>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <span className="text-[10px] text-text-muted">{days}d in stage</span>
+                        {(() => {
+                          const score = calcRiskScore(debt);
+                          const risk = getRiskBadge(score);
+                          return (
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: risk.color + '22', color: risk.color }}>
+                              {risk.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {!!debt.has_plan && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                        )}
+                        {!!debt.has_pending_settlement && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
+                        )}
+                        {!!debt.has_broken_promise && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                      </div>
 
                       {/* Hold badge */}
                       {debt.hold === 1 && (

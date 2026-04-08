@@ -25,6 +25,10 @@ interface Debt {
   priority: 'low' | 'medium' | 'high' | 'critical';
   created_at: string;
   assigned_collector_id?: string | null;
+  has_plan?: number;
+  has_pending_settlement?: number;
+  has_active_promise?: number;
+  has_broken_promise?: number;
 }
 
 interface DebtListProps {
@@ -88,13 +92,19 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   }, []);
 
   // ─── Load Data ──────────────────────────────────────────
+  const DEBT_LIST_SQL = `
+    SELECT d.*,
+      (SELECT COUNT(*) FROM debt_payment_plans WHERE debt_id = d.id) as has_plan,
+      (SELECT COUNT(*) FROM debt_settlements WHERE debt_id = d.id AND response = 'pending') as has_pending_settlement,
+      (SELECT COUNT(*) FROM debt_promises WHERE debt_id = d.id AND kept = 0 AND promised_date >= date('now')) as has_active_promise,
+      (SELECT COUNT(*) FROM debt_promises WHERE debt_id = d.id AND kept = 0 AND promised_date < date('now')) as has_broken_promise
+    FROM debts d WHERE d.company_id = ? AND d.type = ? ORDER BY d.created_at DESC
+  `;
+
   const reload = useCallback(async () => {
     if (!activeCompany) return;
     try {
-      const data = await api.rawQuery(
-        `SELECT * FROM debts WHERE company_id = ? AND type = ? ORDER BY created_at DESC`,
-        [activeCompany.id, type]
-      );
+      const data = await api.rawQuery(DEBT_LIST_SQL, [activeCompany.id, type]);
       setDebts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to reload debts:', err);
@@ -107,10 +117,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       if (!activeCompany) return;
       try {
         const [debtData, statsData] = await Promise.all([
-          api.rawQuery(
-            `SELECT * FROM debts WHERE company_id = ? AND type = ? ORDER BY created_at DESC`,
-            [activeCompany.id, type]
-          ),
+          api.rawQuery(DEBT_LIST_SQL, [activeCompany.id, type]),
           api.debtStats(activeCompany.id),
         ]);
         if (cancelled) return;
@@ -478,7 +485,23 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
-                    <td className="text-text-primary font-medium">{debt.debtor_name}</td>
+                    <td className="text-text-primary font-medium">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{debt.debtor_name}</span>
+                        {!!debt.has_plan && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                        )}
+                        {!!debt.has_pending_settlement && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
+                        )}
+                        {!!debt.has_active_promise && !debt.has_broken_promise && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
+                        )}
+                        {!!debt.has_broken_promise && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-text-secondary text-xs font-mono">{sourceLabel}</td>
                     <td className="text-right font-mono text-text-secondary">
                       {formatCurrency(debt.original_amount)}
@@ -547,7 +570,23 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
-                    <td className="text-text-primary font-medium">{debt.debtor_name}</td>
+                    <td className="text-text-primary font-medium">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{debt.debtor_name}</span>
+                        {!!debt.has_plan && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                        )}
+                        {!!debt.has_pending_settlement && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
+                        )}
+                        {!!debt.has_active_promise && !debt.has_broken_promise && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
+                        )}
+                        {!!debt.has_broken_promise && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-text-secondary text-xs font-mono">{sourceLabel}</td>
                     <td className="text-right font-mono text-text-secondary">
                       {formatCurrency(debt.original_amount)}

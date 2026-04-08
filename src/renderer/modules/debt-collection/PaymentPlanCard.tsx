@@ -7,9 +7,10 @@ const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' 
 interface Props {
   debtId: string;
   balanceDue: number;
+  onRefresh?: () => void;
 }
 
-const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue }) => {
+const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
   const [plan, setPlan] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
   const [form, setForm] = useState({
@@ -51,6 +52,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue }) => {
       });
       setShowForm(false);
       await load();
+      onRefresh?.();
     } catch (err) {
       console.error('Failed to save payment plan:', err);
     } finally {
@@ -62,6 +64,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue }) => {
     try {
       await api.togglePlanInstallment(inst.id, !inst.paid);
       await load();
+      onRefresh?.();
     } catch (err) {
       console.error('Failed to toggle installment:', err);
     }

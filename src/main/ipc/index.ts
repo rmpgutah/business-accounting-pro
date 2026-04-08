@@ -407,7 +407,7 @@ export function registerIpcHandlers(): void {
     'asset_depreciation_entries', 'credit_note_items',
     // Debt collection child tables — company_id lives on parent `debts` table
     'debt_contacts', 'debt_communications', 'debt_payments',
-    'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
+    'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions', 'debt_notes',
     'quote_line_items',
     // Invoice reminders — company_id lives on parent `invoices` table
     'invoice_reminders',
@@ -2826,10 +2826,12 @@ export function registerIpcHandlers(): void {
     // Update debt
     const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
     db.getDb().prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debtId);
+    scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:hold-toggle', (_event, { debtId, hold, reason }: { debtId: string; hold: boolean; reason?: string }) => {
     db.getDb().prepare('UPDATE debts SET hold = ?, hold_reason = ?, updated_at = datetime(\'now\') WHERE id = ?').run(hold ? 1 : 0, reason || '', debtId);
+    scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:assign-collector', (_event, { debtId, collectorId }: { debtId: string; collectorId: string | null }) => {
@@ -3227,7 +3229,7 @@ export function registerIpcHandlers(): void {
         response: 'accepted',
         accepted_date: new Date().toISOString().slice(0, 10),
       });
-      db.update('debts', debtId, { status: 'resolved', balance_due: offer_amount });
+      db.update('debts', debtId, { status: 'settled', balance_due: offer_amount });
       scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
@@ -3284,6 +3286,88 @@ export function registerIpcHandlers(): void {
       return { advanced };
     } catch (err: any) {
       return { error: err.message, advanced: 0 };
+    }
+  });
+
+  // ─── Debt Activity Timeline ──────────────────────────────
+  ipcMain.handle('debt:activity-timeline', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbConn = db.getDb();
+      const events: Array<{ id: string; ts: string; kind: string; label: string; detail: string; icon: string }> = [];
+
+      // Communications
+      const comms = dbConn.prepare(
+        `SELECT id, type, direction, subject, outcome, logged_at FROM debt_communications WHERE debt_id = ? ORDER BY logged_at DESC`
+      ).all(debtId) as any[];
+      for (const c of comms) {
+        const dir = c.direction === 'inbound' ? '← Inbound' : '→ Outbound';
+        events.push({ id: c.id, ts: c.logged_at, kind: 'comm', label: `${dir} ${c.type}`, detail: c.subject || c.outcome || '', icon: 'comm' });
+      }
+
+      // Stage changes
+      const stages = dbConn.prepare(
+        `SELECT id, stage, entered_at, exited_at, notes FROM debt_pipeline_stages WHERE debt_id = ? ORDER BY entered_at DESC`
+      ).all(debtId) as any[];
+      for (const s of stages) {
+        events.push({ id: s.id, ts: s.entered_at, kind: 'stage', label: `Stage: ${s.stage.replace(/_/g, ' ')}`, detail: s.notes || '', icon: 'stage' });
+      }
+
+      // Payments
+      const payments = dbConn.prepare(
+        `SELECT id, amount, received_date, payment_method, notes FROM debt_payments WHERE debt_id = ? ORDER BY received_date DESC`
+      ).all(debtId) as any[];
+      for (const p of payments) {
+        events.push({ id: p.id, ts: p.received_date + 'T00:00:00', kind: 'payment', label: `Payment received: $${Number(p.amount).toFixed(2)}`, detail: [p.payment_method, p.notes].filter(Boolean).join(' — '), icon: 'payment' });
+      }
+
+      // Promises
+      const promises = dbConn.prepare(
+        `SELECT id, promised_date, promised_amount, kept, notes FROM debt_promises WHERE debt_id = ? ORDER BY promised_date DESC`
+      ).all(debtId) as any[];
+      for (const p of promises) {
+        const status = p.kept ? 'Kept' : (p.promised_date < new Date().toISOString().slice(0, 10) ? 'Broken' : 'Pending');
+        events.push({ id: p.id, ts: p.promised_date + 'T00:00:00', kind: 'promise', label: `Promise to pay $${Number(p.promised_amount).toFixed(2)} — ${status}`, detail: p.notes || '', icon: 'promise' });
+      }
+
+      // Compliance events
+      const compliance = dbConn.prepare(
+        `SELECT id, event_type, event_date, notes FROM debt_compliance_log WHERE debt_id = ? ORDER BY event_date DESC`
+      ).all(debtId) as any[];
+      for (const c of compliance) {
+        events.push({ id: c.id, ts: c.event_date + 'T00:00:00', kind: 'compliance', label: `Compliance: ${c.event_type.replace(/_/g, ' ')}`, detail: c.notes || '', icon: 'compliance' });
+      }
+
+      // Settlements
+      const settlements = dbConn.prepare(
+        `SELECT id, offer_amount, response, offered_date, notes FROM debt_settlements WHERE debt_id = ? ORDER BY offered_date DESC`
+      ).all(debtId) as any[];
+      for (const s of settlements) {
+        events.push({ id: s.id, ts: s.offered_date + 'T00:00:00', kind: 'settlement', label: `Settlement offer: $${Number(s.offer_amount).toFixed(2)} — ${s.response}`, detail: s.notes || '', icon: 'settlement' });
+      }
+
+      // Quick notes
+      const notes = dbConn.prepare(
+        `SELECT id, note, created_at FROM debt_notes WHERE debt_id = ? ORDER BY created_at DESC`
+      ).all(debtId) as any[];
+      for (const n of notes) {
+        events.push({ id: n.id, ts: n.created_at, kind: 'note', label: 'Note', detail: n.note, icon: 'note' });
+      }
+
+      // Sort descending by timestamp
+      events.sort((a, b) => (b.ts > a.ts ? 1 : b.ts < a.ts ? -1 : 0));
+      return events;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:quick-note', (_event, { debtId, note }: { debtId: string; note: string }) => {
+    try {
+      const result = db.create('debt_notes', { debt_id: debtId, note, created_by: 'user' });
+      scheduleAutoBackup();
+      return result;
+    } catch (err: any) {
+      return { error: err.message };
     }
   });
 

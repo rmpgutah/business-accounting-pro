@@ -271,6 +271,11 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   // Invoice link
   const [invoiceLink, setInvoiceLink] = useState<any>(null);
 
+  // Activity timeline + quick note
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [quickNote, setQuickNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+
   // Promise-to-Pay state
   const [promises, setPromises] = useState<any[]>([]);
   const [showPromiseForm, setShowPromiseForm] = useState(false);
@@ -291,6 +296,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           interestData,
           promisesData,
           invoiceLinkData,
+          timelineData,
         ] = await Promise.all([
           api.get('debts', debtId),
           api.query('debt_payments', { debt_id: debtId }, { field: 'received_date', dir: 'desc' }),
@@ -307,6 +313,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           api.debtCalculateInterest(debtId).catch(() => null),
           api.listDebtPromises(debtId).catch(() => []),
           api.getDebtInvoiceLink(debtId).catch(() => null),
+          api.getActivityTimeline(debtId).catch(() => []),
         ]);
         api.listUsers().then(setUsers).catch(() => {});
         if (cancelled) return;
@@ -319,6 +326,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setInterestCalc(interestData);
         setPromises(Array.isArray(promisesData) ? promisesData : []);
         setInvoiceLink(invoiceLinkData ?? null);
+        setTimeline(Array.isArray(timelineData) ? timelineData : []);
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -1010,13 +1018,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           </div>
 
           {/* Card 4c — Payment Plan */}
-          <PaymentPlanCard debtId={debtId} balanceDue={debt.balance_due} />
+          <PaymentPlanCard debtId={debtId} balanceDue={debt.balance_due} onRefresh={triggerRefresh} />
 
           {/* Card 4d — Settlement Offers */}
           <SettlementCard debtId={debtId} balanceDue={debt.balance_due} onRefresh={onRefresh} />
 
           {/* Card 4e — FDCPA Compliance Log */}
-          <ComplianceLog debtId={debtId} />
+          <ComplianceLog debtId={debtId} onRefresh={triggerRefresh} />
 
           {/* Card 5 — Evidence Items */}
           <div className="block-card p-6">
@@ -1145,7 +1153,98 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
           </div>
 
-          {/* Card 7 — Pipeline History */}
+          {/* Card 7 — Activity Timeline + Quick Note */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Activity Timeline
+              </h3>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{timeline.length} events</span>
+            </div>
+
+            {/* Quick Note */}
+            <div className="flex gap-2 mb-4">
+              <input
+                className="block-input flex-1"
+                placeholder="Add a quick note..."
+                value={quickNote}
+                onChange={e => setQuickNote(e.target.value)}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter' && quickNote.trim()) {
+                    setSavingNote(true);
+                    try {
+                      await api.addQuickNote(debtId, quickNote.trim());
+                      setQuickNote('');
+                      triggerRefresh();
+                    } finally {
+                      setSavingNote(false);
+                    }
+                  }
+                }}
+              />
+              <button
+                className="block-btn-primary text-xs py-1 px-3"
+                disabled={savingNote || !quickNote.trim()}
+                onClick={async () => {
+                  if (!quickNote.trim()) return;
+                  setSavingNote(true);
+                  try {
+                    await api.addQuickNote(debtId, quickNote.trim());
+                    setQuickNote('');
+                    triggerRefresh();
+                  } finally {
+                    setSavingNote(false);
+                  }
+                }}
+              >
+                {savingNote ? '...' : 'Note'}
+              </button>
+            </div>
+
+            {timeline.length === 0 ? (
+              <p className="text-sm text-text-muted">No activity recorded yet.</p>
+            ) : (
+              <div className="relative pl-5" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border-primary" />
+                <div className="space-y-3">
+                  {timeline.map((ev) => {
+                    const kindColors: Record<string, string> = {
+                      comm: '#60a5fa',
+                      stage: '#a78bfa',
+                      payment: '#22c55e',
+                      promise: '#f59e0b',
+                      compliance: '#f97316',
+                      settlement: '#06b6d4',
+                      note: '#94a3b8',
+                    };
+                    const dotColor = kindColors[ev.kind] || '#94a3b8';
+                    const ts = ev.ts ? ev.ts.slice(0, 10) : '';
+                    return (
+                      <div key={ev.id} className="relative flex gap-3 items-start">
+                        <div
+                          className="absolute -left-5 top-1.5 w-2.5 h-2.5 flex-shrink-0"
+                          style={{ background: dotColor, borderRadius: 3 }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span style={{ fontSize: 11, fontWeight: 700, color: dotColor }}>{ev.label}</span>
+                            <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{ts}</span>
+                          </div>
+                          {ev.detail && (
+                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 1 }}>
+                              {ev.detail}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 8 — Pipeline History */}
           <div className="block-card p-6">
             <SectionLabel>Pipeline History</SectionLabel>
             {pipelineStages.length === 0 ? (
