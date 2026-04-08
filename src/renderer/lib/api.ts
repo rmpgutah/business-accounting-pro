@@ -85,6 +85,15 @@ const api = {
   }): Promise<{ id?: string; error?: string }> =>
     window.electronAPI.invoke('invoice:save', payload),
 
+  // Expense atomic save (header + line items in one DB transaction)
+  saveExpense: (payload: {
+    expenseId: string | null;
+    expenseData: Record<string, any>;
+    lineItems: Array<Record<string, any>>;
+    isEdit: boolean;
+  }): Promise<{ id?: string; error?: string }> =>
+    window.electronAPI.invoke('expense:save', payload),
+
   // Export
   // Bug fix #3: export:invoice-pdf handler was removed in v1.1.1 dedup cleanup;
   // routes to the canonical invoice:generate-pdf channel to avoid "No handler" crash.

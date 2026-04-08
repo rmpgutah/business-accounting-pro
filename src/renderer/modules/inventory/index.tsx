@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  Package, Plus, Search, Filter, AlertTriangle, X, ArrowDown, ArrowUp, RefreshCw, History,
+  Package, Plus, Search, Filter, AlertTriangle, X, ArrowDown, ArrowUp, RefreshCw, History, Pencil, Trash2, ArrowUpDown,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -89,8 +89,16 @@ const Inventory: React.FC = () => {
 
   // Form state
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+
+  type InvSortField = 'name' | 'sku' | 'category' | 'quantity' | 'unit_cost';
+  type InvSortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<InvSortField>('name');
+  const [sortDir, setSortDir] = useState<InvSortDir>('asc');
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   // Adjust modal
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
@@ -101,6 +109,8 @@ const Inventory: React.FC = () => {
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const handleInvSort = (f: InvSortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
 
   // ─── Load ─────────────────────────────────────────────
   const loadItems = async () => {
@@ -136,8 +146,16 @@ const Inventory: React.FC = () => {
       );
     }
     if (categoryFilter) list = list.filter(i => i.category === categoryFilter);
+    list.sort((a, b) => {
+      const aVal = (a as any)[sortField] ?? '';
+      const bVal = (b as any)[sortField] ?? '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
     return list;
-  }, [items, search, categoryFilter, activeTab]);
+  }, [items, search, categoryFilter, activeTab, sortField, sortDir]);
 
   // ─── Stats ────────────────────────────────────────────
   const totalValue = useMemo(() =>
@@ -151,20 +169,28 @@ const Inventory: React.FC = () => {
     if (!formData.name.trim()) return;
     setSaving(true);
     try {
-      await api.create('inventory_items', {
+      const payload = {
         ...formData,
         quantity: Number(formData.quantity),
         unit_cost: Number(formData.unit_cost),
         reorder_point: Number(formData.reorder_point),
         reorder_qty: Number(formData.reorder_qty),
         is_asset: formData.is_asset ? 1 : 0,
-      });
+      };
+      if (editingId) {
+        await api.update('inventory_items', editingId, payload);
+      } else {
+        await api.create('inventory_items', payload);
+      }
+      setOpSuccess(editingId ? 'Item updated' : 'Item created'); setTimeout(() => setOpSuccess(''), 3000);
       setFormData(emptyForm);
+      setEditingId(null);
       setShowForm(false);
       setLoading(true);
       await loadItems();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create inventory item:', err);
+      setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setSaving(false);
     }
@@ -186,10 +212,11 @@ const Inventory: React.FC = () => {
       if (result?.error) throw new Error(result.error);
       setAdjustItem(null);
       setAdjustForm(emptyAdjust);
+      setOpSuccess('Stock adjusted'); setTimeout(() => setOpSuccess(''), 3000);
       await loadItems();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Adjustment failed:', err);
-      alert('Failed to adjust stock.');
+      setOpError('Failed to adjust stock: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setAdjusting(false);
     }
@@ -203,6 +230,34 @@ const Inventory: React.FC = () => {
       const data = await api.inventoryMovements(item.id);
       setMovements(Array.isArray(data) ? data : []);
     } catch { setMovements([]); } finally { setLoadingHistory(false); }
+  };
+
+  // ─── Edit / Delete ───────────────────────────────────
+  const handleEdit = (item: InventoryItem) => {
+    setEditingId(item.id);
+    setFormData({
+      name: item.name,
+      sku: item.sku || '',
+      description: item.description || '',
+      category: item.category || '',
+      quantity: item.quantity,
+      unit_cost: item.unit_cost,
+      reorder_point: item.reorder_point,
+      reorder_qty: item.reorder_qty,
+      is_asset: !!item.is_asset,
+      purchase_date: item.purchase_date || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this inventory item? This will also remove its movement history.')) return;
+    try {
+      await api.remove('inventory_items', id);
+      await loadItems();
+    } catch (err) {
+      console.error('Failed to delete inventory item:', err);
+    }
   };
 
   if (loading) {
@@ -257,8 +312,8 @@ const Inventory: React.FC = () => {
       {showForm && (
         <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-text-primary">New Inventory Item</h3>
-            <button className="text-text-muted hover:text-text-primary" onClick={() => { setShowForm(false); setFormData(emptyForm); }}>
+            <h3 className="text-sm font-semibold text-text-primary">{editingId ? 'Edit Inventory Item' : 'New Inventory Item'}</h3>
+            <button className="text-text-muted hover:text-text-primary" onClick={() => { setShowForm(false); setEditingId(null); setFormData(emptyForm); }}>
               <X size={16} />
             </button>
           </div>
@@ -308,8 +363,8 @@ const Inventory: React.FC = () => {
               <label htmlFor="is_asset" className="text-sm text-text-secondary">Track as fixed asset</label>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button type="button" className="block-btn" onClick={() => { setShowForm(false); setFormData(emptyForm); }}>Cancel</button>
-              <button type="submit" className="block-btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Create Item'}</button>
+              <button type="button" className="block-btn" onClick={() => { setShowForm(false); setEditingId(null); setFormData(emptyForm); }}>Cancel</button>
+              <button type="submit" className="block-btn-primary" disabled={saving}>{saving ? 'Saving...' : editingId ? 'Update Item' : 'Create Item'}</button>
             </div>
           </form>
         </div>
@@ -458,6 +513,9 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="empty-state">
@@ -474,11 +532,11 @@ const Inventory: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>SKU</th>
-                <th>Category</th>
-                <th className="text-right">Qty</th>
-                <th className="text-right">Unit Cost</th>
+                <th className="cursor-pointer select-none" onClick={() => handleInvSort('name')}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleInvSort('sku')}><span className="inline-flex items-center gap-1">SKU {sortField === 'sku' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleInvSort('category')}><span className="inline-flex items-center gap-1">Category {sortField === 'category' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('quantity')}><span className="inline-flex items-center gap-1">Qty {sortField === 'quantity' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('unit_cost')}><span className="inline-flex items-center gap-1">Unit Cost {sortField === 'unit_cost' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="text-right">Total Value</th>
                 <th className="text-right">Reorder At</th>
                 <th className="text-center">Actions</th>
@@ -522,6 +580,20 @@ const Inventory: React.FC = () => {
                           title="View movement history"
                         >
                           <History size={10} /> History
+                        </button>
+                        <button
+                          className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1"
+                          onClick={() => handleEdit(item)}
+                          title="Edit item"
+                        >
+                          <Pencil size={10} /> Edit
+                        </button>
+                        <button
+                          className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                          onClick={() => handleDelete(item.id)}
+                          title="Delete item"
+                        >
+                          <Trash2 size={10} />
                         </button>
                       </div>
                     </td>

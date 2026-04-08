@@ -18,6 +18,7 @@ import {
   Zap,
   Calendar,
   Receipt,
+  Trash2,
 } from 'lucide-react';
 import api from '../../lib/api';
 import PaymentPlanCard from './PaymentPlanCard';
@@ -344,6 +345,16 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     setRefreshKey((k) => k + 1);
     onRefresh();
   }, [onRefresh]);
+
+  const handleDeleteComm = async (id: string) => {
+    if (!window.confirm('Delete this communication?')) return;
+    try {
+      await api.remove('debt_communications', id);
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete communication:', err);
+    }
+  };
 
   // ── Recalculate Interest ──
   const handleRecalcInterest = useCallback(async () => {
@@ -677,6 +688,21 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             Edit
           </button>
           <button
+            className="block-btn flex items-center gap-2 text-xs text-accent-expense hover:bg-accent-expense/10"
+            onClick={async () => {
+              if (!window.confirm(`Delete this debt for "${debt?.debtor_name}"? All related records will be removed.`)) return;
+              try {
+                await api.remove('debts', debtId);
+                onBack();
+              } catch (err) {
+                console.error('Failed to delete debt:', err);
+              }
+            }}
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+          <button
             className="block-btn flex items-center gap-2 text-xs"
             onClick={onInvoice}
             title="Generate Statement of Account"
@@ -754,7 +780,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           <div className="block-card p-6">
             <SectionLabel>Debt Information</SectionLabel>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <InfoRow label="Type">{debt.type}</InfoRow>
+              <InfoRow label="Type"><span className="capitalize">{debt.type}</span></InfoRow>
               <InfoRow label="Status">
                 <span className={statusBadge.className}>{statusBadge.label}</span>
               </InfoRow>
@@ -874,7 +900,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <td className="text-right font-mono font-bold text-green-400">
                         {formatCurrency(p.amount)}
                       </td>
-                      <td className="text-xs">{p.method}</td>
+                      <td className="text-xs capitalize">{p.method || '--'}</td>
                       <td className="text-xs font-mono text-text-muted">
                         {p.reference_number || '--'}
                       </td>
@@ -937,6 +963,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         <span className="text-[10px] text-text-muted font-mono">
                           {formatDate(c.logged_at, { style: 'short' })}
                         </span>
+                        <button
+                          className="ml-auto text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          onClick={() => handleDeleteComm(c.id)}
+                          title="Delete communication"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
                       {c.subject && (
                         <p className="text-xs font-semibold text-text-primary mb-0.5">

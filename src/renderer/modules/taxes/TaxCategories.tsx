@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Tag, Plus, X } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Tag, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -32,14 +32,18 @@ const TaxCategories: React.FC = () => {
   const [categories, setCategories] = useState<TaxCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    schedule_c_line: '',
-    is_deductible: true,
-  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const defaultForm = { name: '', description: '', schedule_c_line: '', is_deductible: true };
+  const [formData, setFormData] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [search, setSearch] = useState('');
+  type SortField = 'name' | 'schedule_c_line' | 'is_deductible';
+  type SortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   const loadCategories = async () => {
     if (!activeCompany) return;
@@ -57,14 +61,34 @@ const TaxCategories: React.FC = () => {
     loadCategories();
   }, [activeCompany]);
 
+  const handleSort = (f: SortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
+
+  const filtered = useMemo(() => {
+    let list = [...categories];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(c => c.name?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q) || c.schedule_c_line?.toLowerCase().includes(q));
+    }
+    list.sort((a, b) => {
+      const aVal = a[sortField] ?? '';
+      const bVal = b[sortField] ?? '';
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [categories, search, sortField, sortDir]);
+
   const seedDefaults = async () => {
     try {
       for (const cat of DEFAULT_CATEGORIES) {
         await api.create('tax_categories', cat);
       }
       await loadCategories();
-    } catch (err) {
+      setOpSuccess('Default categories created'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to seed defaults:', err);
+      setOpError('Failed to seed defaults: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -77,15 +101,45 @@ const TaxCategories: React.FC = () => {
     setFormError('');
     setSaving(true);
     try {
-      await api.create('tax_categories', formData);
-      setFormData({ name: '', description: '', schedule_c_line: '', is_deductible: true });
+      if (editingId) {
+        await api.update('tax_categories', editingId, formData);
+      } else {
+        await api.create('tax_categories', formData);
+      }
+      setFormData(defaultForm);
       setFormError('');
+      setEditingId(null);
       setShowForm(false);
       await loadCategories();
-    } catch (err) {
+      setOpSuccess(editingId ? 'Category updated' : 'Category created'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to create tax category:', err);
+      setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEdit = (cat: TaxCategory) => {
+    setEditingId(cat.id);
+    setFormData({
+      name: cat.name,
+      description: cat.description || '',
+      schedule_c_line: cat.schedule_c_line || '',
+      is_deductible: !!cat.is_deductible,
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this tax category?')) return;
+    try {
+      await api.remove('tax_categories', id);
+      await loadCategories();
+      setOpSuccess('Category deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete tax category:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -134,14 +188,26 @@ const TaxCategories: React.FC = () => {
         </div>
       </div>
 
+      {/* Feedback */}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+
+      {/* Search */}
+      {!showForm && categories.length > 0 && (
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input className="block-input pl-8" placeholder="Search categories..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      )}
+
       {/* Add Form */}
       {showForm && (
         <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-text-primary">New Tax Category</h3>
+            <h3 className="text-sm font-semibold text-text-primary">{editingId ? 'Edit Tax Category' : 'New Tax Category'}</h3>
             <button
               className="text-text-muted hover:text-text-primary"
-              onClick={() => setShowForm(false)}
+              onClick={() => { setShowForm(false); setEditingId(null); setFormData(defaultForm); }}
             >
               <X size={16} />
             </button>
@@ -212,12 +278,12 @@ const TaxCategories: React.FC = () => {
                 className="block-btn-primary"
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save Category'}
+                {saving ? 'Saving...' : editingId ? 'Update Category' : 'Save Category'}
               </button>
               <button
                 type="button"
                 className="block-btn"
-                onClick={() => setShowForm(false)}
+                onClick={() => { setShowForm(false); setEditingId(null); setFormData(defaultForm); }}
               >
                 Cancel
               </button>
@@ -227,7 +293,7 @@ const TaxCategories: React.FC = () => {
       )}
 
       {/* Table */}
-      {categories.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">
             <Tag size={24} className="text-text-muted" />
@@ -242,14 +308,15 @@ const TaxCategories: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('name')}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Description</th>
-                <th>Schedule C Line</th>
-                <th className="text-center">Deductible</th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('schedule_c_line')}><span className="inline-flex items-center gap-1">Schedule C Line {sortField === 'schedule_c_line' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-center cursor-pointer select-none" onClick={() => handleSort('is_deductible')}><span className="inline-flex items-center gap-1">Deductible {sortField === 'is_deductible' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {categories.map((cat) => (
+              {filtered.map((cat) => (
                 <tr key={cat.id}>
                   <td className="text-text-primary font-medium text-sm">{cat.name}</td>
                   <td className="text-text-secondary text-sm">{cat.description || '-'}</td>
@@ -263,10 +330,33 @@ const TaxCategories: React.FC = () => {
                       <span className="text-text-muted">&#10005;</span>
                     )}
                   </td>
+                  <td className="text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1"
+                        onClick={() => handleEdit(cat)}
+                        title="Edit category"
+                      >
+                        <Pencil size={10} /> Edit
+                      </button>
+                      <button
+                        className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                        onClick={() => handleDelete(cat.id)}
+                        title="Delete category"
+                      >
+                        <Trash2 size={10} /> Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {filtered.length > 0 && (
+        <div className="text-xs text-text-muted">
+          Showing {filtered.length} of {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'}
         </div>
       )}
     </div>

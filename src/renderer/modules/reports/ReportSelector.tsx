@@ -10,6 +10,7 @@ import {
   CreditCard,
   List,
   FileSpreadsheet,
+  Receipt,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -23,6 +24,7 @@ export type ReportType =
   | 'trial-balance'
   | 'general-ledger'
   | 'expense-by-category'
+  | 'expense-detail'
   | 'tax-summary'
   | 'financial-statements';
 
@@ -103,6 +105,13 @@ const REPORTS: ReportCard[] = [
       'Visual breakdown of expenses by category with bar chart and percentage of total.',
     icon: PieChart,
     accentClass: 'border-l-[#a855f7]',
+  },
+  {
+    id: 'expense-detail',
+    title: 'Expense Detail Report',
+    description: 'Itemized expense report with line items, grouped by category, vendor, or project.',
+    icon: Receipt,
+    accentClass: 'border-l-[#ec4899]',
   },
   {
     id: 'tax-summary',

@@ -295,6 +295,19 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_debt_notes_debt ON debt_notes(debt_id)`,
+  // Expense line items (2026-04-08)
+  `CREATE TABLE IF NOT EXISTS expense_line_items (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    description TEXT DEFAULT '',
+    quantity REAL DEFAULT 1,
+    unit_price REAL DEFAULT 0,
+    amount REAL DEFAULT 0,
+    account_id TEXT REFERENCES accounts(id),
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_expense_li_expense ON expense_line_items(expense_id)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -435,6 +448,7 @@ const tablesWithoutUpdatedAt = new Set([
   // Debt & Invoice Enhancement child tables — created_at only
   'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
   'debt_compliance_log', 'invoice_debt_links',
+  'expense_line_items',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

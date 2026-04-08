@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarDays, Plus, Check } from 'lucide-react';
+import { CalendarDays, Plus, Check, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -22,6 +22,8 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
   });
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   const load = async () => {
     try {
@@ -53,10 +55,31 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
       setShowForm(false);
       await load();
       onRefresh?.();
-    } catch (err) {
+      setOpSuccess('Payment plan generated'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to save payment plan:', err);
+      setOpError('Failed to save plan: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeletePlan = async () => {
+    if (!plan) return;
+    if (!window.confirm('Delete this payment plan and all its installments?')) return;
+    try {
+      // Delete installments first
+      for (const inst of installments) {
+        await api.remove('debt_plan_installments', inst.id);
+      }
+      await api.remove('debt_payment_plans', plan.id);
+      setPlan(null);
+      setInstallments([]);
+      onRefresh?.();
+      setOpSuccess('Payment plan deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete payment plan:', err);
+      setOpError('Failed to delete plan: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -65,8 +88,10 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
       await api.togglePlanInstallment(inst.id, !inst.paid);
       await load();
       onRefresh?.();
-    } catch (err) {
+      setOpSuccess(inst.paid ? 'Installment unmarked' : 'Installment marked as paid'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to toggle installment:', err);
+      setOpError('Failed to update installment: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -82,14 +107,28 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
           <CalendarDays size={15} className="text-accent-blue" />
           <h4 className="text-sm font-semibold text-text-primary">Payment Plan</h4>
         </div>
-        <button
-          className="block-btn flex items-center gap-1.5 text-xs py-1 px-3"
-          onClick={() => setShowForm(s => !s)}
-        >
-          <Plus size={12} />
-          {plan ? 'Edit Plan' : 'Set Up Plan'}
-        </button>
+        <div className="flex items-center gap-2">
+          {plan && (
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2 text-accent-expense hover:bg-accent-expense/10"
+              onClick={handleDeletePlan}
+              title="Delete plan"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs py-1 px-3"
+            onClick={() => setShowForm(s => !s)}
+          >
+            <Plus size={12} />
+            {plan ? 'Edit Plan' : 'Set Up Plan'}
+          </button>
+        </div>
       </div>
+
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {showForm && (
         <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-bg-tertiary" style={{ borderRadius: 6 }}>

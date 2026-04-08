@@ -258,7 +258,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
             <AlertTriangle size={13} /> {overBudgetLines.length} over budget
           </span>
         )}
-        <span className={`block-badge ${budget.status === 'active' ? 'block-badge-income' : 'block-badge-warning'}`}>
+        <span className={`block-badge ${budget.status === 'active' ? 'block-badge-income' : 'block-badge-warning'} capitalize`}>
           {budget.status}
         </span>
       </div>

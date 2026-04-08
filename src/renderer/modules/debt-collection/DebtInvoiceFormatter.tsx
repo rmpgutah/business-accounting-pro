@@ -150,7 +150,7 @@ function buildStatementHTML(
           <td>${p.applied_to_fees ? formatCurrency(p.applied_to_fees) : '—'}</td>
           <td>${esc(p.notes)}</td>
         </tr>`).join('')
-    : '<tr><td colspan="8" style="text-align:center;color:#999;font-style:italic">No payments recorded</td></tr>';
+    : '<tr><td colspan="8" style="text-align:center;color:#555;font-style:italic">No payments recorded</td></tr>';
 
   return `<!DOCTYPE html>
 <html>
@@ -168,7 +168,7 @@ function buildStatementHTML(
   .doc-title .meta { font-size: 11px; color: #555; margin-top: 6px; line-height: 1.7; }
   .parties { display: flex; gap: 40px; margin-bottom: 28px; padding: 20px; background: #f7f7f7; border-left: 4px solid #111; }
   .party { flex: 1; }
-  .party-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #777; margin-bottom: 6px; }
+  .party-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
   .party-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
   .party-detail { font-size: 11px; color: #444; line-height: 1.6; }
   .summary-box { border: 2px solid #111; margin-bottom: 28px; }
@@ -188,13 +188,13 @@ function buildStatementHTML(
   .highlight-row td { background: #f0f0f0; font-weight: 700; }
   .interest-box { background: #f9f9f9; border: 1px solid #ddd; padding: 16px; margin-bottom: 28px; }
   .interest-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; }
-  .interest-formula { font-size: 10px; color: #888; font-style: italic; margin-top: 8px; border-top: 1px solid #ddd; padding-top: 8px; }
+  .interest-formula { font-size: 10px; color: #555; font-style: italic; margin-top: 8px; border-top: 1px solid #ddd; padding-top: 8px; }
   .legal-notice { border: 1px solid #ccc; padding: 16px; margin-bottom: 28px; background: #fffbf0; }
   .legal-notice-title { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #b45309; margin-bottom: 8px; }
   .legal-notice p { font-size: 10px; color: #444; line-height: 1.7; margin-bottom: 4px; }
   .notes-box { border: 1px solid #e5e5e5; padding: 14px; background: #fafafa; margin-bottom: 28px; }
   .notes-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #777; margin-bottom: 6px; }
-  .footer { border-top: 1px solid #ddd; padding-top: 14px; text-align: center; font-size: 10px; color: #999; margin-top: 32px; }
+  .footer { border-top: 1px solid #ddd; padding-top: 14px; text-align: center; font-size: 10px; color: #555; margin-top: 32px; }
   @media print { body { padding: 0; } -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
@@ -491,7 +491,7 @@ const DebtInvoiceFormatter: React.FC<DebtInvoiceFormatterProps> = ({ debtId, onB
             user-sourced strings are HTML-escaped via esc() before interpolation. */}
         {/* eslint-disable-next-line react/no-danger */}
         <div
-          style={{ background: '#fff', minHeight: '600px', overflow: 'auto' }}
+          style={{ background: '#fff', color: '#111', minHeight: '600px', overflow: 'auto' }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </div>

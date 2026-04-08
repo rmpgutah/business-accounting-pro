@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { CreditCard, Plus, X } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { CreditCard, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -56,19 +56,29 @@ const TaxPayments: React.FC = () => {
   const [payments, setPayments] = useState<TaxPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [search, setSearch] = useState('');
+  type SortField = 'type' | 'amount' | 'date' | 'period' | 'year';
+  type SortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   const currentYear = new Date().getFullYear();
 
-  const [formData, setFormData] = useState({
+  const defaultForm = {
     type: 'federal_estimated' as PaymentType,
     amount: '',
     date: new Date().toISOString().slice(0, 10),
     period: 'Q1',
     year: currentYear,
     confirmation_number: '',
-  });
+  };
+
+  const [formData, setFormData] = useState(defaultForm);
 
   const loadPayments = async () => {
     if (!activeCompany) return;
@@ -87,6 +97,29 @@ const TaxPayments: React.FC = () => {
     loadPayments();
   }, []);
 
+  const handleSort = (f: SortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
+
+  const filtered = useMemo(() => {
+    let list = [...payments];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p =>
+        (PAYMENT_TYPES.find(t => t.value === p.type)?.label || p.type).toLowerCase().includes(q) ||
+        p.confirmation_number?.toLowerCase().includes(q) ||
+        p.period?.toLowerCase().includes(q) ||
+        String(p.year).includes(q)
+      );
+    }
+    list.sort((a, b) => {
+      const aVal = a[sortField] ?? '';
+      const bVal = b[sortField] ?? '';
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [payments, search, sortField, sortDir]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(formData.amount);
@@ -102,29 +135,55 @@ const TaxPayments: React.FC = () => {
     setFormError('');
     setSaving(true);
     try {
-      await api.create('tax_payments', {
+      const payload = {
         type: formData.type,
         amount,
         date: formData.date,
         period: formData.period,
         year: formData.year,
         confirmation_number: formData.confirmation_number,
-      });
-      setFormData({
-        type: 'federal_estimated',
-        amount: '',
-        date: new Date().toISOString().slice(0, 10),
-        period: 'Q1',
-        year: currentYear,
-        confirmation_number: '',
-      });
+      };
+      if (editingId) {
+        await api.update('tax_payments', editingId, payload);
+      } else {
+        await api.create('tax_payments', payload);
+      }
+      setFormData(defaultForm);
       setFormError('');
+      setEditingId(null);
       setShowForm(false);
       await loadPayments();
-    } catch (err) {
+      setOpSuccess(editingId ? 'Payment updated' : 'Payment recorded'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to record payment:', err);
+      setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEdit = (p: TaxPayment) => {
+    setEditingId(p.id);
+    setFormData({
+      type: p.type as PaymentType,
+      amount: String(p.amount),
+      date: p.date,
+      period: p.period,
+      year: p.year,
+      confirmation_number: p.confirmation_number || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this tax payment?')) return;
+    try {
+      await api.remove('tax_payments', id);
+      await loadPayments();
+      setOpSuccess('Payment deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete tax payment:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -166,14 +225,26 @@ const TaxPayments: React.FC = () => {
         </button>
       </div>
 
+      {/* Feedback */}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+
+      {/* Search */}
+      {!showForm && payments.length > 0 && (
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input className="block-input pl-8" placeholder="Search payments..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      )}
+
       {/* Record Payment Form */}
       {showForm && (
         <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-text-primary">Record Tax Payment</h3>
+            <h3 className="text-sm font-semibold text-text-primary">{editingId ? 'Edit Tax Payment' : 'Record Tax Payment'}</h3>
             <button
               className="text-text-muted hover:text-text-primary"
-              onClick={() => setShowForm(false)}
+              onClick={() => { setShowForm(false); setEditingId(null); setFormData(defaultForm); }}
             >
               <X size={16} />
             </button>
@@ -281,9 +352,9 @@ const TaxPayments: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 pt-2">
               <button type="submit" className="block-btn-primary" disabled={saving}>
-                {saving ? 'Recording...' : 'Record Payment'}
+                {saving ? 'Saving...' : editingId ? 'Update Payment' : 'Record Payment'}
               </button>
-              <button type="button" className="block-btn" onClick={() => setShowForm(false)}>
+              <button type="button" className="block-btn" onClick={() => { setShowForm(false); setEditingId(null); setFormData(defaultForm); }}>
                 Cancel
               </button>
             </div>
@@ -292,7 +363,7 @@ const TaxPayments: React.FC = () => {
       )}
 
       {/* Table */}
-      {payments.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">
             <CreditCard size={24} className="text-text-muted" />
@@ -307,16 +378,17 @@ const TaxPayments: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th>Type</th>
-                <th className="text-right">Amount</th>
-                <th>Date</th>
-                <th>Period</th>
-                <th>Year</th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('type')}><span className="inline-flex items-center gap-1">Type {sortField === 'type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')}><span className="inline-flex items-center gap-1">Amount {sortField === 'amount' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('date')}><span className="inline-flex items-center gap-1">Date {sortField === 'date' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('period')}><span className="inline-flex items-center gap-1">Period {sortField === 'period' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('year')}><span className="inline-flex items-center gap-1">Year {sortField === 'year' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Confirmation #</th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {payments.map((p) => (
+              {filtered.map((p) => (
                 <tr key={p.id}>
                   <td>
                     <span className={typeBadge[p.type] || 'block-badge'}>
@@ -332,6 +404,24 @@ const TaxPayments: React.FC = () => {
                   <td className="font-mono text-text-muted text-xs">
                     {p.confirmation_number || '-'}
                   </td>
+                  <td className="text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1"
+                        onClick={() => handleEdit(p)}
+                        title="Edit payment"
+                      >
+                        <Pencil size={10} /> Edit
+                      </button>
+                      <button
+                        className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                        onClick={() => handleDelete(p.id)}
+                        title="Delete payment"
+                      >
+                        <Trash2 size={10} /> Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -343,10 +433,15 @@ const TaxPayments: React.FC = () => {
                 <td className="text-right font-mono font-bold text-text-primary">
                   {fmt.format(totalPaid)}
                 </td>
-                <td colSpan={4} />
+                <td colSpan={5} />
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+      {filtered.length > 0 && (
+        <div className="text-xs text-text-muted">
+          Showing {filtered.length} of {payments.length} payment{payments.length !== 1 ? 's' : ''}
         </div>
       )}
     </div>

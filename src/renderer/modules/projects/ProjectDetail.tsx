@@ -534,7 +534,7 @@ const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
                 {formatDate(inv.due_date)}
               </td>
               <td>
-                <span className={invoiceBadge[inv.status] ?? 'block-badge'}>
+                <span className={`${invoiceBadge[inv.status] ?? 'block-badge'} capitalize`}>
                   {inv.status}
                 </span>
               </td>

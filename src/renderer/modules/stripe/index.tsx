@@ -310,7 +310,7 @@ const StripeSyncModule: React.FC = () => {
                       {txn.stripe_id}
                     </td>
                     <td>
-                      <span className={typeBadgeClass(txn.type)}>
+                      <span className={`${typeBadgeClass(txn.type)} capitalize`}>
                         {txn.type}
                       </span>
                     </td>

@@ -420,6 +420,7 @@ export function registerIpcHandlers(): void {
     // Debt & Invoice Enhancement child tables — company_id lives on parent table
     'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
     'debt_compliance_log', 'invoice_debt_links',
+    'expense_line_items',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -536,6 +537,68 @@ export function registerIpcHandlers(): void {
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Atomic expense save (header + line items in one transaction) ─────────
+  ipcMain.handle('expense:save', (_event, { expenseId, expenseData, lineItems, isEdit }: {
+    expenseId: string | null;
+    expenseData: Record<string, any>;
+    lineItems: Array<Record<string, any>>;
+    isEdit: boolean;
+  }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      const rawDb = db.getDb();
+
+      const saveFn = rawDb.transaction(() => {
+        let savedId: string;
+
+        // Auto-calculate amount from line items when present
+        if (lineItems.length > 0) {
+          expenseData.amount = lineItems.reduce((sum: number, li: any) => sum + ((li.quantity || 1) * (li.unit_price || 0)), 0);
+        }
+
+        if (isEdit && expenseId) {
+          db.update('expenses', expenseId, expenseData);
+          savedId = expenseId;
+          // Replace line items atomically
+          const oldLines = db.queryAll('expense_line_items', { expense_id: expenseId });
+          for (const ol of oldLines) db.remove('expense_line_items', ol.id);
+        } else {
+          // Apply tax rules on create
+          if (companyId) {
+            const taxResults = evaluateRules({ category: 'tax', record: { ...expenseData, company_id: companyId }, company_id: companyId, db: rawDb });
+            Object.assign(expenseData, mergePatches(taxResults));
+            expenseData.rules_applied = rulesAppliedSummary(taxResults);
+            // Apply approval rules
+            const approvalResults = evaluateRules({ category: 'approval', record: { ...expenseData, _type: 'expenses', company_id: companyId }, company_id: companyId, db: rawDb });
+            if (approvalResults.some((r: any) => r.matched)) expenseData.status = 'pending_approval';
+          }
+          const record = db.create('expenses', { ...expenseData, company_id: companyId });
+          savedId = record.id;
+        }
+
+        // Insert new line items
+        for (let i = 0; i < lineItems.length; i++) {
+          db.create('expense_line_items', {
+            ...lineItems[i],
+            expense_id: savedId,
+            amount: (lineItems[i].quantity || 1) * (lineItems[i].unit_price || 0),
+            sort_order: i,
+          });
+        }
+
+        return savedId;
+      });
+
+      const savedId = saveFn();
+      if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
+      scheduleAutoBackup();
+      return { id: savedId };
+    } catch (err) {
+      console.error('expense:save failed:', err);
       return { error: err instanceof Error ? err.message : String(err) };
     }
   });
@@ -3432,10 +3495,12 @@ export function registerIpcHandlers(): void {
           db.create('debt_pipeline_stages', { debt_id: (debt as any).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
           db.create('debt_communications', {
             debt_id: (debt as any).id,
-            type: 'note',
-            date: now.toISOString().slice(0, 10),
-            notes: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
+            type: 'letter',
+            direction: 'outbound',
+            subject: 'Auto-advance notification',
+            body: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
             outcome: 'auto_advanced',
+            logged_by: 'system',
           });
           advanced++;
         }

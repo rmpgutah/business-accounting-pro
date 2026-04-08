@@ -487,7 +487,7 @@ const RecurringTransactions: React.FC = () => {
                     <tr key={t.id}>
                       <td className="text-text-primary font-medium">{t.name}</td>
                       <td>
-                        <span className={typeBadge[t.type] || 'block-badge'}>{t.type}</span>
+                        <span className={typeBadge[t.type] || 'block-badge capitalize'}>{t.type}</span>
                       </td>
                       <td className="text-text-secondary">
                         {frequencyLabel[t.frequency] || t.frequency}
@@ -607,7 +607,7 @@ const RecurringTransactions: React.FC = () => {
                           h.status === 'overdue' ? 'block-badge-expense' :
                           'block-badge-warning'
                         }`}>
-                          {h.status}
+                          <span className="capitalize">{h.status}</span>
                         </span>
                       </td>
                       <td className="text-text-secondary text-xs">{h.client_name || '-'}</td>

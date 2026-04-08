@@ -41,13 +41,13 @@ const baseStyles = `
   .text-right { text-align: right; }
   .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Fira Code', monospace, system-ui; }
   .font-bold { font-weight: 700; }
-  .text-muted { color: #94a3b8; }
+  .text-muted { color: #64748b; }
   .text-dark { color: #0f172a; }
   .text-green { color: #16a34a; }
   .text-red { color: #dc2626; }
   .section-label {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
-    color: #94a3b8; letter-spacing: 0.8px; margin-bottom: 6px;
+    color: #64748b; letter-spacing: 0.8px; margin-bottom: 6px;
   }
 `;
 
@@ -240,7 +240,7 @@ export function generateInvoiceHTML(
 
     if (rowType === 'note') {
       return `<tr>
-        <td colspan="${colSpan}" style="font-style:italic;color:#94a3b8;font-size:${isCompact?'10px':'11px'};
+        <td colspan="${colSpan}" style="font-style:italic;color:#64748b;font-size:${isCompact?'10px':'11px'};
           padding-left:24px;border-bottom:none;">
           ${l.description || ''}
         </td>
@@ -252,7 +252,7 @@ export function generateInvoiceHTML(
       return `<tr>
         <td colspan="${colSpan}" style="text-align:center;padding:12px;border-bottom:none;">
           ${l.description ? `<img src="${l.description}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
-          ${caption ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px;">${caption}</div>` : ''}
+          ${caption ? `<div style="font-size:10px;color:#64748b;margin-top:4px;">${caption}</div>` : ''}
         </td>
       </tr>`;
     }
@@ -317,9 +317,9 @@ export function generateInvoiceHTML(
     ` : style === 'minimal' ? `
       .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; }
       .company-name { font-size: 18px; font-weight: 700; color: #0f172a; }
-      .company-detail { font-size: 11px; color: #94a3b8; margin-top: 4px; line-height: 1.6; }
+      .company-detail { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.6; }
       .inv-title { font-size: 22px; font-weight: 700; color: #0f172a; text-align: right; }
-      .inv-number { font-size: 12px; color: #94a3b8; text-align: right; margin-top: 2px; }
+      .inv-number { font-size: 12px; color: #64748b; text-align: right; margin-top: 2px; }
       .page { padding: 40px; }
       .content { padding: 0; }
       th { border-bottom: 1px solid #0f172a; }
@@ -440,7 +440,7 @@ export function generateInvoiceHTML(
         <td>${m.milestone_label || ''}</td>
         <td class="text-right">${fmtDate(m.due_date)}</td>
         <td class="text-right font-mono">${fmt(Number(m.amount || 0))}</td>
-        <td class="text-right">${m.paid ? '<span style="color:#16a34a;font-weight:700;">PAID</span>' : '<span style="color:#94a3b8;">Due</span>'}</td>
+        <td class="text-right">${m.paid ? '<span style="color:#16a34a;font-weight:700;">PAID</span>' : '<span style="color:#64748b;">Due</span>'}</td>
       </tr>`).join('');
     return `
     <div style="margin-top:24px;">
@@ -473,7 +473,7 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .addr-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
 .addr-detail { font-size: 12px; color: #64748b; line-height: 1.5; }
 .meta-row { display: flex; gap: 36px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; margin-bottom: 24px; flex-wrap: wrap; }
-.meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; }
+.meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; }
 .meta-value { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px; }
 .totals { display: flex; justify-content: flex-end; margin-top: 10px; }
 .totals-box { width: 280px; }
@@ -484,9 +484,9 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .totals-balance { font-weight: 700; font-size: 14px; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 4px; color: ${balance > 0.005 ? '#dc2626' : '#16a34a'}; }
 .footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e2e8f0; }
 .footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; margin-bottom: 4px; }
+.footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; margin-bottom: 4px; }
 .footer-text { font-size: 11px; color: #64748b; line-height: 1.6; white-space: pre-line; }
-.footer-bottom { text-align: center; margin-top: 28px; font-size: 10px; color: #cbd5e1; }
+.footer-bottom { text-align: center; margin-top: 28px; font-size: 10px; color: #64748b; }
 .accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
 </style></head>
 <body>
@@ -552,7 +552,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 
   <div class="footer-bottom">
     ${footerText || companyName}
-    ${invoice.late_fee_pct && invoice.late_fee_pct > 0 ? `<p style="font-size:10px;color:#94a3b8;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
+    ${invoice.late_fee_pct && invoice.late_fee_pct > 0 ? `<p style="font-size:10px;color:#64748b;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
   </div>
 </div>
 </div>
@@ -605,16 +605,16 @@ ${baseStyles}
 .stub-header { text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #0f172a; }
 .stub-company { font-size: 18px; font-weight: 800; color: #0f172a; }
 .stub-addr { font-size: 11px; color: #64748b; margin-top: 4px; }
-.stub-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-top: 12px; }
+.stub-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-top: 12px; }
 .emp-row { display: flex; justify-content: space-between; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 2px; margin-bottom: 20px; }
 .emp-name { font-size: 15px; font-weight: 700; color: #0f172a; }
 .emp-meta { font-size: 11px; color: #64748b; }
-.section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 8px; margin-top: 20px; }
+.section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 8px; margin-top: 20px; }
 .net-pay-box { text-align: center; padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 2px; margin-top: 24px; }
-.net-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; }
+.net-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
 .net-value { font-size: 28px; font-weight: 800; color: #16a34a; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .net-ytd { font-size: 12px; color: #64748b; margin-top: 4px; }
-.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #cbd5e1; }
+.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #64748b; }
 </style></head>
 <body>
 <div class="stub">
@@ -769,8 +769,8 @@ ${baseStyles}
 .report-header { text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
 .report-company { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #0f172a; }
 .report-title { font-size: 12px; color: #475569; margin-top: 4px; }
-.report-dates { font-size: 11px; color: #94a3b8; margin-top: 2px; }
-.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #cbd5e1; }
+.report-dates { font-size: 11px; color: #475569; margin-top: 2px; }
+.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #64748b; }
 </style></head>
 <body>
 <div class="report">
@@ -857,11 +857,11 @@ ${baseStyles}
 .report-date { font-size: 11px; color: #64748b; }
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
 .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 14px 16px; }
-.stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 4px; }
+.stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 4px; }
 .stat-value { font-size: 20px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
 .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #0f172a; margin: 24px 0 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
 .text-right { text-align: right; }
-.text-muted { color: #94a3b8; }
+.text-muted { color: #64748b; }
 .font-mono { font-variant-numeric: tabular-nums; }
 </style></head>
 <body><div class="page">
@@ -931,7 +931,7 @@ export function generateDemandLetterHTML(
         <td>${p.method || '—'}</td>
         <td class="text-muted">${p.reference_number || '—'}</td>
       </tr>`).join('')
-    : `<tr><td colspan="4" style="text-align:center;color:#94a3b8;font-style:italic;">No payments received</td></tr>`;
+    : `<tr><td colspan="4" style="text-align:center;color:#64748b;font-style:italic;">No payments received</td></tr>`;
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Demand Letter — ${debt.debtor_name}</title><style>
@@ -942,7 +942,7 @@ ${baseStyles}
 .company-addr { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.6; }
 .date-line { font-size: 12px; color: #334155; text-align: right; }
 .re-block { background: #f8fafc; border-left: 4px solid #0f172a; padding: 12px 16px; margin: 28px 0; }
-.re-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
+.re-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; }
 .re-value { font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 .body-text { font-size: 12px; color: #334155; line-height: 1.8; margin-bottom: 16px; }
 .balance-box { border: 2px solid #0f172a; border-radius: 4px; padding: 20px 24px; text-align: center; margin: 24px 0; }
@@ -952,7 +952,7 @@ ${baseStyles}
 .sig-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 32px; }
 .sig-title { font-size: 12px; color: #64748b; }
 .text-right { text-align: right; }
-.text-muted { color: #94a3b8; }
+.text-muted { color: #64748b; }
 .font-mono { font-variant-numeric: tabular-nums; }
 </style></head>
 <body><div class="page">
@@ -1031,4 +1031,117 @@ ${baseStyles}
     <div style="font-size:12px;color:#64748b;margin-top:2px;">${companyName}</div>
   </div>
 </div></body></html>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// EXPENSE DETAIL REPORT
+// ═══════════════════════════════════════════════════════════════
+export function generateExpenseReportHTML(
+  expenses: Array<{
+    date: string;
+    description: string;
+    vendor_name: string;
+    category_name: string;
+    amount: number;
+    tax_amount: number;
+    status: string;
+    line_items?: Array<{
+      description: string;
+      quantity: number;
+      unit_price: number;
+      amount: number;
+    }>;
+  }>,
+  companyName: string,
+  dateRange: string,
+  groupBy: string
+): string {
+  const grandTotal = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  const statusBadge = (status: string) => {
+    const colors: Record<string, string> = {
+      paid: '#16a34a', approved: '#16a34a', pending: '#d97706',
+      rejected: '#dc2626', draft: '#94a3b8',
+    };
+    const c = colors[status?.toLowerCase()] || '#64748b';
+    return `<span style="font-size:10px;font-weight:600;color:${c};text-transform:uppercase;letter-spacing:0.5px;">${status || '—'}</span>`;
+  };
+
+  const expenseRows = expenses.map(e => {
+    const mainRow = `<tr>
+      <td>${fmtDate(e.date)}</td>
+      <td>${e.description || '—'}</td>
+      <td>${e.vendor_name || '—'}</td>
+      <td>${e.category_name || '—'}</td>
+      <td class="text-right font-mono">${fmt(Number(e.amount) || 0)}</td>
+      <td>${statusBadge(e.status)}</td>
+    </tr>`;
+
+    const lineItemRows = e.line_items && e.line_items.length > 0
+      ? `<tr><td colspan="6" style="padding:0 0 0 32px;">
+          <table style="width:100%;margin:4px 0 8px;">
+            <thead><tr>
+              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;">Description</th>
+              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:right;">Qty</th>
+              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:right;">Unit Price</th>
+              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:right;">Amount</th>
+            </tr></thead>
+            <tbody>
+              ${e.line_items.map(li => `<tr style="background:#f8fafc;">
+                <td style="padding:3px 8px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;">${li.description || '—'}</td>
+                <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;border-bottom:1px solid #f1f5f9;">${li.quantity}</td>
+                <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid #f1f5f9;">${fmt(Number(li.unit_price) || 0)}</td>
+                <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid #f1f5f9;">${fmt(Number(li.amount) || 0)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </td></tr>`
+      : '';
+
+    return mainRow + lineItemRows;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+${baseStyles}
+.report { padding: 48px; }
+.report-header { text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+.report-company { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #0f172a; }
+.report-title { font-size: 12px; color: #475569; margin-top: 4px; }
+.report-dates { font-size: 11px; color: #475569; margin-top: 2px; }
+.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #64748b; }
+@media print { .report { padding: 0; } tr { page-break-inside: avoid; } }
+</style></head>
+<body>
+<div class="report">
+  <div class="report-header">
+    <div class="report-company">${companyName}</div>
+    <div class="report-title">Expense Detail Report</div>
+    <div class="report-dates">${dateRange}</div>
+    ${groupBy && groupBy !== 'none' ? `<div style="font-size:11px;color:#475569;margin-top:2px;">Grouped by: ${groupBy}</div>` : ''}
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>Date</th>
+      <th>Description</th>
+      <th>Vendor</th>
+      <th>Category</th>
+      <th class="text-right">Amount</th>
+      <th>Status</th>
+    </tr></thead>
+    <tbody>${expenseRows}</tbody>
+  </table>
+
+  <div style="margin-top:24px;padding-top:16px;border-top:2px solid #0f172a;">
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
+      <span style="font-weight:700;color:#0f172a;">Grand Total</span>
+      <span style="font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fmt(grandTotal)}</span>
+    </div>
+  </div>
+
+  <div class="footer-co">${companyName}</div>
+</div>
+</body></html>`;
 }

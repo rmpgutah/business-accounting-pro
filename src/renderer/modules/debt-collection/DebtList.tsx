@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, AlertTriangle, Play, FileText } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
@@ -86,6 +86,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   const [escalationLoading, setEscalationLoading] = useState(false);
   const [escalationResult, setEscalationResult] = useState<{ advanced: number; flagged: number } | null>(null);
 
+  // Feedback state
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
+
   // ─── Load Users ─────────────────────────────────────────
   useEffect(() => {
     api.listUsers().then(setUsers).catch(() => {});
@@ -163,9 +167,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       const result = await api.debtImportOverdueInvoices(activeCompany.id, importDays);
       await reload();
       setShowImportForm(false);
-      alert(`Imported ${result.imported} overdue invoice(s) as debts.`);
-    } catch (err) {
+      setOpSuccess(`Imported ${result.imported} overdue invoice(s) as debts`); setTimeout(() => setOpSuccess(''), 4000);
+    } catch (err: any) {
       console.error('Import overdue failed:', err);
+      setOpError('Import failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setImportLoading(false);
     }
@@ -180,8 +185,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       const result = await api.debtRunEscalation(activeCompany.id);
       setEscalationResult(result);
       await reload();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Escalation failed:', err);
+      setOpError('Escalation failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setEscalationLoading(false);
     }
@@ -202,6 +208,19 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     }));
     downloadCSVBlob(exportData, `debts-${type}-export.csv`);
   }, [filtered, type]);
+
+  // ─── Delete Debt ────────────────────────────────────────
+  const handleDelete = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`Delete debt for "${name}"? This will also remove all related communications, payments, settlements, and compliance records.`)) return;
+    try {
+      await api.remove('debts', id);
+      await reload();
+      setOpSuccess('Debt deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete debt:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+    }
+  }, [reload]);
 
   // ─── Age Calculation ────────────────────────────────────
   const ageDays = (delinquentDate: string): number => {
@@ -283,6 +302,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           </button>
         </div>
       </div>
+
+      {/* Feedback Messages */}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {/* Escalation Result */}
       {escalationResult && (
@@ -561,6 +584,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         >
                           <Pencil size={14} />
                         </button>
+                        <button
+                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                          title="Delete"
+                          onClick={() => handleDelete(debt.id, debt.debtor_name)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -616,6 +646,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         >
                           <Pencil size={14} />
                         </button>
+                        <button
+                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                          title="Delete"
+                          onClick={() => handleDelete(debt.id, debt.debtor_name)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -637,6 +674,12 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {filtered.length > 0 && (
+        <div className="text-xs text-text-muted">
+          Showing {filtered.length} of {debts.length} debt{debts.length !== 1 ? 's' : ''}
         </div>
       )}
     </div>

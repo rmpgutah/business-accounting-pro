@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Handshake, Plus } from 'lucide-react';
+import { Handshake, Plus, Pencil, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -19,8 +19,12 @@ interface Props {
 const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
   const [settlements, setSettlements] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ offer_amount: '', offered_date: '', notes: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const defaultForm = { offer_amount: '', offered_date: '', notes: '' };
+  const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   const load = async () => {
     try {
@@ -35,18 +39,29 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
     if (!form.offer_amount || !form.offered_date) return;
     setSaving(true);
     try {
-      await api.saveSettlement({
-        debt_id: debtId,
-        offer_amount: parseFloat(form.offer_amount) || 0,
-        balance_due: balanceDue,
-        offered_date: form.offered_date,
-        notes: form.notes,
-      });
+      if (editingId) {
+        await api.update('debt_settlements', editingId, {
+          offer_amount: parseFloat(form.offer_amount) || 0,
+          offered_date: form.offered_date,
+          notes: form.notes,
+        });
+      } else {
+        await api.saveSettlement({
+          debt_id: debtId,
+          offer_amount: parseFloat(form.offer_amount) || 0,
+          balance_due: balanceDue,
+          offered_date: form.offered_date,
+          notes: form.notes,
+        });
+      }
       setShowForm(false);
-      setForm({ offer_amount: '', offered_date: '', notes: '' });
+      setEditingId(null);
+      setForm(defaultForm);
       await load();
-    } catch (err) {
+      setOpSuccess(editingId ? 'Offer updated' : 'Offer logged'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to save settlement:', err);
+      setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setSaving(false);
     }
@@ -56,9 +71,11 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
     if (!window.confirm(`Accept settlement of ${fmt.format(s.offer_amount)} and close this debt?`)) return;
     try {
       await api.acceptSettlement(debtId, s.id, s.offer_amount);
+      setOpSuccess('Settlement accepted'); setTimeout(() => setOpSuccess(''), 3000);
       onRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to accept settlement:', err);
+      setOpError('Failed to accept: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -66,8 +83,32 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
     try {
       await api.respondSettlement(s.id, 'rejected');
       await load();
-    } catch (err) {
+      setOpSuccess('Offer rejected'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to reject settlement:', err);
+      setOpError('Failed to reject: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+    }
+  };
+
+  const handleEdit = (s: any) => {
+    setEditingId(s.id);
+    setForm({
+      offer_amount: String(s.offer_amount),
+      offered_date: s.offered_date || '',
+      notes: s.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this settlement offer?')) return;
+    try {
+      await api.remove('debt_settlements', id);
+      await load();
+      setOpSuccess('Offer deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete settlement:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -86,6 +127,9 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
           New Offer
         </button>
       </div>
+
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {showForm && (
         <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-bg-tertiary" style={{ borderRadius: 6 }}>
@@ -188,22 +232,32 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                     {s.notes}
                   </div>
                 )}
-                {s.response === 'pending' && (
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                    <button
-                      className="block-btn-primary text-xs py-1 px-3"
-                      onClick={() => handleAccept(s)}
-                    >
-                      Accept &amp; Close
-                    </button>
-                    <button
-                      className="block-btn text-xs py-1 px-3"
-                      onClick={() => handleReject(s)}
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  {s.response === 'pending' && (
+                    <>
+                      <button className="block-btn-primary text-xs py-1 px-3" onClick={() => handleAccept(s)}>
+                        Accept &amp; Close
+                      </button>
+                      <button className="block-btn text-xs py-1 px-3" onClick={() => handleReject(s)}>
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  <button
+                    className="block-btn text-xs py-1 px-2 inline-flex items-center gap-1"
+                    onClick={() => handleEdit(s)}
+                    title="Edit offer"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                  <button
+                    className="block-btn text-xs py-1 px-2 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                    onClick={() => handleDelete(s.id)}
+                    title="Delete offer"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
               </div>
             );
           })}

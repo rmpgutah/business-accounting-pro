@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  FileText, Upload, Search, Filter, Eye, File, Image, FileSpreadsheet,
+  FileText, Upload, Search, Filter, Eye, File, Image, FileSpreadsheet, Pencil, Trash2, X,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
@@ -53,23 +53,32 @@ const Documents: React.FC = () => {
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<EntityFilter>('');
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [editForm, setEditForm] = useState({ entity_type: '', tags: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  type DocSortField = 'filename' | 'entity_type' | 'file_size' | 'uploaded_at';
+  type DocSortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<DocSortField>('uploaded_at');
+  const [sortDir, setSortDir] = useState<DocSortDir>('desc');
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
+
+  const handleDocSort = (f: DocSortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
+
+  const loadDocuments = async () => {
+    if (!activeCompany) return;
+    try {
+      const rows = await api.query('documents', { company_id: activeCompany.id });
+      setDocuments(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!activeCompany) return;
-      try {
-        // Bug fix #15: was fetching all companies' documents — scoped to active company.
-        const rows = await api.query('documents', { company_id: activeCompany.id });
-        if (!cancelled) setDocuments(Array.isArray(rows) ? rows : []);
-      } catch (err) {
-        console.error('Failed to load documents:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
+    loadDocuments();
   }, [activeCompany]);
 
   const handleUpload = async () => {
@@ -96,13 +105,51 @@ const Documents: React.FC = () => {
       });
 
       setDocuments((prev) => [doc, ...prev]);
-    } catch (err) {
+      setOpSuccess('Document uploaded'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to upload document:', err);
+      setOpError('Failed to upload: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+    }
+  };
+
+  const handleEditDoc = (doc: Document) => {
+    setEditingDoc(doc);
+    setEditForm({ entity_type: doc.entity_type || '', tags: doc.tags || '' });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingDoc) return;
+    setEditSaving(true);
+    try {
+      await api.update('documents', editingDoc.id, {
+        entity_type: editForm.entity_type,
+        tags: editForm.tags,
+      });
+      setEditingDoc(null);
+      await loadDocuments();
+      setOpSuccess('Document updated'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to update document:', err);
+      setOpError('Failed to update: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await api.remove('documents', id);
+      await loadDocuments();
+      setOpSuccess('Document deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete document:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
   const filtered = useMemo(() => {
-    return documents.filter((doc) => {
+    let list = documents.filter((doc) => {
       if (search) {
         const q = search.toLowerCase();
         const match =
@@ -114,7 +161,18 @@ const Documents: React.FC = () => {
       if (entityFilter && doc.entity_type !== entityFilter) return false;
       return true;
     });
-  }, [documents, search, entityFilter]);
+    list.sort((a, b) => {
+      const aVal = (a as any)[sortField] ?? '';
+      const bVal = (b as any)[sortField] ?? '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [documents, search, entityFilter, sortField, sortDir]);
 
   if (loading) {
     return (
@@ -147,6 +205,10 @@ const Documents: React.FC = () => {
           Upload
         </button>
       </div>
+
+      {/* Feedback */}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {/* Filters */}
       <div className="block-card p-3">
@@ -195,13 +257,13 @@ const Documents: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th>Filename</th>
-                <th>Entity Type</th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('filename')}><span className="inline-flex items-center gap-1">Filename {sortField === 'filename' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('entity_type')}><span className="inline-flex items-center gap-1">Entity Type {sortField === 'entity_type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Entity</th>
                 <th>Tags</th>
-                <th className="text-right">Size</th>
-                <th>Uploaded</th>
-                <th className="text-center">Preview</th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleDocSort('file_size')}><span className="inline-flex items-center gap-1">Size {sortField === 'file_size' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('uploaded_at')}><span className="inline-flex items-center gap-1">Uploaded {sortField === 'uploaded_at' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -249,19 +311,79 @@ const Documents: React.FC = () => {
                         : '-'}
                     </td>
                     <td className="text-center">
-                      <button
-                        className="text-text-muted hover:text-accent-blue transition-colors"
-                        onClick={() => setPreviewDoc(doc)}
-                        title="Preview document"
-                      >
-                        <Eye size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          className="text-text-muted hover:text-accent-blue transition-colors p-1"
+                          onClick={() => setPreviewDoc(doc)}
+                          title="Preview document"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-blue transition-colors p-1"
+                          onClick={() => handleEditDoc(doc)}
+                          title="Edit metadata"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-1"
+                          onClick={() => handleDeleteDoc(doc.id)}
+                          title="Delete document"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit Metadata Modal */}
+      {editingDoc && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditingDoc(null)}>
+          <div className="block-card-elevated w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text-primary">Edit Document — {editingDoc.filename}</h3>
+              <button className="text-text-muted hover:text-text-primary" onClick={() => setEditingDoc(null)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">Entity Type</label>
+              <select
+                className="block-select"
+                value={editForm.entity_type}
+                onChange={(e) => setEditForm({ ...editForm, entity_type: e.target.value })}
+              >
+                <option value="">None</option>
+                <option value="client">Client</option>
+                <option value="invoice">Invoice</option>
+                <option value="expense">Expense</option>
+                <option value="project">Project</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">Tags (comma-separated)</label>
+              <input
+                type="text"
+                className="block-input"
+                value={editForm.tags}
+                onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                placeholder="receipt, tax, Q1"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="block-btn" onClick={() => setEditingDoc(null)}>Cancel</button>
+              <button className="block-btn-primary" disabled={editSaving} onClick={handleSaveEdit}>
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
