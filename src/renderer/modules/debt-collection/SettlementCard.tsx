@@ -8,7 +8,6 @@ const RESPONSE_BADGE: Record<string, { label: string; color: string }> = {
   pending: { label: 'Pending', color: '#d97706' },
   accepted: { label: 'Accepted', color: '#22c55e' },
   rejected: { label: 'Rejected', color: '#ef4444' },
-  countered: { label: 'Countered', color: '#8b5cf6' },
 };
 
 interface Props {

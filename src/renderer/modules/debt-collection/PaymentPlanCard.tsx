@@ -139,6 +139,18 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue }) => {
               onChange={e => setForm(p => ({ ...p, total_installments: e.target.value }))}
             />
           </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+              Notes
+            </label>
+            <textarea
+              className="block-input"
+              rows={2}
+              placeholder="Plan notes..."
+              value={form.notes}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+            />
+          </div>
           <div className="col-span-2 flex justify-end gap-2 mt-1">
             <button className="block-btn text-xs py-1 px-3" onClick={() => setShowForm(false)}>
               Cancel

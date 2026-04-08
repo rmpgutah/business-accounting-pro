@@ -7,6 +7,7 @@ import { formatStatus } from '../../lib/format';
 import { formatDate } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
+import { calcRiskScore, getRiskBadge } from './riskScore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Debt {
@@ -446,6 +447,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                   <th className="text-right">Age (days)</th>
                   <th>Stage</th>
                   <th>Priority</th>
+                  <th>Risk</th>
                   <th style={{ width: '90px' }}>Actions</th>
                 </tr>
               ) : (
@@ -505,6 +507,20 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <span className={`text-xs font-semibold uppercase ${priorityColor[debt.priority] || 'text-text-muted'}`}>
                         {debt.priority}
                       </span>
+                    </td>
+                    <td>
+                      {(() => {
+                        const score = calcRiskScore(debt);
+                        const risk = getRiskBadge(score);
+                        return (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                            background: risk.color + '20', color: risk.color,
+                          }}>
+                            {risk.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">

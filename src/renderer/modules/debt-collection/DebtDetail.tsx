@@ -25,6 +25,7 @@ import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { calcRiskScore, getRiskBadge } from './riskScore';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -503,6 +504,21 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   letterSpacing: '0.5px', textTransform: 'uppercase'
                 }}>
                   {badge.label}
+                </span>
+              );
+            })()}
+            {(() => {
+              const brokenCount = promises.filter(
+                p => p.kept === 0 && p.promised_date < new Date().toISOString().slice(0, 10)
+              ).length;
+              const score = calcRiskScore(debt, brokenCount);
+              const risk = getRiskBadge(score);
+              return (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                  background: risk.color + '20', color: risk.color,
+                }}>
+                  Risk: {risk.label} ({score})
                 </span>
               );
             })()}
