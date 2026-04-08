@@ -51,8 +51,14 @@ function daysInStage(stageEnteredAt: string | null): number {
 const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [debts, setDebts] = useState<PipelineDebt[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // ── Load users ──
+  useEffect(() => {
+    api.listUsers().then(setUsers).catch(() => {});
+  }, []);
 
   // ── Load pipeline debts ──
   useEffect(() => {
@@ -185,6 +191,23 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                           HOLD
                         </span>
                       )}
+
+                      {/* Collector badge */}
+                      {(debt as any).assigned_collector_id && (() => {
+                        const u = users.find((x: any) => x.id === (debt as any).assigned_collector_id);
+                        if (!u) return null;
+                        const initials = (u.display_name || u.email || '?').slice(0, 2).toUpperCase();
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 20, height: 20, borderRadius: '50%',
+                            background: 'var(--color-accent)', color: '#fff',
+                            fontSize: 9, fontWeight: 700, marginTop: 4
+                          }}>
+                            {initials}
+                          </span>
+                        );
+                      })()}
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-1 mt-2">

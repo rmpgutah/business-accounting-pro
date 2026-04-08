@@ -61,6 +61,7 @@ interface Debt {
   priority: string;
   current_stage: string;
   assigned_to: string;
+  assigned_collector_id: string | null;
   hold: number;
   hold_reason: string;
   write_off_reason: string;
@@ -256,6 +257,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const [showHoldInput, setShowHoldInput] = useState(false);
   const [holdSaving, setHoldSaving] = useState(false);
 
+  // Users for collector assignment
+  const [users, setUsers] = useState<any[]>([]);
+
   // Advance stage
   const [advancingSaving, setAdvancingSaving] = useState(false);
 
@@ -294,6 +298,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           api.debtCalculateInterest(debtId).catch(() => null),
           api.listDebtPromises(debtId).catch(() => []),
         ]);
+        api.listUsers().then(setUsers).catch(() => {});
         if (cancelled) return;
         setDebt(debtData ?? null);
         setPayments(Array.isArray(paymentData) ? paymentData : []);
@@ -500,6 +505,23 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             })()}
             <span className={stageBadge.className}>{stageBadge.label}</span>
             <span className={statusBadge.className}>{statusBadge.label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="text-text-muted" style={{ fontSize: 12 }}>Collector:</span>
+              <select
+                className="block-select"
+                style={{ fontSize: 12, padding: '2px 8px', minWidth: 140 }}
+                value={debt.assigned_collector_id || ''}
+                onChange={async (e) => {
+                  await api.assignCollector(debt.id, e.target.value || null);
+                  onRefresh();
+                }}
+              >
+                <option value="">Unassigned</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.display_name || u.email}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

@@ -60,6 +60,8 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [collectorFilter, setCollectorFilter] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<{
     total_outstanding: number;
@@ -77,6 +79,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   // Escalation state
   const [escalationLoading, setEscalationLoading] = useState(false);
   const [escalationResult, setEscalationResult] = useState<{ advanced: number; flagged: number } | null>(null);
+
+  // ─── Load Users ─────────────────────────────────────────
+  useEffect(() => {
+    api.listUsers().then(setUsers).catch(() => {});
+  }, []);
 
   // ─── Load Data ──────────────────────────────────────────
   const reload = useCallback(async () => {
@@ -129,9 +136,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       if (priorityFilter && d.priority !== priorityFilter) return false;
       if (dateFrom && d.delinquent_date < dateFrom) return false;
       if (dateTo && d.delinquent_date > dateTo) return false;
+      if (collectorFilter && (d as any).assigned_collector_id !== collectorFilter) return false;
       return true;
     });
-  }, [debts, search, statusFilter, stageFilter, priorityFilter, dateFrom, dateTo]);
+  }, [debts, search, statusFilter, stageFilter, priorityFilter, dateFrom, dateTo, collectorFilter]);
 
   const totalOutstanding = useMemo(
     () => filtered.reduce((sum, d) => sum + (d.balance_due || 0), 0),
@@ -397,6 +405,17 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             onChange={(e) => setDateTo(e.target.value)}
             placeholder="To"
           />
+          <select
+            className="block-select"
+            style={{ fontSize: 12 }}
+            value={collectorFilter}
+            onChange={e => setCollectorFilter(e.target.value)}
+          >
+            <option value="">All Collectors</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.display_name || u.email}</option>
+            ))}
+          </select>
         </div>
       </div>
 

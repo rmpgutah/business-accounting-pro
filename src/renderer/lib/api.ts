@@ -118,7 +118,9 @@ const api = {
   login: (email: string, password: string) =>
     window.electronAPI.invoke('auth:login', { email, password }),
   hasUsers: () => window.electronAPI.invoke('auth:has-users'),
-  listUsers: () => window.electronAPI.invoke('auth:list-users'),
+  listUsers: (): Promise<any[]> => window.electronAPI.invoke('auth:list-users'),
+  assignCollector: (debtId: string, collectorId: string | null): Promise<any> =>
+    window.electronAPI.invoke('debt:assign-collector', { debtId, collectorId }),
   linkUserCompany: (userId: string, companyId: string, role?: string) =>
     window.electronAPI.invoke('auth:link-user-company', { userId, companyId, role }),
   validateSession: (userId: string) =>

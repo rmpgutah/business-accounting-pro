@@ -2772,6 +2772,16 @@ export function registerIpcHandlers(): void {
     db.getDb().prepare('UPDATE debts SET hold = ?, hold_reason = ?, updated_at = datetime(\'now\') WHERE id = ?').run(hold ? 1 : 0, reason || '', debtId);
   });
 
+  ipcMain.handle('debt:assign-collector', (_event, { debtId, collectorId }: { debtId: string; collectorId: string | null }) => {
+    try {
+      db.update('debts', debtId, { assigned_collector_id: collectorId || null });
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('debt:import-overdue', (_event, { companyId, daysThreshold }: { companyId: string; daysThreshold: number }) => {
     const dbInstance = db.getDb();
     const overdue = dbInstance.prepare(`
