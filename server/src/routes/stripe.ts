@@ -54,7 +54,7 @@ stripeRouter.post(
         req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!
       );
     } catch (err: any) {
-      return res.status(400).send(`Webhook error: ${err.message}`);
+      return res.status(400).json({ error: 'Webhook signature verification failed' });
     }
 
     if (event.type === 'checkout.session.completed') {

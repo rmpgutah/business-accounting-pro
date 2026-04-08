@@ -5,8 +5,18 @@ import path from 'path';
 
 export const backupRouter = Router();
 
-const BACKUP_DIR = path.join(__dirname, '..', '..', 'data', 'backups');
+const BACKUP_DIR = path.resolve(__dirname, '..', '..', 'data', 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+/** Sanitize email into a safe filename component and validate resulting path is inside BACKUP_DIR */
+function safePath(email: string, suffix: string): string {
+  const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+  const resolved = path.resolve(BACKUP_DIR, `${safeEmail}${suffix}`);
+  if (!resolved.startsWith(BACKUP_DIR + path.sep) && resolved !== BACKUP_DIR) {
+    throw new Error('Path traversal attempt blocked');
+  }
+  return resolved;
+}
 
 function verifySignature(body: Buffer, signature: string): boolean {
   const secret = process.env.SYNC_SECRET!;
@@ -43,25 +53,25 @@ backupRouter.post('/upload', (req, res) => {
         return res.status(400).json({ error: 'Database file too small' });
       }
 
-      // Sanitize email for filename
-      const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-      // Save timestamped backup
-      const backupPath = path.join(BACKUP_DIR, `${safeEmail}_${timestamp}.db`);
+      // Save timestamped backup (safePath validates no path traversal)
+      const backupPath = safePath(email, `_${timestamp}.db`);
       fs.writeFileSync(backupPath, body);
 
       // Save as latest
-      const latestPath = path.join(BACKUP_DIR, `${safeEmail}_latest.db`);
+      const latestPath = safePath(email, '_latest.db');
       fs.writeFileSync(latestPath, body);
 
       // Clean old backups for this email (keep last 20)
+      const safePrefix = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
       const allBackups = fs.readdirSync(BACKUP_DIR)
-        .filter(f => f.startsWith(safeEmail) && f !== `${safeEmail}_latest.db`)
+        .filter(f => f.startsWith(safePrefix) && f !== `${safePrefix}_latest.db`)
         .sort()
         .reverse();
       for (let i = 20; i < allBackups.length; i++) {
-        fs.unlinkSync(path.join(BACKUP_DIR, allBackups[i]));
+        const cleanupPath = path.resolve(BACKUP_DIR, allBackups[i]);
+        if (cleanupPath.startsWith(BACKUP_DIR + path.sep)) fs.unlinkSync(cleanupPath);
       }
 
       console.log(`Backup uploaded for ${email}: ${body.length} bytes`);
@@ -78,8 +88,7 @@ backupRouter.post('/upload', (req, res) => {
 backupRouter.get('/download/:email', (req, res) => {
   try {
     const email = req.params.email;
-    const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_');
-    const latestPath = path.join(BACKUP_DIR, `${safeEmail}_latest.db`);
+    const latestPath = safePath(email, '_latest.db');
 
     if (!fs.existsSync(latestPath)) {
       return res.status(404).json({ error: 'No backup found for this user' });
@@ -101,8 +110,7 @@ backupRouter.get('/download/:email', (req, res) => {
 backupRouter.get('/status/:email', (req, res) => {
   try {
     const email = req.params.email;
-    const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_');
-    const latestPath = path.join(BACKUP_DIR, `${safeEmail}_latest.db`);
+    const latestPath = safePath(email, '_latest.db');
 
     if (!fs.existsSync(latestPath)) {
       return res.json({ exists: false });

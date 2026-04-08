@@ -19,6 +19,9 @@ const entityModuleMap: Record<string, string> = {
   payments: 'invoicing',
 };
 
+// In-memory navigation params (never persisted to storage)
+const navParams = new Map<string, string>();
+
 // Navigate to a module with optional context
 export function useNavigation() {
   const setModule = useAppStore((s) => s.setModule);
@@ -26,27 +29,27 @@ export function useNavigation() {
   return {
     goTo: (module: string) => setModule(module),
     goToClient: (clientId: string) => {
-      sessionStorage.setItem('nav:clientId', clientId);
+      navParams.set('clientId', clientId);
       setModule('clients');
     },
     goToInvoice: (invoiceId: string) => {
-      sessionStorage.setItem('nav:invoiceId', invoiceId);
+      navParams.set('invoiceId', invoiceId);
       setModule('invoicing');
     },
     goToProject: (projectId: string) => {
-      sessionStorage.setItem('nav:projectId', projectId);
+      navParams.set('projectId', projectId);
       setModule('projects');
     },
     goToExpense: (expenseId: string) => {
-      sessionStorage.setItem('nav:expenseId', expenseId);
+      navParams.set('expenseId', expenseId);
       setModule('expenses');
     },
     goToBudget: (budgetId: string) => {
-      sessionStorage.setItem('nav:budgetId', budgetId);
+      navParams.set('budgetId', budgetId);
       setModule('budgets');
     },
-    goToBankAccount: (bankAccountId: string) => {
-      sessionStorage.setItem('nav:bankAccountId', bankAccountId);
+    goToBankAccount: (id: string) => {
+      navParams.set('bankId', id);
       setModule('banking');
     },
     // Navigate to an entity by type and id (used by notifications)
@@ -56,14 +59,13 @@ export function useNavigation() {
         setModule('dashboard');
         return;
       }
-      // Store the entity ID for the target module to pick up
       const paramKey = entityType.replace(/s$/, '') + 'Id';
-      sessionStorage.setItem(`nav:${paramKey}`, entityId);
+      navParams.set(paramKey, entityId);
       setModule(module);
     },
     getNavParam: (key: string): string | null => {
-      const val = sessionStorage.getItem(`nav:${key}`);
-      if (val) sessionStorage.removeItem(`nav:${key}`);
+      const val = navParams.get(key) ?? null;
+      if (val) navParams.delete(key);
       return val;
     },
   };
