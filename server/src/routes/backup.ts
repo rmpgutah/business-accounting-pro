@@ -8,14 +8,14 @@ export const backupRouter = Router();
 const BACKUP_DIR = path.resolve(__dirname, '..', '..', 'data', 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
-/** Sanitize email into a safe filename component and validate resulting path is inside BACKUP_DIR */
-function safePath(email: string, suffix: string): string {
-  const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
-  const resolved = path.resolve(BACKUP_DIR, `${safeEmail}${suffix}`);
-  if (!resolved.startsWith(BACKUP_DIR + path.sep) && resolved !== BACKUP_DIR) {
-    throw new Error('Path traversal attempt blocked');
+/** Strict email-to-filename sanitizer — only alphanumeric, @, ., _, - allowed */
+function sanitizeEmail(email: string): string {
+  const safe = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+  // Block any remaining path separators or traversal patterns
+  if (safe.includes('/') || safe.includes('\\') || safe.includes('..')) {
+    throw new Error('Invalid email for filename use');
   }
-  return resolved;
+  return safe;
 }
 
 function verifySignature(body: Buffer, signature: string): boolean {
@@ -29,7 +29,6 @@ function verifySignature(body: Buffer, signature: string): boolean {
 }
 
 // ─── POST /api/backup/upload ────────────────────────────
-// Receives raw SQLite database file, stores as latest backup
 backupRouter.post('/upload', (req, res) => {
   try {
     const signature = req.headers['x-bap-signature'] as string;
@@ -39,7 +38,8 @@ backupRouter.post('/upload', (req, res) => {
       return res.status(400).json({ error: 'Missing x-bap-email header' });
     }
 
-    // Collect raw body
+    const safeEmail = sanitizeEmail(email);
+
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
@@ -54,75 +54,75 @@ backupRouter.post('/upload', (req, res) => {
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFilename = `${safeEmail}_${timestamp}.db`;
+      const latestFilename = `${safeEmail}_latest.db`;
 
-      // Save timestamped backup (safePath validates no path traversal)
-      const backupPath = safePath(email, `_${timestamp}.db`);
-      fs.writeFileSync(backupPath, body);
+      // Write files using only sanitized filenames joined to the fixed BACKUP_DIR
+      fs.writeFileSync(path.join(BACKUP_DIR, backupFilename), body);
+      fs.writeFileSync(path.join(BACKUP_DIR, latestFilename), body);
 
-      // Save as latest
-      const latestPath = safePath(email, '_latest.db');
-      fs.writeFileSync(latestPath, body);
-
-      // Clean old backups for this email (keep last 20)
-      const safePrefix = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+      // Clean old backups (keep last 20)
       const allBackups = fs.readdirSync(BACKUP_DIR)
-        .filter(f => f.startsWith(safePrefix) && f !== `${safePrefix}_latest.db`)
+        .filter(f => f.startsWith(safeEmail) && f !== latestFilename)
         .sort()
         .reverse();
       for (let i = 20; i < allBackups.length; i++) {
-        const cleanupPath = path.resolve(BACKUP_DIR, allBackups[i]);
-        if (cleanupPath.startsWith(BACKUP_DIR + path.sep)) fs.unlinkSync(cleanupPath);
+        // Only delete files that match the safe prefix pattern
+        const fname = allBackups[i];
+        if (/^[A-Za-z0-9@._-]+\.db$/.test(fname)) {
+          fs.unlinkSync(path.join(BACKUP_DIR, fname));
+        }
       }
 
-      console.log(`Backup uploaded for ${email}: ${body.length} bytes`);
+      console.log(`Backup uploaded for ${safeEmail}: ${body.length} bytes`);
       return res.json({ ok: true, size: body.length, timestamp });
     });
   } catch (err: any) {
     console.error('Backup upload error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Backup upload failed' });
   }
 });
 
 // ─── GET /api/backup/download/:email ────────────────────
-// Returns latest database backup for this email
 backupRouter.get('/download/:email', (req, res) => {
   try {
-    const email = req.params.email;
-    const latestPath = safePath(email, '_latest.db');
+    const safeEmail = sanitizeEmail(req.params.email);
+    const latestFilename = `${safeEmail}_latest.db`;
+    const fullPath = path.join(BACKUP_DIR, latestFilename);
 
-    if (!fs.existsSync(latestPath)) {
+    if (!fs.existsSync(fullPath)) {
       return res.status(404).json({ error: 'No backup found for this user' });
     }
 
-    const stats = fs.statSync(latestPath);
+    const stats = fs.statSync(fullPath);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Backup-Size', stats.size);
-    fs.createReadStream(latestPath).pipe(res);
+    fs.createReadStream(fullPath).pipe(res);
   } catch (err: any) {
     console.error('Backup download error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Backup download failed' });
   }
 });
 
 // ─── GET /api/backup/status/:email ──────────────────────
-// Check if a backup exists
 backupRouter.get('/status/:email', (req, res) => {
   try {
-    const email = req.params.email;
-    const latestPath = safePath(email, '_latest.db');
+    const safeEmail = sanitizeEmail(req.params.email);
+    const latestFilename = `${safeEmail}_latest.db`;
+    const fullPath = path.join(BACKUP_DIR, latestFilename);
 
-    if (!fs.existsSync(latestPath)) {
+    if (!fs.existsSync(fullPath)) {
       return res.json({ exists: false });
     }
 
-    const stats = fs.statSync(latestPath);
+    const stats = fs.statSync(fullPath);
     return res.json({
       exists: true,
       size: stats.size,
       lastModified: stats.mtime.toISOString(),
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Status check failed' });
   }
 });
