@@ -22,7 +22,18 @@ interface Invoice {
   amount_paid: number;
   status: InvoiceStatus;
   notes?: string;
+  invoice_type?: string;
+  currency?: string;
 }
+
+const TYPE_BADGE_COLORS: Record<string, string> = {
+  standard:    '',
+  service:     '#3b82f6',
+  product:     '#8b5cf6',
+  retainer:    '#d97706',
+  credit_note: '#22c55e',
+  proforma:    '#6b7280',
+};
 
 interface Client {
   id: string;
@@ -447,7 +458,20 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         style={{ accentColor: '#3b82f6' }}
                       />
                     </td>
-                    <td className="font-mono text-accent-blue">{inv.invoice_number}</td>
+                    <td className="font-mono text-accent-blue">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {inv.invoice_number}
+                        {inv.invoice_type && inv.invoice_type !== 'standard' && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase',
+                            background: (TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280') + '22',
+                            color: TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280',
+                          }}>
+                            {inv.invoice_type.replace('_', ' ')}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <button
                         className="text-accent-blue hover:underline text-left"

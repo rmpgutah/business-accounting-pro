@@ -370,8 +370,17 @@ export function generateInvoiceHTML(
       ${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}
     </div>`;
 
+  const invoiceTypeLabel = invoice.invoice_type === 'credit_note' ? 'Credit Note'
+    : invoice.invoice_type === 'proforma' ? 'Proforma Invoice'
+    : invoice.invoice_type === 'retainer' ? 'Retainer Invoice'
+    : invoice.invoice_type === 'service' ? 'Service Invoice'
+    : invoice.invoice_type === 'product' ? 'Invoice'
+    : 'Invoice';
+  const currencyLabel = invoice.currency && invoice.currency !== 'USD' ? ` (${invoice.currency})` : '';
+  const shippingAmount = Number(invoice.shipping_amount || 0);
+
   const invBlock = `
-    <div class="inv-title">Invoice</div>
+    <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
     <div class="inv-number">#${invoice.invoice_number || ''}</div>
     ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${invoice.po_number}</div>` : ''}
     ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${invoice.job_reference}</div>` : ''}`;
@@ -389,7 +398,7 @@ export function generateInvoiceHTML(
     <div class="header-bottom">
       <div>${logoHTML}</div>
       <div>
-        <div class="inv-title">Invoice</div>
+        <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
         <div class="inv-number">#${invoice.invoice_number || ''}</div>
         ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${invoice.po_number}</div>` : ''}
         ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${invoice.job_reference}</div>` : ''}
@@ -458,7 +467,7 @@ export function generateInvoiceHTML(
 ${styledBase}
 ${templateStyles}
 ${stamp ? statusStampCSS(stamp.color) : ''}
-${wmText ? watermarkCSS(wmText, wmOpacity) : ''}
+${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma' ? watermarkCSS('PROFORMA', 0.07) : ''}
 .addresses { display: flex; justify-content: space-between; margin-bottom: 24px; }
 .addr-block { max-width: 48%; }
 .addr-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
@@ -481,7 +490,7 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : ''}
 .accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
 </style></head>
 <body>
-${wmText ? `<div class="watermark">${wmText}</div>` : ''}
+${wmText ? `<div class="watermark">${wmText}</div>` : invoice.invoice_type === 'proforma' ? '<div class="watermark">PROFORMA</div>' : ''}
 ${style === 'modern' ? `<div class="accent-bar"></div>` : ''}
 ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 <div class="page">
@@ -518,8 +527,12 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
       ${taxAmount > 0 ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>` : ''}
       ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>-${fmt(discountAmount)}</span></div>` : ''}
       ${(invoice.discount_pct && invoice.discount_pct > 0) ? `<div class="totals-row" style="color:#ef4444"><span>Discount (${invoice.discount_pct}%)</span><span>-${fmt(Number(invoice.subtotal || 0) * invoice.discount_pct / 100)}</span></div>` : ''}
-      <div class="totals-row totals-total"><span>Total</span><span>${fmt(total)}</span></div>
-      ${amountPaid > 0 ? `
+      ${shippingAmount > 0 ? `<div class="totals-row"><span>Shipping</span><span>${fmt(shippingAmount)}</span></div>` : ''}
+      <div class="totals-row totals-total">
+        <span>${invoice.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}</span>
+        <span style="${invoice.invoice_type === 'credit_note' ? 'color:#16a34a' : ''}">${invoice.invoice_type === 'credit_note' ? `(${fmt(Math.abs(total))}) CR` : fmt(total)}</span>
+      </div>
+      ${amountPaid > 0 && invoice.invoice_type !== 'credit_note' ? `
         <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
         <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt(Math.max(0, balance))}</span></div>
       ` : ''}

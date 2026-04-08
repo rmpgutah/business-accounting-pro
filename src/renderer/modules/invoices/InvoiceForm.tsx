@@ -56,6 +56,30 @@ interface LineItem {
   tax_rate_override: number;   // -1 = use invoice rate
 }
 
+export type InvoiceType = 'standard' | 'service' | 'product' | 'retainer' | 'credit_note' | 'proforma';
+
+interface InvoiceTypeConfig {
+  label: string;
+  description: string;
+  qtyLabel: string;
+  unitPriceLabel: string;
+  showItemCode: boolean;
+  showUnit: boolean;
+  defaultUnitLabel: string;
+  numberPrefix: string;
+}
+
+const INVOICE_TYPE_CONFIG: Record<InvoiceType, InvoiceTypeConfig> = {
+  standard:    { label: 'Standard',    description: 'General purpose invoice',            qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'INV' },
+  service:     { label: 'Service',     description: 'Labor, consulting & hourly services', qtyLabel: 'Hours',  unitPriceLabel: 'Rate / Hr',   showItemCode: false, showUnit: true,  defaultUnitLabel: 'hrs', numberPrefix: 'SVC' },
+  product:     { label: 'Product',     description: 'Physical goods & inventory items',    qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: true,  showUnit: true,  defaultUnitLabel: 'ea',  numberPrefix: 'PRD' },
+  retainer:    { label: 'Retainer',    description: 'Advance payment or retainer fee',    qtyLabel: 'Qty',    unitPriceLabel: 'Amount',      showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'RET' },
+  credit_note: { label: 'Credit Note', description: 'Credit memo or refund',              qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'CR'  },
+  proforma:    { label: 'Proforma',    description: 'Preliminary estimate (not final)',    qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'PRO' },
+};
+
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN', 'JPY', 'CHF', 'CNY', 'INR'];
+
 interface InvoiceFormData {
   client_id: string;
   invoice_number: string;
@@ -72,6 +96,9 @@ interface InvoiceFormData {
   late_fee_pct: number;
   late_fee_grace_days: number;
   discount_pct: number;
+  invoice_type: InvoiceType;
+  currency: string;
+  shipping_amount: number;
 }
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -84,7 +111,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Helpers ────────────────────────────────────────────
 let lineIdCounter = 0;
-const newLineItem = (rowType: LineRowType = 'item'): LineItem => ({
+const newLineItem = (rowType: LineRowType = 'item', defaultUnitLabel = ''): LineItem => ({
   id: `new-${++lineIdCounter}`,
   description: '',
   quantity: 1,
@@ -92,7 +119,7 @@ const newLineItem = (rowType: LineRowType = 'item'): LineItem => ({
   tax_rate: 0,
   account_id: '',
   row_type: rowType,
-  unit_label: '',
+  unit_label: defaultUnitLabel,
   item_code: '',
   line_discount: 0,
   line_discount_type: 'percent',
@@ -261,6 +288,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     late_fee_pct: 0,
     late_fee_grace_days: 0,
     discount_pct: 0,
+    invoice_type: 'standard',
+    currency: 'USD',
+    shipping_amount: 0,
   });
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
@@ -340,6 +370,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             late_fee_pct: inv.late_fee_pct || 0,
             late_fee_grace_days: inv.late_fee_grace_days || 0,
             discount_pct: inv.discount_pct || 0,
+            invoice_type: (inv.invoice_type as InvoiceType) || 'standard',
+            currency: inv.currency || 'USD',
+            shipping_amount: inv.shipping_amount || 0,
           });
 
           const [lineData, scheduleData] = await Promise.all([
@@ -406,7 +439,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     [lines]
   );
 
-  const total = useMemo(() => subtotal + taxTotal - form.discount, [subtotal, taxTotal, form.discount]);
+  const shippingTax = useMemo(() => 0, []); // reserved for future shipping tax
+  const total = useMemo(() => {
+    const raw = subtotal + taxTotal - form.discount + (form.shipping_amount || 0) + shippingTax;
+    return form.invoice_type === 'credit_note' ? -Math.abs(raw) : raw;
+  }, [subtotal, taxTotal, form.discount, form.shipping_amount, form.invoice_type, shippingTax]);
+
+  // ─── Type config derived from form ──────────────────
+  const typeConfig = useMemo(() => INVOICE_TYPE_CONFIG[form.invoice_type] || INVOICE_TYPE_CONFIG.standard, [form.invoice_type]);
+
+  // ─── Currency formatter (switches based on selected currency) ───
+  const currencyFmt = useMemo(() => new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: form.currency || 'USD',
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }), [form.currency]);
 
   // ─── Live preview HTML ───────────────────────────────
   const previewHTML = useMemo(() => {
@@ -425,6 +471,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       notes: form.notes,
       terms_text: form.terms_text,
       amount_paid: 0,
+      invoice_type: form.invoice_type,
+      currency: form.currency,
+      shipping_amount: form.shipping_amount || 0,
     };
     const lineData = lines.map((l) => ({
       description: l.description,
@@ -453,7 +502,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     []
   );
 
-  const addLine = useCallback((rowType: LineRowType = 'item') => setLines((prev) => [...prev, newLineItem(rowType)]), []);
+  const addLine = useCallback((rowType: LineRowType = 'item') => {
+    const cfg = INVOICE_TYPE_CONFIG[form.invoice_type] || INVOICE_TYPE_CONFIG.standard;
+    setLines((prev) => [...prev, newLineItem(rowType, rowType === 'item' ? cfg.defaultUnitLabel : '')]);
+  }, [form.invoice_type]);
 
   const removeLine = useCallback(
     (index: number) => setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index))),
@@ -598,6 +650,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         late_fee_pct: form.late_fee_pct || 0,
         late_fee_grace_days: form.late_fee_grace_days || 0,
         discount_pct: form.discount_pct || 0,
+        invoice_type: form.invoice_type || 'standard',
+        currency: form.currency || 'USD',
+        shipping_amount: form.shipping_amount || 0,
       };
       if (!isEdit) invoiceData.amount_paid = 0;
 
@@ -654,6 +709,63 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           </ul>
         </div>
       )}
+
+      {/* Invoice Type Selector */}
+      <div className="block-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">Invoice Type</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{typeConfig.description}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider mr-1">Currency</label>
+            <select
+              className="block-select"
+              style={{ width: 80, fontSize: 12 }}
+              value={form.currency}
+              onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
+            >
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(Object.keys(INVOICE_TYPE_CONFIG) as InvoiceType[]).map(type => {
+            const cfg = INVOICE_TYPE_CONFIG[type];
+            const isActive = form.invoice_type === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setForm(p => ({ ...p, invoice_type: type }))}
+                style={{
+                  padding: '5px 14px',
+                  borderRadius: 6,
+                  border: `1px solid ${isActive ? 'var(--color-accent)' : 'var(--color-border-primary)'}`,
+                  background: isActive ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
+                  color: isActive ? '#fff' : 'var(--color-text-secondary)',
+                  fontSize: 12,
+                  fontWeight: isActive ? 700 : 400,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+        {form.invoice_type === 'credit_note' && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid #ef4444', borderRadius: 6, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+            Credit Note — total will be displayed as a negative amount (credit to client)
+          </div>
+        )}
+        {form.invoice_type === 'proforma' && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid #d97706', borderRadius: 6, fontSize: 12, color: '#d97706', fontWeight: 600 }}>
+            Proforma — this invoice is preliminary and not a final billing document
+          </div>
+        )}
+      </div>
 
       {/* Invoice Header Fields */}
       <div className="block-card">
@@ -739,14 +851,16 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           <thead>
             <tr>
               <th style={{ width: '2%' }}></th>
-              <th style={{ width: '30%' }}>Description</th>
-              <th style={{ width: '9%' }}>Qty</th>
-              <th style={{ width: '13%' }}>Unit Price</th>
-              <th style={{ width: '11%' }} className="text-right">Amount</th>
-              <th style={{ width: '9%' }}>Tax %</th>
-              <th style={{ width: '7%' }}>Disc%</th>
-              <th style={{ width: '7%' }}>Tax Ovr%</th>
-              <th style={{ width: '14%' }}>Account</th>
+              {typeConfig.showItemCode && <th style={{ width: '9%' }}>SKU / Code</th>}
+              <th style={{ width: typeConfig.showItemCode ? '24%' : '30%' }}>Description</th>
+              {typeConfig.showUnit && <th style={{ width: '6%' }}>Unit</th>}
+              <th style={{ width: '8%' }}>{typeConfig.qtyLabel}</th>
+              <th style={{ width: '12%' }}>{typeConfig.unitPriceLabel}</th>
+              <th style={{ width: '10%' }} className="text-right">Amount</th>
+              <th style={{ width: '8%' }}>Tax %</th>
+              <th style={{ width: '6%' }}>Disc%</th>
+              <th style={{ width: '6%' }}>Tax Ovr%</th>
+              <th style={{ width: '13%' }}>Account</th>
               <th style={{ width: '8%' }}></th>
             </tr>
           </thead>
@@ -831,7 +945,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                         style={{ width: '100%' }}
                       />
                     </td>
-                    <td className="p-1 text-right font-mono font-bold text-text-primary">{fmt.format(subtotalAmt)}</td>
+                    <td className="p-1 text-right font-mono font-bold text-text-primary">{currencyFmt.format(subtotalAmt)}</td>
                     <td className="p-1 text-center">
                       <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
                     </td>
@@ -875,6 +989,17 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                   <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                     <GripVertical size={12} />
                   </td>
+                  {typeConfig.showItemCode && (
+                    <td className="p-1">
+                      <input
+                        className="block-input font-mono"
+                        style={{ fontSize: 11 }}
+                        placeholder="SKU"
+                        value={line.item_code}
+                        onChange={e => updateLine(idx, 'item_code', e.target.value)}
+                      />
+                    </td>
+                  )}
                   <td className="p-1" style={{ position: 'relative' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <input
@@ -901,13 +1026,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       />
                     )}
                   </td>
+                  {typeConfig.showUnit && (
+                    <td className="p-1">
+                      <input
+                        className="block-input"
+                        style={{ fontSize: 11 }}
+                        placeholder={typeConfig.defaultUnitLabel || 'unit'}
+                        value={line.unit_label}
+                        onChange={e => updateLine(idx, 'unit_label', e.target.value)}
+                      />
+                    </td>
+                  )}
                   <td className="p-1">
                     <input
                       type="number"
-                      min={1}
+                      min={0}
                       className="block-input text-right font-mono"
                       value={line.quantity}
-                      onChange={(e) => updateLine(idx, 'quantity', Math.max(1, parseFloat(e.target.value) || 1))}
+                      onChange={(e) => updateLine(idx, 'quantity', Math.max(0, parseFloat(e.target.value) || 0))}
                     />
                   </td>
                   <td className="p-1">
@@ -920,7 +1056,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       onChange={(e) => updateLine(idx, 'unit_price', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className="p-1 text-right font-mono text-text-secondary">{fmt.format(amount)}</td>
+                  <td className="p-1 text-right font-mono text-text-secondary">{currencyFmt.format(amount)}</td>
                   <td className="p-1">
                     <input
                       type="number"
@@ -1010,17 +1146,17 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
       {/* Footer Totals */}
       <div className="flex justify-end">
-        <div className="block-card w-80 space-y-3">
+        <div className="block-card w-96 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-text-secondary">Subtotal</span>
-            <span className="font-mono text-text-primary">{fmt.format(subtotal)}</span>
+            <span className="font-mono text-text-primary">{currencyFmt.format(subtotal)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-text-secondary">Tax</span>
-            <span className="font-mono text-text-primary">{fmt.format(taxTotal)}</span>
+            <span className="font-mono text-text-primary">{currencyFmt.format(taxTotal)}</span>
           </div>
           <div className="flex justify-between text-sm items-center">
-            <span className="text-text-secondary">Discount</span>
+            <span className="text-text-secondary">Discount (flat)</span>
             <input
               type="number"
               min={0}
@@ -1030,9 +1166,32 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
             />
           </div>
-          <div className="flex justify-between text-sm font-bold pt-3" style={{ borderTop: '1px solid var(--color-border-primary)' }}>
-            <span className="text-text-primary">Total</span>
-            <span className="font-mono text-text-primary text-lg">{fmt.format(total)}</span>
+          <div className="flex justify-between text-sm items-center">
+            <span className="text-text-secondary">Shipping</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className="block-input text-right font-mono w-28"
+              value={form.shipping_amount || ''}
+              placeholder="0.00"
+              onChange={(e) => setForm(p => ({ ...p, shipping_amount: parseFloat(e.target.value) || 0 }))}
+            />
+          </div>
+          <div
+            className="flex justify-between text-sm font-bold pt-3"
+            style={{ borderTop: '1px solid var(--color-border-primary)' }}
+          >
+            <span className="text-text-primary">
+              {form.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}
+              {form.currency !== 'USD' && <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>{form.currency}</span>}
+            </span>
+            <span
+              className="font-mono text-lg"
+              style={{ color: form.invoice_type === 'credit_note' ? '#22c55e' : 'var(--color-text-primary)' }}
+            >
+              {form.invoice_type === 'credit_note' ? `(${currencyFmt.format(Math.abs(total))}) CR` : currencyFmt.format(total)}
+            </span>
           </div>
         </div>
       </div>
@@ -1136,7 +1295,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           <button onClick={onBack} className="block-btn p-2" title="Back">
             <ArrowLeft size={16} />
           </button>
-          <h1 className="module-title text-text-primary">{isEdit ? 'Edit Invoice' : 'New Invoice'}</h1>
+          <h1 className="module-title text-text-primary">
+            {isEdit ? 'Edit' : 'New'} {typeConfig.label} Invoice
+          </h1>
         </div>
         <div className="module-actions">
           <button

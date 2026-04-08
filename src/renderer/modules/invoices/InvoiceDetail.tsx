@@ -31,7 +31,18 @@ interface Invoice {
   late_fee_pct?: number;
   late_fee_grace_days?: number;
   discount_pct?: number;
+  invoice_type?: string;
+  currency?: string;
+  shipping_amount?: number;
 }
+
+const INVOICE_TYPE_COLORS: Record<string, string> = {
+  service:     '#3b82f6',
+  product:     '#8b5cf6',
+  retainer:    '#d97706',
+  credit_note: '#22c55e',
+  proforma:    '#6b7280',
+};
 
 interface LineItem {
   id: string;
@@ -230,6 +241,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <h1 className="module-title text-text-primary">{invoice.invoice_number}</h1>
           <span className={badge.className}>{badge.label}</span>
+          {invoice.invoice_type && invoice.invoice_type !== 'standard' && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase',
+              background: (INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280') + '22',
+              color: INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280',
+            }}>
+              {invoice.invoice_type.replace('_', ' ')}
+            </span>
+          )}
+          {invoice.currency && invoice.currency !== 'USD' && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '2px 6px', borderRadius: 4, background: 'var(--color-bg-tertiary)' }}>
+              {invoice.currency}
+            </span>
+          )}
           {debtLink && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '2px 8px', borderRadius: 4 }}>
               In Collections
@@ -431,13 +456,26 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 </span>
               </div>
             )}
+            {(invoice.shipping_amount || 0) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Shipping</span>
+                <span className="font-mono text-text-primary">{formatCurrency(invoice.shipping_amount || 0)}</span>
+              </div>
+            )}
             <div
               className="flex justify-between text-sm font-bold pt-2"
               style={{ borderTop: '1px solid var(--color-border-primary)' }}
             >
-              <span className="text-text-primary">Total</span>
-              <span className="font-mono text-text-primary text-lg">
-                {formatCurrency(invoice.total)}
+              <span className="text-text-primary">
+                {invoice.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}
+              </span>
+              <span
+                className="font-mono text-lg"
+                style={{ color: invoice.invoice_type === 'credit_note' ? '#22c55e' : 'var(--color-text-primary)' }}
+              >
+                {invoice.invoice_type === 'credit_note'
+                  ? `(${formatCurrency(Math.abs(invoice.total))}) CR`
+                  : formatCurrency(invoice.total)}
               </span>
             </div>
             <div className="flex justify-between text-sm">

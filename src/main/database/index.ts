@@ -260,6 +260,12 @@ export function initDatabase(): Database.Database {
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(invoice_id, debt_id)
 )`,
+  // Invoice type & currency enhancements (2026-04-07)
+  "ALTER TABLE invoices ADD COLUMN invoice_type TEXT DEFAULT 'standard'",
+  "ALTER TABLE invoices ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE invoices ADD COLUMN terms_accepted INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN shipping_amount REAL DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN unit_label_override TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
