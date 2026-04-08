@@ -1041,6 +1041,7 @@ const PurchaseOrdersModule: React.FC = () => {
   const [view, setView] = useState<View>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [listKey, setListKey] = useState(0);
 
   const goList = useCallback(() => {
     setView('list');
@@ -1066,6 +1067,7 @@ const PurchaseOrdersModule: React.FC = () => {
   const handleSaved = useCallback((id: string) => {
     setSelectedId(id);
     setEditId(null);
+    setListKey(k => k + 1);
     setView('detail');
   }, []);
 
@@ -1091,6 +1093,7 @@ const PurchaseOrdersModule: React.FC = () => {
 
   return (
     <POList
+      key={listKey}
       onNew={goNew}
       onView={goDetail}
     />

@@ -1313,6 +1313,7 @@ const BillsModule: React.FC = () => {
   const [view, setView] = useState<View>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [listKey, setListKey] = useState(0);
 
   const goToList = useCallback(() => {
     setView('list');
@@ -1338,6 +1339,7 @@ const BillsModule: React.FC = () => {
   const handleSaved = useCallback((id: string) => {
     setSelectedId(id);
     setEditId(null);
+    setListKey(k => k + 1);
     setView('detail');
   }, []);
 
@@ -1363,6 +1365,7 @@ const BillsModule: React.FC = () => {
 
   return (
     <BillsList
+      key={listKey}
       onNew={goToNew}
       onView={goToDetail}
     />

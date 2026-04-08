@@ -58,13 +58,21 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
       if (!activeCompany) return;
       try {
         const [expData, catData, expSummaryResult] = await Promise.all([
-          api.query('expenses', { company_id: activeCompany.id }),
+          api.rawQuery(
+            `SELECT e.*, c.name as category_name, v.name as vendor_name
+             FROM expenses e
+             LEFT JOIN categories c ON e.category_id = c.id
+             LEFT JOIN vendors v ON e.vendor_id = v.id
+             WHERE e.company_id = ?
+             ORDER BY e.date DESC`,
+            [activeCompany.id]
+          ),
           api.query('categories', { company_id: activeCompany.id }),
           api.rawQuery(
             `SELECT
               COALESCE(SUM(CASE WHEN strftime('%Y-%m', date) = strftime('%Y-%m', 'now') THEN amount ELSE 0 END), 0) as month_total,
-              (SELECT ec.name FROM expense_categories ec JOIN expenses e2 ON e2.category_id = ec.id WHERE e2.company_id = ? GROUP BY e2.category_id ORDER BY SUM(e2.amount) DESC LIMIT 1) as top_category,
-              (SELECT COUNT(DISTINCT e2.category_id) FROM expenses e2 JOIN budget_lines bl ON bl.category_id = e2.category_id WHERE e2.company_id = ? AND strftime('%Y-%m', e2.date) = strftime('%Y-%m', 'now') GROUP BY e2.category_id HAVING SUM(e2.amount) > bl.amount) as over_budget_count
+              (SELECT c.name FROM categories c JOIN expenses e2 ON e2.category_id = c.id WHERE e2.company_id = ? GROUP BY e2.category_id ORDER BY SUM(e2.amount) DESC LIMIT 1) as top_category,
+              (SELECT COUNT(*) FROM (SELECT e2.category_id FROM expenses e2 JOIN budget_lines bl ON bl.category = (SELECT c2.name FROM categories c2 WHERE c2.id = e2.category_id) WHERE e2.company_id = ? AND strftime('%Y-%m', e2.date) = strftime('%Y-%m', 'now') GROUP BY e2.category_id HAVING SUM(e2.amount) > bl.amount)) as over_budget_count
             FROM expenses WHERE company_id = ?`,
             [activeCompany.id, activeCompany.id, activeCompany.id]
           ),
