@@ -272,6 +272,7 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoices ADD COLUMN terms_accepted INTEGER DEFAULT 0",
   "ALTER TABLE invoices ADD COLUMN shipping_amount REAL DEFAULT 0",
   "ALTER TABLE invoice_line_items ADD COLUMN unit_label_override TEXT DEFAULT ''",
+  "ALTER TABLE invoice_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
   // Debt notes table for quick internal annotations (2026-04-07)
   `CREATE TABLE IF NOT EXISTS debt_notes (
     id TEXT PRIMARY KEY,
