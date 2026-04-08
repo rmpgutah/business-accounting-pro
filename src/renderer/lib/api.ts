@@ -357,6 +357,14 @@ const api = {
     window.electronAPI.invoke('debt:payment-plan-save', data),
   togglePlanInstallment: (installmentId: string, paid: boolean): Promise<any> =>
     window.electronAPI.invoke('debt:plan-installment-toggle', { installmentId, paid }),
+  listSettlements: (debtId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:settlements-list', { debtId }),
+  saveSettlement: (data: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('debt:settlement-save', data),
+  respondSettlement: (settlementId: string, response: string, counterAmount?: number): Promise<any> =>
+    window.electronAPI.invoke('debt:settlement-respond', { settlementId, response, counter_amount: counterAmount }),
+  acceptSettlement: (debtId: string, settlementId: string, offerAmount: number): Promise<any> =>
+    window.electronAPI.invoke('debt:settlement-accept', { debtId, settlementId, offer_amount: offerAmount }),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>

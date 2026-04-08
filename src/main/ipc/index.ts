@@ -3127,6 +3127,54 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('debt:settlements-list', (_event, { debtId }) => {
+    try {
+      return db.queryAll('debt_settlements', { debt_id: debtId }, { field: 'created_at', dir: 'desc' });
+    } catch { return []; }
+  });
+
+  ipcMain.handle('debt:settlement-save', (_event, data) => {
+    try {
+      const { debt_id, offer_amount, balance_due, offered_date, notes } = data;
+      const offer_pct = balance_due > 0 ? (offer_amount / balance_due) * 100 : 0;
+      const result = db.create('debt_settlements', {
+        debt_id, offer_amount, offer_pct, offered_date,
+        notes: notes || '', response: 'pending',
+      });
+      scheduleAutoBackup();
+      return result;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:settlement-respond', (_event, { settlementId, response, counter_amount }) => {
+    try {
+      const data: any = { response };
+      if (response === 'accepted') data.accepted_date = new Date().toISOString().slice(0, 10);
+      if (counter_amount != null) data.counter_amount = counter_amount;
+      db.update('debt_settlements', settlementId, data);
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:settlement-accept', (_event, { debtId, settlementId, offer_amount }) => {
+    try {
+      db.update('debt_settlements', settlementId, {
+        response: 'accepted',
+        accepted_date: new Date().toISOString().slice(0, 10),
+      });
+      db.update('debts', debtId, { status: 'resolved', balance_due: offer_amount });
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();

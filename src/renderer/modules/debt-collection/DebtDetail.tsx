@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import PaymentPlanCard from './PaymentPlanCard';
+import SettlementCard from './SettlementCard';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -965,6 +966,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
           {/* Card 4c — Payment Plan */}
           <PaymentPlanCard debtId={debtId} balanceDue={debt.balance_due} />
+
+          {/* Card 4d — Settlement Offers */}
+          <SettlementCard debtId={debtId} balanceDue={debt.balance_due} onRefresh={onRefresh} />
 
           {/* Card 5 — Evidence Items */}
           <div className="block-card p-6">
