@@ -22,6 +22,7 @@ import {
   Mail,
   Bell,
   Shield,
+  Zap,
   Building2,
   Plug,
   Globe,
@@ -101,6 +102,7 @@ const sections: NavSection[] = [
       { id: 'notifications', label: 'Notifications', icon: Bell },
       { id: 'audit-trail', label: 'Audit Trail', icon: Shield },
       { id: 'rules', label: 'Rules', icon: Shield },
+      { id: 'automations', label: 'Automations', icon: Zap },
     ],
   },
   {

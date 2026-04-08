@@ -80,6 +80,8 @@ const MODULE_NAMES: Record<string, string> = {
   'fixed-assets': 'Fixed Assets',
   'debt-collection': 'Debt Collection',
   quotes: 'Quotes & Estimates',
+  automations: 'Automations',
+  rules: 'Approval Rules',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
