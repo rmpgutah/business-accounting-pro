@@ -64,7 +64,7 @@ const sections: NavSection[] = [
   {
     title: 'OPERATIONS',
     items: [
-      { id: 'payroll', label: 'Payroll', icon: Users },
+      { id: 'payroll', label: 'Employee', icon: Users },
       { id: 'time-tracking', label: 'Time Tracking', icon: Clock },
       { id: 'projects', label: 'Projects', icon: FolderKanban },
       { id: 'inventory', label: 'Inventory', icon: Package },

@@ -177,8 +177,8 @@ const PayrollModule: React.FC = () => {
       {/* Tab Bar */}
       <div className="flex items-center border-b border-border-primary bg-bg-secondary px-6 pt-4">
         <div className="flex items-center gap-2 mr-6">
-          <DollarSign size={20} className="text-accent-blue" />
-          <h1 className="text-base font-bold text-text-primary">Payroll</h1>
+          <Users size={20} className="text-accent-blue" />
+          <h1 className="text-base font-bold text-text-primary">Employee</h1>
         </div>
         <div className="flex gap-0">
           {tabs.map((tab) => (

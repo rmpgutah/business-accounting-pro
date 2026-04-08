@@ -6,6 +6,7 @@ import api from '../../lib/api';
 interface EmployeeFormData {
   name: string;
   email: string;
+  phone: string;
   type: 'employee' | 'contractor';
   pay_type: 'salary' | 'hourly';
   pay_rate: string;
@@ -15,11 +16,16 @@ interface EmployeeFormData {
   state: string;
   state_allowances: string;
   start_date: string;
-  ssn_last4: string;
+  ssn: string;           // full 9-digit SSN, displayed masked
+  ssn_last4: string;     // legacy field kept for payroll runner compatibility
   status: 'active' | 'inactive';
   employment_type: 'full-time' | 'part-time' | 'contractor';
   department: string;
   job_title: string;
+  address_line1: string;
+  address_line2: string;
+  city: string;
+  zip: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   routing_number: string;
@@ -37,6 +43,7 @@ interface EmployeeFormProps {
 const EMPTY_FORM: EmployeeFormData = {
   name: '',
   email: '',
+  phone: '',
   type: 'employee',
   pay_type: 'salary',
   pay_rate: '',
@@ -46,11 +53,16 @@ const EMPTY_FORM: EmployeeFormData = {
   state: '',
   state_allowances: '0',
   start_date: '',
+  ssn: '',
   ssn_last4: '',
   status: 'active',
   employment_type: 'full-time',
   department: '',
   job_title: '',
+  address_line1: '',
+  address_line2: '',
+  city: '',
+  zip: '',
   emergency_contact_name: '',
   emergency_contact_phone: '',
   routing_number: '',
@@ -89,6 +101,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
           setForm({
             name: emp.name ?? '',
             email: emp.email ?? '',
+            phone: emp.phone ?? '',
             type: emp.type ?? 'employee',
             pay_type: emp.pay_type ?? 'salary',
             pay_rate: emp.pay_rate != null ? String(emp.pay_rate) : '',
@@ -98,11 +111,16 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             state: emp.state ?? '',
             state_allowances: emp.state_allowances != null ? String(emp.state_allowances) : '0',
             start_date: emp.start_date ?? '',
+            ssn: emp.ssn ?? '',
             ssn_last4: emp.ssn_last4 ?? '',
             status: emp.status ?? 'active',
             employment_type: emp.employment_type ?? 'full-time',
             department: emp.department ?? '',
             job_title: emp.job_title ?? '',
+            address_line1: emp.address_line1 ?? '',
+            address_line2: emp.address_line2 ?? '',
+            city: emp.city ?? '',
+            zip: emp.zip ?? '',
             emergency_contact_name: emp.emergency_contact_name ?? '',
             emergency_contact_phone: emp.emergency_contact_phone ?? '',
             routing_number: emp.routing_number ?? '',
@@ -128,11 +146,20 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  // ─── SSN masked input handler ───────────────────────
+  // ─── SSN masked input (full 9-digit) ────────────────
+  const [ssnFocused, setSsnFocused] = useState(false);
   const handleSsnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 4);
-    setField('ssn_last4', raw);
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 9);
+    setField('ssn', raw);
+    setField('ssn_last4', raw.slice(-4));  // keep legacy field in sync
   };
+  const ssnDisplay = ssnFocused
+    ? form.ssn.replace(/(\d{3})(\d{2})(\d{1,4})/, '$1-$2-$3').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+    : form.ssn.length === 9
+      ? `***-**-${form.ssn.slice(-4)}`
+      : form.ssn.length > 0
+        ? '•'.repeat(form.ssn.length)
+        : '';
 
   // ─── Save ───────────────────────────────────────────
   const handleSave = async () => {
@@ -160,6 +187,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
+        phone: form.phone.trim(),
         type: form.type,
         pay_type: form.pay_type,
         pay_rate: Number(form.pay_rate),
@@ -169,11 +197,16 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         state: form.state.trim(),
         state_allowances: Number(form.state_allowances) || 0,
         start_date: form.start_date,
-        ssn_last4: form.ssn_last4,
+        ssn: form.ssn,
+        ssn_last4: form.ssn.slice(-4),
         status: form.status,
         employment_type: form.employment_type,
         department: form.department.trim(),
         job_title: form.job_title.trim(),
+        address_line1: form.address_line1.trim(),
+        address_line2: form.address_line2.trim(),
+        city: form.city.trim(),
+        zip: form.zip.trim(),
         emergency_contact_name: form.emergency_contact_name.trim(),
         emergency_contact_phone: form.emergency_contact_phone.trim(),
         routing_number: form.routing_number.trim(),
@@ -279,6 +312,16 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Phone</label>
+                  <input
+                    className="block-input w-full"
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setField('phone', e.target.value)}
+                    placeholder="(555) 000-0000"
+                  />
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Type</label>
                   <select
                     className="block-select w-full"
@@ -310,15 +353,74 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">SSN (Last 4)</label>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">SSN</label>
                   <input
                     className="block-input w-full font-mono"
-                    value={form.ssn_last4 ? `***-**-${form.ssn_last4.padStart(4, '_')}` : ''}
+                    value={ssnDisplay}
                     onChange={handleSsnChange}
-                    placeholder="***-**-____"
-                    maxLength={13}
+                    onFocus={() => setSsnFocused(true)}
+                    onBlur={() => setSsnFocused(false)}
+                    placeholder="___-__-____"
+                    maxLength={11}
+                    autoComplete="off"
                   />
-                  <p className="text-[10px] text-text-muted mt-1">Only the last 4 digits are stored</p>
+                  <p className="text-[10px] text-text-muted mt-1">Stored encrypted — masked when not editing</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div>
+              <h2 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-4">Address</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Street Address</label>
+                  <input
+                    className="block-input w-full"
+                    value={form.address_line1}
+                    onChange={(e) => setField('address_line1', e.target.value)}
+                    placeholder="123 Main St"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Address Line 2</label>
+                  <input
+                    className="block-input w-full"
+                    value={form.address_line2}
+                    onChange={(e) => setField('address_line2', e.target.value)}
+                    placeholder="Apt, Suite, Unit (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">City</label>
+                  <input
+                    className="block-input w-full"
+                    value={form.city}
+                    onChange={(e) => setField('city', e.target.value)}
+                    placeholder="City"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">State</label>
+                    <input
+                      className="block-input w-full"
+                      value={form.state}
+                      onChange={(e) => setField('state', e.target.value)}
+                      placeholder="CA"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">ZIP</label>
+                    <input
+                      className="block-input w-full font-mono"
+                      value={form.zip}
+                      onChange={(e) => setField('zip', e.target.value)}
+                      placeholder="00000"
+                      maxLength={10}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -399,7 +501,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-text-secondary mb-1">State</label>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Tax Withholding State</label>
                     <input
                       className="block-input w-full"
                       value={form.state}

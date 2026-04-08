@@ -53,7 +53,7 @@ const MODULE_NAMES: Record<string, string> = {
   invoicing: 'Invoicing',
   expenses: 'Expenses',
   clients: 'Clients',
-  payroll: 'Payroll',
+  payroll: 'Employee',
   'time-tracking': 'Time Tracking',
   projects: 'Projects',
   inventory: 'Inventory',

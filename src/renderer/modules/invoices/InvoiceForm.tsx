@@ -856,12 +856,14 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               {typeConfig.showUnit && <th style={{ width: '6%' }}>Unit</th>}
               <th style={{ width: '8%' }}>{typeConfig.qtyLabel}</th>
               <th style={{ width: '12%' }}>{typeConfig.unitPriceLabel}</th>
-              <th style={{ width: '10%' }} className="text-right">Amount</th>
+              <th style={{ width: '8%' }} className="text-right">Base</th>
               <th style={{ width: '8%' }}>Tax %</th>
-              <th style={{ width: '6%' }}>Disc%</th>
-              <th style={{ width: '6%' }}>Tax Ovr%</th>
-              <th style={{ width: '13%' }}>Account</th>
-              <th style={{ width: '8%' }}></th>
+              <th style={{ width: '5%' }}>Disc%</th>
+              <th style={{ width: '5%' }}>Tax Ovr%</th>
+              <th style={{ width: '8%' }} className="text-right">Tax</th>
+              <th style={{ width: '9%' }} className="text-right">Total</th>
+              <th style={{ width: '10%' }}>Account</th>
+              <th style={{ width: '7%' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -870,11 +872,14 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               const isItem = rowType === 'item';
               const baseAmount = line.quantity * line.unit_price;
               const amount = baseAmount * (1 - (line.discount_pct || 0) / 100);
+              const effectiveTaxRate = line.tax_rate_override >= 0 ? line.tax_rate_override : line.tax_rate;
+              const lineTax = isItem ? amount * (effectiveTaxRate / 100) : 0;
+              const lineTotal = amount + lineTax;
 
               if (rowType === 'spacer') {
                 return (
                   <tr key={line.id} style={{ background: 'var(--color-bg-tertiary)', opacity: 0.5 }}>
-                    <td className="p-1 text-center" colSpan={10}>
+                    <td className="p-1 text-center" colSpan={12}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
                         <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
                         <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={11} /></button>
@@ -890,7 +895,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                       <GripVertical size={12} />
                     </td>
-                    <td colSpan={8} className="p-1">
+                    <td colSpan={10} className="p-1">
                       <input
                         className="block-input font-bold"
                         placeholder="Section heading..."
@@ -912,7 +917,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                       <GripVertical size={12} />
                     </td>
-                    <td colSpan={8} className="p-1">
+                    <td colSpan={10} className="p-1">
                       <input
                         className="block-input"
                         placeholder="Note (italic in PDF)..."
@@ -936,7 +941,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr key={line.id} style={{ borderTop: '1px solid var(--color-border-primary)', background: 'var(--color-bg-tertiary)' }}>
                     <td></td>
-                    <td colSpan={7} className="p-1">
+                    <td colSpan={9} className="p-1">
                       <input
                         className="block-input font-bold"
                         placeholder="Subtotal label..."
@@ -959,7 +964,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
                       <GripVertical size={12} />
                     </td>
-                    <td colSpan={7} className="p-1">
+                    <td colSpan={9} className="p-1">
                       <input
                         className="block-input"
                         placeholder="Image URL or base64..."
@@ -1099,6 +1104,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                         updateLine(idx, 'tax_rate_override', v);
                       }}
                     />
+                  </td>
+                  <td className="p-1 text-right font-mono" style={{ color: 'var(--color-accent-revenue)', fontSize: 12 }}>
+                    {isItem && lineTax > 0 ? `+${currencyFmt.format(lineTax)}` : '—'}
+                  </td>
+                  <td className="p-1 text-right font-mono font-semibold text-text-primary">
+                    {isItem ? currencyFmt.format(lineTotal) : ''}
                   </td>
                   <td className="p-1">
                     <select
