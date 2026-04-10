@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle } from 'lucide-react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle, Package } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
@@ -57,6 +57,7 @@ interface InvoiceListProps {
   onViewInvoice: (id: string) => void;
   onEditInvoice: (id: string) => void;
   onSettings?: () => void;
+  onCatalog?: () => void;
 }
 
 const InvoiceList: React.FC<InvoiceListProps> = ({
@@ -64,6 +65,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   onViewInvoice,
   onEditInvoice,
   onSettings,
+  onCatalog,
 }) => {
   const nav = useNavigation();
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -263,6 +265,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       <div className="module-header">
         <h1 className="module-title text-text-primary">Invoices</h1>
         <div className="module-actions">
+          {onCatalog && (
+            <button className="block-btn flex items-center gap-2" onClick={onCatalog} title="Manage catalog items">
+              <Package size={16} />
+              Catalog
+            </button>
+          )}
           {onSettings && (
             <button className="block-btn flex items-center gap-2" onClick={onSettings} title="Invoice template settings">
               <Settings size={16} />
