@@ -210,6 +210,30 @@ export function generateInvoiceHTML(
   const clientPhone = client?.phone || '';
 
   const taxAmount      = Number(invoice.tax_amount || 0);
+
+  // Tax breakdown by rate (EU VAT Art. 226 / US mixed-rate compliance)
+  const taxByRate: Record<string, { taxable: number; tax: number }> = {};
+  for (const l of lineItems) {
+    if ((l.row_type || 'item') !== 'item') continue;
+    const override = Number(l.tax_rate_override ?? -1);
+    const rate = override >= 0 ? override : Number(l.tax_rate || 0);
+    if (rate <= 0) continue;
+    const base = Number(l.quantity || 0) * Number(l.unit_price || 0) * (1 - (Number(l.discount_pct || 0)) / 100);
+    const key = rate.toFixed(2);
+    if (!taxByRate[key]) taxByRate[key] = { taxable: 0, tax: 0 };
+    taxByRate[key].taxable += base;
+    taxByRate[key].tax += base * (rate / 100);
+  }
+  const sortedRates = Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b));
+  const hasMultipleRates = sortedRates.length > 1;
+  const taxBreakdownHTML = hasMultipleRates
+    ? sortedRates.map(rate =>
+        `<div class="totals-row"><span>Tax @ ${rate}% on ${fmt(taxByRate[rate].taxable)}</span><span>${fmt(taxByRate[rate].tax)}</span></div>`
+      ).join('')
+    : (taxAmount > 0
+        ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>`
+        : '');
+
   const discountAmount = Number(invoice.discount_amount || 0);
   const amountPaid     = Number(invoice.amount_paid || 0);
   const total          = Number(invoice.total || 0);
@@ -547,7 +571,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
   <div class="totals">
     <div class="totals-box">
       <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
-      ${taxAmount > 0 ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>` : ''}
+      ${taxBreakdownHTML}
       ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>-${fmt(discountAmount)}</span></div>` : ''}
       ${(invoice.discount_pct && invoice.discount_pct > 0) ? `<div class="totals-row" style="color:#ef4444"><span>Discount (${invoice.discount_pct}%)</span><span>-${fmt(Number(invoice.subtotal || 0) * invoice.discount_pct / 100)}</span></div>` : ''}
       ${shippingAmount > 0 ? `<div class="totals-row"><span>Shipping</span><span>${fmt(shippingAmount)}</span></div>` : ''}

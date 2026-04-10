@@ -513,6 +513,26 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     [lines]
   );
 
+  const taxByRate = useMemo(() => {
+    const map: Record<string, { taxable: number; tax: number }> = {};
+    for (const l of lines) {
+      if ((l.row_type || 'item') !== 'item') continue;
+      const rate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
+      if (rate <= 0) continue;
+      const base = l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100);
+      const key = rate.toFixed(2);
+      if (!map[key]) map[key] = { taxable: 0, tax: 0 };
+      map[key].taxable += base;
+      map[key].tax += base * (rate / 100);
+    }
+    return map;
+  }, [lines]);
+
+  const sortedTaxRates = useMemo(
+    () => Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b)),
+    [taxByRate]
+  );
+
   const shippingTax = useMemo(() => 0, []); // reserved for future shipping tax
   const total = useMemo(() => {
     const raw = subtotal + taxTotal - form.discount + (form.shipping_amount || 0) + shippingTax;
@@ -1472,10 +1492,19 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <span className="text-text-secondary">Subtotal</span>
             <span className="font-mono text-text-primary">{currencyFmt.format(subtotal)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-text-secondary">Tax</span>
-            <span className="font-mono text-text-primary">{currencyFmt.format(taxTotal)}</span>
-          </div>
+          {sortedTaxRates.length > 1 ? (
+            sortedTaxRates.map((rate) => (
+              <div key={rate} className="flex justify-between text-sm">
+                <span className="text-text-secondary">Tax @ {rate}% on {currencyFmt.format(taxByRate[rate].taxable)}</span>
+                <span className="font-mono text-text-primary">{currencyFmt.format(taxByRate[rate].tax)}</span>
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Tax</span>
+              <span className="font-mono text-text-primary">{currencyFmt.format(taxTotal)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm items-center">
             <span className="text-text-secondary">Discount (flat)</span>
             <input

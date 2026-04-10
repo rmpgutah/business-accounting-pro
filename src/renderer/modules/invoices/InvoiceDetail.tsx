@@ -51,6 +51,9 @@ interface LineItem {
   unit_price: number;
   amount: number;
   tax_rate: number;
+  tax_rate_override?: number;
+  discount_pct?: number;
+  row_type?: string;
   account_id: string;
 }
 
@@ -159,6 +162,27 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const balance = useMemo(
     () => (invoice ? invoice.total - invoice.amount_paid : 0),
     [invoice]
+  );
+
+  const taxByRate = useMemo(() => {
+    const map: Record<string, { taxable: number; tax: number }> = {};
+    for (const l of lines) {
+      if ((l.row_type || 'item') !== 'item') continue;
+      const override = l.tax_rate_override;
+      const rate = (override != null && override >= 0) ? override : l.tax_rate;
+      if (rate <= 0) continue;
+      const base = l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100);
+      const key = rate.toFixed(2);
+      if (!map[key]) map[key] = { taxable: 0, tax: 0 };
+      map[key].taxable += base;
+      map[key].tax += base * (rate / 100);
+    }
+    return map;
+  }, [lines]);
+
+  const sortedTaxRates = useMemo(
+    () => Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b)),
+    [taxByRate]
   );
 
   const handleSendInvoice = async () => {
@@ -451,11 +475,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <span className="text-text-secondary">Subtotal</span>
               <span className="font-mono text-text-primary">{formatCurrency(invoice.subtotal)}</span>
             </div>
-            {invoice.tax_amount > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
-              </div>
+            {sortedTaxRates.length > 1 ? (
+              sortedTaxRates.map((rate) => (
+                <div key={rate} className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax @ {rate}% on {formatCurrency(taxByRate[rate].taxable)}</span>
+                  <span className="font-mono text-text-primary">{formatCurrency(taxByRate[rate].tax)}</span>
+                </div>
+              ))
+            ) : (
+              invoice.tax_amount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax</span>
+                  <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
+                </div>
+              )
             )}
             {invoice.discount_amount > 0 && (
               <div className="flex justify-between text-sm">
