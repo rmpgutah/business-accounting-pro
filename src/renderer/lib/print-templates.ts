@@ -277,7 +277,7 @@ export function generateInvoiceHTML(
     const lineStyleAttr = [
       (l.bold || 0) ? 'font-weight:700' : '',
       (l.italic || 0) ? 'font-style:italic' : '',
-      (l.highlight_color || '') ? `background:${l.highlight_color}` : '',
+      (l.highlight_color || '') ? `background-color:${l.highlight_color}` : '',
     ].filter(Boolean).join(';');
     const discountedPrice = (() => {
       const baseAmt = Number(l.amount || (l.quantity || 1) * (l.unit_price || 0));

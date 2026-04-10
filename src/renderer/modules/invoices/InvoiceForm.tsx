@@ -1236,19 +1236,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     </td>
                   )}
                   <td className="p-1" style={{ position: 'relative' }}>
-                    {hoveredLineIdx === idx && (
-                      <div style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: '-26px',
-                        zIndex: 20,
-                        display: 'flex',
-                        gap: 2,
-                        padding: '3px 4px',
-                        background: 'var(--color-bg-elevated)',
-                        border: '1px solid var(--color-border-primary)',
-                        borderRadius: 4,
-                      }}>
+                    {hoveredLineIdx === idx && dragIndex === null && (
+                      <div
+                        onMouseEnter={() => setHoveredLineIdx(idx)}
+                        onMouseLeave={() => setHoveredLineIdx(null)}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 'calc(100% + 2px)',
+                          zIndex: 20,
+                          display: 'flex',
+                          gap: 2,
+                          padding: '3px 4px',
+                          background: 'var(--color-bg-elevated)',
+                          border: '1px solid var(--color-border-primary)',
+                          borderRadius: 4,
+                        }}>
                         <button
                           type="button"
                           title="Bold"
