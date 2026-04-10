@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical, ChevronUp, ChevronDown, Bold, Italic } from 'lucide-react';
 import api from '../../lib/api';
 import { FieldLabel } from '../../components/FieldLabel';
 import { required, validateForm, minValue } from '../../lib/validation';
@@ -54,6 +54,9 @@ interface LineItem {
   line_discount_type: 'percent' | 'flat';
   discount_pct: number;
   tax_rate_override: number;   // -1 = use invoice rate
+  bold: number;
+  italic: number;
+  highlight_color: string;
 }
 
 export type InvoiceType = 'standard' | 'service' | 'product' | 'retainer' | 'credit_note' | 'proforma';
@@ -168,6 +171,9 @@ const newLineItem = (rowType: LineRowType = 'item', defaultUnitLabel = ''): Line
   line_discount_type: 'percent',
   discount_pct: 0,
   tax_rate_override: -1,
+  bold: 0,
+  italic: 0,
+  highlight_color: '',
 });
 
 const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
@@ -342,6 +348,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [rowDraggable, setRowDraggableState] = useState<Record<number, boolean>>({});
+  const [hoveredLineIdx, setHoveredLineIdx] = useState<number | null>(null);
 
   const setRowDraggable = useCallback((idx: number, value: boolean) => {
     setRowDraggableState((prev) => ({ ...prev, [idx]: value }));
@@ -456,6 +463,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 line_discount_type: l.line_discount_type ?? 'percent',
                 discount_pct: l.discount_pct || 0,
                 tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
+                bold: l.bold ?? 0,
+                italic: l.italic ?? 0,
+                highlight_color: l.highlight_color ?? '',
               }))
             );
           }
@@ -538,6 +548,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       item_code: l.item_code,
       line_discount: l.line_discount,
       line_discount_type: l.line_discount_type,
+      bold: l.bold,
+      italic: l.italic,
+      highlight_color: l.highlight_color,
     }));
     return generateInvoiceHTML(inv, activeCompany, client, lineData, invoiceSettings || undefined);
   }, [showPreview, form, lines, subtotal, taxTotal, total, activeCompany, clients, invoiceSettings]);
@@ -810,6 +823,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         line_discount_type: l.line_discount_type || 'percent',
         discount_pct: l.discount_pct || 0,
         tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
+        bold: l.bold || 0,
+        italic: l.italic || 0,
+        highlight_color: l.highlight_color || '',
       }));
 
       const result = await api.saveInvoice({ invoiceId: isEdit ? invoiceId : null, invoiceData, lineItems, isEdit });
@@ -1196,6 +1212,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 <tr
                   key={line.id}
                   {...getRowDragProps(idx)}
+                  onMouseEnter={() => setHoveredLineIdx(idx)}
+                  onMouseLeave={() => setHoveredLineIdx(null)}
                   style={getRowDragStyle(idx)}
                 >
                   <GripCell
@@ -1218,13 +1236,74 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     </td>
                   )}
                   <td className="p-1" style={{ position: 'relative' }}>
+                    {hoveredLineIdx === idx && (
+                      <div style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: '-26px',
+                        zIndex: 20,
+                        display: 'flex',
+                        gap: 2,
+                        padding: '3px 4px',
+                        background: 'var(--color-bg-elevated)',
+                        border: '1px solid var(--color-border-primary)',
+                        borderRadius: 4,
+                      }}>
+                        <button
+                          type="button"
+                          title="Bold"
+                          onClick={() => updateLine(idx, 'bold', line.bold ? 0 : 1)}
+                          style={{
+                            background: line.bold ? 'var(--color-accent-blue)' : 'transparent',
+                            color: line.bold ? '#fff' : 'var(--color-text-muted)',
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 2,
+                          }}
+                        >
+                          <Bold size={10} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Italic"
+                          onClick={() => updateLine(idx, 'italic', line.italic ? 0 : 1)}
+                          style={{
+                            background: line.italic ? 'var(--color-accent-blue)' : 'transparent',
+                            color: line.italic ? '#fff' : 'var(--color-text-muted)',
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 2,
+                          }}
+                        >
+                          <Italic size={10} />
+                        </button>
+                        <div style={{ width: 1, background: 'var(--color-border-primary)', margin: '0 2px' }} />
+                        {['', '#fef9c3', '#dbeafe', '#fecaca', '#dcfce7'].map((color) => (
+                          <button
+                            key={color || 'none'}
+                            type="button"
+                            title={color ? `Highlight ${color}` : 'No highlight'}
+                            onClick={() => updateLine(idx, 'highlight_color', color)}
+                            style={{
+                              background: color || 'transparent',
+                              border: line.highlight_color === color
+                                ? '2px solid var(--color-accent-blue)'
+                                : '1px solid var(--color-border-primary)',
+                              width: 14, height: 14, cursor: 'pointer', borderRadius: 2,
+                              backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 4 }}>
                       <input
                         className="block-input"
                         placeholder="Item description"
                         value={line.description}
                         onChange={(e) => updateLine(idx, 'description', e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{
+                          flex: 1,
+                          fontWeight: line.bold ? 700 : undefined,
+                          fontStyle: line.italic ? 'italic' : undefined,
+                          background: line.highlight_color || undefined,
+                        }}
                       />
                       <button
                         className="block-btn p-1"

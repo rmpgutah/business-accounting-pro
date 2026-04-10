@@ -274,6 +274,11 @@ export function generateInvoiceHTML(
     // ── Standard item row ──
     const rowBg = (style === 'modern' || style === 'executive') && i % 2 === 0 ? `background:${secondary}14;` : '';
     const rowPad = isCompact ? 'padding-top:4px;padding-bottom:4px;' : '';
+    const lineStyleAttr = [
+      (l.bold || 0) ? 'font-weight:700' : '',
+      (l.italic || 0) ? 'font-style:italic' : '',
+      (l.highlight_color || '') ? `background:${l.highlight_color}` : '',
+    ].filter(Boolean).join(';');
     const discountedPrice = (() => {
       const baseAmt = Number(l.amount || (l.quantity || 1) * (l.unit_price || 0));
       if (!l.line_discount || l.line_discount === 0) return baseAmt;
@@ -297,7 +302,8 @@ export function generateInvoiceHTML(
       return `<td class="${cls}" style="${rowPad}">${val}</td>`;
     }).join('');
 
-    return `<tr style="${rowBg}">${cells}</tr>`;
+    const mergedRowStyle = [rowBg, lineStyleAttr].filter(Boolean).join(';');
+    return `<tr style="${mergedRowStyle}">${cells}</tr>`;
   }).join('');
 
   // ── Template CSS ──
