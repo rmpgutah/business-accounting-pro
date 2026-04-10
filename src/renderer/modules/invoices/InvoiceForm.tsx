@@ -80,6 +80,49 @@ const INVOICE_TYPE_CONFIG: Record<InvoiceType, InvoiceTypeConfig> = {
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN', 'JPY', 'CHF', 'CNY', 'INR'];
 
+// ─── GripCell (hoisted to module scope to prevent remount-on-render) ───
+interface GripCellProps {
+  idx: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onMoveUp: (idx: number) => void;
+  onMoveDown: (idx: number) => void;
+  onActivateDrag: (idx: number) => void;
+}
+
+const GripCell: React.FC<GripCellProps> = React.memo(({ idx, isFirst, isLast, onMoveUp, onMoveDown, onActivateDrag }) => (
+  <td
+    className="p-1 text-center"
+    style={{ cursor: 'grab', color: 'var(--color-text-muted)', width: 28 }}
+    onMouseDown={() => onActivateDrag(idx)}
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <button
+        type="button"
+        onClick={() => onMoveUp(idx)}
+        disabled={isFirst}
+        title="Move up"
+        aria-label={`Move row ${idx + 1} up`}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: isFirst ? 'not-allowed' : 'pointer', opacity: isFirst ? 0.3 : 1 }}
+      >
+        <ChevronUp size={9} />
+      </button>
+      <GripVertical size={11} aria-hidden="true" />
+      <button
+        type="button"
+        onClick={() => onMoveDown(idx)}
+        disabled={isLast}
+        title="Move down"
+        aria-label={`Move row ${idx + 1} down`}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: isLast ? 'not-allowed' : 'pointer', opacity: isLast ? 0.3 : 1 }}
+      >
+        <ChevronDown size={9} />
+      </button>
+    </div>
+  </td>
+));
+GripCell.displayName = 'GripCell';
+
 interface InvoiceFormData {
   client_id: string;
   invoice_number: string;
@@ -576,6 +619,47 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     setRowDraggableState({});
   }, []);
 
+  const handleActivateDrag = useCallback((i: number) => {
+    setRowDraggable(i, true);
+  }, [setRowDraggable]);
+
+  // Safety net: if user mousedowns the grip but releases without starting a drag,
+  // neither onDragEnd nor a drop fires. Reset rowDraggable on any document mouseup
+  // (deferred to next tick so dragstart can fire first and preserve state).
+  useEffect(() => {
+    const onGlobalMouseUp = () => {
+      setTimeout(() => {
+        setDragIndex((current) => {
+          if (current !== null) return current; // drag in progress — don't touch
+          setRowDraggableState({});
+          return current;
+        });
+      }, 0);
+    };
+    document.addEventListener('mouseup', onGlobalMouseUp);
+    return () => document.removeEventListener('mouseup', onGlobalMouseUp);
+  }, []);
+
+  const getRowDragProps = useCallback((idx: number) => ({
+    draggable: !!rowDraggable[idx],
+    onDragStart: handleDragStart(idx),
+    onDragOver: handleDragOver(idx),
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop(idx),
+    onDragEnd: handleDragEnd,
+  }), [rowDraggable, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd]);
+
+  const getRowDragStyle = useCallback((idx: number): React.CSSProperties => {
+    const style: React.CSSProperties = {};
+    if (overIndex === idx && dragIndex !== null && dragIndex !== idx) {
+      style.borderTop = '2px solid var(--color-accent-blue)';
+    }
+    if (dragIndex === idx) {
+      style.opacity = 0.4;
+    }
+    return style;
+  }, [overIndex, dragIndex]);
+
   // ─── Form field helpers ──────────────────────────────
   const updateField = useCallback(
     (field: keyof InvoiceFormData, value: string | number) =>
@@ -742,37 +826,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       setSaving(false);
     }
   };
-
-  const GripCell: React.FC<{ idx: number }> = ({ idx }) => (
-    <td
-      className="p-1 text-center"
-      style={{ cursor: 'grab', color: 'var(--color-text-muted)', width: 28 }}
-      onMouseDown={() => setRowDraggable(idx, true)}
-      onMouseUp={() => setRowDraggable(idx, false)}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-        <button
-          type="button"
-          onClick={() => moveLineUp(idx)}
-          disabled={idx === 0}
-          title="Move up"
-          style={{ background: 'none', border: 'none', padding: 0, cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
-        >
-          <ChevronUp size={9} />
-        </button>
-        <GripVertical size={11} />
-        <button
-          type="button"
-          onClick={() => moveLineDown(idx)}
-          disabled={idx === lines.length - 1}
-          title="Move down"
-          style={{ background: 'none', border: 'none', padding: 0, cursor: idx === lines.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === lines.length - 1 ? 0.3 : 1 }}
-        >
-          <ChevronDown size={9} />
-        </button>
-      </div>
-    </td>
-  );
 
   if (loading) {
     return (
@@ -966,19 +1019,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr
                     key={line.id}
-                    draggable={!!rowDraggable[idx]}
-                    onDragStart={handleDragStart(idx)}
-                    onDragOver={handleDragOver(idx)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop(idx)}
-                    onDragEnd={handleDragEnd}
+                    {...getRowDragProps(idx)}
                     style={{
                       background: 'var(--color-bg-tertiary)',
-                      opacity: dragIndex === idx ? 0.4 : 0.5,
-                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
+                      opacity: 0.5,
+                      ...getRowDragStyle(idx),
                     }}
                   >
-                    <GripCell idx={idx} />
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td className="p-1 text-center" colSpan={11}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
                         <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
@@ -993,19 +1048,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr
                     key={line.id}
-                    draggable={!!rowDraggable[idx]}
-                    onDragStart={handleDragStart(idx)}
-                    onDragOver={handleDragOver(idx)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop(idx)}
-                    onDragEnd={handleDragEnd}
+                    {...getRowDragProps(idx)}
                     style={{
                       background: 'rgba(100,116,139,0.08)',
-                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
-                      opacity: dragIndex === idx ? 0.4 : undefined,
+                      ...getRowDragStyle(idx),
                     }}
                   >
-                    <GripCell idx={idx} />
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={10} className="p-1">
                       <input
                         className="block-input font-bold"
@@ -1026,19 +1082,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr
                     key={line.id}
-                    draggable={!!rowDraggable[idx]}
-                    onDragStart={handleDragStart(idx)}
-                    onDragOver={handleDragOver(idx)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop(idx)}
-                    onDragEnd={handleDragEnd}
+                    {...getRowDragProps(idx)}
                     style={{
                       background: 'var(--color-bg-secondary)',
-                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
-                      opacity: dragIndex === idx ? 0.4 : undefined,
+                      ...getRowDragStyle(idx),
                     }}
                   >
-                    <GripCell idx={idx} />
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={10} className="p-1">
                       <input
                         className="block-input"
@@ -1063,19 +1120,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr
                     key={line.id}
-                    draggable={!!rowDraggable[idx]}
-                    onDragStart={handleDragStart(idx)}
-                    onDragOver={handleDragOver(idx)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop(idx)}
-                    onDragEnd={handleDragEnd}
+                    {...getRowDragProps(idx)}
                     style={{
-                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : '1px solid var(--color-border-primary)',
+                      borderTop: '1px solid var(--color-border-primary)',
                       background: 'var(--color-bg-tertiary)',
-                      opacity: dragIndex === idx ? 0.4 : undefined,
+                      ...getRowDragStyle(idx),
                     }}
                   >
-                    <GripCell idx={idx} />
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={9} className="p-1">
                       <input
                         className="block-input font-bold"
@@ -1097,18 +1156,17 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 return (
                   <tr
                     key={line.id}
-                    draggable={!!rowDraggable[idx]}
-                    onDragStart={handleDragStart(idx)}
-                    onDragOver={handleDragOver(idx)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop(idx)}
-                    onDragEnd={handleDragEnd}
-                    style={{
-                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
-                      opacity: dragIndex === idx ? 0.4 : undefined,
-                    }}
+                    {...getRowDragProps(idx)}
+                    style={getRowDragStyle(idx)}
                   >
-                    <GripCell idx={idx} />
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={9} className="p-1">
                       <input
                         className="block-input"
@@ -1137,18 +1195,17 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               return (
                 <tr
                   key={line.id}
-                  draggable={!!rowDraggable[idx]}
-                  onDragStart={handleDragStart(idx)}
-                  onDragOver={handleDragOver(idx)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop(idx)}
-                  onDragEnd={handleDragEnd}
-                  style={{
-                    borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
-                    opacity: dragIndex === idx ? 0.4 : undefined,
-                  }}
+                  {...getRowDragProps(idx)}
+                  style={getRowDragStyle(idx)}
                 >
-                  <GripCell idx={idx} />
+                  <GripCell
+                    idx={idx}
+                    isFirst={idx === 0}
+                    isLast={idx === lines.length - 1}
+                    onMoveUp={moveLineUp}
+                    onMoveDown={moveLineDown}
+                    onActivateDrag={handleActivateDrag}
+                  />
                   {typeConfig.showItemCode && (
                     <td className="p-1">
                       <input
