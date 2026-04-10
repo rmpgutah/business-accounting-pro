@@ -106,6 +106,10 @@ export interface InvoiceSettings {
   column_config?: InvoiceColumnConfig[] | string;
   payment_qr_url?: string;
   show_payment_qr?: boolean | number;
+  custom_field_1_label?: string;
+  custom_field_2_label?: string;
+  custom_field_3_label?: string;
+  custom_field_4_label?: string;
 }
 
 const DEFAULT_COLUMNS: InvoiceColumnConfig[] = [
@@ -182,6 +186,18 @@ export function generateInvoiceHTML(
   const showQR    = settings?.show_payment_qr && settings?.show_payment_qr !== 0;
   const qrUrl     = settings?.payment_qr_url || '';
   const cols      = resolveColumns(settings?.column_config);
+
+  const escapeHTML = (s: string) =>
+    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const customFieldRows = [1, 2, 3, 4]
+    .map(n => ({
+      label: settings?.[`custom_field_${n}_label` as keyof InvoiceSettings] as string | undefined,
+      value: (invoice as any)[`custom_field_${n}`] as string | undefined,
+    }))
+    .filter(f => f.label && f.value)
+    .map(f => `<div><div class="meta-label">${escapeHTML(f.label!)}</div><div class="meta-value">${escapeHTML(f.value!)}</div></div>`)
+    .join('');
 
   const companyName  = company?.name || 'Company';
   const companyAddr  = [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
@@ -520,6 +536,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     <div><div class="meta-label">Due Date</div><div class="meta-value">${fmtDate(invoice.due_date)}</div></div>
     <div><div class="meta-label">Terms</div><div class="meta-value">${invoice.terms || 'Net 30'}</div></div>
     <div><div class="meta-label">Status</div><div class="meta-value" style="color:${stamp?.color || '#0f172a'}">${(invoice.status || 'draft').toUpperCase()}</div></div>
+    ${customFieldRows}
   </div>
 
   <table>

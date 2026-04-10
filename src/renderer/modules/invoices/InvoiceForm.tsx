@@ -145,6 +145,10 @@ interface InvoiceFormData {
   invoice_type: InvoiceType;
   currency: string;
   shipping_amount: number;
+  custom_field_1: string;
+  custom_field_2: string;
+  custom_field_3: string;
+  custom_field_4: string;
 }
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -340,6 +344,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     invoice_type: 'standard',
     currency: 'USD',
     shipping_amount: 0,
+    custom_field_1: '',
+    custom_field_2: '',
+    custom_field_3: '',
+    custom_field_4: '',
   });
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
@@ -432,6 +440,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             invoice_type: (inv.invoice_type as InvoiceType) || 'standard',
             currency: inv.currency || 'USD',
             shipping_amount: inv.shipping_amount || 0,
+            custom_field_1: inv.custom_field_1 || '',
+            custom_field_2: inv.custom_field_2 || '',
+            custom_field_3: inv.custom_field_3 || '',
+            custom_field_4: inv.custom_field_4 || '',
           });
 
           const [lineData, scheduleData] = await Promise.all([
@@ -805,6 +817,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         invoice_type: form.invoice_type || 'standard',
         currency: form.currency || 'USD',
         shipping_amount: form.shipping_amount || 0,
+        custom_field_1: form.custom_field_1.trim() || null,
+        custom_field_2: form.custom_field_2.trim() || null,
+        custom_field_3: form.custom_field_3.trim() || null,
+        custom_field_4: form.custom_field_4.trim() || null,
       };
       if (!isEdit) invoiceData.amount_paid = 0;
 
@@ -1536,6 +1552,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Job / Project Reference</label>
             <input className="block-input" placeholder="Internal job or project name" value={form.job_reference} onChange={e => setForm(p => ({ ...p, job_reference: e.target.value }))} />
           </div>
+          {[1, 2, 3, 4].map((n) => {
+            const label = (invoiceSettings as any)?.[`custom_field_${n}_label`];
+            if (!label) return null;
+            const key = `custom_field_${n}` as keyof InvoiceFormData;
+            return (
+              <div key={n}>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  {label}
+                </label>
+                <input
+                  className="block-input"
+                  value={(form[key] as string) || ''}
+                  onChange={(e) => updateField(key, e.target.value)}
+                />
+              </div>
+            );
+          })}
           <div>
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Invoice Discount %</label>
             <input type="number" min={0} max={100} step="0.1" className="block-input" placeholder="0" value={form.discount_pct || ''} onChange={e => setForm(p => ({ ...p, discount_pct: parseFloat(e.target.value) || 0 }))} />
