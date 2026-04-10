@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical } from 'lucide-react';
+import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import api from '../../lib/api';
 import { FieldLabel } from '../../components/FieldLabel';
 import { required, validateForm, minValue } from '../../lib/validation';
@@ -295,6 +295,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
 
+  // Drag-and-drop state for line reordering
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [rowDraggable, setRowDraggableState] = useState<Record<number, boolean>>({});
+
+  const setRowDraggable = useCallback((idx: number, value: boolean) => {
+    setRowDraggableState((prev) => ({ ...prev, [idx]: value }));
+  }, []);
+
   // ─── Fetch reference data + existing invoice ─────────
   useEffect(() => {
     let cancelled = false;
@@ -521,6 +530,52 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     });
   }, []);
 
+  const moveLineUp = useCallback((idx: number) => {
+    if (idx > 0) moveLine(idx, idx - 1);
+  }, [moveLine]);
+
+  const moveLineDown = useCallback((idx: number) => {
+    setLines((prev) => {
+      if (idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.splice(idx + 1, 0, item);
+      return next;
+    });
+  }, []);
+
+  const handleDragStart = useCallback((idx: number) => (e: React.DragEvent) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    // Required for Firefox
+    e.dataTransfer.setData('text/plain', String(idx));
+  }, []);
+
+  const handleDragOver = useCallback((idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragIndex !== null && dragIndex !== idx) setOverIndex(idx);
+  }, [dragIndex]);
+
+  const handleDragLeave = useCallback(() => {
+    setOverIndex(null);
+  }, []);
+
+  const handleDrop = useCallback((idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== idx) {
+      moveLine(dragIndex, idx);
+    }
+    setDragIndex(null);
+    setOverIndex(null);
+  }, [dragIndex, moveLine]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setOverIndex(null);
+    setRowDraggableState({});
+  }, []);
+
   // ─── Form field helpers ──────────────────────────────
   const updateField = useCallback(
     (field: keyof InvoiceFormData, value: string | number) =>
@@ -687,6 +742,37 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       setSaving(false);
     }
   };
+
+  const GripCell: React.FC<{ idx: number }> = ({ idx }) => (
+    <td
+      className="p-1 text-center"
+      style={{ cursor: 'grab', color: 'var(--color-text-muted)', width: 28 }}
+      onMouseDown={() => setRowDraggable(idx, true)}
+      onMouseUp={() => setRowDraggable(idx, false)}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+        <button
+          type="button"
+          onClick={() => moveLineUp(idx)}
+          disabled={idx === 0}
+          title="Move up"
+          style={{ background: 'none', border: 'none', padding: 0, cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+        >
+          <ChevronUp size={9} />
+        </button>
+        <GripVertical size={11} />
+        <button
+          type="button"
+          onClick={() => moveLineDown(idx)}
+          disabled={idx === lines.length - 1}
+          title="Move down"
+          style={{ background: 'none', border: 'none', padding: 0, cursor: idx === lines.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === lines.length - 1 ? 0.3 : 1 }}
+        >
+          <ChevronDown size={9} />
+        </button>
+      </div>
+    </td>
+  );
 
   if (loading) {
     return (
@@ -878,8 +964,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'spacer') {
                 return (
-                  <tr key={line.id} style={{ background: 'var(--color-bg-tertiary)', opacity: 0.5 }}>
-                    <td className="p-1 text-center" colSpan={12}>
+                  <tr
+                    key={line.id}
+                    draggable={!!rowDraggable[idx]}
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      background: 'var(--color-bg-tertiary)',
+                      opacity: dragIndex === idx ? 0.4 : 0.5,
+                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
+                    }}
+                  >
+                    <GripCell idx={idx} />
+                    <td className="p-1 text-center" colSpan={11}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
                         <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
                         <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={11} /></button>
@@ -891,10 +991,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'section') {
                 return (
-                  <tr key={line.id} style={{ background: 'rgba(100,116,139,0.08)' }}>
-                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                      <GripVertical size={12} />
-                    </td>
+                  <tr
+                    key={line.id}
+                    draggable={!!rowDraggable[idx]}
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      background: 'rgba(100,116,139,0.08)',
+                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
+                      opacity: dragIndex === idx ? 0.4 : undefined,
+                    }}
+                  >
+                    <GripCell idx={idx} />
                     <td colSpan={10} className="p-1">
                       <input
                         className="block-input font-bold"
@@ -913,10 +1024,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'note') {
                 return (
-                  <tr key={line.id} style={{ background: 'var(--color-bg-secondary)' }}>
-                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                      <GripVertical size={12} />
-                    </td>
+                  <tr
+                    key={line.id}
+                    draggable={!!rowDraggable[idx]}
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      background: 'var(--color-bg-secondary)',
+                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
+                      opacity: dragIndex === idx ? 0.4 : undefined,
+                    }}
+                  >
+                    <GripCell idx={idx} />
                     <td colSpan={10} className="p-1">
                       <input
                         className="block-input"
@@ -939,8 +1061,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                   .filter(r => (r.row_type || 'item') === 'item')
                   .reduce((s, r) => s + r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100), 0);
                 return (
-                  <tr key={line.id} style={{ borderTop: '1px solid var(--color-border-primary)', background: 'var(--color-bg-tertiary)' }}>
-                    <td></td>
+                  <tr
+                    key={line.id}
+                    draggable={!!rowDraggable[idx]}
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : '1px solid var(--color-border-primary)',
+                      background: 'var(--color-bg-tertiary)',
+                      opacity: dragIndex === idx ? 0.4 : undefined,
+                    }}
+                  >
+                    <GripCell idx={idx} />
                     <td colSpan={9} className="p-1">
                       <input
                         className="block-input font-bold"
@@ -960,10 +1095,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'image') {
                 return (
-                  <tr key={line.id}>
-                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                      <GripVertical size={12} />
-                    </td>
+                  <tr
+                    key={line.id}
+                    draggable={!!rowDraggable[idx]}
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
+                      opacity: dragIndex === idx ? 0.4 : undefined,
+                    }}
+                  >
+                    <GripCell idx={idx} />
                     <td colSpan={9} className="p-1">
                       <input
                         className="block-input"
@@ -990,10 +1135,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               // Standard item row
               return (
-                <tr key={line.id}>
-                  <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                    <GripVertical size={12} />
-                  </td>
+                <tr
+                  key={line.id}
+                  draggable={!!rowDraggable[idx]}
+                  onDragStart={handleDragStart(idx)}
+                  onDragOver={handleDragOver(idx)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop(idx)}
+                  onDragEnd={handleDragEnd}
+                  style={{
+                    borderTop: overIndex === idx && dragIndex !== null && dragIndex !== idx ? '2px solid var(--color-accent-blue)' : undefined,
+                    opacity: dragIndex === idx ? 0.4 : undefined,
+                  }}
+                >
+                  <GripCell idx={idx} />
                   {typeConfig.showItemCode && (
                     <td className="p-1">
                       <input
