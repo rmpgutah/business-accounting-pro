@@ -15,8 +15,10 @@ export function formatCurrency(value: number | string | null | undefined): strin
 }
 
 // ─── Date ────────────────────────────────────────────────
-const _mediumFmt  = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-const _shortFmt   = new Intl.DateTimeFormat('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+// All dates formatted in Mountain Time (America/Denver → MST/MDT, UTC-0600/0700)
+const TZ = 'America/Denver';
+const _mediumFmt  = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: TZ });
+const _shortFmt   = new Intl.DateTimeFormat('en-US', { month: '2-digit', day: '2-digit', year: '2-digit', timeZone: TZ });
 const _relFmt     = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
 
 export function formatDate(
@@ -68,6 +70,8 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   settled:          { label: 'Settled',          className: 'block-badge block-badge-income' },
   written_off:      { label: 'Written Off',      className: 'block-badge' },
   disputed:         { label: 'Disputed',         className: 'block-badge block-badge-purple' },
+  investigating:    { label: 'Investigating',    className: 'block-badge block-badge-blue' },
+  on_hold:          { label: 'On Hold',          className: 'block-badge block-badge-warning' },
   bankruptcy:       { label: 'Bankruptcy',       className: 'block-badge block-badge-expense' },
   // Quotes
   accepted:         { label: 'Accepted',         className: 'block-badge block-badge-income' },

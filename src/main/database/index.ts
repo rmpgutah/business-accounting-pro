@@ -326,6 +326,11 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE debts ADD COLUMN preferred_contact_method TEXT DEFAULT ''",
   "ALTER TABLE debts ADD COLUMN do_not_call INTEGER DEFAULT 0",
   "ALTER TABLE debts ADD COLUMN cease_desist_active INTEGER DEFAULT 0",
+  // Invoice late fee & dunning (2026-04-08)
+  "ALTER TABLE invoices ADD COLUMN late_fee_applied INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN dunning_stage INTEGER DEFAULT 0",
+  // Payroll run type (2026-04-08)
+  "ALTER TABLE payroll_runs ADD COLUMN run_type TEXT DEFAULT 'regular'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

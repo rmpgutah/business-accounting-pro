@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings } from 'lucide-react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
@@ -82,6 +82,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
+  const [feedback, setFeedback] = useState<{ type: string; message: string } | null>(null);
 
   // Overdue → debt conversion
   const [candidates, setCandidates] = useState<any[]>([]);
@@ -268,12 +269,51 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               Customize
             </button>
           )}
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const result = await api.applyLateFees();
+              if (result?.applied > 0) {
+                setFeedback({ type: 'success', message: `Applied late fees to ${result.applied} invoice(s)` });
+                reload();
+              } else {
+                setFeedback({ type: 'info', message: 'No invoices eligible for late fees' });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+          >
+            <DollarSign size={14} />
+            Apply Late Fees
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const result = await api.runDunning();
+              if (result?.advanced > 0) {
+                setFeedback({ type: 'success', message: `Advanced dunning on ${result.advanced} invoice(s)` });
+                reload();
+              } else {
+                setFeedback({ type: 'info', message: 'No invoices need dunning advancement' });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+          >
+            <AlertTriangle size={14} />
+            Run Dunning
+          </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNewInvoice}>
             <Plus size={16} />
             New Invoice
           </button>
         </div>
       </div>
+
+      {/* Feedback */}
+      {feedback && (
+        <div className={`text-xs px-3 py-2 border ${feedback.type === 'success' ? 'text-accent-income bg-accent-income/10 border-accent-income/20' : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'}`} style={{ borderRadius: '6px' }}>
+          {feedback.message}
+        </div>
+      )}
 
       {/* Summary Bar */}
       {invoiceSummary && (
@@ -495,7 +535,17 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       {formatCurrency(balance)}
                     </td>
                     <td>
-                      <span className={badge.className}>{badge.label}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={badge.className}>{badge.label}</span>
+                        {(inv as any).dunning_stage > 0 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>
+                            {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
+                          </span>
+                        )}
+                        {(inv as any).late_fee_applied === 1 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#ef444422', color: '#f87171' }}>FEE</span>
+                        )}
+                      </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {inv.status === 'overdue' && (

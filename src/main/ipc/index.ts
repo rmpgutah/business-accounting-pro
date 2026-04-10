@@ -3742,6 +3742,150 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Invoice: Apply Late Fees ─────────────────────────────
+  ipcMain.handle('invoice:apply-late-fees', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { applied: 0 };
+      const dbInstance = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+      const overdue = dbInstance.prepare(`
+        SELECT id, total, late_fee_pct, late_fee_grace_days, due_date
+        FROM invoices
+        WHERE company_id = ? AND status IN ('sent','overdue','partial')
+          AND late_fee_pct > 0 AND late_fee_applied = 0
+          AND due_date != '' AND due_date IS NOT NULL
+      `).all(companyId) as any[];
+
+      let applied = 0;
+      const applyTx = dbInstance.transaction(() => {
+        for (const inv of overdue) {
+          const daysOverdue = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86_400_000);
+          if (daysOverdue <= (inv.late_fee_grace_days || 0)) continue;
+          const feeAmount = Math.round((inv.total || 0) * (inv.late_fee_pct / 100) * 100) / 100;
+          if (feeAmount <= 0) continue;
+          dbInstance.prepare(`
+            UPDATE invoices SET late_fee_amount = ?, late_fee_applied = 1, status = 'overdue', updated_at = datetime('now')
+            WHERE id = ?
+          `).run(feeAmount, inv.id);
+          applied++;
+        }
+      });
+      applyTx();
+      if (applied > 0) scheduleAutoBackup();
+      return { applied };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Invoice: Run Dunning ────────────────────────────────
+  ipcMain.handle('invoice:run-dunning', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { advanced: 0 };
+      const dbInstance = db.getDb();
+      const overdue = dbInstance.prepare(`
+        SELECT id, due_date, dunning_stage, client_id
+        FROM invoices
+        WHERE company_id = ? AND status IN ('sent','overdue','partial')
+          AND due_date != '' AND due_date IS NOT NULL
+      `).all(companyId) as any[];
+
+      // Dunning thresholds: stage 0→1 at 7d, 1→2 at 14d, 2→3 at 30d, 3→4 at 45d
+      const thresholds = [7, 14, 30, 45];
+      let advanced = 0;
+      const dunningTx = dbInstance.transaction(() => {
+        for (const inv of overdue) {
+          const daysOverdue = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86_400_000);
+          const currentStage = inv.dunning_stage || 0;
+          if (currentStage >= 4) continue;
+          const nextThreshold = thresholds[currentStage];
+          if (daysOverdue >= nextThreshold) {
+            dbInstance.prepare(`UPDATE invoices SET dunning_stage = ?, updated_at = datetime('now') WHERE id = ?`).run(currentStage + 1, inv.id);
+            advanced++;
+          }
+        }
+      });
+      dunningTx();
+      if (advanced > 0) scheduleAutoBackup();
+      return { advanced };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Payroll: Employee Summary ───────────────────────────
+  ipcMain.handle('payroll:employee-summary', (_event, { employeeId }: { employeeId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const year = new Date().getFullYear();
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      const ytd = dbInstance.prepare(`
+        SELECT
+          COALESCE(SUM(gross_pay), 0) as ytd_gross,
+          COALESCE(SUM(net_pay), 0) as ytd_net,
+          COALESCE(SUM(federal_tax + state_tax + social_security + medicare), 0) as ytd_taxes,
+          COALESCE(SUM(total_deductions), 0) as ytd_deductions,
+          COUNT(*) as pay_count,
+          MAX(pr.pay_date) as last_pay_date
+        FROM pay_stubs ps
+        JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+        WHERE ps.employee_id = ? AND pr.pay_date BETWEEN ? AND ?
+      `).get(employeeId, yearStart, yearEnd) as any;
+
+      const deductions = dbInstance.prepare(`
+        SELECT * FROM employee_deductions WHERE employee_id = ? AND (end_date IS NULL OR end_date >= ?)
+        ORDER BY type, name
+      `).all(employeeId, yearStart);
+
+      return { ytd: ytd || {}, deductions };
+    } catch (err: any) {
+      return { ytd: {}, deductions: [] };
+    }
+  });
+
+  // ─── Reports: Budget vs Actual ───────────────────────────
+  ipcMain.handle('reports:budget-vs-actual', (_event, { budgetId }: { budgetId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const budget = dbInstance.prepare('SELECT * FROM budgets WHERE id = ?').get(budgetId) as any;
+      if (!budget) return { error: 'Budget not found' };
+
+      const lines = dbInstance.prepare('SELECT * FROM budget_lines WHERE budget_id = ? ORDER BY category').all(budgetId) as any[];
+      const companyId = budget.company_id;
+
+      // Get actual expenses grouped by category for the budget period
+      const actuals = dbInstance.prepare(`
+        SELECT c.name as category, COALESCE(SUM(e.amount), 0) as actual
+        FROM expenses e
+        LEFT JOIN categories c ON e.category_id = c.id
+        WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+        GROUP BY c.name
+      `).all(companyId, budget.start_date, budget.end_date) as any[];
+
+      const actualMap = new Map(actuals.map((a: any) => [a.category, a.actual]));
+
+      const comparison = lines.map((line: any) => {
+        const actual = actualMap.get(line.category) || 0;
+        const variance = line.amount - actual;
+        const variancePct = line.amount > 0 ? Math.round((variance / line.amount) * 100) : 0;
+        return {
+          category: line.category,
+          budgeted: line.amount,
+          actual,
+          variance,
+          variance_pct: variancePct,
+        };
+      });
+
+      return { budget, comparison };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Quotes ──────────────────────────────────────────────
   ipcMain.handle('quotes:next-number', () => {
     const companyId = db.getCurrentCompanyId();

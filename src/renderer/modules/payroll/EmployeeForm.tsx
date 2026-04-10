@@ -85,6 +85,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking'>('general');
+  const [ytdSummary, setYtdSummary] = useState<any>(null);
 
   const isEditing = Boolean(employeeId);
 
@@ -139,6 +140,12 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
 
     load();
     return () => { cancelled = true; };
+  }, [employeeId]);
+
+  // ─── Load YTD Summary ──────────────────────────────
+  useEffect(() => {
+    if (!employeeId) return;
+    api.employeeSummary(employeeId).then(setYtdSummary).catch(() => {});
   }, [employeeId]);
 
   // ─── Field updater ──────────────────────────────────
@@ -586,6 +593,35 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
           </div>
         )}
       </div>
+
+      {/* YTD Earnings Summary */}
+      {isEditing && ytdSummary?.ytd && (
+        <div className="block-card p-4">
+          <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">
+            {new Date().getFullYear()} Year-to-Date Earnings
+          </h3>
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { label: 'Gross Pay', value: ytdSummary.ytd.ytd_gross, color: 'text-text-primary' },
+              { label: 'Taxes', value: ytdSummary.ytd.ytd_taxes, color: 'text-accent-expense' },
+              { label: 'Deductions', value: ytdSummary.ytd.ytd_deductions, color: 'text-orange-500' },
+              { label: 'Net Pay', value: ytdSummary.ytd.ytd_net, color: 'text-accent-income' },
+            ].map((item) => (
+              <div key={item.label} className="text-center">
+                <p className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-1">{item.label}</p>
+                <p className={`text-lg font-bold font-mono ${item.color}`}>
+                  ${Number(item.value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+          </div>
+          {ytdSummary.ytd.pay_count > 0 && (
+            <p className="text-xs text-text-muted mt-2 text-center">
+              {ytdSummary.ytd.pay_count} pay stub{ytdSummary.ytd.pay_count !== 1 ? 's' : ''} · Last paid: {ytdSummary.ytd.last_pay_date || '—'}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-3 justify-end">

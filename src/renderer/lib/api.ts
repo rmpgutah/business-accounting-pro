@@ -415,6 +415,20 @@ const api = {
   uploadDebtDocument: (debtId: string, filePath: string, fileName: string, fileSize: number): Promise<any> =>
     window.electronAPI.invoke('debt:upload-document', { debtId, filePath, fileName, fileSize }),
 
+  // ─── Invoice Automation ───────────────────────────
+  applyLateFees: (): Promise<{ applied: number }> =>
+    window.electronAPI.invoke('invoice:apply-late-fees'),
+  runDunning: (): Promise<{ advanced: number }> =>
+    window.electronAPI.invoke('invoice:run-dunning'),
+
+  // ─── Payroll Summary ─────────────────────────────
+  employeeSummary: (employeeId: string): Promise<any> =>
+    window.electronAPI.invoke('payroll:employee-summary', { employeeId }),
+
+  // ─── Reports ─────────────────────────────────────
+  budgetVsActual: (budgetId: string): Promise<any> =>
+    window.electronAPI.invoke('reports:budget-vs-actual', { budgetId }),
+
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>
     window.electronAPI.invoke('quotes:next-number'),

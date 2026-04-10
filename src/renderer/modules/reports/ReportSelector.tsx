@@ -11,6 +11,7 @@ import {
   List,
   FileSpreadsheet,
   Receipt,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -26,7 +27,8 @@ export type ReportType =
   | 'expense-by-category'
   | 'expense-detail'
   | 'tax-summary'
-  | 'financial-statements';
+  | 'financial-statements'
+  | 'budget-vs-actual';
 
 interface ReportCard {
   id: ReportType;
@@ -128,6 +130,14 @@ const REPORTS: ReportCard[] = [
       'Formatted, print-ready Profit & Loss, Balance Sheet, and Cash Flow statements.',
     icon: FileSpreadsheet,
     accentClass: 'border-l-accent-income',
+  },
+  {
+    id: 'budget-vs-actual',
+    title: 'Budget vs Actual',
+    description:
+      'Compare budgeted amounts to actual spending by category with variance analysis.',
+    icon: Target,
+    accentClass: 'border-l-purple-500',
   },
 ];
 

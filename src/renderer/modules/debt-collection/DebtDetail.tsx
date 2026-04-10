@@ -1467,7 +1467,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={relevanceClass}>{e.court_relevance}</span>
+                        <span className={`${relevanceClass} capitalize`}>{e.court_relevance}</span>
                         <span className="text-[10px] text-text-muted font-mono">
                           {formatDate(e.date_of_evidence || e.created_at, { style: 'short' })}
                         </span>
