@@ -147,6 +147,25 @@ export function openPrintPreview(htmlContent: string, title: string): void {
   });
 }
 
+// ─── Render HTML to PDF Buffer (headless, no dialog) ────────
+// Used when we need a PDF in memory (e.g. attaching to an email) rather
+// than prompting the user to save it. Caller is responsible for writing
+// the buffer to disk or streaming it.
+export async function htmlToPDFBuffer(htmlContent: string): Promise<Buffer> {
+  const win = new BrowserWindow({ show: false, width: 800, height: 1100 });
+  try {
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    const pdfData = await win.webContents.printToPDF({
+      pageSize: 'Letter',
+      margins: { top: 0.3, bottom: 0.3, left: 0.3, right: 0.3 },
+      printBackground: true,
+    });
+    return Buffer.from(pdfData);
+  } finally {
+    win.close();
+  }
+}
+
 // ─── Save HTML as PDF (headless — no preview window) ────────
 export async function saveHTMLAsPDF(htmlContent: string, title: string): Promise<string> {
   const { filePath } = await dialog.showSaveDialog({

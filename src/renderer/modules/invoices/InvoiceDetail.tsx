@@ -165,11 +165,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     if (!invoice || invoice.status === 'paid') return;
     setSending(true);
     try {
-      const result = await api.sendInvoiceEmail(invoiceId);
+      // Build the SAME HTML the user saw in preview so the attached PDF matches.
+      const html = buildHTML();
+      const result = await api.sendInvoiceEmail(invoiceId, html || undefined);
       if (result?.error) {
         console.error('Send invoice failed:', result.error);
-      } else if (result?.newStatus) {
-        setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+        alert('Failed to open email: ' + result.error);
+      } else if (result?.success) {
+        if (result.newStatus) {
+          setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+        }
+        // Let the user know the PDF is ready for manual attachment
+        if (result.pdfPath) {
+          console.info('Invoice PDF saved to:', result.pdfPath);
+        }
       }
     } catch (err) {
       console.error('Failed to send invoice:', err);

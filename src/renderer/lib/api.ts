@@ -102,12 +102,12 @@ const api = {
     window.electronAPI.invoke('export:csv', { table, filters }),
 
   // Invoice PDF & Email
-  generateInvoicePDF: (invoiceId: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
-    window.electronAPI.invoke('invoice:generate-pdf', invoiceId),
-  previewInvoicePDF: (invoiceId: string): Promise<{ success?: boolean; error?: string }> =>
-    window.electronAPI.invoke('invoice:preview-pdf', invoiceId),
-  sendInvoiceEmail: (invoiceId: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
-    window.electronAPI.invoke('invoice:send-email', invoiceId),
+  // Pass `html` to guarantee the saved/emailed PDF matches the in-app preview
+  // (applies invoice_settings: logo, accent, columns, payment schedule, etc.).
+  generateInvoicePDF: (invoiceId: string, html?: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:generate-pdf', html ? { invoiceId, html } : invoiceId),
+  sendInvoiceEmail: (invoiceId: string, html?: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
+    window.electronAPI.invoke('invoice:send-email', html ? { invoiceId, html } : invoiceId),
   generateInvoiceToken: (invoiceId: string): Promise<{ token: string }> =>
     window.electronAPI.invoke('invoice:generate-token', invoiceId),
   invoiceScheduleReminders: (invoiceId: string): Promise<{ scheduled: number }> =>

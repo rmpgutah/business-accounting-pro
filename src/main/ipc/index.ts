@@ -6,11 +6,11 @@ import { syncPush } from '../sync';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { generateInvoicePDF, generateInvoiceHTML } from '../services/pdf-generator';
+import { generateInvoicePDF } from '../services/pdf-generator';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
-import { openPrintPreview, saveHTMLAsPDF, printHTML } from '../services/print-preview';
+import { openPrintPreview, saveHTMLAsPDF, printHTML, htmlToPDFBuffer } from '../services/print-preview';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
 import http from 'http';
 import https from 'https';
@@ -791,19 +791,17 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── PDF Generate (Invoice) — Download via Save Dialog ──
-  ipcMain.handle('invoice:generate-pdf', async (_event, invoiceId: string) => {
+  // Accepts optional pre-built HTML from the renderer so the saved PDF
+  // matches the preview exactly (including settings, payment schedule, etc.)
+  ipcMain.handle('invoice:generate-pdf', async (_event, payload: string | { invoiceId: string; html?: string }) => {
+    const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
+    const providedHTML = typeof payload === 'string' ? undefined : payload.html;
+
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
 
-    const dbInstance = db.getDb();
     const invoice = db.getById('invoices', invoiceId);
     if (!invoice) return { error: 'Invoice not found' };
-
-    const client = db.getById('clients', invoice.client_id);
-    const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
 
     const { filePath } = await dialog.showSaveDialog({
       defaultPath: `Invoice-${invoice.invoice_number}.pdf`,
@@ -813,7 +811,18 @@ export function registerIpcHandlers(): void {
     if (!filePath) return { cancelled: true };
 
     try {
-      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      let pdfBuffer: Buffer;
+      if (providedHTML) {
+        pdfBuffer = await htmlToPDFBuffer(providedHTML);
+      } else {
+        const dbInstance = db.getDb();
+        const client = db.getById('clients', invoice.client_id);
+        const company = db.getById('companies', companyId);
+        const lineItems = dbInstance.prepare(
+          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+        ).all(invoiceId) as any[];
+        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      }
       fs.writeFileSync(filePath, pdfBuffer);
       return { path: filePath };
     } catch (err: any) {
@@ -821,37 +830,21 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // ─── PDF Preview (Invoice) — Opens in new window ───────
-  ipcMain.handle('invoice:preview-pdf', async (_event, invoiceId: string) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
-
-    const dbInstance = db.getDb();
-    const invoice = db.getById('invoices', invoiceId);
-    if (!invoice) return { error: 'Invoice not found' };
-
-    const client = db.getById('clients', invoice.client_id);
-    const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
-
-    const html = generateInvoiceHTML(invoice, company, client, lineItems);
-
-    const previewWin = new BrowserWindow({
-      width: 820,
-      height: 1060,
-      title: `Invoice ${invoice.invoice_number} — Preview`,
-      autoHideMenuBar: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
-    });
-
-    await previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    return { success: true };
-  });
+  // NOTE: invoice:preview-pdf removed — the renderer now uses print:preview
+  // with client-generated HTML (see InvoiceDetail.handlePreview). That path
+  // respects invoice_settings and payment_schedule; the old server template
+  // did not.
 
   // ─── Email Invoice ─────────────────────────────────────
-  ipcMain.handle('invoice:send-email', async (_event, invoiceId: string) => {
+  // Accepts optional pre-built HTML from the renderer so the PDF attachment
+  // matches what the user sees in the preview (including logo, accent color,
+  // template style, column config, payment schedule, watermark, footer).
+  // Falls back to the server-side template only if no HTML is provided.
+  ipcMain.handle('invoice:send-email', async (_event, payload: string | { invoiceId: string; html?: string }) => {
+    // Back-compat: old callers passed the invoiceId as a bare string.
+    const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
+    const providedHTML = typeof payload === 'string' ? undefined : payload.html;
+
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
 
@@ -861,23 +854,32 @@ export function registerIpcHandlers(): void {
 
     const client = db.getById('clients', invoice.client_id);
     const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
 
     try {
-      // Generate PDF to temp location
-      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      // Generate PDF to temp location — prefer renderer-built HTML (uses settings),
+      // fall back to the basic server template if none was supplied.
+      let pdfBuffer: Buffer;
+      if (providedHTML) {
+        pdfBuffer = await htmlToPDFBuffer(providedHTML);
+      } else {
+        const lineItems = dbInstance.prepare(
+          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+        ).all(invoiceId) as any[];
+        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      }
+
       const tmpDir = os.tmpdir();
-      const pdfPath = path.join(tmpDir, `Invoice-${invoice.invoice_number}.pdf`);
+      const safeNumber = String(invoice.invoice_number || invoiceId).replace(/[^a-zA-Z0-9-_]/g, '');
+      const pdfPath = path.join(tmpDir, `Invoice-${safeNumber}.pdf`);
       fs.writeFileSync(pdfPath, pdfBuffer);
 
       // Open email client with pre-filled content
       const emailResult = await sendInvoiceEmail(invoice, company, client);
 
       if (emailResult.success) {
+        const previousStatus = invoice.status;
         // Update invoice status to sent if still draft
-        if (invoice.status === 'draft') {
+        if (previousStatus === 'draft') {
           db.update('invoices', invoiceId, { status: 'sent' });
         }
 
@@ -891,7 +893,7 @@ export function registerIpcHandlers(): void {
           companyId,
           client?.email || '',
           `Invoice ${invoice.invoice_number} from ${company?.name || ''}`,
-          'Invoice email opened in mail client',
+          'Mail client opened with PDF attached from temp folder',
           'invoice',
           invoiceId,
           'sent',
@@ -900,9 +902,16 @@ export function registerIpcHandlers(): void {
 
         // Reveal the PDF in filesystem so user can attach it
         shell.showItemInFolder(pdfPath);
+        scheduleAutoBackup();
+
+        return {
+          success: true,
+          pdfPath,
+          newStatus: previousStatus === 'draft' ? 'sent' : previousStatus,
+        };
       }
 
-      return { ...emailResult, pdfPath, newStatus: invoice.status === 'draft' ? 'sent' : invoice.status };
+      return { ...emailResult, pdfPath };
     } catch (err: any) {
       return { error: err?.message || 'Failed to send email' };
     }
