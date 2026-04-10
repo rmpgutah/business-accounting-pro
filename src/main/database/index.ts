@@ -331,6 +331,21 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoices ADD COLUMN dunning_stage INTEGER DEFAULT 0",
   // Payroll run type (2026-04-08)
   "ALTER TABLE payroll_runs ADD COLUMN run_type TEXT DEFAULT 'regular'",
+  // Invoice reorder + customizations (2026-04-10)
+  // Per-line styling
+  "ALTER TABLE invoice_line_items ADD COLUMN bold INTEGER DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN italic INTEGER DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
+  // Custom header field labels (per-company)
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_1_label TEXT DEFAULT ''",
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_2_label TEXT DEFAULT ''",
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_3_label TEXT DEFAULT ''",
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_4_label TEXT DEFAULT ''",
+  // Custom header field values (per-invoice)
+  "ALTER TABLE invoices ADD COLUMN custom_field_1 TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN custom_field_2 TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN custom_field_3 TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN custom_field_4 TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
