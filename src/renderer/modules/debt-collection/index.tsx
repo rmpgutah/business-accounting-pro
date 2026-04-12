@@ -21,6 +21,7 @@ import LegalToolkit from './LegalToolkit';
 import AnalyticsView from './AnalyticsView';
 import AutomationSettings from './AutomationSettings';
 import CollectorDashboard from './CollectorDashboard';
+import DebtMiniList from './DebtMiniList';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -139,7 +140,20 @@ const DebtCollectionModule: React.FC = () => {
   }, []);
 
   return (
-    <div className="p-6 h-full overflow-y-auto">
+    <div className="h-full overflow-hidden flex">
+      {/* Left Panel — Persistent Debt List */}
+      <div className="w-[280px] flex-shrink-0 border-r border-border-primary bg-bg-secondary overflow-hidden">
+        <DebtMiniList
+          activeDebtId={activeDebtId}
+          onSelect={(id) => {
+            setActiveDebtId(id);
+            setView('detail');
+          }}
+        />
+      </div>
+
+      {/* Right Panel — Tab Content */}
+      <div className="flex-1 overflow-y-auto p-6">
       {/* Tabs */}
       <div className="flex items-center border-b border-border-primary mb-6">
         <TabBtn
@@ -312,6 +326,7 @@ const DebtCollectionModule: React.FC = () => {
       {showSettings && (
         <AutomationSettings onClose={() => setShowSettings(false)} />
       )}
+      </div>
     </div>
   );
 };
