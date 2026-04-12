@@ -1477,3 +1477,92 @@ ${section11}
 
 </body></html>`;
 }
+
+// ─── Verification Affidavit ────────────────────────────────
+export function generateVerificationAffidavitHTML(
+  debt: any,
+  company: any,
+  signatoryName: string,
+): string {
+  const companyName = company?.name || 'Company';
+  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
+  const debtorName = debt?.debtor_name || 'Debtor';
+  const fmtAmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
+  const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 14px; color: #111; padding: 60px; line-height: 1.8; }
+  .page { max-width: 650px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 18px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 32px; border-bottom: 2px solid #111; padding-bottom: 12px; }
+  .section { margin-bottom: 24px; }
+  .section-title { font-weight: 700; text-decoration: underline; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  td { padding: 6px 12px; border: 1px solid #ccc; font-size: 13px; }
+  td:first-child { font-weight: 600; width: 40%; background: #f9f9f9; }
+  .sig-block { margin-top: 48px; }
+  .sig-line { border-top: 1px solid #111; width: 300px; margin-top: 48px; padding-top: 4px; }
+  .notary { margin-top: 40px; border: 1px solid #ccc; padding: 20px; background: #fafafa; }
+  .notary-title { font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; margin-bottom: 12px; }
+  @media print { body { padding: 0; } }
+</style></head><body>
+<div class="page">
+  <h1>Verification of Debt &mdash; Affidavit</h1>
+
+  <div class="section">
+    <p>I, <strong>${signatoryName || '[Signatory Name]'}</strong>, being duly sworn, depose and state as follows:</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">1. Identity and Authority</div>
+    <p>I am an authorized representative of <strong>${companyName}</strong>, located at ${companyAddr || '[Company Address]'}. I have personal knowledge of the business records and accounts maintained by ${companyName}, and I am authorized to make this verification on behalf of the company.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">2. Debt Verification</div>
+    <p>The following debt is a true and accurate representation of the obligation owed by <strong>${debtorName}</strong> to ${companyName}:</p>
+    <table>
+      <tr><td>Debtor Name</td><td>${debtorName}</td></tr>
+      <tr><td>Original Amount</td><td>${fmtAmt(debt?.original_amount)}</td></tr>
+      <tr><td>Interest Accrued</td><td>${fmtAmt(debt?.interest_accrued)}</td></tr>
+      <tr><td>Fees Accrued</td><td>${fmtAmt(debt?.fees_accrued)}</td></tr>
+      <tr><td>Payments Made</td><td>${fmtAmt(debt?.payments_made)}</td></tr>
+      <tr><td>Current Balance Due</td><td><strong>${fmtAmt(debt?.balance_due)}</strong></td></tr>
+      <tr><td>Date of Original Obligation</td><td>${debt?.due_date || '[Date]'}</td></tr>
+      <tr><td>Source Reference</td><td>${debt?.source_type === 'invoice' ? 'Invoice #' + (debt?.source_id?.substring(0, 8).toUpperCase() || '') : 'Manual Entry'}</td></tr>
+      <tr><td>Jurisdiction</td><td>${debt?.jurisdiction || '[Jurisdiction]'}</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">3. Basis of Knowledge</div>
+    <p>The information set forth herein is based upon the business records of ${companyName}, which are kept in the regular course of business, made at or near the time of the events recorded, and maintained by persons with knowledge of the recorded acts and events.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">4. Verification Statement</div>
+    <p>I verify under penalty of perjury that the foregoing statements are true and correct to the best of my knowledge, information, and belief. This verification is made pursuant to 15 U.S.C. &sect; 1692g of the Fair Debt Collection Practices Act.</p>
+  </div>
+
+  <div class="sig-block">
+    <div class="sig-line">
+      <strong>${signatoryName || '[Signatory Name]'}</strong><br>
+      <span style="font-size:12px;color:#555;">Authorized Representative, ${companyName}</span>
+    </div>
+    <p style="margin-top:12px;">Date: ${todayLong}</p>
+  </div>
+
+  <div class="notary">
+    <div class="notary-title">Notary Acknowledgment</div>
+    <p>State of _________________ &nbsp;&nbsp; County of _________________</p>
+    <p>Subscribed and sworn to before me this ______ day of _________________, 20_____.</p>
+    <div style="margin-top:32px;border-top:1px solid #111;width:250px;padding-top:4px;">
+      Notary Public<br>
+      <span style="font-size:11px;">My commission expires: _______________</span>
+    </div>
+  </div>
+
+  <div style="margin-top:40px;text-align:center;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:12px;">
+    Generated by ${companyName} &middot; ${todayLong}
+  </div>
+</div></body></html>`;
+}

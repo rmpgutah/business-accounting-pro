@@ -934,6 +934,17 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             Court Packet
           </button>
           <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const { generateVerificationAffidavitHTML } = await import('../../lib/print-templates');
+              const html = generateVerificationAffidavitHTML(debt, activeCompany, activeCompany?.name || '');
+              await api.printPreview(html, `Verification Affidavit — ${debt?.debtor_name}`);
+            }}
+          >
+            <FileText size={14} />
+            Affidavit
+          </button>
+          <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"
             onClick={() => setShowWriteOff(true)}
           >
