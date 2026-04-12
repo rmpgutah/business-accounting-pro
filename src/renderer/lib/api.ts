@@ -420,6 +420,14 @@ const api = {
     window.electronAPI.invoke('debt:generate-court-packet', { debtId }),
   batchRecalcInterest: (): Promise<{ updated: number; error?: string }> =>
     window.electronAPI.invoke('debt:batch-recalc-interest'),
+  matchBankPayments: (): Promise<{ auto_matched: number; suggested: number; error?: string }> =>
+    window.electronAPI.invoke('debt:match-bank-payments'),
+  listPendingMatches: (): Promise<any[]> =>
+    window.electronAPI.invoke('debt:list-pending-matches'),
+  acceptPaymentMatch: (matchId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:accept-match', { matchId }),
+  rejectPaymentMatch: (matchId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:reject-match', { matchId }),
   smartRecommendations: (companyId: string): Promise<any[]> =>
     window.electronAPI.invoke('debt:smart-recommendations', { companyId }),
 

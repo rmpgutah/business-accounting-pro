@@ -4035,6 +4035,180 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Debt: Bank Payment Matching ─────────────────────────────
+  ipcMain.handle('debt:match-bank-payments', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { auto_matched: 0, suggested: 0 };
+      const dbInstance = db.getDb();
+
+      // Get credit-side bank transactions not already matched
+      const txns = dbInstance.prepare(`
+        SELECT bt.* FROM bank_transactions bt
+        JOIN bank_accounts ba ON bt.bank_account_id = ba.id
+        WHERE ba.company_id = ? AND bt.type = 'credit'
+          AND bt.id NOT IN (SELECT bank_transaction_id FROM debt_payment_matches)
+          AND bt.id NOT IN (SELECT COALESCE(reference_number, '') FROM debt_payments WHERE reference_number IS NOT NULL AND reference_number != '')
+        ORDER BY bt.date DESC LIMIT 200
+      `).all(companyId) as any[];
+
+      // Get active debts for matching
+      const debts = dbInstance.prepare(`
+        SELECT d.id, d.debtor_name, d.balance_due, d.source_id, i.invoice_number
+        FROM debts d
+        LEFT JOIN invoices i ON d.source_id = i.id
+        WHERE d.company_id = ? AND d.status NOT IN ('settled', 'written_off') AND d.balance_due > 0
+      `).all(companyId) as any[];
+
+      let autoMatched = 0;
+      let suggested = 0;
+
+      const matchTx = dbInstance.transaction(() => {
+        for (const txn of txns) {
+          const memo = (txn.description || txn.reference || '').toLowerCase();
+          let matched = false;
+
+          // Auto-match: check if memo contains an invoice number or debt source_id prefix
+          for (const debt of debts) {
+            const invoiceNum = (debt.invoice_number || '').toLowerCase();
+            const sourcePrefix = (debt.source_id || '').substring(0, 8).toLowerCase();
+
+            if (invoiceNum && memo.includes(invoiceNum)) {
+              db.create('debt_payments', {
+                debt_id: debt.id,
+                amount: txn.amount,
+                method: 'ach',
+                reference_number: txn.id,
+                received_date: txn.date || new Date().toISOString().slice(0, 10),
+                applied_to_principal: txn.amount,
+                applied_to_interest: 0,
+                applied_to_fees: 0,
+                notes: 'Auto-matched from bank import: ' + (txn.description || ''),
+              });
+
+              db.create('debt_payment_matches', {
+                bank_transaction_id: txn.id,
+                debt_id: debt.id,
+                match_type: 'auto',
+                confidence: 0.95,
+                status: 'accepted',
+              });
+
+              logDebtAudit(debt.id, 'payment_recorded', 'amount', '', String(txn.amount) + ' (auto-matched from bank)');
+              autoMatched++;
+              matched = true;
+              break;
+            }
+
+            if (sourcePrefix && sourcePrefix.length >= 6 && memo.includes(sourcePrefix)) {
+              db.create('debt_payments', {
+                debt_id: debt.id,
+                amount: txn.amount,
+                method: 'ach',
+                reference_number: txn.id,
+                received_date: txn.date || new Date().toISOString().slice(0, 10),
+                applied_to_principal: txn.amount,
+                applied_to_interest: 0,
+                applied_to_fees: 0,
+                notes: 'Auto-matched from bank import: ' + (txn.description || ''),
+              });
+
+              db.create('debt_payment_matches', {
+                bank_transaction_id: txn.id,
+                debt_id: debt.id,
+                match_type: 'auto',
+                confidence: 0.85,
+                status: 'accepted',
+              });
+
+              logDebtAudit(debt.id, 'payment_recorded', 'amount', '', String(txn.amount) + ' (auto-matched from bank)');
+              autoMatched++;
+              matched = true;
+              break;
+            }
+          }
+
+          if (matched) continue;
+
+          // Suggested match: amount within $0.01 of a debt's balance
+          for (const debt of debts) {
+            if (Math.abs(txn.amount - debt.balance_due) <= 0.01) {
+              db.create('debt_payment_matches', {
+                bank_transaction_id: txn.id,
+                debt_id: debt.id,
+                match_type: 'suggested',
+                confidence: 0.7,
+                status: 'pending',
+              });
+              suggested++;
+              break;
+            }
+          }
+        }
+      });
+      matchTx();
+      if (autoMatched > 0) scheduleAutoBackup();
+      return { auto_matched: autoMatched, suggested };
+    } catch (err: any) {
+      return { error: err.message, auto_matched: 0, suggested: 0 };
+    }
+  });
+
+  ipcMain.handle('debt:list-pending-matches', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return [];
+      return db.getDb().prepare(`
+        SELECT dpm.*, bt.date as txn_date, bt.amount as txn_amount, bt.description as txn_memo,
+               d.debtor_name, d.balance_due
+        FROM debt_payment_matches dpm
+        JOIN bank_transactions bt ON dpm.bank_transaction_id = bt.id
+        JOIN debts d ON dpm.debt_id = d.id
+        WHERE d.company_id = ? AND dpm.status = 'pending'
+        ORDER BY dpm.created_at DESC
+      `).all(companyId);
+    } catch (_) { return []; }
+  });
+
+  ipcMain.handle('debt:accept-match', (_event, { matchId }: { matchId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const match = dbInstance.prepare('SELECT * FROM debt_payment_matches WHERE id = ?').get(matchId) as any;
+      if (!match) return { error: 'Match not found' };
+
+      const txn = dbInstance.prepare('SELECT * FROM bank_transactions WHERE id = ?').get(match.bank_transaction_id) as any;
+      if (!txn) return { error: 'Transaction not found' };
+
+      db.create('debt_payments', {
+        debt_id: match.debt_id,
+        amount: txn.amount,
+        method: 'ach',
+        reference_number: txn.id,
+        received_date: txn.date || new Date().toISOString().slice(0, 10),
+        applied_to_principal: txn.amount,
+        applied_to_interest: 0,
+        applied_to_fees: 0,
+        notes: 'Matched from bank import: ' + (txn.description || ''),
+      });
+
+      dbInstance.prepare('UPDATE debt_payment_matches SET status = ? WHERE id = ?').run('accepted', matchId);
+      logDebtAudit(match.debt_id, 'payment_recorded', 'amount', '', String(txn.amount) + ' (bank match accepted)');
+      scheduleAutoBackup();
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:reject-match', (_event, { matchId }: { matchId: string }) => {
+    try {
+      db.getDb().prepare('UPDATE debt_payment_matches SET status = ? WHERE id = ?').run('rejected', matchId);
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // ─── Invoice: Apply Late Fees ─────────────────────────────
   ipcMain.handle('invoice:apply-late-fees', () => {
     try {

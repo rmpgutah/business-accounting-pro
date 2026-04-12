@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
@@ -8,6 +8,7 @@ import { formatDate } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { calcRiskScore, getRiskBadge } from './riskScore';
+import PaymentMatchReview from './PaymentMatchReview';
 
 // ─── Types ──────────────────────────────────────────────
 interface Debt {
@@ -90,6 +91,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
 
   // Feedback state
   const [opSuccess, setOpSuccess] = useState('');
+  const [showMatchReview, setShowMatchReview] = useState(false);
   const [opError, setOpError] = useState('');
 
   // Bulk selection state
@@ -390,6 +392,26 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           >
             <RefreshCw size={14} />
             Recalc Interest
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const result = await api.matchBankPayments();
+              if (result?.auto_matched > 0) {
+                setOpSuccess(`Auto-matched ${result.auto_matched} payments`);
+                setTimeout(() => setOpSuccess(''), 4000);
+                await reload();
+              }
+              if (result?.suggested > 0) {
+                setShowMatchReview(true);
+              } else if (result?.auto_matched === 0) {
+                setOpSuccess('No bank transactions to match');
+                setTimeout(() => setOpSuccess(''), 3000);
+              }
+            }}
+          >
+            <DollarSign size={14} />
+            Match Payments
           </button>
           <button className="block-btn flex items-center gap-2" onClick={handleExport}>
             <Download size={14} />
@@ -832,6 +854,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         <div className="text-xs text-text-muted">
           Showing {filtered.length} of {debts.length} debt{debts.length !== 1 ? 's' : ''}
         </div>
+      )}
+
+      {showMatchReview && (
+        <PaymentMatchReview
+          onClose={() => setShowMatchReview(false)}
+          onDone={() => reload()}
+        />
       )}
     </div>
   );
