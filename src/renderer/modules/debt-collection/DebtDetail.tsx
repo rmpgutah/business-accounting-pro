@@ -921,6 +921,19 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
           </div>
           <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const data = await api.generateCourtPacket(debtId);
+              if (data?.error) { console.error(data.error); return; }
+              const { generateCourtPacketHTML } = await import('../../lib/print-templates');
+              const html = generateCourtPacketHTML(data);
+              await api.printPreview(html, `Court Packet — ${debt?.debtor_name}`);
+            }}
+          >
+            <Scale size={14} />
+            Court Packet
+          </button>
+          <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"
             onClick={() => setShowWriteOff(true)}
           >

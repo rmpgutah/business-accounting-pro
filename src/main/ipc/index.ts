@@ -3087,6 +3087,30 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('debt:generate-court-packet', async (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      const debt = db.getById('debts', debtId);
+      if (!debt) return { error: 'Debt not found' };
+      const company = companyId ? db.getById('companies', companyId) : null;
+
+      const communications = dbInstance.prepare('SELECT * FROM debt_communications WHERE debt_id = ? ORDER BY logged_at ASC').all(debtId);
+      const payments = dbInstance.prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY received_date ASC').all(debtId);
+      const evidence = dbInstance.prepare('SELECT * FROM debt_evidence WHERE debt_id = ? ORDER BY date_of_evidence ASC').all(debtId);
+      const compliance = dbInstance.prepare('SELECT * FROM debt_compliance_log WHERE debt_id = ? ORDER BY event_date ASC').all(debtId);
+      const auditLog = dbInstance.prepare('SELECT * FROM debt_audit_log WHERE debt_id = ? ORDER BY performed_at ASC').all(debtId);
+      const settlements = dbInstance.prepare('SELECT * FROM debt_settlements WHERE debt_id = ? ORDER BY created_at ASC').all(debtId);
+      const contacts = dbInstance.prepare('SELECT * FROM debt_contacts WHERE debt_id = ? ORDER BY role ASC').all(debtId);
+      const disputes = dbInstance.prepare('SELECT * FROM debt_disputes WHERE debt_id = ? ORDER BY created_at ASC').all(debtId);
+      const legalActions = dbInstance.prepare('SELECT * FROM debt_legal_actions WHERE debt_id = ? ORDER BY created_at ASC').all(debtId);
+
+      return { debt, company, communications, payments, evidence, compliance, auditLog, settlements, contacts, disputes, legalActions };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('debt:stats', (_event, { companyId }: { companyId: string }) => {
     const row = db.getDb().prepare(`
       SELECT

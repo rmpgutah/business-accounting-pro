@@ -1297,3 +1297,183 @@ ${baseStyles}
 </div>
 </body></html>`;
 }
+
+// ─── Court Packet (Judge-Ready PDF Bundle) ──────────────────
+export function generateCourtPacketHTML(data: {
+  debt: any;
+  company: any;
+  communications: any[];
+  payments: any[];
+  evidence: any[];
+  compliance: any[];
+  auditLog: any[];
+  settlements: any[];
+  contacts: any[];
+  disputes: any[];
+  legalActions: any[];
+}): string {
+  const { debt, company, communications, payments, evidence, compliance, auditLog, settlements, contacts, disputes, legalActions } = data;
+
+  const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const cfmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
+  const dfmt = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '\u2014';
+  const caseRef = debt.id ? String(debt.id).substring(0, 8).toUpperCase() : 'N/A';
+  const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const companyName = esc(company?.name || 'Company');
+
+  const sectionCounts = [
+    { title: 'Account Summary', count: 1 },
+    { title: 'Communication Log', count: communications.length },
+    { title: 'Payment History', count: payments.length },
+    { title: 'Evidence Inventory', count: evidence.length },
+    { title: 'FDCPA/TCPA Compliance Timeline', count: compliance.length },
+    { title: 'Chain of Custody (Audit Trail)', count: auditLog.length },
+    { title: 'Settlement History', count: settlements.length },
+    { title: 'Contact Directory', count: contacts.length },
+    { title: 'Dispute History', count: disputes.length },
+    { title: 'Legal Actions', count: legalActions.length },
+    { title: 'Generation Certificate', count: 1 },
+  ];
+
+  const tableHead = (cols: string[]) => `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
+  const td = (v: any) => `<td>${esc(v)}</td>`;
+  const noRecords = '<p style="color:#888;font-style:italic;margin:12px 0;">No records available.</p>';
+
+  const sectionHeader = (n: number, title: string, count: number) =>
+    `<div class="section" id="section-${n}">
+      <h2 style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:#111;">SECTION ${n}: ${esc(title)}</h2>
+      <div style="font-size:11px;color:#666;margin-bottom:8px;">(${count} item${count !== 1 ? 's' : ''})</div>
+      <hr style="border:none;border-top:2px solid #333;margin-bottom:16px;">`;
+
+  // ── Section 1: Account Summary ──
+  const section1 = `${sectionHeader(1, 'Account Summary', 1)}
+    <table><tbody>
+      <tr><td style="font-weight:700;width:40%;">Debtor Name</td>${td(debt.debtor_name)}</tr>
+      <tr><td style="font-weight:700;">Original Amount</td><td>${cfmt(debt.original_amount)}</td></tr>
+      <tr><td style="font-weight:700;">Accrued Interest</td><td>${cfmt(debt.accrued_interest)}</td></tr>
+      <tr><td style="font-weight:700;">Fees &amp; Costs</td><td>${cfmt(debt.fees)}</td></tr>
+      <tr><td style="font-weight:700;">Payments Applied</td><td>${cfmt(debt.total_paid)}</td></tr>
+      <tr><td style="font-weight:700;">Balance Due</td><td style="font-weight:700;color:#b91c1c;">${cfmt(debt.balance_due)}</td></tr>
+      <tr><td style="font-weight:700;">Due Date</td>${td(dfmt(debt.due_date))}</tr>
+      <tr><td style="font-weight:700;">Delinquent Date</td>${td(dfmt(debt.delinquent_date))}</tr>
+      <tr><td style="font-weight:700;">Jurisdiction</td>${td(debt.jurisdiction || 'N/A')}</tr>
+      <tr><td style="font-weight:700;">Interest Rate</td><td>${debt.interest_rate ? (Number(debt.interest_rate) * 100).toFixed(2) + '%' : 'N/A'}</td></tr>
+      <tr><td style="font-weight:700;">Interest Type</td>${td(debt.interest_type || 'N/A')}</tr>
+    </tbody></table>
+  </div>`;
+
+  // ── Section 2: Communication Log ──
+  const section2 = `${sectionHeader(2, 'Communication Log', communications.length)}
+    ${communications.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Type', 'Direction', 'Subject', 'Outcome'])}
+    <tbody>${communications.map(c => `<tr>${td(dfmt(c.logged_at))}${td(c.type)}${td(c.direction)}${td(c.subject)}${td(c.outcome)}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 3: Payment History ──
+  const section3 = `${sectionHeader(3, 'Payment History', payments.length)}
+    ${payments.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Amount', 'Method', 'Reference', 'Applied To'])}
+    <tbody>${payments.map(p => `<tr>${td(dfmt(p.received_date))}<td>${cfmt(p.amount)}</td>${td(p.method)}${td(p.reference_number)}${td(p.applied_to)}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 4: Evidence Inventory ──
+  const section4 = `${sectionHeader(4, 'Evidence Inventory', evidence.length)}
+    ${evidence.length === 0 ? noRecords : `<table>${tableHead(['Type', 'Title', 'Court Relevance', 'Date', 'Description'])}
+    <tbody>${evidence.map(e => `<tr>${td(e.evidence_type)}${td(e.title)}${td(e.court_relevance)}${td(dfmt(e.date_of_evidence))}<td>${esc(String(e.description || '').substring(0, 120))}${(e.description || '').length > 120 ? '&hellip;' : ''}</td></tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 5: FDCPA/TCPA Compliance Timeline ──
+  const section5 = `${sectionHeader(5, 'FDCPA/TCPA Compliance Timeline', compliance.length)}
+    ${compliance.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Event Type', 'Notes'])}
+    <tbody>${compliance.map(c => `<tr>${td(dfmt(c.event_date))}${td(c.event_type)}${td(c.notes)}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 6: Chain of Custody (Audit Trail) ──
+  const section6 = `${sectionHeader(6, 'Chain of Custody (Audit Trail)', auditLog.length)}
+    ${auditLog.length === 0 ? noRecords : `<table>${tableHead(['Timestamp', 'Action', 'Field', 'Old Value', 'New Value', 'Performed By'])}
+    <tbody>${auditLog.map(a => `<tr>${td(dfmt(a.performed_at))}${td(a.action)}${td(a.field_name)}${td(a.old_value)}${td(a.new_value)}${td(a.performed_by)}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 7: Settlement History ──
+  const section7 = `${sectionHeader(7, 'Settlement History', settlements.length)}
+    ${settlements.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Offer Amount', 'Response', 'Counter Amount', 'Accepted Date'])}
+    <tbody>${settlements.map(s => `<tr>${td(dfmt(s.created_at))}<td>${cfmt(s.offer_amount)}</td>${td(s.response)}${s.counter_amount ? `<td>${cfmt(s.counter_amount)}</td>` : td('')}${td(dfmt(s.accepted_date))}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 8: Contact Directory ──
+  const section8 = `${sectionHeader(8, 'Contact Directory', contacts.length)}
+    ${contacts.length === 0 ? noRecords : `<table>${tableHead(['Role', 'Name', 'Email', 'Phone', 'Company'])}
+    <tbody>${contacts.map(c => `<tr>${td(c.role)}${td(c.name)}${td(c.email)}${td(c.phone)}${td(c.company_name)}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 9: Dispute History ──
+  const section9 = `${sectionHeader(9, 'Dispute History', disputes.length)}
+    ${disputes.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Reason', 'Status', 'Resolution'])}
+    <tbody>${disputes.map(d => `<tr>${td(dfmt(d.created_at))}${td(d.reason)}${td(d.status)}${td(d.resolution)}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 10: Legal Actions ──
+  const section10 = `${sectionHeader(10, 'Legal Actions', legalActions.length)}
+    ${legalActions.length === 0 ? noRecords : `<table>${tableHead(['Type', 'Status', 'Court', 'Case Number', 'Hearing Date'])}
+    <tbody>${legalActions.map(l => `<tr>${td(l.action_type)}${td(l.status)}${td(l.court_name)}${td(l.case_number)}${td(dfmt(l.hearing_date))}</tr>`).join('')}</tbody></table>`}
+  </div>`;
+
+  // ── Section 11: Generation Certificate ──
+  const section11 = `${sectionHeader(11, 'Generation Certificate', 1)}
+    <div style="border:2px solid #333;padding:24px;margin:12px 0;">
+      <p style="margin-bottom:12px;">This document was generated on <strong>${generatedDate}</strong> from the business records of <strong>${companyName}</strong>. Records are maintained in the regular course of business by persons with knowledge of the recorded acts.</p>
+      <p style="margin-bottom:12px;">The information contained herein is a true and accurate representation of the records as stored in the electronic database at the time of generation.</p>
+      <div style="margin-top:36px;border-top:1px solid #333;width:50%;padding-top:8px;font-size:11px;color:#666;">Authorized Signature / Date</div>
+    </div>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Court Packet — ${esc(debt.debtor_name)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12px; line-height: 1.6; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 0.75in; }
+  @media print {
+    .section { page-break-before: always; }
+    .cover { page-break-after: always; }
+  }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  th, td { padding: 6px 10px; text-align: left; border: 1px solid #ccc; font-size: 11px; }
+  th { background: #f0f0f0; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+  .cover { text-align: center; padding-top: 200px; }
+  .cover h1 { font-size: 22px; font-weight: 700; letter-spacing: 2px; margin-bottom: 12px; }
+  .cover .subtitle { font-size: 16px; color: #333; margin-bottom: 8px; }
+  .cover .meta { font-size: 13px; color: #555; margin-bottom: 6px; }
+  .cover .confidential { margin-top: 60px; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: #b91c1c; text-transform: uppercase; }
+  .toc { padding-top: 40px; }
+  .toc h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #333; padding-bottom: 8px; }
+  .toc-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #ccc; font-size: 12px; }
+  .toc-item .count { color: #666; font-size: 11px; }
+</style></head><body>
+
+<div class="cover">
+  <div style="font-size:13px;color:#666;margin-bottom:40px;">${companyName}</div>
+  <h1>COURT PACKET</h1>
+  <div class="subtitle">DEBT COLLECTION FILE</div>
+  <div class="meta" style="margin-top:30px;font-size:14px;font-weight:700;">${esc(debt.debtor_name)}</div>
+  <div class="meta">Case Reference: ${caseRef}</div>
+  <div class="meta">Generated: ${generatedDate}</div>
+  <div class="confidential">CONFIDENTIAL &mdash; PREPARED FOR LEGAL PROCEEDINGS</div>
+</div>
+
+<div class="section toc">
+  <h2>Table of Contents</h2>
+  ${sectionCounts.map((s, i) => `<div class="toc-item"><span>Section ${i + 1}: ${s.title}</span><span class="count">${s.count} item${s.count !== 1 ? 's' : ''}</span></div>`).join('')}
+</div>
+
+${section1}
+${section2}
+${section3}
+${section4}
+${section5}
+${section6}
+${section7}
+${section8}
+${section9}
+${section10}
+${section11}
+
+</body></html>`;
+}

@@ -416,6 +416,8 @@ const api = {
     window.electronAPI.invoke('debt:upload-document', { debtId, filePath, fileName, fileSize }),
   debtAuditLog: (debtId: string, limit?: number): Promise<any[]> =>
     window.electronAPI.invoke('debt:audit-log', { debtId, limit }),
+  generateCourtPacket: (debtId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:generate-court-packet', { debtId }),
 
   // ─── Invoice Automation ───────────────────────────
   applyLateFees: (): Promise<{ applied: number }> =>
