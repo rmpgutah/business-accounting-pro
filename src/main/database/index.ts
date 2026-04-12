@@ -346,6 +346,31 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoices ADD COLUMN custom_field_2 TEXT DEFAULT ''",
   "ALTER TABLE invoices ADD COLUMN custom_field_3 TEXT DEFAULT ''",
   "ALTER TABLE invoices ADD COLUMN custom_field_4 TEXT DEFAULT ''",
+  // DC Immersive Workspace (2026-04-12)
+  `CREATE TABLE IF NOT EXISTS debt_audit_log (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    field_name TEXT DEFAULT '',
+    old_value TEXT DEFAULT '',
+    new_value TEXT DEFAULT '',
+    performed_by TEXT DEFAULT 'user',
+    performed_at TEXT DEFAULT (datetime('now')),
+    ip_address TEXT DEFAULT '',
+    notes TEXT DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_debt_audit_debt ON debt_audit_log(debt_id)`,
+  `CREATE TABLE IF NOT EXISTS debt_payment_matches (
+    id TEXT PRIMARY KEY,
+    bank_transaction_id TEXT NOT NULL,
+    debt_id TEXT NOT NULL,
+    match_type TEXT NOT NULL CHECK(match_type IN ('auto','suggested')),
+    confidence REAL DEFAULT 0,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','accepted','rejected')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dpm_debt ON debt_payment_matches(debt_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_dpm_txn ON debt_payment_matches(bank_transaction_id)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -487,6 +512,8 @@ const tablesWithoutUpdatedAt = new Set([
   'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
   'debt_compliance_log', 'invoice_debt_links',
   'expense_line_items', 'debt_disputes',
+  // DC Immersive Workspace — created_at only
+  'debt_audit_log', 'debt_payment_matches',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

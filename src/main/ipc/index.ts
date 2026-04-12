@@ -421,6 +421,7 @@ export function registerIpcHandlers(): void {
     'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
     'debt_compliance_log', 'invoice_debt_links',
     'expense_line_items', 'debt_disputes',
+    'debt_audit_log', 'debt_payment_matches',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -3018,6 +3019,37 @@ export function registerIpcHandlers(): void {
     }
     return principal * rate * (days / 365);
   }
+
+  // ─── Audit Log Helper ──────────────────────────────────
+  // Immutable chain-of-custody logging. Called by every debt-mutating handler.
+  // MUST NEVER throw — audit is a side-effect, not a gate.
+  function logDebtAudit(
+    debtId: string,
+    action: string,
+    fieldName: string = '',
+    oldValue: string = '',
+    newValue: string = '',
+    performedBy: string = 'user'
+  ): void {
+    try {
+      const dbInstance = db.getDb();
+      dbInstance.prepare(`
+        INSERT INTO debt_audit_log (id, debt_id, action, field_name, old_value, new_value, performed_by, performed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `).run(uuid(), debtId, action, fieldName, oldValue, newValue, performedBy);
+    } catch (_) { /* audit logging must never crash the primary operation */ }
+  }
+
+  // ─── Debt: Audit Log Query ────────────────────────────
+  ipcMain.handle('debt:audit-log', (_event, { debtId, limit }: { debtId: string; limit?: number }) => {
+    try {
+      return db.getDb().prepare(
+        'SELECT * FROM debt_audit_log WHERE debt_id = ? ORDER BY performed_at DESC LIMIT ?'
+      ).all(debtId, limit || 200);
+    } catch (_) {
+      return [];
+    }
+  });
 
   ipcMain.handle('debt:stats', (_event, { companyId }: { companyId: string }) => {
     const row = db.getDb().prepare(`
