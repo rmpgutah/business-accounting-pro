@@ -95,6 +95,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [reminders, setReminders] = useState<any[]>([]);
@@ -349,7 +350,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               </button>
               <button
                 className="block-btn-success flex items-center gap-2"
-                onClick={() => setShowPaymentModal(true)}
+                onClick={() => { setEditPaymentId(null); setShowPaymentModal(true); }}
               >
                 <DollarSign size={14} />
                 Record Payment
@@ -596,6 +597,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <th>Method</th>
                 <th>Reference</th>
                 <th className="text-right">Amount</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -606,6 +608,15 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
                     {formatCurrency(p.amount)}
+                  </td>
+                  <td>
+                    <button
+                      className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                      onClick={() => { setEditPaymentId(p.id); setShowPaymentModal(true); }}
+                      title="Edit payment"
+                    >
+                      <Edit size={12} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -693,7 +704,8 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           invoiceId={invoiceId}
           invoiceTotal={invoice.total}
           amountPaid={invoice.amount_paid}
-          onClose={() => setShowPaymentModal(false)}
+          editPaymentId={editPaymentId}
+          onClose={() => { setShowPaymentModal(false); setEditPaymentId(null); }}
           onSaved={handlePaymentSaved}
         />
       )}

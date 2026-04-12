@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  RefreshCw, Plus, Search, Filter, X, Play, Pause,
+  RefreshCw, Plus, Search, Filter, X, Play, Pause, Pencil,
   Zap, Clock, History, FileText, Receipt,
 } from 'lucide-react';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
@@ -97,6 +97,7 @@ const RecurringTransactions: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [lastProcessed, setLastProcessed] = useState<string | null>(null);
@@ -170,17 +171,23 @@ const RecurringTransactions: React.FC = () => {
     if (!formData.name.trim() || !formData.next_date) return;
     setSaving(true);
     try {
-      await api.create('recurring_templates', {
+      const payload = {
         ...formData,
         is_active: formData.is_active ? 1 : 0,
         end_date: formData.end_date || null,
-      });
+      };
+      if (editingId) {
+        await api.update('recurring_templates', editingId, payload);
+      } else {
+        await api.create('recurring_templates', payload);
+      }
       setFormData(emptyForm);
+      setEditingId(null);
       setShowForm(false);
       setLoading(true);
       await loadTemplates();
     } catch (err) {
-      console.error('Failed to create template:', err);
+      console.error('Failed to save template:', err);
     } finally {
       setSaving(false);
     }
@@ -524,6 +531,24 @@ const RecurringTransactions: React.FC = () => {
                           title={t.is_active ? 'Pause' : 'Resume'}
                         >
                           {t.is_active ? <Pause size={16} /> : <Play size={16} />}
+                        </button>
+                        <button
+                          className="p-1 rounded-sm text-text-muted hover:text-accent-blue transition-colors"
+                          onClick={() => {
+                            setEditingId(t.id);
+                            setFormData({
+                              name: t.name || '',
+                              type: t.type as any || 'invoice',
+                              frequency: t.frequency as any || 'monthly',
+                              next_date: t.next_date || '',
+                              end_date: t.end_date || '',
+                              is_active: !!t.is_active,
+                            });
+                            setShowForm(true);
+                          }}
+                          title="Edit template"
+                        >
+                          <Pencil size={14} />
                         </button>
                       </td>
                     </tr>
