@@ -686,7 +686,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <div
               className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-bg-secondary0'}`}
               style={{ borderRadius: '6px' }}
-              title={`Priority: ${debt.priority}`}
+              title={`Priority: ${debt.priority ? debt.priority.charAt(0).toUpperCase() + debt.priority.slice(1) : ''}`}
             />
           </div>
           <div className="flex items-center gap-4">

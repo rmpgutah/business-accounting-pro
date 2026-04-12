@@ -37,7 +37,7 @@ export const RuleList: React.FC<Props> = ({ rules, onEdit, onDelete, onToggle, o
           <div>
             <div className="font-bold text-sm">{rule.name}</div>
             <div className="text-xs text-text-muted">
-              Priority {rule.priority} · Applied {rule.applied_count}&times;
+              Priority <span className="capitalize">{rule.priority}</span> · Applied {rule.applied_count}&times;
               {rule.last_run_at ? ` · Last: ${formatDate(rule.last_run_at)}` : ''}
             </div>
           </div>

@@ -304,7 +304,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
                   <option value="">-- Select Contact --</option>
                   {contacts.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}{c.role ? ` (${c.role})` : ''}
+                      {c.name}{c.role ? ` (${c.role.charAt(0).toUpperCase() + c.role.slice(1)})` : ''}
                     </option>
                   ))}
                 </select>
