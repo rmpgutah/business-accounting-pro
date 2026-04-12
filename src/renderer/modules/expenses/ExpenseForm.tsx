@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Receipt, DollarSign, Paperclip, X, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Receipt, DollarSign, Paperclip, X, Plus, Trash2, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -21,6 +21,10 @@ interface ExpenseFormData {
   is_billable: boolean;
   reference: string;
   tags: string;
+  status: string;
+  approved_by: string;
+  approved_date: string;
+  rejection_reason: string;
 }
 
 interface DropdownOption {
@@ -200,6 +204,32 @@ const emptyForm: ExpenseFormData = {
   is_billable: false,
   reference: '',
   tags: '',
+  status: 'pending',
+  approved_by: '',
+  approved_date: '',
+  rejection_reason: '',
+};
+
+// ─── Attached Documents (for receipt linking) ─────────
+const AttachedDocs: React.FC<{ expenseId: string }> = ({ expenseId }) => {
+  const [docs, setDocs] = useState<any[]>([]);
+  useEffect(() => {
+    api.rawQuery("SELECT * FROM documents WHERE entity_type = 'expense' AND entity_id = ?", [expenseId])
+      .then(r => setDocs(Array.isArray(r) ? r : []))
+      .catch(() => {});
+  }, [expenseId]);
+  if (docs.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Attached Documents</p>
+      {docs.map((d: any) => (
+        <div key={d.id} className="flex items-center gap-2 text-xs text-text-secondary">
+          <FileText size={12} className="text-accent-blue" />
+          <span className="truncate">{d.filename}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -307,6 +337,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               is_billable: !!existing.is_billable,
               reference: existing.reference || '',
               tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : (existing.tags || ''),
+              status: existing.status || 'pending',
+              approved_by: existing.approved_by || '',
+              approved_date: existing.approved_date || '',
+              rejection_reason: existing.rejection_reason || '',
             });
             // Load existing line items
             const existingLines = await api.query('expense_line_items', { expense_id: expenseId }, { field: 'sort_order', dir: 'asc' });
@@ -381,6 +415,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         is_billable: form.is_billable ? 1 : 0,
         reference: form.reference.trim() || null,
         receipt_path: receiptPath || null,
+        status: form.status || 'pending',
+        approved_by: form.approved_by || '',
+        approved_date: form.approved_date || '',
+        rejection_reason: form.rejection_reason || '',
         tags: form.tags
           ? form.tags.split(',').map((t) => t.trim()).filter(Boolean)
           : [],
@@ -857,6 +895,49 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 Click to attach receipt
               </div>
             )}
+            {/* Attached Documents */}
+            {isEditing && expenseId && (
+              <AttachedDocs expenseId={expenseId} />
+            )}
+          </div>
+
+          {/* ─── Status & Approval Workflow ──────────────── */}
+          <div className="col-span-3">
+            <div className="flex items-center gap-2 mb-4 mt-2">
+              <span className="text-xs font-semibold text-accent-blue uppercase tracking-wider">
+                Status & Approval
+              </span>
+              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Status</label>
+                <select name="status" className="block-select" value={form.status} onChange={handleChange}>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </div>
+              {(form.status === 'approved' || form.status === 'paid') && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Approved By</label>
+                    <input className="block-input" value={form.approved_by} onChange={(e) => setForm(p => ({...p, approved_by: e.target.value}))} placeholder="Approver name" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Approval Date</label>
+                    <input type="date" className="block-input" value={form.approved_date} onChange={(e) => setForm(p => ({...p, approved_date: e.target.value}))} />
+                  </div>
+                </>
+              )}
+              {form.status === 'rejected' && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Rejection Reason</label>
+                  <input className="block-input" value={form.rejection_reason} onChange={(e) => setForm(p => ({...p, rejection_reason: e.target.value}))} placeholder="Reason for rejection" />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

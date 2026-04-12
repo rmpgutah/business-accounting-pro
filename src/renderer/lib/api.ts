@@ -231,6 +231,8 @@ const api = {
     window.electronAPI.invoke('reports:general-ledger', { startDate, endDate, accountId }),
   reportCashFlow: (startDate: string, endDate: string) =>
     window.electronAPI.invoke('reports:cash-flow', { startDate, endDate }),
+  vendorSpend: (startDate: string, endDate: string): Promise<any[]> =>
+    window.electronAPI.invoke('reports:vendor-spend', { startDate, endDate }),
 
   // ─── Bills / Accounts Payable ──────────────────────
   billsNextNumber: (): Promise<string> =>

@@ -624,6 +624,27 @@ export function registerIpcHandlers(): void {
           });
         }
 
+        // Auto-create document record for receipt attachment
+        if (expenseData.receipt_path) {
+          const fileName = expenseData.receipt_path.split(/[\\/]/).pop() || 'receipt';
+          const existingDoc = rawDb.prepare(
+            "SELECT id FROM documents WHERE entity_type = 'expense' AND entity_id = ? LIMIT 1"
+          ).get(savedId) as any;
+          if (!existingDoc) {
+            db.create('documents', {
+              company_id: companyId,
+              filename: fileName,
+              file_path: expenseData.receipt_path,
+              file_size: 0,
+              mime_type: '',
+              entity_type: 'expense',
+              entity_id: savedId,
+              tags: '["receipt"]',
+              description: 'Expense receipt',
+            });
+          }
+        }
+
         return savedId;
       });
 
@@ -2192,6 +2213,29 @@ export function registerIpcHandlers(): void {
     }
 
     return { startDate, endDate, accounts: Object.values(byAccount) };
+  });
+
+  ipcMain.handle('reports:vendor-spend', (_event, { startDate, endDate }: { startDate: string; endDate: string }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return [];
+      return db.getDb().prepare(`
+        SELECT v.id, v.name as vendor_name,
+          COUNT(e.id) as transaction_count,
+          COALESCE(SUM(e.amount), 0) as total_spend,
+          COALESCE(AVG(e.amount), 0) as avg_transaction,
+          MIN(e.date) as first_transaction,
+          MAX(e.date) as last_transaction
+        FROM vendors v
+        LEFT JOIN expenses e ON e.vendor_id = v.id AND e.company_id = ? AND e.date BETWEEN ? AND ?
+        WHERE v.company_id = ?
+        GROUP BY v.id, v.name
+        HAVING total_spend > 0
+        ORDER BY total_spend DESC
+      `).all(companyId, startDate, endDate, companyId);
+    } catch (err: any) {
+      return [];
+    }
   });
 
   ipcMain.handle('reports:cash-flow', (_event, { startDate, endDate }: { startDate: string; endDate: string }) => {

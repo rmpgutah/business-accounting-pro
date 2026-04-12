@@ -19,8 +19,9 @@ interface Expense {
   vendor_id?: string;
   amount: number;
   tax_amount?: number;
-  status: 'pending' | 'approved' | 'paid';
+  status: 'pending' | 'approved' | 'paid' | 'rejected';
   is_billable: boolean;
+  is_recurring?: number;
   payment_method?: string;
   reference?: string;
   custom_fields?: string;
@@ -336,6 +337,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5">
                         {exp.description || '(no description)'}
+                        {exp.is_recurring ? (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>RECURRING</span>
+                        ) : null}
                         {exp.custom_fields && exp.custom_fields !== '{}' && (
                           <FileText size={12} className="text-accent-blue shrink-0" title="Has detailed info" />
                         )}

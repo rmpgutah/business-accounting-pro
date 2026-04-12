@@ -10,6 +10,35 @@ interface CategoryRow {
   amount: number;
 }
 
+// ─── Vendor Spend Table ─────────────────────────────────
+const VendorSpendTable: React.FC<{ startDate: string; endDate: string }> = ({ startDate, endDate }) => {
+  const [vendors, setVendors] = useState<any[]>([]);
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    api.vendorSpend(startDate, endDate).then(r => setVendors(Array.isArray(r) ? r : [])).catch(() => {});
+  }, [startDate, endDate]);
+
+  if (vendors.length === 0) return <p className="text-xs text-text-muted">No vendor data for this period.</p>;
+
+  const maxSpend = Math.max(...vendors.map(v => v.total_spend));
+  const fmtCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+
+  return (
+    <div className="space-y-2">
+      {vendors.slice(0, 10).map((v: any) => (
+        <div key={v.id} className="flex items-center gap-3">
+          <span className="text-xs text-text-primary font-medium w-32 truncate">{v.vendor_name}</span>
+          <div className="flex-1 h-2 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
+            <div className="h-full bg-accent-blue" style={{ width: `${(v.total_spend / maxSpend) * 100}%`, borderRadius: '6px', transition: 'width 0.3s' }} />
+          </div>
+          <span className="text-xs font-mono text-text-secondary w-24 text-right">{fmtCurrency(v.total_spend)}</span>
+          <span className="text-[10px] text-text-muted w-16 text-right">{v.transaction_count} txns</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -276,6 +305,12 @@ const ExpenseByCategory: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* Vendor Spend Section */}
+      <div className="block-card p-4 mt-4" style={{ borderRadius: '6px' }}>
+        <h3 className="text-sm font-semibold text-text-primary mb-3">Top Vendors by Spend</h3>
+        <VendorSpendTable startDate={startDate} endDate={endDate} />
+      </div>
     </div>
   );
 };

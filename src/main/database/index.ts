@@ -371,6 +371,10 @@ export function initDatabase(): Database.Database {
   )`,
   `CREATE INDEX IF NOT EXISTS idx_dpm_debt ON debt_payment_matches(debt_id)`,
   `CREATE INDEX IF NOT EXISTS idx_dpm_txn ON debt_payment_matches(bank_transaction_id)`,
+  // Expense approval workflow (2026-04-12)
+  "ALTER TABLE expenses ADD COLUMN approved_by TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN approved_date TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN rejection_reason TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
