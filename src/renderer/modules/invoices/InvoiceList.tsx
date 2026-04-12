@@ -99,25 +99,32 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [invoiceData, clientData, summaryResult, candidateData] = await Promise.all([
+        // Load invoices and clients first (critical), summary and candidates are non-blocking
+        const [invoiceData, clientData] = await Promise.all([
           api.query('invoices', { company_id: activeCompany.id }),
           api.query('clients', { company_id: activeCompany.id }),
-          api.rawQuery(
-            `SELECT
-              COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
-              COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
-              COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', paid_date) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
-            FROM invoices WHERE company_id = ?`,
-            [activeCompany.id]
-          ),
-          api.getOverdueCandidates(activeCompany.id, 30).catch(() => []),
         ]);
         if (cancelled) return;
-        setInvoices(invoiceData ?? []);
-        setClients(clientData ?? []);
-        const summaryRow = Array.isArray(summaryResult) ? summaryResult[0] : summaryResult;
-        setInvoiceSummary(summaryRow ?? null);
-        setCandidates(Array.isArray(candidateData) ? candidateData : []);
+        setInvoices(Array.isArray(invoiceData) ? invoiceData : []);
+        setClients(Array.isArray(clientData) ? clientData : []);
+
+        // Non-critical secondary data — failures don't hide invoices
+        api.rawQuery(
+          `SELECT
+            COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
+            COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
+            COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
+          FROM invoices WHERE company_id = ?`,
+          [activeCompany.id]
+        ).then(r => {
+          if (cancelled) return;
+          const row = Array.isArray(r) ? r[0] : r;
+          setInvoiceSummary(row ?? null);
+        }).catch(() => {});
+        api.getOverdueCandidates(activeCompany.id, 30).then(r => {
+          if (cancelled) return;
+          setCandidates(Array.isArray(r) ? r : []);
+        }).catch(() => {});
       } catch (err) {
         console.error('Failed to load invoices:', err);
       } finally {
