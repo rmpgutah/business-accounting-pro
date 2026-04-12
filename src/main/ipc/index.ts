@@ -450,6 +450,15 @@ export function registerIpcHandlers(): void {
       }
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      // Debt child table audit
+      const DEBT_CHILD_AUDIT: Record<string, string> = {
+        debt_payments: 'payment_recorded',
+        debt_communications: 'communication_logged',
+        debt_disputes: 'dispute_filed',
+      };
+      if (DEBT_CHILD_AUDIT[table] && (data.debt_id || payload.debt_id)) {
+        logDebtAudit(data.debt_id || payload.debt_id, DEBT_CHILD_AUDIT[table], table, '', record?.id || '');
+      }
       syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
       return record;
@@ -473,6 +482,21 @@ export function registerIpcHandlers(): void {
         }
         db.logAudit(companyId, table, id, 'update', changes);
       }
+      // Debt audit: log each changed field
+      if (table === 'debts' && id && old) {
+        try {
+          const newRow = db.getById('debts', id) as any;
+          if (newRow) {
+            for (const key of Object.keys(data)) {
+              const oldVal = String((old as any)[key] ?? '');
+              const newVal = String(newRow[key] ?? '');
+              if (oldVal !== newVal) {
+                logDebtAudit(id, 'field_edit', key, oldVal, newVal);
+              }
+            }
+          }
+        } catch (_) {}
+      }
       syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
       return record;
@@ -484,6 +508,15 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('db:delete', (_event, { table, id }) => {
     try {
+      // Debt child table audit — read debt_id before deletion
+      const DEBT_AUDIT_TABLES = ['debt_payments', 'debt_communications', 'debt_evidence', 'debt_legal_actions',
+        'debt_settlements', 'debt_disputes', 'debt_contacts', 'debt_promises', 'debt_notes'];
+      if (DEBT_AUDIT_TABLES.includes(table)) {
+        try {
+          const row = db.getById(table, id) as any;
+          if (row?.debt_id) logDebtAudit(row.debt_id, 'record_deleted', table, id, '');
+        } catch (_) {}
+      }
       const companyId = db.getCurrentCompanyId();
       if (companyId) db.logAudit(companyId, table, id, 'delete');
       db.remove(table, id);
@@ -1182,6 +1215,7 @@ export function registerIpcHandlers(): void {
         kept: data.kept ? 1 : 0,
         notes: data.notes || '',
       });
+      logDebtAudit(data.debt_id, 'promise_recorded', 'promised_date', '', (data.promised_date || '') + ' $' + (data.promised_amount || 0));
       scheduleAutoBackup();
       return result;
     } catch (err) {
@@ -1191,7 +1225,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('debt:promise-update', (_event, { id, kept, notes }: { id: string; kept: boolean; notes?: string }) => {
     try {
+      const promise = db.getDb().prepare('SELECT debt_id FROM debt_promises WHERE id = ?').get(id) as any;
       const result = db.update('debt_promises', id, { kept: kept ? 1 : 0, notes: notes || '' });
+      if (promise?.debt_id) logDebtAudit(promise.debt_id, 'promise_updated', 'kept', '', kept ? 'kept' : 'broken');
       scheduleAutoBackup();
       return result;
     } catch (err) {
@@ -3079,6 +3115,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:advance-stage', (_event, { debtId, notes }: { debtId: string; notes?: string }) => {
     const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
     if (!debt) throw new Error('Debt not found');
+    const oldStage = debt.current_stage || '';
     const currentIdx = DEBT_STAGE_ORDER.indexOf(debt.current_stage);
     if (currentIdx < 0 || currentIdx >= DEBT_STAGE_ORDER.length - 1) return;
     const nextStage = DEBT_STAGE_ORDER[currentIdx + 1];
@@ -3089,17 +3126,21 @@ export function registerIpcHandlers(): void {
     // Update debt
     const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
     db.getDb().prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debtId);
+    logDebtAudit(debtId, 'stage_advance', 'current_stage', oldStage, nextStage);
     scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:hold-toggle', (_event, { debtId, hold, reason }: { debtId: string; hold: boolean; reason?: string }) => {
     db.getDb().prepare('UPDATE debts SET hold = ?, hold_reason = ?, updated_at = datetime(\'now\') WHERE id = ?').run(hold ? 1 : 0, reason || '', debtId);
+    logDebtAudit(debtId, 'hold_toggle', 'hold', hold ? '0' : '1', hold ? '1' : '0');
     scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:assign-collector', (_event, { debtId, collectorId }: { debtId: string; collectorId: string | null }) => {
     try {
+      const oldDebt = db.getById('debts', debtId) as any;
       db.update('debts', debtId, { assigned_collector_id: collectorId || null });
+      logDebtAudit(debtId, 'assignment_change', 'assigned_collector_id', oldDebt?.assigned_collector_id || '', collectorId || '');
       scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
@@ -3432,6 +3473,7 @@ export function registerIpcHandlers(): void {
         });
         d.setDate(d.getDate() + days);
       }
+      logDebtAudit(debt_id, 'plan_created', 'payment_plan', '', installment_amount ? '$' + installment_amount + ' plan' : 'Plan saved');
       scheduleAutoBackup();
       return db.queryAll('debt_plan_installments', { plan_id: plan.id }, { field: 'due_date', dir: 'asc' });
     } catch (err: any) {
@@ -3466,6 +3508,7 @@ export function registerIpcHandlers(): void {
         debt_id, offer_amount, offer_pct, offered_date,
         notes: notes || '', response: 'pending',
       });
+      logDebtAudit(debt_id, 'settlement_offered', 'offer_amount', '', String(offer_amount || 0));
       scheduleAutoBackup();
       return result;
     } catch (err: any) {
@@ -3493,6 +3536,7 @@ export function registerIpcHandlers(): void {
         accepted_date: new Date().toISOString().slice(0, 10),
       });
       db.update('debts', debtId, { status: 'settled', balance_due: offer_amount });
+      logDebtAudit(debtId, 'settlement_accepted', 'status', 'in_collection', 'settled');
       scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
@@ -3509,6 +3553,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:compliance-save', (_event, data) => {
     try {
       const result = db.create('debt_compliance_log', data);
+      logDebtAudit(data.debt_id, 'compliance_event', 'event_type', '', data.event_type || '');
       scheduleAutoBackup();
       return result;
     } catch (err: any) {
@@ -3629,6 +3674,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:quick-note', (_event, { debtId, note }: { debtId: string; note: string }) => {
     try {
       const result = db.create('debt_notes', { debt_id: debtId, note, created_by: 'user' });
+      logDebtAudit(debtId, 'note_added', 'notes', '', note.substring(0, 100));
       scheduleAutoBackup();
       return result;
     } catch (err: any) {
@@ -3652,6 +3698,7 @@ export function registerIpcHandlers(): void {
         });
       });
       addFeeTx();
+      logDebtAudit(debtId, 'fee_added', 'fees_accrued', '', amount.toFixed(2) + ' (' + feeType + ')');
       scheduleAutoBackup();
       return { success: true };
     } catch (err: any) {
