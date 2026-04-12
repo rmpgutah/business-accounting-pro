@@ -306,6 +306,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
   // Document attachments
   const [documents, setDocuments] = useState<any[]>([]);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
 
   // ── Load All Data ──
   useEffect(() => {
@@ -359,6 +360,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         // Load installments + documents in parallel (non-blocking)
         api.upcomingInstallments(debtId).then(r => setInstallments(Array.isArray(r) ? r : [])).catch(() => {});
         api.rawQuery('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC', ['debt', debtId]).then(r => setDocuments(Array.isArray(r) ? r : [])).catch(() => {});
+        api.debtAuditLog(debtId, 100).then(r => setAuditLog(Array.isArray(r) ? r : [])).catch(() => {});
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -1643,6 +1645,61 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card — Chain of Custody Audit Log */}
+          <div className="block-card p-6">
+            <SectionLabel>Chain of Custody</SectionLabel>
+            {auditLog.length === 0 ? (
+              <p className="text-sm text-text-muted">No audit entries yet.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {auditLog.map((entry: any) => {
+                  const actionLabels: Record<string, string> = {
+                    stage_advance: 'Stage Advanced',
+                    hold_toggle: 'Hold Toggled',
+                    assignment_change: 'Collector Assigned',
+                    fee_added: 'Fee Added',
+                    settlement_accepted: 'Settlement Accepted',
+                    settlement_offered: 'Settlement Offered',
+                    compliance_event: 'Compliance Event',
+                    plan_created: 'Payment Plan Created',
+                    promise_recorded: 'Promise Recorded',
+                    promise_updated: 'Promise Updated',
+                    note_added: 'Note Added',
+                    field_edit: 'Field Updated',
+                    payment_recorded: 'Payment Recorded',
+                    communication_logged: 'Communication Logged',
+                    dispute_filed: 'Dispute Filed',
+                    record_deleted: 'Record Deleted',
+                    interest_recalculated: 'Interest Recalculated',
+                  };
+                  const label = actionLabels[entry.action] || entry.action;
+                  return (
+                    <div key={entry.id} className="flex items-start gap-2 px-2 py-1.5 border-l-2 border-border-primary text-xs">
+                      <span className="text-text-muted font-mono whitespace-nowrap flex-shrink-0">
+                        {formatDate(entry.performed_at, { style: 'short' })}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="text-text-primary font-semibold">{label}</span>
+                        {entry.field_name && (
+                          <span className="text-text-muted ml-1">({entry.field_name})</span>
+                        )}
+                        {entry.old_value && entry.new_value && (
+                          <span className="text-text-muted ml-1">
+                            {entry.old_value} &rarr; {entry.new_value}
+                          </span>
+                        )}
+                        {!entry.old_value && entry.new_value && (
+                          <span className="text-text-muted ml-1">: {entry.new_value}</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-text-muted ml-auto flex-shrink-0 capitalize">{entry.performed_by}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
