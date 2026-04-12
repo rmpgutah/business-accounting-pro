@@ -1115,45 +1115,155 @@ export function generateCollectionLetterHTML(
   <tr style="font-weight:700;"><td style="padding:8px 12px;border:2px solid #111;">Balance Due</td><td style="padding:8px 12px;border:2px solid #111;text-align:right;font-family:monospace;">${fmtAmt(balanceDue)}</td></tr>
 </table>`;
 
+  // Shared blocks
+  const accountRef = debt?.source_type === 'invoice'
+    ? `Invoice #${(debt?.source_id || '').substring(0, 8).toUpperCase()}`
+    : debt?.source_type === 'bill' ? `Bill #${(debt?.source_id || '').substring(0, 8).toUpperCase()}` : 'Manual Entry';
+  const delinquentDate = debt?.delinquent_date ? new Date(debt.delinquent_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+  const jurisdiction = debt?.jurisdiction || 'the applicable jurisdiction';
+  const interestRate = debt?.interest_rate ? `${(debt.interest_rate * 100).toFixed(2)}% per annum (${debt.interest_type === 'compound' ? 'compound' : 'simple'})` : 'N/A';
+  const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86_400_000)) : 0;
+  const settlementAmt = Math.round(balanceDue * 0.7 * 100) / 100;
+
+  const accountRefBlock = `<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:11px;background:#f9f9f9;">
+  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;width:35%;">Account Reference</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${accountRef}</td></tr>
+  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Original Due Date</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${dueDate}</td></tr>
+  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Date Delinquent</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${delinquentDate}</td></tr>
+  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Days Past Due</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${daysOverdue} days</td></tr>
+  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Interest Rate</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${interestRate}</td></tr>
+  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Jurisdiction</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${jurisdiction}</td></tr>
+</table>`;
+
+  const paymentInstructions = `<div style="margin:16px 0;padding:14px;border:1px solid #ddd;border-left:3px solid #2563eb;background:#fafafa;">
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#333;margin-bottom:6px;">Payment Instructions</p>
+  <p style="font-size:12px;color:#444;line-height:1.6;">Make checks payable to <strong>${companyName}</strong> and mail to:<br>${companyAddr || '[Company Address]'}</p>
+  ${companyPhone ? `<p style="font-size:12px;color:#444;">Phone: ${companyPhone}</p>` : ''}
+  ${companyEmail ? `<p style="font-size:12px;color:#444;">Email: ${companyEmail}</p>` : ''}
+  <p style="font-size:11px;color:#666;margin-top:6px;">Please include your account reference <strong>${accountRef}</strong> with all correspondence and payments.</p>
+</div>`;
+
+  const fdcpaNotice = `<div style="margin:16px 0;padding:12px;border:1px solid #e5e5e5;background:#fffbf0;font-size:10px;color:#555;line-height:1.7;">
+  <p style="font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Your Rights Under Federal Law</p>
+  <p>Under the Fair Debt Collection Practices Act (15 U.S.C. &sect; 1692 et seq.), you have the right to:</p>
+  <ul style="margin:6px 0;padding-left:20px;">
+    <li>Dispute this debt in writing within thirty (30) days of receiving this notice.</li>
+    <li>Request the name and address of the original creditor, if different from the current creditor.</li>
+    <li>Request verification of the debt, including the amount owed and the name of the creditor.</li>
+  </ul>
+  <p>If you dispute this debt in writing within the 30-day period, ${companyName} will cease collection activities until verification has been provided to you. Unless you dispute this debt within 30 days after receipt of this notice, the debt will be assumed to be valid.</p>
+</div>`;
+
   const LETTERS: Record<string, { title: string; accent: string; body: string }> = {
     reminder: {
       title: 'Payment Reminder',
       accent: '#2563eb',
-      body: `<p>This is a friendly reminder that your account has a past-due balance of <strong>${fmtAmt(balanceDue)}</strong> (due ${dueDate}).</p>
-<p>Please remit payment at your earliest convenience. If you have already sent payment, please disregard this notice.</p>
-<p>Contact us at ${companyPhone || companyEmail || 'the number on file'} for questions or payment arrangements.</p>`,
+      body: `<p>We are writing to remind you that the following account has a past-due balance that requires your attention.</p>
+${accountRefBlock}
+${summaryTable}
+<p>Our records indicate that a payment of <strong>${fmtAmt(balanceDue)}</strong> was due on <strong>${dueDate}</strong> and remains unpaid as of the date of this letter. The account is now <strong>${daysOverdue} days past due</strong>.</p>
+<p>We understand that oversights can occur. If you have already submitted payment, please disregard this notice and accept our thanks. If payment has not yet been sent, we kindly request that you remit the amount due at your earliest convenience to avoid additional fees or collection activity.</p>
+${paymentInstructions}
+<p>If you are experiencing financial difficulty and would like to discuss a payment arrangement, please contact us at ${companyPhone || companyEmail || 'the number on file'}. We are committed to working with you to resolve this matter amicably.</p>`,
     },
     warning: {
-      title: 'Warning Notice',
+      title: 'Warning Notice — Second Notice',
       accent: '#d97706',
-      body: `<p>Despite prior correspondence, your account remains past due.</p>${summaryTable}
-<p>Please pay by <strong>${thirtyDayDate}</strong> to avoid further collection activity, additional fees, and potential credit reporting.</p>`,
+      body: `<p>Despite our previous correspondence dated on or about your original due date of ${dueDate}, the balance on your account remains unpaid. This letter serves as a <strong>formal warning</strong> that failure to resolve this matter may result in additional consequences.</p>
+${accountRefBlock}
+${summaryTable}
+<p><strong>Please be advised that if payment is not received by ${thirtyDayDate}, the following actions may be taken:</strong></p>
+<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
+  <li>Assessment of additional late fees and collection costs as permitted by law</li>
+  <li>Accrual of interest at a rate of ${interestRate} on the outstanding balance</li>
+  <li>Referral of this account to a third-party collections agency</li>
+  <li>Reporting of the delinquent account to one or more consumer credit reporting bureaus</li>
+</ul>
+<p>We strongly urge you to contact our office immediately to make payment or to arrange a mutually agreeable payment plan. This is your opportunity to resolve this debt before more serious measures are taken.</p>
+${paymentInstructions}
+${fdcpaNotice}`,
     },
     final_notice: {
       title: 'Final Notice Before Legal Action',
       accent: '#dc2626',
-      body: `<p><strong style="color:#dc2626;">THIS IS YOUR FINAL NOTICE.</strong></p>
-<p>Your account has a delinquent balance of <strong>${fmtAmt(balanceDue)}</strong>.</p>
-<p>Unless payment or a satisfactory arrangement is received by <strong>${deadlineDate}</strong>, we will pursue collections agency referral, credit bureau reporting, and/or legal action including civil complaint and garnishment.</p>${summaryTable}`,
+      body: `<p style="font-weight:700;color:#dc2626;font-size:14px;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">This is your final notice. Immediate action is required.</p>
+<p>Multiple attempts have been made to resolve the outstanding balance on your account. As of the date of this letter, no payment or satisfactory response has been received. Your account is now <strong>${daysOverdue} days past due</strong>.</p>
+${accountRefBlock}
+${summaryTable}
+<p><strong>Unless full payment of ${fmtAmt(balanceDue)} or a satisfactory payment arrangement is received by ${deadlineDate}, ${companyName} intends to pursue one or more of the following remedies without further notice:</strong></p>
+<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
+  <li>Filing a civil complaint in the appropriate court in ${jurisdiction}</li>
+  <li>Seeking a monetary judgment for the full amount owed plus court costs, attorney fees, and accrued interest</li>
+  <li>Pursuing post-judgment remedies including wage garnishment, bank levy, and/or property lien</li>
+  <li>Reporting the delinquent account and any resulting judgment to all major credit bureaus</li>
+  <li>Referral to an external collections agency or law firm for further action</li>
+</ul>
+<p>A judgment against you may remain on your credit report for up to seven (7) years and may affect your ability to obtain credit, housing, or employment.</p>
+<p><strong>To avoid legal proceedings, please remit payment or contact us immediately to discuss resolution options.</strong></p>
+${paymentInstructions}
+${fdcpaNotice}`,
     },
     demand: {
-      title: 'Demand for Payment',
+      title: 'Formal Demand for Payment',
       accent: '#111',
-      body: `<p>This constitutes a formal demand for payment of <strong>${fmtAmt(balanceDue)}</strong> owed to ${companyName}.</p>
-<p>The debt arises from an obligation of <strong>${fmtAmt(originalAmt)}</strong> (due ${dueDate}), plus interest and fees.</p>${summaryTable}
-<p>Pay within <strong>ten (10) days</strong> of this letter or ${companyName} will commence legal proceedings. Under the FDCPA, you may dispute this debt in writing within 30 days.</p>`,
+      body: `<p style="font-weight:700;">RE: DEMAND FOR PAYMENT — ${accountRef}</p>
+<p>This letter constitutes a formal demand for payment pursuant to the laws of ${jurisdiction}. Please treat this correspondence with the utmost seriousness.</p>
+${accountRefBlock}
+${summaryTable}
+<p>The above-referenced debt arises from an obligation originally in the amount of <strong>${fmtAmt(originalAmt)}</strong>, which became due and payable on <strong>${dueDate}</strong>. Despite the passage of <strong>${daysOverdue} days</strong> since the date of delinquency, the obligation remains unsatisfied. Interest continues to accrue at a rate of <strong>${interestRate}</strong> until the balance is paid in full.</p>
+<p><strong>DEMAND:</strong> You are hereby demanded to pay the total sum of <strong>${fmtAmt(balanceDue)}</strong> within <strong>ten (10) calendar days</strong> of the date of this letter (i.e., by <strong>${deadlineDate}</strong>).</p>
+<p><strong>CONSEQUENCES OF NON-PAYMENT:</strong> If payment is not received by the above deadline, ${companyName} reserves the right to, and intends to, commence legal proceedings against you in a court of competent jurisdiction in ${jurisdiction} to recover the full amount owed, together with:</p>
+<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
+  <li>Pre-judgment and post-judgment interest at the maximum rate permitted by law</li>
+  <li>Court costs, filing fees, and service of process expenses</li>
+  <li>Reasonable attorney fees as permitted by contract or statute</li>
+  <li>All additional collection costs and administrative expenses</li>
+</ul>
+<p>This letter may be tendered as evidence of demand in any subsequent legal proceeding.</p>
+${paymentInstructions}
+${fdcpaNotice}`,
     },
     settlement_offer: {
       title: 'Settlement Offer',
       accent: '#0891b2',
-      body: `<p>To resolve your outstanding balance of <strong>${fmtAmt(balanceDue)}</strong>, ${companyName} offers a settlement of <strong>${fmtAmt(balanceDue * 0.7)}</strong> (70%) as payment in full, if received by <strong>${thirtyDayDate}</strong>.</p>${summaryTable}
-<p>This offer expires on ${thirtyDayDate}. After that date, the full balance remains due.</p>`,
+      body: `<p>In an effort to resolve the outstanding balance on your account without the need for further collection activity or legal proceedings, ${companyName} is prepared to offer the following settlement.</p>
+${accountRefBlock}
+${summaryTable}
+<p style="padding:14px;border:2px solid #0891b2;background:#f0fdfa;text-align:center;margin:16px 0;">
+  <span style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#0891b2;font-weight:700;">Settlement Amount</span>
+  <span style="display:block;font-size:24px;font-weight:800;color:#111;margin:4px 0;">${fmtAmt(settlementAmt)}</span>
+  <span style="display:block;font-size:12px;color:#555;">(${Math.round((settlementAmt / balanceDue) * 100)}% of current balance — a savings of ${fmtAmt(balanceDue - settlementAmt)})</span>
+</p>
+<p><strong>Terms of this offer:</strong></p>
+<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
+  <li>Payment of <strong>${fmtAmt(settlementAmt)}</strong> must be received in full by <strong>${thirtyDayDate}</strong>.</li>
+  <li>Payment must be made by certified check, cashier's check, or wire transfer.</li>
+  <li>Upon receipt of payment, ${companyName} will consider this account <strong>settled in full</strong> and cease all further collection activity.</li>
+  <li>A written confirmation of settlement will be provided within ten (10) business days of payment.</li>
+  <li>This offer is made without prejudice and does not constitute an admission that the balance owed is less than the full amount.</li>
+</ul>
+<p><strong>This offer expires on ${thirtyDayDate}.</strong> If payment is not received by that date, the offer is automatically withdrawn and the full balance of <strong>${fmtAmt(balanceDue)}</strong> will remain due and subject to continued collection activity, including legal action.</p>
+${paymentInstructions}
+<p style="font-size:11px;color:#666;">To accept this offer, please remit payment referencing account <strong>${accountRef}</strong> and write "Settlement" on the memo line of your check.</p>`,
     },
     payment_confirmation: {
-      title: 'Payment Confirmation',
+      title: 'Payment Confirmation & Account Update',
       accent: '#16a34a',
-      body: `<p>Thank you for your payment${totalPaid > 0 ? ' of <strong>' + fmtAmt(totalPaid) + '</strong>' : ''}.</p>${summaryTable}
-${balanceDue <= 0 ? '<p>Your account is <strong>paid in full</strong>. Thank you.</p>' : '<p>A remaining balance of <strong>' + fmtAmt(balanceDue) + '</strong> is still due.</p>'}`,
+      body: `<p>We are writing to confirm receipt of your recent payment and to provide an updated summary of your account.</p>
+${accountRefBlock}
+<div style="padding:14px;border:2px solid #16a34a;background:#f0fdf4;text-align:center;margin:16px 0;">
+  <span style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#16a34a;font-weight:700;">Payment Received</span>
+  <span style="display:block;font-size:24px;font-weight:800;color:#111;margin:4px 0;">${fmtAmt(totalPaid)}</span>
+  <span style="display:block;font-size:12px;color:#555;">Applied to your account on ${todayLong}</span>
+</div>
+${summaryTable}
+${balanceDue <= 0
+  ? `<p style="font-weight:700;color:#16a34a;">Your account balance is now <strong>$0.00</strong>. This account is considered <strong>paid in full</strong>.</p>
+<p>Thank you for resolving this matter. No further action is required on your part. If you require a formal payoff letter or receipt for your records, please contact our office and we will provide one promptly.</p>`
+  : `<p>Thank you for your payment. Please note that a remaining balance of <strong>${fmtAmt(balanceDue)}</strong> is still outstanding on this account.</p>
+<p>Interest continues to accrue at a rate of <strong>${interestRate}</strong> on the unpaid balance. We encourage you to remit the remaining balance as soon as possible to avoid additional charges and to bring your account to good standing.</p>
+<p>If you would like to set up a payment plan for the remaining balance, please contact us at ${companyPhone || companyEmail || 'the number on file'} to discuss available options.</p>`}
+${paymentInstructions}
+<p style="font-size:11px;color:#666;">Please retain this letter for your records. If you believe there is a discrepancy in the payment amount or account balance shown above, contact our office within ten (10) business days.</p>`,
     },
   };
 
