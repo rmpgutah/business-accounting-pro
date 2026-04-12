@@ -1696,9 +1696,9 @@ export function registerIpcHandlers(): void {
     const tx = (dbInstance as any).transaction(() => {
       const paymentId = uuid();
       (dbInstance as any).prepare(`
-        INSERT INTO payments (id, invoice_id, amount, date, payment_method, reference)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(paymentId, invoiceId, amount, date, method || 'transfer', reference || '');
+        INSERT INTO payments (id, company_id, invoice_id, amount, date, payment_method, reference)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(paymentId, companyId, invoiceId, amount, date, method || 'transfer', reference || '');
 
       const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
       if (!invoice) throw new Error('Invoice not found');
