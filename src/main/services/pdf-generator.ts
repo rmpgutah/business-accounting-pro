@@ -10,7 +10,7 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
 
 // ─── HTML Template Builder ───────────────────────────────
-function buildInvoiceHTML(
+export function buildInvoiceHTML(
   company: any,
   client: any,
   invoice: any,

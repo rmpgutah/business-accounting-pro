@@ -6,7 +6,7 @@ import { syncPush } from '../sync';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { generateInvoicePDF } from '../services/pdf-generator';
+import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
@@ -861,6 +861,52 @@ export function registerIpcHandlers(): void {
       return { path: filePath };
     } catch (err: any) {
       return { error: err?.message || 'PDF generation failed' };
+    }
+  });
+
+  // ─── Batch PDF Export ──────────────────────────────────
+  ipcMain.handle('invoice:batch-pdf', async (_event, { invoiceIds }: { invoiceIds: string[] }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { error: 'No company selected' };
+
+      const { filePath } = await dialog.showSaveDialog({
+        defaultPath: `Invoices-Batch-${new Date().toISOString().slice(0, 10)}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (!filePath) return { cancelled: true };
+
+      const dbInstance = db.getDb();
+      const company = db.getById('companies', companyId);
+      const allHtml: string[] = [];
+
+      for (const invId of invoiceIds) {
+        const invoice = db.getById('invoices', invId);
+        if (!invoice) continue;
+        const client = db.getById('clients', invoice.client_id);
+        const lineItems = dbInstance.prepare(
+          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+        ).all(invId) as any[];
+        const html = buildInvoiceHTML(company, client, invoice, lineItems);
+        allHtml.push(html);
+      }
+
+      // Combine all invoices into one HTML with page breaks
+      const combinedHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        @media print { .page-break { page-break-before: always; } }
+        .page-break { page-break-before: always; }
+      </style></head><body>
+        ${allHtml.map((h, i) => {
+          const body = h.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] || h;
+          return i === 0 ? body : `<div class="page-break"></div>${body}`;
+        }).join('')}
+      </body></html>`;
+
+      const pdfBuffer = await htmlToPDFBuffer(combinedHTML);
+      fs.writeFileSync(filePath, pdfBuffer);
+      return { path: filePath, count: allHtml.length };
+    } catch (err: any) {
+      return { error: err?.message || 'Batch PDF failed' };
     }
   });
 
@@ -3011,8 +3057,30 @@ export function registerIpcHandlers(): void {
     }
 
     if (table === 'expenses') { clone.date = today; }
-    const cols = Object.keys(clone);
-    dbInstance.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
+
+    const cloneTx = dbInstance.transaction(() => {
+      const cols = Object.keys(clone);
+      dbInstance.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
+
+      // Clone child line items
+      const LINE_ITEM_TABLES: Record<string, string> = {
+        invoices: 'invoice_line_items',
+        bills: 'bill_line_items',
+        expenses: 'expense_line_items',
+      };
+      const lineTable = LINE_ITEM_TABLES[table];
+      const parentCol = table === 'invoices' ? 'invoice_id' : table === 'bills' ? 'bill_id' : 'expense_id';
+      if (lineTable) {
+        const lines = dbInstance.prepare(`SELECT * FROM ${lineTable} WHERE ${parentCol} = ?`).all(id) as any[];
+        for (const line of lines) {
+          const newLine = { ...line, id: uuid(), [parentCol]: newId };
+          const lineCols = Object.keys(newLine);
+          dbInstance.prepare(`INSERT INTO ${lineTable} (${lineCols.join(',')}) VALUES (${lineCols.map(c => '@' + c).join(',')})`).run(newLine);
+        }
+      }
+    });
+    cloneTx();
+    scheduleAutoBackup();
     return { id: newId };
   });
 

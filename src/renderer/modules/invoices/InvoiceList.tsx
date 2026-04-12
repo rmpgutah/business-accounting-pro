@@ -623,6 +623,27 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             Export CSV
           </button>
 
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={async () => {
+              const ids = Array.from(selectedIds);
+              if (ids.length === 0) return;
+              const result = await api.batchExportPDF(ids);
+              if (result?.cancelled) return;
+              if (result?.error) {
+                setFeedback({ type: 'error', message: 'PDF export failed: ' + result.error });
+              } else {
+                setFeedback({ type: 'success', message: `Exported ${result?.count || ids.length} invoices to PDF` });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <FileText size={13} />
+            Export PDF
+          </button>
+
           {!showDeleteConfirm ? (
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"

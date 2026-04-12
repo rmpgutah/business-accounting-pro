@@ -431,6 +431,9 @@ const api = {
   smartRecommendations: (companyId: string): Promise<any[]> =>
     window.electronAPI.invoke('debt:smart-recommendations', { companyId }),
 
+  batchExportPDF: (invoiceIds: string[]): Promise<{ path?: string; count?: number; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:batch-pdf', { invoiceIds }),
+
   // ─── Invoice Automation ───────────────────────────
   applyLateFees: (): Promise<{ applied: number }> =>
     window.electronAPI.invoke('invoice:apply-late-fees'),

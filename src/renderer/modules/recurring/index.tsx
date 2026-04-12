@@ -99,6 +99,7 @@ const RecurringTransactions: React.FC = () => {
   const [formData, setFormData] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [processFeedback, setProcessFeedback] = useState('');
   const [processing, setProcessing] = useState(false);
   const [lastProcessed, setLastProcessed] = useState<string | null>(null);
   const [tab, setTab] = useState<TabView>('templates');
@@ -218,8 +219,11 @@ const RecurringTransactions: React.FC = () => {
       await loadLastProcessed();
       if (tab === 'history') await loadHistory();
       if (result.processed > 0) {
-        console.log(`Processed ${result.processed} templates: ${result.invoicesCreated} invoices, ${result.expensesCreated} expenses`);
+        setProcessFeedback(`Processed ${result.processed} template(s): ${result.invoicesCreated || 0} invoice(s), ${result.expensesCreated || 0} expense(s) created`);
+      } else {
+        setProcessFeedback('No templates were due for processing');
       }
+      setTimeout(() => setProcessFeedback(''), 5000);
     } catch (err) {
       console.error('Failed to process recurring:', err);
     } finally {
@@ -280,6 +284,13 @@ const RecurringTransactions: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Process feedback */}
+      {processFeedback && (
+        <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>
+          {processFeedback}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px', width: 'fit-content' }}>

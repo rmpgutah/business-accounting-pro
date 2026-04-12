@@ -229,9 +229,14 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     const result = await api.cloneRecord('invoices', invoice.id);
     if (result?.error) {
       console.error('Duplicate invoice failed:', result.error);
+      alert('Failed to duplicate invoice: ' + result.error);
       return;
     }
-    onBack();
+    if (result?.id) {
+      onEdit(result.id); // Open the cloned invoice for editing
+    } else {
+      onBack();
+    }
   };
 
   const handleScheduleReminders = async () => {
