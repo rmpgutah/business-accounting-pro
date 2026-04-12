@@ -418,6 +418,10 @@ const api = {
     window.electronAPI.invoke('debt:audit-log', { debtId, limit }),
   generateCourtPacket: (debtId: string): Promise<any> =>
     window.electronAPI.invoke('debt:generate-court-packet', { debtId }),
+  batchRecalcInterest: (): Promise<{ updated: number; error?: string }> =>
+    window.electronAPI.invoke('debt:batch-recalc-interest'),
+  smartRecommendations: (companyId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:smart-recommendations', { companyId }),
 
   // ─── Invoice Automation ───────────────────────────
   applyLateFees: (): Promise<{ applied: number }> =>

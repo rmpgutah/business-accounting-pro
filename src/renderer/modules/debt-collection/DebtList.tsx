@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
@@ -370,6 +370,26 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           >
             <FileText size={13} />
             Portfolio Report
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const result = await api.batchRecalcInterest();
+              if (result?.updated > 0) {
+                setOpSuccess(`Recalculated interest on ${result.updated} debts`);
+                setTimeout(() => setOpSuccess(''), 4000);
+                await reload();
+              } else if (result?.error) {
+                setOpError(result.error);
+                setTimeout(() => setOpError(''), 5000);
+              } else {
+                setOpSuccess('No debts needed interest recalculation');
+                setTimeout(() => setOpSuccess(''), 3000);
+              }
+            }}
+          >
+            <RefreshCw size={14} />
+            Recalc Interest
           </button>
           <button className="block-btn flex items-center gap-2" onClick={handleExport}>
             <Download size={14} />

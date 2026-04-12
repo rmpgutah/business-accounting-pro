@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Clock, Gavel, MessageSquare, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Clock, Gavel, MessageSquare, RefreshCw, Zap } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -59,6 +59,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
 
   const load = async () => {
     if (!activeCompany) return;
@@ -66,6 +67,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
     try {
       const result = await api.collectorDashboard(activeCompany.id);
       setData(result);
+      api.smartRecommendations(activeCompany.id).then(r => setRecommendations(Array.isArray(r) ? r : [])).catch(() => {});
     } catch (err) {
       console.error('Failed to load dashboard:', err);
     } finally {
@@ -91,7 +93,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
     );
   }
 
-  const totalActions = data.brokenPromises.length + data.overdueInstallments.length + data.upcomingHearings.length + data.followUpsDue.length;
+  const totalActions = data.brokenPromises.length + data.overdueInstallments.length + data.upcomingHearings.length + data.followUpsDue.length + recommendations.length;
 
   return (
     <div className="space-y-4">
@@ -198,6 +200,43 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           )}
         />
       </div>
+
+      {/* Smart Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#8b5cf6' }}>
+            <div className="flex items-center gap-2">
+              <Zap size={16} className="text-purple-400" />
+              <span className="text-sm font-semibold text-text-primary">Smart Recommendations</span>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#8b5cf622', color: '#8b5cf6' }}>
+              {recommendations.length}
+            </span>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {recommendations.map((rec: any, idx: number) => {
+              const priorityColors: Record<string, string> = { critical: '#ef4444', high: '#d97706', medium: '#3b82f6' };
+              const color = priorityColors[rec.priority] || '#6b7280';
+              return (
+                <div
+                  key={rec.debtId + idx}
+                  className="flex items-start gap-3 px-4 py-3 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
+                  onClick={() => onViewDebt(rec.debtId)}
+                >
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: color + '22', color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
+                    {rec.priority}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-text-primary font-medium">{rec.debtorName}</p>
+                    <p className="text-xs text-text-secondary font-semibold">{rec.recommendation}</p>
+                    <p className="text-xs text-text-muted mt-0.5">{rec.reason}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

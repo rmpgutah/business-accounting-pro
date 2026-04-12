@@ -3111,6 +3111,187 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('debt:batch-recalc-interest', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { updated: 0 };
+      const dbInstance = db.getDb();
+
+      const debts = dbInstance.prepare(`
+        SELECT id, original_amount, interest_rate, interest_type,
+               compound_frequency, interest_start_date, interest_accrued,
+               fees_accrued, payments_made
+        FROM debts
+        WHERE company_id = ? AND status NOT IN ('settled','written_off') AND interest_rate > 0
+      `).all(companyId) as any[];
+
+      let updated = 0;
+      const recalcTx = dbInstance.transaction(() => {
+        for (const d of debts) {
+          if (!d.interest_start_date) continue;
+          const days = Math.max(0, (Date.now() - new Date(d.interest_start_date).getTime()) / 86_400_000);
+          const years = days / 365.25;
+          let interest: number;
+
+          if (d.interest_type === 'compound') {
+            const n = d.compound_frequency || 12;
+            interest = d.original_amount * Math.pow(1 + d.interest_rate / n, n * years) - d.original_amount;
+          } else {
+            interest = d.original_amount * d.interest_rate * years;
+          }
+
+          interest = Math.round(interest * 100) / 100;
+          const oldInterest = d.interest_accrued || 0;
+          const newBalance = d.original_amount + interest + (d.fees_accrued || 0) - (d.payments_made || 0);
+
+          dbInstance.prepare(`
+            UPDATE debts SET interest_accrued = ?, balance_due = ?, updated_at = datetime('now') WHERE id = ?
+          `).run(interest, Math.round(newBalance * 100) / 100, d.id);
+
+          logDebtAudit(d.id, 'interest_recalculated', 'interest_accrued',
+            String(oldInterest.toFixed(2)), String(interest.toFixed(2)), 'system');
+          updated++;
+        }
+      });
+      recalcTx();
+      if (updated > 0) scheduleAutoBackup();
+      return { updated };
+    } catch (err: any) {
+      return { error: err.message, updated: 0 };
+    }
+  });
+
+  ipcMain.handle('debt:smart-recommendations', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+      const recommendations: Array<{ debtId: string; debtorName: string; recommendation: string; reason: string; priority: string }> = [];
+
+      const debts = dbInstance.prepare(`
+        SELECT d.*,
+          (SELECT AVG(CAST(julianday(COALESCE(ps.exited_at, datetime('now'))) - julianday(ps.entered_at) AS REAL))
+           FROM debt_pipeline_stages ps WHERE ps.debt_id = d.id) as avg_days_in_stage,
+          (SELECT COUNT(*) FROM debt_promises dp WHERE dp.debt_id = d.id AND dp.kept = 0 AND dp.promised_date < ?) as broken_promises,
+          (SELECT COUNT(*) FROM debt_legal_actions la WHERE la.debt_id = d.id) as legal_action_count,
+          (SELECT COUNT(*) FROM debt_settlements s WHERE s.debt_id = d.id) as settlement_count,
+          (SELECT COUNT(*) FROM debt_plan_installments pi
+           JOIN debt_payment_plans pp ON pi.plan_id = pp.id
+           WHERE pp.debt_id = d.id AND pi.paid = 0 AND pi.due_date < ?) as missed_installments
+        FROM debts d
+        WHERE d.company_id = ? AND d.status NOT IN ('settled','written_off')
+        ORDER BY d.balance_due DESC
+        LIMIT 100
+      `).all(today, today, companyId) as any[];
+
+      // Pipeline velocity averages (for "2x average" rule)
+      const stageAvgs = dbInstance.prepare(`
+        SELECT stage, AVG(CAST(julianday(COALESCE(exited_at, datetime('now'))) - julianday(entered_at) AS REAL)) as avg_days
+        FROM debt_pipeline_stages ps
+        JOIN debts d ON ps.debt_id = d.id
+        WHERE d.company_id = ?
+        GROUP BY stage
+      `).all(companyId) as any[];
+      const stageAvgMap: Record<string, number> = {};
+      for (const sa of stageAvgs) stageAvgMap[sa.stage] = sa.avg_days || 30;
+
+      for (const d of debts) {
+        const daysDelinquent = d.delinquent_date
+          ? Math.floor((Date.now() - new Date(d.delinquent_date).getTime()) / 86_400_000)
+          : 0;
+        const currentStageAvg = stageAvgMap[d.current_stage] || 30;
+        const daysInCurrentStage = d.avg_days_in_stage || 0;
+
+        // Rule 1: Statute expiring within 90 days
+        if (d.statute_of_limitations_date) {
+          const daysToStatute = Math.floor((new Date(d.statute_of_limitations_date).getTime() - Date.now()) / 86_400_000);
+          if (daysToStatute <= 90 && daysToStatute > 0 && d.legal_action_count === 0) {
+            recommendations.push({
+              debtId: d.id, debtorName: d.debtor_name,
+              recommendation: 'URGENT: File before statute expires',
+              reason: `Statute expires in ${daysToStatute} days (${d.statute_of_limitations_date}). No legal action filed.`,
+              priority: 'critical'
+            });
+            continue;
+          }
+        }
+
+        // Rule 2: Broken promises >= 2 AND pre-legal
+        if (d.broken_promises >= 2 && !['legal_action', 'judgment', 'garnishment'].includes(d.current_stage)) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Escalate — multiple broken promises',
+            reason: `${d.broken_promises} broken promises. Currently in ${d.current_stage} stage.`,
+            priority: 'high'
+          });
+          continue;
+        }
+
+        // Rule 3: High risk + no legal action
+        if (d.balance_due > 5000 && daysDelinquent > 120 && d.legal_action_count === 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Recommend legal action',
+            reason: `Balance $${d.balance_due.toFixed(0)}, ${daysDelinquent} days delinquent, no legal action filed.`,
+            priority: 'high'
+          });
+          continue;
+        }
+
+        // Rule 4: Payment plan failing (2+ missed installments)
+        if (d.missed_installments >= 2) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Payment plan failing — renegotiate or escalate',
+            reason: `${d.missed_installments} missed installments on active payment plan.`,
+            priority: 'high'
+          });
+          continue;
+        }
+
+        // Rule 5: No settlement offered for large old debts
+        if (d.balance_due > 5000 && daysDelinquent > 120 && d.settlement_count === 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Consider settlement offer at 70%',
+            reason: `Balance $${d.balance_due.toFixed(0)}, ${daysDelinquent} days delinquent, no settlement offered.`,
+            priority: 'medium'
+          });
+          continue;
+        }
+
+        // Rule 6: Days in stage > 2x average
+        if (daysInCurrentStage > currentStageAvg * 2 && currentStageAvg > 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Consider advancing to next stage',
+            reason: `${Math.round(daysInCurrentStage)} days in ${d.current_stage} (avg: ${Math.round(currentStageAvg)} days).`,
+            priority: 'medium'
+          });
+          continue;
+        }
+
+        // Rule 7: C&D active + no legal counsel
+        if (d.cease_desist_active && d.legal_action_count === 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Legal counsel needed — C&D limits options',
+            reason: 'Cease & desist is active but no legal action or counsel assigned.',
+            priority: 'high'
+          });
+        }
+      }
+
+      // Sort: critical first, then high, then medium
+      const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2 };
+      recommendations.sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9));
+
+      return recommendations.slice(0, 20);
+    } catch (err: any) {
+      console.error('debt:smart-recommendations error:', err);
+      return [];
+    }
+  });
+
   ipcMain.handle('debt:stats', (_event, { companyId }: { companyId: string }) => {
     const row = db.getDb().prepare(`
       SELECT
