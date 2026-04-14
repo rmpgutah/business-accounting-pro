@@ -6,11 +6,11 @@ import { syncPush } from '../sync';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { generateInvoicePDF, generateInvoiceHTML } from '../services/pdf-generator';
+import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
-import { openPrintPreview, saveHTMLAsPDF, printHTML } from '../services/print-preview';
+import { openPrintPreview, saveHTMLAsPDF, printHTML, htmlToPDFBuffer } from '../services/print-preview';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
 import http from 'http';
 import https from 'https';
@@ -420,6 +420,8 @@ export function registerIpcHandlers(): void {
     // Debt & Invoice Enhancement child tables — company_id lives on parent table
     'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
     'debt_compliance_log', 'invoice_debt_links',
+    'expense_line_items', 'debt_disputes',
+    'debt_audit_log', 'debt_payment_matches',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -448,6 +450,15 @@ export function registerIpcHandlers(): void {
       }
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      // Debt child table audit
+      const DEBT_CHILD_AUDIT: Record<string, string> = {
+        debt_payments: 'payment_recorded',
+        debt_communications: 'communication_logged',
+        debt_disputes: 'dispute_filed',
+      };
+      if (DEBT_CHILD_AUDIT[table] && (data.debt_id || payload.debt_id)) {
+        logDebtAudit(data.debt_id || payload.debt_id, DEBT_CHILD_AUDIT[table], table, '', record?.id || '');
+      }
       syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
       return record;
@@ -471,6 +482,21 @@ export function registerIpcHandlers(): void {
         }
         db.logAudit(companyId, table, id, 'update', changes);
       }
+      // Debt audit: log each changed field
+      if (table === 'debts' && id && old) {
+        try {
+          const newRow = db.getById('debts', id) as any;
+          if (newRow) {
+            for (const key of Object.keys(data)) {
+              const oldVal = String((old as any)[key] ?? '');
+              const newVal = String(newRow[key] ?? '');
+              if (oldVal !== newVal) {
+                logDebtAudit(id, 'field_edit', key, oldVal, newVal);
+              }
+            }
+          }
+        } catch (_) {}
+      }
       syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
       return record;
@@ -482,6 +508,15 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('db:delete', (_event, { table, id }) => {
     try {
+      // Debt child table audit — read debt_id before deletion
+      const DEBT_AUDIT_TABLES = ['debt_payments', 'debt_communications', 'debt_evidence', 'debt_legal_actions',
+        'debt_settlements', 'debt_disputes', 'debt_contacts', 'debt_promises', 'debt_notes'];
+      if (DEBT_AUDIT_TABLES.includes(table)) {
+        try {
+          const row = db.getById(table, id) as any;
+          if (row?.debt_id) logDebtAudit(row.debt_id, 'record_deleted', table, id, '');
+        } catch (_) {}
+      }
       const companyId = db.getCurrentCompanyId();
       if (companyId) db.logAudit(companyId, table, id, 'delete');
       db.remove(table, id);
@@ -536,6 +571,68 @@ export function registerIpcHandlers(): void {
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── Atomic expense save (header + line items in one transaction) ─────────
+  ipcMain.handle('expense:save', (_event, { expenseId, expenseData, lineItems, isEdit }: {
+    expenseId: string | null;
+    expenseData: Record<string, any>;
+    lineItems: Array<Record<string, any>>;
+    isEdit: boolean;
+  }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      const rawDb = db.getDb();
+
+      const saveFn = rawDb.transaction(() => {
+        let savedId: string;
+
+        // Auto-calculate amount from line items when present
+        if (lineItems.length > 0) {
+          expenseData.amount = lineItems.reduce((sum: number, li: any) => sum + ((li.quantity || 1) * (li.unit_price || 0)), 0);
+        }
+
+        if (isEdit && expenseId) {
+          db.update('expenses', expenseId, expenseData);
+          savedId = expenseId;
+          // Replace line items atomically
+          const oldLines = db.queryAll('expense_line_items', { expense_id: expenseId });
+          for (const ol of oldLines) db.remove('expense_line_items', ol.id);
+        } else {
+          // Apply tax rules on create
+          if (companyId) {
+            const taxResults = evaluateRules({ category: 'tax', record: { ...expenseData, company_id: companyId }, company_id: companyId, db: rawDb });
+            Object.assign(expenseData, mergePatches(taxResults));
+            expenseData.rules_applied = rulesAppliedSummary(taxResults);
+            // Apply approval rules
+            const approvalResults = evaluateRules({ category: 'approval', record: { ...expenseData, _type: 'expenses', company_id: companyId }, company_id: companyId, db: rawDb });
+            if (approvalResults.some((r: any) => r.matched)) expenseData.status = 'pending_approval';
+          }
+          const record = db.create('expenses', { ...expenseData, company_id: companyId });
+          savedId = record.id;
+        }
+
+        // Insert new line items
+        for (let i = 0; i < lineItems.length; i++) {
+          db.create('expense_line_items', {
+            ...lineItems[i],
+            expense_id: savedId,
+            amount: (lineItems[i].quantity || 1) * (lineItems[i].unit_price || 0),
+            sort_order: i,
+          });
+        }
+
+        return savedId;
+      });
+
+      const savedId = saveFn();
+      if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
+      scheduleAutoBackup();
+      return { id: savedId };
+    } catch (err) {
+      console.error('expense:save failed:', err);
       return { error: err instanceof Error ? err.message : String(err) };
     }
   });
@@ -728,19 +825,17 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── PDF Generate (Invoice) — Download via Save Dialog ──
-  ipcMain.handle('invoice:generate-pdf', async (_event, invoiceId: string) => {
+  // Accepts optional pre-built HTML from the renderer so the saved PDF
+  // matches the preview exactly (including settings, payment schedule, etc.)
+  ipcMain.handle('invoice:generate-pdf', async (_event, payload: string | { invoiceId: string; html?: string }) => {
+    const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
+    const providedHTML = typeof payload === 'string' ? undefined : payload.html;
+
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
 
-    const dbInstance = db.getDb();
     const invoice = db.getById('invoices', invoiceId);
     if (!invoice) return { error: 'Invoice not found' };
-
-    const client = db.getById('clients', invoice.client_id);
-    const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
 
     const { filePath } = await dialog.showSaveDialog({
       defaultPath: `Invoice-${invoice.invoice_number}.pdf`,
@@ -750,7 +845,18 @@ export function registerIpcHandlers(): void {
     if (!filePath) return { cancelled: true };
 
     try {
-      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      let pdfBuffer: Buffer;
+      if (providedHTML) {
+        pdfBuffer = await htmlToPDFBuffer(providedHTML);
+      } else {
+        const dbInstance = db.getDb();
+        const client = db.getById('clients', invoice.client_id);
+        const company = db.getById('companies', companyId);
+        const lineItems = dbInstance.prepare(
+          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+        ).all(invoiceId) as any[];
+        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      }
       fs.writeFileSync(filePath, pdfBuffer);
       return { path: filePath };
     } catch (err: any) {
@@ -758,37 +864,67 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // ─── PDF Preview (Invoice) — Opens in new window ───────
-  ipcMain.handle('invoice:preview-pdf', async (_event, invoiceId: string) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
+  // ─── Batch PDF Export ──────────────────────────────────
+  ipcMain.handle('invoice:batch-pdf', async (_event, { invoiceIds }: { invoiceIds: string[] }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { error: 'No company selected' };
 
-    const dbInstance = db.getDb();
-    const invoice = db.getById('invoices', invoiceId);
-    if (!invoice) return { error: 'Invoice not found' };
+      const { filePath } = await dialog.showSaveDialog({
+        defaultPath: `Invoices-Batch-${new Date().toISOString().slice(0, 10)}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (!filePath) return { cancelled: true };
 
-    const client = db.getById('clients', invoice.client_id);
-    const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
+      const dbInstance = db.getDb();
+      const company = db.getById('companies', companyId);
+      const allHtml: string[] = [];
 
-    const html = generateInvoiceHTML(invoice, company, client, lineItems);
+      for (const invId of invoiceIds) {
+        const invoice = db.getById('invoices', invId);
+        if (!invoice) continue;
+        const client = db.getById('clients', invoice.client_id);
+        const lineItems = dbInstance.prepare(
+          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+        ).all(invId) as any[];
+        const html = buildInvoiceHTML(company, client, invoice, lineItems);
+        allHtml.push(html);
+      }
 
-    const previewWin = new BrowserWindow({
-      width: 820,
-      height: 1060,
-      title: `Invoice ${invoice.invoice_number} — Preview`,
-      autoHideMenuBar: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
-    });
+      // Combine all invoices into one HTML with page breaks
+      const combinedHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        @media print { .page-break { page-break-before: always; } }
+        .page-break { page-break-before: always; }
+      </style></head><body>
+        ${allHtml.map((h, i) => {
+          const body = h.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] || h;
+          return i === 0 ? body : `<div class="page-break"></div>${body}`;
+        }).join('')}
+      </body></html>`;
 
-    await previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    return { success: true };
+      const pdfBuffer = await htmlToPDFBuffer(combinedHTML);
+      fs.writeFileSync(filePath, pdfBuffer);
+      return { path: filePath, count: allHtml.length };
+    } catch (err: any) {
+      return { error: err?.message || 'Batch PDF failed' };
+    }
   });
 
+  // NOTE: invoice:preview-pdf removed — the renderer now uses print:preview
+  // with client-generated HTML (see InvoiceDetail.handlePreview). That path
+  // respects invoice_settings and payment_schedule; the old server template
+  // did not.
+
   // ─── Email Invoice ─────────────────────────────────────
-  ipcMain.handle('invoice:send-email', async (_event, invoiceId: string) => {
+  // Accepts optional pre-built HTML from the renderer so the PDF attachment
+  // matches what the user sees in the preview (including logo, accent color,
+  // template style, column config, payment schedule, watermark, footer).
+  // Falls back to the server-side template only if no HTML is provided.
+  ipcMain.handle('invoice:send-email', async (_event, payload: string | { invoiceId: string; html?: string }) => {
+    // Back-compat: old callers passed the invoiceId as a bare string.
+    const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
+    const providedHTML = typeof payload === 'string' ? undefined : payload.html;
+
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
 
@@ -798,23 +934,32 @@ export function registerIpcHandlers(): void {
 
     const client = db.getById('clients', invoice.client_id);
     const company = db.getById('companies', companyId);
-    const lineItems = dbInstance.prepare(
-      'SELECT * FROM invoice_line_items WHERE invoice_id = ?'
-    ).all(invoiceId) as any[];
 
     try {
-      // Generate PDF to temp location
-      const pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      // Generate PDF to temp location — prefer renderer-built HTML (uses settings),
+      // fall back to the basic server template if none was supplied.
+      let pdfBuffer: Buffer;
+      if (providedHTML) {
+        pdfBuffer = await htmlToPDFBuffer(providedHTML);
+      } else {
+        const lineItems = dbInstance.prepare(
+          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+        ).all(invoiceId) as any[];
+        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+      }
+
       const tmpDir = os.tmpdir();
-      const pdfPath = path.join(tmpDir, `Invoice-${invoice.invoice_number}.pdf`);
+      const safeNumber = String(invoice.invoice_number || invoiceId).replace(/[^a-zA-Z0-9-_]/g, '');
+      const pdfPath = path.join(tmpDir, `Invoice-${safeNumber}.pdf`);
       fs.writeFileSync(pdfPath, pdfBuffer);
 
       // Open email client with pre-filled content
       const emailResult = await sendInvoiceEmail(invoice, company, client);
 
       if (emailResult.success) {
+        const previousStatus = invoice.status;
         // Update invoice status to sent if still draft
-        if (invoice.status === 'draft') {
+        if (previousStatus === 'draft') {
           db.update('invoices', invoiceId, { status: 'sent' });
         }
 
@@ -828,7 +973,7 @@ export function registerIpcHandlers(): void {
           companyId,
           client?.email || '',
           `Invoice ${invoice.invoice_number} from ${company?.name || ''}`,
-          'Invoice email opened in mail client',
+          'Mail client opened with PDF attached from temp folder',
           'invoice',
           invoiceId,
           'sent',
@@ -837,9 +982,16 @@ export function registerIpcHandlers(): void {
 
         // Reveal the PDF in filesystem so user can attach it
         shell.showItemInFolder(pdfPath);
+        scheduleAutoBackup();
+
+        return {
+          success: true,
+          pdfPath,
+          newStatus: previousStatus === 'draft' ? 'sent' : previousStatus,
+        };
       }
 
-      return { ...emailResult, pdfPath, newStatus: invoice.status === 'draft' ? 'sent' : invoice.status };
+      return { ...emailResult, pdfPath };
     } catch (err: any) {
       return { error: err?.message || 'Failed to send email' };
     }
@@ -1109,6 +1261,7 @@ export function registerIpcHandlers(): void {
         kept: data.kept ? 1 : 0,
         notes: data.notes || '',
       });
+      logDebtAudit(data.debt_id, 'promise_recorded', 'promised_date', '', (data.promised_date || '') + ' $' + (data.promised_amount || 0));
       scheduleAutoBackup();
       return result;
     } catch (err) {
@@ -1118,7 +1271,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('debt:promise-update', (_event, { id, kept, notes }: { id: string; kept: boolean; notes?: string }) => {
     try {
+      const promise = db.getDb().prepare('SELECT debt_id FROM debt_promises WHERE id = ?').get(id) as any;
       const result = db.update('debt_promises', id, { kept: kept ? 1 : 0, notes: notes || '' });
+      if (promise?.debt_id) logDebtAudit(promise.debt_id, 'promise_updated', 'kept', '', kept ? 'kept' : 'broken');
       scheduleAutoBackup();
       return result;
     } catch (err) {
@@ -1587,9 +1742,9 @@ export function registerIpcHandlers(): void {
     const tx = (dbInstance as any).transaction(() => {
       const paymentId = uuid();
       (dbInstance as any).prepare(`
-        INSERT INTO payments (id, invoice_id, amount, date, payment_method, reference)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(paymentId, invoiceId, amount, date, method || 'transfer', reference || '');
+        INSERT INTO payments (id, company_id, invoice_id, amount, date, payment_method, reference)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(paymentId, companyId, invoiceId, amount, date, method || 'transfer', reference || '');
 
       const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
       if (!invoice) throw new Error('Invoice not found');
@@ -2902,8 +3057,30 @@ export function registerIpcHandlers(): void {
     }
 
     if (table === 'expenses') { clone.date = today; }
-    const cols = Object.keys(clone);
-    dbInstance.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
+
+    const cloneTx = dbInstance.transaction(() => {
+      const cols = Object.keys(clone);
+      dbInstance.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
+
+      // Clone child line items
+      const LINE_ITEM_TABLES: Record<string, string> = {
+        invoices: 'invoice_line_items',
+        bills: 'bill_line_items',
+        expenses: 'expense_line_items',
+      };
+      const lineTable = LINE_ITEM_TABLES[table];
+      const parentCol = table === 'invoices' ? 'invoice_id' : table === 'bills' ? 'bill_id' : 'expense_id';
+      if (lineTable) {
+        const lines = dbInstance.prepare(`SELECT * FROM ${lineTable} WHERE ${parentCol} = ?`).all(id) as any[];
+        for (const line of lines) {
+          const newLine = { ...line, id: uuid(), [parentCol]: newId };
+          const lineCols = Object.keys(newLine);
+          dbInstance.prepare(`INSERT INTO ${lineTable} (${lineCols.join(',')}) VALUES (${lineCols.map(c => '@' + c).join(',')})`).run(newLine);
+        }
+      }
+    });
+    cloneTx();
+    scheduleAutoBackup();
     return { id: newId };
   });
 
@@ -2947,6 +3124,242 @@ export function registerIpcHandlers(): void {
     return principal * rate * (days / 365);
   }
 
+  // ─── Audit Log Helper ──────────────────────────────────
+  // Immutable chain-of-custody logging. Called by every debt-mutating handler.
+  // MUST NEVER throw — audit is a side-effect, not a gate.
+  function logDebtAudit(
+    debtId: string,
+    action: string,
+    fieldName: string = '',
+    oldValue: string = '',
+    newValue: string = '',
+    performedBy: string = 'user'
+  ): void {
+    try {
+      const dbInstance = db.getDb();
+      dbInstance.prepare(`
+        INSERT INTO debt_audit_log (id, debt_id, action, field_name, old_value, new_value, performed_by, performed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `).run(uuid(), debtId, action, fieldName, oldValue, newValue, performedBy);
+    } catch (_) { /* audit logging must never crash the primary operation */ }
+  }
+
+  // ─── Debt: Audit Log Query ────────────────────────────
+  ipcMain.handle('debt:audit-log', (_event, { debtId, limit }: { debtId: string; limit?: number }) => {
+    try {
+      return db.getDb().prepare(
+        'SELECT * FROM debt_audit_log WHERE debt_id = ? ORDER BY performed_at DESC LIMIT ?'
+      ).all(debtId, limit || 200);
+    } catch (_) {
+      return [];
+    }
+  });
+
+  ipcMain.handle('debt:generate-court-packet', async (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      const debt = db.getById('debts', debtId);
+      if (!debt) return { error: 'Debt not found' };
+      const company = companyId ? db.getById('companies', companyId) : null;
+
+      const communications = dbInstance.prepare('SELECT * FROM debt_communications WHERE debt_id = ? ORDER BY logged_at ASC').all(debtId);
+      const payments = dbInstance.prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY received_date ASC').all(debtId);
+      const evidence = dbInstance.prepare('SELECT * FROM debt_evidence WHERE debt_id = ? ORDER BY date_of_evidence ASC').all(debtId);
+      const compliance = dbInstance.prepare('SELECT * FROM debt_compliance_log WHERE debt_id = ? ORDER BY event_date ASC').all(debtId);
+      const auditLog = dbInstance.prepare('SELECT * FROM debt_audit_log WHERE debt_id = ? ORDER BY performed_at ASC').all(debtId);
+      const settlements = dbInstance.prepare('SELECT * FROM debt_settlements WHERE debt_id = ? ORDER BY created_at ASC').all(debtId);
+      const contacts = dbInstance.prepare('SELECT * FROM debt_contacts WHERE debt_id = ? ORDER BY role ASC').all(debtId);
+      const disputes = dbInstance.prepare('SELECT * FROM debt_disputes WHERE debt_id = ? ORDER BY created_at ASC').all(debtId);
+      const legalActions = dbInstance.prepare('SELECT * FROM debt_legal_actions WHERE debt_id = ? ORDER BY created_at ASC').all(debtId);
+
+      return { debt, company, communications, payments, evidence, compliance, auditLog, settlements, contacts, disputes, legalActions };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:batch-recalc-interest', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { updated: 0 };
+      const dbInstance = db.getDb();
+
+      const debts = dbInstance.prepare(`
+        SELECT id, original_amount, interest_rate, interest_type,
+               compound_frequency, interest_start_date, interest_accrued,
+               fees_accrued, payments_made
+        FROM debts
+        WHERE company_id = ? AND status NOT IN ('settled','written_off') AND interest_rate > 0
+      `).all(companyId) as any[];
+
+      let updated = 0;
+      const recalcTx = dbInstance.transaction(() => {
+        for (const d of debts) {
+          if (!d.interest_start_date) continue;
+          const days = Math.max(0, (Date.now() - new Date(d.interest_start_date).getTime()) / 86_400_000);
+          const years = days / 365.25;
+          let interest: number;
+
+          if (d.interest_type === 'compound') {
+            const n = d.compound_frequency || 12;
+            interest = d.original_amount * Math.pow(1 + d.interest_rate / n, n * years) - d.original_amount;
+          } else {
+            interest = d.original_amount * d.interest_rate * years;
+          }
+
+          interest = Math.round(interest * 100) / 100;
+          const oldInterest = d.interest_accrued || 0;
+          const newBalance = d.original_amount + interest + (d.fees_accrued || 0) - (d.payments_made || 0);
+
+          dbInstance.prepare(`
+            UPDATE debts SET interest_accrued = ?, balance_due = ?, updated_at = datetime('now') WHERE id = ?
+          `).run(interest, Math.round(newBalance * 100) / 100, d.id);
+
+          logDebtAudit(d.id, 'interest_recalculated', 'interest_accrued',
+            String(oldInterest.toFixed(2)), String(interest.toFixed(2)), 'system');
+          updated++;
+        }
+      });
+      recalcTx();
+      if (updated > 0) scheduleAutoBackup();
+      return { updated };
+    } catch (err: any) {
+      return { error: err.message, updated: 0 };
+    }
+  });
+
+  ipcMain.handle('debt:smart-recommendations', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+      const recommendations: Array<{ debtId: string; debtorName: string; recommendation: string; reason: string; priority: string }> = [];
+
+      const debts = dbInstance.prepare(`
+        SELECT d.*,
+          (SELECT AVG(CAST(julianday(COALESCE(ps.exited_at, datetime('now'))) - julianday(ps.entered_at) AS REAL))
+           FROM debt_pipeline_stages ps WHERE ps.debt_id = d.id) as avg_days_in_stage,
+          (SELECT COUNT(*) FROM debt_promises dp WHERE dp.debt_id = d.id AND dp.kept = 0 AND dp.promised_date < ?) as broken_promises,
+          (SELECT COUNT(*) FROM debt_legal_actions la WHERE la.debt_id = d.id) as legal_action_count,
+          (SELECT COUNT(*) FROM debt_settlements s WHERE s.debt_id = d.id) as settlement_count,
+          (SELECT COUNT(*) FROM debt_plan_installments pi
+           JOIN debt_payment_plans pp ON pi.plan_id = pp.id
+           WHERE pp.debt_id = d.id AND pi.paid = 0 AND pi.due_date < ?) as missed_installments
+        FROM debts d
+        WHERE d.company_id = ? AND d.status NOT IN ('settled','written_off')
+        ORDER BY d.balance_due DESC
+        LIMIT 100
+      `).all(today, today, companyId) as any[];
+
+      // Pipeline velocity averages (for "2x average" rule)
+      const stageAvgs = dbInstance.prepare(`
+        SELECT stage, AVG(CAST(julianday(COALESCE(exited_at, datetime('now'))) - julianday(entered_at) AS REAL)) as avg_days
+        FROM debt_pipeline_stages ps
+        JOIN debts d ON ps.debt_id = d.id
+        WHERE d.company_id = ?
+        GROUP BY stage
+      `).all(companyId) as any[];
+      const stageAvgMap: Record<string, number> = {};
+      for (const sa of stageAvgs) stageAvgMap[sa.stage] = sa.avg_days || 30;
+
+      for (const d of debts) {
+        const daysDelinquent = d.delinquent_date
+          ? Math.floor((Date.now() - new Date(d.delinquent_date).getTime()) / 86_400_000)
+          : 0;
+        const currentStageAvg = stageAvgMap[d.current_stage] || 30;
+        const daysInCurrentStage = d.avg_days_in_stage || 0;
+
+        // Rule 1: Statute expiring within 90 days
+        if (d.statute_of_limitations_date) {
+          const daysToStatute = Math.floor((new Date(d.statute_of_limitations_date).getTime() - Date.now()) / 86_400_000);
+          if (daysToStatute <= 90 && daysToStatute > 0 && d.legal_action_count === 0) {
+            recommendations.push({
+              debtId: d.id, debtorName: d.debtor_name,
+              recommendation: 'URGENT: File before statute expires',
+              reason: `Statute expires in ${daysToStatute} days (${d.statute_of_limitations_date}). No legal action filed.`,
+              priority: 'critical'
+            });
+            continue;
+          }
+        }
+
+        // Rule 2: Broken promises >= 2 AND pre-legal
+        if (d.broken_promises >= 2 && !['legal_action', 'judgment', 'garnishment'].includes(d.current_stage)) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Escalate — multiple broken promises',
+            reason: `${d.broken_promises} broken promises. Currently in ${d.current_stage} stage.`,
+            priority: 'high'
+          });
+          continue;
+        }
+
+        // Rule 3: High risk + no legal action
+        if (d.balance_due > 5000 && daysDelinquent > 120 && d.legal_action_count === 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Recommend legal action',
+            reason: `Balance $${d.balance_due.toFixed(0)}, ${daysDelinquent} days delinquent, no legal action filed.`,
+            priority: 'high'
+          });
+          continue;
+        }
+
+        // Rule 4: Payment plan failing (2+ missed installments)
+        if (d.missed_installments >= 2) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Payment plan failing — renegotiate or escalate',
+            reason: `${d.missed_installments} missed installments on active payment plan.`,
+            priority: 'high'
+          });
+          continue;
+        }
+
+        // Rule 5: No settlement offered for large old debts
+        if (d.balance_due > 5000 && daysDelinquent > 120 && d.settlement_count === 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Consider settlement offer at 70%',
+            reason: `Balance $${d.balance_due.toFixed(0)}, ${daysDelinquent} days delinquent, no settlement offered.`,
+            priority: 'medium'
+          });
+          continue;
+        }
+
+        // Rule 6: Days in stage > 2x average
+        if (daysInCurrentStage > currentStageAvg * 2 && currentStageAvg > 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Consider advancing to next stage',
+            reason: `${Math.round(daysInCurrentStage)} days in ${d.current_stage} (avg: ${Math.round(currentStageAvg)} days).`,
+            priority: 'medium'
+          });
+          continue;
+        }
+
+        // Rule 7: C&D active + no legal counsel
+        if (d.cease_desist_active && d.legal_action_count === 0) {
+          recommendations.push({
+            debtId: d.id, debtorName: d.debtor_name,
+            recommendation: 'Legal counsel needed — C&D limits options',
+            reason: 'Cease & desist is active but no legal action or counsel assigned.',
+            priority: 'high'
+          });
+        }
+      }
+
+      // Sort: critical first, then high, then medium
+      const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2 };
+      recommendations.sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9));
+
+      return recommendations.slice(0, 20);
+    } catch (err: any) {
+      console.error('debt:smart-recommendations error:', err);
+      return [];
+    }
+  });
+
   ipcMain.handle('debt:stats', (_event, { companyId }: { companyId: string }) => {
     const row = db.getDb().prepare(`
       SELECT
@@ -2975,6 +3388,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:advance-stage', (_event, { debtId, notes }: { debtId: string; notes?: string }) => {
     const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
     if (!debt) throw new Error('Debt not found');
+    const oldStage = debt.current_stage || '';
     const currentIdx = DEBT_STAGE_ORDER.indexOf(debt.current_stage);
     if (currentIdx < 0 || currentIdx >= DEBT_STAGE_ORDER.length - 1) return;
     const nextStage = DEBT_STAGE_ORDER[currentIdx + 1];
@@ -2985,17 +3399,21 @@ export function registerIpcHandlers(): void {
     // Update debt
     const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
     db.getDb().prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debtId);
+    logDebtAudit(debtId, 'stage_advance', 'current_stage', oldStage, nextStage);
     scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:hold-toggle', (_event, { debtId, hold, reason }: { debtId: string; hold: boolean; reason?: string }) => {
     db.getDb().prepare('UPDATE debts SET hold = ?, hold_reason = ?, updated_at = datetime(\'now\') WHERE id = ?').run(hold ? 1 : 0, reason || '', debtId);
+    logDebtAudit(debtId, 'hold_toggle', 'hold', hold ? '0' : '1', hold ? '1' : '0');
     scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:assign-collector', (_event, { debtId, collectorId }: { debtId: string; collectorId: string | null }) => {
     try {
+      const oldDebt = db.getById('debts', debtId) as any;
       db.update('debts', debtId, { assigned_collector_id: collectorId || null });
+      logDebtAudit(debtId, 'assignment_change', 'assigned_collector_id', oldDebt?.assigned_collector_id || '', collectorId || '');
       scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
@@ -3328,6 +3746,7 @@ export function registerIpcHandlers(): void {
         });
         d.setDate(d.getDate() + days);
       }
+      logDebtAudit(debt_id, 'plan_created', 'payment_plan', '', installment_amount ? '$' + installment_amount + ' plan' : 'Plan saved');
       scheduleAutoBackup();
       return db.queryAll('debt_plan_installments', { plan_id: plan.id }, { field: 'due_date', dir: 'asc' });
     } catch (err: any) {
@@ -3362,6 +3781,7 @@ export function registerIpcHandlers(): void {
         debt_id, offer_amount, offer_pct, offered_date,
         notes: notes || '', response: 'pending',
       });
+      logDebtAudit(debt_id, 'settlement_offered', 'offer_amount', '', String(offer_amount || 0));
       scheduleAutoBackup();
       return result;
     } catch (err: any) {
@@ -3389,6 +3809,7 @@ export function registerIpcHandlers(): void {
         accepted_date: new Date().toISOString().slice(0, 10),
       });
       db.update('debts', debtId, { status: 'settled', balance_due: offer_amount });
+      logDebtAudit(debtId, 'settlement_accepted', 'status', 'in_collection', 'settled');
       scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
@@ -3405,6 +3826,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:compliance-save', (_event, data) => {
     try {
       const result = db.create('debt_compliance_log', data);
+      logDebtAudit(data.debt_id, 'compliance_event', 'event_type', '', data.event_type || '');
       scheduleAutoBackup();
       return result;
     } catch (err: any) {
@@ -3432,10 +3854,12 @@ export function registerIpcHandlers(): void {
           db.create('debt_pipeline_stages', { debt_id: (debt as any).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
           db.create('debt_communications', {
             debt_id: (debt as any).id,
-            type: 'note',
-            date: now.toISOString().slice(0, 10),
-            notes: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
+            type: 'letter',
+            direction: 'outbound',
+            subject: 'Auto-advance notification',
+            body: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
             outcome: 'auto_advanced',
+            logged_by: 'system',
           });
           advanced++;
         }
@@ -3523,8 +3947,475 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:quick-note', (_event, { debtId, note }: { debtId: string; note: string }) => {
     try {
       const result = db.create('debt_notes', { debt_id: debtId, note, created_by: 'user' });
+      logDebtAudit(debtId, 'note_added', 'notes', '', note.substring(0, 100));
       scheduleAutoBackup();
       return result;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Debt: Add Fee ────────────────────────────────────────
+  ipcMain.handle('debt:add-fee', (_event, { debtId, amount, feeType, description }: { debtId: string; amount: number; feeType: string; description: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const addFeeTx = dbInstance.transaction(() => {
+        dbInstance.prepare(
+          `UPDATE debts SET fees_accrued = fees_accrued + ?, balance_due = balance_due + ?, updated_at = datetime('now') WHERE id = ?`
+        ).run(amount, amount, debtId);
+        // Log as activity note
+        db.create('debt_notes', {
+          debt_id: debtId,
+          note: `Fee added: $${amount.toFixed(2)} (${feeType}) — ${description || 'No description'}`,
+          created_by: 'system',
+        });
+      });
+      addFeeTx();
+      logDebtAudit(debtId, 'fee_added', 'fees_accrued', '', amount.toFixed(2) + ' (' + feeType + ')');
+      scheduleAutoBackup();
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Debt: Collector Performance ─────────────────────────
+  ipcMain.handle('debt:collector-performance', (_event, { startDate, endDate }: { startDate?: string; endDate?: string }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return [];
+      const dbInstance = db.getDb();
+      const dateFilter = startDate && endDate
+        ? `AND d.created_at BETWEEN '${startDate}' AND '${endDate}'`
+        : '';
+      const rows = dbInstance.prepare(`
+        SELECT
+          u.id as collector_id,
+          u.name as collector_name,
+          COUNT(DISTINCT d.id) as active_cases,
+          COALESCE(SUM(d.original_amount), 0) as total_owed,
+          COALESCE(SUM(d.payments_made), 0) as total_collected,
+          CASE WHEN SUM(d.original_amount) > 0
+            THEN ROUND(SUM(d.payments_made) * 100.0 / SUM(d.original_amount), 1)
+            ELSE 0 END as recovery_rate,
+          COALESCE(AVG(
+            CASE WHEN d.payments_made > 0
+              THEN CAST(julianday((SELECT MIN(dp.received_date) FROM debt_payments dp WHERE dp.debt_id = d.id)) - julianday(d.delinquent_date) AS INTEGER)
+              ELSE NULL END
+          ), 0) as avg_days_to_first_payment
+        FROM users u
+        INNER JOIN debts d ON d.assigned_collector_id = u.id AND d.company_id = ?
+        ${dateFilter}
+        GROUP BY u.id, u.name
+        ORDER BY total_collected DESC
+      `).all(companyId);
+      return rows;
+    } catch (err: any) {
+      console.error('debt:collector-performance error:', err);
+      return [];
+    }
+  });
+
+  // ─── Debt: Collector Dashboard ────────────────────────────
+  ipcMain.handle('debt:collector-dashboard', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+      const weekAhead = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+
+      const brokenPromises = dbInstance.prepare(`
+        SELECT dp.*, d.debtor_name, d.balance_due, d.id as debt_id
+        FROM debt_promises dp
+        JOIN debts d ON dp.debt_id = d.id
+        WHERE d.company_id = ? AND dp.kept = 0 AND dp.promised_date < ?
+        ORDER BY dp.promised_date DESC LIMIT 25
+      `).all(companyId, today);
+
+      const overdueInstallments = dbInstance.prepare(`
+        SELECT dpi.*, dpp.debt_id, d.debtor_name, d.balance_due
+        FROM debt_plan_installments dpi
+        JOIN debt_payment_plans dpp ON dpi.plan_id = dpp.id
+        JOIN debts d ON dpp.debt_id = d.id
+        WHERE d.company_id = ? AND dpi.paid = 0 AND dpi.due_date < ?
+        ORDER BY dpi.due_date ASC LIMIT 25
+      `).all(companyId, today);
+
+      const upcomingHearings = dbInstance.prepare(`
+        SELECT dla.*, d.debtor_name, d.balance_due, d.id as debt_id
+        FROM debt_legal_actions dla
+        JOIN debts d ON dla.debt_id = d.id
+        WHERE d.company_id = ? AND dla.hearing_date BETWEEN ? AND ?
+        ORDER BY dla.hearing_date ASC LIMIT 25
+      `).all(companyId, today, weekAhead);
+
+      const followUpsDue = dbInstance.prepare(`
+        SELECT dc.*, d.debtor_name, d.balance_due, d.id as debt_id
+        FROM debt_communications dc
+        JOIN debts d ON dc.debt_id = d.id
+        WHERE d.company_id = ? AND dc.next_action_date <= ? AND dc.next_action_date != ''
+        ORDER BY dc.next_action_date ASC LIMIT 25
+      `).all(companyId, today);
+
+      return { brokenPromises, overdueInstallments, upcomingHearings, followUpsDue };
+    } catch (err: any) {
+      console.error('debt:collector-dashboard error:', err);
+      return { brokenPromises: [], overdueInstallments: [], upcomingHearings: [], followUpsDue: [] };
+    }
+  });
+
+  // ─── Debt: Upcoming Installments ─────────────────────────
+  ipcMain.handle('debt:upcoming-installments', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const rows = dbInstance.prepare(`
+        SELECT dpi.*, dpp.debt_id
+        FROM debt_plan_installments dpi
+        JOIN debt_payment_plans dpp ON dpi.plan_id = dpp.id
+        WHERE dpp.debt_id = ?
+        ORDER BY dpi.due_date ASC
+      `).all(debtId);
+      return rows;
+    } catch (err: any) {
+      return [];
+    }
+  });
+
+  // ─── Debt: Upload Document ───────────────────────────────
+  ipcMain.handle('debt:upload-document', async (_event, { debtId, filePath, fileName, fileSize }: { debtId: string; filePath: string; fileName: string; fileSize: number }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) throw new Error('No active company');
+      const result = db.create('documents', {
+        company_id: companyId,
+        filename: fileName,
+        file_path: filePath,
+        file_size: fileSize || 0,
+        mime_type: '',
+        entity_type: 'debt',
+        entity_id: debtId,
+        tags: '[]',
+        description: '',
+      });
+      scheduleAutoBackup();
+      return result;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Debt: Bank Payment Matching ─────────────────────────────
+  ipcMain.handle('debt:match-bank-payments', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { auto_matched: 0, suggested: 0 };
+      const dbInstance = db.getDb();
+
+      // Get credit-side bank transactions not already matched
+      const txns = dbInstance.prepare(`
+        SELECT bt.* FROM bank_transactions bt
+        JOIN bank_accounts ba ON bt.bank_account_id = ba.id
+        WHERE ba.company_id = ? AND bt.type = 'credit'
+          AND bt.id NOT IN (SELECT bank_transaction_id FROM debt_payment_matches)
+          AND bt.id NOT IN (SELECT COALESCE(reference_number, '') FROM debt_payments WHERE reference_number IS NOT NULL AND reference_number != '')
+        ORDER BY bt.date DESC LIMIT 200
+      `).all(companyId) as any[];
+
+      // Get active debts for matching
+      const debts = dbInstance.prepare(`
+        SELECT d.id, d.debtor_name, d.balance_due, d.source_id, i.invoice_number
+        FROM debts d
+        LEFT JOIN invoices i ON d.source_id = i.id
+        WHERE d.company_id = ? AND d.status NOT IN ('settled', 'written_off') AND d.balance_due > 0
+      `).all(companyId) as any[];
+
+      let autoMatched = 0;
+      let suggested = 0;
+
+      const matchTx = dbInstance.transaction(() => {
+        for (const txn of txns) {
+          const memo = (txn.description || txn.reference || '').toLowerCase();
+          let matched = false;
+
+          // Auto-match: check if memo contains an invoice number or debt source_id prefix
+          for (const debt of debts) {
+            const invoiceNum = (debt.invoice_number || '').toLowerCase();
+            const sourcePrefix = (debt.source_id || '').substring(0, 8).toLowerCase();
+
+            if (invoiceNum && memo.includes(invoiceNum)) {
+              db.create('debt_payments', {
+                debt_id: debt.id,
+                amount: txn.amount,
+                method: 'ach',
+                reference_number: txn.id,
+                received_date: txn.date || new Date().toISOString().slice(0, 10),
+                applied_to_principal: txn.amount,
+                applied_to_interest: 0,
+                applied_to_fees: 0,
+                notes: 'Auto-matched from bank import: ' + (txn.description || ''),
+              });
+
+              db.create('debt_payment_matches', {
+                bank_transaction_id: txn.id,
+                debt_id: debt.id,
+                match_type: 'auto',
+                confidence: 0.95,
+                status: 'accepted',
+              });
+
+              logDebtAudit(debt.id, 'payment_recorded', 'amount', '', String(txn.amount) + ' (auto-matched from bank)');
+              autoMatched++;
+              matched = true;
+              break;
+            }
+
+            if (sourcePrefix && sourcePrefix.length >= 6 && memo.includes(sourcePrefix)) {
+              db.create('debt_payments', {
+                debt_id: debt.id,
+                amount: txn.amount,
+                method: 'ach',
+                reference_number: txn.id,
+                received_date: txn.date || new Date().toISOString().slice(0, 10),
+                applied_to_principal: txn.amount,
+                applied_to_interest: 0,
+                applied_to_fees: 0,
+                notes: 'Auto-matched from bank import: ' + (txn.description || ''),
+              });
+
+              db.create('debt_payment_matches', {
+                bank_transaction_id: txn.id,
+                debt_id: debt.id,
+                match_type: 'auto',
+                confidence: 0.85,
+                status: 'accepted',
+              });
+
+              logDebtAudit(debt.id, 'payment_recorded', 'amount', '', String(txn.amount) + ' (auto-matched from bank)');
+              autoMatched++;
+              matched = true;
+              break;
+            }
+          }
+
+          if (matched) continue;
+
+          // Suggested match: amount within $0.01 of a debt's balance
+          for (const debt of debts) {
+            if (Math.abs(txn.amount - debt.balance_due) <= 0.01) {
+              db.create('debt_payment_matches', {
+                bank_transaction_id: txn.id,
+                debt_id: debt.id,
+                match_type: 'suggested',
+                confidence: 0.7,
+                status: 'pending',
+              });
+              suggested++;
+              break;
+            }
+          }
+        }
+      });
+      matchTx();
+      if (autoMatched > 0) scheduleAutoBackup();
+      return { auto_matched: autoMatched, suggested };
+    } catch (err: any) {
+      return { error: err.message, auto_matched: 0, suggested: 0 };
+    }
+  });
+
+  ipcMain.handle('debt:list-pending-matches', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return [];
+      return db.getDb().prepare(`
+        SELECT dpm.*, bt.date as txn_date, bt.amount as txn_amount, bt.description as txn_memo,
+               d.debtor_name, d.balance_due
+        FROM debt_payment_matches dpm
+        JOIN bank_transactions bt ON dpm.bank_transaction_id = bt.id
+        JOIN debts d ON dpm.debt_id = d.id
+        WHERE d.company_id = ? AND dpm.status = 'pending'
+        ORDER BY dpm.created_at DESC
+      `).all(companyId);
+    } catch (_) { return []; }
+  });
+
+  ipcMain.handle('debt:accept-match', (_event, { matchId }: { matchId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const match = dbInstance.prepare('SELECT * FROM debt_payment_matches WHERE id = ?').get(matchId) as any;
+      if (!match) return { error: 'Match not found' };
+
+      const txn = dbInstance.prepare('SELECT * FROM bank_transactions WHERE id = ?').get(match.bank_transaction_id) as any;
+      if (!txn) return { error: 'Transaction not found' };
+
+      db.create('debt_payments', {
+        debt_id: match.debt_id,
+        amount: txn.amount,
+        method: 'ach',
+        reference_number: txn.id,
+        received_date: txn.date || new Date().toISOString().slice(0, 10),
+        applied_to_principal: txn.amount,
+        applied_to_interest: 0,
+        applied_to_fees: 0,
+        notes: 'Matched from bank import: ' + (txn.description || ''),
+      });
+
+      dbInstance.prepare('UPDATE debt_payment_matches SET status = ? WHERE id = ?').run('accepted', matchId);
+      logDebtAudit(match.debt_id, 'payment_recorded', 'amount', '', String(txn.amount) + ' (bank match accepted)');
+      scheduleAutoBackup();
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('debt:reject-match', (_event, { matchId }: { matchId: string }) => {
+    try {
+      db.getDb().prepare('UPDATE debt_payment_matches SET status = ? WHERE id = ?').run('rejected', matchId);
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Invoice: Apply Late Fees ─────────────────────────────
+  ipcMain.handle('invoice:apply-late-fees', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { applied: 0 };
+      const dbInstance = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+      const overdue = dbInstance.prepare(`
+        SELECT id, total, late_fee_pct, late_fee_grace_days, due_date
+        FROM invoices
+        WHERE company_id = ? AND status IN ('sent','overdue','partial')
+          AND late_fee_pct > 0 AND late_fee_applied = 0
+          AND due_date != '' AND due_date IS NOT NULL
+      `).all(companyId) as any[];
+
+      let applied = 0;
+      const applyTx = dbInstance.transaction(() => {
+        for (const inv of overdue) {
+          const daysOverdue = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86_400_000);
+          if (daysOverdue <= (inv.late_fee_grace_days || 0)) continue;
+          const feeAmount = Math.round((inv.total || 0) * (inv.late_fee_pct / 100) * 100) / 100;
+          if (feeAmount <= 0) continue;
+          dbInstance.prepare(`
+            UPDATE invoices SET late_fee_amount = ?, late_fee_applied = 1, status = 'overdue', updated_at = datetime('now')
+            WHERE id = ?
+          `).run(feeAmount, inv.id);
+          applied++;
+        }
+      });
+      applyTx();
+      if (applied > 0) scheduleAutoBackup();
+      return { applied };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Invoice: Run Dunning ────────────────────────────────
+  ipcMain.handle('invoice:run-dunning', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { advanced: 0 };
+      const dbInstance = db.getDb();
+      const overdue = dbInstance.prepare(`
+        SELECT id, due_date, dunning_stage, client_id
+        FROM invoices
+        WHERE company_id = ? AND status IN ('sent','overdue','partial')
+          AND due_date != '' AND due_date IS NOT NULL
+      `).all(companyId) as any[];
+
+      // Dunning thresholds: stage 0→1 at 7d, 1→2 at 14d, 2→3 at 30d, 3→4 at 45d
+      const thresholds = [7, 14, 30, 45];
+      let advanced = 0;
+      const dunningTx = dbInstance.transaction(() => {
+        for (const inv of overdue) {
+          const daysOverdue = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86_400_000);
+          const currentStage = inv.dunning_stage || 0;
+          if (currentStage >= 4) continue;
+          const nextThreshold = thresholds[currentStage];
+          if (daysOverdue >= nextThreshold) {
+            dbInstance.prepare(`UPDATE invoices SET dunning_stage = ?, updated_at = datetime('now') WHERE id = ?`).run(currentStage + 1, inv.id);
+            advanced++;
+          }
+        }
+      });
+      dunningTx();
+      if (advanced > 0) scheduleAutoBackup();
+      return { advanced };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Payroll: Employee Summary ───────────────────────────
+  ipcMain.handle('payroll:employee-summary', (_event, { employeeId }: { employeeId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const year = new Date().getFullYear();
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      const ytd = dbInstance.prepare(`
+        SELECT
+          COALESCE(SUM(gross_pay), 0) as ytd_gross,
+          COALESCE(SUM(net_pay), 0) as ytd_net,
+          COALESCE(SUM(federal_tax + state_tax + social_security + medicare), 0) as ytd_taxes,
+          COALESCE(SUM(total_deductions), 0) as ytd_deductions,
+          COUNT(*) as pay_count,
+          MAX(pr.pay_date) as last_pay_date
+        FROM pay_stubs ps
+        JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+        WHERE ps.employee_id = ? AND pr.pay_date BETWEEN ? AND ?
+      `).get(employeeId, yearStart, yearEnd) as any;
+
+      const deductions = dbInstance.prepare(`
+        SELECT * FROM employee_deductions WHERE employee_id = ? AND (end_date IS NULL OR end_date >= ?)
+        ORDER BY type, name
+      `).all(employeeId, yearStart);
+
+      return { ytd: ytd || {}, deductions };
+    } catch (err: any) {
+      return { ytd: {}, deductions: [] };
+    }
+  });
+
+  // ─── Reports: Budget vs Actual ───────────────────────────
+  ipcMain.handle('reports:budget-vs-actual', (_event, { budgetId }: { budgetId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const budget = dbInstance.prepare('SELECT * FROM budgets WHERE id = ?').get(budgetId) as any;
+      if (!budget) return { error: 'Budget not found' };
+
+      const lines = dbInstance.prepare('SELECT * FROM budget_lines WHERE budget_id = ? ORDER BY category').all(budgetId) as any[];
+      const companyId = budget.company_id;
+
+      // Get actual expenses grouped by category for the budget period
+      const actuals = dbInstance.prepare(`
+        SELECT c.name as category, COALESCE(SUM(e.amount), 0) as actual
+        FROM expenses e
+        LEFT JOIN categories c ON e.category_id = c.id
+        WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+        GROUP BY c.name
+      `).all(companyId, budget.start_date, budget.end_date) as any[];
+
+      const actualMap = new Map(actuals.map((a: any) => [a.category, a.actual]));
+
+      const comparison = lines.map((line: any) => {
+        const actual = actualMap.get(line.category) || 0;
+        const variance = line.amount - actual;
+        const variancePct = line.amount > 0 ? Math.round((variance / line.amount) * 100) : 0;
+        return {
+          category: line.category,
+          budgeted: line.amount,
+          actual,
+          variance,
+          variance_pct: variancePct,
+        };
+      });
+
+      return { budget, comparison };
     } catch (err: any) {
       return { error: err.message };
     }

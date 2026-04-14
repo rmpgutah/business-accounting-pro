@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, Plus, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Plus, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 
 const EVENT_LABELS: Record<string, string> = {
@@ -20,12 +20,12 @@ interface Props {
 const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
   const [events, setEvents] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    event_type: 'validation_notice_sent',
-    event_date: '',
-    notes: '',
-  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const defaultForm = { event_type: 'validation_notice_sent', event_date: '', notes: '' };
+  const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   const load = async () => {
     try {
@@ -40,15 +40,45 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
     if (!form.event_date) return;
     setSaving(true);
     try {
-      await api.saveComplianceEvent({ debt_id: debtId, ...form });
+      if (editingId) {
+        await api.update('debt_compliance_log', editingId, form);
+      } else {
+        await api.saveComplianceEvent({ debt_id: debtId, ...form });
+      }
       setShowForm(false);
-      setForm({ event_type: 'validation_notice_sent', event_date: '', notes: '' });
+      setEditingId(null);
+      setForm(defaultForm);
       await load();
       onRefresh?.();
-    } catch (err) {
+      setOpSuccess(editingId ? 'Event updated' : 'Event logged'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to save compliance event:', err);
+      setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEdit = (ev: any) => {
+    setEditingId(ev.id);
+    setForm({
+      event_type: ev.event_type,
+      event_date: ev.event_date || '',
+      notes: ev.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this compliance event?')) return;
+    try {
+      await api.remove('debt_compliance_log', id);
+      await load();
+      onRefresh?.();
+      setOpSuccess('Event deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete compliance event:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -69,6 +99,9 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
           Log Event
         </button>
       </div>
+
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {hasCeaseDesist && (
         <div
@@ -170,7 +203,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
               >
                 {ev.event_date}
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   {EVENT_LABELS[ev.event_type] || ev.event_type}
                 </div>
@@ -179,6 +212,22 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
                     {ev.notes}
                   </div>
                 )}
+              </div>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                <button
+                  className="block-btn text-xs px-1.5 py-0.5"
+                  onClick={() => handleEdit(ev)}
+                  title="Edit event"
+                >
+                  <Pencil size={10} />
+                </button>
+                <button
+                  className="block-btn text-xs px-1.5 py-0.5 text-accent-expense hover:bg-accent-expense/10"
+                  onClick={() => handleDelete(ev.id)}
+                  title="Delete event"
+                >
+                  <Trash2 size={10} />
+                </button>
               </div>
             </div>
           ))}

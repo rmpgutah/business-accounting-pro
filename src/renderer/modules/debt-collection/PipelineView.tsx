@@ -160,16 +160,25 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
             style={{ maxHeight: 'calc(100vh - 200px)' }}
           >
             {/* Column header */}
-            <div className="flex items-center justify-between px-3 pt-3 pb-2">
-              <span className="uppercase text-xs font-bold text-text-muted truncate">
-                {stageLabel.label}
-              </span>
-              <span
-                className="block-badge text-[10px] min-w-[20px] text-center"
-                style={{ padding: '1px 6px' }}
-              >
-                {stageDebts.length}
-              </span>
+            <div className="px-3 pt-3 pb-2">
+              <div className="flex items-center justify-between">
+                <span className="uppercase text-xs font-bold text-text-muted truncate">
+                  {stageLabel.label}
+                </span>
+                <span
+                  className="block-badge text-[10px] min-w-[20px] text-center"
+                  style={{ padding: '1px 6px' }}
+                >
+                  {stageDebts.length}
+                </span>
+              </div>
+              {stageDebts.length > 0 && (
+                <div className="text-[10px] text-text-muted mt-1 font-mono">
+                  {formatCurrency(stageDebts.reduce((s, d) => s + (d.balance_due || 0), 0))}
+                  {' · '}
+                  {Math.round(stageDebts.reduce((s, d) => s + daysInStage(d.stage_entered_at), 0) / stageDebts.length)}d avg
+                </div>
+              )}
             </div>
 
             {/* Scrollable card list */}

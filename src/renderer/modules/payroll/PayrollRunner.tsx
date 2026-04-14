@@ -220,6 +220,10 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   const [periodEnd, setPeriodEnd] = useState('');
   const [payDate, setPayDate] = useState('');
 
+  // Run type (regular, bonus, correction, off_cycle)
+  const [runType, setRunType] = useState<'regular' | 'bonus' | 'correction' | 'off_cycle'>('regular');
+  const [bonusMap, setBonusMap] = useState<Record<string, number>>({});
+
   // Step 2: hours overrides for hourly employees
   const [hoursMap, setHoursMap] = useState<Record<string, number>>({});
 
@@ -356,6 +360,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         totalTaxes,
         totalNet: totals.net_pay,
         stubs,
+        runType,
       });
 
       onComplete();
@@ -404,6 +409,32 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       {step === 1 && (
         <div className="block-card p-6 space-y-6" style={{ borderRadius: '6px' }}>
           <h2 className="text-sm font-bold text-text-primary">Select Pay Period</h2>
+
+          {/* Run Type */}
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Run Type</label>
+            <div className="flex gap-2">
+              {([
+                { value: 'regular', label: 'Regular' },
+                { value: 'bonus', label: 'Bonus' },
+                { value: 'correction', label: 'Correction' },
+                { value: 'off_cycle', label: 'Off-Cycle' },
+              ] as const).map((rt) => (
+                <button
+                  key={rt.value}
+                  className={`px-3 py-1.5 text-xs font-semibold border transition-colors ${runType === rt.value ? 'bg-accent-blue/20 border-accent-blue text-accent-blue' : 'border-border-primary text-text-muted hover:text-text-primary'}`}
+                  style={{ borderRadius: '6px' }}
+                  onClick={() => setRunType(rt.value)}
+                >
+                  {rt.label}
+                </button>
+              ))}
+            </div>
+            {runType === 'bonus' && (
+              <p className="text-xs text-text-muted mt-2">Bonus runs use flat 22% federal supplemental wage rate. Enter bonus amounts in step 2.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Period Start *</label>

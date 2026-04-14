@@ -10,7 +10,7 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
 
 // ─── HTML Template Builder ───────────────────────────────
-function buildInvoiceHTML(
+export function buildInvoiceHTML(
   company: any,
   client: any,
   invoice: any,
@@ -216,12 +216,8 @@ export async function generateInvoicePDF(
   }
 }
 
-// ─── Generate HTML (for preview window) ──────────────────
-export function generateInvoiceHTML(
-  invoiceData: any,
-  companyData: any,
-  clientData: any,
-  lineItems: any[]
-): string {
-  return buildInvoiceHTML(companyData, clientData, invoiceData, lineItems);
-}
+// NOTE: generateInvoiceHTML was removed. Renderer uses
+// src/renderer/lib/print-templates.ts → generateInvoiceHTML(...) which
+// respects invoice settings (logo, accent, columns, payment schedule, etc.).
+// This file is now ONLY a fallback for headless PDF generation when the
+// renderer cannot supply its own HTML (e.g., cron jobs, CLI automation).

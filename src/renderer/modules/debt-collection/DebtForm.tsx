@@ -30,6 +30,9 @@ interface DebtFormData {
   employment_status: 'unknown' | 'employed' | 'self-employed' | 'unemployed' | 'retired';
   monthly_income_estimate: number;
   best_contact_time: string;
+  preferred_contact_method: string;
+  do_not_call: boolean;
+  cease_desist_active: boolean;
   debtor_attorney_name: string;
   debtor_attorney_phone: string;
 }
@@ -102,6 +105,9 @@ const emptyForm: DebtFormData = {
   employment_status: 'unknown',
   monthly_income_estimate: 0,
   best_contact_time: '',
+  preferred_contact_method: '',
+  do_not_call: false,
+  cease_desist_active: false,
   debtor_attorney_name: '',
   debtor_attorney_phone: '',
 };
@@ -226,6 +232,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               employment_status: existing.employment_status ?? 'unknown',
               monthly_income_estimate: Number(existing.monthly_income_estimate || 0),
               best_contact_time: existing.best_contact_time ?? '',
+              preferred_contact_method: existing.preferred_contact_method ?? '',
+              do_not_call: !!existing.do_not_call,
+              cease_desist_active: !!existing.cease_desist_active,
               debtor_attorney_name: existing.debtor_attorney_name ?? '',
               debtor_attorney_phone: existing.debtor_attorney_phone ?? '',
             });
@@ -392,6 +401,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         employment_status: form.employment_status,
         monthly_income_estimate: form.monthly_income_estimate || null,
         best_contact_time: form.best_contact_time.trim() || null,
+        preferred_contact_method: form.preferred_contact_method || null,
+        do_not_call: form.do_not_call ? 1 : 0,
+        cease_desist_active: form.cease_desist_active ? 1 : 0,
         debtor_attorney_name: form.debtor_attorney_name.trim() || null,
         debtor_attorney_phone: form.debtor_attorney_phone.trim() || null,
       };
@@ -956,6 +968,26 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Best Contact Time</label>
               <input className="block-input" value={form.best_contact_time} onChange={(e) => setForm(p => ({...p, best_contact_time: e.target.value}))} placeholder="e.g. Mornings, after 5pm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Preferred Contact Method</label>
+              <select className="block-select w-full" value={form.preferred_contact_method} onChange={(e) => setForm(p => ({...p, preferred_contact_method: e.target.value}))}>
+                <option value="">No Preference</option>
+                <option value="phone">Phone</option>
+                <option value="email">Email</option>
+                <option value="letter">Letter</option>
+                <option value="text">Text</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-6 col-span-2">
+              <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                <input type="checkbox" checked={form.do_not_call} onChange={(e) => setForm(p => ({...p, do_not_call: e.target.checked}))} />
+                <span className="font-semibold uppercase tracking-wider">Do Not Call</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                <input type="checkbox" checked={form.cease_desist_active} onChange={(e) => setForm(p => ({...p, cease_desist_active: e.target.checked}))} />
+                <span className="font-semibold uppercase tracking-wider text-red-400">Cease & Desist Active</span>
+              </label>
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Debtor Attorney</label>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, AlertTriangle, Play, FileText } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
@@ -8,6 +8,7 @@ import { formatDate } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { calcRiskScore, getRiskBadge } from './riskScore';
+import PaymentMatchReview from './PaymentMatchReview';
 
 // ─── Types ──────────────────────────────────────────────
 interface Debt {
@@ -29,6 +30,8 @@ interface Debt {
   has_pending_settlement?: number;
   has_active_promise?: number;
   has_broken_promise?: number;
+  cease_desist_active?: number;
+  do_not_call?: number;
 }
 
 interface DebtListProps {
@@ -85,6 +88,16 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   // Escalation state
   const [escalationLoading, setEscalationLoading] = useState(false);
   const [escalationResult, setEscalationResult] = useState<{ advanced: number; flagged: number } | null>(null);
+
+  // Feedback state
+  const [opSuccess, setOpSuccess] = useState('');
+  const [showMatchReview, setShowMatchReview] = useState(false);
+  const [opError, setOpError] = useState('');
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignCollector, setBulkAssignCollector] = useState('');
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   // ─── Load Users ─────────────────────────────────────────
   useEffect(() => {
@@ -163,9 +176,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       const result = await api.debtImportOverdueInvoices(activeCompany.id, importDays);
       await reload();
       setShowImportForm(false);
-      alert(`Imported ${result.imported} overdue invoice(s) as debts.`);
-    } catch (err) {
+      setOpSuccess(`Imported ${result.imported} overdue invoice(s) as debts`); setTimeout(() => setOpSuccess(''), 4000);
+    } catch (err: any) {
       console.error('Import overdue failed:', err);
+      setOpError('Import failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setImportLoading(false);
     }
@@ -180,8 +194,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       const result = await api.debtRunEscalation(activeCompany.id);
       setEscalationResult(result);
       await reload();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Escalation failed:', err);
+      setOpError('Escalation failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
     } finally {
       setEscalationLoading(false);
     }
@@ -202,6 +217,91 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     }));
     downloadCSVBlob(exportData, `debts-${type}-export.csv`);
   }, [filtered, type]);
+
+  // ─── Delete Debt ────────────────────────────────────────
+  const handleDelete = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`Delete debt for "${name}"? This will also remove all related communications, payments, settlements, and compliance records.`)) return;
+    try {
+      await api.remove('debts', id);
+      await reload();
+      setOpSuccess('Debt deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete debt:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+    }
+  }, [reload]);
+
+  // ─── Bulk Actions ──────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(d => d.id)));
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkAssignCollector || selectedIds.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      for (const id of selectedIds) {
+        await api.assignCollector(id, bulkAssignCollector);
+      }
+      setSelectedIds(new Set());
+      setBulkAssignCollector('');
+      await reload();
+      setOpSuccess(`Assigned ${selectedIds.size} debts`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk assign failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkAdvance = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Advance stage for ${selectedIds.size} selected debts?`)) return;
+    setBulkProcessing(true);
+    try {
+      let advanced = 0;
+      for (const id of selectedIds) {
+        await api.debtAdvanceStage(id);
+        advanced++;
+      }
+      setSelectedIds(new Set());
+      await reload();
+      setOpSuccess(`Advanced ${advanced} debts`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk advance failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkHold = async (hold: boolean) => {
+    if (selectedIds.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      for (const id of selectedIds) {
+        await api.debtHoldToggle(id, hold, hold ? 'Bulk hold' : '');
+      }
+      setSelectedIds(new Set());
+      await reload();
+      setOpSuccess(`${hold ? 'Held' : 'Released'} ${selectedIds.size} debts`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk hold failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
 
   // ─── Age Calculation ────────────────────────────────────
   const ageDays = (delinquentDate: string): number => {
@@ -273,6 +373,46 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <FileText size={13} />
             Portfolio Report
           </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const result = await api.batchRecalcInterest();
+              if (result?.updated > 0) {
+                setOpSuccess(`Recalculated interest on ${result.updated} debts`);
+                setTimeout(() => setOpSuccess(''), 4000);
+                await reload();
+              } else if (result?.error) {
+                setOpError(result.error);
+                setTimeout(() => setOpError(''), 5000);
+              } else {
+                setOpSuccess('No debts needed interest recalculation');
+                setTimeout(() => setOpSuccess(''), 3000);
+              }
+            }}
+          >
+            <RefreshCw size={14} />
+            Recalc Interest
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const result = await api.matchBankPayments();
+              if (result?.auto_matched > 0) {
+                setOpSuccess(`Auto-matched ${result.auto_matched} payments`);
+                setTimeout(() => setOpSuccess(''), 4000);
+                await reload();
+              }
+              if (result?.suggested > 0) {
+                setShowMatchReview(true);
+              } else if (result?.auto_matched === 0) {
+                setOpSuccess('No bank transactions to match');
+                setTimeout(() => setOpSuccess(''), 3000);
+              }
+            }}
+          >
+            <DollarSign size={14} />
+            Match Payments
+          </button>
           <button className="block-btn flex items-center gap-2" onClick={handleExport}>
             <Download size={14} />
             Export CSV
@@ -283,6 +423,32 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           </button>
         </div>
       </div>
+
+      {/* Feedback Messages */}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+
+      {/* Bulk Action Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: '6px' }}>
+          <span className="text-xs font-bold text-accent-blue">{selectedIds.size} selected</span>
+          <div className="flex items-center gap-2 ml-2">
+            <select className="block-select text-xs" style={{ width: 'auto', minWidth: 140 }} value={bulkAssignCollector} onChange={(e) => setBulkAssignCollector(e.target.value)}>
+              <option value="">Assign Collector...</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+            {bulkAssignCollector && (
+              <button className="block-btn-primary text-xs py-1 px-3" onClick={handleBulkAssign} disabled={bulkProcessing}>Assign</button>
+            )}
+          </div>
+          {isReceivable && (
+            <button className="block-btn text-xs py-1 px-3" onClick={handleBulkAdvance} disabled={bulkProcessing}>Advance Stage</button>
+          )}
+          <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(true)} disabled={bulkProcessing}>Hold</button>
+          <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(false)} disabled={bulkProcessing}>Release</button>
+          <button className="text-xs text-text-muted ml-auto hover:text-text-primary" onClick={() => setSelectedIds(new Set())}>Clear</button>
+        </div>
+      )}
 
       {/* Escalation Result */}
       {escalationResult && (
@@ -447,6 +613,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <thead>
               {isReceivable ? (
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                  </th>
                   <th>Debtor</th>
                   <th>Source</th>
                   <th className="text-right">Original</th>
@@ -459,6 +628,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                 </tr>
               ) : (
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                  </th>
                   <th>Creditor</th>
                   <th>Source</th>
                   <th className="text-right">Original</th>
@@ -485,6 +657,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
+                    </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{debt.debtor_name}</span>
@@ -499,6 +674,15 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         )}
                         {!!debt.has_broken_promise && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                        {debt.status === 'disputed' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                        )}
+                        {!!debt.cease_desist_active && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                        )}
+                        {!!debt.do_not_call && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                       </div>
                     </td>
@@ -561,6 +745,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         >
                           <Pencil size={14} />
                         </button>
+                        <button
+                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                          title="Delete"
+                          onClick={() => handleDelete(debt.id, debt.debtor_name)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -570,6 +761,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
+                    </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{debt.debtor_name}</span>
@@ -584,6 +778,15 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         )}
                         {!!debt.has_broken_promise && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                        )}
+                        {debt.status === 'disputed' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                        )}
+                        {!!debt.cease_desist_active && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                        )}
+                        {!!debt.do_not_call && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                       </div>
                     </td>
@@ -616,6 +819,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         >
                           <Pencil size={14} />
                         </button>
+                        <button
+                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                          title="Delete"
+                          onClick={() => handleDelete(debt.id, debt.debtor_name)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -638,6 +848,19 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             </tfoot>
           </table>
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <div className="text-xs text-text-muted">
+          Showing {filtered.length} of {debts.length} debt{debts.length !== 1 ? 's' : ''}
+        </div>
+      )}
+
+      {showMatchReview && (
+        <PaymentMatchReview
+          onClose={() => setShowMatchReview(false)}
+          onDone={() => reload()}
+        />
       )}
     </div>
   );

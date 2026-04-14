@@ -39,6 +39,7 @@ interface MonthBucket {
 interface BudgetDetailProps {
   budgetId: string;
   onBack: () => void;
+  onEdit?: (id: string) => void;
 }
 
 // ─── Formatters ─────────────────────────────────────────
@@ -110,7 +111,7 @@ function MiniBarChart({ months }: { months: MonthBucket[] }) {
 }
 
 // ─── Component ──────────────────────────────────────────
-const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
+const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [lines, setLines] = useState<BudgetLine[]>([]);
@@ -258,9 +259,14 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
             <AlertTriangle size={13} /> {overBudgetLines.length} over budget
           </span>
         )}
-        <span className={`block-badge ${budget.status === 'active' ? 'block-badge-income' : 'block-badge-warning'}`}>
+        <span className={`block-badge ${budget.status === 'active' ? 'block-badge-income' : 'block-badge-warning'} capitalize`}>
           {budget.status}
         </span>
+        {onEdit && (
+          <button className="block-btn flex items-center gap-2 text-xs" onClick={() => onEdit(budgetId)}>
+            <TrendingUp size={14} /> Edit
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}

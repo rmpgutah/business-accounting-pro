@@ -85,6 +85,15 @@ const api = {
   }): Promise<{ id?: string; error?: string }> =>
     window.electronAPI.invoke('invoice:save', payload),
 
+  // Expense atomic save (header + line items in one DB transaction)
+  saveExpense: (payload: {
+    expenseId: string | null;
+    expenseData: Record<string, any>;
+    lineItems: Array<Record<string, any>>;
+    isEdit: boolean;
+  }): Promise<{ id?: string; error?: string }> =>
+    window.electronAPI.invoke('expense:save', payload),
+
   // Export
   // Bug fix #3: export:invoice-pdf handler was removed in v1.1.1 dedup cleanup;
   // routes to the canonical invoice:generate-pdf channel to avoid "No handler" crash.
@@ -93,12 +102,12 @@ const api = {
     window.electronAPI.invoke('export:csv', { table, filters }),
 
   // Invoice PDF & Email
-  generateInvoicePDF: (invoiceId: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
-    window.electronAPI.invoke('invoice:generate-pdf', invoiceId),
-  previewInvoicePDF: (invoiceId: string): Promise<{ success?: boolean; error?: string }> =>
-    window.electronAPI.invoke('invoice:preview-pdf', invoiceId),
-  sendInvoiceEmail: (invoiceId: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
-    window.electronAPI.invoke('invoice:send-email', invoiceId),
+  // Pass `html` to guarantee the saved/emailed PDF matches the in-app preview
+  // (applies invoice_settings: logo, accent, columns, payment schedule, etc.).
+  generateInvoicePDF: (invoiceId: string, html?: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:generate-pdf', html ? { invoiceId, html } : invoiceId),
+  sendInvoiceEmail: (invoiceId: string, html?: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
+    window.electronAPI.invoke('invoice:send-email', html ? { invoiceId, html } : invoiceId),
   generateInvoiceToken: (invoiceId: string): Promise<{ token: string }> =>
     window.electronAPI.invoke('invoice:generate-token', invoiceId),
   invoiceScheduleReminders: (invoiceId: string): Promise<{ scheduled: number }> =>
@@ -395,6 +404,49 @@ const api = {
     window.electronAPI.invoke('debt:activity-timeline', { debtId }),
   addQuickNote: (debtId: string, note: string): Promise<any> =>
     window.electronAPI.invoke('debt:quick-note', { debtId, note }),
+  addDebtFee: (debtId: string, amount: number, feeType: string, description: string): Promise<any> =>
+    window.electronAPI.invoke('debt:add-fee', { debtId, amount, feeType, description }),
+  collectorPerformance: (startDate?: string, endDate?: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:collector-performance', { startDate, endDate }),
+  collectorDashboard: (companyId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:collector-dashboard', { companyId }),
+  upcomingInstallments: (debtId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:upcoming-installments', { debtId }),
+  uploadDebtDocument: (debtId: string, filePath: string, fileName: string, fileSize: number): Promise<any> =>
+    window.electronAPI.invoke('debt:upload-document', { debtId, filePath, fileName, fileSize }),
+  debtAuditLog: (debtId: string, limit?: number): Promise<any[]> =>
+    window.electronAPI.invoke('debt:audit-log', { debtId, limit }),
+  generateCourtPacket: (debtId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:generate-court-packet', { debtId }),
+  batchRecalcInterest: (): Promise<{ updated: number; error?: string }> =>
+    window.electronAPI.invoke('debt:batch-recalc-interest'),
+  matchBankPayments: (): Promise<{ auto_matched: number; suggested: number; error?: string }> =>
+    window.electronAPI.invoke('debt:match-bank-payments'),
+  listPendingMatches: (): Promise<any[]> =>
+    window.electronAPI.invoke('debt:list-pending-matches'),
+  acceptPaymentMatch: (matchId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:accept-match', { matchId }),
+  rejectPaymentMatch: (matchId: string): Promise<any> =>
+    window.electronAPI.invoke('debt:reject-match', { matchId }),
+  smartRecommendations: (companyId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:smart-recommendations', { companyId }),
+
+  batchExportPDF: (invoiceIds: string[]): Promise<{ path?: string; count?: number; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:batch-pdf', { invoiceIds }),
+
+  // ─── Invoice Automation ───────────────────────────
+  applyLateFees: (): Promise<{ applied: number }> =>
+    window.electronAPI.invoke('invoice:apply-late-fees'),
+  runDunning: (): Promise<{ advanced: number }> =>
+    window.electronAPI.invoke('invoice:run-dunning'),
+
+  // ─── Payroll Summary ─────────────────────────────
+  employeeSummary: (employeeId: string): Promise<any> =>
+    window.electronAPI.invoke('payroll:employee-summary', { employeeId }),
+
+  // ─── Reports ─────────────────────────────────────
+  budgetVsActual: (budgetId: string): Promise<any> =>
+    window.electronAPI.invoke('reports:budget-vs-actual', { budgetId }),
 
   // ─── Quotes ────────────────────────────────────────
   quotesNextNumber: (): Promise<string> =>

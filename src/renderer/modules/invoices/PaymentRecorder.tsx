@@ -24,6 +24,7 @@ interface PaymentRecorderProps {
   invoiceId: string;
   invoiceTotal: number;
   amountPaid: number;
+  editPaymentId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -32,10 +33,12 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   invoiceId,
   invoiceTotal,
   amountPaid,
+  editPaymentId,
   onClose,
   onSaved,
 }) => {
   const balanceDue = useMemo(() => invoiceTotal - amountPaid, [invoiceTotal, amountPaid]);
+  const isEditing = !!editPaymentId;
 
   const [amount, setAmount] = useState<string>(String(balanceDue));
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -43,6 +46,25 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   const [reference, setReference] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>('');
+
+  // Load existing payment for editing
+  React.useEffect(() => {
+    if (!editPaymentId) return;
+    const load = async () => {
+      try {
+        const p = await api.get('payments', editPaymentId);
+        if (p) {
+          setAmount(String(p.amount || ''));
+          setDate(p.date || new Date().toISOString().slice(0, 10));
+          setMethod(p.payment_method || 'transfer');
+          setReference(p.reference || '');
+        }
+      } catch (err) {
+        console.error('Failed to load payment:', err);
+      }
+    };
+    load();
+  }, [editPaymentId]);
 
   const handleSave = async () => {
     setError('');
@@ -63,7 +85,16 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
 
     setSaving(true);
     try {
-      await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
+      if (isEditing && editPaymentId) {
+        await api.update('payments', editPaymentId, {
+          amount: parsedAmount,
+          date,
+          payment_method: method || 'transfer',
+          reference: reference || '',
+        });
+      } else {
+        await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
+      }
       onSaved();
     } catch (err) {
       console.error('Failed to record payment:', err);
@@ -89,7 +120,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <DollarSign size={18} className="text-accent-income" />
-            <h2 className="text-base font-bold text-text-primary">Record Payment</h2>
+            <h2 className="text-base font-bold text-text-primary">{isEditing ? 'Edit Payment' : 'Record Payment'}</h2>
           </div>
           <button
             onClick={onClose}
@@ -200,7 +231,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
             Cancel
           </button>
           <button className="block-btn-success" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Record Payment'}
+            {saving ? 'Saving...' : isEditing ? 'Update Payment' : 'Record Payment'}
           </button>
         </div>
       </div>

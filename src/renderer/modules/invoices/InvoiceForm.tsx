@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical } from 'lucide-react';
+import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical, ChevronUp, ChevronDown, Bold, Italic } from 'lucide-react';
 import api from '../../lib/api';
 import { FieldLabel } from '../../components/FieldLabel';
 import { required, validateForm, minValue } from '../../lib/validation';
@@ -54,6 +54,9 @@ interface LineItem {
   line_discount_type: 'percent' | 'flat';
   discount_pct: number;
   tax_rate_override: number;   // -1 = use invoice rate
+  bold: number;
+  italic: number;
+  highlight_color: string;
 }
 
 export type InvoiceType = 'standard' | 'service' | 'product' | 'retainer' | 'credit_note' | 'proforma';
@@ -80,6 +83,49 @@ const INVOICE_TYPE_CONFIG: Record<InvoiceType, InvoiceTypeConfig> = {
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN', 'JPY', 'CHF', 'CNY', 'INR'];
 
+// ─── GripCell (hoisted to module scope to prevent remount-on-render) ───
+interface GripCellProps {
+  idx: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onMoveUp: (idx: number) => void;
+  onMoveDown: (idx: number) => void;
+  onActivateDrag: (idx: number) => void;
+}
+
+const GripCell: React.FC<GripCellProps> = React.memo(({ idx, isFirst, isLast, onMoveUp, onMoveDown, onActivateDrag }) => (
+  <td
+    className="p-1 text-center"
+    style={{ cursor: 'grab', color: 'var(--color-text-muted)', width: 28 }}
+    onMouseDown={() => onActivateDrag(idx)}
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <button
+        type="button"
+        onClick={() => onMoveUp(idx)}
+        disabled={isFirst}
+        title="Move up"
+        aria-label={`Move row ${idx + 1} up`}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: isFirst ? 'not-allowed' : 'pointer', opacity: isFirst ? 0.3 : 1 }}
+      >
+        <ChevronUp size={9} />
+      </button>
+      <GripVertical size={11} aria-hidden="true" />
+      <button
+        type="button"
+        onClick={() => onMoveDown(idx)}
+        disabled={isLast}
+        title="Move down"
+        aria-label={`Move row ${idx + 1} down`}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: isLast ? 'not-allowed' : 'pointer', opacity: isLast ? 0.3 : 1 }}
+      >
+        <ChevronDown size={9} />
+      </button>
+    </div>
+  </td>
+));
+GripCell.displayName = 'GripCell';
+
 interface InvoiceFormData {
   client_id: string;
   invoice_number: string;
@@ -99,6 +145,10 @@ interface InvoiceFormData {
   invoice_type: InvoiceType;
   currency: string;
   shipping_amount: number;
+  custom_field_1: string;
+  custom_field_2: string;
+  custom_field_3: string;
+  custom_field_4: string;
 }
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -125,6 +175,9 @@ const newLineItem = (rowType: LineRowType = 'item', defaultUnitLabel = ''): Line
   line_discount_type: 'percent',
   discount_pct: 0,
   tax_rate_override: -1,
+  bold: 0,
+  italic: 0,
+  highlight_color: '',
 });
 
 const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
@@ -291,9 +344,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     invoice_type: 'standard',
     currency: 'USD',
     shipping_amount: 0,
+    custom_field_1: '',
+    custom_field_2: '',
+    custom_field_3: '',
+    custom_field_4: '',
   });
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
+
+  // Drag-and-drop state for line reordering
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [rowDraggable, setRowDraggableState] = useState<Record<number, boolean>>({});
+  const [hoveredLineIdx, setHoveredLineIdx] = useState<number | null>(null);
+
+  const setRowDraggable = useCallback((idx: number, value: boolean) => {
+    setRowDraggableState((prev) => ({ ...prev, [idx]: value }));
+  }, []);
 
   // ─── Fetch reference data + existing invoice ─────────
   useEffect(() => {
@@ -373,6 +440,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             invoice_type: (inv.invoice_type as InvoiceType) || 'standard',
             currency: inv.currency || 'USD',
             shipping_amount: inv.shipping_amount || 0,
+            custom_field_1: inv.custom_field_1 || '',
+            custom_field_2: inv.custom_field_2 || '',
+            custom_field_3: inv.custom_field_3 || '',
+            custom_field_4: inv.custom_field_4 || '',
           });
 
           const [lineData, scheduleData] = await Promise.all([
@@ -404,6 +475,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 line_discount_type: l.line_discount_type ?? 'percent',
                 discount_pct: l.discount_pct || 0,
                 tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
+                bold: l.bold ?? 0,
+                italic: l.italic ?? 0,
+                highlight_color: l.highlight_color ?? '',
               }))
             );
           }
@@ -437,6 +511,26 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       return s + discountedAmount * (effectiveTaxRate / 100);
     }, 0),
     [lines]
+  );
+
+  const taxByRate = useMemo(() => {
+    const map: Record<string, { taxable: number; tax: number }> = {};
+    for (const l of lines) {
+      if ((l.row_type || 'item') !== 'item') continue;
+      const rate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
+      if (rate <= 0) continue;
+      const base = l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100);
+      const key = rate.toFixed(2);
+      if (!map[key]) map[key] = { taxable: 0, tax: 0 };
+      map[key].taxable += base;
+      map[key].tax += base * (rate / 100);
+    }
+    return map;
+  }, [lines]);
+
+  const sortedTaxRates = useMemo(
+    () => Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b)),
+    [taxByRate]
   );
 
   const shippingTax = useMemo(() => 0, []); // reserved for future shipping tax
@@ -486,6 +580,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       item_code: l.item_code,
       line_discount: l.line_discount,
       line_discount_type: l.line_discount_type,
+      bold: l.bold,
+      italic: l.italic,
+      highlight_color: l.highlight_color,
     }));
     return generateInvoiceHTML(inv, activeCompany, client, lineData, invoiceSettings || undefined);
   }, [showPreview, form, lines, subtotal, taxTotal, total, activeCompany, clients, invoiceSettings]);
@@ -520,6 +617,93 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       return next;
     });
   }, []);
+
+  const moveLineUp = useCallback((idx: number) => {
+    if (idx > 0) moveLine(idx, idx - 1);
+  }, [moveLine]);
+
+  const moveLineDown = useCallback((idx: number) => {
+    setLines((prev) => {
+      if (idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.splice(idx + 1, 0, item);
+      return next;
+    });
+  }, []);
+
+  const handleDragStart = useCallback((idx: number) => (e: React.DragEvent) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    // Required for Firefox
+    e.dataTransfer.setData('text/plain', String(idx));
+  }, []);
+
+  const handleDragOver = useCallback((idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragIndex !== null && dragIndex !== idx) setOverIndex(idx);
+  }, [dragIndex]);
+
+  const handleDragLeave = useCallback(() => {
+    setOverIndex(null);
+  }, []);
+
+  const handleDrop = useCallback((idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== idx) {
+      moveLine(dragIndex, idx);
+    }
+    setDragIndex(null);
+    setOverIndex(null);
+  }, [dragIndex, moveLine]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setOverIndex(null);
+    setRowDraggableState({});
+  }, []);
+
+  const handleActivateDrag = useCallback((i: number) => {
+    setRowDraggable(i, true);
+  }, [setRowDraggable]);
+
+  // Safety net: if user mousedowns the grip but releases without starting a drag,
+  // neither onDragEnd nor a drop fires. Reset rowDraggable on any document mouseup
+  // (deferred to next tick so dragstart can fire first and preserve state).
+  useEffect(() => {
+    const onGlobalMouseUp = () => {
+      setTimeout(() => {
+        setDragIndex((current) => {
+          if (current !== null) return current; // drag in progress — don't touch
+          setRowDraggableState({});
+          return current;
+        });
+      }, 0);
+    };
+    document.addEventListener('mouseup', onGlobalMouseUp);
+    return () => document.removeEventListener('mouseup', onGlobalMouseUp);
+  }, []);
+
+  const getRowDragProps = useCallback((idx: number) => ({
+    draggable: !!rowDraggable[idx],
+    onDragStart: handleDragStart(idx),
+    onDragOver: handleDragOver(idx),
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop(idx),
+    onDragEnd: handleDragEnd,
+  }), [rowDraggable, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd]);
+
+  const getRowDragStyle = useCallback((idx: number): React.CSSProperties => {
+    const style: React.CSSProperties = {};
+    if (overIndex === idx && dragIndex !== null && dragIndex !== idx) {
+      style.borderTop = '2px solid var(--color-accent-blue)';
+    }
+    if (dragIndex === idx) {
+      style.opacity = 0.4;
+    }
+    return style;
+  }, [overIndex, dragIndex]);
 
   // ─── Form field helpers ──────────────────────────────
   const updateField = useCallback(
@@ -653,6 +837,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         invoice_type: form.invoice_type || 'standard',
         currency: form.currency || 'USD',
         shipping_amount: form.shipping_amount || 0,
+        custom_field_1: form.custom_field_1.trim() || null,
+        custom_field_2: form.custom_field_2.trim() || null,
+        custom_field_3: form.custom_field_3.trim() || null,
+        custom_field_4: form.custom_field_4.trim() || null,
       };
       if (!isEdit) invoiceData.amount_paid = 0;
 
@@ -671,6 +859,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         line_discount_type: l.line_discount_type || 'percent',
         discount_pct: l.discount_pct || 0,
         tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
+        bold: l.bold || 0,
+        italic: l.italic || 0,
+        highlight_color: l.highlight_color || '',
       }));
 
       const result = await api.saveInvoice({ invoiceId: isEdit ? invoiceId : null, invoiceData, lineItems, isEdit });
@@ -878,8 +1069,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'spacer') {
                 return (
-                  <tr key={line.id} style={{ background: 'var(--color-bg-tertiary)', opacity: 0.5 }}>
-                    <td className="p-1 text-center" colSpan={12}>
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      background: 'var(--color-bg-tertiary)',
+                      opacity: 0.5,
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
+                    <td className="p-1 text-center" colSpan={11}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
                         <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
                         <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={11} /></button>
@@ -891,10 +1098,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'section') {
                 return (
-                  <tr key={line.id} style={{ background: 'rgba(100,116,139,0.08)' }}>
-                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                      <GripVertical size={12} />
-                    </td>
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      background: 'rgba(100,116,139,0.08)',
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={10} className="p-1">
                       <input
                         className="block-input font-bold"
@@ -913,10 +1132,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'note') {
                 return (
-                  <tr key={line.id} style={{ background: 'var(--color-bg-secondary)' }}>
-                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                      <GripVertical size={12} />
-                    </td>
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      background: 'var(--color-bg-secondary)',
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={10} className="p-1">
                       <input
                         className="block-input"
@@ -939,8 +1170,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                   .filter(r => (r.row_type || 'item') === 'item')
                   .reduce((s, r) => s + r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100), 0);
                 return (
-                  <tr key={line.id} style={{ borderTop: '1px solid var(--color-border-primary)', background: 'var(--color-bg-tertiary)' }}>
-                    <td></td>
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      borderTop: '1px solid var(--color-border-primary)',
+                      background: 'var(--color-bg-tertiary)',
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={9} className="p-1">
                       <input
                         className="block-input font-bold"
@@ -960,10 +1206,19 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               if (rowType === 'image') {
                 return (
-                  <tr key={line.id}>
-                    <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                      <GripVertical size={12} />
-                    </td>
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={getRowDragStyle(idx)}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
                     <td colSpan={9} className="p-1">
                       <input
                         className="block-input"
@@ -990,10 +1245,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
               // Standard item row
               return (
-                <tr key={line.id}>
-                  <td className="p-1 text-center" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-                    <GripVertical size={12} />
-                  </td>
+                <tr
+                  key={line.id}
+                  {...getRowDragProps(idx)}
+                  onMouseEnter={() => setHoveredLineIdx(idx)}
+                  onMouseLeave={() => setHoveredLineIdx(null)}
+                  style={getRowDragStyle(idx)}
+                >
+                  <GripCell
+                    idx={idx}
+                    isFirst={idx === 0}
+                    isLast={idx === lines.length - 1}
+                    onMoveUp={moveLineUp}
+                    onMoveDown={moveLineDown}
+                    onActivateDrag={handleActivateDrag}
+                  />
                   {typeConfig.showItemCode && (
                     <td className="p-1">
                       <input
@@ -1006,13 +1272,77 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     </td>
                   )}
                   <td className="p-1" style={{ position: 'relative' }}>
+                    {hoveredLineIdx === idx && dragIndex === null && (
+                      <div
+                        onMouseEnter={() => setHoveredLineIdx(idx)}
+                        onMouseLeave={() => setHoveredLineIdx(null)}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 'calc(100% + 2px)',
+                          zIndex: 20,
+                          display: 'flex',
+                          gap: 2,
+                          padding: '3px 4px',
+                          background: 'var(--color-bg-elevated)',
+                          border: '1px solid var(--color-border-primary)',
+                          borderRadius: 4,
+                        }}>
+                        <button
+                          type="button"
+                          title="Bold"
+                          onClick={() => updateLine(idx, 'bold', line.bold ? 0 : 1)}
+                          style={{
+                            background: line.bold ? 'var(--color-accent-blue)' : 'transparent',
+                            color: line.bold ? '#fff' : 'var(--color-text-muted)',
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 2,
+                          }}
+                        >
+                          <Bold size={10} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Italic"
+                          onClick={() => updateLine(idx, 'italic', line.italic ? 0 : 1)}
+                          style={{
+                            background: line.italic ? 'var(--color-accent-blue)' : 'transparent',
+                            color: line.italic ? '#fff' : 'var(--color-text-muted)',
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 2,
+                          }}
+                        >
+                          <Italic size={10} />
+                        </button>
+                        <div style={{ width: 1, background: 'var(--color-border-primary)', margin: '0 2px' }} />
+                        {['', '#fef9c3', '#dbeafe', '#fecaca', '#dcfce7'].map((color) => (
+                          <button
+                            key={color || 'none'}
+                            type="button"
+                            title={color ? `Highlight ${color}` : 'No highlight'}
+                            onClick={() => updateLine(idx, 'highlight_color', color)}
+                            style={{
+                              background: color || 'transparent',
+                              border: line.highlight_color === color
+                                ? '2px solid var(--color-accent-blue)'
+                                : '1px solid var(--color-border-primary)',
+                              width: 14, height: 14, cursor: 'pointer', borderRadius: 2,
+                              backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 4 }}>
                       <input
                         className="block-input"
                         placeholder="Item description"
                         value={line.description}
                         onChange={(e) => updateLine(idx, 'description', e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{
+                          flex: 1,
+                          fontWeight: line.bold ? 700 : undefined,
+                          fontStyle: line.italic ? 'italic' : undefined,
+                          background: line.highlight_color || undefined,
+                        }}
                       />
                       <button
                         className="block-btn p-1"
@@ -1162,10 +1492,19 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <span className="text-text-secondary">Subtotal</span>
             <span className="font-mono text-text-primary">{currencyFmt.format(subtotal)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-text-secondary">Tax</span>
-            <span className="font-mono text-text-primary">{currencyFmt.format(taxTotal)}</span>
-          </div>
+          {sortedTaxRates.length > 1 ? (
+            sortedTaxRates.map((rate) => (
+              <div key={rate} className="flex justify-between text-sm">
+                <span className="text-text-secondary">Tax @ {rate}% on {currencyFmt.format(taxByRate[rate].taxable)}</span>
+                <span className="font-mono text-text-primary">{currencyFmt.format(taxByRate[rate].tax)}</span>
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Tax</span>
+              <span className="font-mono text-text-primary">{currencyFmt.format(taxTotal)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm items-center">
             <span className="text-text-secondary">Discount (flat)</span>
             <input
@@ -1242,6 +1581,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Job / Project Reference</label>
             <input className="block-input" placeholder="Internal job or project name" value={form.job_reference} onChange={e => setForm(p => ({ ...p, job_reference: e.target.value }))} />
           </div>
+          {[1, 2, 3, 4].map((n) => {
+            const label = (invoiceSettings as any)?.[`custom_field_${n}_label`];
+            if (!label) return null;
+            const key = `custom_field_${n}` as keyof InvoiceFormData;
+            return (
+              <div key={n}>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  {label}
+                </label>
+                <input
+                  className="block-input"
+                  value={(form[key] as string) || ''}
+                  onChange={(e) => updateField(key, e.target.value)}
+                />
+              </div>
+            );
+          })}
           <div>
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Invoice Discount %</label>
             <input type="number" min={0} max={100} step="0.1" className="block-input" placeholder="0" value={form.discount_pct || ''} onChange={e => setForm(p => ({ ...p, discount_pct: parseFloat(e.target.value) || 0 }))} />

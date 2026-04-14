@@ -203,7 +203,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
             <div className="space-y-2">
               {data.status_breakdown.map((entry) => (
                 <div key={entry.status} className="flex items-center justify-between">
-                  <span className={STATUS_BADGE[entry.status] ?? 'block-badge'}>
+                  <span className={`${STATUS_BADGE[entry.status] ?? 'block-badge'} capitalize`}>
                     {entry.status}
                   </span>
                   <span className="text-xs font-mono text-text-secondary font-bold">

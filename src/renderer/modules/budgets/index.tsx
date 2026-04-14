@@ -3,7 +3,7 @@ import BudgetList from './BudgetList';
 import BudgetForm from './BudgetForm';
 import BudgetDetail from './BudgetDetail';
 
-type View = 'list' | 'new' | 'detail';
+type View = 'list' | 'new' | 'edit' | 'detail';
 
 const BudgetModule: React.FC = () => {
   const [view, setView] = useState<View>('list');
@@ -37,10 +37,19 @@ const BudgetModule: React.FC = () => {
         />
       )}
 
+      {view === 'edit' && selectedBudgetId && (
+        <BudgetForm
+          editBudgetId={selectedBudgetId}
+          onBack={() => setView('detail')}
+          onCreated={handleCreated}
+        />
+      )}
+
       {view === 'detail' && selectedBudgetId && (
         <BudgetDetail
           budgetId={selectedBudgetId}
           onBack={() => setView('list')}
+          onEdit={(id) => { setSelectedBudgetId(id); setView('edit'); }}
         />
       )}
     </div>

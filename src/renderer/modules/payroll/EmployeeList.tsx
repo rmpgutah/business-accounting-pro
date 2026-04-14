@@ -247,7 +247,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                           : 'block-badge block-badge-purple'
                       }
                     >
-                      {emp.type}
+                      {emp.type === 'employee' ? 'Employee' : 'Contractor'}
                     </span>
                   </td>
                   <td className="text-text-secondary capitalize">{emp.pay_type}</td>
@@ -266,7 +266,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                           : 'block-badge block-badge-expense'
                       }
                     >
-                      {emp.status}
+                      {emp.status === 'active' ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                 </tr>

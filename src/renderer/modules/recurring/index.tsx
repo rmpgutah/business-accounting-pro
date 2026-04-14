@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  RefreshCw, Plus, Search, Filter, X, Play, Pause,
+  RefreshCw, Plus, Search, Filter, X, Play, Pause, Pencil,
   Zap, Clock, History, FileText, Receipt,
 } from 'lucide-react';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
@@ -97,7 +97,9 @@ const RecurringTransactions: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [processFeedback, setProcessFeedback] = useState('');
   const [processing, setProcessing] = useState(false);
   const [lastProcessed, setLastProcessed] = useState<string | null>(null);
   const [tab, setTab] = useState<TabView>('templates');
@@ -170,17 +172,23 @@ const RecurringTransactions: React.FC = () => {
     if (!formData.name.trim() || !formData.next_date) return;
     setSaving(true);
     try {
-      await api.create('recurring_templates', {
+      const payload = {
         ...formData,
         is_active: formData.is_active ? 1 : 0,
         end_date: formData.end_date || null,
-      });
+      };
+      if (editingId) {
+        await api.update('recurring_templates', editingId, payload);
+      } else {
+        await api.create('recurring_templates', payload);
+      }
       setFormData(emptyForm);
+      setEditingId(null);
       setShowForm(false);
       setLoading(true);
       await loadTemplates();
     } catch (err) {
-      console.error('Failed to create template:', err);
+      console.error('Failed to save template:', err);
     } finally {
       setSaving(false);
     }
@@ -211,8 +219,11 @@ const RecurringTransactions: React.FC = () => {
       await loadLastProcessed();
       if (tab === 'history') await loadHistory();
       if (result.processed > 0) {
-        console.log(`Processed ${result.processed} templates: ${result.invoicesCreated} invoices, ${result.expensesCreated} expenses`);
+        setProcessFeedback(`Processed ${result.processed} template(s): ${result.invoicesCreated || 0} invoice(s), ${result.expensesCreated || 0} expense(s) created`);
+      } else {
+        setProcessFeedback('No templates were due for processing');
       }
+      setTimeout(() => setProcessFeedback(''), 5000);
     } catch (err) {
       console.error('Failed to process recurring:', err);
     } finally {
@@ -273,6 +284,13 @@ const RecurringTransactions: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Process feedback */}
+      {processFeedback && (
+        <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>
+          {processFeedback}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px', width: 'fit-content' }}>
@@ -487,7 +505,7 @@ const RecurringTransactions: React.FC = () => {
                     <tr key={t.id}>
                       <td className="text-text-primary font-medium">{t.name}</td>
                       <td>
-                        <span className={typeBadge[t.type] || 'block-badge'}>{t.type}</span>
+                        <span className={typeBadge[t.type] || 'block-badge capitalize'}>{t.type}</span>
                       </td>
                       <td className="text-text-secondary">
                         {frequencyLabel[t.frequency] || t.frequency}
@@ -524,6 +542,24 @@ const RecurringTransactions: React.FC = () => {
                           title={t.is_active ? 'Pause' : 'Resume'}
                         >
                           {t.is_active ? <Pause size={16} /> : <Play size={16} />}
+                        </button>
+                        <button
+                          className="p-1 rounded-sm text-text-muted hover:text-accent-blue transition-colors"
+                          onClick={() => {
+                            setEditingId(t.id);
+                            setFormData({
+                              name: t.name || '',
+                              type: t.type as any || 'invoice',
+                              frequency: t.frequency as any || 'monthly',
+                              next_date: t.next_date || '',
+                              end_date: t.end_date || '',
+                              is_active: !!t.is_active,
+                            });
+                            setShowForm(true);
+                          }}
+                          title="Edit template"
+                        >
+                          <Pencil size={14} />
                         </button>
                       </td>
                     </tr>
@@ -607,7 +643,7 @@ const RecurringTransactions: React.FC = () => {
                           h.status === 'overdue' ? 'block-badge-expense' :
                           'block-badge-warning'
                         }`}>
-                          {h.status}
+                          <span className="capitalize">{h.status}</span>
                         </span>
                       </td>
                       <td className="text-text-secondary text-xs">{h.client_name || '-'}</td>

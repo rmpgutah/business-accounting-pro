@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Printer, Download } from 'lucide-react';
+import { Printer, Download, GitCompare } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -31,10 +31,10 @@ const fmt = new Intl.NumberFormat('en-US', {
 });
 
 // ─── Render helpers ─────────────────────────────────────
-const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
+const SectionHeader: React.FC<{ label: string; cols?: number }> = ({ label, cols = 2 }) => (
   <tr className="bg-bg-tertiary/30">
     <td
-      colSpan={2}
+      colSpan={cols}
       className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
     >
       {label}
@@ -48,7 +48,9 @@ const PnLLineRow: React.FC<{
   indent?: number;
   bold?: boolean;
   accent?: string;
-}> = ({ name, amount, indent = 0, bold = false, accent }) => (
+  priorAmount?: number | null;
+  change?: React.ReactNode;
+}> = ({ name, amount, indent = 0, bold = false, accent, priorAmount, change }) => (
   <tr className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
     <td
       className={`py-1.5 text-xs ${bold ? 'font-bold text-text-primary' : 'text-text-secondary'}`}
@@ -63,6 +65,16 @@ const PnLLineRow: React.FC<{
     >
       {fmt.format(amount)}
     </td>
+    {priorAmount !== undefined && priorAmount !== null && (
+      <td className="py-1.5 text-right pr-4 font-mono text-xs text-text-muted">
+        {fmt.format(priorAmount)}
+      </td>
+    )}
+    {change !== undefined && (
+      <td className="py-1.5 text-right pr-6 text-xs">
+        {change}
+      </td>
+    )}
   </tr>
 );
 
@@ -72,7 +84,9 @@ const PnLSubtotalRow: React.FC<{
   accent?: string;
   topBorder?: boolean;
   doubleBorder?: boolean;
-}> = ({ label, amount, accent, topBorder, doubleBorder }) => (
+  priorAmount?: number | null;
+  change?: React.ReactNode;
+}> = ({ label, amount, accent, topBorder, doubleBorder, priorAmount, change }) => (
   <tr
     className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
   >
@@ -84,6 +98,16 @@ const PnLSubtotalRow: React.FC<{
     >
       {fmt.format(amount)}
     </td>
+    {priorAmount !== undefined && priorAmount !== null && (
+      <td className="py-2 text-right pr-4 font-mono text-xs font-bold text-text-muted">
+        {fmt.format(priorAmount)}
+      </td>
+    )}
+    {change !== undefined && (
+      <td className="py-2 text-right pr-6 text-xs font-bold">
+        {change}
+      </td>
+    )}
   </tr>
 );
 
@@ -103,6 +127,8 @@ const ProfitAndLoss: React.FC = () => {
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
   );
   const [loading, setLoading] = useState(true);
+  const [compareYoY, setCompareYoY] = useState(false);
+  const [priorData, setPriorData] = useState<PnLData | null>(null);
   const [data, setData] = useState<PnLData>({
     revenue: [],
     costOfServices: [],
@@ -204,6 +230,43 @@ const ProfitAndLoss: React.FC = () => {
     };
   }, [startDate, endDate, activeCompany]);
 
+  // ─── Load prior year data for YoY comparison ──────────
+  useEffect(() => {
+    if (!compareYoY || !activeCompany) { setPriorData(null); return; }
+    const priorStart = startDate.replace(/^\d{4}/, String(parseInt(startDate.slice(0, 4), 10) - 1));
+    const priorEnd = endDate.replace(/^\d{4}/, String(parseInt(endDate.slice(0, 4), 10) - 1));
+
+    api.rawQuery(
+      `SELECT a.name AS account_name, a.code AS account_code, a.type AS account_type, a.subtype AS subtype,
+        COALESCE(SUM(jel.credit - jel.debit), 0) AS total
+      FROM journal_entry_lines jel
+      JOIN accounts a ON a.id = jel.account_id
+      JOIN journal_entries je ON je.id = jel.journal_entry_id
+      WHERE je.date BETWEEN ? AND ? AND je.company_id = ? AND a.type IN ('revenue','expense')
+      GROUP BY a.id, a.name, a.code, a.type, a.subtype ORDER BY a.type, a.subtype, a.code`,
+      [priorStart, priorEnd, activeCompany.id]
+    ).then((rows: any[]) => {
+      const result: PnLData = { revenue: [], costOfServices: [], operatingExpenses: {}, otherIncome: [], otherExpenses: [] };
+      for (const row of rows ?? []) {
+        const item: LineItem = { account_name: row.account_name, account_code: row.account_code, subtype: row.subtype || '', total: row.total };
+        const sub = (item.subtype || '').toLowerCase();
+        if (row.account_type === 'revenue') {
+          if (sub.includes('other')) result.otherIncome.push(item);
+          else result.revenue.push(item);
+        } else {
+          if (sub.includes('cost of') || sub.includes('cogs')) result.costOfServices.push(item);
+          else if (sub.includes('other') || sub.includes('interest expense')) result.otherExpenses.push({ ...item, total: Math.abs(item.total) });
+          else {
+            const group = item.subtype || 'General';
+            if (!result.operatingExpenses[group]) result.operatingExpenses[group] = [];
+            result.operatingExpenses[group].push({ ...item, total: Math.abs(item.total) });
+          }
+        }
+      }
+      setPriorData(result);
+    }).catch(() => setPriorData(null));
+  }, [compareYoY, startDate, endDate, activeCompany]);
+
   // ─── Computed totals ────────────────────────────────────
   const totalRevenue = useMemo(
     () => data.revenue.reduce((s, r) => s + r.total, 0),
@@ -233,6 +296,42 @@ const ProfitAndLoss: React.FC = () => {
     [data.otherExpenses]
   );
   const netIncome = netOperatingIncome + totalOtherIncome - totalOtherExpenses;
+
+  // ─── Prior year totals (for YoY) ──────────────────────
+  const priorTotalRevenue = priorData?.revenue.reduce((s, r) => s + r.total, 0) ?? 0;
+  const priorTotalCOS = priorData?.costOfServices.reduce((s, r) => s + Math.abs(r.total), 0) ?? 0;
+  const priorTotalOpex = Object.values(priorData?.operatingExpenses ?? {}).flat().reduce((s, r) => s + r.total, 0);
+  const priorTotalOtherIncome = priorData?.otherIncome.reduce((s, r) => s + r.total, 0) ?? 0;
+  const priorTotalOtherExpenses = priorData?.otherExpenses.reduce((s, r) => s + r.total, 0) ?? 0;
+  const priorGrossProfit = priorTotalRevenue - priorTotalCOS;
+  const priorNetOperating = priorGrossProfit - priorTotalOpex;
+  const priorNetIncome = priorNetOperating + priorTotalOtherIncome - priorTotalOtherExpenses;
+
+  // Lookup prior amount by account code
+  const priorAmountMap = useMemo(() => {
+    if (!priorData) return new Map<string, number>();
+    const map = new Map<string, number>();
+    const addAll = (items: LineItem[]) => items.forEach(i => map.set(i.account_code, i.total));
+    addAll(priorData.revenue);
+    addAll(priorData.costOfServices);
+    addAll(priorData.otherIncome);
+    addAll(priorData.otherExpenses);
+    Object.values(priorData.operatingExpenses).flat().forEach(i => map.set(i.account_code, Math.abs(i.total)));
+    return map;
+  }, [priorData]);
+
+  const changeArrow = (current: number, prior: number, isExpense = false) => {
+    if (!compareYoY || !priorData) return null;
+    const diff = current - prior;
+    if (Math.abs(diff) < 0.01) return null;
+    const pct = prior !== 0 ? Math.round((diff / Math.abs(prior)) * 100) : 0;
+    const isGood = isExpense ? diff < 0 : diff > 0;
+    return (
+      <span className={`text-[10px] font-mono ml-2 ${isGood ? 'text-accent-income' : 'text-accent-expense'}`}>
+        {diff > 0 ? '+' : ''}{fmt.format(diff)} ({pct > 0 ? '+' : ''}{pct}%)
+      </span>
+    );
+  };
 
   // ─── Build P&L report HTML for printing ────────────────
   const buildPnLHTML = useCallback(() => {
@@ -373,6 +472,14 @@ const ProfitAndLoss: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button
+            className={`p-2 transition-colors ${compareYoY ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'}`}
+            style={{ borderRadius: '6px' }}
+            title="Year-over-Year Comparison"
+            onClick={() => setCompareYoY(v => !v)}
+          >
+            <GitCompare size={15} />
+          </button>
+          <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
             title="Print Report"
@@ -416,15 +523,27 @@ const ProfitAndLoss: React.FC = () => {
           </div>
 
           <table className="w-full text-sm">
+            {compareYoY && priorData && (
+              <thead>
+                <tr className="border-b border-border-primary">
+                  <th className="px-6 py-2 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Account</th>
+                  <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Current</th>
+                  <th className="py-2 text-right pr-4 text-xs font-bold text-text-muted uppercase tracking-wider">Prior Year</th>
+                  <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Change</th>
+                </tr>
+              </thead>
+            )}
             <tbody>
               {/* Revenue */}
-              <SectionHeader label="Revenue" />
+              <SectionHeader label="Revenue" cols={compareYoY && priorData ? 4 : 2} />
               {data.revenue.map((r) => (
                 <PnLLineRow
                   key={r.account_code}
                   name={r.account_name}
                   amount={r.total}
                   indent={1}
+                  priorAmount={compareYoY && priorData ? (priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                  change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0) : undefined}
                 />
               ))}
               <PnLSubtotalRow
@@ -432,6 +551,8 @@ const ProfitAndLoss: React.FC = () => {
                 amount={totalRevenue}
                 accent="text-accent-income"
                 topBorder
+                priorAmount={compareYoY && priorData ? priorTotalRevenue : undefined}
+                change={compareYoY && priorData ? changeArrow(totalRevenue, priorTotalRevenue) : undefined}
               />
 
               <PnLSpacer />
@@ -552,13 +673,21 @@ const ProfitAndLoss: React.FC = () => {
                 </td>
                 <td
                   className={`py-3 text-right pr-6 font-mono text-sm font-bold ${
-                    netIncome >= 0
-                      ? 'text-accent-income'
-                      : 'text-accent-expense'
+                    netIncome >= 0 ? 'text-accent-income' : 'text-accent-expense'
                   }`}
                 >
                   {fmt.format(netIncome)}
                 </td>
+                {compareYoY && priorData && (
+                  <td className="py-3 text-right pr-4 font-mono text-sm font-bold text-text-muted">
+                    {fmt.format(priorNetIncome)}
+                  </td>
+                )}
+                {compareYoY && priorData && (
+                  <td className="py-3 text-right pr-6 text-sm font-bold">
+                    {changeArrow(netIncome, priorNetIncome)}
+                  </td>
+                )}
               </tr>
             </tbody>
           </table>

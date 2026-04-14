@@ -295,6 +295,82 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_debt_notes_debt ON debt_notes(debt_id)`,
+  // Expense line items (2026-04-08)
+  `CREATE TABLE IF NOT EXISTS expense_line_items (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    description TEXT DEFAULT '',
+    quantity REAL DEFAULT 1,
+    unit_price REAL DEFAULT 0,
+    amount REAL DEFAULT 0,
+    account_id TEXT REFERENCES accounts(id),
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_expense_li_expense ON expense_line_items(expense_id)`,
+  // Debt disputes (2026-04-08)
+  `CREATE TABLE IF NOT EXISTS debt_disputes (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    dispute_date TEXT DEFAULT (date('now')),
+    reason TEXT NOT NULL DEFAULT 'other' CHECK(reason IN ('not_my_debt','wrong_amount','already_paid','statute_expired','identity_theft','other')),
+    description TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','investigating','resolved','rejected')),
+    resolution TEXT DEFAULT '',
+    resolved_date TEXT,
+    resolved_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_debt_disputes_debt ON debt_disputes(debt_id)`,
+  // Debtor contact preferences (2026-04-08)
+  "ALTER TABLE debts ADD COLUMN preferred_contact_method TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN do_not_call INTEGER DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN cease_desist_active INTEGER DEFAULT 0",
+  // Invoice late fee & dunning (2026-04-08)
+  "ALTER TABLE invoices ADD COLUMN late_fee_applied INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN dunning_stage INTEGER DEFAULT 0",
+  // Payroll run type (2026-04-08)
+  "ALTER TABLE payroll_runs ADD COLUMN run_type TEXT DEFAULT 'regular'",
+  // Invoice reorder + customizations (2026-04-10)
+  // Per-line styling
+  "ALTER TABLE invoice_line_items ADD COLUMN bold INTEGER DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN italic INTEGER DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
+  // Custom header field labels (per-company)
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_1_label TEXT DEFAULT ''",
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_2_label TEXT DEFAULT ''",
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_3_label TEXT DEFAULT ''",
+  "ALTER TABLE invoice_settings ADD COLUMN custom_field_4_label TEXT DEFAULT ''",
+  // Custom header field values (per-invoice)
+  "ALTER TABLE invoices ADD COLUMN custom_field_1 TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN custom_field_2 TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN custom_field_3 TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN custom_field_4 TEXT DEFAULT ''",
+  // DC Immersive Workspace (2026-04-12)
+  `CREATE TABLE IF NOT EXISTS debt_audit_log (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    field_name TEXT DEFAULT '',
+    old_value TEXT DEFAULT '',
+    new_value TEXT DEFAULT '',
+    performed_by TEXT DEFAULT 'user',
+    performed_at TEXT DEFAULT (datetime('now')),
+    ip_address TEXT DEFAULT '',
+    notes TEXT DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_debt_audit_debt ON debt_audit_log(debt_id)`,
+  `CREATE TABLE IF NOT EXISTS debt_payment_matches (
+    id TEXT PRIMARY KEY,
+    bank_transaction_id TEXT NOT NULL,
+    debt_id TEXT NOT NULL,
+    match_type TEXT NOT NULL CHECK(match_type IN ('auto','suggested')),
+    confidence REAL DEFAULT 0,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','accepted','rejected')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dpm_debt ON debt_payment_matches(debt_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_dpm_txn ON debt_payment_matches(bank_transaction_id)`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -435,6 +511,9 @@ const tablesWithoutUpdatedAt = new Set([
   // Debt & Invoice Enhancement child tables — created_at only
   'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
   'debt_compliance_log', 'invoice_debt_links',
+  'expense_line_items', 'debt_disputes',
+  // DC Immersive Workspace — created_at only
+  'debt_audit_log', 'debt_payment_matches',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

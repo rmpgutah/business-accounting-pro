@@ -198,7 +198,7 @@ export default function EmailModule() {
                       <span className="block-badge-blue">{entry.entity_type}</span>
                     </td>
                     <td>
-                      <span className={entry.status === 'sent' ? 'block-badge-income' : 'block-badge-expense'}>
+                      <span className={`${entry.status === 'sent' ? 'block-badge-income' : 'block-badge-expense'} capitalize`}>
                         {entry.status}
                       </span>
                     </td>

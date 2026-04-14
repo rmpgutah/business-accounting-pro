@@ -5,6 +5,9 @@ import {
   ArrowRightLeft,
   CheckCircle,
   X,
+  Pencil,
+  Trash2,
+  Search,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -28,15 +31,13 @@ const MultiCompany: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    legal_name: '',
-    tax_id: '',
-    industry: '',
-    fiscal_year_end: '12',
-    base_currency: 'USD',
-  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const defaultForm = { name: '', legal_name: '', tax_id: '', industry: '', fiscal_year_end: '12', base_currency: 'USD' };
+  const [formData, setFormData] = useState(defaultForm);
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -60,8 +61,12 @@ const MultiCompany: React.FC = () => {
     try {
       await api.switchCompany(company.id);
       setActiveCompany(company as any);
-    } catch (err) {
+      setOpSuccess('Switched to ' + company.name);
+      setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
       console.error('Failed to switch company:', err);
+      setOpError('Failed to switch: ' + (err?.message || 'Unknown error'));
+      setTimeout(() => setOpError(''), 5000);
     } finally {
       setSwitching(null);
     }
@@ -71,28 +76,63 @@ const MultiCompany: React.FC = () => {
     if (!formData.name) return;
     setCreating(true);
     try {
-      await api.createCompany({
+      const payload = {
         name: formData.name,
         legal_name: formData.legal_name,
         tax_id: formData.tax_id,
         industry: formData.industry,
         fiscal_year_end: formData.fiscal_year_end,
         base_currency: formData.base_currency,
-      });
-      setFormData({
-        name: '',
-        legal_name: '',
-        tax_id: '',
-        industry: '',
-        fiscal_year_end: '12',
-        base_currency: 'USD',
-      });
+      };
+      if (editingId) {
+        await api.updateCompany(editingId, payload);
+      } else {
+        await api.createCompany(payload);
+      }
+      setOpSuccess(editingId ? 'Company updated' : 'Company created');
+      setTimeout(() => setOpSuccess(''), 3000);
+      setFormData(defaultForm);
+      setEditingId(null);
       setShowForm(false);
       await loadCompanies();
-    } catch (err) {
-      console.error('Failed to create company:', err);
+    } catch (err: any) {
+      console.error('Failed to save company:', err);
+      setOpError('Failed to save: ' + (err?.message || 'Unknown error'));
+      setTimeout(() => setOpError(''), 5000);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleEdit = (company: Company) => {
+    setEditingId(company.id);
+    setFormData({
+      name: company.name,
+      legal_name: company.legal_name || '',
+      tax_id: company.tax_id || '',
+      industry: '',
+      fiscal_year_end: '12',
+      base_currency: 'USD',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (company: Company) => {
+    if (activeCompany?.id === company.id) {
+      setOpError('Cannot delete the active company. Switch to another company first.');
+      setTimeout(() => setOpError(''), 5000);
+      return;
+    }
+    if (!window.confirm(`Delete company "${company.name}"? This cannot be undone.`)) return;
+    try {
+      await api.remove('companies', company.id);
+      await loadCompanies();
+      setOpSuccess('Company deleted');
+      setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete company:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error'));
+      setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -103,6 +143,12 @@ const MultiCompany: React.FC = () => {
       </div>
     );
   }
+
+  const filteredCompanies = companies.filter(c => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return c.name?.toLowerCase().includes(q) || c.legal_name?.toLowerCase().includes(q) || c.tax_id?.toLowerCase().includes(q);
+  });
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
@@ -115,7 +161,7 @@ const MultiCompany: React.FC = () => {
         <div className="module-actions">
           <button
             className="block-btn-primary flex items-center gap-2"
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => { setShowForm(!showForm); if (showForm) { setEditingId(null); setFormData(defaultForm); } }}
           >
             {showForm ? <X size={14} /> : <Plus size={14} />}
             {showForm ? 'Cancel' : 'New Company'}
@@ -123,11 +169,21 @@ const MultiCompany: React.FC = () => {
         </div>
       </div>
 
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+
+      {companies.length > 0 && !showForm && (
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input className="block-input pl-8" placeholder="Search companies..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      )}
+
       {/* New Company Form (inline) */}
       {showForm && (
         <div className="block-card p-5" style={{ borderColor: 'var(--color-accent-blue)' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Create New Company
+            {editingId ? 'Edit Company' : 'Create New Company'}
           </h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -222,26 +278,35 @@ const MultiCompany: React.FC = () => {
               style={{ opacity: !formData.name || creating ? 0.5 : 1 }}
             >
               <Plus size={14} />
-              {creating ? 'Creating...' : 'Create Company'}
+              {creating ? 'Saving...' : editingId ? 'Update Company' : 'Create Company'}
             </button>
           </div>
         </div>
       )}
 
       {/* Companies List */}
-      {companies.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <Building2 size={24} className="text-text-muted" />
+      {filteredCompanies.length === 0 ? (
+        companies.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Building2 size={24} className="text-text-muted" />
+            </div>
+            <p className="text-text-muted text-sm">No companies configured</p>
+            <p className="text-text-muted text-xs mt-1">
+              Create your first company to get started.
+            </p>
           </div>
-          <p className="text-text-muted text-sm">No companies configured</p>
-          <p className="text-text-muted text-xs mt-1">
-            Create your first company to get started.
-          </p>
-        </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Search size={24} className="text-text-muted" />
+            </div>
+            <p className="text-text-muted text-sm">No companies match your search</p>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          {companies.map((company) => {
+          {filteredCompanies.map((company) => {
             const isActive = activeCompany?.id === company.id;
             return (
               <div
@@ -311,18 +376,36 @@ const MultiCompany: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Switch Button */}
-                {!isActive && (
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  {!isActive && (
+                    <button
+                      className="block-btn flex items-center gap-2"
+                      onClick={() => handleSwitch(company)}
+                      disabled={switching === company.id}
+                      style={{ opacity: switching === company.id ? 0.6 : 1 }}
+                    >
+                      <ArrowRightLeft size={14} />
+                      {switching === company.id ? 'Switching...' : 'Switch'}
+                    </button>
+                  )}
                   <button
-                    className="block-btn flex items-center gap-2 shrink-0 ml-4"
-                    onClick={() => handleSwitch(company)}
-                    disabled={switching === company.id}
-                    style={{ opacity: switching === company.id ? 0.6 : 1 }}
+                    className="block-btn flex items-center gap-1.5"
+                    onClick={() => handleEdit(company)}
+                    title="Edit company"
                   >
-                    <ArrowRightLeft size={14} />
-                    {switching === company.id ? 'Switching...' : 'Switch'}
+                    <Pencil size={12} />
                   </button>
-                )}
+                  {!isActive && (
+                    <button
+                      className="block-btn flex items-center gap-1.5 text-accent-expense hover:bg-accent-expense/10"
+                      onClick={() => handleDelete(company)}
+                      title="Delete company"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

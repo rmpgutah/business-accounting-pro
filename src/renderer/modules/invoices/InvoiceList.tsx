@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings } from 'lucide-react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle, Package } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
@@ -57,6 +57,7 @@ interface InvoiceListProps {
   onViewInvoice: (id: string) => void;
   onEditInvoice: (id: string) => void;
   onSettings?: () => void;
+  onCatalog?: () => void;
 }
 
 const InvoiceList: React.FC<InvoiceListProps> = ({
@@ -64,6 +65,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   onViewInvoice,
   onEditInvoice,
   onSettings,
+  onCatalog,
 }) => {
   const nav = useNavigation();
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -82,6 +84,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
+  const [feedback, setFeedback] = useState<{ type: string; message: string } | null>(null);
 
   // Overdue → debt conversion
   const [candidates, setCandidates] = useState<any[]>([]);
@@ -96,25 +99,32 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [invoiceData, clientData, summaryResult, candidateData] = await Promise.all([
+        // Load invoices and clients first (critical), summary and candidates are non-blocking
+        const [invoiceData, clientData] = await Promise.all([
           api.query('invoices', { company_id: activeCompany.id }),
           api.query('clients', { company_id: activeCompany.id }),
-          api.rawQuery(
-            `SELECT
-              COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
-              COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
-              COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', paid_date) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
-            FROM invoices WHERE company_id = ?`,
-            [activeCompany.id]
-          ),
-          api.getOverdueCandidates(activeCompany.id, 30).catch(() => []),
         ]);
         if (cancelled) return;
-        setInvoices(invoiceData ?? []);
-        setClients(clientData ?? []);
-        const summaryRow = Array.isArray(summaryResult) ? summaryResult[0] : summaryResult;
-        setInvoiceSummary(summaryRow ?? null);
-        setCandidates(Array.isArray(candidateData) ? candidateData : []);
+        setInvoices(Array.isArray(invoiceData) ? invoiceData : []);
+        setClients(Array.isArray(clientData) ? clientData : []);
+
+        // Non-critical secondary data — failures don't hide invoices
+        api.rawQuery(
+          `SELECT
+            COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
+            COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
+            COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
+          FROM invoices WHERE company_id = ?`,
+          [activeCompany.id]
+        ).then(r => {
+          if (cancelled) return;
+          const row = Array.isArray(r) ? r[0] : r;
+          setInvoiceSummary(row ?? null);
+        }).catch(() => {});
+        api.getOverdueCandidates(activeCompany.id, 30).then(r => {
+          if (cancelled) return;
+          setCandidates(Array.isArray(r) ? r : []);
+        }).catch(() => {});
       } catch (err) {
         console.error('Failed to load invoices:', err);
       } finally {
@@ -262,18 +272,63 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       <div className="module-header">
         <h1 className="module-title text-text-primary">Invoices</h1>
         <div className="module-actions">
+          {onCatalog && (
+            <button className="block-btn flex items-center gap-2" onClick={onCatalog} title="Manage catalog items">
+              <Package size={16} />
+              Catalog
+            </button>
+          )}
           {onSettings && (
             <button className="block-btn flex items-center gap-2" onClick={onSettings} title="Invoice template settings">
               <Settings size={16} />
               Customize
             </button>
           )}
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const result = await api.applyLateFees();
+              if (result?.applied > 0) {
+                setFeedback({ type: 'success', message: `Applied late fees to ${result.applied} invoice(s)` });
+                reload();
+              } else {
+                setFeedback({ type: 'info', message: 'No invoices eligible for late fees' });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+          >
+            <DollarSign size={14} />
+            Apply Late Fees
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const result = await api.runDunning();
+              if (result?.advanced > 0) {
+                setFeedback({ type: 'success', message: `Advanced dunning on ${result.advanced} invoice(s)` });
+                reload();
+              } else {
+                setFeedback({ type: 'info', message: 'No invoices need dunning advancement' });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+          >
+            <AlertTriangle size={14} />
+            Run Dunning
+          </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNewInvoice}>
             <Plus size={16} />
             New Invoice
           </button>
         </div>
       </div>
+
+      {/* Feedback */}
+      {feedback && (
+        <div className={`text-xs px-3 py-2 border ${feedback.type === 'success' ? 'text-accent-income bg-accent-income/10 border-accent-income/20' : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'}`} style={{ borderRadius: '6px' }}>
+          {feedback.message}
+        </div>
+      )}
 
       {/* Summary Bar */}
       {invoiceSummary && (
@@ -495,7 +550,17 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       {formatCurrency(balance)}
                     </td>
                     <td>
-                      <span className={badge.className}>{badge.label}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={badge.className}>{badge.label}</span>
+                        {(inv as any).dunning_stage > 0 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>
+                            {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
+                          </span>
+                        )}
+                        {(inv as any).late_fee_applied === 1 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#ef444422', color: '#f87171' }}>FEE</span>
+                        )}
+                      </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {inv.status === 'overdue' && (
@@ -556,6 +621,27 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           >
             <Download size={13} />
             Export CSV
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={async () => {
+              const ids = Array.from(selectedIds);
+              if (ids.length === 0) return;
+              const result = await api.batchExportPDF(ids);
+              if (result?.cancelled) return;
+              if (result?.error) {
+                setFeedback({ type: 'error', message: 'PDF export failed: ' + result.error });
+              } else {
+                setFeedback({ type: 'success', message: `Exported ${result?.count || ids.length} invoices to PDF` });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <FileText size={13} />
+            Export PDF
           </button>
 
           {!showDeleteConfirm ? (

@@ -43,6 +43,10 @@ type FullSettings = ISettings & {
   show_payment_terms: boolean;
   payment_qr_url: string;
   show_payment_qr: boolean;
+  custom_field_1_label: string;
+  custom_field_2_label: string;
+  custom_field_3_label: string;
+  custom_field_4_label: string;
 };
 
 const DEFAULT_SETTINGS: FullSettings = {
@@ -64,6 +68,10 @@ const DEFAULT_SETTINGS: FullSettings = {
   column_config: DEFAULT_COLUMNS,
   payment_qr_url: '',
   show_payment_qr: false,
+  custom_field_1_label: '',
+  custom_field_2_label: '',
+  custom_field_3_label: '',
+  custom_field_4_label: '',
 };
 
 // ─── Column Configurator (inline) ───────────────────────
@@ -149,6 +157,10 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
             column_config: colConfig,
             payment_qr_url: data.payment_qr_url || '',
             show_payment_qr: data.show_payment_qr !== 0 && data.show_payment_qr !== false,
+            custom_field_1_label: data.custom_field_1_label || '',
+            custom_field_2_label: data.custom_field_2_label || '',
+            custom_field_3_label: data.custom_field_3_label || '',
+            custom_field_4_label: data.custom_field_4_label || '',
           });
         }
       } catch (err) {
@@ -450,6 +462,31 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                     onChange={(e) => setSettings((p) => ({ ...p, default_due_days: parseInt(e.target.value) || 30 }))} />
                 </div>
               </div>
+            </div>
+
+            {/* Custom Fields */}
+            <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary">Custom Fields</h3>
+              <p className="text-xs text-text-muted">
+                Define up to 4 custom fields that appear on every invoice header. Leave a label blank to hide that field.
+              </p>
+              {[1, 2, 3, 4].map((n) => {
+                const key = `custom_field_${n}_label` as keyof FullSettings;
+                const placeholders = ['e.g. Purchase Order', 'e.g. Department', 'e.g. Contract #', 'e.g. Cost Center'];
+                return (
+                  <div key={n}>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                      Field {n} Label
+                    </label>
+                    <input
+                      className="block-input"
+                      placeholder={placeholders[n - 1]}
+                      value={(settings[key] as string) || ''}
+                      onChange={(e) => setSettings((s) => ({ ...s, [key]: e.target.value }))}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
           </div>

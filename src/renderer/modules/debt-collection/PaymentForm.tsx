@@ -12,6 +12,7 @@ interface DebtData {
 
 interface PaymentFormProps {
   debtId: string;
+  editId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -23,7 +24,7 @@ function todayISO(): string {
 }
 
 // ─── Component ──────────────────────────────────────────
-const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) => {
+const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSaved }) => {
   // Debt data loaded on mount
   const [debt, setDebt] = useState<DebtData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +62,28 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
     load();
     return () => { cancelled = true; };
   }, [debtId]);
+
+  // ── Load existing payment for edit ──
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const row = await api.get('debt_payments', editId);
+        if (row && !cancelled) {
+          setAmount(String(row.amount || ''));
+          setMethod(row.method || 'check');
+          setReferenceNumber(row.reference_number || '');
+          setReceivedDate(row.received_date ? row.received_date.slice(0, 10) : todayISO());
+          setNotes(row.notes || '');
+        }
+      } catch (err) {
+        console.error('Failed to load payment:', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [editId]);
 
   // ── Parsed amount ──
   const parsedAmount = useMemo(() => {
@@ -112,30 +135,37 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
     }
 
     setSaving(true);
-    try {
-      // 1. Create payment record
-      await api.create('debt_payments', {
-        debt_id: debtId,
-        amount: parsedAmount,
-        method,
-        reference_number: referenceNumber || null,
-        received_date: receivedDate,
-        applied_to_principal: allocation.principal,
-        applied_to_interest: allocation.interest,
-        applied_to_fees: allocation.fees,
-        notes: notes || null,
-      });
+    const paymentPayload = {
+      debt_id: debtId,
+      amount: parsedAmount,
+      method,
+      reference_number: referenceNumber || null,
+      received_date: receivedDate,
+      applied_to_principal: allocation.principal,
+      applied_to_interest: allocation.interest,
+      applied_to_fees: allocation.fees,
+      notes: notes || null,
+    };
 
-      // 2. Update debt running totals & auto-settle if fully paid
-      await api.rawQuery(
-        `UPDATE debts SET
-          payments_made = payments_made + ?,
-          balance_due = original_amount + interest_accrued + fees_accrued - payments_made - ?,
-          status = CASE WHEN original_amount + interest_accrued + fees_accrued - payments_made - ? <= 0 THEN 'settled' ELSE status END,
-          updated_at = datetime('now')
-        WHERE id = ?`,
-        [parsedAmount, parsedAmount, parsedAmount, debtId]
-      );
+    try {
+      if (editId) {
+        // Update existing payment record
+        await api.update('debt_payments', editId, paymentPayload);
+      } else {
+        // 1. Create payment record
+        await api.create('debt_payments', paymentPayload);
+
+        // 2. Update debt running totals & auto-settle if fully paid
+        await api.rawQuery(
+          `UPDATE debts SET
+            payments_made = payments_made + ?,
+            balance_due = original_amount + interest_accrued + fees_accrued - payments_made - ?,
+            status = CASE WHEN original_amount + interest_accrued + fees_accrued - payments_made - ? <= 0 THEN 'settled' ELSE status END,
+            updated_at = datetime('now')
+          WHERE id = ?`,
+          [parsedAmount, parsedAmount, parsedAmount, debtId]
+        );
+      }
 
       onSaved();
     } catch (err) {
@@ -169,7 +199,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
                 <DollarSign size={16} className="text-accent-income" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-text-primary">Record Payment</h3>
+                <h3 className="text-base font-bold text-text-primary">{editId ? 'Edit Payment' : 'Record Payment'}</h3>
                 {debt && (
                   <p className="text-xs text-text-muted mt-0.5">
                     Balance Due: <span className="text-text-primary font-semibold">{formatCurrency(debt.balance_due)}</span>
@@ -325,7 +355,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
                   disabled={saving || parsedAmount <= 0}
                 >
                   <DollarSign size={14} />
-                  {saving ? 'Recording...' : 'Record Payment'}
+                  {saving ? 'Saving...' : editId ? 'Update Payment' : 'Record Payment'}
                 </button>
               </div>
             </form>

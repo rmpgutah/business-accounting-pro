@@ -23,6 +23,7 @@ interface Contact {
 
 interface CommunicationFormProps {
   debtId: string;
+  editId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -46,10 +47,11 @@ const emptyForm: CommunicationFormData = {
 };
 
 // ─── Component ──────────────────────────────────────────
-const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, onSaved }) => {
+const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, onClose, onSaved }) => {
   const [form, setForm] = useState<CommunicationFormData>({ ...emptyForm });
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(!!editId);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,39 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
     return () => { cancelled = true; };
   }, [debtId]);
 
+  // Load existing record for edit
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const row = await api.get('debt_communications', editId);
+        if (row && !cancelled) {
+          const loggedAt = row.logged_at
+            ? row.logged_at.replace(' ', 'T').slice(0, 16)
+            : currentDatetimeLocal();
+          setForm({
+            type: row.type || 'phone',
+            direction: row.direction || 'outbound',
+            subject: row.subject || '',
+            body: row.body || '',
+            outcome: row.outcome || '',
+            next_action: row.next_action || '',
+            next_action_date: row.next_action_date ? row.next_action_date.slice(0, 10) : '',
+            contact_id: row.contact_id || '',
+            logged_at: loggedAt,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load communication:', err);
+      } finally {
+        if (!cancelled) setLoadingEdit(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [editId]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -79,22 +114,28 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
     if (saving) return;
     setSaving(true);
 
+    const payload = {
+      debt_id: debtId,
+      type: form.type,
+      direction: form.direction,
+      subject: form.subject || null,
+      body: form.body || null,
+      outcome: form.outcome || null,
+      next_action: form.next_action || null,
+      next_action_date: form.next_action_date || null,
+      contact_id: form.contact_id || null,
+      logged_at: form.logged_at
+        ? new Date(form.logged_at).toISOString()
+        : new Date().toISOString(),
+      logged_by: '',
+    };
+
     try {
-      await api.create('debt_communications', {
-        debt_id: debtId,
-        type: form.type,
-        direction: form.direction,
-        subject: form.subject || null,
-        body: form.body || null,
-        outcome: form.outcome || null,
-        next_action: form.next_action || null,
-        next_action_date: form.next_action_date || null,
-        contact_id: form.contact_id || null,
-        logged_at: form.logged_at
-          ? new Date(form.logged_at).toISOString()
-          : new Date().toISOString(),
-        logged_by: '',
-      });
+      if (editId) {
+        await api.update('debt_communications', editId, payload);
+      } else {
+        await api.create('debt_communications', payload);
+      }
       onSaved();
     } catch (err) {
       console.error('Failed to save communication:', err);
@@ -120,7 +161,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
             <h3 className="text-base font-bold text-text-primary">
-              Log Communication
+              {editId ? 'Edit Communication' : 'Log Communication'}
             </h3>
             <button
               type="button"
@@ -263,7 +304,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
                   <option value="">-- Select Contact --</option>
                   {contacts.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}{c.role ? ` (${c.role})` : ''}
+                      {c.name}{c.role ? ` (${c.role.charAt(0).toUpperCase() + c.role.slice(1)})` : ''}
                     </option>
                   ))}
                 </select>
@@ -292,7 +333,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
                 className="block-btn-primary"
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Saving...' : editId ? 'Update' : 'Save'}
               </button>
             </div>
           </form>

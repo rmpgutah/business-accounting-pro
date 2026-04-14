@@ -10,6 +10,8 @@ import {
   CreditCard,
   List,
   FileSpreadsheet,
+  Receipt,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -23,8 +25,10 @@ export type ReportType =
   | 'trial-balance'
   | 'general-ledger'
   | 'expense-by-category'
+  | 'expense-detail'
   | 'tax-summary'
-  | 'financial-statements';
+  | 'financial-statements'
+  | 'budget-vs-actual';
 
 interface ReportCard {
   id: ReportType;
@@ -105,6 +109,13 @@ const REPORTS: ReportCard[] = [
     accentClass: 'border-l-[#a855f7]',
   },
   {
+    id: 'expense-detail',
+    title: 'Expense Detail Report',
+    description: 'Itemized expense report with line items, grouped by category, vendor, or project.',
+    icon: Receipt,
+    accentClass: 'border-l-[#ec4899]',
+  },
+  {
     id: 'tax-summary',
     title: 'Tax Summary',
     description:
@@ -119,6 +130,14 @@ const REPORTS: ReportCard[] = [
       'Formatted, print-ready Profit & Loss, Balance Sheet, and Cash Flow statements.',
     icon: FileSpreadsheet,
     accentClass: 'border-l-accent-income',
+  },
+  {
+    id: 'budget-vs-actual',
+    title: 'Budget vs Actual',
+    description:
+      'Compare budgeted amounts to actual spending by category with variance analysis.',
+    icon: Target,
+    accentClass: 'border-l-purple-500',
   },
 ];
 

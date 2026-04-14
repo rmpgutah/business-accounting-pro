@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Receipt, DollarSign, Paperclip, X } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { ArrowLeft, Receipt, DollarSign, Paperclip, X, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -32,6 +32,20 @@ interface ExpenseFormProps {
   expenseId?: string | null;
   onBack: () => void;
   onSaved: () => void;
+}
+
+// ─── Expense Line Item ─────────────────────────────────
+interface ExpenseLineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  account_id: string;
+}
+
+function newLineItem(): ExpenseLineItem {
+  return { id: crypto.randomUUID(), description: '', quantity: 1, unit_price: 0, amount: 0, account_id: '' };
 }
 
 // ─── Category-Specific Detail Fields ───────────────────
@@ -202,8 +216,42 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [errors, setErrors] = useState<string[]>([]);
   const [receiptPath, setReceiptPath] = useState<string>('');
   const [details, setDetails] = useState<Record<string, string>>({});
+  const [useLineItems, setUseLineItems] = useState(false);
+  const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
 
   const isEditing = !!expenseId;
+
+  // Auto-calculate total from line items
+  const lineItemTotal = useMemo(() =>
+    lineItems.reduce((sum, li) => sum + (li.quantity * li.unit_price), 0),
+    [lineItems]
+  );
+
+  useEffect(() => {
+    if (useLineItems && lineItems.length > 0) {
+      setForm(prev => ({ ...prev, amount: lineItemTotal.toFixed(2) }));
+    }
+  }, [lineItemTotal, useLineItems]);
+
+  // Line item handlers
+  const handleLineChange = (index: number, field: keyof ExpenseLineItem, value: string | number) => {
+    setLineItems(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      updated[index].amount = updated[index].quantity * updated[index].unit_price;
+      return updated;
+    });
+  };
+  const addLineItem = () => setLineItems(prev => [...prev, newLineItem()]);
+  const removeLineItem = (index: number) => setLineItems(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== index));
+  const moveLineItem = (from: number, to: number) => {
+    setLineItems(prev => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  };
 
   // Determine which detail fields to show based on selected category
   const selectedCategory = categories.find(c => c.id === form.category_id);
@@ -260,6 +308,19 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               reference: existing.reference || '',
               tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : (existing.tags || ''),
             });
+            // Load existing line items
+            const existingLines = await api.query('expense_line_items', { expense_id: expenseId }, { field: 'sort_order', dir: 'asc' });
+            if (Array.isArray(existingLines) && existingLines.length > 0) {
+              setLineItems(existingLines.map((l: any) => ({
+                id: l.id,
+                description: l.description || '',
+                quantity: l.quantity || 1,
+                unit_price: l.unit_price || 0,
+                amount: l.amount || 0,
+                account_id: l.account_id || '',
+              })));
+              setUseLineItems(true);
+            }
           }
         }
       } catch (err) {
@@ -326,11 +387,23 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         custom_fields: Object.keys(details).length > 0 ? details : {},
       };
 
-      if (isEditing && expenseId) {
-        await api.update('expenses', expenseId, payload);
-      } else {
-        await api.create('expenses', payload);
-      }
+      const lineItemsPayload = useLineItems
+        ? lineItems.map(li => ({
+            description: li.description,
+            quantity: li.quantity,
+            unit_price: li.unit_price,
+            amount: li.quantity * li.unit_price,
+            account_id: li.account_id || null,
+          }))
+        : [];
+
+      const result = await api.saveExpense({
+        expenseId: isEditing ? expenseId! : null,
+        expenseData: payload,
+        lineItems: lineItemsPayload,
+        isEdit: isEditing,
+      });
+      if (result?.error) throw new Error(result.error);
       onSaved();
     } catch (err) {
       console.error('Failed to save expense:', err);
@@ -407,7 +480,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Amount */}
           <div>
-            <FieldLabel label="Amount" required tooltip="Total amount of the expense including any taxes" />
+            <FieldLabel label="Amount" required tooltip={useLineItems ? 'Auto-calculated from line items' : 'Total amount of the expense including any taxes'} />
             <div className="relative">
               <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
@@ -415,10 +488,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 name="amount"
                 step="0.01"
                 min="0"
-                className="block-input pl-8"
+                className={`block-input pl-8 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.amount}
                 onChange={handleChange}
+                readOnly={useLineItems}
                 required
               />
             </div>
@@ -442,6 +516,95 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 onChange={handleChange}
               />
             </div>
+          </div>
+
+          {/* Line Items Toggle + Editor — full width */}
+          <div className="col-span-3">
+            <div className="flex items-center gap-3 mb-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-text-muted uppercase tracking-wider cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={useLineItems}
+                  onChange={(e) => {
+                    setUseLineItems(e.target.checked);
+                    if (e.target.checked && lineItems.length === 0) setLineItems([newLineItem()]);
+                  }}
+                  className="accent-accent-blue"
+                />
+                Itemize Expense
+              </label>
+              {useLineItems && (
+                <span className="text-[10px] text-text-muted">Break this expense into individual line items</span>
+              )}
+            </div>
+
+            {useLineItems && (
+              <div className="border border-border-primary p-4 space-y-2 mb-2" style={{ borderRadius: '6px', background: 'var(--color-bg-tertiary)' }}>
+                {/* Header row */}
+                <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider px-1">
+                  <div className="col-span-1"></div>
+                  <div className="col-span-4">Description</div>
+                  <div className="col-span-2 text-right">Qty</div>
+                  <div className="col-span-2 text-right">Unit Price</div>
+                  <div className="col-span-2 text-right">Amount</div>
+                  <div className="col-span-1"></div>
+                </div>
+
+                {/* Line item rows */}
+                {lineItems.map((li, idx) => (
+                  <div key={li.id} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-1 flex flex-col items-center gap-0.5">
+                      {idx > 0 && (
+                        <button type="button" onClick={() => moveLineItem(idx, idx - 1)}
+                          className="text-text-muted hover:text-text-primary text-[10px] leading-none" title="Move up">&#9650;</button>
+                      )}
+                      {idx < lineItems.length - 1 && (
+                        <button type="button" onClick={() => moveLineItem(idx, idx + 1)}
+                          className="text-text-muted hover:text-text-primary text-[10px] leading-none" title="Move down">&#9660;</button>
+                      )}
+                    </div>
+                    <div className="col-span-4">
+                      <input type="text" className="block-input text-sm" placeholder="Item description"
+                        value={li.description}
+                        onChange={(e) => handleLineChange(idx, 'description', e.target.value)} />
+                    </div>
+                    <div className="col-span-2">
+                      <input type="number" className="block-input text-sm text-right font-mono" step="1" min="0"
+                        value={li.quantity}
+                        onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="col-span-2">
+                      <input type="number" className="block-input text-sm text-right font-mono" step="0.01" min="0"
+                        placeholder="0.00"
+                        value={li.unit_price || ''}
+                        onChange={(e) => handleLineChange(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="col-span-2 text-right font-mono text-sm text-text-secondary">
+                      ${(li.quantity * li.unit_price).toFixed(2)}
+                    </div>
+                    <div className="col-span-1 text-center">
+                      {lineItems.length > 1 && (
+                        <button type="button" onClick={() => removeLineItem(idx)}
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5" title="Remove item">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add line + total */}
+                <div className="flex items-center justify-between pt-3 border-t border-border-primary">
+                  <button type="button" onClick={addLineItem}
+                    className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5">
+                    <Plus size={12} /> Add Item
+                  </button>
+                  <div className="text-sm font-bold text-text-primary font-mono">
+                    Total: ${lineItemTotal.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Description — full width */}

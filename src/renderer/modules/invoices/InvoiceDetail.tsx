@@ -51,6 +51,9 @@ interface LineItem {
   unit_price: number;
   amount: number;
   tax_rate: number;
+  tax_rate_override?: number;
+  discount_pct?: number;
+  row_type?: string;
   account_id: string;
 }
 
@@ -92,6 +95,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [reminders, setReminders] = useState<any[]>([]);
@@ -161,15 +165,45 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     [invoice]
   );
 
+  const taxByRate = useMemo(() => {
+    const map: Record<string, { taxable: number; tax: number }> = {};
+    for (const l of lines) {
+      if ((l.row_type || 'item') !== 'item') continue;
+      const override = l.tax_rate_override;
+      const rate = (override != null && override >= 0) ? override : l.tax_rate;
+      if (rate <= 0) continue;
+      const base = l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100);
+      const key = rate.toFixed(2);
+      if (!map[key]) map[key] = { taxable: 0, tax: 0 };
+      map[key].taxable += base;
+      map[key].tax += base * (rate / 100);
+    }
+    return map;
+  }, [lines]);
+
+  const sortedTaxRates = useMemo(
+    () => Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b)),
+    [taxByRate]
+  );
+
   const handleSendInvoice = async () => {
     if (!invoice || invoice.status === 'paid') return;
     setSending(true);
     try {
-      const result = await api.sendInvoiceEmail(invoiceId);
+      // Build the SAME HTML the user saw in preview so the attached PDF matches.
+      const html = buildHTML();
+      const result = await api.sendInvoiceEmail(invoiceId, html || undefined);
       if (result?.error) {
         console.error('Send invoice failed:', result.error);
-      } else if (result?.newStatus) {
-        setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+        alert('Failed to open email: ' + result.error);
+      } else if (result?.success) {
+        if (result.newStatus) {
+          setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+        }
+        // Let the user know the PDF is ready for manual attachment
+        if (result.pdfPath) {
+          console.info('Invoice PDF saved to:', result.pdfPath);
+        }
       }
     } catch (err) {
       console.error('Failed to send invoice:', err);
@@ -195,9 +229,14 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     const result = await api.cloneRecord('invoices', invoice.id);
     if (result?.error) {
       console.error('Duplicate invoice failed:', result.error);
+      alert('Failed to duplicate invoice: ' + result.error);
       return;
     }
-    onBack();
+    if (result?.id) {
+      onEdit(result.id); // Open the cloned invoice for editing
+    } else {
+      onBack();
+    }
   };
 
   const handleScheduleReminders = async () => {
@@ -316,7 +355,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               </button>
               <button
                 className="block-btn-success flex items-center gap-2"
-                onClick={() => setShowPaymentModal(true)}
+                onClick={() => { setEditPaymentId(null); setShowPaymentModal(true); }}
               >
                 <DollarSign size={14} />
                 Record Payment
@@ -442,11 +481,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <span className="text-text-secondary">Subtotal</span>
               <span className="font-mono text-text-primary">{formatCurrency(invoice.subtotal)}</span>
             </div>
-            {invoice.tax_amount > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
-              </div>
+            {sortedTaxRates.length > 1 ? (
+              sortedTaxRates.map((rate) => (
+                <div key={rate} className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax @ {rate}% on {formatCurrency(taxByRate[rate].taxable)}</span>
+                  <span className="font-mono text-text-primary">{formatCurrency(taxByRate[rate].tax)}</span>
+                </div>
+              ))
+            ) : (
+              invoice.tax_amount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax</span>
+                  <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
+                </div>
+              )
             )}
             {invoice.discount_amount > 0 && (
               <div className="flex justify-between text-sm">
@@ -554,6 +602,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <th>Method</th>
                 <th>Reference</th>
                 <th className="text-right">Amount</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -564,6 +613,15 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
                     {formatCurrency(p.amount)}
+                  </td>
+                  <td>
+                    <button
+                      className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                      onClick={() => { setEditPaymentId(p.id); setShowPaymentModal(true); }}
+                      title="Edit payment"
+                    >
+                      <Edit size={12} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -651,7 +709,8 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           invoiceId={invoiceId}
           invoiceTotal={invoice.total}
           amountPaid={invoice.amount_paid}
-          onClose={() => setShowPaymentModal(false)}
+          editPaymentId={editPaymentId}
+          onClose={() => { setShowPaymentModal(false); setEditPaymentId(null); }}
           onSaved={handlePaymentSaved}
         />
       )}

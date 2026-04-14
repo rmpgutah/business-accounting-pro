@@ -12,6 +12,8 @@ const TrialBalance = React.lazy(() => import('./TrialBalance'));
 const APAgingReport = React.lazy(() => import('./APAgingReport'));
 const GeneralLedger = React.lazy(() => import('./GeneralLedger'));
 const FinancialStatements = React.lazy(() => import('./FinancialStatements'));
+const ExpenseDetailReport = React.lazy(() => import('./ExpenseDetailReport'));
+const BudgetVsActualReport = React.lazy(() => import('./BudgetVsActualReport'));
 
 // ─── Report title map ───────────────────────────────────
 const REPORT_TITLES: Record<ReportType, string> = {
@@ -23,8 +25,10 @@ const REPORT_TITLES: Record<ReportType, string> = {
   'trial-balance': 'Trial Balance',
   'general-ledger': 'General Ledger',
   'expense-by-category': 'Expense by Category',
+  'expense-detail': 'Expense Detail Report',
   'tax-summary': 'Tax Summary',
   'financial-statements': 'Financial Statements',
+  'budget-vs-actual': 'Budget vs Actual',
 };
 
 // ─── Lazy loading fallback ───────────────────────────────
@@ -56,10 +60,14 @@ const ReportsModule: React.FC = () => {
         return <Suspense fallback={<LazyFallback />}><TrialBalance /></Suspense>;
       case 'general-ledger':
         return <Suspense fallback={<LazyFallback />}><GeneralLedger /></Suspense>;
+      case 'expense-detail':
+        return <Suspense fallback={<LazyFallback />}><ExpenseDetailReport /></Suspense>;
       case 'tax-summary':
         return <Suspense fallback={<LazyFallback />}><TaxSummary /></Suspense>;
       case 'financial-statements':
         return <Suspense fallback={<LazyFallback />}><FinancialStatements /></Suspense>;
+      case 'budget-vs-actual':
+        return <Suspense fallback={<LazyFallback />}><BudgetVsActualReport /></Suspense>;
       default:
         return null;
     }

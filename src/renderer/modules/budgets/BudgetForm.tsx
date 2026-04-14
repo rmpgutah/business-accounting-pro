@@ -15,6 +15,7 @@ interface Account {
 }
 
 interface BudgetFormProps {
+  editBudgetId?: string | null;
   onBack: () => void;
   onCreated: (id: string) => void;
 }
@@ -28,14 +29,15 @@ const fmt = new Intl.NumberFormat('en-US', {
 });
 
 // ─── Component ──────────────────────────────────────────
-const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
+const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const [step, setStep] = useState<'budget' | 'lines'>('budget');
+  const [step, setStep] = useState<'budget' | 'lines'>(editBudgetId ? 'lines' : 'budget');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
-  const [budgetId, setBudgetId] = useState<string | null>(null);
+  const [budgetId, setBudgetId] = useState<string | null>(editBudgetId || null);
   const [budgetError, setBudgetError] = useState('');
   const [linesError, setLinesError] = useState('');
+  const isEditing = !!editBudgetId;
 
   // Budget fields
   const [name, setName] = useState('');
@@ -59,6 +61,29 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
     loadAccounts();
   }, [activeCompany]);
 
+  // Load existing budget for editing
+  useEffect(() => {
+    if (!editBudgetId) return;
+    const load = async () => {
+      try {
+        const budget = await api.get('budgets', editBudgetId);
+        if (budget) {
+          setName(budget.name || '');
+          setPeriod(budget.period || 'monthly');
+          setStartDate(budget.start_date || '');
+          setEndDate(budget.end_date || '');
+        }
+        const existingLines = await api.query('budget_lines', { budget_id: editBudgetId });
+        if (Array.isArray(existingLines) && existingLines.length > 0) {
+          setLines(existingLines.map((l: any) => ({ category: l.category || '', amount: String(l.amount || '') })));
+        }
+      } catch (err) {
+        console.error('Failed to load budget for editing:', err);
+      }
+    };
+    load();
+  }, [editBudgetId]);
+
   const handleCreateBudget = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -72,14 +97,25 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
     setBudgetError('');
     setSaving(true);
     try {
-      const result = await api.create('budgets', {
-        name: name.trim(),
-        period,
-        start_date: startDate,
-        end_date: endDate,
-        status: 'active',
-      });
-      const id = result?.id || result;
+      let id: string;
+      if (isEditing && editBudgetId) {
+        await api.update('budgets', editBudgetId, {
+          name: name.trim(),
+          period,
+          start_date: startDate,
+          end_date: endDate,
+        });
+        id = editBudgetId;
+      } else {
+        const result = await api.create('budgets', {
+          name: name.trim(),
+          period,
+          start_date: startDate,
+          end_date: endDate,
+          status: 'active',
+        });
+        id = result?.id || result;
+      }
       setBudgetId(id);
       setStep('lines');
     } catch (err) {
@@ -123,6 +159,13 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
     setSaving(true);
     try {
+      // In edit mode, delete old lines before inserting new ones
+      if (isEditing && budgetId) {
+        const oldLines = await api.query('budget_lines', { budget_id: budgetId });
+        if (Array.isArray(oldLines)) {
+          for (const ol of oldLines) await api.remove('budget_lines', ol.id);
+        }
+      }
       for (const line of validLines) {
         await api.create('budget_lines', {
           budget_id: budgetId,

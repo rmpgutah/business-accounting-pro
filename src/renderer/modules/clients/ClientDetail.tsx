@@ -194,7 +194,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
                 </span>
               </div>
               <p className="text-xs text-text-muted uppercase tracking-wider mb-3">
-                {client.type} {client.tax_id ? `\u00B7 Tax ID: ${client.tax_id}` : ''}
+                <span className="capitalize">{client.type}</span> {client.tax_id ? `\u00B7 Tax ID: ${client.tax_id}` : ''}
               </p>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {client.email && (
@@ -326,7 +326,7 @@ const InvoicesTable: React.FC<{ data: any[] }> = ({ data }) => (
                   : 'block-badge-warning'
               }`}
             >
-              {inv.status}
+              <span className="capitalize">{inv.status}</span>
             </span>
           </td>
           <td className="font-mono text-text-primary">{formatCurrency(inv.total ?? 0)}</td>
