@@ -5,15 +5,17 @@ import path from 'path';
 
 export const backupRouter = Router();
 
-const BACKUP_DIR = path.resolve(__dirname, '..', '..', 'data', 'backups');
-if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+const BACKUP_DIR_UNRESOLVED = path.resolve(__dirname, '..', '..', 'data', 'backups');
+if (!fs.existsSync(BACKUP_DIR_UNRESOLVED)) fs.mkdirSync(BACKUP_DIR_UNRESOLVED, { recursive: true });
+const BACKUP_DIR = fs.realpathSync(BACKUP_DIR_UNRESOLVED);
 
-/** Strict email-to-filename sanitizer — only alphanumeric, @, ., _, - allowed */
-function sanitizeEmail(email: string): string {
-  const safe = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
-  // Block any remaining path separators or traversal patterns
-  if (safe.includes('/') || safe.includes('\\') || safe.includes('..')) {
-    throw new Error('Invalid email for filename use');
+/** Sanitize email into a safe filename component and validate resulting path is inside BACKUP_DIR */
+function safePath(email: string, suffix: string): string {
+  const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+  const resolved = path.resolve(BACKUP_DIR, `${safeEmail}${suffix}`);
+  // Ensure the resolved path is exactly BACKUP_DIR or a descendant of it
+  if (!(resolved === BACKUP_DIR || resolved.startsWith(BACKUP_DIR + path.sep))) {
+    throw new Error('Path traversal attempt blocked');
   }
   return safe;
 }
