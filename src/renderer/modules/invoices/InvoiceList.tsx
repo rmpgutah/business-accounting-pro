@@ -568,6 +568,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                           onClick={() => sendToCollections(inv.id)}
                           className="block-btn text-xs"
                           title="Send to Collections"
+                          aria-label="Send to Collections"
                         >
                           <Scale size={14} />
                         </button>

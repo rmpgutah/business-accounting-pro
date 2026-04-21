@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Plus, Search, FileText } from 'lucide-react';
+import { Plus, Search, FileText, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -180,6 +180,8 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
               <th className="text-center px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                 Status
               </th>
+              <th className="px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider" style={{ width: '50px' }}>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -216,13 +218,31 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                     {entry.is_posted === 1 ? 'Posted' : 'Unposted'}
                   </span>
                 </td>
+                <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                    title="Delete entry"
+                    aria-label="Delete entry"
+                    onClick={async () => {
+                      if (!window.confirm('Delete this journal entry? This cannot be undone.')) return;
+                      try {
+                        await api.remove('journal_entries', entry.id);
+                        setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+                      } catch (err) {
+                        console.error('Failed to delete journal entry:', err);
+                      }
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </td>
               </tr>
             ))}
 
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-4 py-8 text-center text-sm text-text-muted"
                 >
                   <FileText

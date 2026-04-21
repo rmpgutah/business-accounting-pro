@@ -1164,6 +1164,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                 <th>Account</th>
                 <th>Reference</th>
                 <th className="text-right">Amount</th>
+                <th style={{ width: '40px' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -1182,6 +1183,25 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                   </td>
                   <td className="text-right font-mono text-accent-income">
                     {formatCurrency(p.amount)}
+                  </td>
+                  <td className="text-center">
+                    <button
+                      className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                      onClick={async () => {
+                        if (!window.confirm('Delete this payment?')) return;
+                        try {
+                          await api.remove('bill_payments', p.id);
+                          setLoading(true);
+                          await loadData();
+                        } catch (err) {
+                          console.error('Failed to delete payment:', err);
+                        }
+                      }}
+                      title="Delete payment"
+                      aria-label="Delete payment"
+                    >
+                      <Trash2 size={11} />
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -184,6 +184,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                       className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
                       onClick={(e) => handleDelete(e, b.id)}
                       title="Delete budget"
+                      aria-label="Delete budget"
                     >
                       <Trash2 size={10} /> Delete
                     </button>

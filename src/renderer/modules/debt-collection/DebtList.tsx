@@ -608,6 +608,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           <p className="text-xs text-text-muted mt-1">
             Create one or import from overdue invoices.
           </p>
+          <button className="block-btn-primary flex items-center gap-2 mx-auto mt-3" onClick={onNew}>
+            <Plus size={14} /> Create New Debt
+          </button>
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
@@ -736,6 +739,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <button
                           className="block-btn p-1"
                           title="View"
+                          aria-label="View debt"
                           onClick={() => onView(debt.id)}
                         >
                           <Eye size={14} />
@@ -743,6 +747,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <button
                           className="block-btn p-1"
                           title="Edit"
+                          aria-label="Edit debt"
                           onClick={() => onEdit(debt.id)}
                         >
                           <Pencil size={14} />
@@ -750,6 +755,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <button
                           className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
                           title="Delete"
+                          aria-label="Delete debt"
                           onClick={() => handleDelete(debt.id, debt.debtor_name)}
                         >
                           <Trash2 size={14} />
@@ -810,6 +816,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <button
                           className="block-btn p-1"
                           title="View"
+                          aria-label="View debt"
                           onClick={() => onView(debt.id)}
                         >
                           <Eye size={14} />
@@ -817,6 +824,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <button
                           className="block-btn p-1"
                           title="Edit"
+                          aria-label="Edit debt"
                           onClick={() => onEdit(debt.id)}
                         >
                           <Pencil size={14} />
@@ -824,6 +832,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <button
                           className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
                           title="Delete"
+                          aria-label="Delete debt"
                           onClick={() => handleDelete(debt.id, debt.debtor_name)}
                         >
                           <Trash2 size={14} />
