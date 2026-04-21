@@ -385,12 +385,45 @@ function postJournalEntry(
 }
 
 export function registerIpcHandlers(): void {
+  // ─── Input Validation Helpers ──────────────────────────
+  const VALID_TABLES = new Set([
+    'invoices', 'invoice_line_items', 'expenses', 'expense_line_items',
+    'clients', 'vendors', 'accounts', 'journal_entries', 'journal_entry_lines',
+    'projects', 'employees', 'employee_deductions', 'time_entries',
+    'categories', 'payments', 'budgets', 'budget_lines',
+    'bank_accounts', 'bank_transactions', 'bank_reconciliation_matches',
+    'documents', 'recurring_templates', 'tax_categories', 'tax_payments',
+    'inventory_items', 'inventory_movements', 'quotes', 'quote_line_items',
+    'bills', 'bill_line_items', 'bill_payments', 'purchase_orders', 'po_line_items',
+    'fixed_assets', 'asset_depreciation_entries',
+    'debts', 'debt_contacts', 'debt_communications', 'debt_payments',
+    'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
+    'debt_notes', 'debt_promises', 'debt_payment_plans', 'debt_plan_installments',
+    'debt_settlements', 'debt_compliance_log', 'debt_disputes', 'debt_audit_log',
+    'debt_payment_matches', 'debt_automation_rules', 'debt_templates',
+    'companies', 'users', 'user_companies', 'settings', 'notifications',
+    'audit_log', 'email_log', 'stripe_transactions',
+    'invoice_settings', 'invoice_catalog_items', 'invoice_reminders',
+    'invoice_payment_schedule', 'invoice_tokens', 'invoice_debt_links',
+    'client_contacts', 'credit_notes', 'credit_note_items',
+    'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
+    'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
+    'pto_policies', 'pto_balances', 'pto_transactions',
+    'state_tax_brackets', 'approval_queue',
+  ]);
+
+  function validateTable(table: string): boolean {
+    return VALID_TABLES.has(table);
+  }
+
   // ─── Generic CRUD ────────────────────────────────────
   ipcMain.handle('db:query', (_event, { table, filters, sort, limit, offset }) => {
+    if (!validateTable(table)) return [];
     return db.queryAll(table, filters, sort, limit, offset);
   });
 
   ipcMain.handle('db:get', (_event, { table, id }) => {
+    if (!validateTable(table)) return null;
     return db.getById(table, id);
   });
 
@@ -425,6 +458,7 @@ export function registerIpcHandlers(): void {
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
+    if (!validateTable(table)) return { error: 'Invalid table' };
     try {
       const companyId = db.getCurrentCompanyId();
       const payload = tablesWithoutCompanyId.has(table)
@@ -469,6 +503,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('db:update', (_event, { table, id, data }) => {
+    if (!validateTable(table)) return { error: 'Invalid table' };
     try {
       const old = db.getById(table, id);
       const record = db.update(table, id, data);
@@ -507,6 +542,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('db:delete', (_event, { table, id }) => {
+    if (!validateTable(table)) return { error: 'Invalid table' };
     try {
       // Debt child table audit — read debt_id before deletion
       const DEBT_AUDIT_TABLES = ['debt_payments', 'debt_communications', 'debt_evidence', 'debt_legal_actions',
@@ -582,6 +618,10 @@ export function registerIpcHandlers(): void {
     lineItems: Array<Record<string, any>>;
     isEdit: boolean;
   }) => {
+    for (const li of lineItems) {
+      if (li.quantity != null && li.quantity < 0) return { error: 'Quantity cannot be negative' };
+      if (li.unit_price != null && li.unit_price < 0) return { error: 'Unit price cannot be negative' };
+    }
     try {
       const companyId = db.getCurrentCompanyId();
       const rawDb = db.getDb();
@@ -692,6 +732,7 @@ export function registerIpcHandlers(): void {
 
   // ─── Global Search ───────────────────────────────────
   ipcMain.handle('search:global', (_event, query) => {
+    if (!query || query.length > 200) return [];
     const results: Array<{ type: string; id: string; title: string; subtitle: string }> = [];
     const q = `%${query}%`;
     const companyId = db.getCurrentCompanyId();
@@ -1326,6 +1367,8 @@ export function registerIpcHandlers(): void {
   // ─── Auth ──────────────────────────────────────────────
 
   ipcMain.handle('auth:register', (_event, { email, password, displayName }: { email: string; password: string; displayName: string }) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Invalid email format' };
+    if (!password || password.length < 6) return { error: 'Password must be at least 6 characters' };
     // Check if any users exist (first user becomes owner)
     const existing = db.runQuery('SELECT COUNT(*) as count FROM users');
     const isFirst = existing[0]?.count === 0;
@@ -1438,6 +1481,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('export:csv', async (_event, { table, filters }: { table: string; filters?: Record<string, any> }) => {
+    if (!validateTable(table)) return { error: 'Invalid table' };
     const rows = db.queryAll(table, filters || {});
     if (rows.length === 0) return { error: 'No data to export' };
 
@@ -1756,6 +1800,7 @@ export function registerIpcHandlers(): void {
   // Consolidated handler: creates payment record, updates invoice status,
   // and posts DR Cash / CR Accounts Receivable journal entry in one transaction.
   ipcMain.handle('invoice:record-payment', (_event, { invoiceId, amount, date, method, reference }: any) => {
+    if (!amount || amount <= 0) return { error: 'Amount must be greater than zero' };
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
@@ -2383,6 +2428,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('bills:pay', (_event, { billId, amount, date, accountId, paymentMethod, reference, notes }: any) => {
+    if (!amount || amount <= 0) return { error: 'Amount must be greater than zero' };
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
@@ -4001,6 +4047,7 @@ export function registerIpcHandlers(): void {
 
   // ─── Debt: Add Fee ────────────────────────────────────────
   ipcMain.handle('debt:add-fee', (_event, { debtId, amount, feeType, description }: { debtId: string; amount: number; feeType: string; description: string }) => {
+    if (!amount || amount <= 0) return { error: 'Fee amount must be greater than zero' };
     try {
       const dbInstance = db.getDb();
       const addFeeTx = dbInstance.transaction(() => {
