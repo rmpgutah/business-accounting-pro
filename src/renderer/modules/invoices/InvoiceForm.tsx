@@ -370,17 +370,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       if (!activeCompany) return;
       try {
         const cid = activeCompany.id;
-        const [clientData, accountData, catalogData, settingsData] = await Promise.all([
+
+        // Critical: clients + accounts needed for form
+        const [clientData, accountData] = await Promise.all([
           api.query('clients', { company_id: cid }),
           api.query('accounts', { company_id: cid, type: 'revenue' }),
-          api.listCatalogItems().catch(() => []),
-          api.getInvoiceSettings().catch(() => null),
         ]);
         if (cancelled) return;
-        setClients(clientData ?? []);
-        setAccounts(accountData ?? []);
-        setCatalogItems(catalogData ?? []);
-        if (settingsData && !settingsData.error) setInvoiceSettings(settingsData);
+        setClients(Array.isArray(clientData) ? clientData : []);
+        setAccounts(Array.isArray(accountData) ? accountData : []);
+
+        // Non-critical secondary data — failures don't hide primary content
+        api.listCatalogItems()
+          .then(r => { if (!cancelled) setCatalogItems(Array.isArray(r) ? r : []); })
+          .catch(() => {});
+        api.getInvoiceSettings()
+          .then(r => { if (!cancelled && r && !r.error) setInvoiceSettings(r); })
+          .catch(() => {});
 
         if (!invoiceId) {
           const nextNum = await fetchNextInvoiceNumber(cid);

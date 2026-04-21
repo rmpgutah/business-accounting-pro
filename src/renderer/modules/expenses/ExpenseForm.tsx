@@ -299,20 +299,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         // Bug fix #11: all 5 reference queries were missing company_id —
         // showed cross-company data in dropdowns.
         const cid = activeCompany.id;
-        const [catData, accData, venData, projData, cliData] = await Promise.all([
+
+        // Critical: categories + accounts needed for form validation
+        const [catData, accData] = await Promise.all([
           api.query('categories', { company_id: cid }),
           api.query('accounts', { company_id: cid, type: 'expense' }),
-          api.query('vendors', { company_id: cid }),
-          api.query('projects', { company_id: cid }),
-          api.query('clients', { company_id: cid }),
         ]);
         if (cancelled) return;
 
         setCategories(Array.isArray(catData) ? catData : []);
         setAccounts(Array.isArray(accData) ? accData : []);
-        setVendors(Array.isArray(venData) ? venData : []);
-        setProjects(Array.isArray(projData) ? projData : []);
-        setClients(Array.isArray(cliData) ? cliData : []);
+
+        // Non-critical secondary data — failures don't hide primary content
+        api.query('vendors', { company_id: cid })
+          .then(r => { if (!cancelled) setVendors(Array.isArray(r) ? r : []); })
+          .catch(() => {});
+        api.query('projects', { company_id: cid })
+          .then(r => { if (!cancelled) setProjects(Array.isArray(r) ? r : []); })
+          .catch(() => {});
+        api.query('clients', { company_id: cid })
+          .then(r => { if (!cancelled) setClients(Array.isArray(r) ? r : []); })
+          .catch(() => {});
 
         if (expenseId) {
           const existing = await api.get('expenses', expenseId);

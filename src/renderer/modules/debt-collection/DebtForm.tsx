@@ -177,30 +177,43 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
       if (!activeCompany) return;
       try {
         const cid = activeCompany.id;
-        const [clientData, vendorData, employeeData, invoiceData, billData] = await Promise.all([
+
+        // Critical: clients + vendors (debtor selection)
+        const [clientData, vendorData] = await Promise.all([
           api.query('clients', { company_id: cid }),
           api.query('vendors', { company_id: cid }),
-          api.query('employees', { company_id: cid }),
-          api.query('invoices', { company_id: cid, status: 'overdue' }),
-          api.query('bills', { company_id: cid }),
         ]);
         if (cancelled) return;
 
         setClients(Array.isArray(clientData) ? clientData : []);
         setVendors(Array.isArray(vendorData) ? vendorData : []);
-        setEmployees((Array.isArray(employeeData) ? employeeData : []).map((emp: any) => ({
-          ...emp,
-          name: emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
-          address: [emp.address_line1, emp.city, emp.state, emp.zip].filter(Boolean).join(', '),
-        })));
-        setInvoices((Array.isArray(invoiceData) ? invoiceData : []).map((inv: any) => ({
-          ...inv,
-          name: `${inv.invoice_number || inv.id.slice(0, 8)} — $${((inv.total || 0) - (inv.amount_paid || 0)).toFixed(2)} due`,
-        })));
-        setBills((Array.isArray(billData) ? billData : []).map((bill: any) => ({
-          ...bill,
-          name: `${bill.bill_number || bill.id.slice(0, 8)} — $${((bill.total || 0) - (bill.amount_paid || 0)).toFixed(2)} due`,
-        })));
+
+        // Non-critical secondary data — failures don't hide primary content
+        api.query('employees', { company_id: cid })
+          .then(r => {
+            if (!cancelled) setEmployees((Array.isArray(r) ? r : []).map((emp: any) => ({
+              ...emp,
+              name: emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+              address: [emp.address_line1, emp.city, emp.state, emp.zip].filter(Boolean).join(', '),
+            })));
+          })
+          .catch(() => {});
+        api.query('invoices', { company_id: cid, status: 'overdue' })
+          .then(r => {
+            if (!cancelled) setInvoices((Array.isArray(r) ? r : []).map((inv: any) => ({
+              ...inv,
+              name: `${inv.invoice_number || inv.id.slice(0, 8)} — $${((inv.total || 0) - (inv.amount_paid || 0)).toFixed(2)} due`,
+            })));
+          })
+          .catch(() => {});
+        api.query('bills', { company_id: cid })
+          .then(r => {
+            if (!cancelled) setBills((Array.isArray(r) ? r : []).map((bill: any) => ({
+              ...bill,
+              name: `${bill.bill_number || bill.id.slice(0, 8)} — $${((bill.total || 0) - (bill.amount_paid || 0)).toFixed(2)} due`,
+            })));
+          })
+          .catch(() => {});
 
         if (debtId) {
           const existing = await api.get('debts', debtId);

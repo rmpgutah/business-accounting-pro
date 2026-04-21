@@ -103,10 +103,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     const load = async () => {
       try {
         setLoading(true);
-        const [client, contactData] = await Promise.all([
-          api.get('clients', clientId),
-          api.listClientContacts(clientId),
-        ]);
+        // Critical: client data
+        const client = await api.get('clients', clientId);
+
+        // Non-critical — failures don't hide primary content
+        api.listClientContacts(clientId)
+          .then(r => { if (!cancelled) setContacts((r ?? []).map((c: any) => ({ ...c, is_primary: Boolean(c.is_primary) }))); })
+          .catch(() => {});
+
         if (!cancelled && client) {
           const pt = client.payment_terms ?? 30;
           // Parse tags JSON array → comma-separated string
@@ -150,7 +154,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             default_late_fee_pct: client.default_late_fee_pct || 0,
           });
           setPaymentTermsRaw(String(pt));
-          setContacts((contactData ?? []).map((c: any) => ({ ...c, is_primary: Boolean(c.is_primary) })));
         }
       } catch (err) {
         console.error('Failed to load client:', err);

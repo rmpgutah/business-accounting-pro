@@ -424,139 +424,12 @@ const Dashboard: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       const cid = activeCompany.id;
-      try {
-        const [
-          statsData,
-          cashflowData,
-          activityData,
-          dueData,
-          clientsData,
-          revenueByClientData,
-          expenseByCategoryData,
-          last12MonthsRevenue,
-          last12MonthsExpenses,
-          invoicesSentData,
-          avgPaymentDaysData,
-          thisMonthRevData,
-          lastMonthRevData,
-          topClientMonthData,
-        ] = await Promise.all([
-          api.dashboardStats(start, end),
-          api.dashboardCashflow(start, end),
-          api.dashboardActivity('all', 15),
-          api.rawQuery(
-            `SELECT i.*, c.name as client_name FROM invoices i
-             LEFT JOIN clients c ON i.client_id = c.id
-             WHERE i.company_id = ? AND i.status IN ('sent','partial') AND i.due_date <= date('now', '+7 days') AND i.due_date >= date('now')
-             ORDER BY i.due_date ASC LIMIT 5`,
-            [cid]
-          ),
-          api.rawQuery(
-            `SELECT c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
-             FROM clients c
-             LEFT JOIN invoices i ON i.client_id = c.id AND i.issue_date >= date('now', '-90 days')
-             WHERE c.company_id = ?
-             GROUP BY c.id
-             HAVING total_paid > 0
-             ORDER BY total_paid DESC
-             LIMIT 5`,
-            [cid]
-          ),
-          // Revenue by client (top 5 + Other) for PieChart
-          api.rawQuery(
-            `SELECT c.name, COALESCE(SUM(i.total), 0) as value
-             FROM invoices i
-             JOIN clients c ON i.client_id = c.id
-             WHERE i.company_id = ? AND i.status IN ('paid', 'sent', 'partial')
-               AND i.issue_date >= date('now', '-12 months')
-             GROUP BY c.id
-             ORDER BY value DESC`,
-            [cid]
-          ),
-          // Expenses by category for Treemap
-          api.rawQuery(
-            `SELECT
-               CASE WHEN cat.name IS NOT NULL AND cat.name != '' THEN cat.name
-                    WHEN e.category_id != '' THEN e.category_id
-                    ELSE 'Uncategorized' END as name,
-               COALESCE(SUM(e.amount), 0) as size
-             FROM expenses e
-             LEFT JOIN categories cat ON e.category_id = cat.id
-             WHERE e.company_id = ? AND e.date >= date('now', '-12 months')
-             GROUP BY name
-             HAVING size > 0
-             ORDER BY size DESC`,
-            [cid]
-          ),
-          // Last 12 months revenue for AreaChart
-          api.rawQuery(
-            `SELECT strftime('%Y-%m', issue_date) as month,
-                    COALESCE(SUM(total), 0) as total
-             FROM invoices
-             WHERE company_id = ? AND status IN ('paid', 'sent', 'partial')
-               AND issue_date >= date('now', '-12 months')
-             GROUP BY month
-             ORDER BY month ASC`,
-            [cid]
-          ),
-          // Last 12 months expenses for AreaChart
-          api.rawQuery(
-            `SELECT strftime('%Y-%m', date) as month,
-                    COALESCE(SUM(amount), 0) as total
-             FROM expenses
-             WHERE company_id = ? AND date >= date('now', '-12 months')
-             GROUP BY month
-             ORDER BY month ASC`,
-            [cid]
-          ),
-          // Invoices sent this month
-          api.rawQuery(
-            `SELECT COUNT(*) as cnt FROM invoices
-             WHERE company_id = ? AND status IN ('sent','paid','partial','overdue')
-               AND issue_date >= date('now', 'start of month')`,
-            [cid]
-          ),
-          // Avg days to payment
-          api.rawQuery(
-            `SELECT AVG(julianday(
-               CASE WHEN amount_paid >= total THEN updated_at ELSE date('now') END
-             ) - julianday(issue_date)) as avg_days
-             FROM invoices
-             WHERE company_id = ? AND status = 'paid' AND issue_date >= date('now', '-6 months')`,
-            [cid]
-          ),
-          // This month revenue
-          api.rawQuery(
-            `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
-             WHERE company_id = ? AND status IN ('paid','sent','partial')
-               AND issue_date >= date('now', 'start of month')`,
-            [cid]
-          ),
-          // Last month revenue
-          api.rawQuery(
-            `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
-             WHERE company_id = ? AND status IN ('paid','sent','partial')
-               AND issue_date >= date('now', 'start of month', '-1 month')
-               AND issue_date < date('now', 'start of month')`,
-            [cid]
-          ),
-          // Top client this month
-          api.rawQuery(
-            `SELECT c.name, COALESCE(SUM(i.total), 0) as total
-             FROM invoices i
-             JOIN clients c ON i.client_id = c.id
-             WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
-               AND i.issue_date >= date('now', 'start of month')
-             GROUP BY c.id
-             ORDER BY total DESC
-             LIMIT 1`,
-            [cid]
-          ),
-        ]);
 
+      // Dashboard is ALL optional data — each query loads independently
+      // so a single failure doesn't blank the entire dashboard.
+
+      api.dashboardStats(start, end).then(statsData => {
         if (cancelled) return;
-
-        // Stats
         if (statsData) {
           setStats({
             revenue: statsData.revenue ?? 0,
@@ -569,40 +442,114 @@ const Dashboard: React.FC = () => {
             outstandingChange: statsData.outstandingChange ?? 0,
           });
         }
+      }).catch(() => {});
 
-        if (cashflowData && Array.isArray(cashflowData)) setCashflow(cashflowData);
-        if (activityData && Array.isArray(activityData)) setRecentActivity(activityData);
-        if (dueData && Array.isArray(dueData)) setUpcomingDue(dueData);
-        if (clientsData && Array.isArray(clientsData)) setTopClients(clientsData);
+      api.dashboardCashflow(start, end).then(r => {
+        if (!cancelled && Array.isArray(r)) setCashflow(r);
+      }).catch(() => {});
 
-        // Pie chart: top 5 + Other
-        if (revenueByClientData && Array.isArray(revenueByClientData)) {
-          const top5 = revenueByClientData.slice(0, 5);
-          const otherTotal = revenueByClientData
-            .slice(5)
-            .reduce((sum: number, r: any) => sum + (r.value || 0), 0);
-          const pieData: ClientRevenue[] = top5.map((r: any) => ({
-            name: r.name || 'Unknown',
-            value: r.value || 0,
-          }));
-          if (otherTotal > 0) pieData.push({ name: 'Other', value: otherTotal });
-          setClientRevenue(pieData);
-        }
+      api.dashboardActivity('all', 15).then(r => {
+        if (!cancelled && Array.isArray(r)) setRecentActivity(r);
+      }).catch(() => {});
 
-        // Treemap: expense categories
-        if (expenseByCategoryData && Array.isArray(expenseByCategoryData)) {
-          const treemapData: ExpenseCategory[] = expenseByCategoryData.map(
-            (r: any, i: number) => ({
-              name: r.name || 'Uncategorized',
-              size: r.size || 0,
-              fill: TREEMAP_COLORS[i % TREEMAP_COLORS.length],
-            })
-          );
-          setExpenseCategories(treemapData);
-        }
+      api.rawQuery(
+        `SELECT i.*, c.name as client_name FROM invoices i
+         LEFT JOIN clients c ON i.client_id = c.id
+         WHERE i.company_id = ? AND i.status IN ('sent','partial') AND i.due_date <= date('now', '+7 days') AND i.due_date >= date('now')
+         ORDER BY i.due_date ASC LIMIT 5`,
+        [cid]
+      ).then(r => {
+        if (!cancelled && Array.isArray(r)) setUpcomingDue(r);
+      }).catch(() => {});
 
-        // Build Revenue vs Expenses area chart from last 12 months
-        // (stored in cashflow state for the area chart)
+      api.rawQuery(
+        `SELECT c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
+         FROM clients c
+         LEFT JOIN invoices i ON i.client_id = c.id AND i.issue_date >= date('now', '-90 days')
+         WHERE c.company_id = ?
+         GROUP BY c.id
+         HAVING total_paid > 0
+         ORDER BY total_paid DESC
+         LIMIT 5`,
+        [cid]
+      ).then(r => {
+        if (!cancelled && Array.isArray(r)) setTopClients(r);
+      }).catch(() => {});
+
+      // Revenue by client (top 5 + Other) for PieChart
+      api.rawQuery(
+        `SELECT c.name, COALESCE(SUM(i.total), 0) as value
+         FROM invoices i
+         JOIN clients c ON i.client_id = c.id
+         WHERE i.company_id = ? AND i.status IN ('paid', 'sent', 'partial')
+           AND i.issue_date >= date('now', '-12 months')
+         GROUP BY c.id
+         ORDER BY value DESC`,
+        [cid]
+      ).then(revenueByClientData => {
+        if (cancelled || !Array.isArray(revenueByClientData)) return;
+        const top5 = revenueByClientData.slice(0, 5);
+        const otherTotal = revenueByClientData
+          .slice(5)
+          .reduce((sum: number, r: any) => sum + (r.value || 0), 0);
+        const pieData: ClientRevenue[] = top5.map((r: any) => ({
+          name: r.name || 'Unknown',
+          value: r.value || 0,
+        }));
+        if (otherTotal > 0) pieData.push({ name: 'Other', value: otherTotal });
+        setClientRevenue(pieData);
+      }).catch(() => {});
+
+      // Expenses by category for Treemap
+      api.rawQuery(
+        `SELECT
+           CASE WHEN cat.name IS NOT NULL AND cat.name != '' THEN cat.name
+                WHEN e.category_id != '' THEN e.category_id
+                ELSE 'Uncategorized' END as name,
+           COALESCE(SUM(e.amount), 0) as size
+         FROM expenses e
+         LEFT JOIN categories cat ON e.category_id = cat.id
+         WHERE e.company_id = ? AND e.date >= date('now', '-12 months')
+         GROUP BY name
+         HAVING size > 0
+         ORDER BY size DESC`,
+        [cid]
+      ).then(expenseByCategoryData => {
+        if (cancelled || !Array.isArray(expenseByCategoryData)) return;
+        const treemapData: ExpenseCategory[] = expenseByCategoryData.map(
+          (r: any, i: number) => ({
+            name: r.name || 'Uncategorized',
+            size: r.size || 0,
+            fill: TREEMAP_COLORS[i % TREEMAP_COLORS.length],
+          })
+        );
+        setExpenseCategories(treemapData);
+      }).catch(() => {});
+
+      // Last 12 months revenue + expenses for AreaChart and forecast
+      Promise.all([
+        api.rawQuery(
+          `SELECT strftime('%Y-%m', issue_date) as month,
+                  COALESCE(SUM(total), 0) as total
+           FROM invoices
+           WHERE company_id = ? AND status IN ('paid', 'sent', 'partial')
+             AND issue_date >= date('now', '-12 months')
+           GROUP BY month
+           ORDER BY month ASC`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT strftime('%Y-%m', date) as month,
+                  COALESCE(SUM(amount), 0) as total
+           FROM expenses
+           WHERE company_id = ? AND date >= date('now', '-12 months')
+           GROUP BY month
+           ORDER BY month ASC`,
+          [cid]
+        ),
+      ]).then(([last12MonthsRevenue, last12MonthsExpenses]) => {
+        if (cancelled) return;
+
         if (last12MonthsRevenue && last12MonthsExpenses) {
           const revMap = new Map<string, number>();
           const expMap = new Map<string, number>();
@@ -616,15 +563,12 @@ const Dashboard: React.FC = () => {
             expenses: expMap.get(m) || 0,
           }));
           setCashflow(areaData);
-        }
 
-        // Cash flow forecast: use last months to project next 3
-        if (last12MonthsRevenue && last12MonthsExpenses) {
+          // Cash flow forecast: use last months to project next 3
           const revArr = (last12MonthsRevenue as any[]).map((r) => r.total || 0);
           const expArr = (last12MonthsExpenses as any[]).map((r) => r.total || 0);
           const netArr = revArr.map((r, i) => r - (expArr[i] || 0));
 
-          // Simple linear regression on net cash
           const n = netArr.length;
           if (n >= 2) {
             let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
@@ -635,13 +579,11 @@ const Dashboard: React.FC = () => {
             const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
             const intercept = (sumY - slope * sumX) / n;
 
-            // Variance for confidence band
             const residuals = netArr.map((v, i) => v - (slope * i + intercept));
             const stdDev = Math.sqrt(
               residuals.reduce((s, r) => s + r * r, 0) / Math.max(n - 2, 1)
             );
 
-            // Running cash from current balance
             const currentCash = netArr.reduce((a, b) => a + b, 0);
             const forecast: CashForecastPoint[] = [];
             let runningCash = currentCash;
@@ -662,12 +604,54 @@ const Dashboard: React.FC = () => {
             setCashForecast(forecast);
           }
         }
+      }).catch(() => {});
 
-        // Quick metrics
-        const invoicesSent = Array.isArray(invoicesSentData) ? invoicesSentData[0]?.cnt : invoicesSentData?.cnt;
-        const avgDays = Array.isArray(avgPaymentDaysData) ? avgPaymentDaysData[0]?.avg_days : avgPaymentDaysData?.avg_days;
-        const thisRev = Array.isArray(thisMonthRevData) ? thisMonthRevData[0]?.rev : thisMonthRevData?.rev;
-        const lastRev = Array.isArray(lastMonthRevData) ? lastMonthRevData[0]?.rev : lastMonthRevData?.rev;
+      // Quick metrics
+      Promise.all([
+        api.rawQuery(
+          `SELECT COUNT(*) as cnt FROM invoices
+           WHERE company_id = ? AND status IN ('sent','paid','partial','overdue')
+             AND issue_date >= date('now', 'start of month')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT AVG(julianday(
+             CASE WHEN amount_paid >= total THEN updated_at ELSE date('now') END
+           ) - julianday(issue_date)) as avg_days
+           FROM invoices
+           WHERE company_id = ? AND status = 'paid' AND issue_date >= date('now', '-6 months')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
+           WHERE company_id = ? AND status IN ('paid','sent','partial')
+             AND issue_date >= date('now', 'start of month')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
+           WHERE company_id = ? AND status IN ('paid','sent','partial')
+             AND issue_date >= date('now', 'start of month', '-1 month')
+             AND issue_date < date('now', 'start of month')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT c.name, COALESCE(SUM(i.total), 0) as total
+           FROM invoices i
+           JOIN clients c ON i.client_id = c.id
+           WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
+             AND i.issue_date >= date('now', 'start of month')
+           GROUP BY c.id
+           ORDER BY total DESC
+           LIMIT 1`,
+          [cid]
+        ),
+      ]).then(([invoicesSentData, avgPaymentDaysData, thisMonthRevData, lastMonthRevData, topClientMonthData]) => {
+        if (cancelled) return;
+        const invoicesSent = Array.isArray(invoicesSentData) ? invoicesSentData[0]?.cnt : (invoicesSentData as any)?.cnt;
+        const avgDays = Array.isArray(avgPaymentDaysData) ? avgPaymentDaysData[0]?.avg_days : (avgPaymentDaysData as any)?.avg_days;
+        const thisRev = Array.isArray(thisMonthRevData) ? thisMonthRevData[0]?.rev : (thisMonthRevData as any)?.rev;
+        const lastRev = Array.isArray(lastMonthRevData) ? lastMonthRevData[0]?.rev : (lastMonthRevData as any)?.rev;
         const topClient = Array.isArray(topClientMonthData) ? topClientMonthData[0] : topClientMonthData;
 
         const growthPct =
@@ -677,29 +661,32 @@ const Dashboard: React.FC = () => {
           invoicesSentThisMonth: invoicesSent || 0,
           avgDaysToPayment: Math.round(avgDays || 0),
           revenueGrowthPct: growthPct,
-          topClientName: topClient?.name || '--',
-          topClientRevenue: topClient?.total || 0,
+          topClientName: (topClient as any)?.name || '--',
+          topClientRevenue: (topClient as any)?.total || 0,
         });
+      }).catch(() => {});
 
-        const anomalyData = await api.listAnomalies();
-        setAnomalies(anomalyData || []);
+      // Anomalies
+      api.listAnomalies().then(r => {
+        if (!cancelled) setAnomalies(r || []);
+      }).catch(() => {});
 
-        const [approvalCount, activityRow] = await Promise.all([
-          api.pendingApprovalCount(activeCompany.id),
-          api.rawQuery(
-            `SELECT
-              (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='pricing' AND date(last_run_at)=date('now')) as pricing_today,
-              (SELECT COUNT(*) FROM approval_queue WHERE company_id = ? AND status='pending') as approvals_pending,
-              (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='alert' AND date(last_run_at)>=date('now','-7 days')) as alerts_week`,
-            [activeCompany.id, activeCompany.id, activeCompany.id]
-          ),
-        ]);
+      // Rules activity & approvals
+      Promise.all([
+        api.pendingApprovalCount(activeCompany.id),
+        api.rawQuery(
+          `SELECT
+            (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='pricing' AND date(last_run_at)=date('now')) as pricing_today,
+            (SELECT COUNT(*) FROM approval_queue WHERE company_id = ? AND status='pending') as approvals_pending,
+            (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='alert' AND date(last_run_at)>=date('now','-7 days')) as alerts_week`,
+          [activeCompany.id, activeCompany.id, activeCompany.id]
+        ),
+      ]).then(([approvalCount, activityRow]) => {
+        if (cancelled) return;
         setPendingApprovals(approvalCount ?? 0);
         const rowData = Array.isArray(activityRow) ? activityRow[0] : activityRow;
         setRulesActivity(rowData ?? null);
-      } catch (err) {
-        console.error('Dashboard data load failed:', err);
-      }
+      }).catch(() => {});
     };
 
     load();

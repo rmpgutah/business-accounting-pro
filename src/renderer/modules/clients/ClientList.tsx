@@ -73,7 +73,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       try {
         setLoading(true);
         const [rows, clientSummaryResult] = await Promise.all([
-          api.query('clients', { company_id: activeCompany.id }),
+          api.query('clients', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' }),
           api.rawQuery(
             `SELECT
               COALESCE(SUM(total - amount_paid), 0) as total_receivables,
@@ -168,7 +168,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   // ─── Batch Actions ──────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    const rows = await api.query('clients', { company_id: activeCompany.id });
+    const rows = await api.query('clients', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' });
     setClients(Array.isArray(rows) ? rows : []);
     setSelectedIds(new Set());
   }, [activeCompany]);

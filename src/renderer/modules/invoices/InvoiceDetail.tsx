@@ -133,21 +133,27 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       if (!inv) return;
       setInvoice(inv);
 
-      const [clientData, lineData, paymentData, reminderData, settingsData, scheduleData] = await Promise.all([
+      // Critical data: client, lines, payments
+      const [clientData, lineData, paymentData] = await Promise.all([
         api.get('clients', inv.client_id),
         api.query('invoice_line_items', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' }),
         api.query('payments', { invoice_id: invoiceId }),
-        api.invoiceListReminders(invoiceId),
-        api.getInvoiceSettings().catch(() => null),
-        api.listPaymentSchedule(invoiceId).catch(() => []),
       ]);
 
       setClient(clientData ?? null);
-      setLines(lineData ?? []);
-      setPayments(paymentData ?? []);
-      setReminders(reminderData ?? []);
-      setPaymentSchedule(scheduleData ?? []);
-      if (settingsData && !settingsData.error) setInvoiceSettings(settingsData);
+      setLines(Array.isArray(lineData) ? lineData : []);
+      setPayments(Array.isArray(paymentData) ? paymentData : []);
+
+      // Non-critical secondary data — failures don't hide primary content
+      api.invoiceListReminders(invoiceId)
+        .then(r => { setReminders(Array.isArray(r) ? r : []); })
+        .catch(() => {});
+      api.getInvoiceSettings()
+        .then(r => { if (r && !r.error) setInvoiceSettings(r); })
+        .catch(() => {});
+      api.listPaymentSchedule(invoiceId)
+        .then(r => { setPaymentSchedule(Array.isArray(r) ? r : []); })
+        .catch(() => {});
       api.getInvoiceDebtLink(invoiceId).then(setDebtLink).catch(() => {});
     } catch (err) {
       console.error('Failed to load invoice detail:', err);

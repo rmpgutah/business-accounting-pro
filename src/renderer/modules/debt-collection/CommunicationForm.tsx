@@ -137,8 +137,9 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
         await api.create('debt_communications', payload);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save communication:', err);
+      alert('Failed to save communication: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }

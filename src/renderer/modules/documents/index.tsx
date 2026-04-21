@@ -68,7 +68,7 @@ const Documents: React.FC = () => {
   const loadDocuments = async () => {
     if (!activeCompany) return;
     try {
-      const rows = await api.query('documents', { company_id: activeCompany.id });
+      const rows = await api.query('documents', { company_id: activeCompany.id }, { field: 'uploaded_at', dir: 'desc' });
       setDocuments(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Failed to load documents:', err);

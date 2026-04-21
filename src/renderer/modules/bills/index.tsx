@@ -158,15 +158,18 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [billData, vendorData, statsData] = await Promise.all([
+        const [billData, vendorData] = await Promise.all([
           api.query('bills', { company_id: activeCompany.id }),
           api.query('vendors', { company_id: activeCompany.id }),
-          api.billsStats(),
         ]);
         if (cancelled) return;
-        setBills(billData ?? []);
-        setVendors(vendorData ?? []);
-        if (statsData) setStats(statsData);
+        setBills(Array.isArray(billData) ? billData : []);
+        setVendors(Array.isArray(vendorData) ? vendorData : []);
+
+        // Non-critical — failures don't hide primary content
+        api.billsStats()
+          .then(r => { if (!cancelled && r) setStats(r); })
+          .catch(() => {});
       } catch (err) {
         console.error('Failed to load bills:', err);
       } finally {

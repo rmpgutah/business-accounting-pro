@@ -79,7 +79,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
       if (!activeCompany) return;
       try {
         setLoading(true);
-        const rows = await api.query('employees', { company_id: activeCompany.id });
+        const rows = await api.query('employees', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' });
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }

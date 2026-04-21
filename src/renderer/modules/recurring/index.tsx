@@ -111,7 +111,7 @@ const RecurringTransactions: React.FC = () => {
     if (!activeCompany) return;
     try {
       // Bug fix #14: was fetching all companies' templates — scoped to active company.
-      const rows = await api.query('recurring_templates', { company_id: activeCompany.id });
+      const rows = await api.query('recurring_templates', { company_id: activeCompany.id }, { field: 'created_at', dir: 'desc' });
       setTemplates(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Failed to load recurring templates:', err);

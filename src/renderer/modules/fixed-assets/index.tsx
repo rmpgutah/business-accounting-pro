@@ -96,7 +96,11 @@ function calcAnnualDepreciation(
   if (!purchasePrice || !usefulLifeYears || usefulLifeYears <= 0) return 0;
   const depreciable = purchasePrice - salvageValue;
   if (method === 'straight_line') return depreciable / usefulLifeYears;
-  if (method === 'double_declining') return (purchasePrice * (2 / usefulLifeYears));
+  if (method === 'double_declining') {
+    // Year 1 depreciation (subsequent years apply rate to declining book value)
+    const rate = 2 / usefulLifeYears;
+    return Math.min(purchasePrice * rate, purchasePrice - salvageValue);
+  }
   if (method === 'sum_of_years_digits') {
     const syd = (usefulLifeYears * (usefulLifeYears + 1)) / 2;
     return (depreciable * usefulLifeYears) / syd;
@@ -395,11 +399,13 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
   useEffect(() => {
     const init = async () => {
       if (!activeCompany) return;
-      const [accts, asset] = await Promise.all([
-        api.query('accounts', { company_id: activeCompany.id }),
-        assetId ? api.get('fixed_assets', assetId) : Promise.resolve(null),
-      ]);
-      setAccounts(accts ?? []);
+      // Critical: asset data; accounts are optional (for dropdowns)
+      const asset = assetId ? await api.get('fixed_assets', assetId) : null;
+
+      // Non-critical — failures don't hide primary content
+      api.query('accounts', { company_id: activeCompany.id })
+        .then(r => setAccounts(Array.isArray(r) ? r : []))
+        .catch(() => {});
       if (asset) {
         setForm({
           name: asset.name ?? '',
@@ -724,14 +730,17 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, sched, hist] = await Promise.all([
-        api.get('fixed_assets', assetId),
-        window.electronAPI.invoke('assets:schedule', { assetId }),
-        api.query('asset_depreciation_entries', { asset_id: assetId }),
-      ]);
+      // Critical: asset data
+      const a = await api.get('fixed_assets', assetId);
       setAsset(a);
-      setSchedule(sched ?? []);
-      setHistory(hist ?? []);
+
+      // Non-critical secondary data — failures don't hide primary content
+      window.electronAPI.invoke('assets:schedule', { assetId })
+        .then((r: any) => setSchedule(Array.isArray(r) ? r : []))
+        .catch(() => {});
+      api.query('asset_depreciation_entries', { asset_id: assetId })
+        .then(r => setHistory(Array.isArray(r) ? r : []))
+        .catch(() => {});
     } finally {
       setLoading(false);
     }

@@ -118,8 +118,9 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
       }
       setBudgetId(id);
       setStep('lines');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create budget:', err);
+      alert('Failed to create budget: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -174,8 +175,9 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
         });
       }
       onCreated(budgetId);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save budget lines:', err);
+      alert('Failed to save budget lines: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }

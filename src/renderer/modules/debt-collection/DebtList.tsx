@@ -129,13 +129,15 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [debtData, statsData] = await Promise.all([
-          api.rawQuery(DEBT_LIST_SQL, [activeCompany.id, type]),
-          api.debtStats(activeCompany.id),
-        ]);
+        // Critical: debt data
+        const debtData = await api.rawQuery(DEBT_LIST_SQL, [activeCompany.id, type]);
         if (cancelled) return;
         setDebts(Array.isArray(debtData) ? debtData : []);
-        setStats(statsData ?? null);
+
+        // Non-critical — failures don't hide primary content
+        api.debtStats(activeCompany.id)
+          .then(r => { if (!cancelled) setStats(r ?? null); })
+          .catch(() => {});
       } catch (err) {
         console.error('Failed to load debts:', err);
       } finally {

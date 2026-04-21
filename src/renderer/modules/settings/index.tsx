@@ -397,8 +397,9 @@ export default function SettingsModule() {
     try {
       // Bug fix #16b: use scoped setSetting instead of generic query/update/create.
       await api.setSetting(key, value);
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Failed to save setting ${key}:`, err);
+      alert('Failed to save setting: ' + (err?.message || 'Unknown error'));
     }
   }, []);
 
@@ -410,8 +411,9 @@ export default function SettingsModule() {
           Object.entries(entries).map(([key, value]) => saveSetting(key, value)),
         );
         setSettings((prev) => ({ ...prev, ...entries }));
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Failed to save ${section}:`, err);
+        alert(`Failed to save ${section}: ` + (err?.message || 'Unknown error'));
       } finally {
         setSavingSection('');
       }
@@ -457,8 +459,9 @@ export default function SettingsModule() {
     setSavingSection('company');
     try {
       await api.updateCompany(activeCompany.id, companyForm);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save company:', err);
+      alert('Failed to save company: ' + (err?.message || 'Unknown error'));
     } finally {
       setSavingSection('');
     }
@@ -473,8 +476,9 @@ export default function SettingsModule() {
       setBackupConfig((prev) => ({ ...prev, last_backup_date: now }));
       setBackupMsg('Backup created successfully.');
       setTimeout(() => setBackupMsg(''), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Backup failed:', err);
+      alert('Backup failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setSavingSection('');
     }

@@ -49,16 +49,23 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
     const parsedPriority = parseInt(priority, 10);
     if (isNaN(parsedPriority)) { setError('Priority must be a number.'); return; }
     setSaving(true);
-    const data = {
-      company_id: activeCompany!.id, category, name: name.trim(),
-      priority: parsedPriority, is_active: 1,
-      trigger: TRIGGER_FOR[category] ?? 'manual',
-      conditions: JSON.stringify(conditions),
-      actions: JSON.stringify(actions),
-    };
-    if (rule?.id) { await api.updateRule(rule.id, data); }
-    else { await api.createRule(data); }
-    onSave();
+    try {
+      const data = {
+        company_id: activeCompany!.id, category, name: name.trim(),
+        priority: parsedPriority, is_active: 1,
+        trigger: TRIGGER_FOR[category] ?? 'manual',
+        conditions: JSON.stringify(conditions),
+        actions: JSON.stringify(actions),
+      };
+      if (rule?.id) { await api.updateRule(rule.id, data); }
+      else { await api.createRule(data); }
+      onSave();
+    } catch (err: any) {
+      console.error('Failed to save rule:', err);
+      alert('Failed to save rule: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
