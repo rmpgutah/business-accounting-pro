@@ -291,6 +291,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
         <EmptyState icon={Receipt} message="No expenses found" />
       ) : (
         <div className="block-card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="block-table">
             <thead>
               <tr>
@@ -395,6 +396,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
               </tr>
             </tfoot>
           </table>
+          </div>
         </div>
       )}
 

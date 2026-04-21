@@ -194,6 +194,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
         className="block-table bg-bg-secondary border border-border-primary overflow-hidden"
         style={{ borderRadius: '6px' }}
       >
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-bg-tertiary border-b border-border-primary">
@@ -297,6 +298,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       {showImport && (

@@ -330,6 +330,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="block-table">
             <thead>
               <tr>
@@ -389,6 +390,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
@@ -1193,8 +1195,9 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                           await api.remove('bill_payments', p.id);
                           setLoading(true);
                           await loadData();
-                        } catch (err) {
+                        } catch (err: any) {
                           console.error('Failed to delete payment:', err);
+                          alert('Operation failed: ' + (err?.message || 'Unknown error'));
                         }
                       }}
                       title="Delete payment"

@@ -5,6 +5,7 @@ import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -625,7 +626,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                         onChange={(e) => handleLineChange(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="col-span-2 text-right font-mono text-sm text-text-secondary">
-                      ${(li.quantity * li.unit_price).toFixed(2)}
+                      {formatCurrency(li.quantity * li.unit_price)}
                     </div>
                     <div className="col-span-1 text-center">
                       {lineItems.length > 1 && (
@@ -645,7 +646,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     <Plus size={12} /> Add Item
                   </button>
                   <div className="text-sm font-bold text-text-primary font-mono">
-                    Total: ${lineItemTotal.toFixed(2)}
+                    Total: {formatCurrency(lineItemTotal)}
                   </div>
                 </div>
               </div>

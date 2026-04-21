@@ -384,8 +384,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('debt_communications', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete communication:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -394,8 +395,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('debt_evidence', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete evidence:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -404,8 +406,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('debt_legal_actions', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete legal action:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -414,8 +417,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('debt_payments', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete payment:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -424,8 +428,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('debt_promises', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete promise:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -439,8 +444,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       setShowFeeForm(false);
       setFeeForm({ amount: '', feeType: 'late_fee', description: '' });
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add fee:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setFeeSaving(false);
     }
@@ -468,8 +474,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       setEditingDisputeId(null);
       setDisputeForm({ reason: 'other', description: '', status: 'open' });
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save dispute:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setDisputeSaving(false);
     }
@@ -486,8 +493,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('debt_disputes', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete dispute:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -501,8 +509,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         await api.uploadDebtDocument(debtId, fullPath, fileName, 0);
         triggerRefresh();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to upload document:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -511,8 +520,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.remove('documents', id);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete document:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -523,8 +533,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       const { generateCollectionLetterHTML } = await import('../../lib/print-templates');
       const html = generateCollectionLetterHTML(debt, payments, activeCompany, type);
       await api.printPreview(html, `${type.replace(/_/g, ' ')} — ${debt?.debtor_name}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to generate letter:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -533,8 +544,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       const result = await api.debtCalculateInterest(debtId);
       setInterestCalc(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to recalculate interest:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   }, [debtId]);
 
@@ -544,8 +556,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.debtAdvanceStage(debtId);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to advance stage:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setAdvancingSaving(false);
     }
@@ -560,8 +573,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       try {
         await api.debtHoldToggle(debtId, false);
         triggerRefresh();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to release hold:', err);
+        alert('Operation failed: ' + (err?.message || 'Unknown error'));
       } finally {
         setHoldSaving(false);
       }
@@ -578,8 +592,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       setShowHoldInput(false);
       setHoldReason('');
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to put on hold:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setHoldSaving(false);
     }
@@ -597,8 +612,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       setShowWriteOff(false);
       setWriteOffReason('');
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to write off debt:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setWriteOffSaving(false);
     }
@@ -732,8 +748,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   try {
                     await api.assignCollector(debt.id, e.target.value || null);
                     onRefresh();
-                  } catch (err) {
+                  } catch (err: any) {
                     console.error('Failed to assign collector:', err);
+                    alert('Operation failed: ' + (err?.message || 'Unknown error'));
                   }
                 }}
               >
@@ -751,8 +768,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   try {
                     await api.update('debts', debt.id, { auto_advance_enabled: e.target.checked ? 1 : 0 });
                     triggerRefresh();
-                  } catch (err) {
+                  } catch (err: any) {
                     console.error('Failed to update auto-advance:', err);
+                    alert('Operation failed: ' + (err?.message || 'Unknown error'));
                   }
                 }}
                 style={{ width: 14, height: 14 }}
@@ -873,8 +891,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               try {
                 await api.remove('debts', debtId);
                 onBack();
-              } catch (err) {
+              } catch (err: any) {
                 console.error('Failed to delete debt:', err);
+                alert('Operation failed: ' + (err?.message || 'Unknown error'));
               }
             }}
           >
@@ -1339,7 +1358,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   return (
                     <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
                       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 90 }}>{p.promised_date}</div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>${Number(p.promised_amount).toFixed(2)}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{formatCurrency(Number(p.promised_amount))}</div>
                       {p.notes && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', flex: 1 }}>{p.notes}</div>}
                       <div style={{ flex: 1 }} />
                       <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: badgeColor + '22', color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>

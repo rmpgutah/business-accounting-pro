@@ -483,6 +483,9 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
         const created = await api.create('fixed_assets', data);
         onSaved(created.id ?? assetId ?? '');
       }
+    } catch (err: any) {
+      console.error('Failed to save asset:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }

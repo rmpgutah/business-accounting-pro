@@ -470,6 +470,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="block-table">
             <thead>
               <tr>
@@ -579,6 +580,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

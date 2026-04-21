@@ -130,8 +130,9 @@ const TimeTracking: React.FC = () => {
     try {
       await api.remove('time_entries', id);
       loadEntries();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete time entry:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   };
 

@@ -3,6 +3,7 @@ import { ArrowLeft, Scale, Save, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtFormData {
@@ -202,7 +203,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
           .then(r => {
             if (!cancelled) setInvoices((Array.isArray(r) ? r : []).map((inv: any) => ({
               ...inv,
-              name: `${inv.invoice_number || inv.id.slice(0, 8)} — $${((inv.total || 0) - (inv.amount_paid || 0)).toFixed(2)} due`,
+              name: `${inv.invoice_number || inv.id.slice(0, 8)} — ${formatCurrency((inv.total || 0) - (inv.amount_paid || 0))} due`,
             })));
           })
           .catch(() => {});
@@ -210,7 +211,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
           .then(r => {
             if (!cancelled) setBills((Array.isArray(r) ? r : []).map((bill: any) => ({
               ...bill,
-              name: `${bill.bill_number || bill.id.slice(0, 8)} — $${((bill.total || 0) - (bill.amount_paid || 0)).toFixed(2)} due`,
+              name: `${bill.bill_number || bill.id.slice(0, 8)} — ${formatCurrency((bill.total || 0) - (bill.amount_paid || 0))} due`,
             })));
           })
           .catch(() => {});

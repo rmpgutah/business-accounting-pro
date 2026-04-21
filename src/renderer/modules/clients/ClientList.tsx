@@ -283,6 +283,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="overflow-x-auto">
           <table className="block-table">
             <thead>
               <tr>
@@ -358,6 +359,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

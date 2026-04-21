@@ -614,6 +614,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="block-table">
             <thead>
               {isReceivable ? (
@@ -858,6 +859,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               </tr>
             </tfoot>
           </table>
+          </div>
         </div>
       )}
 
