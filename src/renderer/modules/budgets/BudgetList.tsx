@@ -144,6 +144,9 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
           <p className="text-xs text-text-muted mt-1">
             Create your first budget to start tracking spending.
           </p>
+          <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={onNew}>
+            <Plus size={14} /> Create Budget
+          </button>
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">

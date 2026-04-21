@@ -181,6 +181,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
       <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
+        role="presentation"
       />
 
       {/* Modal */}

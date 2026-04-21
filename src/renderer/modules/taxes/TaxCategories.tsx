@@ -308,10 +308,10 @@ const TaxCategories: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => handleSort('name')}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('name')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Description</th>
-                <th className="cursor-pointer select-none" onClick={() => handleSort('schedule_c_line')}><span className="inline-flex items-center gap-1">Schedule C Line {sortField === 'schedule_c_line' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="text-center cursor-pointer select-none" onClick={() => handleSort('is_deductible')}><span className="inline-flex items-center gap-1">Deductible {sortField === 'is_deductible' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('schedule_c_line')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Schedule C Line {sortField === 'schedule_c_line' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-center cursor-pointer select-none" onClick={() => handleSort('is_deductible')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Deductible {sortField === 'is_deductible' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="text-center">Actions</th>
               </tr>
             </thead>

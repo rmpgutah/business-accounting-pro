@@ -532,11 +532,11 @@ const Inventory: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => handleInvSort('name')}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleInvSort('sku')}><span className="inline-flex items-center gap-1">SKU {sortField === 'sku' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleInvSort('category')}><span className="inline-flex items-center gap-1">Category {sortField === 'category' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('quantity')}><span className="inline-flex items-center gap-1">Qty {sortField === 'quantity' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('unit_cost')}><span className="inline-flex items-center gap-1">Unit Cost {sortField === 'unit_cost' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleInvSort('name')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleInvSort('sku')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">SKU {sortField === 'sku' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleInvSort('category')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Category {sortField === 'category' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('quantity')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Qty {sortField === 'quantity' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('unit_cost')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Unit Cost {sortField === 'unit_cost' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="text-right">Total Value</th>
                 <th className="text-right">Reorder At</th>
                 <th className="text-center">Actions</th>

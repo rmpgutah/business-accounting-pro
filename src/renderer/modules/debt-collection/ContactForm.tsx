@@ -117,6 +117,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
       <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
+        role="presentation"
       />
 
       {/* Modal */}

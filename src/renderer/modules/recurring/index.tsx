@@ -484,6 +484,9 @@ const RecurringTransactions: React.FC = () => {
               <p className="text-xs text-text-muted mt-1">
                 Create a template to automate recurring invoices or expenses.
               </p>
+              <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={() => setShowForm(true)}>
+                <Plus size={14} /> Create Template
+              </button>
             </div>
           ) : (
             <div className="block-card p-0 overflow-hidden">

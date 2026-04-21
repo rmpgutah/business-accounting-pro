@@ -251,18 +251,21 @@ const Documents: React.FC = () => {
           <p className="text-xs text-text-muted mt-1">
             Upload your first document or adjust the filters above.
           </p>
+          <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={handleUpload}>
+            <Upload size={14} /> Upload Document
+          </button>
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <table className="block-table">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => handleDocSort('filename')}><span className="inline-flex items-center gap-1">Filename {sortField === 'filename' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleDocSort('entity_type')}><span className="inline-flex items-center gap-1">Entity Type {sortField === 'entity_type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('filename')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Filename {sortField === 'filename' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('entity_type')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Entity Type {sortField === 'entity_type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Entity</th>
                 <th>Tags</th>
-                <th className="text-right cursor-pointer select-none" onClick={() => handleDocSort('file_size')}><span className="inline-flex items-center gap-1">Size {sortField === 'file_size' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleDocSort('uploaded_at')}><span className="inline-flex items-center gap-1">Uploaded {sortField === 'uploaded_at' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleDocSort('file_size')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Size {sortField === 'file_size' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('uploaded_at')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Uploaded {sortField === 'uploaded_at' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="text-center">Actions</th>
               </tr>
             </thead>

@@ -378,11 +378,11 @@ const TaxPayments: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => handleSort('type')}><span className="inline-flex items-center gap-1">Type {sortField === 'type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')}><span className="inline-flex items-center gap-1">Amount {sortField === 'amount' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleSort('date')}><span className="inline-flex items-center gap-1">Date {sortField === 'date' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleSort('period')}><span className="inline-flex items-center gap-1">Period {sortField === 'period' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleSort('year')}><span className="inline-flex items-center gap-1">Year {sortField === 'year' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('type')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Type {sortField === 'type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Amount {sortField === 'amount' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('date')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Date {sortField === 'date' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('period')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Period {sortField === 'period' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleSort('year')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Year {sortField === 'year' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Confirmation #</th>
                 <th className="text-center">Actions</th>
               </tr>
@@ -391,7 +391,7 @@ const TaxPayments: React.FC = () => {
               {filtered.map((p) => (
                 <tr key={p.id}>
                   <td>
-                    <span className={typeBadge[p.type] || 'block-badge'}>
+                    <span className={typeBadge[p.type] || 'block-badge capitalize'}>
                       {PAYMENT_TYPES.find((t) => t.value === p.type)?.label || p.type}
                     </span>
                   </td>

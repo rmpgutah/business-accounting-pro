@@ -36,7 +36,7 @@ const PaymentMatchReview: React.FC<PaymentMatchReviewProps> = ({ onClose, onDone
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} role="presentation" />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="block-card-elevated w-full max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col"
