@@ -375,6 +375,22 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expenses ADD COLUMN approved_by TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN approved_date TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN rejection_reason TEXT DEFAULT ''",
+  // Performance indexes (2026-04-12)
+  "CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id)",
+  "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(company_id, status)",
+  "CREATE INDEX IF NOT EXISTS idx_invoices_due ON invoices(company_id, due_date)",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(company_id, date)",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_vendor ON expenses(vendor_id)",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id)",
+  "CREATE INDEX IF NOT EXISTS idx_accounts_company ON accounts(company_id, code)",
+  "CREATE INDEX IF NOT EXISTS idx_je_company_date ON journal_entries(company_id, date)",
+  "CREATE INDEX IF NOT EXISTS idx_jel_account ON journal_entry_lines(account_id)",
+  "CREATE INDEX IF NOT EXISTS idx_time_entries_project ON time_entries(project_id)",
+  "CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id)",
+  "CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company_id)",
+  "CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id)",
+  "CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id)",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

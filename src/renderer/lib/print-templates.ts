@@ -4,6 +4,17 @@
  * Light theme, professional layout, inline CSS, print-optimized.
  */
 
+// ─── HTML escape helper (XSS prevention) ────────────────────
+function esc(s: string | null | undefined): string {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Currency Formatter ──────────────────────────────────────
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n || 0);
@@ -187,27 +198,24 @@ export function generateInvoiceHTML(
   const qrUrl     = settings?.payment_qr_url || '';
   const cols      = resolveColumns(settings?.column_config);
 
-  const escapeHTML = (s: string) =>
-    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
   const customFieldRows = [1, 2, 3, 4]
     .map(n => ({
       label: settings?.[`custom_field_${n}_label` as keyof InvoiceSettings] as string | undefined,
       value: (invoice as any)[`custom_field_${n}`] as string | undefined,
     }))
     .filter(f => f.label && f.value)
-    .map(f => `<div><div class="meta-label">${escapeHTML(f.label!)}</div><div class="meta-value">${escapeHTML(f.value!)}</div></div>`)
+    .map(f => `<div><div class="meta-label">${esc(f.label!)}</div><div class="meta-value">${esc(f.value!)}</div></div>`)
     .join('');
 
-  const companyName  = company?.name || 'Company';
-  const companyAddr  = [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
-  const companyEmail = company?.email || '';
-  const companyPhone = company?.phone || '';
+  const companyName  = esc(company?.name || 'Company');
+  const companyAddr  = esc([company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const companyEmail = esc(company?.email || '');
+  const companyPhone = esc(company?.phone || '');
 
-  const clientName  = client?.name || 'Client';
-  const clientEmail = client?.email || '';
-  const clientAddr  = [client?.address_line1, client?.address_line2, client?.city, client?.state, client?.zip].filter(Boolean).join(', ');
-  const clientPhone = client?.phone || '';
+  const clientName  = esc(client?.name || 'Client');
+  const clientEmail = esc(client?.email || '');
+  const clientAddr  = esc([client?.address_line1, client?.address_line2, client?.city, client?.state, client?.zip].filter(Boolean).join(', '));
+  const clientPhone = esc(client?.phone || '');
 
   const taxAmount      = Number(invoice.tax_amount || 0);
 
@@ -273,7 +281,7 @@ export function generateInvoiceHTML(
       return `<tr>
         <td colspan="${colSpan}" style="background:${secondary}22;font-weight:700;font-size:${isCompact?'10px':'11px'};
           text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;padding:${isCompact?'4px 12px':'6px 12px'};border-bottom:none;">
-          ${l.description || ''}
+          ${esc(l.description || '')}
         </td>
       </tr>`;
     }
@@ -282,13 +290,13 @@ export function generateInvoiceHTML(
       return `<tr>
         <td colspan="${colSpan}" style="font-style:italic;color:#64748b;font-size:${isCompact?'10px':'11px'};
           padding-left:24px;border-bottom:none;">
-          ${l.description || ''}
+          ${esc(l.description || '')}
         </td>
       </tr>`;
     }
 
     if (rowType === 'image') {
-      const caption = l.unit_label || '';
+      const caption = esc(l.unit_label || '');
       return `<tr>
         <td colspan="${colSpan}" style="text-align:center;padding:12px;border-bottom:none;">
           ${l.description ? `<img src="${l.description}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
@@ -305,7 +313,7 @@ export function generateInvoiceHTML(
       lastSubtotalAt = i + 1;
       return `<tr style="border-top:1px solid #334155;">
         <td colspan="${colSpan - 1}" style="font-weight:700;font-size:${isCompact?'11px':'12px'};color:#0f172a;">
-          ${l.description || 'Subtotal'}
+          ${esc(l.description || 'Subtotal')}
         </td>
         <td class="text-right font-mono font-bold" style="color:#0f172a;">${fmt(subtotalAmt)}</td>
       </tr>`;
@@ -331,10 +339,10 @@ export function generateInvoiceHTML(
       const cls = `${right ? 'text-right font-mono' : ''} ${c.key === 'amount' ? 'font-bold' : ''}`.trim();
       let val = '';
       switch (c.key) {
-        case 'item_code':    val = l.item_code ? `<span style="font-size:9px;background:#f1f5f9;padding:1px 4px;border-radius:2px;color:#64748b;">${l.item_code}</span>` : ''; break;
-        case 'description':  val = l.description || ''; break;
+        case 'item_code':    val = l.item_code ? `<span style="font-size:9px;background:#f1f5f9;padding:1px 4px;border-radius:2px;color:#64748b;">${esc(l.item_code)}</span>` : ''; break;
+        case 'description':  val = esc(l.description || ''); break;
         case 'quantity':     val = String(l.quantity ?? 1); break;
-        case 'unit_label':   val = l.unit_label || ''; break;
+        case 'unit_label':   val = esc(l.unit_label || ''); break;
         case 'unit_price':   val = fmt(l.unit_price || 0); break;
         case 'tax_rate':     val = l.tax_rate > 0 ? l.tax_rate + '%' : '—'; break;
         case 'amount':       val = fmt(discountedPrice); break;
@@ -427,9 +435,9 @@ export function generateInvoiceHTML(
 
   const invBlock = `
     <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
-    <div class="inv-number">#${invoice.invoice_number || ''}</div>
-    ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${invoice.po_number}</div>` : ''}
-    ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${invoice.job_reference}</div>` : ''}`;
+    <div class="inv-number">#${esc(invoice.invoice_number || '')}</div>
+    ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${esc(invoice.po_number)}</div>` : ''}
+    ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}`;
 
   let headerHTML = '';
   if (style === 'executive') {
@@ -445,9 +453,9 @@ export function generateInvoiceHTML(
       <div>${logoHTML}</div>
       <div>
         <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
-        <div class="inv-number">#${invoice.invoice_number || ''}</div>
-        ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${invoice.po_number}</div>` : ''}
-        ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${invoice.job_reference}</div>` : ''}
+        <div class="inv-number">#${esc(invoice.invoice_number || '')}</div>
+        ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${esc(invoice.po_number)}</div>` : ''}
+        ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}
       </div>
     </div>`;
   } else if (style === 'modern') {
@@ -483,7 +491,7 @@ export function generateInvoiceHTML(
     if (!paymentSchedule || paymentSchedule.length === 0) return '';
     const rows = paymentSchedule.map(m => `
       <tr>
-        <td>${m.milestone_label || ''}</td>
+        <td>${esc(m.milestone_label || '')}</td>
         <td class="text-right">${fmtDate(m.due_date)}</td>
         <td class="text-right font-mono">${fmt(Number(m.amount || 0))}</td>
         <td class="text-right">${m.paid ? '<span style="color:#16a34a;font-weight:700;">PAID</span>' : '<span style="color:#64748b;">Due</span>'}</td>
@@ -509,7 +517,7 @@ export function generateInvoiceHTML(
     : '';
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Invoice ${invoice.invoice_number || ''}</title><style>
+<html><head><meta charset="utf-8"><title>Invoice ${esc(invoice.invoice_number || '')}</title><style>
 ${styledBase}
 ${templateStyles}
 ${stamp ? statusStampCSS(stamp.color) : ''}
@@ -536,7 +544,7 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
 </style></head>
 <body>
-${wmText ? `<div class="watermark">${wmText}</div>` : invoice.invoice_type === 'proforma' ? '<div class="watermark">PROFORMA</div>' : ''}
+${wmText ? `<div class="watermark">${esc(wmText)}</div>` : invoice.invoice_type === 'proforma' ? '<div class="watermark">PROFORMA</div>' : ''}
 ${style === 'modern' ? `<div class="accent-bar"></div>` : ''}
 ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 <div class="page">
@@ -558,7 +566,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
   <div class="meta-row">
     <div><div class="meta-label">Invoice Date</div><div class="meta-value">${fmtDate(invoice.issue_date)}</div></div>
     <div><div class="meta-label">Due Date</div><div class="meta-value">${fmtDate(invoice.due_date)}</div></div>
-    <div><div class="meta-label">Terms</div><div class="meta-value">${invoice.terms || 'Net 30'}</div></div>
+    <div><div class="meta-label">Terms</div><div class="meta-value">${esc(invoice.terms || 'Net 30')}</div></div>
     <div><div class="meta-label">Status</div><div class="meta-value" style="color:${stamp?.color || '#0f172a'}">${(invoice.status || 'draft').toUpperCase()}</div></div>
     ${customFieldRows}
   </div>
@@ -592,13 +600,13 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
   ${(invoice.notes || invoice.terms_text) ? `
   <div class="footer">
     <div class="footer-grid">
-      ${invoice.notes ? `<div><div class="footer-label">Notes</div><div class="footer-text">${invoice.notes}</div></div>` : ''}
-      ${invoice.terms_text ? `<div><div class="footer-label">Terms &amp; Conditions</div><div class="footer-text">${invoice.terms_text}</div></div>` : ''}
+      ${invoice.notes ? `<div><div class="footer-label">Notes</div><div class="footer-text">${esc(invoice.notes)}</div></div>` : ''}
+      ${invoice.terms_text ? `<div><div class="footer-label">Terms &amp; Conditions</div><div class="footer-text">${esc(invoice.terms_text)}</div></div>` : ''}
     </div>
   </div>` : ''}
 
   <div class="footer-bottom">
-    ${footerText || companyName}
+    ${esc(footerText) || companyName}
     ${invoice.late_fee_pct && invoice.late_fee_pct > 0 ? `<p style="font-size:10px;color:#64748b;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
   </div>
 </div>
@@ -848,7 +856,7 @@ export function generateDebtPortfolioReportHTML(
   collectedYtd: number,
   company: any
 ): string {
-  const companyName = company?.name || 'Company';
+  const companyName = esc(company?.name || 'Company');
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const now = Date.now();
@@ -883,15 +891,15 @@ export function generateDebtPortfolioReportHTML(
     </tr>`).join('');
 
   const stageRows = Object.entries(stages).map(([stage, count]) => `
-    <tr><td style="text-transform:capitalize;">${stage.replace(/_/g, ' ')}</td><td class="text-right">${count}</td></tr>`).join('');
+    <tr><td style="text-transform:capitalize;">${esc(stage.replace(/_/g, ' '))}</td><td class="text-right">${count}</td></tr>`).join('');
 
   const top10Rows = top10.map(d => {
     const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
     return `<tr>
-      <td>${d.debtor_name || '—'}</td>
+      <td>${esc(d.debtor_name || '—')}</td>
       <td class="text-right font-mono">${fmt(Number(d.balance_due || 0))}</td>
       <td class="text-right">${days}d</td>
-      <td style="text-transform:capitalize;">${(d.current_stage || '').replace(/_/g, ' ')}</td>
+      <td style="text-transform:capitalize;">${esc((d.current_stage || '').replace(/_/g, ' '))}</td>
     </tr>`;
   }).join('');
 
@@ -956,8 +964,8 @@ export function generateDemandLetterHTML(
     signatory_title?: string;
   } = {}
 ): string {
-  const companyName = company?.name || 'Your Company';
-  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
+  const companyName = esc(company?.name || 'Your Company');
+  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
   const deadlineDays = options.deadline_days ?? 10;
   const deadlineDate = new Date(Date.now() + deadlineDays * 86_400_000)
     .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -975,13 +983,13 @@ export function generateDemandLetterHTML(
     ? payments.map(p => `<tr>
         <td>${fmtDateLocal(p.received_date)}</td>
         <td class="text-right font-mono">${fmt(Number(p.amount || 0))}</td>
-        <td>${p.method || '—'}</td>
-        <td class="text-muted">${p.reference_number || '—'}</td>
+        <td>${esc(p.method || '—')}</td>
+        <td class="text-muted">${esc(p.reference_number || '—')}</td>
       </tr>`).join('')
     : `<tr><td colspan="4" style="text-align:center;color:#64748b;font-style:italic;">No payments received</td></tr>`;
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Demand Letter — ${debt.debtor_name}</title><style>
+<html><head><meta charset="utf-8"><title>Demand Letter — ${esc(debt.debtor_name)}</title><style>
 ${baseStyles}
 .page { padding: 60px; max-width: 720px; margin: 0 auto; }
 .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
@@ -1012,9 +1020,9 @@ ${baseStyles}
   </div>
 
   <div style="margin-bottom:28px;">
-    <div style="font-size:12px;color:#334155;font-weight:600;">${debt.debtor_name || 'To Whom It May Concern'}</div>
-    ${debt.debtor_address ? `<div style="font-size:12px;color:#64748b;">${debt.debtor_address}</div>` : ''}
-    ${debt.debtor_email ? `<div style="font-size:12px;color:#64748b;">${debt.debtor_email}</div>` : ''}
+    <div style="font-size:12px;color:#334155;font-weight:600;">${esc(debt.debtor_name || 'To Whom It May Concern')}</div>
+    ${debt.debtor_address ? `<div style="font-size:12px;color:#64748b;">${esc(debt.debtor_address)}</div>` : ''}
+    ${debt.debtor_email ? `<div style="font-size:12px;color:#64748b;">${esc(debt.debtor_email)}</div>` : ''}
   </div>
 
   <div class="re-block">
@@ -1022,7 +1030,7 @@ ${baseStyles}
     <div class="re-value">Account #${(debt.id || '').slice(0, 8).toUpperCase() || 'N/A'} — Balance Due: ${fmt(balanceDue)}</div>
   </div>
 
-  <p class="body-text">Dear ${debt.debtor_name || 'Account Holder'},</p>
+  <p class="body-text">Dear ${esc(debt.debtor_name || 'Account Holder')},</p>
 
   <p class="body-text">
     This letter constitutes a formal demand for payment of the outstanding balance owed to <strong>${companyName}</strong>.
@@ -1056,8 +1064,8 @@ ${baseStyles}
 
   <p class="body-text">
     <strong>You are hereby demanded to remit payment in full no later than ${deadlineDate}.</strong>
-    ${options.payment_address ? ` Payment by check should be made payable to <strong>${companyName}</strong> and mailed to: <strong>${options.payment_address}</strong>.` : ''}
-    ${options.online_payment_url ? ` Payment may also be submitted online at: <strong>${options.online_payment_url}</strong>.` : ''}
+    ${options.payment_address ? ` Payment by check should be made payable to <strong>${companyName}</strong> and mailed to: <strong>${esc(options.payment_address)}</strong>.` : ''}
+    ${options.online_payment_url ? ` Payment may also be submitted online at: <strong>${esc(options.online_payment_url)}</strong>.` : ''}
   </p>
 
   <p class="body-text">
@@ -1068,13 +1076,13 @@ ${baseStyles}
 
   <p class="body-text">
     If you believe this amount is in error or wish to discuss a payment arrangement, please contact us immediately at
-    ${company?.email || 'our office'} or ${company?.phone || 'the number on file'}.
+    ${esc(company?.email || 'our office')} or ${esc(company?.phone || 'the number on file')}.
   </p>
 
   <div class="signature-block">
     <p class="body-text">Sincerely,</p>
-    <div class="sig-name">${options.signatory_name || companyName}</div>
-    <div class="sig-title">${options.signatory_title || 'Accounts Receivable'}</div>
+    <div class="sig-name">${esc(options.signatory_name) || companyName}</div>
+    <div class="sig-title">${esc(options.signatory_title || 'Accounts Receivable')}</div>
     <div style="font-size:12px;color:#64748b;margin-top:2px;">${companyName}</div>
   </div>
 </div></body></html>`;
@@ -1090,14 +1098,14 @@ export function generateCollectionLetterHTML(
   company: any,
   letterType: string,
 ): string {
-  const companyName = company?.name || 'Your Company';
-  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
-  const companyPhone = company?.phone || '';
-  const companyEmail = company?.email || '';
+  const companyName = esc(company?.name || 'Your Company');
+  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const companyPhone = esc(company?.phone || '');
+  const companyEmail = esc(company?.email || '');
   const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const fmtAmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
-  const debtorName = debt?.debtor_name || 'Account Holder';
-  const debtorAddr = debt?.debtor_address || '';
+  const debtorName = esc(debt?.debtor_name || 'Account Holder');
+  const debtorAddr = esc(debt?.debtor_address || '');
   const balanceDue = debt?.balance_due || 0;
   const originalAmt = debt?.original_amount || 0;
   const interestAmt = debt?.interest_accrued || 0;
@@ -1120,7 +1128,7 @@ export function generateCollectionLetterHTML(
     ? `Invoice #${(debt?.source_id || '').substring(0, 8).toUpperCase()}`
     : debt?.source_type === 'bill' ? `Bill #${(debt?.source_id || '').substring(0, 8).toUpperCase()}` : 'Manual Entry';
   const delinquentDate = debt?.delinquent_date ? new Date(debt.delinquent_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
-  const jurisdiction = debt?.jurisdiction || 'the applicable jurisdiction';
+  const jurisdiction = esc(debt?.jurisdiction || 'the applicable jurisdiction');
   const interestRate = debt?.interest_rate ? `${(debt.interest_rate * 100).toFixed(2)}% per annum (${debt.interest_type === 'compound' ? 'compound' : 'simple'})` : 'N/A';
   const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86_400_000)) : 0;
   const settlementAmt = Math.round(balanceDue * 0.7 * 100) / 100;
@@ -1594,9 +1602,10 @@ export function generateVerificationAffidavitHTML(
   company: any,
   signatoryName: string,
 ): string {
-  const companyName = company?.name || 'Company';
-  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
-  const debtorName = debt?.debtor_name || 'Debtor';
+  const companyName = esc(company?.name || 'Company');
+  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const debtorName = esc(debt?.debtor_name || 'Debtor');
+  const sigName = esc(signatoryName || '[Signatory Name]');
   const fmtAmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
   const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -1619,7 +1628,7 @@ export function generateVerificationAffidavitHTML(
   <h1>Verification of Debt &mdash; Affidavit</h1>
 
   <div class="section">
-    <p>I, <strong>${signatoryName || '[Signatory Name]'}</strong>, being duly sworn, depose and state as follows:</p>
+    <p>I, <strong>${sigName}</strong>, being duly sworn, depose and state as follows:</p>
   </div>
 
   <div class="section">
@@ -1637,9 +1646,9 @@ export function generateVerificationAffidavitHTML(
       <tr><td>Fees Accrued</td><td>${fmtAmt(debt?.fees_accrued)}</td></tr>
       <tr><td>Payments Made</td><td>${fmtAmt(debt?.payments_made)}</td></tr>
       <tr><td>Current Balance Due</td><td><strong>${fmtAmt(debt?.balance_due)}</strong></td></tr>
-      <tr><td>Date of Original Obligation</td><td>${debt?.due_date || '[Date]'}</td></tr>
-      <tr><td>Source Reference</td><td>${debt?.source_type === 'invoice' ? 'Invoice #' + (debt?.source_id?.substring(0, 8).toUpperCase() || '') : 'Manual Entry'}</td></tr>
-      <tr><td>Jurisdiction</td><td>${debt?.jurisdiction || '[Jurisdiction]'}</td></tr>
+      <tr><td>Date of Original Obligation</td><td>${esc(debt?.due_date || '[Date]')}</td></tr>
+      <tr><td>Source Reference</td><td>${debt?.source_type === 'invoice' ? 'Invoice #' + esc(debt?.source_id?.substring(0, 8).toUpperCase() || '') : 'Manual Entry'}</td></tr>
+      <tr><td>Jurisdiction</td><td>${esc(debt?.jurisdiction || '[Jurisdiction]')}</td></tr>
     </table>
   </div>
 
@@ -1655,7 +1664,7 @@ export function generateVerificationAffidavitHTML(
 
   <div class="sig-block">
     <div class="sig-line">
-      <strong>${signatoryName || '[Signatory Name]'}</strong><br>
+      <strong>${sigName}</strong><br>
       <span style="font-size:12px;color:#555;">Authorized Representative, ${companyName}</span>
     </div>
     <p style="margin-top:12px;">Date: ${todayLong}</p>
