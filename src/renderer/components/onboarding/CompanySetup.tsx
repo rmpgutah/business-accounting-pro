@@ -108,7 +108,8 @@ const CompanySetup: React.FC = () => {
       style={{ background: 'var(--color-bg-primary-solid)' }}
     >
       {/* Drag region at the top of the window for macOS hiddenInset title bar */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
+      {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag', zIndex: 10 }} />
       <div
         className="w-full p-8"
         style={{

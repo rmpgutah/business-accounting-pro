@@ -205,12 +205,18 @@ const ExpenseDetailReport: React.FC = () => {
       const { generateExpenseReportHTML } = await import('../../lib/print-templates');
       const printData = filtered.map((e) => ({
         ...e,
-        lineItems: lineItemsMap[e.id] || [],
+        tax_amount: (e as any).tax_amount ?? 0,
+        line_items: (lineItemsMap[e.id] || []).map((li: any) => ({
+          description: li.description ?? '',
+          quantity: li.quantity ?? 1,
+          unit_price: li.unit_price ?? li.amount ?? 0,
+          amount: li.amount ?? 0,
+        })),
       }));
       const html = generateExpenseReportHTML(
-        printData,
+        printData as any,
         activeCompany.name,
-        { start: startDate, end: endDate },
+        `${startDate} to ${endDate}`,
         groupBy
       );
       await api.printPreview(html, 'Expense Detail Report');

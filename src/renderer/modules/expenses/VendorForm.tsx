@@ -268,11 +268,10 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                     Payment Terms
                   </label>
                   <input
-                    type="text"
+                    type="number"
                     name="payment_terms"
                     className="block-input"
                     placeholder="e.g. 30"
-                    type="number"
                     min={0}
                     value={form.payment_terms}
                     onChange={handleChange}

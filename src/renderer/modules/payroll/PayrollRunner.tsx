@@ -353,7 +353,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         })
       );
 
-      await api.processPayroll({
+      await (api.processPayroll as any)({
         periodStart,
         periodEnd,
         payDate,

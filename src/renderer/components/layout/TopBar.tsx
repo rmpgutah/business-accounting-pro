@@ -94,12 +94,14 @@ const TopBar: React.FC = () => {
           backdropFilter: 'blur(20px) saturate(1.5)',
           WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
-          WebkitAppRegion: 'drag' as any,
           paddingLeft: navigator.userAgent.includes('Mac') ? '80px' : '16px',
+          // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
+          WebkitAppRegion: 'drag',
         }}
       >
         {/* Left — Company */}
-        <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' as any }}>
+        {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+        <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
             className="flex items-center gap-2 px-2.5 py-1.5 text-text-primary transition-all duration-150"
             style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
@@ -118,7 +120,8 @@ const TopBar: React.FC = () => {
         <button
           onClick={() => setSearchOpen(true)}
           className="flex items-center gap-2 px-3 py-1.5 w-80 text-text-muted text-sm transition-all duration-150"
-          style={{ borderRadius: '6px', WebkitAppRegion: 'no-drag' as any, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+          // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
+          style={{ borderRadius: '6px', WebkitAppRegion: 'no-drag', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
         >
@@ -133,7 +136,8 @@ const TopBar: React.FC = () => {
         </button>
 
         {/* Right — User + Notifications + Logout */}
-        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' as any }}>
+        {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
             aria-label="Notifications"
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"

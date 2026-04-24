@@ -1047,7 +1047,7 @@ const Dashboard: React.FC = () => {
           <div style={{ width: '100%', minHeight: 300 }}>
             <ResponsiveContainer width="100%" height={300}>
               <Treemap
-                data={expenseCategories}
+                data={expenseCategories as any[]}
                 dataKey="size"
                 nameKey="name"
                 stroke="#0a0a0a"

@@ -1040,7 +1040,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
                     borderRadius: '6px',
                     fontSize: '12px',
                   }}
-                  formatter={(v: number) => fmt.format(v)}
+                  formatter={(v) => fmt.format(Number(v))}
                 />
                 <Bar dataKey="bookValue" name="Book Value" fill="var(--color-accent-blue)" radius={0} />
                 <Bar dataKey="depreciation" name="Depreciation" fill="var(--color-accent-expense)" radius={0} />

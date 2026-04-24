@@ -476,7 +476,7 @@ const KPIDashboard: React.FC = () => {
               <BarChart data={monthlyChartData} barGap={4}>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} />
                 <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                 <Bar dataKey="revenue" fill="#2563eb" radius={[2,2,0,0]} name="Revenue" />
                 <Bar dataKey="expenses" fill="#ef4444" radius={[2,2,0,0]} name="Expenses" />
               </BarChart>
