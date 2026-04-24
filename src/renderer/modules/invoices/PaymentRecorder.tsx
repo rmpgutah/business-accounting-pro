@@ -37,15 +37,30 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   onClose,
   onSaved,
 }) => {
-  const balanceDue = useMemo(() => invoiceTotal - amountPaid, [invoiceTotal, amountPaid]);
   const isEditing = !!editPaymentId;
 
-  const [amount, setAmount] = useState<string>(String(balanceDue));
+  const [amount, setAmount] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [method, setMethod] = useState<string>('transfer');
   const [reference, setReference] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>('');
+  // Track the original payment amount when editing (to add back to balance)
+  const [originalAmount, setOriginalAmount] = useState<number>(0);
+
+  // Compute balance: for edits, add back the original payment since it's being replaced
+  const balanceDue = useMemo(
+    () => (invoiceTotal - amountPaid) + (isEditing ? originalAmount : 0),
+    [invoiceTotal, amountPaid, isEditing, originalAmount]
+  );
+
+  // Set default amount for new payments
+  React.useEffect(() => {
+    if (!isEditing) {
+      const newBalance = invoiceTotal - amountPaid;
+      setAmount(String(newBalance > 0 ? newBalance : ''));
+    }
+  }, [isEditing, invoiceTotal, amountPaid]);
 
   // Load existing payment for editing
   React.useEffect(() => {
@@ -54,7 +69,9 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       try {
         const p = await api.get('payments', editPaymentId);
         if (p) {
-          setAmount(String(p.amount || ''));
+          const paymentAmt = Number(p.amount) || 0;
+          setAmount(String(paymentAmt || ''));
+          setOriginalAmount(paymentAmt);
           setDate(p.date || new Date().toISOString().slice(0, 10));
           setMethod(p.payment_method || 'transfer');
           setReference(p.reference || '');
