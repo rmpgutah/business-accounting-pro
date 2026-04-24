@@ -1,4 +1,5 @@
 import React from 'react';
+import logoUrl from '../../assets/RMPG_WHITE_NEGATIVE_TRANSPARENT_FIXED.png';
 import {
   LayoutDashboard,
   BookOpen,
@@ -136,14 +137,17 @@ const Sidebar: React.FC = () => {
         borderColor: 'rgba(255,255,255,0.06)',
       }}
     >
-      {/* App Header */}
-      <div className="flex items-center gap-2.5 px-3 h-14 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div
-          className="flex items-center justify-center w-8 h-8 bg-accent-blue text-white font-bold text-sm shrink-0"
-          style={{ borderRadius: '4px' }}
-        >
-          B
-        </div>
+      {/* App Header — pt-10 leaves room for macOS traffic lights on hiddenInset title bar */}
+      <div
+        className="flex items-center gap-2.5 px-3 pt-10 pb-2 shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <img
+          src={logoUrl}
+          alt="RMPG"
+          className="w-8 h-8 shrink-0"
+          style={{ objectFit: 'contain' }}
+        />
         {!sidebarCollapsed && (
           <div className="flex flex-col leading-tight overflow-hidden">
             <span className="text-[11px] font-semibold text-text-primary tracking-tight">BAP</span>

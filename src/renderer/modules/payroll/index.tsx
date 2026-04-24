@@ -96,7 +96,14 @@ const PayrollModule: React.FC = () => {
     setExpandedRunId(runId);
     if (!runStubs[runId]) {
       try {
-        const stubs = await api.query('pay_stubs', { payroll_run_id: runId });
+        // JOIN employees so each stub row carries employee_name (pay_stubs has employee_id only)
+        const stubs = await api.rawQuery(
+          `SELECT ps.*, COALESCE(NULLIF(TRIM(e.first_name || ' ' || e.last_name), ''), e.email, 'Unknown') AS employee_name
+           FROM pay_stubs ps
+           LEFT JOIN employees e ON ps.employee_id = e.id
+           WHERE ps.payroll_run_id = ?`,
+          [runId]
+        );
         setRunStubs((prev) => ({
           ...prev,
           [runId]: Array.isArray(stubs) ? stubs : [],

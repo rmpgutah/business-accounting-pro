@@ -3,6 +3,7 @@ import { LogIn, UserPlus, Eye, EyeOff, ArrowRight, Shield, Lock, BarChart3 } fro
 import api from '../../lib/api';
 import { useAuthStore, AuthUser } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
+import logoUrl from '../../assets/RMPG_WHITE_NEGATIVE_TRANSPARENT_FIXED.png';
 
 type Mode = 'login' | 'register' | 'pick-user';
 
@@ -20,8 +21,11 @@ const SAVED_NAME_KEY  = 'bap-saved-name';
 const REMEMBER_KEY    = 'bap-remember';
 
 // Mountain landscape — loads from Unsplash with CSS gradient fallback
-const BG_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80&auto=format';
-const BG_FALLBACK = 'linear-gradient(160deg, #0a1628 0%, #0f1d32 25%, #162640 50%, #1a3050 70%, #0e1a2e 100%)';
+// Dark alpine lake at dusk — scenic but dark enough for the white logo to read clearly
+const BG_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80&auto=format';
+const BG_FALLBACK = 'linear-gradient(160deg, #06101e 0%, #0a1628 25%, #0e1d32 50%, #12253f 70%, #07101d 100%)';
+// Overlay darkens the photo so the white logo/text stay high-contrast regardless of image
+const BG_OVERLAY = 'linear-gradient(rgba(5,10,20,0.55), rgba(5,10,20,0.70))';
 
 const AuthScreen: React.FC = () => {
   const setUser      = useAuthStore((s) => s.setUser);
@@ -178,7 +182,7 @@ const AuthScreen: React.FC = () => {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',
-        background: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.45)), url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
+        background: `${BG_OVERLAY}, url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
         }}>
         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Loading...</div>
       </div>
@@ -188,7 +192,7 @@ const AuthScreen: React.FC = () => {
   return (
     <div style={{
       display: 'flex', minHeight: '100vh', width: '100%',
-      background: `linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.45)), url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
+      background: `${BG_OVERLAY}, url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
       fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
     }}>
       {/* Drag region for macOS hiddenInset title bar */}
@@ -196,17 +200,17 @@ const AuthScreen: React.FC = () => {
 
       {/* ── Left branding panel ───────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px', minWidth: '300px' }}>
-        <div style={{
-          width: '64px', height: '64px', borderRadius: '50%',
-          background: 'rgba(20,23,30,0.75)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '2px solid rgba(239,68,68,0.6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '22px', fontWeight: 800, color: '#ef4444', marginBottom: '32px',
-          boxShadow: '0 4px 20px rgba(239,68,68,0.2)',
-          letterSpacing: '-0.5px',
-        }}>BAP</div>
+        <img
+          src={logoUrl}
+          alt="RMPG Logo"
+          style={{
+            width: '96px',
+            height: '96px',
+            objectFit: 'contain',
+            marginBottom: '32px',
+            filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.5))',
+          }}
+        />
 
         <h1 style={{ fontSize: '48px', fontWeight: 800, color: 'white', lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: '16px' }}>
           Business<br />Accounting<br />Pro
