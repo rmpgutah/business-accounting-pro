@@ -381,7 +381,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   <div style={{ position: 'relative', display: 'inline-block' }}>
                     <img src={settings.logo_data} alt="Company logo" style={{ height: 60, maxWidth: 200, objectFit: 'contain', borderRadius: '4px', border: '1px solid var(--color-border-primary)' }} />
                     <button onClick={() => setSettings((p) => ({ ...p, logo_data: null }))}
-                      style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: '#fff', borderRadius: '50%', width: 18, height: 18, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove logo">
+                      style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 18, height: 18, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove logo">
                       <X size={10} />
                     </button>
                   </div>

@@ -145,7 +145,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
   // ─── Load YTD Summary ──────────────────────────────
   useEffect(() => {
     if (!employeeId) return;
-    api.employeeSummary(employeeId).then(setYtdSummary).catch(() => {});
+    api.employeeSummary(employeeId).then(setYtdSummary).catch((err) => {
+      console.warn('YTD summary unavailable:', err?.message || err);
+    });
   }, [employeeId]);
 
   // ─── Field updater ──────────────────────────────────

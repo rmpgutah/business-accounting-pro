@@ -405,7 +405,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
                 style={{
-                  background: '#ef4444',
+                  background: 'var(--color-accent-expense)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',

@@ -98,21 +98,48 @@ const CompanySetup: React.FC = () => {
   const labelClass = 'text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block';
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0a0a0a', padding: '24px' }}>
+    <div
+      className="flex items-center justify-center min-h-screen p-6"
+      style={{ background: 'var(--color-bg-primary-solid)' }}
+    >
       {/* Drag region at the top of the window for macOS hiddenInset title bar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
-      <div style={{ width: '100%', maxWidth: '640px', background: '#141414', border: '1px solid #2e2e2e', padding: '32px', borderRadius: '6px' }}>
+      <div
+        className="w-full p-8"
+        style={{
+          maxWidth: '640px',
+          background: 'var(--color-bg-secondary-solid)',
+          border: '1px solid var(--color-border-primary)',
+          borderRadius: '8px',
+        }}
+      >
         {/* Logo & Header */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', background: '#3b82f6', marginBottom: '16px', borderRadius: '6px' }}>
+        <div className="flex flex-col items-center mb-8">
+          <div
+            className="flex items-center justify-center mb-4"
+            style={{
+              width: '56px',
+              height: '56px',
+              background: 'var(--color-accent-blue)',
+              borderRadius: '8px',
+            }}
+          >
             <Building2 size={28} color="white" />
           </div>
-          <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#f0f0f0' }}>Business Accounting Pro</h1>
-          <p style={{ fontSize: '14px', color: '#a0a0a0', marginTop: '4px' }}>Set up your company to get started</p>
+          <h1 className="text-xl font-bold text-text-primary">Business Accounting Pro</h1>
+          <p className="text-sm text-text-secondary mt-1">Set up your company to get started</p>
         </div>
 
         {error && (
-          <div style={{ padding: '8px 12px', marginBottom: '16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '13px', borderRadius: '6px' }}>
+          <div
+            className="mb-4 text-accent-expense text-sm"
+            style={{
+              padding: '10px 14px',
+              background: 'var(--color-accent-expense-bg)',
+              border: '1px solid rgba(248,113,113,0.25)',
+              borderRadius: '6px',
+            }}
+          >
             {error}
           </div>
         )}
@@ -120,7 +147,7 @@ const CompanySetup: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '16px' }}>
-            <label className={labelClass}>Company Name <span style={{ color: '#ef4444' }}>*</span></label>
+            <label className={labelClass}>Company Name <span className="text-accent-expense">*</span></label>
             <input
               type="text"
               className="block-input"

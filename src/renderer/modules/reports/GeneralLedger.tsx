@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -49,6 +50,7 @@ const NORMAL_SIDE: Record<string, 'debit' | 'credit'> = {
 const GeneralLedger: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [accounts, setAccounts] = useState<GLAccount[]>([]);
   const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -78,6 +80,7 @@ const GeneralLedger: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         // Fetch all posted journal entry lines for this company in the date range
@@ -169,8 +172,9 @@ const GeneralLedger: React.FC = () => {
         } else {
           setExpandedAccounts(new Set());
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load General Ledger:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load General Ledger');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -218,6 +222,7 @@ const GeneralLedger: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load General Ledger" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: '6px' }}>
         <div className="flex flex-wrap items-center gap-3">

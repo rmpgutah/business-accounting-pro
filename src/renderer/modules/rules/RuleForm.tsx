@@ -36,8 +36,14 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
   const { activeCompany } = useCompanyStore();
   const [name, setName] = useState(rule?.name ?? '');
   const [priority, setPriority] = useState(String(rule?.priority ?? '0'));
-  const [conditions, setConditions] = useState<any[]>(rule ? JSON.parse(rule.conditions ?? '[]') : []);
-  const [actions, setActions] = useState<any[]>(rule ? JSON.parse(rule.actions ?? '[]') : []);
+  const [conditions, setConditions] = useState<any[]>(() => {
+    if (!rule) return [];
+    try { return JSON.parse(rule.conditions ?? '[]'); } catch { return []; }
+  });
+  const [actions, setActions] = useState<any[]>(() => {
+    if (!rule) return [];
+    try { return JSON.parse(rule.actions ?? '[]'); } catch { return []; }
+  });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 

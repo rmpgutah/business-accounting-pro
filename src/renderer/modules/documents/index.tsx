@@ -295,11 +295,14 @@ const Documents: React.FC = () => {
                     <td>
                       {doc.tags ? (
                         <div className="flex flex-wrap gap-1">
-                          {doc.tags.split(',').map((tag, i) => (
-                            <span key={i} className="block-badge block-badge-purple text-[10px]">
-                              {tag.trim()}
-                            </span>
-                          ))}
+                          {doc.tags.split(',').map((tag) => {
+                            const t = tag.trim();
+                            return (
+                              <span key={`${doc.id}:${t}`} className="block-badge block-badge-purple text-[10px]">
+                                {t}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className="text-text-muted">-</span>

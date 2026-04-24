@@ -390,7 +390,7 @@ const ExportSection: React.FC = () => {
               className="block-btn-success flex items-center gap-1.5"
               onClick={handleFullBackup}
               disabled={backupLoading}
-              style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
+              style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
             >
               <Archive size={14} />
               {backupLoading ? 'Creating Backup...' : 'Export All Data'}

@@ -3,6 +3,7 @@ import { Printer, Download, AlertTriangle } from 'lucide-react';
 import { format, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface AccountLine {
@@ -104,6 +105,7 @@ const BalanceSheet: React.FC = () => {
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
   );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [data, setData] = useState<BSData>({
     currentAssets: [],
     fixedAssets: [],
@@ -118,6 +120,7 @@ const BalanceSheet: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         // Query all account balances as of the date
@@ -219,8 +222,9 @@ const BalanceSheet: React.FC = () => {
         }
 
         setData(result);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load Balance Sheet:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load Balance Sheet');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -264,6 +268,7 @@ const BalanceSheet: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load Balance Sheet" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"

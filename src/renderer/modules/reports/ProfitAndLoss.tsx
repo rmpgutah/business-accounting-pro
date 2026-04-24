@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { generateReportHTML } from '../../lib/print-templates';
 import type { ReportColumn, ReportSummary } from '../../lib/print-templates';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -127,6 +128,7 @@ const ProfitAndLoss: React.FC = () => {
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
   );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [compareYoY, setCompareYoY] = useState(false);
   const [priorData, setPriorData] = useState<PnLData | null>(null);
   const [data, setData] = useState<PnLData>({
@@ -143,6 +145,7 @@ const ProfitAndLoss: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         const rows: any[] = await api.rawQuery(
@@ -217,8 +220,9 @@ const ProfitAndLoss: React.FC = () => {
         }
 
         setData(result);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load P&L:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load Profit & Loss');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -431,6 +435,7 @@ const ProfitAndLoss: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load Profit & Loss" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"

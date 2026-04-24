@@ -341,14 +341,17 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     <td>
                       {client.tags ? (
                         <div className="flex flex-wrap gap-1">
-                          {client.tags.split(',').map((tag, i) => (
-                            <span
-                              key={i}
-                              className="block-badge block-badge-purple text-[10px]"
-                            >
-                              {tag.trim()}
-                            </span>
-                          ))}
+                          {client.tags.split(',').map((tag) => {
+                            const t = tag.trim();
+                            return (
+                              <span
+                                key={`${client.id}:${t}`}
+                                className="block-badge block-badge-purple text-[10px]"
+                              >
+                                {t}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className="text-text-muted">--</span>
@@ -426,7 +429,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -438,7 +441,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

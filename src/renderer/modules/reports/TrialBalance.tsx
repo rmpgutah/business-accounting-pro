@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -36,6 +37,7 @@ const TYPE_GROUP_ORDER = ['asset', 'liability', 'equity', 'revenue', 'income', '
 const TrialBalance: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [lines, setLines] = useState<TrialBalanceLine[]>([]);
 
   // Date range defaults to current year
@@ -49,6 +51,7 @@ const TrialBalance: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
       try {
         const rows: any[] = await api.rawQuery(
           `SELECT
@@ -93,8 +96,9 @@ const TrialBalance: React.FC = () => {
         });
 
         setLines(mapped);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load Trial Balance:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load Trial Balance');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -136,6 +140,7 @@ const TrialBalance: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load Trial Balance" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
         <div className="flex items-center gap-3">

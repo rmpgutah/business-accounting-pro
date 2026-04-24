@@ -299,9 +299,12 @@ const AuthScreen: React.FC = () => {
 
             <form onSubmit={handleLogin}>
               <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Email</label>
+                <label style={labelStyle} htmlFor="auth-email">Email</label>
                 <input
+                  id="auth-email"
                   type="email"
+                  name="email"
+                  autoComplete="username"
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -312,12 +315,15 @@ const AuthScreen: React.FC = () => {
                 />
               </div>
               <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Password</label>
+                <label style={labelStyle} htmlFor="auth-password">Password</label>
                 <div style={{ position: 'relative' }}>
                   <input
+                    id="auth-password"
                     ref={passwordRef}
                     type={showPassword ? 'text' : 'password'}
-                    placeholder=""
+                    name="password"
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoFocus={!!email}
@@ -325,7 +331,7 @@ const AuthScreen: React.FC = () => {
                     onFocus={inputFocus}
                     onBlur={inputBlur}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}
                     style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '4px' }}>
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -386,9 +392,12 @@ const AuthScreen: React.FC = () => {
 
             <form onSubmit={handleRegister}>
               <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Full Name</label>
+                <label style={labelStyle} htmlFor="reg-name">Full Name</label>
                 <input
+                  id="reg-name"
                   type="text"
+                  name="name"
+                  autoComplete="name"
                   placeholder="John Smith"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -399,9 +408,12 @@ const AuthScreen: React.FC = () => {
                 />
               </div>
               <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Email</label>
+                <label style={labelStyle} htmlFor="reg-email">Email</label>
                 <input
+                  id="reg-email"
                   type="email"
+                  name="email"
+                  autoComplete="username"
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -411,10 +423,13 @@ const AuthScreen: React.FC = () => {
                 />
               </div>
               <div style={{ marginBottom: '28px' }}>
-                <label style={labelStyle}>Password</label>
+                <label style={labelStyle} htmlFor="reg-password">Password</label>
                 <div style={{ position: 'relative' }}>
                   <input
+                    id="reg-password"
                     type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="new-password"
                     placeholder="Min. 6 characters"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -422,7 +437,7 @@ const AuthScreen: React.FC = () => {
                     onFocus={inputFocus}
                     onBlur={inputBlur}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}
                     style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '4px' }}>
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>

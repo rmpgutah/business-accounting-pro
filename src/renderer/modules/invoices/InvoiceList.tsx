@@ -208,12 +208,15 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     setBatchLoading(true);
     try {
       const ids = Array.from(selectedIds);
-      for (const id of ids) {
-        const inv = invoices.find(i => i.id === id);
-        if (inv) {
-          await api.update('invoices', id, { status: 'paid', amount_paid: inv.total });
-        }
-      }
+      // Update in parallel for speed; preserve any existing overpayment via Math.max
+      await Promise.all(
+        ids.map((id) => {
+          const inv = invoices.find((i) => i.id === id);
+          if (!inv) return Promise.resolve();
+          const newPaid = Math.max(Number(inv.amount_paid) || 0, Number(inv.total) || 0);
+          return api.update('invoices', id, { status: 'paid', amount_paid: newPaid });
+        })
+      );
       await reload();
     } catch (err: any) { console.error('Batch mark paid failed:', err); alert('Failed to mark invoices as paid: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
@@ -611,7 +614,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             className="block-btn-success flex items-center gap-1.5 text-xs"
             onClick={handleBatchMarkPaid}
             disabled={batchLoading}
-            style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
           >
             <CheckCircle size={13} />
             Mark as Paid
@@ -651,7 +654,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -663,7 +666,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

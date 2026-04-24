@@ -120,8 +120,12 @@ const StripeSyncModule: React.FC = () => {
       setSavedApiKey(apiKey);
       setIsConnected(!!apiKey);
       setApiKey('');
-    } catch (err) {
+      setSyncMessage('API key saved successfully.');
+      setTimeout(() => setSyncMessage(''), 3000);
+    } catch (err: any) {
       console.error('Failed to save API key:', err);
+      setSyncMessage('Failed to save API key: ' + (err?.message || 'Unknown error'));
+      setTimeout(() => setSyncMessage(''), 6000);
     } finally {
       setSavingKey(false);
     }

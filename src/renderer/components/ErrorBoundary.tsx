@@ -27,87 +27,50 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     this.setState({ hasError: false, error: null });
   };
 
+  handleHardReload = () => {
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            padding: '48px 24px',
-          }}
-        >
-          <div
-            style={{
-              background: '#141414',
-              border: '1px solid #2e2e2e',
-              borderRadius: '6px',
-              padding: '32px',
-              maxWidth: '480px',
-              width: '100%',
-            }}
-          >
-            <h2
-              style={{
-                color: '#e2e2e2',
-                fontSize: '16px',
-                fontWeight: 700,
-                marginBottom: '8px',
-                fontFamily: 'monospace',
-              }}
-            >
+        <div className="flex items-center justify-center h-full p-12">
+          <div className="block-card-elevated max-w-md w-full">
+            <h2 className="text-base font-bold text-text-primary mb-2 font-mono">
               Module Error
             </h2>
-            <p
-              style={{
-                color: '#888',
-                fontSize: '13px',
-                lineHeight: '1.5',
-                marginBottom: '20px',
-              }}
-            >
-              Something went wrong while rendering this module.
+            <p className="text-xs text-text-muted leading-relaxed mb-5">
+              Something went wrong while rendering this module. Try reloading — if the error persists, use Hard Reload to restart the app.
             </p>
             <div
+              className="mb-5 p-3 overflow-x-auto"
               style={{
-                background: '#1a1a1a',
-                border: '1px solid #2e2e2e',
+                background: 'var(--color-bg-primary)',
+                border: '1px solid var(--color-border-primary)',
                 borderRadius: '6px',
-                padding: '12px',
-                marginBottom: '20px',
-                overflowX: 'auto',
               }}
             >
               <code
-                style={{
-                  color: '#ef4444',
-                  fontSize: '12px',
-                  fontFamily: 'monospace',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
+                className="text-accent-expense text-xs font-mono"
+                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
               >
                 {this.state.error?.message ?? 'Unknown error'}
               </code>
             </div>
-            <button
-              onClick={this.handleReload}
-              style={{
-                background: '#2e2e2e',
-                color: '#e2e2e2',
-                border: '1px solid #3a3a3a',
-                borderRadius: '6px',
-                padding: '8px 20px',
-                fontSize: '13px',
-                fontWeight: 600,
-                fontFamily: 'monospace',
-                cursor: 'pointer',
-              }}
-            >
-              Reload Module
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={this.handleReload}
+                className="block-btn-primary text-xs"
+              >
+                Reload Module
+              </button>
+              <button
+                onClick={this.handleHardReload}
+                className="block-btn text-xs"
+              >
+                Hard Reload
+              </button>
+            </div>
           </div>
         </div>
       );

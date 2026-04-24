@@ -3,6 +3,7 @@ import { Printer, Download } from 'lucide-react';
 import { format, startOfYear, endOfYear } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -105,6 +106,7 @@ const TaxSummary: React.FC = () => {
     format(endOfYear(new Date()), 'yyyy-MM-dd')
   );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [data, setData] = useState<TaxData>({
     totalRevenue: 0,
     deductions: [],
@@ -117,6 +119,7 @@ const TaxSummary: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         // Total revenue from invoices
@@ -165,8 +168,9 @@ const TaxSummary: React.FC = () => {
         if (!cancelled) {
           setData({ totalRevenue, deductions, taxPayments });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load Tax Summary:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load Tax Summary');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -211,6 +215,7 @@ const TaxSummary: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load Tax Summary" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"

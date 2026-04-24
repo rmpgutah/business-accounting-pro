@@ -488,7 +488,7 @@ const ReconcileView: React.FC = () => {
                       );
                       return (
                         <tr
-                          key={i}
+                          key={`${pair.bank.id}:${pair.book.id}`}
                           className="border-b border-border-primary/50 hover:bg-bg-hover/30"
                         >
                           <td className="px-4 py-2 text-xs text-text-primary">

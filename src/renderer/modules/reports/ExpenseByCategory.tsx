@@ -13,11 +13,16 @@ interface CategoryRow {
 // ─── Vendor Spend Table ─────────────────────────────────
 const VendorSpendTable: React.FC<{ startDate: string; endDate: string }> = ({ startDate, endDate }) => {
   const [vendors, setVendors] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
     if (!startDate || !endDate) return;
-    api.vendorSpend(startDate, endDate).then(r => setVendors(Array.isArray(r) ? r : [])).catch(() => {});
+    setLoadError('');
+    api.vendorSpend(startDate, endDate)
+      .then(r => setVendors(Array.isArray(r) ? r : []))
+      .catch((err: any) => setLoadError(err?.message || 'Failed to load vendor spend'));
   }, [startDate, endDate]);
 
+  if (loadError) return <p className="text-xs text-accent-expense">Error: {loadError}</p>;
   if (vendors.length === 0) return <p className="text-xs text-text-muted">No vendor data for this period.</p>;
 
   const maxSpend = Math.max(...vendors.map(v => v.total_spend));

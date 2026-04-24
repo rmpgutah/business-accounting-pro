@@ -3,6 +3,7 @@ import { Printer, Download } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -95,6 +96,7 @@ const CashFlowStatement: React.FC = () => {
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
   );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [data, setData] = useState<CashFlowData>({
     operatingInflows: 0,
     operatingOutflows: 0,
@@ -110,6 +112,7 @@ const CashFlowStatement: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         // Operating: revenue received (invoices amount_paid)
@@ -185,8 +188,9 @@ const CashFlowStatement: React.FC = () => {
             beginningCash,
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load Cash Flow Statement:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load Cash Flow Statement');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -222,6 +226,7 @@ const CashFlowStatement: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load Cash Flow Statement" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"

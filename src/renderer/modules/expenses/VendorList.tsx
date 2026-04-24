@@ -58,8 +58,10 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
     try {
       await api.remove('vendors', id);
       setVendors((prev) => prev.filter((v) => v.id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete vendor:', err);
+      alert('Failed to delete vendor: ' + (err?.message || 'Unknown error') +
+        '\n\nThis vendor may be referenced by existing expenses or bills.');
     }
   };
 

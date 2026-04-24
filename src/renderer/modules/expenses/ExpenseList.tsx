@@ -446,7 +446,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -458,7 +458,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

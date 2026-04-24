@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -56,6 +57,7 @@ const APAgingReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<AgingEntry[]>([]);
   const [bucketFilter, setBucketFilter] = useState<BucketKey | 'all'>('all');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +65,7 @@ const APAgingReport: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         const rows: BillRow[] = await api.rawQuery(
@@ -93,8 +96,9 @@ const APAgingReport: React.FC = () => {
 
         mapped.sort((a, b) => b.daysOutstanding - a.daysOutstanding);
         setEntries(mapped);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load AP Aging:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load AP Aging report');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -133,6 +137,7 @@ const APAgingReport: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load AP Aging" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
         <span className="text-xs text-text-muted font-semibold uppercase tracking-wider">

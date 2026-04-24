@@ -46,7 +46,9 @@ const BudgetVsActualReport: React.FC = () => {
       if (list.length > 0 && !selectedBudgetId) {
         setSelectedBudgetId(list[0].id);
       }
-    }).catch(() => {});
+    }).catch((err: any) => {
+      console.error('Failed to load budgets:', err);
+    });
   }, [activeCompany]);
 
   // Load comparison data
