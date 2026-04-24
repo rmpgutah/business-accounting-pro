@@ -408,13 +408,13 @@ const RecurringTransactions: React.FC = () => {
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <div
-                  className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                  className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                     formData.is_active ? 'bg-accent-income' : 'bg-bg-tertiary border border-border-primary'
                   }`}
                   onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
                 >
                   <div
-                    className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
+                    className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                       formData.is_active ? 'translate-x-5' : 'translate-x-0'
                     }`}
                     style={{ borderRadius: '6px' }}
@@ -545,7 +545,7 @@ const RecurringTransactions: React.FC = () => {
                       </td>
                       <td className="text-center">
                         <button
-                          className={`p-1 rounded-sm transition-colors ${
+                          className={`p-1 rounded transition-colors ${
                             t.is_active
                               ? 'text-accent-warning hover:bg-accent-warning-bg'
                               : 'text-accent-income hover:bg-accent-income-bg'
@@ -556,7 +556,7 @@ const RecurringTransactions: React.FC = () => {
                           {t.is_active ? <Pause size={16} /> : <Play size={16} />}
                         </button>
                         <button
-                          className="p-1 rounded-sm text-text-muted hover:text-accent-blue transition-colors"
+                          className="p-1 rounded text-text-muted hover:text-accent-blue transition-colors"
                           onClick={() => {
                             setEditingId(t.id);
                             setFormData({

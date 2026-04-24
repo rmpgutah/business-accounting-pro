@@ -670,25 +670,25 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{debt.debtor_name}</span>
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
                         )}
                         {!!debt.has_active_promise && !debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
                         )}
                         {!!debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
                         )}
                         {debt.status === 'disputed' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
                         )}
                         {!!debt.cease_desist_active && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>C&D</span>
                         )}
                         {!!debt.do_not_call && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                       </div>
                     </td>
@@ -704,7 +704,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         const badge = getAgingBadge(debt.delinquent_date);
                         return (
                           <span style={{
-                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
                             background: badge.bg, color: badge.color,
                             letterSpacing: '0.5px', textTransform: 'uppercase'
                           }}>
@@ -727,7 +727,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         const risk = getRiskBadge(score);
                         return (
                           <span style={{
-                            fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                            fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6,
                             background: risk.color + '20', color: risk.color,
                           }}>
                             {risk.label}
@@ -777,25 +777,25 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{debt.debtor_name}</span>
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
                         )}
                         {!!debt.has_active_promise && !debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
                         )}
                         {!!debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
                         )}
                         {debt.status === 'disputed' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
                         )}
                         {!!debt.cease_desist_active && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>C&D</span>
                         )}
                         {!!debt.do_not_call && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                       </div>
                     </td>

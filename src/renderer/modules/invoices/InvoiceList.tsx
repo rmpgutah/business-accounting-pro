@@ -535,7 +535,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         {inv.invoice_number}
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span style={{
-                            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase',
+                            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, textTransform: 'uppercase',
                             background: (TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280') + '22',
                             color: TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280',
                           }}>
@@ -570,12 +570,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={badge.className}>{badge.label}</span>
                         {(inv as any).dunning_stage > 0 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#d9770622', color: '#f59e0b' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>
                             {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
                           </span>
                         )}
                         {(inv as any).late_fee_applied === 1 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#ef444422', color: '#f87171' }}>FEE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#f87171' }}>FEE</span>
                         )}
                       </div>
                     </td>

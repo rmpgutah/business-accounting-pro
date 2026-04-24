@@ -398,7 +398,7 @@ const Inventory: React.FC = () => {
                         : 'border-accent-blue text-accent-blue bg-accent-blue/10'
                       : 'border-border-primary text-text-muted'
                   }`}
-                  style={{ borderRadius: '4px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   {t === 'in' ? '▼ Receive' : t === 'out' ? '▲ Ship' : '↺ Adjust'}
                 </button>
@@ -468,7 +468,7 @@ const Inventory: React.FC = () => {
                 </div>
               ) : (
                 movements.map(m => (
-                  <div key={m.id} className="block-card p-3 flex items-start justify-between gap-2" style={{ borderRadius: '4px' }}>
+                  <div key={m.id} className="block-card p-3 flex items-start justify-between gap-2" style={{ borderRadius: '6px' }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <MovBadge type={m.type} />

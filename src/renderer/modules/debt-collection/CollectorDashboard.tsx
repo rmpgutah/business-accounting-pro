@@ -32,7 +32,7 @@ const ActionCard: React.FC<{
         {icon}
         <span className="text-sm font-semibold text-text-primary">{title}</span>
       </div>
-      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: color + '22', color, minWidth: 24, textAlign: 'center' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: color + '22', color, minWidth: 24, textAlign: 'center' }}>
         {count}
       </span>
     </div>
@@ -209,7 +209,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
               <Zap size={16} className="text-purple-400" />
               <span className="text-sm font-semibold text-text-primary">Smart Recommendations</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#8b5cf622', color: '#8b5cf6' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#8b5cf622', color: '#8b5cf6' }}>
               {recommendations.length}
             </span>
           </div>
@@ -223,7 +223,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                   className="flex items-start gap-3 px-4 py-3 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
                   onClick={() => onViewDebt(rec.debtId)}
                 >
-                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: color + '22', color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: color + '22', color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
                     {rec.priority}
                   </span>
                   <div className="min-w-0 flex-1">

@@ -1329,7 +1329,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                           padding: '3px 4px',
                           background: 'var(--color-bg-elevated)',
                           border: '1px solid var(--color-border-primary)',
-                          borderRadius: 4,
+                          borderRadius: 6,
                         }}>
                         <button
                           type="button"
@@ -1338,7 +1338,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                           style={{
                             background: line.bold ? 'var(--color-accent-blue)' : 'transparent',
                             color: line.bold ? '#fff' : 'var(--color-text-muted)',
-                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 2,
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 6,
                           }}
                         >
                           <Bold size={10} />
@@ -1350,7 +1350,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                           style={{
                             background: line.italic ? 'var(--color-accent-blue)' : 'transparent',
                             color: line.italic ? '#fff' : 'var(--color-text-muted)',
-                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 2,
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 6,
                           }}
                         >
                           <Italic size={10} />
@@ -1367,7 +1367,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                               border: line.highlight_color === color
                                 ? '2px solid var(--color-accent-blue)'
                                 : '1px solid var(--color-border-primary)',
-                              width: 14, height: 14, cursor: 'pointer', borderRadius: 2,
+                              width: 14, height: 14, cursor: 'pointer', borderRadius: 6,
                               backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
                             }}
                           />

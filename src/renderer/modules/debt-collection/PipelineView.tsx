@@ -213,7 +213,7 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                           const score = calcRiskScore(debt);
                           const risk = getRiskBadge(score);
                           return (
-                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: risk.color + '22', color: risk.color }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 6, background: risk.color + '22', color: risk.color }}>
                               {risk.label}
                             </span>
                           );
@@ -221,13 +221,13 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                       </div>
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
                         )}
                         {!!debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
                         )}
                       </div>
 

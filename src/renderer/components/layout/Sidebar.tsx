@@ -213,7 +213,7 @@ const Sidebar: React.FC = () => {
         <button
           onClick={toggleSidebar}
           className="flex items-center justify-center w-full py-1.5 text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150"
-          style={{ borderRadius: '4px' }}
+          style={{ borderRadius: '6px' }}
         >
           {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>

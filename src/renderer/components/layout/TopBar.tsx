@@ -129,7 +129,7 @@ const TopBar: React.FC = () => {
           <span className="flex-1 text-left">Search...</span>
           <kbd
             className="text-[10px] px-1.5 py-0.5 bg-bg-tertiary border border-border-secondary text-text-muted"
-            style={{ borderRadius: '4px' }}
+            style={{ borderRadius: '6px' }}
           >
             ⌘K
           </kbd>
@@ -141,13 +141,13 @@ const TopBar: React.FC = () => {
           <button
             aria-label="Notifications"
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '4px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Bell size={18} />
             {notificationCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-accent-expense"
-                style={{ borderRadius: '4px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {notificationCount > 99 ? '99+' : notificationCount}
               </span>
@@ -163,7 +163,7 @@ const TopBar: React.FC = () => {
               <div
                 className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                 style={{
-                  width: '26px', height: '26px', borderRadius: '4px',
+                  width: '26px', height: '26px', borderRadius: '6px',
                   background: authUser.avatar_color || '#3b82f6',
                 }}
               >
@@ -175,7 +175,7 @@ const TopBar: React.FC = () => {
               <button
                 onClick={logout}
                 className="p-1 text-text-muted hover:text-accent-expense transition-all duration-150"
-                style={{ borderRadius: '4px' }}
+                style={{ borderRadius: '6px' }}
                 title="Sign Out"
               >
                 <LogOut size={14} />
@@ -218,7 +218,7 @@ const TopBar: React.FC = () => {
                 aria-label="Close search"
                 onClick={closeSearch}
                 className="p-1 text-text-muted hover:text-text-primary"
-                style={{ borderRadius: '4px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <X size={14} />
               </button>
@@ -236,7 +236,7 @@ const TopBar: React.FC = () => {
                   <div className="px-4 py-1">
                     <span
                       className="inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue"
-                      style={{ borderRadius: '4px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       {type}
                     </span>
@@ -264,7 +264,7 @@ const TopBar: React.FC = () => {
             <div className="flex items-center justify-between px-4 py-2 border-t border-border-primary text-[11px] text-text-muted">
               <span>Type to search</span>
               <span>
-                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '4px' }}>
+                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '6px' }}>
                   ESC
                 </kbd>{' '}
                 to close

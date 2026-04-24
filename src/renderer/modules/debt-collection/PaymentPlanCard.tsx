@@ -233,7 +233,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
                         style={{
                           background: inst.paid ? '#22c55e' : 'var(--color-bg-tertiary)',
                           border: '1px solid var(--color-border-primary)',
-                          borderRadius: 4,
+                          borderRadius: 6,
                           width: 20,
                           height: 20,
                           display: 'inline-flex',

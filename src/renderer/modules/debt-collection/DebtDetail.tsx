@@ -716,7 +716,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               const badge = getAgingBadge(debt.delinquent_date);
               return (
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
                   background: badge.bg, color: badge.color,
                   letterSpacing: '0.5px', textTransform: 'uppercase'
                 }}>
@@ -732,7 +732,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               const risk = getRiskBadge(score);
               return (
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
                   background: risk.color + '20', color: risk.color,
                 }}>
                   Risk: {risk.label} ({score})
@@ -933,7 +933,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <button
                     key={lt.key}
                     className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
-                    style={{ borderRadius: '4px' }}
+                    style={{ borderRadius: '6px' }}
                     onClick={() => handleGenerateLetter(lt.key)}
                   >
                     {lt.label}
@@ -979,12 +979,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {(!!debt.cease_desist_active || !!debt.do_not_call) && (
           <div className="mt-3 flex items-center gap-3 px-4 py-2.5 border border-red-700/50" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
             {!!debt.cease_desist_active && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#dc262622', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#dc262622', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Cease & Desist Active
               </span>
             )}
             {!!debt.do_not_call && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#d9770622', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#d9770622', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Do Not Call
               </span>
             )}
@@ -1000,7 +1000,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {/* Contact Preference Badges (non-restricted) */}
         {!debt.cease_desist_active && !debt.do_not_call && debt.preferred_contact_method && (
           <div className="mt-2 flex items-center gap-2">
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#2563eb22', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {debt.preferred_contact_method} preferred
             </span>
           </div>
@@ -1372,18 +1372,18 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{formatCurrency(Number(p.promised_amount))}</div>
                       {p.notes && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', flex: 1 }}>{p.notes}</div>}
                       <div style={{ flex: 1 }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: badgeColor + '22', color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: badgeColor + '22', color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                         {badgeLabel}
                       </span>
                       <button
                         onClick={() => togglePromiseKept(p.id, Boolean(p.kept))}
-                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
                       >
                         {p.kept ? 'Mark Broken' : 'Mark Kept'}
                       </button>
                       <button
                         onClick={() => handleDeletePromise(p.id)}
-                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
                         title="Delete promise"
                       >
                         <Trash2 size={11} />
@@ -1466,7 +1466,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   return (
                     <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
                       <div className="flex items-center gap-2 min-w-0">
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: (statusColor[d.status] || '#777') + '22', color: statusColor[d.status] || '#777', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: (statusColor[d.status] || '#777') + '22', color: statusColor[d.status] || '#777', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           {d.status}
                         </span>
                         <span className="text-xs text-text-primary font-medium">{reasonLabels[d.reason] || d.reason}</span>
@@ -1661,7 +1661,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                           <div key={inst.id || idx} className="flex items-center justify-between px-2.5 py-1.5 border border-border-primary" style={{ borderRadius: '6px', borderLeftWidth: 3, borderLeftColor: color }}>
                             <span className="text-xs font-mono text-text-secondary">{formatDate(inst.due_date)}</span>
                             <span className="text-xs font-mono font-bold text-text-primary">{formatCurrency(inst.amount || 0)}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: color + '22', color }}>{label}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: color + '22', color }}>{label}</span>
                           </div>
                         );
                       })}
@@ -1828,7 +1828,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <div key={ev.id} className="relative flex gap-3 items-start">
                         <div
                           className="absolute -left-5 top-1.5 w-2.5 h-2.5 flex-shrink-0"
-                          style={{ background: dotColor, borderRadius: 3 }}
+                          style={{ background: dotColor, borderRadius: 6 }}
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">

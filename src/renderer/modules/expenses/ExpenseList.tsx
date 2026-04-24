@@ -341,7 +341,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                       <div className="flex items-center gap-1.5">
                         {exp.description || '(no description)'}
                         {exp.is_recurring ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#2563eb22', color: '#60a5fa' }}>RECURRING</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>RECURRING</span>
                         ) : null}
                         {exp.custom_fields && exp.custom_fields !== '{}' && (
                           <span title="Has detailed info"><FileText size={12} className="text-accent-blue shrink-0" /></span>

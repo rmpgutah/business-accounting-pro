@@ -28,7 +28,7 @@ export const Tooltip: React.FC<Props> = ({ content, children, placement = 'top' 
             whitespace-pre-wrap leading-relaxed
             ${placement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}
           `}
-          style={{ borderRadius: '4px' }}
+          style={{ borderRadius: '6px' }}
         >
           {content}
         </span>

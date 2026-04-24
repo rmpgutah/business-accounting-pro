@@ -807,7 +807,7 @@ export default function SettingsModule() {
           </Field>
           <div className="flex items-center gap-3">
             <div
-              className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+              className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                 stripeConfig.stripe_test_mode
                   ? 'bg-accent-warning'
                   : 'bg-bg-tertiary border border-border-primary'
@@ -817,7 +817,7 @@ export default function SettingsModule() {
               }
             >
               <div
-                className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
+                className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                   stripeConfig.stripe_test_mode ? 'translate-x-5' : 'translate-x-0'
                 }`}
                 style={{ borderRadius: '6px' }}
@@ -861,7 +861,7 @@ export default function SettingsModule() {
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <div
-                className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                   backupConfig.auto_backup
                     ? 'bg-accent-income'
                     : 'bg-bg-tertiary border border-border-primary'
@@ -873,7 +873,7 @@ export default function SettingsModule() {
                 }}
               >
                 <div
-                  className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
+                  className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                     backupConfig.auto_backup ? 'translate-x-5' : 'translate-x-0'
                   }`}
                   style={{ borderRadius: '6px' }}

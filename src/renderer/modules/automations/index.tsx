@@ -475,7 +475,7 @@ const AutomationsModule: React.FC = () => {
               return (
                 <div key={label} className="block-card p-4" style={{ borderRadius: '6px' }}>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">{label}</p>
-                  <pre className="text-xs font-mono text-text-secondary overflow-x-auto whitespace-pre-wrap bg-bg-tertiary p-3" style={{ borderRadius: '4px' }}>
+                  <pre className="text-xs font-mono text-text-secondary overflow-x-auto whitespace-pre-wrap bg-bg-tertiary p-3" style={{ borderRadius: '6px' }}>
                     {typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}
                   </pre>
                 </div>

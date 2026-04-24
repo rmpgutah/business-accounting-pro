@@ -329,13 +329,13 @@ const Notifications: React.FC = () => {
                   style={{ borderRadius: '6px' }}
                 >
                   <div
-                    className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                    className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                       preferences[key] !== false ? 'bg-accent-income' : 'bg-bg-tertiary border border-border-primary'
                     }`}
                     onClick={(e) => { e.preventDefault(); togglePreference(key); }}
                   >
                     <div
-                      className={`w-4 h-4 bg-bg-secondary rounded-sm transform transition-transform ${
+                      className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                         preferences[key] !== false ? 'translate-x-5' : 'translate-x-0'
                       }`}
                       style={{ borderRadius: '6px' }}

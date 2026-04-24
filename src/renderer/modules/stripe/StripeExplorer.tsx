@@ -247,7 +247,7 @@ const StripeExplorer: React.FC = () => {
                 <span className="flex items-center justify-between">
                   <span className="truncate">{r.label}</span>
                   {r.preview && (
-                    <span className="text-[9px] px-1 py-0.5 bg-accent-warning/15 text-accent-warning rounded-sm shrink-0" title="Requires preview enrollment on your Stripe account">
+                    <span className="text-[9px] px-1 py-0.5 bg-accent-warning/15 text-accent-warning rounded shrink-0" title="Requires preview enrollment on your Stripe account">
                       preview
                     </span>
                   )}

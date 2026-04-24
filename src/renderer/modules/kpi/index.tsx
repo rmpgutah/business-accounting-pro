@@ -504,7 +504,7 @@ const KPIDashboard: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {segments.filter(s => s.value > 0).map(s => (
                     <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '2px', background: s.color, flexShrink: 0 }} />
+                      <div style={{ width: 10, height: 10, borderRadius: '6px', background: s.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: '12px', color: 'var(--color-text-secondary)' }}>{s.label}</div>
                       <div style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: s.color, fontWeight: 600 }}>{formatCurrency(s.value)}</div>
                       <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', width: 36, textAlign: 'right' }}>{((s.value/total)*100).toFixed(0)}%</div>

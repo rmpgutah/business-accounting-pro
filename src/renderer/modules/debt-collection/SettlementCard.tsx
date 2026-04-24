@@ -220,7 +220,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                       fontWeight: 600,
                       color: badge.color,
                       padding: '2px 8px',
-                      borderRadius: 4,
+                      borderRadius: 6,
                       background: badge.color + '20',
                     }}
                   >

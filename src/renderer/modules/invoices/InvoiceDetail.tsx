@@ -294,7 +294,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           <span className={badge.className}>{badge.label}</span>
           {invoice.invoice_type && invoice.invoice_type !== 'standard' && (
             <span style={{
-              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase',
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase',
               background: (INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280') + '22',
               color: INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280',
             }}>
@@ -302,12 +302,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </span>
           )}
           {invoice.currency && invoice.currency !== 'USD' && (
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '2px 6px', borderRadius: 4, background: 'var(--color-bg-tertiary)' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '2px 6px', borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
               {invoice.currency}
             </span>
           )}
           {debtLink && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '2px 8px', borderRadius: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '2px 8px', borderRadius: 6 }}>
               In Collections
             </span>
           )}
