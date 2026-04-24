@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   Receipt,
   Target,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,7 +29,8 @@ export type ReportType =
   | 'expense-detail'
   | 'tax-summary'
   | 'financial-statements'
-  | 'budget-vs-actual';
+  | 'budget-vs-actual'
+  | 'payroll-register';
 
 interface ReportCard {
   id: ReportType;
@@ -137,6 +139,14 @@ const REPORTS: ReportCard[] = [
     description:
       'Compare budgeted amounts to actual spending by category with variance analysis.',
     icon: Target,
+    accentClass: 'border-l-purple-500',
+  },
+  {
+    id: 'payroll-register',
+    title: 'Payroll Register',
+    description:
+      'Per-run breakdown of employee pay, taxes, and deductions.',
+    icon: Users,
     accentClass: 'border-l-purple-500',
   },
 ];
