@@ -71,8 +71,9 @@ const AccountsList: React.FC<AccountsListProps> = ({
   const [showInactive, setShowInactive] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [error, setError] = useState('');
+  const [cashBasis, setCashBasis] = useState<{ cash_revenue: number; cash_expenses: number } | null>(null);
 
-  // Fetch accounts
+  // Fetch accounts WITH computed balances from journal entries
   useEffect(() => {
     let cancelled = false;
 
@@ -81,12 +82,54 @@ const AccountsList: React.FC<AccountsListProps> = ({
       setLoading(true);
       setError('');
       try {
-        const data = await api.query('accounts', {
-          company_id: activeCompany.id,
-        });
+        // Get accounts with computed balances from GL
+        const data = await api.rawQuery(
+          `SELECT a.*,
+            COALESCE((
+              SELECT SUM(jel.debit - jel.credit)
+              FROM journal_entry_lines jel
+              JOIN journal_entries je ON jel.journal_entry_id = je.id
+              WHERE jel.account_id = a.id AND je.company_id = ?
+            ), 0) as gl_balance,
+            COALESCE((
+              SELECT SUM(jel.debit) FROM journal_entry_lines jel
+              JOIN journal_entries je ON jel.journal_entry_id = je.id
+              WHERE jel.account_id = a.id AND je.company_id = ?
+            ), 0) as total_debits,
+            COALESCE((
+              SELECT SUM(jel.credit) FROM journal_entry_lines jel
+              JOIN journal_entries je ON jel.journal_entry_id = je.id
+              WHERE jel.account_id = a.id AND je.company_id = ?
+            ), 0) as total_credits
+          FROM accounts a
+          WHERE a.company_id = ?
+          ORDER BY a.code`,
+          [activeCompany.id, activeCompany.id, activeCompany.id, activeCompany.id]
+        );
         if (!cancelled && Array.isArray(data)) {
-          setAccounts(data);
+          // Compute effective balance: for asset/expense accounts, debit-credit is positive
+          // For liability/equity/revenue, credit-debit is positive
+          const enriched = data.map((a: any) => ({
+            ...a,
+            balance: ['asset', 'expense'].includes(a.type)
+              ? (a.total_debits || 0) - (a.total_credits || 0)
+              : (a.total_credits || 0) - (a.total_debits || 0),
+          }));
+          setAccounts(enriched);
         }
+
+        // Also load cash-basis totals from invoices + expenses for summary
+        api.rawQuery(
+          `SELECT
+            COALESCE((SELECT SUM(amount_paid) FROM invoices WHERE company_id = ? AND status IN ('paid','partial')), 0) as cash_revenue,
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE company_id = ? AND status IN ('approved','paid')), 0) as cash_expenses
+          `,
+          [activeCompany.id, activeCompany.id]
+        ).then(r => {
+          if (!cancelled && Array.isArray(r) && r[0]) {
+            setCashBasis(r[0]);
+          }
+        }).catch(() => {});
       } catch (err: any) {
         console.error('Failed to load accounts:', err);
         if (!cancelled) setError(err?.message || 'Failed to load accounts');
@@ -103,8 +146,21 @@ const AccountsList: React.FC<AccountsListProps> = ({
 
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    const data = await api.query('accounts', { company_id: activeCompany.id });
-    setAccounts(Array.isArray(data) ? data : []);
+    const data = await api.rawQuery(
+      `SELECT a.*,
+        COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel JOIN journal_entries je ON jel.journal_entry_id = je.id WHERE jel.account_id = a.id AND je.company_id = ?), 0) as gl_balance
+      FROM accounts a WHERE a.company_id = ? ORDER BY a.code`,
+      [activeCompany.id, activeCompany.id]
+    );
+    if (Array.isArray(data)) {
+      const enriched = data.map((a: any) => ({
+        ...a,
+        balance: ['asset', 'expense'].includes(a.type)
+          ? (a.gl_balance || 0)
+          : -(a.gl_balance || 0),
+      }));
+      setAccounts(enriched);
+    }
   }, [activeCompany]);
 
   // Group accounts by type
@@ -188,6 +244,36 @@ const AccountsList: React.FC<AccountsListProps> = ({
       </div>
 
       {/* Table */}
+      {/* Cash-Basis Activity Summary */}
+      {cashBasis && (cashBasis.cash_revenue > 0 || cashBasis.cash_expenses > 0) && (
+        <div className="grid grid-cols-3 gap-4 mb-2">
+          <div className="block-card p-4 border-l-4 border-l-accent-income" style={{ borderRadius: '6px' }}>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-1">Revenue (Cash Basis)</p>
+            <p className="text-xl font-bold font-mono text-accent-income">{formatCurrency(cashBasis.cash_revenue)}</p>
+            <p className="text-[10px] text-text-muted mt-0.5">From paid/partial invoices</p>
+          </div>
+          <div className="block-card p-4 border-l-4 border-l-accent-expense" style={{ borderRadius: '6px' }}>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-1">Expenses (Cash Basis)</p>
+            <p className="text-xl font-bold font-mono text-accent-expense">{formatCurrency(cashBasis.cash_expenses)}</p>
+            <p className="text-[10px] text-text-muted mt-0.5">Approved + paid expenses</p>
+          </div>
+          <div className="block-card p-4 border-l-4 border-l-accent-blue" style={{ borderRadius: '6px' }}>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold mb-1">Net Income (Cash Basis)</p>
+            <p className={`text-xl font-bold font-mono ${cashBasis.cash_revenue - cashBasis.cash_expenses >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
+              {formatCurrency(cashBasis.cash_revenue - cashBasis.cash_expenses)}
+            </p>
+            <p className="text-[10px] text-text-muted mt-0.5">Revenue minus expenses</p>
+          </div>
+        </div>
+      )}
+
+      {/* GL Account Balances Note */}
+      {accounts.every(a => (a.balance ?? 0) === 0) && (cashBasis?.cash_revenue ?? 0) > 0 && (
+        <div className="text-xs text-text-muted bg-bg-tertiary border border-border-primary px-4 py-2 mb-2" style={{ borderRadius: '6px' }}>
+          GL account balances are zero because journal entries haven't been posted yet. The cash-basis summary above shows activity from invoices and expenses. Post journal entries to populate account balances.
+        </div>
+      )}
+
       <div
         className="block-table bg-bg-secondary border border-border-primary overflow-hidden"
         style={{ borderRadius: '6px' }}

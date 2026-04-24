@@ -487,6 +487,9 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE employees ADD COLUMN pay_rate_effective_date TEXT DEFAULT ''",
   // Feature 20: Check number on pay stubs
   "ALTER TABLE pay_stubs ADD COLUMN check_number TEXT DEFAULT ''",
+  // Company fiscal year end + base currency
+  "ALTER TABLE companies ADD COLUMN fiscal_year_end TEXT DEFAULT '12'",
+  "ALTER TABLE companies ADD COLUMN base_currency TEXT DEFAULT 'USD'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

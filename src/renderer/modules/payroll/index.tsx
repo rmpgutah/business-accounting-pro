@@ -14,11 +14,8 @@ type Tab = 'employees' | 'run' | 'history' | 'pto';
 
 interface PayrollRun {
   id: string;
-  // DB column names are pay_period_start / pay_period_end
-  pay_period_start: string;
-  pay_period_end: string;
-  period_start?: string; // alias if present
-  period_end?: string;   // alias if present
+  period_start: string;
+  period_end: string;
   pay_date: string;
   status: string;
   total_gross: number;
@@ -76,7 +73,10 @@ const PayrollModule: React.FC = () => {
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const rows = await api.query('payroll_runs', { company_id: activeCompany.id }, { field: 'pay_date', dir: 'desc' });
+      const rows = await api.rawQuery(
+        'SELECT *, pay_period_start AS period_start, pay_period_end AS period_end FROM payroll_runs WHERE company_id = ? ORDER BY pay_date DESC',
+        [activeCompany.id]
+      );
       setRuns(Array.isArray(rows) ? rows : []);
     } catch (err: any) {
       console.error('Failed to load payroll history:', err);
@@ -281,7 +281,7 @@ const PayrollModule: React.FC = () => {
                           <div>
                             <div className="text-xs text-text-muted">Pay Period</div>
                             <div className="text-sm font-mono text-text-primary">
-                              {run.pay_period_start || run.period_start} to {run.pay_period_end || run.period_end}
+                              {run.period_start} to {run.period_end}
                             </div>
                           </div>
                           <div>
