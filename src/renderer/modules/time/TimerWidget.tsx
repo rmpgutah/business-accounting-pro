@@ -221,25 +221,25 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
   const handleStop = useCallback(async () => {
     stopTicking();
 
-    const segmentSeconds =
-      timerState === 'running'
-        ? Math.floor((Date.now() - segmentStartRef.current) / 1000)
-        : 0;
-    const totalSeconds = accumulatedRef.current + segmentSeconds;
-    const durationMinutes = Math.round(totalSeconds / 60);
-
-    setTimerState('idle');
-    savePersistedTimer(null);
-
-    if (durationMinutes < 1) {
-      setElapsed(0);
-      accumulatedRef.current = 0;
-      return;
+    // Compute elapsed from refs (not React state, which may be stale)
+    const now = Date.now();
+    let segmentSeconds = 0;
+    if (timerState === 'running' && segmentStartRef.current > 0) {
+      segmentSeconds = Math.floor((now - segmentStartRef.current) / 1000);
     }
+    // Use elapsed state as fallback if refs seem wrong
+    const totalSeconds = Math.max(
+      accumulatedRef.current + segmentSeconds,
+      elapsed  // fallback: the displayed elapsed value
+    );
+    const durationMinutes = Math.max(1, Math.round(totalSeconds / 60));
 
     const endTime = new Date();
     const startTime = originalStartRef.current ?? new Date(endTime.getTime() - totalSeconds * 1000);
 
+    // Reset timer state AFTER capturing values
+    setTimerState('idle');
+    savePersistedTimer(null);
     setError('');
     setSaving(true);
 
@@ -255,22 +255,32 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
         is_billable: billable,
       });
 
+      // IPC handler returns { error } on failure instead of throwing
       if (result && typeof result === 'object' && 'error' in result) {
         throw new Error(result.error);
       }
 
+      // Verify result is a valid record
+      if (!result || !result.id) {
+        throw new Error('Entry was not created — no record returned');
+      }
+
+      // Reset form on success
       setDescription('');
       setElapsed(0);
       accumulatedRef.current = 0;
       originalStartRef.current = null;
       onEntryCreated();
     } catch (err: any) {
-      console.error('Failed to create time entry:', err);
-      setError(err?.message || 'Failed to save time entry. Please try again.');
+      const msg = err?.message || 'Failed to save time entry';
+      console.error('Failed to create time entry:', msg, err);
+      setError(msg);
+      // Backup alert so the user never misses the error
+      alert('Time entry failed to save: ' + msg);
     } finally {
       setSaving(false);
     }
-  }, [timerState, clientId, projectId, description, billable, onEntryCreated, stopTicking]);
+  }, [timerState, elapsed, clientId, projectId, description, billable, onEntryCreated, stopTicking]);
 
   const handleDiscard = useCallback(() => {
     stopTicking();

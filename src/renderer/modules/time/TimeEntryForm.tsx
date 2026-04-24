@@ -174,11 +174,16 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         throw new Error(result.error);
       }
 
+      if (!result || !result.id) {
+        throw new Error('Entry was not saved — no record returned');
+      }
+
       onSaved();
       onClose();
     } catch (err: any) {
-      console.error('Failed to save time entry:', err);
-      setFormError(err?.message || 'Failed to save time entry. Please try again.');
+      const msg = err?.message || 'Failed to save time entry. Please try again.';
+      console.error('Failed to save time entry:', msg, err);
+      setFormError(msg);
     } finally {
       setSaving(false);
     }
