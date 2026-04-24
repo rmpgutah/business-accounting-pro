@@ -836,15 +836,33 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           </div>
         </div>
         <div className="module-actions">
-          {!isFinal && (
-            <button
-              className="block-btn flex items-center gap-1.5 text-xs"
-              onClick={() => onEdit(po.id)}
-            >
-              <FileText size={13} />
-              Edit
-            </button>
-          )}
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={() => onEdit(po.id)}
+          >
+            <FileText size={13} />
+            Edit
+          </button>
+          <button
+            className="block-btn text-accent-expense hover:bg-accent-expense/10 flex items-center gap-1.5 text-xs"
+            onClick={async () => {
+              if (!window.confirm('Delete this purchase order and all its line items? This cannot be undone.')) return;
+              try {
+                const items = await api.query('po_line_items', { po_id: po.id });
+                if (Array.isArray(items)) {
+                  for (const item of items) await api.remove('po_line_items', item.id);
+                }
+                await api.remove('purchase_orders', po.id);
+                onBack();
+              } catch (err: any) {
+                alert('Failed to delete purchase order: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+            title="Delete purchase order"
+          >
+            <Trash2 size={13} />
+            Delete
+          </button>
         </div>
       </div>
 
@@ -1026,8 +1044,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
             This purchase order is{' '}
             <span className={formatStatus(po.status).className}>
               {formatStatus(po.status).label}
-            </span>{' '}
-            and no further actions are available.
+            </span>.
           </div>
         </div>
       )}

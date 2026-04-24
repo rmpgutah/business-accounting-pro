@@ -7,6 +7,7 @@ import {
   Link2,
   Unlink,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -60,6 +61,7 @@ const ReconcileView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
+  const [savedMatches, setSavedMatches] = useState<any[]>([]);
 
   // Load bank accounts
   useEffect(() => {
@@ -120,6 +122,25 @@ const ReconcileView: React.FC = () => {
         setBookEntries(bookData ?? []);
       } else {
         setBookEntries([]);
+      }
+
+      // Load saved reconciliation matches for this bank account
+      try {
+        const matches = await api.rawQuery(
+          `SELECT brm.id, brm.bank_transaction_id, brm.journal_entry_line_id, brm.match_type,
+                  bt.description AS bank_desc, bt.amount AS bank_amount, bt.date AS bank_date,
+                  je.description AS book_memo, (jel.debit - jel.credit) AS book_amount, je.date AS book_date
+           FROM bank_reconciliation_matches brm
+           JOIN bank_transactions bt ON bt.id = brm.bank_transaction_id
+           LEFT JOIN journal_entry_lines jel ON jel.id = brm.journal_entry_line_id
+           LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
+           WHERE bt.bank_account_id = ?
+           ORDER BY bt.date DESC`,
+          [selectedBankId]
+        );
+        setSavedMatches(Array.isArray(matches) ? matches : []);
+      } catch {
+        setSavedMatches([]);
       }
     } catch (err) {
       console.error('Failed to load reconciliation data:', err);
@@ -344,18 +365,36 @@ const ReconcileView: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-primary font-medium truncate max-w-[60%]">
+                        <span className="text-xs text-text-primary font-medium truncate max-w-[55%]">
                           {txn.description}
                         </span>
-                        <span
-                          className={`text-xs font-mono ${
-                            txn.amount >= 0
-                              ? 'text-accent-income'
-                              : 'text-accent-expense'
-                          }`}
-                        >
-                          {fmt.format(txn.amount)}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-xs font-mono ${
+                              txn.amount >= 0
+                                ? 'text-accent-income'
+                                : 'text-accent-expense'
+                            }`}
+                          >
+                            {fmt.format(txn.amount)}
+                          </span>
+                          <button
+                            className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm('Delete this bank transaction?')) return;
+                              try {
+                                await api.remove('bank_transactions', txn.id);
+                                setBankTxns((prev) => prev.filter((t) => t.id !== txn.id));
+                              } catch (err: any) {
+                                alert('Failed to delete: ' + (err?.message || 'Unknown error'));
+                              }
+                            }}
+                            title="Delete transaction"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
                       </div>
                       <span className="text-[10px] text-text-muted font-mono">
                         {formatDate(txn.date)}
@@ -437,6 +476,87 @@ const ReconcileView: React.FC = () => {
                 : !selectedBank && selectedBook
                   ? 'Now click a bank transaction on the left to match.'
                   : 'Matching...'}
+            </div>
+          )}
+
+          {/* Saved reconciliation matches (with unmatch) */}
+          {savedMatches.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                Saved Matches ({savedMatches.length})
+              </h3>
+              <div
+                className="block-card p-0 overflow-hidden"
+                style={{ borderRadius: '6px' }}
+              >
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-bg-tertiary border-b border-border-primary">
+                      <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                        Bank Transaction
+                      </th>
+                      <th className="text-right px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="text-center px-2 py-2 w-8" />
+                      <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                        Book Entry
+                      </th>
+                      <th className="text-right px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="text-center px-2 py-2 w-16" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedMatches.map((m: any) => (
+                      <tr
+                        key={m.id}
+                        className="border-b border-border-primary/50 hover:bg-bg-hover/30 transition-colors"
+                      >
+                        <td className="px-4 py-2 text-xs text-text-primary">
+                          <div>{m.bank_desc}</div>
+                          <div className="text-[10px] text-text-muted font-mono">
+                            {formatDate(m.bank_date)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
+                          {fmt.format(m.bank_amount ?? 0)}
+                        </td>
+                        <td className="text-center px-2 py-2">
+                          <Link2 size={12} className="text-accent-income" />
+                        </td>
+                        <td className="px-4 py-2 text-xs text-text-primary">
+                          <div>{m.book_memo || '(no memo)'}</div>
+                          <div className="text-[10px] text-text-muted font-mono">
+                            {formatDate(m.book_date)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
+                          {fmt.format(m.book_amount ?? 0)}
+                        </td>
+                        <td className="text-center px-2 py-2">
+                          <button
+                            className="block-btn text-[10px] text-accent-expense px-2 py-1"
+                            onClick={async () => {
+                              if (!window.confirm('Unmatch this pair? Both the bank transaction and book entry will become unmatched.')) return;
+                              try {
+                                await api.remove('bank_reconciliation_matches', m.id);
+                                await api.update('bank_transactions', m.bank_transaction_id, { status: 'pending', is_matched: 0 });
+                                loadTransactions();
+                              } catch (err: any) {
+                                alert('Failed to unmatch: ' + (err?.message || 'Unknown error'));
+                              }
+                            }}
+                          >
+                            Unmatch
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

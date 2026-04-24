@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Users, DollarSign, FileText, Calculator, Plus } from 'lucide-react';
+import { Users, DollarSign, FileText, Calculator, Plus, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import EmployeeList from './EmployeeList';
@@ -303,6 +303,26 @@ const PayrollModule: React.FC = () => {
                           <span className="block-badge block-badge-income text-[10px]">
                             {run.status ?? 'processed'}
                           </span>
+                          <button
+                            className="block-btn text-accent-expense hover:bg-accent-expense/10 flex items-center gap-1 text-[10px] px-2 py-1"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm('Delete this payroll run and all associated pay stubs? This cannot be undone.')) return;
+                              try {
+                                const stubs = await api.query('pay_stubs', { payroll_run_id: run.id });
+                                if (Array.isArray(stubs)) {
+                                  for (const s of stubs) await api.remove('pay_stubs', s.id);
+                                }
+                                await api.remove('payroll_runs', run.id);
+                                loadHistory();
+                              } catch (err: any) {
+                                alert('Failed to delete payroll run: ' + (err?.message || 'Unknown error'));
+                              }
+                            }}
+                            title="Delete this payroll run"
+                          >
+                            <Trash2 size={12} /> Void Run
+                          </button>
                         </div>
                       </div>
 

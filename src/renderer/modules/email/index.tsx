@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search } from 'lucide-react';
+import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -188,6 +188,7 @@ export default function EmailModule() {
                   <th>Type</th>
                   <th>Status</th>
                   <th>Sent</th>
+                  <th style={{ width: 40 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,6 +205,19 @@ export default function EmailModule() {
                       </span>
                     </td>
                     <td className="text-text-muted text-xs">{entry.sent_at}</td>
+                    <td>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                        onClick={async () => {
+                          if (!window.confirm('Delete this email log entry?')) return;
+                          await api.remove('email_log', entry.id);
+                          loadEmailLog();
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

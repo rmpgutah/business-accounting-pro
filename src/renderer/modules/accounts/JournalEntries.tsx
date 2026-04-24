@@ -209,16 +209,36 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                   {formatCurrency(entry.total_credit ?? 0)}
                 </td>
                 <td className="px-4 py-2 text-center">
-                  <span
-                    className={`inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                      entry.is_posted === 1
-                        ? 'bg-accent-income/15 text-accent-income'
-                        : 'bg-bg-tertiary text-text-muted'
-                    }`}
-                    style={{ borderRadius: '6px' }}
-                  >
-                    {entry.is_posted === 1 ? 'Posted' : 'Unposted'}
-                  </span>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span
+                      className={`inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                        entry.is_posted === 1
+                          ? 'bg-accent-income/15 text-accent-income'
+                          : 'bg-bg-tertiary text-text-muted'
+                      }`}
+                      style={{ borderRadius: '6px' }}
+                    >
+                      {entry.is_posted === 1 ? 'Posted' : 'Unposted'}
+                    </span>
+                    {entry.is_posted === 1 && (
+                      <button
+                        className="text-[10px] text-accent-blue hover:underline font-semibold"
+                        title="Unpost entry to make it editable"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!window.confirm('Unpost this journal entry? It will become editable again.')) return;
+                          try {
+                            await api.update('journal_entries', entry.id, { is_posted: 0 });
+                            setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, is_posted: 0 } : e));
+                          } catch (err: any) {
+                            alert('Failed to unpost: ' + (err?.message || 'Unknown error'));
+                          }
+                        }}
+                      >
+                        Unpost
+                      </button>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
                   <button

@@ -9,6 +9,7 @@ import {
   DollarSign,
   AlertCircle,
   Globe,
+  Trash2,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -352,6 +353,7 @@ const StripeSyncModule: React.FC = () => {
                   <th>Description</th>
                   <th>Status</th>
                   <th>Synced Date</th>
+                  <th style={{ width: 40 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -384,6 +386,19 @@ const StripeSyncModule: React.FC = () => {
                       {txn.synced_at
                         ? formatDate(txn.synced_at)
                         : '--'}
+                    </td>
+                    <td>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                        onClick={async () => {
+                          if (!window.confirm('Delete this synced transaction?')) return;
+                          await api.remove('stripe_transactions', txn.id);
+                          loadData();
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </td>
                   </tr>
                 ))}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -346,34 +346,28 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           >
             <Copy size={14} /> Duplicate
           </button>
-          {invoice.status === 'draft' && (
-            <button
-              className="block-btn flex items-center gap-2"
-              onClick={() => onEdit(invoiceId)}
-            >
-              <Edit size={14} />
-              Edit
-            </button>
-          )}
-          {invoice.status !== 'paid' && (
-            <>
-              <button
-                className="block-btn-primary flex items-center gap-2"
-                onClick={handleSendInvoice}
-                disabled={sending}
-              >
-                <Mail size={14} />
-                {sending ? 'Sending...' : 'Send Invoice'}
-              </button>
-              <button
-                className="block-btn-success flex items-center gap-2"
-                onClick={() => { setEditPaymentId(null); setShowPaymentModal(true); }}
-              >
-                <DollarSign size={14} />
-                Record Payment
-              </button>
-            </>
-          )}
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => onEdit(invoiceId)}
+          >
+            <Edit size={14} />
+            Edit
+          </button>
+          <button
+            className="block-btn-primary flex items-center gap-2"
+            onClick={handleSendInvoice}
+            disabled={sending}
+          >
+            <Mail size={14} />
+            {sending ? 'Sending...' : 'Send Invoice'}
+          </button>
+          <button
+            className="block-btn-success flex items-center gap-2"
+            onClick={() => { setEditPaymentId(null); setShowPaymentModal(true); }}
+          >
+            <DollarSign size={14} />
+            Record Payment
+          </button>
           {invoice.status === 'overdue' && (
             <button
               onClick={() => sendToCollections(invoice.id)}
@@ -629,13 +623,34 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                     {formatCurrency(p.amount)}
                   </td>
                   <td>
-                    <button
-                      className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
-                      onClick={() => { setEditPaymentId(p.id); setShowPaymentModal(true); }}
-                      title="Edit payment"
-                    >
-                      <Edit size={12} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                        onClick={() => { setEditPaymentId(p.id); setShowPaymentModal(true); }}
+                        title="Edit payment"
+                      >
+                        <Edit size={12} />
+                      </button>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                        onClick={async () => {
+                          if (!window.confirm('Delete this payment? The invoice balance will be recalculated.')) return;
+                          try {
+                            await api.remove('payments', p.id);
+                            const remainingPayments = await api.query('payments', { invoice_id: invoiceId });
+                            const newPaid = (remainingPayments || []).reduce((s: number, pay: any) => s + (pay.amount || 0), 0);
+                            const newStatus = newPaid >= (invoice?.total || 0) ? 'paid' : newPaid > 0 ? 'partial' : 'sent';
+                            await api.update('invoices', invoiceId, { amount_paid: newPaid, status: newStatus });
+                            loadData();
+                          } catch (err: any) {
+                            alert('Failed to delete payment: ' + (err?.message || 'Unknown error'));
+                          }
+                        }}
+                        title="Delete payment"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
