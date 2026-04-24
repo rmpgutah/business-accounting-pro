@@ -391,6 +391,10 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company_id)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id)",
   "CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id)",
+  // Pay stub deduction breakdown columns (2026-04-23)
+  "ALTER TABLE pay_stubs ADD COLUMN pretax_deductions REAL DEFAULT 0",
+  "ALTER TABLE pay_stubs ADD COLUMN posttax_deductions REAL DEFAULT 0",
+  "ALTER TABLE pay_stubs ADD COLUMN deduction_detail TEXT DEFAULT '{}'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

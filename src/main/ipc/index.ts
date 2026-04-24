@@ -1984,36 +1984,56 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('payroll:process', (_event, {
     periodStart, periodEnd, payDate,
     totalGross, totalTaxes, totalNet,
-    stubs, // Array<{ employeeId, hours, grossPay, federalTax, stateTax, ss, medicare, netPay, ytdGross, ytdTaxes, ytdNet }>
+    stubs, // Array<{ employeeId, hours, grossPay, federalTax, stateTax, ss, medicare, netPay, ytdGross, ytdTaxes, ytdNet, preTaxDeductions?, postTaxDeductions?, deductionDetail? }>
+    runType,
   }: any) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
 
+    // BUG 1: Check for duplicate payroll run
+    const existingRun = (dbInstance as any).prepare(
+      `SELECT id FROM payroll_runs WHERE company_id = ? AND pay_period_start = ? AND pay_period_end = ?`
+    ).get(companyId, periodStart, periodEnd) as any;
+    if (existingRun) {
+      return { error: 'A payroll run already exists for this period. Delete the existing run first to reprocess.' };
+    }
+
     const tx = (dbInstance as any).transaction(() => {
       const runId = uuid();
       (dbInstance as any).prepare(`
-        INSERT INTO payroll_runs (id, company_id, pay_period_start, pay_period_end, pay_date, status, total_gross, total_taxes, total_deductions, total_net)
-        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, 0, ?)
-      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet);
+        INSERT INTO payroll_runs (id, company_id, pay_period_start, pay_period_end, pay_date, status, total_gross, total_taxes, total_deductions, total_net, run_type)
+        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, 0, ?, ?)
+      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet, runType || 'regular');
 
       for (const s of stubs) {
         (dbInstance as any).prepare(`
-          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net)
-          VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
-        `).run(uuid(), runId, s.employeeId, s.hours, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet);
+          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net, pretax_deductions, posttax_deductions, deduction_detail)
+          VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuid(), runId, s.employeeId, s.hours, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}');
       }
 
-      postJournalEntry(dbInstance, companyId, payDate, `Payroll ${periodStart} to ${periodEnd}`, [
-        { nameHint: 'Wages', debit: totalGross, credit: 0, note: 'Gross wages expense' },
-        { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable to employees' },
-        { nameHint: 'Tax', debit: 0, credit: totalTaxes, note: 'Payroll taxes withheld' },
+      // BUG 4: Break out taxes into separate GL lines instead of single lumped "Tax" line
+      const totalFederalTax = stubs.reduce((sum: number, s: any) => sum + (s.federalTax || 0), 0);
+      const totalStateTax = stubs.reduce((sum: number, s: any) => sum + (s.stateTax || 0), 0);
+      const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
+      const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+
+      postJournalEntry(dbInstance, companyId, payDate, `Payroll - ${periodStart} to ${periodEnd}`, [
+        { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages' },
+        { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable' },
+        { nameHint: 'Federal Withholding', debit: 0, credit: totalFederalTax, note: 'Federal income tax withheld' },
+        { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
+        { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
+        { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
       ]);
 
       return { runId };
     });
 
-    return tx();
+    const result = tx();
+    scheduleAutoBackup();
+    return result;
   });
 
   // ─── Settings get / set ───────────────────────────────────

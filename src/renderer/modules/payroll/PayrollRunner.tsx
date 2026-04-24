@@ -95,7 +95,8 @@ function calcPayStub(
   emp: Employee,
   hoursOverride?: number,
   stateTaxOverride?: number,
-  empDeductions?: EmployeeDeduction[]
+  empDeductions?: EmployeeDeduction[],
+  runType?: string
 ): PayCalc {
   const periods = PAY_PERIODS_MAP[emp.pay_schedule] ?? 26;
   const defaultHours = DEFAULT_HOURS_MAP[emp.pay_schedule] ?? 80;
@@ -124,12 +125,19 @@ function calcPayStub(
   // Taxable gross (after pre-tax deductions)
   const taxableGross = Math.max(0, gross_pay - pre_tax_deductions);
 
-  // Annualized taxable gross for tax bracket lookup
+  // Annualized taxable gross for tax bracket + SS wage base
   const annualTaxableGross = taxableGross * periods;
 
-  // Federal tax (per period, on taxable gross)
-  const federalAnnual = calcFederalTaxAnnual(annualTaxableGross);
-  const federal_tax = federalAnnual / periods;
+  // Federal tax
+  let federal_tax: number;
+  if (runType === 'bonus') {
+    // IRS supplemental wage rate: flat 22% for most employees
+    federal_tax = taxableGross * 0.22;
+  } else {
+    // Standard bracket-based calculation
+    const federalAnnual = calcFederalTaxAnnual(annualTaxableGross);
+    federal_tax = federalAnnual / periods;
+  }
 
   // State tax: use engine result if provided, else flat fallback on taxable gross
   const state_tax = stateTaxOverride !== undefined
@@ -289,9 +297,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   // ─── Calculations ─────────────────────────────────────
   const calculations = useMemo(() => {
     return employees.map((emp) =>
-      calcPayStub(emp, hoursMap[emp.id], stateTaxMap[emp.id], deductionsByEmployee[emp.id])
+      calcPayStub(emp, hoursMap[emp.id], stateTaxMap[emp.id], deductionsByEmployee[emp.id], runType)
     );
-  }, [employees, hoursMap, stateTaxMap, deductionsByEmployee]);
+  }, [employees, hoursMap, stateTaxMap, deductionsByEmployee, runType]);
 
   const totals = useMemo(() => {
     return calculations.reduce(
@@ -350,11 +358,14 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
             ytdGross: ytd.ytd_gross + calc.gross_pay,
             ytdTaxes: ytd.ytd_taxes + totalWithholding,
             ytdNet: ytd.ytd_net + calc.net_pay,
+            preTaxDeductions: calc.pre_tax_deductions,
+            postTaxDeductions: calc.post_tax_deductions,
+            deductionDetail: '{}',
           };
         })
       );
 
-      await (api.processPayroll as any)({
+      const result = await (api.processPayroll as any)({
         periodStart,
         periodEnd,
         payDate,
@@ -364,6 +375,11 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         stubs,
         runType,
       });
+
+      // BUG 1: Handle duplicate payroll run error
+      if (result?.error) {
+        throw new Error(result.error);
+      }
 
       onComplete();
     } catch (err: any) {
@@ -491,6 +507,32 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
               {periodStart} to {periodEnd} &mdash; Pay Date: {payDate}
             </div>
           </div>
+
+          {/* Auto-fill hours from time entries for hourly employees */}
+          {employees.some((e) => e.pay_type === 'hourly') && (
+            <div className="flex justify-end">
+              <button
+                className="block-btn text-xs"
+                onClick={async () => {
+                  if (!periodStart || !periodEnd) return;
+                  const newHoursMap: Record<string, number> = {};
+                  for (const emp of employees.filter(e => e.pay_type === 'hourly')) {
+                    try {
+                      const entries = await api.rawQuery(
+                        'SELECT COALESCE(SUM(hours), 0) as total FROM time_entries WHERE employee_id = ? AND date BETWEEN ? AND ?',
+                        [emp.id, periodStart, periodEnd]
+                      );
+                      const total = Array.isArray(entries) ? (entries[0]?.total || 0) : 0;
+                      if (total > 0) newHoursMap[emp.id] = total;
+                    } catch { /* ignore — fallback to manual entry */ }
+                  }
+                  setHoursMap(prev => ({ ...prev, ...newHoursMap }));
+                }}
+              >
+                Auto-Fill from Time Entries
+              </button>
+            </div>
+          )}
 
           <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
             <table className="block-table">

@@ -22,6 +22,9 @@ interface PayStub {
   social_security: number;
   medicare: number;
   net_pay: number;
+  pretax_deductions?: number;
+  posttax_deductions?: number;
+  deduction_detail?: string;
 }
 
 interface YtdTotals {
@@ -291,13 +294,56 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
                 <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.medicare)}</td>
                 <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.medicare)}</td>
               </tr>
+              {/* Pre-tax / Post-tax deduction breakdown */}
+              {((stub.pretax_deductions ?? 0) > 0 || (stub.posttax_deductions ?? 0) > 0) && (
+                <>
+                  {(stub.pretax_deductions ?? 0) > 0 && (
+                    <tr>
+                      <td className="py-1.5 text-text-primary">Pre-Tax Deductions</td>
+                      <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.pretax_deductions!)}</td>
+                      <td className="py-1.5 text-right font-mono text-text-secondary">--</td>
+                    </tr>
+                  )}
+                  {(stub.posttax_deductions ?? 0) > 0 && (
+                    <tr>
+                      <td className="py-1.5 text-text-primary">Post-Tax Deductions</td>
+                      <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.posttax_deductions!)}</td>
+                      <td className="py-1.5 text-right font-mono text-text-secondary">--</td>
+                    </tr>
+                  )}
+                </>
+              )}
               <tr className="border-t border-border-primary font-semibold">
                 <td className="py-1.5 text-text-primary">Total Deductions</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(totalDeductions)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(totalDeductions + (stub.pretax_deductions ?? 0) + (stub.posttax_deductions ?? 0))}</td>
                 <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytdTotalDeductions)}</td>
               </tr>
             </tbody>
           </table>
+
+          {/* Itemized deduction detail */}
+          {stub.deduction_detail && stub.deduction_detail !== '{}' && (() => {
+            try {
+              const detail = JSON.parse(stub.deduction_detail);
+              const entries = Object.entries(detail);
+              if (entries.length === 0) return null;
+              return (
+                <div className="mt-3 pt-3 border-t border-border-primary">
+                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Deduction Detail</div>
+                  <div className="space-y-1">
+                    {entries.map(([name, amount]) => (
+                      <div key={name} className="flex justify-between text-xs">
+                        <span className="text-text-muted">{name}</span>
+                        <span className="font-mono text-text-primary">{formatCurrency(Number(amount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            } catch {
+              return null;
+            }
+          })()}
         </div>
 
         {/* Net Pay */}

@@ -212,8 +212,9 @@ const api = {
   processPayroll: (args: {
     periodStart: string; periodEnd: string; payDate: string;
     totalGross: number; totalTaxes: number; totalNet: number;
-    stubs: Array<{ employeeId: string; hours: number; grossPay: number; federalTax: number; stateTax: number; ss: number; medicare: number; netPay: number; ytdGross: number; ytdTaxes: number; ytdNet: number }>;
-  }): Promise<{ runId: string }> =>
+    stubs: Array<{ employeeId: string; hours: number; grossPay: number; federalTax: number; stateTax: number; ss: number; medicare: number; netPay: number; ytdGross: number; ytdTaxes: number; ytdNet: number; preTaxDeductions?: number; postTaxDeductions?: number; deductionDetail?: string }>;
+    runType?: string;
+  }): Promise<{ runId: string; error?: string }> =>
     window.electronAPI.invoke('payroll:process', args),
 
   // Payroll YTD
