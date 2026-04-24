@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Printer, Download } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -91,7 +91,7 @@ const ExpenseByCategory: React.FC = () => {
         const rows: any[] = await api.rawQuery(
           `SELECT
              COALESCE(a.subtype, 'Uncategorized') AS category,
-             COALESCE(SUM(ABS(jel.debit - jel.credit)), 0) AS amount
+             ABS(COALESCE(SUM(jel.debit - jel.credit), 0)) AS amount
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
@@ -165,18 +165,12 @@ const ExpenseByCategory: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => window.print()}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
             title="Print"
           >
             <Printer size={15} />
-          </button>
-          <button
-            className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
-            title="Export"
-          >
-            <Download size={15} />
           </button>
         </div>
       </div>

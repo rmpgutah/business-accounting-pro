@@ -4,6 +4,7 @@ import { format, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Types ──────────────────────────────────────────────
 interface AccountLine {
@@ -303,6 +304,7 @@ const BalanceSheet: React.FC = () => {
             </div>
           )}
           <button
+            onClick={() => window.print()}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
             title="Print"
@@ -310,9 +312,26 @@ const BalanceSheet: React.FC = () => {
             <Printer size={15} />
           </button>
           <button
+            onClick={() => {
+              const rows: Array<Record<string, any>> = [];
+              const section = (name: string, items: AccountLine[]) => {
+                rows.push({ section: name, account: '', balance: '' });
+                for (const a of items) rows.push({ section: '', account: a.account_name, balance: a.balance });
+              };
+              section('Current Assets', data.currentAssets);
+              section('Fixed Assets', data.fixedAssets);
+              rows.push({ section: 'Total Assets', account: '', balance: totalAssets });
+              section('Current Liabilities', data.currentLiabilities);
+              section('Long-Term Liabilities', data.longTermLiabilities);
+              rows.push({ section: 'Total Liabilities', account: '', balance: totalLiabilities });
+              section('Equity', data.equity);
+              rows.push({ section: 'Total Equity', account: '', balance: totalEquity });
+              rows.push({ section: 'Total Liabilities & Equity', account: '', balance: totalLiabilitiesAndEquity });
+              downloadCSVBlob(rows, `balance-sheet-${asOfDate}.csv`);
+            }}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
-            title="Export"
+            title="Export CSV"
           >
             <Download size={15} />
           </button>

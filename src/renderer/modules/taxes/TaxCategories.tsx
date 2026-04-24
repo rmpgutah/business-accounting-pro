@@ -82,7 +82,7 @@ const TaxCategories: React.FC = () => {
   const seedDefaults = async () => {
     try {
       for (const cat of DEFAULT_CATEGORIES) {
-        await api.create('tax_categories', cat);
+        await api.create('tax_categories', { ...cat, company_id: activeCompany?.id });
       }
       await loadCategories();
       setOpSuccess('Default categories created'); setTimeout(() => setOpSuccess(''), 3000);
@@ -104,7 +104,7 @@ const TaxCategories: React.FC = () => {
       if (editingId) {
         await api.update('tax_categories', editingId, formData);
       } else {
-        await api.create('tax_categories', formData);
+        await api.create('tax_categories', { ...formData, company_id: activeCompany?.id });
       }
       setFormData(defaultForm);
       setFormError('');

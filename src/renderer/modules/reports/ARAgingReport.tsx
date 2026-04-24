@@ -4,6 +4,7 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -150,6 +151,7 @@ const ARAgingReport: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => window.print()}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
             title="Print"
@@ -157,9 +159,21 @@ const ARAgingReport: React.FC = () => {
             <Printer size={15} />
           </button>
           <button
+            onClick={() => {
+              downloadCSVBlob(
+                entries.map((e) => ({
+                  invoice_number: e.invoiceNumber,
+                  client: e.clientName,
+                  amount_due: e.amountDue.toFixed(2),
+                  days_outstanding: e.daysOutstanding,
+                  bucket: BUCKET_LABELS[e.bucket as BucketKey],
+                })),
+                `ar-aging-${format(new Date(), 'yyyy-MM-dd')}.csv`
+              );
+            }}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
-            title="Export"
+            title="Export CSV"
           >
             <Download size={15} />
           </button>

@@ -11,7 +11,7 @@ interface Vendor {
   email?: string;
   phone?: string;
   status?: string;
-  payment_terms?: string;
+  payment_terms?: number;
 }
 
 interface VendorListProps {
@@ -146,7 +146,7 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
                       {formatStatus(v.status).label}
                     </span>
                   </td>
-                  <td className="text-text-secondary">{v.payment_terms || '-'}</td>
+                  <td className="text-text-secondary">{v.payment_terms ? `Net ${v.payment_terms}` : '-'}</td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button

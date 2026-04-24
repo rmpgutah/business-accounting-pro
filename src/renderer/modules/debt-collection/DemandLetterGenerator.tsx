@@ -13,9 +13,8 @@ interface Template {
   id: string;
   name: string;
   severity: string;
-  description: string;
-  subject_template: string;
-  body_template: string;
+  subject: string;
+  body: string;
 }
 
 interface Debt {
@@ -38,6 +37,13 @@ function mergeFields(
   debt: Debt,
   companyName: string
 ): string {
+  const totalDue = (debt.balance_due || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0);
+  const delinquent = debt.delinquent_date ? new Date(debt.delinquent_date) : null;
+  const daysOverdue = delinquent && !isNaN(delinquent.getTime())
+    ? Math.max(0, Math.floor((Date.now() - delinquent.getTime()) / 86400000))
+    : 0;
+  const demandDeadline = new Date(Date.now() + 14 * 86400000);
+  const demandDeadlineIso = demandDeadline.toISOString().slice(0, 10);
   return text
     .replace(/\{\{debtor_name\}\}/g, debt.debtor_name || '')
     .replace(/\{\{debtor_email\}\}/g, debt.debtor_email || '')
@@ -46,8 +52,11 @@ function mergeFields(
     .replace(/\{\{balance_due\}\}/g, formatCurrency(debt.balance_due))
     .replace(/\{\{interest_accrued\}\}/g, formatCurrency(debt.interest_accrued))
     .replace(/\{\{fees_accrued\}\}/g, formatCurrency(debt.fees_accrued))
+    .replace(/\{\{total_due\}\}/g, formatCurrency(totalDue))
     .replace(/\{\{due_date\}\}/g, formatDate(debt.due_date))
     .replace(/\{\{delinquent_date\}\}/g, formatDate(debt.delinquent_date))
+    .replace(/\{\{days_overdue\}\}/g, String(daysOverdue))
+    .replace(/\{\{demand_deadline\}\}/g, formatDate(demandDeadlineIso))
     .replace(/\{\{jurisdiction\}\}/g, debt.jurisdiction || '')
     .replace(/\{\{company_name\}\}/g, companyName)
     .replace(/\{\{current_date\}\}/g, formatDate(new Date().toISOString()));
@@ -118,12 +127,12 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   // ── Preview text ──
   const previewSubject = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.subject_template || '', debt, companyName);
+    return mergeFields(selectedTemplate.subject || '', debt, companyName);
   }, [selectedTemplate, debt, companyName]);
 
   const previewBody = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.body_template || '', debt, companyName);
+    return mergeFields(selectedTemplate.body || '', debt, companyName);
   }, [selectedTemplate, debt, companyName]);
 
   // ── Generate & Log ──
@@ -235,11 +244,6 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                 >
                   {tpl.severity}
                 </span>
-                {tpl.description && (
-                  <p className="text-xs text-text-muted mt-2 line-clamp-2">
-                    {tpl.description}
-                  </p>
-                )}
               </button>
             );
           })}

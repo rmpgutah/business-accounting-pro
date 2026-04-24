@@ -21,7 +21,7 @@ interface Account {
   type: AccountType;
   subtype: string;
   description: string;
-  parent_account_id: string | null;
+  parent_id: string | null;
   is_active: boolean;
   balance: number;
 }

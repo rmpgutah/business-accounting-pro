@@ -106,9 +106,9 @@ const STATUS_OPTIONS = [
   'filed',
   'served',
   'hearing_scheduled',
+  'in_progress',
   'judgment',
   'appeal',
-  'settled',
   'closed',
 ];
 

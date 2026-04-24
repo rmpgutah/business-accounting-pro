@@ -112,6 +112,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
         id = editBudgetId;
       } else {
         const result = await api.create('budgets', {
+          company_id: activeCompany?.id,
           name: name.trim(),
           period,
           start_date: startDate,

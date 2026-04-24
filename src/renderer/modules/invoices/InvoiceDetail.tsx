@@ -23,7 +23,6 @@ interface Invoice {
   amount_paid: number;
   status: InvoiceStatus;
   terms: string;
-  terms_text: string;
   notes: string;
   po_number?: string;
   job_reference?: string;
@@ -61,8 +60,13 @@ interface Client {
   id: string;
   name: string;
   email?: string;
-  address?: string;
   phone?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
 }
 
 interface Payment {
@@ -70,7 +74,7 @@ interface Payment {
   invoice_id: string;
   amount: number;
   date: string;
-  method: string;
+  payment_method: string;
   reference: string;
 }
 
@@ -439,9 +443,17 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <div className="space-y-1 text-sm">
                 <p className="text-text-primary font-semibold text-base">{client.name}</p>
                 {client.email && <p className="text-text-secondary">{client.email}</p>}
-                {client.address && (
-                  <p className="text-text-muted whitespace-pre-line">{client.address}</p>
-                )}
+                {(() => {
+                  const addr = [
+                    client.address_line1,
+                    client.address_line2,
+                    [client.city, client.state, client.zip].filter(Boolean).join(', '),
+                    client.country && client.country !== 'US' ? client.country : '',
+                  ].filter(Boolean);
+                  return addr.length > 0 ? (
+                    <p className="text-text-muted whitespace-pre-line">{addr.join('\n')}</p>
+                  ) : null;
+                })()}
                 {client.phone && <p className="text-text-muted">{client.phone}</p>}
               </div>
             ) : (
@@ -561,30 +573,18 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </div>
         )}
 
-        {/* Notes & Terms */}
-        {(invoice.notes || invoice.terms_text) && (
+        {/* Notes */}
+        {invoice.notes && (
           <div
             className="grid grid-cols-2 gap-6 mt-8 pt-6"
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
           >
-            {invoice.notes && (
-              <div>
-                <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
-                  Notes
-                </span>
-                <p className="text-sm text-text-secondary whitespace-pre-line">{invoice.notes}</p>
-              </div>
-            )}
-            {invoice.terms_text && (
-              <div>
-                <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
-                  Terms & Conditions
-                </span>
-                <p className="text-sm text-text-secondary whitespace-pre-line">
-                  {invoice.terms_text}
-                </p>
-              </div>
-            )}
+            <div>
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
+                Notes
+              </span>
+              <p className="text-sm text-text-secondary whitespace-pre-line">{invoice.notes}</p>
+            </div>
           </div>
         )}
       </div>
@@ -615,7 +615,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               {payments.map((p) => (
                 <tr key={p.id}>
                   <td className="text-text-secondary">{p.date}</td>
-                  <td className="text-text-secondary capitalize">{p.method}</td>
+                  <td className="text-text-secondary capitalize">{p.payment_method}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
                     {formatCurrency(p.amount)}

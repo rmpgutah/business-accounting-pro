@@ -23,11 +23,11 @@ const TopBar: React.FC = () => {
   // Cmd+K / Ctrl+K shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.shiftKey) {
         e.preventDefault();
         setSearchOpen(true);
       }
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && searchOpen) {
         setSearchOpen(false);
         setLocalQuery('');
         setSearchQuery('');
@@ -36,13 +36,13 @@ const TopBar: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setSearchOpen, setSearchQuery, setSearchResults]);
+  }, [searchOpen, setSearchOpen, setSearchQuery, setSearchResults]);
 
   // Focus input when modal opens
   useEffect(() => {
-    if (searchOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!searchOpen) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [searchOpen]);
 
   // Debounced search
@@ -135,6 +135,7 @@ const TopBar: React.FC = () => {
         {/* Right — User + Notifications + Logout */}
         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
+            aria-label="Notifications"
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '4px' }}
           >
@@ -210,6 +211,7 @@ const TopBar: React.FC = () => {
                 onChange={(e) => handleSearchInput(e.target.value)}
               />
               <button
+                aria-label="Close search"
                 onClick={closeSearch}
                 className="p-1 text-text-muted hover:text-text-primary"
                 style={{ borderRadius: '4px' }}

@@ -148,7 +148,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
           if (!cancelled && Array.isArray(expenseData)) {
             const map: Record<string, number> = {};
             for (const row of expenseData) {
-              if (row.category) map[row.category.toLowerCase()] = row.total || 0;
+              if (row.category) map[String(row.category).toLowerCase()] = Number(row.total) || 0;
             }
             setActuals(map);
           }
@@ -181,7 +181,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
 
   const linesWithActual: LineWithActual[] = useMemo(() => {
     return lines.map((line) => {
-      const actual = actuals[line.category.toLowerCase()] || 0;
+      const actual = actuals[(line.category || '').toLowerCase()] || 0;
       const remaining = line.amount - actual;
       const percentUsed = line.amount > 0 ? (actual / line.amount) * 100 : 0;
       const variance = line.amount - actual;

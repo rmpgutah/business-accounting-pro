@@ -174,7 +174,7 @@ const ImportTransactions: React.FC = () => {
         // set is_matched default so bank reconciliation queries work correctly.
         await api.create('bank_transactions', {
           bank_account_id: selectedBankId,
-          transaction_date: row.date,
+          date: row.date,
           description: row.description,
           amount: row.amount,
           type: row.amount >= 0 ? 'credit' : 'debit',

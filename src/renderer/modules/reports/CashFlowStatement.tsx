@@ -4,6 +4,7 @@ import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -115,11 +116,11 @@ const CashFlowStatement: React.FC = () => {
       setError('');
 
       try {
-        // Operating: revenue received (invoices amount_paid)
+        // Operating: cash received via payments on invoices (actual cash in during period)
         const revenueRows: any[] = await api.rawQuery(
-          `SELECT COALESCE(SUM(amount_paid), 0) as total
-           FROM invoices
-           WHERE company_id = ? AND issue_date BETWEEN ? AND ?`,
+          `SELECT COALESCE(SUM(p.amount), 0) as total
+           FROM payments p
+           WHERE p.company_id = ? AND p.date BETWEEN ? AND ?`,
           [activeCompany.id, startDate, endDate]
         );
         const operatingInflows = Number(revenueRows?.[0]?.total) || 0;
@@ -137,7 +138,7 @@ const CashFlowStatement: React.FC = () => {
         const investRows: any[] = await api.rawQuery(
           `SELECT COALESCE(SUM(unit_cost * quantity), 0) as total
            FROM inventory_items
-           WHERE company_id = ? AND is_asset = 1 AND created_at BETWEEN ? AND ?`,
+           WHERE company_id = ? AND is_asset = 1 AND date(created_at) BETWEEN ? AND ?`,
           [activeCompany.id, startDate, endDate]
         );
         const investingOutflows = Number(investRows?.[0]?.total) || 0;
@@ -268,6 +269,7 @@ const CashFlowStatement: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => window.print()}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
             title="Print"
@@ -275,9 +277,24 @@ const CashFlowStatement: React.FC = () => {
             <Printer size={15} />
           </button>
           <button
+            onClick={() => {
+              downloadCSVBlob([
+                { line: 'Cash received from customers', amount: data.operatingInflows },
+                { line: 'Cash paid for expenses', amount: -data.operatingOutflows },
+                { line: 'Net Operating', amount: netOperating },
+                { line: 'Purchase of assets', amount: -data.investingOutflows },
+                { line: 'Net Investing', amount: netInvesting },
+                { line: 'Owner equity contributions', amount: data.financingEquityIn },
+                { line: 'Owner draws', amount: -data.financingDraws },
+                { line: 'Net Financing', amount: netFinancing },
+                { line: 'Net Change in Cash', amount: netChange },
+                { line: 'Beginning Cash', amount: data.beginningCash },
+                { line: 'Ending Cash', amount: endingCash },
+              ], `cash-flow-${startDate}-to-${endDate}.csv`);
+            }}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
-            title="Export"
+            title="Export CSV"
           >
             <Download size={15} />
           </button>

@@ -153,7 +153,7 @@ const TaxDashboard: React.FC = () => {
       return {
         ...q,
         amount: quarterlyAmount,
-        paid: paidAmount >= quarterlyAmount,
+        paid: quarterlyAmount > 0 && paidAmount >= quarterlyAmount,
         paidAmount,
       } as QuarterPayment;
     });

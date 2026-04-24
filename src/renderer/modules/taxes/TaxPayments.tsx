@@ -95,7 +95,7 @@ const TaxPayments: React.FC = () => {
 
   useEffect(() => {
     loadPayments();
-  }, []);
+  }, [activeCompany]);
 
   const handleSort = (f: SortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
 
@@ -136,6 +136,7 @@ const TaxPayments: React.FC = () => {
     setSaving(true);
     try {
       const payload = {
+        company_id: activeCompany?.id,
         type: formData.type,
         amount,
         date: formData.date,

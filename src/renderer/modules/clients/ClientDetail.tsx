@@ -315,7 +315,7 @@ const InvoicesTable: React.FC<{ data: any[] }> = ({ data }) => (
       {data.map((inv) => (
         <tr key={inv.id}>
           <td className="font-mono text-text-primary">{inv.invoice_number ?? inv.id}</td>
-          <td className="text-text-secondary text-xs">{inv.date ?? inv.created_at ?? '--'}</td>
+          <td className="text-text-secondary text-xs">{inv.issue_date ?? inv.date ?? inv.created_at ?? '--'}</td>
           <td>
             <span
               className={`block-badge ${

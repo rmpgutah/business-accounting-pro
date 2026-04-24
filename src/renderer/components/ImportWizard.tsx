@@ -43,7 +43,10 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
       setMapping(autoMap);
       setStep(2);
     };
+    reader.onerror = () => { setError('Failed to read file. Please try again.'); };
     reader.readAsText(file);
+    // Reset so the same file can be picked again
+    e.target.value = '';
   };
 
   const handleImport = async () => {

@@ -83,7 +83,12 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
            FROM debts d
            LEFT JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL
            WHERE d.company_id = ? AND d.status NOT IN (?, ?)
-           ORDER BY d.priority DESC, d.created_at`,
+           ORDER BY CASE d.priority
+             WHEN 'critical' THEN 1
+             WHEN 'high' THEN 2
+             WHEN 'medium' THEN 3
+             WHEN 'low' THEN 4
+             ELSE 5 END, d.created_at`,
           [activeCompany.id, 'settled', 'written_off']
         );
         if (cancelled) return;

@@ -303,7 +303,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
         // Critical: categories + accounts needed for form validation
         const [catData, accData] = await Promise.all([
-          api.query('categories', { company_id: cid }),
+          api.query('categories', { company_id: cid, type: 'expense' }),
           api.query('accounts', { company_id: cid, type: 'expense' }),
         ]);
         if (cancelled) return;

@@ -11,7 +11,7 @@ interface Budget {
   period: 'monthly' | 'quarterly' | 'annual';
   start_date: string;
   end_date: string;
-  status: 'draft' | 'active' | 'closed';
+  status: 'active' | 'closed';
 }
 
 interface BudgetListProps {
