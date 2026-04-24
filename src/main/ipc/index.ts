@@ -351,9 +351,90 @@ function seedDefaultCategories(companyId: string): { seeded: boolean; count: num
 }
 
 // ─── Journal Entry Auto-Poster ────────────────────────────
-// Posts a balanced journal entry when the required accounts are found.
-// Silently no-ops if any account is missing — best-effort for companies
-// that haven't configured a full chart of accounts.
+// ─── Account Lookup (multi-strategy) ─────────────────────
+// Tries multiple strategies to find an account by name hint:
+// 1. Exact name match
+// 2. LIKE name match
+// 3. Alias mapping (common name → default account names)
+// 4. Type + subtype fallback
+const ACCOUNT_ALIASES: Record<string, string[]> = {
+  'Cash':                  ['Cash', 'Checking Account', 'Bank Account'],
+  'Receivable':            ['Accounts Receivable', 'Trade Receivable', 'A/R'],
+  'Payable':               ['Accounts Payable', 'Trade Payable', 'A/P'],
+  'Wages Expense':         ['Payroll Expense', 'Wages Expense', 'Salary Expense', 'Wage Expense'],
+  'Wages Payable':         ['Payroll Liabilities', 'Wages Payable', 'Salary Payable', 'Payroll Payable'],
+  'Federal Withholding':   ['Federal Tax Payable', 'Federal Withholding', 'Federal Income Tax Payable'],
+  'State Withholding':     ['State Tax Payable', 'State Withholding', 'State Income Tax Payable'],
+  'Social Security Payable': ['Payroll Liabilities', 'Social Security Payable', 'FICA Payable', 'Payroll Tax Expense'],
+  'Medicare Payable':      ['Payroll Liabilities', 'Medicare Payable', 'FICA Payable', 'Payroll Tax Expense'],
+  'Revenue':               ['Service Revenue', 'Sales Revenue', 'Revenue', 'Consulting Revenue', 'Project Revenue', 'Income'],
+  'Expense':               ['Cost of Services', 'General Expense', 'Operating Expense', 'Miscellaneous Expense'],
+};
+
+const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> = {
+  'Cash':                  { type: 'asset', subtype: 'current' },
+  'Receivable':            { type: 'asset', subtype: 'current' },
+  'Payable':               { type: 'liability', subtype: 'current' },
+  'Wages Expense':         { type: 'expense', subtype: 'payroll' },
+  'Wages Payable':         { type: 'liability', subtype: 'current' },
+  'Federal Withholding':   { type: 'liability', subtype: 'current' },
+  'State Withholding':     { type: 'liability', subtype: 'current' },
+  'Social Security Payable': { type: 'liability', subtype: 'current' },
+  'Medicare Payable':      { type: 'liability', subtype: 'current' },
+  'Revenue':               { type: 'revenue' },
+  'Expense':               { type: 'expense' },
+};
+
+function findAccount(dbInstance: any, companyId: string, nameHint: string): string | null {
+  // Strategy 1: Exact name match
+  let acct = dbInstance.prepare(
+    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
+  ).get(companyId, nameHint) as any;
+  if (acct) return acct.id;
+
+  // Strategy 2: LIKE match
+  acct = dbInstance.prepare(
+    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? LIMIT 1`
+  ).get(companyId, `%${nameHint}%`) as any;
+  if (acct) return acct.id;
+
+  // Strategy 3: Try known aliases
+  const aliases = ACCOUNT_ALIASES[nameHint];
+  if (aliases) {
+    for (const alias of aliases) {
+      acct = dbInstance.prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
+      ).get(companyId, alias) as any;
+      if (acct) return acct.id;
+    }
+    // Try LIKE with each alias
+    for (const alias of aliases) {
+      acct = dbInstance.prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? LIMIT 1`
+      ).get(companyId, `%${alias}%`) as any;
+      if (acct) return acct.id;
+    }
+  }
+
+  // Strategy 4: Fall back to type + subtype
+  const fallback = ACCOUNT_TYPE_FALLBACK[nameHint];
+  if (fallback) {
+    const query = fallback.subtype
+      ? `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? AND subtype = ? ORDER BY code LIMIT 1`
+      : `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? ORDER BY code LIMIT 1`;
+    const params = fallback.subtype
+      ? [companyId, fallback.type, fallback.subtype]
+      : [companyId, fallback.type];
+    acct = dbInstance.prepare(query).get(...params) as any;
+    if (acct) return acct.id;
+  }
+
+  return null;
+}
+
+// Posts a balanced journal entry using multi-strategy account lookup.
+// Silently no-ops if any required account is missing — best-effort for
+// companies that haven't configured a full chart of accounts.
 function postJournalEntry(
   dbInstance: ReturnType<typeof db.getDb>,
   companyId: string,
@@ -361,13 +442,15 @@ function postJournalEntry(
   description: string,
   lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>
 ): void {
+  // Skip lines with zero amounts
+  const nonZero = lines.filter(l => l.debit > 0 || l.credit > 0);
+  if (nonZero.length === 0) return;
+
   const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
-  for (const line of lines) {
-    const acct = (dbInstance as any).prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? LIMIT 1`
-    ).get(companyId, `%${line.nameHint}%`) as any;
-    if (!acct) return; // skip whole entry if any account is missing
-    resolved.push({ accountId: acct.id, debit: line.debit, credit: line.credit, note: line.note ?? '' });
+  for (const line of nonZero) {
+    const accountId = findAccount(dbInstance as any, companyId, line.nameHint);
+    if (!accountId) return; // skip whole entry if any account is missing
+    resolved.push({ accountId, debit: line.debit, credit: line.credit, note: line.note ?? '' });
   }
 
   const lastJE = (dbInstance as any).prepare(
@@ -627,6 +710,20 @@ export function registerIpcHandlers(): void {
 
       const savedId = saveFn();
       if (companyId) db.logAudit(companyId, 'invoices', savedId, isEdit ? 'update' : 'create');
+
+      // Auto-post JE for new invoices: DR Receivable / CR Revenue
+      if (!isEdit && companyId) {
+        const total = Number(invoiceData.total || invoiceData.subtotal) || 0;
+        if (total > 0) {
+          const invoiceNum = invoiceData.invoice_number || savedId.substring(0, 8);
+          postJournalEntry(rawDb, companyId, invoiceData.issue_date || new Date().toISOString().slice(0, 10),
+            `Invoice created - #${invoiceNum}`, [
+              { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${invoiceNum}` },
+              { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${invoiceNum}` },
+            ]);
+        }
+      }
+
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
@@ -713,6 +810,21 @@ export function registerIpcHandlers(): void {
 
       const savedId = saveFn();
       if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
+
+      // Auto-post JE for new expenses: DR Expense / CR Cash (or Payable)
+      if (!isEdit && companyId) {
+        const amount = Number(expenseData.amount) || 0;
+        if (amount > 0) {
+          const desc = expenseData.description || 'Expense';
+          const isPaid = expenseData.status === 'paid';
+          postJournalEntry(rawDb, companyId, expenseData.date || new Date().toISOString().slice(0, 10),
+            `Expense recorded - ${desc}`, [
+              { nameHint: 'Expense', debit: amount, credit: 0, note: desc },
+              { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
+            ]);
+        }
+      }
+
       scheduleAutoBackup();
       return { id: savedId };
     } catch (err) {
@@ -1922,6 +2034,93 @@ export function registerIpcHandlers(): void {
       }
     }
     return 'JE-1001';
+  });
+
+  // ─── GL Rebuild (retro-post missing journal entries) ──────
+  // Scans all invoices, expenses, payments, and payroll runs,
+  // posts JEs for any that don't have corresponding entries.
+  ipcMain.handle('gl:rebuild', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    const dbInstance = db.getDb();
+    let posted = 0;
+
+    // Track which invoices/expenses already have JEs (by description pattern)
+    const existingDescs = new Set<string>();
+    const allJEs = dbInstance.prepare(
+      `SELECT description FROM journal_entries WHERE company_id = ?`
+    ).all(companyId) as any[];
+    for (const je of allJEs) {
+      if (je.description) existingDescs.add(je.description);
+    }
+
+    // 1. Invoices → DR Receivable / CR Revenue
+    const invoices = dbInstance.prepare(
+      `SELECT id, invoice_number, issue_date, total, subtotal FROM invoices WHERE company_id = ? AND status != 'draft'`
+    ).all(companyId) as any[];
+    for (const inv of invoices) {
+      const desc = `Invoice created - #${inv.invoice_number || inv.id.substring(0, 8)}`;
+      if (existingDescs.has(desc)) continue;
+      const total = Number(inv.total || inv.subtotal) || 0;
+      if (total <= 0) continue;
+      postJournalEntry(dbInstance, companyId, inv.issue_date || new Date().toISOString().slice(0, 10), desc, [
+        { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${inv.invoice_number || ''}` },
+        { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${inv.invoice_number || ''}` },
+      ]);
+      posted++;
+    }
+
+    // 2. Invoice payments → DR Cash / CR Receivable (already handled by record-payment, but catch old ones)
+    const payments = dbInstance.prepare(
+      `SELECT p.*, i.invoice_number FROM payments p LEFT JOIN invoices i ON p.invoice_id = i.id WHERE p.company_id = ?`
+    ).all(companyId) as any[];
+    for (const p of payments) {
+      const desc = `Payment received - ${p.invoice_number || p.invoice_id?.substring(0, 8) || ''}`;
+      if (existingDescs.has(desc)) continue;
+      const amount = Number(p.amount) || 0;
+      if (amount <= 0) continue;
+      postJournalEntry(dbInstance, companyId, p.date || new Date().toISOString().slice(0, 10), desc, [
+        { nameHint: 'Cash', debit: amount, credit: 0, note: `Cash received` },
+        { nameHint: 'Receivable', debit: 0, credit: amount, note: `Clear AR` },
+      ]);
+      posted++;
+    }
+
+    // 3. Expenses → DR Expense / CR Cash or Payable
+    const expenses = dbInstance.prepare(
+      `SELECT id, description, date, amount, status FROM expenses WHERE company_id = ?`
+    ).all(companyId) as any[];
+    for (const exp of expenses) {
+      const desc = `Expense recorded - ${exp.description || exp.id.substring(0, 8)}`;
+      if (existingDescs.has(desc)) continue;
+      const amount = Number(exp.amount) || 0;
+      if (amount <= 0) continue;
+      const isPaid = exp.status === 'paid';
+      postJournalEntry(dbInstance, companyId, exp.date || new Date().toISOString().slice(0, 10), desc, [
+        { nameHint: 'Expense', debit: amount, credit: 0, note: exp.description || 'Expense' },
+        { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: isPaid ? 'Cash paid' : 'Accounts Payable' },
+      ]);
+      posted++;
+    }
+
+    // 4. Bill payments → DR Payable / CR Cash (already handled by bills:pay, but catch old ones)
+    const billPayments = dbInstance.prepare(
+      `SELECT bp.*, b.bill_number FROM bill_payments bp LEFT JOIN bills b ON bp.bill_id = b.id WHERE bp.company_id = ?`
+    ).all(companyId) as any[];
+    for (const bp of billPayments) {
+      const desc = `Bill payment - ${bp.bill_number || bp.bill_id?.substring(0, 8) || ''}`;
+      if (existingDescs.has(desc)) continue;
+      const amount = Number(bp.amount) || 0;
+      if (amount <= 0) continue;
+      postJournalEntry(dbInstance, companyId, bp.date || new Date().toISOString().slice(0, 10), desc, [
+        { nameHint: 'Payable', debit: amount, credit: 0, note: 'AP cleared' },
+        { nameHint: 'Cash', debit: 0, credit: amount, note: 'Cash paid' },
+      ]);
+      posted++;
+    }
+
+    scheduleAutoBackup();
+    return { posted, message: `Rebuilt GL: ${posted} journal entries posted.` };
   });
 
   // ─── Invoice Record Payment ───────────────────────────────

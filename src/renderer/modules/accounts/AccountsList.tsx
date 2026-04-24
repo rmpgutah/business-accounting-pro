@@ -6,6 +6,7 @@ import {
   ToggleLeft,
   ToggleRight,
   BookOpen,
+  RefreshCw,
 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
@@ -72,6 +73,8 @@ const AccountsList: React.FC<AccountsListProps> = ({
   const [showImport, setShowImport] = useState(false);
   const [error, setError] = useState('');
   const [cashBasis, setCashBasis] = useState<{ cash_revenue: number; cash_expenses: number } | null>(null);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildMessage, setRebuildMessage] = useState('');
 
   // Fetch accounts WITH computed balances from journal entries
   useEffect(() => {
@@ -213,6 +216,15 @@ const AccountsList: React.FC<AccountsListProps> = ({
   return (
     <div className="space-y-4">
       {error && <ErrorBanner message={error} title="Failed to load accounts" onDismiss={() => setError('')} />}
+      {rebuildMessage && (
+        <div
+          className="flex items-center justify-between px-4 py-2.5 text-xs text-accent-income bg-accent-income/10 border border-accent-income/20"
+          style={{ borderRadius: '6px' }}
+        >
+          <span>{rebuildMessage}</span>
+          <button onClick={() => setRebuildMessage('')} className="text-accent-income/60 hover:text-accent-income text-xs font-bold">Dismiss</button>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -229,6 +241,34 @@ const AccountsList: React.FC<AccountsListProps> = ({
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setRebuilding(true);
+              setRebuildMessage('');
+              setError('');
+              try {
+                const result = await api.rebuildGL();
+                if (result?.error) {
+                  setError(result.error);
+                } else {
+                  setRebuildMessage(result?.message || `Posted ${result?.posted || 0} journal entries.`);
+                  // Reload accounts to reflect new balances
+                  reload();
+                }
+              } catch (err: any) {
+                setError(err?.message || 'Failed to rebuild GL');
+              } finally {
+                setRebuilding(false);
+              }
+            }}
+            disabled={rebuilding}
+            className="flex items-center gap-1.5 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue transition-colors"
+            title="Post missing journal entries for all invoices, expenses, and payments"
+            style={{ opacity: rebuilding ? 0.6 : 1 }}
+          >
+            <RefreshCw size={12} className={rebuilding ? 'animate-spin' : ''} />
+            {rebuilding ? 'Rebuilding...' : 'Rebuild GL'}
+          </button>
           <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             Import CSV
           </button>

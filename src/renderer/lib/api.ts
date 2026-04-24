@@ -202,6 +202,10 @@ const api = {
   nextJournalNumber: (): Promise<string> =>
     window.electronAPI.invoke('journal:next-number'),
 
+  // Rebuild GL: retro-post missing journal entries for all transactions
+  rebuildGL: (): Promise<{ posted?: number; message?: string; error?: string }> =>
+    window.electronAPI.invoke('gl:rebuild'),
+
   // Invoice Record Payment (with journal entry)
   recordInvoicePayment: (
     invoiceId: string, amount: number, date: string, method: string, reference: string
