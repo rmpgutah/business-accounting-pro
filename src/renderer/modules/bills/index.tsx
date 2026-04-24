@@ -16,6 +16,8 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
+import { useNavigation } from '../../lib/navigation';
 
 // ─── Types ───────────────────────────────────────────────
 type View = 'list' | 'form' | 'detail';
@@ -141,6 +143,7 @@ interface BillsListProps {
 
 const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const nav = useNavigation();
   const [bills, setBills] = useState<Bill[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [stats, setStats] = useState<BillStats>({
@@ -357,7 +360,18 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     onClick={() => onView(bill.id)}
                   >
                     <td className="font-mono text-accent-blue text-xs">{bill.bill_number}</td>
-                    <td className="text-text-primary">{vendorName}</td>
+                    <td className="text-text-primary" onClick={(e) => e.stopPropagation()}>
+                      {bill.vendor_id && vendorName !== '—' ? (
+                        <button
+                          className="text-accent-blue hover:underline text-left"
+                          onClick={() => nav.goToVendor(bill.vendor_id)}
+                        >
+                          {vendorName}
+                        </button>
+                      ) : (
+                        vendorName
+                      )}
+                    </td>
                     <td className="font-mono text-text-secondary text-xs">{formatDate(bill.issue_date)}</td>
                     <td className="font-mono text-text-secondary text-xs">{formatDate(bill.due_date)}</td>
                     <td className="text-right font-mono text-text-primary">
@@ -643,22 +657,11 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
 
       {/* Validation errors */}
       {errors.length > 0 && (
-        <div
-          style={{
-            background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
-            borderRadius: '6px',
-            padding: '12px 16px',
-          }}
-        >
-          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
-            {errors.map((e, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
-                {e}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ErrorBanner
+          message={errors.join(' \u2022 ')}
+          title="Validation errors"
+          onDismiss={() => setErrors([])}
+        />
       )}
 
       {/* Bill header fields */}

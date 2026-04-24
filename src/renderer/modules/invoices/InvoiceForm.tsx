@@ -9,6 +9,7 @@ import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates'
 import RowTypeToolbar from './RowTypeToolbar';
 import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
 import type { LineRowType } from '../../../shared/types';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -936,13 +937,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     <div className="p-6 space-y-6">
       {/* Validation Errors */}
       {errors.length > 0 && (
-        <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid #ef4444', borderRadius: '6px', padding: '12px 16px' }}>
-          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
-            {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>{err}</li>
-            ))}
-          </ul>
-        </div>
+        <ErrorBanner
+          message={errors.join(' \u2022 ')}
+          title="Validation errors"
+          onDismiss={() => setErrors([])}
+        />
       )}
 
       {/* Invoice Type Selector */}

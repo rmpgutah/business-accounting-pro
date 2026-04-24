@@ -415,6 +415,9 @@ const Dashboard: React.FC = () => {
   const [anomalies, setAnomalies] = useState<any[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [rulesActivity, setRulesActivity] = useState<{ pricing_today: number; approvals_pending: number; alerts_week: number } | null>(null);
+  const [debtStats, setDebtStats] = useState<{ count: number; total: number } | null>(null);
+  const [billsStats, setBillsStats] = useState<{ unpaid_total: number; overdue_count: number } | null>(null);
+  const [payrollStats, setPayrollStats] = useState<{ active_count: number } | null>(null);
 
   const { start, end } = useMemo(() => dateRange(period), [period]);
 
@@ -671,6 +674,42 @@ const Dashboard: React.FC = () => {
         if (!cancelled) setAnomalies(r || []);
       }).catch(() => {});
 
+      // Debt collection summary
+      api.rawQuery(
+        'SELECT COUNT(*) as count, COALESCE(SUM(balance_due),0) as total FROM debts WHERE company_id = ? AND status NOT IN ("settled","written_off")',
+        [cid]
+      ).then(r => {
+        if (!cancelled) {
+          const row = Array.isArray(r) ? r[0] : r;
+          setDebtStats(row ? { count: row.count ?? 0, total: row.total ?? 0 } : null);
+        }
+      }).catch(() => {});
+
+      // Bills / AP summary
+      api.rawQuery(
+        `SELECT
+          COALESCE(SUM(CASE WHEN status NOT IN ('paid') THEN total - amount_paid ELSE 0 END), 0) as unpaid_total,
+          COUNT(CASE WHEN status = 'overdue' OR (status NOT IN ('paid','draft') AND due_date < date('now')) THEN 1 END) as overdue_count
+         FROM bills WHERE company_id = ?`,
+        [cid]
+      ).then(r => {
+        if (!cancelled) {
+          const row = Array.isArray(r) ? r[0] : r;
+          setBillsStats(row ? { unpaid_total: row.unpaid_total ?? 0, overdue_count: row.overdue_count ?? 0 } : null);
+        }
+      }).catch(() => {});
+
+      // Payroll summary
+      api.rawQuery(
+        'SELECT COUNT(*) as active_count FROM employees WHERE company_id = ? AND status = "active"',
+        [cid]
+      ).then(r => {
+        if (!cancelled) {
+          const row = Array.isArray(r) ? r[0] : r;
+          setPayrollStats(row ? { active_count: row.active_count ?? 0 } : null);
+        }
+      }).catch(() => {});
+
       // Rules activity & approvals
       Promise.all([
         api.pendingApprovalCount(activeCompany.id),
@@ -866,6 +905,60 @@ const Dashboard: React.FC = () => {
             {formatCurrency(quickMetrics.topClientRevenue)}
           </p>
           <span className="text-[10px] text-text-muted">This month</span>
+        </div>
+      </div>
+
+      {/* ─── Cross-Module Summary Cards ─── */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Debt Collection */}
+        <div
+          className="block-card p-4 border-l-2 border-l-accent-expense cursor-pointer hover:bg-bg-hover transition-colors"
+          style={{ borderRadius: '6px' }}
+          onClick={() => setModule('debt-collection')}
+        >
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Debt Collection
+          </span>
+          <p className="text-2xl font-mono text-text-primary mt-1">
+            {debtStats ? formatCurrency(debtStats.total) : '$0.00'}
+          </p>
+          <span className="text-xs text-text-muted">
+            {debtStats?.count ?? 0} outstanding debt{(debtStats?.count ?? 0) !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Bills / AP */}
+        <div
+          className="block-card p-4 border-l-2 border-l-accent-warning cursor-pointer hover:bg-bg-hover transition-colors"
+          style={{ borderRadius: '6px' }}
+          onClick={() => setModule('bills')}
+        >
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Bills / AP
+          </span>
+          <p className="text-2xl font-mono text-text-primary mt-1">
+            {billsStats ? formatCurrency(billsStats.unpaid_total) : '$0.00'}
+          </p>
+          <span className="text-xs text-text-muted">
+            {billsStats?.overdue_count ?? 0} overdue bill{(billsStats?.overdue_count ?? 0) !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Payroll */}
+        <div
+          className="block-card p-4 border-l-2 border-l-accent-purple cursor-pointer hover:bg-bg-hover transition-colors"
+          style={{ borderRadius: '6px' }}
+          onClick={() => setModule('payroll')}
+        >
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Payroll
+          </span>
+          <p className="text-2xl font-mono text-text-primary mt-1">
+            {payrollStats?.active_count ?? 0}
+          </p>
+          <span className="text-xs text-text-muted">
+            active employee{(payrollStats?.active_count ?? 0) !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 

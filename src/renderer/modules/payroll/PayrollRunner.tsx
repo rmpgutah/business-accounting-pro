@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Calculator, DollarSign, ArrowLeft, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -402,9 +403,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       <StepIndicator currentStep={step} />
 
       {error && (
-        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '6px' }}>
-          {error}
-        </div>
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
       )}
 
       {/* ─── Step 1: Pay Period ─────────────────────── */}

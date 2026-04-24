@@ -17,6 +17,12 @@ const entityModuleMap: Record<string, string> = {
   recurring_templates: 'recurring',
   payment: 'invoicing',
   payments: 'invoicing',
+  vendor: 'vendors',
+  vendors: 'vendors',
+  employee: 'payroll',
+  employees: 'payroll',
+  debt: 'debt-collection',
+  debts: 'debt-collection',
 };
 
 // In-memory navigation params (never persisted to storage)
@@ -51,6 +57,18 @@ export function useNavigation() {
     goToBankAccount: (id: string) => {
       navParams.set('bankId', id);
       setModule('banking');
+    },
+    goToVendor: (vendorId: string) => {
+      navParams.set('vendorId', vendorId);
+      setModule('vendors');
+    },
+    goToEmployee: (employeeId: string) => {
+      navParams.set('employeeId', employeeId);
+      setModule('payroll');
+    },
+    goToDebt: (debtId: string) => {
+      navParams.set('debtId', debtId);
+      setModule('debt-collection');
     },
     // Navigate to an entity by type and id (used by notifications)
     goToEntity: (entityType: string, entityId: string) => {

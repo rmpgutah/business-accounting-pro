@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -490,22 +491,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
       {/* Validation Errors */}
       {errors.length > 0 && (
-        <div
-          style={{
-            background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
-            borderRadius: '6px',
-            padding: '12px 16px',
-          }}
-        >
-          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
-            {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
-                {err}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ErrorBanner
+          message={errors.join(' \u2022 ')}
+          title="Validation errors"
+          onDismiss={() => setErrors([])}
+        />
       )}
 
       {/* Form */}

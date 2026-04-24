@@ -7,6 +7,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
+import { useNavigation } from '../../lib/navigation';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -40,6 +41,7 @@ interface ExpenseListProps {
 // ─── Component ──────────────────────────────────────────
 const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const nav = useNavigation();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
@@ -349,8 +351,17 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                     <td className="text-text-secondary">
                       {exp.category_name || '-'}
                     </td>
-                    <td className="text-text-secondary">
-                      {exp.vendor_name || '-'}
+                    <td className="text-text-secondary" onClick={(e) => e.stopPropagation()}>
+                      {exp.vendor_id && exp.vendor_name ? (
+                        <button
+                          className="text-accent-blue hover:underline text-left"
+                          onClick={() => nav.goToVendor(exp.vendor_id!)}
+                        >
+                          {exp.vendor_name}
+                        </button>
+                      ) : (
+                        exp.vendor_name || '-'
+                      )}
                     </td>
                     <td className="text-right font-mono text-accent-expense">
                       {formatCurrency(exp.amount)}
