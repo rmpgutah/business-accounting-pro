@@ -116,12 +116,12 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
         }
         setExpenses(expMap);
 
-        // Aggregate hours by project
+        // Aggregate hours by project (time_entries has duration_minutes, not hours)
         const timeMap: Record<string, number> = {};
         if (Array.isArray(timeRows)) {
           for (const te of timeRows) {
             if (te.project_id) {
-              timeMap[te.project_id] = (timeMap[te.project_id] ?? 0) + (te.hours ?? 0);
+              timeMap[te.project_id] = (timeMap[te.project_id] ?? 0) + ((te.duration_minutes ?? 0) / 60);
             }
           }
         }

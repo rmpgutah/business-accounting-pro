@@ -40,10 +40,11 @@ interface TimeEntry {
   id: string;
   project_id: string;
   description: string;
-  hours: number;
+  duration_minutes: number;
+  hours: number;         // computed: duration_minutes / 60
   date: string;
   user_name?: string;
-  billable?: boolean;
+  is_billable: number;   // SQLite integer (0 or 1)
   hourly_rate?: number;
 }
 
@@ -140,7 +141,17 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         const cid = activeCompany.id;
         const [proj, allTimeEntries, allExpenses, allInvoices, allLineItems] = await Promise.all([
           api.get('projects', projectId),
-          api.query('time_entries', { company_id: cid, project_id: projectId }),
+          // JOIN employees for user_name and compute hours from duration_minutes
+          api.rawQuery(
+            `SELECT te.*,
+                    (te.duration_minutes / 60.0) AS hours,
+                    COALESCE(e.name, e.email, 'Unknown') AS user_name
+             FROM time_entries te
+             LEFT JOIN employees e ON te.employee_id = e.id
+             WHERE te.company_id = ? AND te.project_id = ?
+             ORDER BY te.date DESC`,
+            [cid, projectId]
+          ),
           api.query('expenses', { company_id: cid, project_id: projectId }),
           api.query('invoices', { company_id: cid }),
           api.query('invoice_line_items', { project_id: projectId }),
@@ -159,11 +170,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           }
         }
 
-        // Filter related records
-        const projectTime = Array.isArray(allTimeEntries)
-          ? allTimeEntries.filter((t: any) => t.project_id === projectId)
-          : [];
-        setTimeEntries(projectTime);
+        // Time entries already filtered by project in the SQL query
+        setTimeEntries(Array.isArray(allTimeEntries) ? allTimeEntries : []);
 
         const projectExpenses = Array.isArray(allExpenses)
           ? allExpenses.filter((e: any) => e.project_id === projectId)
@@ -452,10 +460,10 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
               <td className="text-center">
                 <span
                   className={`block-badge text-[10px] ${
-                    entry.billable !== false ? 'block-badge-income' : 'block-badge-expense'
+                    entry.is_billable ? 'block-badge-income' : 'block-badge-expense'
                   }`}
                 >
-                  {entry.billable !== false ? 'Yes' : 'No'}
+                  {entry.is_billable ? 'Yes' : 'No'}
                 </span>
               </td>
             </tr>
