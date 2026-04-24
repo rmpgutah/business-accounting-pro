@@ -391,6 +391,58 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company_id)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id)",
   "CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id)",
+  // ── Advanced Debt Collection Features (2026-04-23) ─────────────
+  // Feature 1: Skip Trace Module
+  `CREATE TABLE IF NOT EXISTS debt_skip_traces (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    trace_date TEXT DEFAULT (date('now')),
+    source TEXT DEFAULT '',
+    address_tried TEXT DEFAULT '',
+    phone_tried TEXT DEFAULT '',
+    email_tried TEXT DEFAULT '',
+    employer_found TEXT DEFAULT '',
+    result TEXT DEFAULT 'pending' CHECK(result IN ('pending','verified','invalid','no_contact')),
+    notes TEXT DEFAULT '',
+    created_by TEXT DEFAULT 'user',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_skip_traces_debt ON debt_skip_traces(debt_id)`,
+  // Feature 2: Debtor Financial Profile
+  "ALTER TABLE debts ADD COLUMN debtor_ssn_last4 TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN debtor_dob TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN debtor_employer TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN debtor_income_monthly REAL DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN debtor_assets_description TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN debtor_bank_name TEXT DEFAULT ''",
+  // Feature 6: Debtor Credit Score Tracking
+  "ALTER TABLE debts ADD COLUMN credit_score INTEGER DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN credit_score_date TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN credit_score_source TEXT DEFAULT ''",
+  // Feature 10: Multi-Currency Debt Support
+  "ALTER TABLE debts ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE debts ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+  // Feature 16: Interest Freeze/Resume
+  "ALTER TABLE debts ADD COLUMN interest_frozen INTEGER DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN interest_frozen_date TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN interest_frozen_reason TEXT DEFAULT ''",
+  // Feature 18: Collection Cost Tracking
+  "ALTER TABLE debts ADD COLUMN collection_costs REAL DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN agency_commission_rate REAL DEFAULT 0",
+  "ALTER TABLE debts ADD COLUMN agency_commission_paid REAL DEFAULT 0",
+  // Feature 24: Collection Campaign Manager
+  `CREATE TABLE IF NOT EXISTS debt_campaigns (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    status TEXT DEFAULT 'active' CHECK(status IN ('active','paused','completed')),
+    target_stage TEXT DEFAULT '',
+    target_age_min INTEGER DEFAULT 0,
+    target_age_max INTEGER DEFAULT 999,
+    letter_template_id TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
   // Pay stub deduction breakdown columns (2026-04-23)
   "ALTER TABLE pay_stubs ADD COLUMN pretax_deductions REAL DEFAULT 0",
   "ALTER TABLE pay_stubs ADD COLUMN posttax_deductions REAL DEFAULT 0",
@@ -578,6 +630,8 @@ const tablesWithoutUpdatedAt = new Set([
   'expense_line_items', 'debt_disputes',
   // DC Immersive Workspace — created_at only
   'debt_audit_log', 'debt_payment_matches',
+  // Advanced debt collection — created_at only
+  'debt_skip_traces', 'debt_campaigns',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

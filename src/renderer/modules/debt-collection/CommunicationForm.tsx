@@ -50,6 +50,7 @@ const emptyForm: CommunicationFormData = {
 const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, onClose, onSaved }) => {
   const [form, setForm] = useState<CommunicationFormData>({ ...emptyForm });
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
 
@@ -67,6 +68,10 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
       }
     };
     loadContacts();
+    // Feature 14: Load communication templates
+    api.rawQuery('SELECT * FROM debt_templates ORDER BY name', []).then(r => {
+      if (Array.isArray(r)) setTemplates(r);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [debtId]);
 
@@ -214,6 +219,34 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
                 </select>
               </div>
             </div>
+
+            {/* Feature 14: Template Selector */}
+            {templates.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  Use Template
+                </label>
+                <select
+                  className="block-select"
+                  value=""
+                  onChange={(e) => {
+                    const t = templates.find((t: any) => t.id === e.target.value);
+                    if (t) {
+                      setForm(prev => ({
+                        ...prev,
+                        subject: t.subject || t.name || prev.subject,
+                        body: t.body || t.content || prev.body,
+                      }));
+                    }
+                  }}
+                >
+                  <option value="">-- Select Template --</option>
+                  {templates.map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Subject — full-width */}
             <div>

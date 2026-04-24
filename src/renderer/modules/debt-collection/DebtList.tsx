@@ -32,6 +32,9 @@ interface Debt {
   has_broken_promise?: number;
   cease_desist_active?: number;
   do_not_call?: number;
+  statute_of_limitations_date?: string;
+  interest_frozen?: number;
+  currency?: string;
 }
 
 interface DebtListProps {
@@ -415,6 +418,62 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <DollarSign size={14} />
             Match Payments
           </button>
+          {/* Feature 12: Auto-Assign */}
+          <button className="block-btn flex items-center gap-2 text-xs" onClick={async () => {
+            if (!activeCompany) return;
+            try {
+              const result = await api.autoAssignDebts(activeCompany.id);
+              if (result?.assigned > 0) {
+                setOpSuccess(`Auto-assigned ${result.assigned} debts`); setTimeout(() => setOpSuccess(''), 4000);
+                await reload();
+              } else {
+                setOpSuccess('No unassigned debts to distribute'); setTimeout(() => setOpSuccess(''), 3000);
+              }
+            } catch (err: any) {
+              setOpError('Auto-assign failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+            }
+          }}>
+            <RefreshCw size={14} />
+            Auto-Assign
+          </button>
+          {/* Feature 13: Auto Priority */}
+          <button className="block-btn flex items-center gap-2 text-xs" onClick={async () => {
+            if (!activeCompany) return;
+            try {
+              const result = await api.autoPriorityScore(activeCompany.id);
+              if (result?.updated > 0) {
+                setOpSuccess(`Updated priority on ${result.updated} debts`); setTimeout(() => setOpSuccess(''), 4000);
+                await reload();
+              }
+            } catch (err: any) {
+              setOpError('Auto-priority failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+            }
+          }}>
+            <AlertTriangle size={14} />
+            Auto-Priority
+          </button>
+          {/* Feature 20: Consolidate Selected */}
+          {selectedIds.size >= 2 && (
+            <button className="block-btn flex items-center gap-2 text-xs text-accent-blue" onClick={async () => {
+              if (!activeCompany) return;
+              if (!window.confirm(`Consolidate ${selectedIds.size} selected debts into one?`)) return;
+              try {
+                const result = await api.consolidateDebts(Array.from(selectedIds), activeCompany.id);
+                if (result?.error) {
+                  setOpError(result.error); setTimeout(() => setOpError(''), 5000);
+                } else if (result?.newDebtId) {
+                  setSelectedIds(new Set());
+                  setOpSuccess(`Consolidated ${result.consolidated} debts`); setTimeout(() => setOpSuccess(''), 4000);
+                  await reload();
+                }
+              } catch (err: any) {
+                setOpError('Consolidation failed: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+              }
+            }}>
+              <Scale size={14} />
+              Consolidate Selected
+            </button>
+          )}
           <button className="block-btn flex items-center gap-2" onClick={handleExport}>
             <Download size={14} />
             Export CSV
@@ -690,6 +749,20 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         {!!debt.do_not_call && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
+                        {!!debt.interest_frozen && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa' }}>FROZEN</span>
+                        )}
+                        {debt.statute_of_limitations_date && (() => {
+                          const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
+                          if (dLeft > 0 && dLeft <= 90) {
+                            const sColor = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : '#d97706';
+                            return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: sColor + '22', color: sColor }}>{dLeft}d SOL</span>;
+                          }
+                          return null;
+                        })()}
+                        {debt.currency && debt.currency !== 'USD' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>{debt.currency}</span>
+                        )}
                       </div>
                     </td>
                     <td className="text-text-secondary text-xs font-mono">{sourceLabel}</td>
@@ -796,6 +869,20 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         )}
                         {!!debt.do_not_call && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
+                        )}
+                        {!!debt.interest_frozen && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa' }}>FROZEN</span>
+                        )}
+                        {debt.statute_of_limitations_date && (() => {
+                          const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
+                          if (dLeft > 0 && dLeft <= 90) {
+                            const sColor = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : '#d97706';
+                            return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: sColor + '22', color: sColor }}>{dLeft}d SOL</span>;
+                          }
+                          return null;
+                        })()}
+                        {debt.currency && debt.currency !== 'USD' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>{debt.currency}</span>
                         )}
                       </div>
                     </td>

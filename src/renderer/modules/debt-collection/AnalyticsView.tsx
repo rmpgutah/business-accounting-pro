@@ -5,12 +5,16 @@ import {
   Area,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Cell,
+  PieChart,
+  Pie,
 } from 'recharts';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
@@ -107,6 +111,13 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
   const [collectorPerf, setCollectorPerf] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Feature 8: CEI
+  const [cei, setCei] = useState<number | null>(null);
+  // Feature 15: Segmentation
+  const [segmentation, setSegmentation] = useState<{ byStage: any[]; byBalance: any[]; byCollector: any[] }>({ byStage: [], byBalance: [], byCollector: [] });
+  // Feature 25: Recovery Forecast
+  const [forecast, setForecast] = useState<any[]>([]);
+
   // ── Data loader ──
   const loadData = useCallback(async () => {
     if (!resolvedId) return;
@@ -120,6 +131,42 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
       setAnalytics(analyticsRes);
       setStats(statsRes);
       setCollectorPerf(Array.isArray(perfRes) ? perfRes : []);
+
+      // Feature 8: CEI = (Total Collected / Total Placed) x 100
+      if (statsRes) {
+        const totalPlaced = (statsRes.total_outstanding || 0) + (statsRes.collected_this_month || 0);
+        const ceiVal = totalPlaced > 0 ? Math.round(((statsRes.collected_this_month || 0) / totalPlaced) * 10000) / 100 : 0;
+        setCei(ceiVal);
+      }
+
+      // Feature 15: Segmentation (computed from raw queries)
+      try {
+        const [stageRes, balanceRes, collectorRes] = await Promise.all([
+          api.rawQuery(`SELECT current_stage as segment, COUNT(*) as count, COALESCE(SUM(balance_due),0) as total, COALESCE(AVG(balance_due),0) as avg_balance FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') GROUP BY current_stage`, [resolvedId]),
+          api.rawQuery(`SELECT CASE WHEN balance_due < 1000 THEN '$0-1K' WHEN balance_due < 5000 THEN '$1K-5K' WHEN balance_due < 10000 THEN '$5K-10K' ELSE '$10K+' END as segment, COUNT(*) as count, COALESCE(SUM(balance_due),0) as total, COALESCE(AVG(balance_due),0) as avg_balance FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') GROUP BY segment`, [resolvedId]),
+          api.rawQuery(`SELECT COALESCE(u.display_name, u.email, 'Unassigned') as segment, COUNT(*) as count, COALESCE(SUM(d.balance_due),0) as total, COALESCE(AVG(d.balance_due),0) as avg_balance FROM debts d LEFT JOIN users u ON d.assigned_collector_id = u.id WHERE d.company_id = ? AND d.status NOT IN ('settled','written_off') GROUP BY segment`, [resolvedId]),
+        ]);
+        setSegmentation({
+          byStage: Array.isArray(stageRes) ? stageRes : [],
+          byBalance: Array.isArray(balanceRes) ? balanceRes : [],
+          byCollector: Array.isArray(collectorRes) ? collectorRes : [],
+        });
+      } catch (_) {}
+
+      // Feature 25: Recovery Forecast (simplified projection from collection rates)
+      try {
+        const monthlyHistory = analyticsRes?.collectionByMonth || [];
+        if (monthlyHistory.length >= 2) {
+          const recentMonths = monthlyHistory.slice(-3);
+          const avgMonthly = recentMonths.reduce((s: number, m: any) => s + (m.total || 0), 0) / recentMonths.length;
+          const forecastData = [
+            { period: '30 days', projected: Math.round(avgMonthly) },
+            { period: '60 days', projected: Math.round(avgMonthly * 2) },
+            { period: '90 days', projected: Math.round(avgMonthly * 3) },
+          ];
+          setForecast(forecastData);
+        }
+      } catch (_) {}
     } catch (err) {
       console.error('Failed to load debt analytics', err);
     } finally {
@@ -451,6 +498,121 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
               </div>
             )}
           </div>
+
+          {/* ── 8. Collection Effectiveness Index (CEI) ── */}
+          {cei !== null && (
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-text-primary text-sm font-semibold mb-3">
+                Collection Effectiveness Index (CEI)
+              </h3>
+              <div className="flex items-center justify-center py-4">
+                <div className="text-center">
+                  <div className={`text-4xl font-mono font-bold ${cei >= 50 ? 'text-accent-income' : cei >= 25 ? 'text-yellow-500' : 'text-accent-expense'}`}>
+                    {cei.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-text-muted mt-2">Total Collected / Total Placed for Collection</div>
+                  <div className="w-full h-2 bg-bg-tertiary mt-3" style={{ borderRadius: 6, width: 200 }}>
+                    <div className={`h-full ${cei >= 50 ? 'bg-accent-income' : cei >= 25 ? 'bg-yellow-500' : 'bg-accent-expense'}`} style={{ width: `${Math.min(cei, 100)}%`, borderRadius: 6, transition: 'width 0.5s ease' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 11. Debt Aging Waterfall ── */}
+          <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+            <h3 className="text-text-primary text-sm font-semibold mb-3">
+              Aging Waterfall
+            </h3>
+            <div className="flex items-end gap-1 justify-center" style={{ height: 120 }}>
+              {agingData.map((a, i) => {
+                const maxTotal = Math.max(...agingData.map(x => x.total), 1);
+                const height = Math.max((a.total / maxTotal) * 100, 4);
+                const prevTotal = i > 0 ? agingData[i - 1].total : 0;
+                const flow = Math.min(prevTotal, a.total);
+                return (
+                  <div key={a.bucket} className="flex flex-col items-center" style={{ width: `${100 / agingData.length}%`, maxWidth: 120 }}>
+                    <div className="text-[10px] font-mono text-text-muted mb-1">{formatCurrency(a.total)}</div>
+                    <div style={{ height: `${height}px`, width: '60%', background: AGING_COLORS[a.bucket] || '#6b7280', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} />
+                    <div className="text-[10px] text-text-muted mt-1 text-center">{a.bucket}</div>
+                    <div className="text-[10px] text-text-secondary">{a.count} debts</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── 15. Portfolio Segmentation ── */}
+          {(segmentation.byStage.length > 0 || segmentation.byBalance.length > 0) && (
+            <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+              <h3 className="text-text-primary text-sm font-semibold mb-3">
+                Portfolio Segmentation
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                {/* By Stage */}
+                <div>
+                  <h4 className="text-xs text-text-muted font-semibold uppercase mb-2">By Stage</h4>
+                  <div className="space-y-1">
+                    {segmentation.byStage.map((s: any) => (
+                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 6 }}>
+                        <span className="text-text-secondary capitalize">{(s.segment || '').replace(/_/g, ' ')}</span>
+                        <span className="font-mono text-text-primary">{s.count} / {formatCurrency(s.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* By Balance Range */}
+                <div>
+                  <h4 className="text-xs text-text-muted font-semibold uppercase mb-2">By Balance</h4>
+                  <div className="space-y-1">
+                    {segmentation.byBalance.map((s: any) => (
+                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 6 }}>
+                        <span className="text-text-secondary">{s.segment}</span>
+                        <span className="font-mono text-text-primary">{s.count} / {formatCurrency(s.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* By Collector */}
+                <div>
+                  <h4 className="text-xs text-text-muted font-semibold uppercase mb-2">By Collector</h4>
+                  <div className="space-y-1">
+                    {segmentation.byCollector.map((s: any) => (
+                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 6 }}>
+                        <span className="text-text-secondary truncate" style={{ maxWidth: 100 }}>{s.segment}</span>
+                        <span className="font-mono text-text-primary">{s.count} / {formatCurrency(s.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 25. Recovery Forecast ── */}
+          {forecast.length > 0 && (
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-text-primary text-sm font-semibold mb-3">
+                Recovery Forecast
+              </h3>
+              <div style={{ height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={forecast}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
+                    <XAxis dataKey="period" tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} />
+                    <YAxis tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip content={<CurrencyTooltip />} />
+                    <Bar dataKey="projected" fill="#22c55e" maxBarSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-between text-xs text-text-muted mt-2 px-2">
+                {forecast.map(f => (
+                  <span key={f.period}>{f.period}: <strong className="text-accent-income">{formatCurrency(f.projected)}</strong></span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

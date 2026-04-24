@@ -28,7 +28,7 @@ import ComplianceLog from './ComplianceLog';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useNavigation } from '../../lib/navigation';
-import { calcRiskScore, getRiskBadge } from './riskScore';
+import { calcRiskScore, getRiskBadge, collectionScore, getCollectionBadge } from './riskScore';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 
@@ -81,6 +81,32 @@ interface Debt {
   notes: string;
   created_at: string;
   updated_at: string;
+  // Feature 2: Financial Profile
+  debtor_ssn_last4: string;
+  debtor_dob: string;
+  debtor_employer: string;
+  debtor_income_monthly: number;
+  debtor_assets_description: string;
+  debtor_bank_name: string;
+  // Feature 6: Credit Score
+  credit_score: number;
+  credit_score_date: string;
+  credit_score_source: string;
+  // Feature 10: Multi-Currency
+  currency: string;
+  exchange_rate: number;
+  // Feature 16: Interest Freeze
+  interest_frozen: number;
+  interest_frozen_date: string;
+  interest_frozen_reason: string;
+  // Feature 18: Collection Costs
+  collection_costs: number;
+  agency_commission_rate: number;
+  agency_commission_paid: number;
+  // Employment
+  employer_name: string;
+  employment_status: string;
+  monthly_income_estimate: number;
 }
 
 interface Payment {
@@ -312,6 +338,19 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const [documents, setDocuments] = useState<any[]>([]);
   const [auditLog, setAuditLog] = useState<any[]>([]);
 
+  // Feature 1: Skip Traces
+  const [skipTraces, setSkipTraces] = useState<any[]>([]);
+  const [showSkipTraceForm, setShowSkipTraceForm] = useState(false);
+  const [skipTraceForm, setSkipTraceForm] = useState({ source: '', address_tried: '', phone_tried: '', email_tried: '', employer_found: '', result: 'pending', notes: '' });
+  const [skipTraceSaving, setSkipTraceSaving] = useState(false);
+
+  // Feature 4: Schedule Communication
+  const [showScheduleComm, setShowScheduleComm] = useState(false);
+  const [schedCommForm, setSchedCommForm] = useState({ type: 'email', scheduledDate: '', subject: '', body: '' });
+
+  // Feature 22: Cease & Desist blocking modal
+  const [showCeaseDesistBlock, setShowCeaseDesistBlock] = useState(false);
+
   // ── Load All Data ──
   useEffect(() => {
     let cancelled = false;
@@ -361,10 +400,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setDisputes(Array.isArray(disputesData) ? disputesData : []);
         setInvoiceLink(invoiceLinkData ?? null);
         setTimeline(Array.isArray(timelineData) ? timelineData : []);
-        // Load installments + documents in parallel (non-blocking)
+        // Load installments + documents + skip traces in parallel (non-blocking)
         api.upcomingInstallments(debtId).then(r => setInstallments(Array.isArray(r) ? r : [])).catch(() => {});
         api.rawQuery('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC', ['debt', debtId]).then(r => setDocuments(Array.isArray(r) ? r : [])).catch(() => {});
         api.debtAuditLog(debtId, 100).then(r => setAuditLog(Array.isArray(r) ? r : [])).catch(() => {});
+        // Feature 1: Skip Traces
+        api.query('debt_skip_traces', { debt_id: debtId }, { field: 'created_at', dir: 'desc' }).then(r => setSkipTraces(Array.isArray(r) ? r : [])).catch(() => {});
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -732,15 +773,48 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               ).length;
               const score = calcRiskScore(debt, brokenCount);
               const risk = getRiskBadge(score);
+              // Feature 3: Collection Score
+              const cScore = collectionScore(debt, {
+                brokenPromises: brokenCount,
+                hasLegalAction: legalActions.length > 0,
+                hasPaymentPlan: installments.length > 0,
+                hasEmployment: !!(debt.employer_name || debt.debtor_employer),
+                contactAttempts: communications.length,
+              });
+              const cBadge = getCollectionBadge(cScore);
               return (
-                <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                  background: risk.color + '20', color: risk.color,
-                }}>
-                  Risk: {risk.label} ({score})
-                </span>
+                <>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    background: risk.color + '20', color: risk.color,
+                  }}>
+                    Risk: {risk.label} ({score})
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    background: cBadge.color + '20', color: cBadge.color,
+                  }}>
+                    Collectability: {cBadge.label} ({cScore})
+                  </span>
+                </>
               );
             })()}
+            {/* Feature 6: Credit Score */}
+            {debt.credit_score > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                background: debt.credit_score >= 670 ? '#22c55e22' : debt.credit_score >= 580 ? '#d9770622' : '#ef444422',
+                color: debt.credit_score >= 670 ? '#22c55e' : debt.credit_score >= 580 ? '#d97706' : '#ef4444',
+              }}>
+                Credit: {debt.credit_score}
+              </span>
+            )}
+            {/* Feature 10: Currency */}
+            {debt.currency && debt.currency !== 'USD' && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>
+                {debt.currency}
+              </span>
+            )}
             <span className={stageBadge.className}>{stageBadge.label}</span>
             <span className={statusBadge.className}>{statusBadge.label}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -839,7 +913,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         <div className="flex items-center gap-2 mt-3 flex-wrap">
           <button
             className="block-btn flex items-center gap-2 text-xs"
-            onClick={() => onOpenModal('communication')}
+            onClick={() => {
+              if (debt.cease_desist_active) {
+                setShowCeaseDesistBlock(true);
+              } else {
+                onOpenModal('communication');
+              }
+            }}
           >
             <MessageSquare size={14} />
             Log Communication
@@ -968,6 +1048,49 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <FileText size={14} />
             Affidavit
           </button>
+          {/* Feature 4: Schedule Communication */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => setShowScheduleComm(v => !v)}
+          >
+            <Calendar size={14} />
+            Schedule Comm
+          </button>
+          {/* Feature 9: Copy Payment Link */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              try {
+                const result = await api.generateDebtPortalToken(debtId);
+                if (result?.portalUrl) {
+                  await navigator.clipboard.writeText(result.portalUrl);
+                  alert('Payment link copied to clipboard');
+                }
+              } catch (err: any) {
+                alert('Failed to generate link: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+          >
+            <FileText size={14} />
+            Copy Payment Link
+          </button>
+          {/* Feature 16: Interest Freeze/Resume */}
+          <button
+            className={`block-btn flex items-center gap-2 text-xs ${debt.interest_frozen ? 'text-yellow-400' : ''}`}
+            onClick={async () => {
+              try {
+                const freeze = !debt.interest_frozen;
+                const reason = freeze ? prompt('Reason for freezing interest:') || '' : '';
+                await api.freezeInterest(debtId, freeze, reason);
+                triggerRefresh();
+              } catch (err: any) {
+                alert('Failed: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+          >
+            {debt.interest_frozen ? <Play size={14} /> : <Pause size={14} />}
+            {debt.interest_frozen ? 'Resume Interest' : 'Freeze Interest'}
+          </button>
           <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"
             onClick={() => setShowWriteOff(true)}
@@ -1005,6 +1128,71 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {debt.preferred_contact_method} preferred
             </span>
+          </div>
+        )}
+
+        {/* Feature 22: Cease & Desist Blocking Modal */}
+        {showCeaseDesistBlock && (
+          <div className="mt-3 p-4 border border-red-700" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
+            <p className="text-sm text-red-400 font-bold mb-2">CEASE & DESIST ACTIVE</p>
+            <p className="text-xs text-text-secondary mb-3">Outbound communications are blocked. This debtor has sent a cease and desist notice. Proceeding may violate FDCPA regulations.</p>
+            <div className="flex gap-2">
+              <button className="block-btn text-xs" onClick={() => setShowCeaseDesistBlock(false)}>Cancel</button>
+              <button className="block-btn text-xs text-yellow-400" onClick={() => { setShowCeaseDesistBlock(false); onOpenModal('communication'); }}>
+                Manager Override — Proceed
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Feature 4: Schedule Communication Form */}
+        {showScheduleComm && (
+          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+            <p className="text-sm font-semibold text-text-primary mb-3">Schedule Communication</p>
+            <div className="grid grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Type</label>
+                <select className="block-select" value={schedCommForm.type} onChange={(e) => setSchedCommForm(f => ({ ...f, type: e.target.value }))}>
+                  <option value="email">Email</option>
+                  <option value="phone">Phone</option>
+                  <option value="letter">Letter</option>
+                  <option value="text">Text</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Date</label>
+                <input type="date" className="block-input" value={schedCommForm.scheduledDate} onChange={(e) => setSchedCommForm(f => ({ ...f, scheduledDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Subject</label>
+                <input className="block-input" placeholder="Subject" value={schedCommForm.subject} onChange={(e) => setSchedCommForm(f => ({ ...f, subject: e.target.value }))} />
+              </div>
+              <div className="flex gap-2">
+                <button className="block-btn-primary text-xs py-2 px-4" onClick={async () => {
+                  if (!schedCommForm.scheduledDate) return;
+                  try {
+                    await api.scheduleCommunication(debtId, schedCommForm.type, schedCommForm.scheduledDate, schedCommForm.subject, schedCommForm.body);
+                    setShowScheduleComm(false);
+                    setSchedCommForm({ type: 'email', scheduledDate: '', subject: '', body: '' });
+                    triggerRefresh();
+                  } catch (err: any) {
+                    alert('Failed: ' + (err?.message || 'Unknown error'));
+                  }
+                }}>Schedule</button>
+                <button className="block-btn text-xs py-2 px-3" onClick={() => setShowScheduleComm(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Feature 16: Interest Frozen Banner */}
+        {!!debt.interest_frozen && (
+          <div className="mt-3 flex items-center gap-3 px-4 py-2 border border-blue-700/50" style={{ borderRadius: '6px', background: 'rgba(59,130,246,0.08)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Interest Frozen
+            </span>
+            {debt.interest_frozen_date && <span className="text-xs text-text-muted">since {debt.interest_frozen_date}</span>}
+            {debt.interest_frozen_reason && <span className="text-xs text-text-secondary">{debt.interest_frozen_reason}</span>}
           </div>
         )}
 
@@ -1140,9 +1328,20 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               </InfoRow>
               <InfoRow label="Jurisdiction">{debt.jurisdiction || '--'}</InfoRow>
               <InfoRow label="Statute of Limitations">
-                {debt.statute_of_limitations_date
-                  ? formatDate(debt.statute_of_limitations_date)
-                  : '--'}
+                {debt.statute_of_limitations_date ? (
+                  (() => {
+                    const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
+                    const color = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : dLeft < 180 ? '#d97706' : '#22c55e';
+                    return (
+                      <span className="flex items-center gap-2">
+                        <span>{formatDate(debt.statute_of_limitations_date)}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: color + '22', color }}>
+                          {dLeft > 0 ? `${dLeft}d left` : 'EXPIRED'}
+                        </span>
+                      </span>
+                    );
+                  })()
+                ) : '--'}
               </InfoRow>
               <InfoRow label="Assigned To">{debt.assigned_to || '--'}</InfoRow>
             </div>
@@ -1249,6 +1448,124 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               </table>
             )}
           </div>
+
+          {/* Feature 7: Garnishment Calculator */}
+          {debt.current_stage === 'garnishment' && (
+            <div className="block-card p-6">
+              <SectionLabel>Garnishment Calculator</SectionLabel>
+              {(() => {
+                const monthly = debt.debtor_income_monthly || debt.monthly_income_estimate || 0;
+                const weekly = monthly / 4.33;
+                const pct25 = weekly * 0.25;
+                const minWageExcess = Math.max(0, weekly - 30 * 7.25);
+                const maxGarnish = Math.min(pct25, minWageExcess);
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-text-muted">Monthly Income</span><span className="font-mono">{formatCurrency(monthly)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">Weekly Disposable</span><span className="font-mono">{formatCurrency(weekly)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">25% of Disposable</span><span className="font-mono">{formatCurrency(pct25)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">30x Min Wage Excess</span><span className="font-mono">{formatCurrency(minWageExcess)}</span></div>
+                    <div className="flex justify-between border-t border-border-primary pt-2 font-bold">
+                      <span>Max Garnishment/Week</span>
+                      <span className="font-mono text-accent-expense">{formatCurrency(maxGarnish)}</span>
+                    </div>
+                    {monthly === 0 && (
+                      <p className="text-xs text-yellow-400 italic mt-2">Add debtor income in Financial Profile to calculate garnishment amounts.</p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Feature 17: Contact Scoring */}
+          {communications.length > 0 && (
+            <div className="block-card p-6">
+              <SectionLabel>Contact Scoring</SectionLabel>
+              {(() => {
+                const total = communications.length;
+                const successful = communications.filter((c: any) => c.outcome && c.outcome !== 'no_answer' && c.outcome !== 'voicemail' && c.outcome !== 'scheduled').length;
+                const rate = total > 0 ? Math.round((successful / total) * 100) : 0;
+                return (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center">
+                      <div className="text-lg font-mono font-bold text-text-primary">{total}</div>
+                      <div className="text-[10px] text-text-muted uppercase">Attempts</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-mono font-bold text-accent-income">{successful}</div>
+                      <div className="text-[10px] text-text-muted uppercase">Reached</div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`text-lg font-mono font-bold ${rate >= 50 ? 'text-accent-income' : rate >= 25 ? 'text-yellow-500' : 'text-accent-expense'}`}>{rate}%</div>
+                      <div className="text-[10px] text-text-muted uppercase">Contact Rate</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Feature 18: Collection ROI */}
+          {(debt.collection_costs > 0 || debt.payments_made > 0) && (
+            <div className="block-card p-6">
+              <SectionLabel>Collection ROI</SectionLabel>
+              {(() => {
+                const costs = debt.collection_costs || 0;
+                const collected = debt.payments_made || 0;
+                const roi = costs > 0 ? Math.round(((collected - costs) / costs) * 100) : 0;
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-text-muted">Total Collected</span><span className="font-mono text-accent-income">{formatCurrency(collected)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">Collection Costs</span><span className="font-mono text-accent-expense">{formatCurrency(costs)}</span></div>
+                    {debt.agency_commission_paid > 0 && (
+                      <div className="flex justify-between"><span className="text-text-muted">Agency Commission</span><span className="font-mono text-text-secondary">{formatCurrency(debt.agency_commission_paid)}</span></div>
+                    )}
+                    <div className="flex justify-between border-t border-border-primary pt-2 font-bold">
+                      <span>Net Recovery</span>
+                      <span className={`font-mono ${collected - costs >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{formatCurrency(collected - costs)}</span>
+                    </div>
+                    {costs > 0 && (
+                      <div className="flex justify-between font-bold">
+                        <span>ROI</span>
+                        <span className={`font-mono ${roi >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{roi}%</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Feature 21: Payment Waterfall Allocation */}
+          {payments.length > 0 && (
+            <div className="block-card p-6">
+              <SectionLabel>Payment Allocation Waterfall</SectionLabel>
+              {(() => {
+                const totalPrincipal = payments.reduce((s, p) => s + (p.applied_to_principal || 0), 0);
+                const totalInterest = payments.reduce((s, p) => s + (p.applied_to_interest || 0), 0);
+                const totalFees = payments.reduce((s, p) => s + (p.applied_to_fees || 0), 0);
+                const totalAll = totalPrincipal + totalInterest + totalFees || 1;
+                const pctPrincipal = Math.round((totalPrincipal / totalAll) * 100);
+                const pctInterest = Math.round((totalInterest / totalAll) * 100);
+                const pctFees = Math.round((totalFees / totalAll) * 100);
+                return (
+                  <div className="space-y-3">
+                    <div className="flex h-4 w-full overflow-hidden" style={{ borderRadius: 6 }}>
+                      {pctFees > 0 && <div style={{ width: `${pctFees}%`, background: '#ef4444' }} title={`Fees: ${pctFees}%`} />}
+                      {pctInterest > 0 && <div style={{ width: `${pctInterest}%`, background: '#f97316' }} title={`Interest: ${pctInterest}%`} />}
+                      {pctPrincipal > 0 && <div style={{ width: `${pctPrincipal}%`, background: '#22c55e' }} title={`Principal: ${pctPrincipal}%`} />}
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#ef4444', borderRadius: 3 }} /> Fees {formatCurrency(totalFees)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#f97316', borderRadius: 3 }} /> Interest {formatCurrency(totalInterest)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#22c55e', borderRadius: 3 }} /> Principal {formatCurrency(totalPrincipal)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* ── Right Column (2/5 = 40%) ── */}
@@ -1479,6 +1796,112 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         <button className="text-text-muted hover:text-accent-blue transition-colors p-0.5" onClick={() => handleEditDispute(d)} title="Edit"><Pencil size={11} /></button>
                         <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDeleteDispute(d.id)} title="Delete"><Trash2 size={11} /></button>
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Feature 1: Skip Traces Card */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Skip Traces
+              </h3>
+              <button className="block-btn flex items-center gap-1 text-xs" onClick={() => setShowSkipTraceForm(v => !v)}>
+                <Plus size={12} />
+                Add Trace
+              </button>
+            </div>
+
+            {showSkipTraceForm && (
+              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Source</label>
+                    <input className="block-input" placeholder="e.g. LexisNexis" value={skipTraceForm.source} onChange={(e) => setSkipTraceForm(f => ({ ...f, source: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Result</label>
+                    <select className="block-select" value={skipTraceForm.result} onChange={(e) => setSkipTraceForm(f => ({ ...f, result: e.target.value }))}>
+                      <option value="pending">Pending</option>
+                      <option value="verified">Verified</option>
+                      <option value="invalid">Invalid</option>
+                      <option value="no_contact">No Contact</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Address Tried</label>
+                    <input className="block-input" placeholder="Address" value={skipTraceForm.address_tried} onChange={(e) => setSkipTraceForm(f => ({ ...f, address_tried: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Phone Tried</label>
+                    <input className="block-input" placeholder="Phone" value={skipTraceForm.phone_tried} onChange={(e) => setSkipTraceForm(f => ({ ...f, phone_tried: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Email Tried</label>
+                    <input className="block-input" placeholder="Email" value={skipTraceForm.email_tried} onChange={(e) => setSkipTraceForm(f => ({ ...f, email_tried: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Employer Found</label>
+                    <input className="block-input" placeholder="Employer" value={skipTraceForm.employer_found} onChange={(e) => setSkipTraceForm(f => ({ ...f, employer_found: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Notes</label>
+                  <textarea className="block-input" rows={2} placeholder="Notes..." value={skipTraceForm.notes} onChange={(e) => setSkipTraceForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} />
+                </div>
+                <div className="flex gap-2">
+                  <button className="block-btn-primary text-xs" disabled={skipTraceSaving} onClick={async () => {
+                    setSkipTraceSaving(true);
+                    try {
+                      await api.create('debt_skip_traces', { debt_id: debtId, ...skipTraceForm });
+                      setShowSkipTraceForm(false);
+                      setSkipTraceForm({ source: '', address_tried: '', phone_tried: '', email_tried: '', employer_found: '', result: 'pending', notes: '' });
+                      triggerRefresh();
+                    } catch (err: any) {
+                      alert('Failed: ' + (err?.message || 'Unknown error'));
+                    } finally {
+                      setSkipTraceSaving(false);
+                    }
+                  }}>{skipTraceSaving ? 'Saving...' : 'Save'}</button>
+                  <button className="block-btn text-xs" onClick={() => setShowSkipTraceForm(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {skipTraces.length === 0 && !showSkipTraceForm ? (
+              <p className="text-sm text-text-muted">No skip traces recorded</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {skipTraces.map((st: any) => {
+                  const resultColor: Record<string, string> = { pending: '#d97706', verified: '#22c55e', invalid: '#ef4444', no_contact: '#6b7280' };
+                  return (
+                    <div key={st.id} className="p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: (resultColor[st.result] || '#777') + '22', color: resultColor[st.result] || '#777', textTransform: 'uppercase' }}>
+                            {st.result}
+                          </span>
+                          {st.source && <span className="text-xs text-text-primary font-medium">{st.source}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-text-muted font-mono">{formatDate(st.trace_date || st.created_at, { style: 'short' })}</span>
+                          <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={async () => {
+                            if (!window.confirm('Delete this skip trace?')) return;
+                            await api.remove('debt_skip_traces', st.id);
+                            triggerRefresh();
+                          }} title="Delete"><Trash2 size={11} /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-[10px] text-text-muted">
+                        {st.address_tried && <span>Addr: {st.address_tried}</span>}
+                        {st.phone_tried && <span>Phone: {st.phone_tried}</span>}
+                        {st.email_tried && <span>Email: {st.email_tried}</span>}
+                        {st.employer_found && <span>Employer: {st.employer_found}</span>}
+                      </div>
+                      {st.notes && <p className="text-xs text-text-secondary mt-1">{st.notes}</p>}
                     </div>
                   );
                 })}

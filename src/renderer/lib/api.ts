@@ -449,6 +449,33 @@ const api = {
   smartRecommendations: (companyId: string): Promise<any[]> =>
     window.electronAPI.invoke('debt:smart-recommendations', { companyId }),
 
+  // Feature 4: Schedule Communication
+  scheduleCommunication: (debtId: string, type: string, scheduledDate: string, subject: string, body: string): Promise<any> =>
+    window.electronAPI.invoke('debt:schedule-communication', { debtId, type, scheduledDate, subject, body }),
+  // Feature 12: Auto-Assign Debts
+  autoAssignDebts: (companyId: string): Promise<{ assigned: number; error?: string }> =>
+    window.electronAPI.invoke('debt:auto-assign', { companyId }),
+  // Feature 13: Auto Priority Scoring
+  autoPriorityScore: (companyId: string): Promise<{ updated: number; error?: string }> =>
+    window.electronAPI.invoke('debt:auto-priority', { companyId }),
+  // Feature 16: Freeze/Resume Interest
+  freezeInterest: (debtId: string, freeze: boolean, reason?: string): Promise<any> =>
+    window.electronAPI.invoke('debt:freeze-interest', { debtId, freeze, reason }),
+  // Feature 20: Consolidate Debts
+  consolidateDebts: (debtIds: string[], companyId: string): Promise<{ newDebtId?: string; consolidated?: number; error?: string }> =>
+    window.electronAPI.invoke('debt:consolidate', { debtIds, companyId }),
+  // Feature 23: Transfer Debt
+  transferDebt: (debtId: string, targetCompanyId: string): Promise<{ newDebtId?: string; error?: string }> =>
+    window.electronAPI.invoke('debt:transfer', { debtId, targetCompanyId }),
+  // Feature 24: Campaign Manager
+  listCampaigns: (companyId: string): Promise<any[]> =>
+    window.electronAPI.invoke('debt:campaign-list', { companyId }),
+  saveCampaign: (data: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('debt:campaign-save', data),
+  // Feature 9: Payment Portal Link
+  generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
+    window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
+
   batchExportPDF: (invoiceIds: string[]): Promise<{ path?: string; count?: number; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('invoice:batch-pdf', { invoiceIds }),
 

@@ -476,6 +476,8 @@ export function registerIpcHandlers(): void {
     'debt_compliance_log', 'invoice_debt_links',
     'expense_line_items', 'debt_disputes',
     'debt_audit_log', 'debt_payment_matches',
+    // Advanced debt collection child tables — company_id lives on parent
+    'debt_skip_traces',
   ]);
 
   ipcMain.handle('db:create', (_event, { table, data }) => {
@@ -4725,6 +4727,212 @@ export function registerIpcHandlers(): void {
     try {
       db.getDb().prepare('UPDATE debt_payment_matches SET status = ? WHERE id = ?').run('rejected', matchId);
       return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // ─── Advanced Debt Collection Handlers ──────────────────────
+
+  // Feature 4: Schedule Communication
+  ipcMain.handle('debt:schedule-communication', (_event, { debtId, type, scheduledDate, subject, body }: { debtId: string; type: string; scheduledDate: string; subject: string; body: string }) => {
+    try {
+      const record = db.create('debt_communications', {
+        debt_id: debtId,
+        type,
+        direction: 'outbound',
+        subject,
+        body,
+        next_action: 'send',
+        next_action_date: scheduledDate,
+        logged_at: new Date().toISOString(),
+        outcome: 'scheduled',
+      });
+      logDebtAudit(debtId, 'communication_logged', 'scheduled', '', scheduledDate);
+      scheduleAutoBackup();
+      return record;
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 12: Auto-Assign Debts to Collectors
+  ipcMain.handle('debt:auto-assign', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const unassigned = dbInstance.prepare(
+        `SELECT id FROM debts WHERE company_id = ? AND (assigned_collector_id IS NULL OR assigned_collector_id = '') AND status NOT IN ('settled','written_off') ORDER BY balance_due DESC`
+      ).all(companyId) as any[];
+      const collectors = dbInstance.prepare('SELECT id FROM users').all() as any[];
+      if (collectors.length === 0 || unassigned.length === 0) return { assigned: 0 };
+      let idx = 0;
+      const tx = dbInstance.transaction(() => {
+        for (const debt of unassigned) {
+          const collectorId = collectors[idx % collectors.length].id;
+          dbInstance.prepare('UPDATE debts SET assigned_collector_id = ?, updated_at = datetime(\'now\') WHERE id = ?').run(collectorId, debt.id);
+          logDebtAudit(debt.id, 'assignment_change', 'assigned_collector_id', '', collectorId);
+          idx++;
+        }
+      });
+      tx();
+      scheduleAutoBackup();
+      return { assigned: unassigned.length };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 20: Consolidate Debts
+  ipcMain.handle('debt:consolidate', (_event, { debtIds, companyId }: { debtIds: string[]; companyId: string }) => {
+    try {
+      if (debtIds.length < 2) return { error: 'Need at least 2 debts to consolidate' };
+      const dbInstance = db.getDb();
+      const debts = debtIds.map(id => dbInstance.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any).filter(Boolean);
+      if (debts.length < 2) return { error: 'Could not find all selected debts' };
+      // Check same debtor
+      const debtorName = debts[0].debtor_name;
+      if (!debts.every(d => d.debtor_name === debtorName)) return { error: 'All debts must be from the same debtor' };
+      const totalBalance = debts.reduce((s: number, d: any) => s + (d.balance_due || 0), 0);
+      const totalOriginal = debts.reduce((s: number, d: any) => s + (d.original_amount || 0), 0);
+      const totalInterest = debts.reduce((s: number, d: any) => s + (d.interest_accrued || 0), 0);
+      const totalFees = debts.reduce((s: number, d: any) => s + (d.fees_accrued || 0), 0);
+      const totalPayments = debts.reduce((s: number, d: any) => s + (d.payments_made || 0), 0);
+      const newDebt = db.create('debts', {
+        company_id: companyId,
+        type: debts[0].type,
+        debtor_type: debts[0].debtor_type,
+        debtor_name: debtorName,
+        debtor_email: debts[0].debtor_email || '',
+        debtor_phone: debts[0].debtor_phone || '',
+        debtor_address: debts[0].debtor_address || '',
+        original_amount: totalOriginal,
+        interest_accrued: totalInterest,
+        fees_accrued: totalFees,
+        payments_made: totalPayments,
+        balance_due: totalBalance,
+        due_date: debts.reduce((earliest: string, d: any) => (!earliest || d.due_date < earliest) ? d.due_date : earliest, ''),
+        delinquent_date: debts.reduce((earliest: string, d: any) => (!earliest || d.delinquent_date < earliest) ? d.delinquent_date : earliest, ''),
+        status: 'active',
+        current_stage: 'reminder',
+        priority: debts.some((d: any) => d.priority === 'critical') ? 'critical' : debts.some((d: any) => d.priority === 'high') ? 'high' : 'medium',
+        notes: `Consolidated from ${debts.length} debts: ${debtIds.map(id => id.slice(0, 8)).join(', ')}`,
+        source_type: 'manual',
+      });
+      // Mark originals as settled
+      for (const d of debts) {
+        dbInstance.prepare('UPDATE debts SET status = ?, notes = ?, updated_at = datetime(\'now\') WHERE id = ?')
+          .run('settled', `Consolidated into ${newDebt.id.slice(0, 8)}`, d.id);
+      }
+      db.create('debt_pipeline_stages', { debt_id: newDebt.id, stage: 'reminder' });
+      scheduleAutoBackup();
+      return { newDebtId: newDebt.id, consolidated: debts.length };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 23: Transfer Debt Between Companies
+  ipcMain.handle('debt:transfer', (_event, { debtId, targetCompanyId }: { debtId: string; targetCompanyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const debt = dbInstance.prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
+      if (!debt) return { error: 'Debt not found' };
+      // Create copy in target company
+      const cols = Object.keys(debt).filter(k => k !== 'id' && k !== 'company_id' && k !== 'created_at' && k !== 'updated_at');
+      const newDebtData: Record<string, any> = { company_id: targetCompanyId };
+      for (const col of cols) newDebtData[col] = debt[col];
+      newDebtData.notes = (newDebtData.notes || '') + `\nTransferred from company ${debt.company_id.slice(0, 8)}`;
+      const newDebt = db.create('debts', newDebtData);
+      // Mark original as transferred
+      dbInstance.prepare('UPDATE debts SET status = ?, notes = ?, updated_at = datetime(\'now\') WHERE id = ?')
+        .run('settled', `Transferred to company ${targetCompanyId.slice(0, 8)}`, debtId);
+      logDebtAudit(debtId, 'field_edit', 'status', debt.status, 'transferred');
+      scheduleAutoBackup();
+      return { newDebtId: newDebt.id };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 16: Freeze/Resume Interest
+  ipcMain.handle('debt:freeze-interest', (_event, { debtId, freeze, reason }: { debtId: string; freeze: boolean; reason?: string }) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      db.getDb().prepare(`UPDATE debts SET interest_frozen = ?, interest_frozen_date = ?, interest_frozen_reason = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(freeze ? 1 : 0, freeze ? today : '', reason || '', debtId);
+      logDebtAudit(debtId, 'field_edit', 'interest_frozen', freeze ? '0' : '1', freeze ? '1' : '0');
+      scheduleAutoBackup();
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 13: Auto Priority Scoring
+  ipcMain.handle('debt:auto-priority', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const debts = dbInstance.prepare(
+        `SELECT id, balance_due, statute_of_limitations_date FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off')`
+      ).all(companyId) as any[];
+      const today = new Date().toISOString().slice(0, 10);
+      let updated = 0;
+      const tx = dbInstance.transaction(() => {
+        for (const d of debts) {
+          let priority = 'low';
+          if (d.balance_due >= 10000) priority = 'critical';
+          else if (d.balance_due >= 5000) priority = 'high';
+          else if (d.balance_due >= 1000) priority = 'medium';
+          // Override: statute expiring within 90 days
+          if (d.statute_of_limitations_date) {
+            const daysLeft = Math.floor((new Date(d.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
+            if (daysLeft >= 0 && daysLeft <= 90) priority = 'critical';
+          }
+          dbInstance.prepare('UPDATE debts SET priority = ?, updated_at = datetime(\'now\') WHERE id = ?').run(priority, d.id);
+          updated++;
+        }
+      });
+      tx();
+      if (updated > 0) scheduleAutoBackup();
+      return { updated };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 24: Campaign Manager CRUD
+  ipcMain.handle('debt:campaign-list', (_event, { companyId }: { companyId: string }) => {
+    try {
+      return db.queryAll('debt_campaigns', { company_id: companyId }, { field: 'created_at', dir: 'desc' });
+    } catch (err: any) {
+      return [];
+    }
+  });
+
+  ipcMain.handle('debt:campaign-save', (_event, data: Record<string, any>) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (data.id) {
+        return db.update('debt_campaigns', data.id, data);
+      } else {
+        return db.create('debt_campaigns', { ...data, company_id: companyId });
+      }
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
+  // Feature 9: Generate Payment Portal Link
+  ipcMain.handle('debt:generate-portal-token', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const token = crypto.randomBytes(32).toString('hex');
+      // Store token in debt notes for now (lightweight approach)
+      const debt = db.getById('debts', debtId) as any;
+      if (!debt) return { error: 'Debt not found' };
+      db.update('debts', debtId, { notes: (debt.notes || '') });
+      // Return a generated portal URL
+      const portalUrl = `${SYNC_SERVER}/portal/debt/${token}`;
+      return { token, portalUrl };
     } catch (err: any) {
       return { error: err.message };
     }

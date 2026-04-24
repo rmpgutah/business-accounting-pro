@@ -36,6 +36,27 @@ interface DebtFormData {
   cease_desist_active: boolean;
   debtor_attorney_name: string;
   debtor_attorney_phone: string;
+  // Feature 2: Financial Profile
+  debtor_ssn_last4: string;
+  debtor_dob: string;
+  debtor_employer: string;
+  debtor_income_monthly: number;
+  debtor_assets_description: string;
+  debtor_bank_name: string;
+  // Feature 6: Credit Score
+  credit_score: number;
+  credit_score_date: string;
+  credit_score_source: string;
+  // Feature 10: Multi-Currency
+  currency: string;
+  exchange_rate: number;
+  // Feature 16: Interest Freeze
+  interest_frozen: boolean;
+  interest_frozen_reason: string;
+  // Feature 18: Collection Costs
+  collection_costs: number;
+  agency_commission_rate: number;
+  agency_commission_paid: number;
 }
 
 interface DropdownOption {
@@ -111,6 +132,22 @@ const emptyForm: DebtFormData = {
   cease_desist_active: false,
   debtor_attorney_name: '',
   debtor_attorney_phone: '',
+  debtor_ssn_last4: '',
+  debtor_dob: '',
+  debtor_employer: '',
+  debtor_income_monthly: 0,
+  debtor_assets_description: '',
+  debtor_bank_name: '',
+  credit_score: 0,
+  credit_score_date: '',
+  credit_score_source: '',
+  currency: 'USD',
+  exchange_rate: 1.0,
+  interest_frozen: false,
+  interest_frozen_reason: '',
+  collection_costs: 0,
+  agency_commission_rate: 0,
+  agency_commission_paid: 0,
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -251,6 +288,22 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               cease_desist_active: !!existing.cease_desist_active,
               debtor_attorney_name: existing.debtor_attorney_name ?? '',
               debtor_attorney_phone: existing.debtor_attorney_phone ?? '',
+              debtor_ssn_last4: existing.debtor_ssn_last4 ?? '',
+              debtor_dob: existing.debtor_dob ?? '',
+              debtor_employer: existing.debtor_employer ?? '',
+              debtor_income_monthly: Number(existing.debtor_income_monthly || 0),
+              debtor_assets_description: existing.debtor_assets_description ?? '',
+              debtor_bank_name: existing.debtor_bank_name ?? '',
+              credit_score: Number(existing.credit_score || 0),
+              credit_score_date: existing.credit_score_date ?? '',
+              credit_score_source: existing.credit_score_source ?? '',
+              currency: existing.currency ?? 'USD',
+              exchange_rate: Number(existing.exchange_rate || 1.0),
+              interest_frozen: !!existing.interest_frozen,
+              interest_frozen_reason: existing.interest_frozen_reason ?? '',
+              collection_costs: Number(existing.collection_costs || 0),
+              agency_commission_rate: Number(existing.agency_commission_rate || 0),
+              agency_commission_paid: Number(existing.agency_commission_paid || 0),
             });
           }
         }
@@ -429,6 +482,27 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         cease_desist_active: form.cease_desist_active ? 1 : 0,
         debtor_attorney_name: form.debtor_attorney_name.trim() || null,
         debtor_attorney_phone: form.debtor_attorney_phone.trim() || null,
+        // Feature 2: Financial Profile
+        debtor_ssn_last4: form.debtor_ssn_last4.trim() || null,
+        debtor_dob: form.debtor_dob || null,
+        debtor_employer: form.debtor_employer.trim() || null,
+        debtor_income_monthly: form.debtor_income_monthly || null,
+        debtor_assets_description: form.debtor_assets_description.trim() || null,
+        debtor_bank_name: form.debtor_bank_name.trim() || null,
+        // Feature 6: Credit Score
+        credit_score: form.credit_score || null,
+        credit_score_date: form.credit_score_date || null,
+        credit_score_source: form.credit_score_source.trim() || null,
+        // Feature 10: Multi-Currency
+        currency: form.currency || 'USD',
+        exchange_rate: form.exchange_rate || 1.0,
+        // Feature 16: Interest Freeze
+        interest_frozen: form.interest_frozen ? 1 : 0,
+        interest_frozen_reason: form.interest_frozen_reason.trim() || null,
+        // Feature 18: Collection Costs
+        collection_costs: form.collection_costs || null,
+        agency_commission_rate: form.agency_commission_rate || null,
+        agency_commission_paid: form.agency_commission_paid || null,
       };
 
       if (isEditing && debtId) {
@@ -1023,6 +1097,105 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Attorney Phone</label>
               <input className="block-input" type="tel" name="debtor_attorney_phone" autoComplete="tel" value={form.debtor_attorney_phone} onChange={(e) => setForm(p => ({...p, debtor_attorney_phone: e.target.value}))} placeholder="(555) 000-0000" />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 6 — Financial Profile (Feature 2) */}
+        <div className="block-card p-6 mb-4">
+          <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">
+            Financial Profile
+          </h3>
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">SSN Last 4</label>
+              <input className="block-input" maxLength={4} placeholder="0000" value={form.debtor_ssn_last4} onChange={(e) => setForm(p => ({...p, debtor_ssn_last4: e.target.value.replace(/\D/g, '').slice(0, 4)}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Date of Birth</label>
+              <input type="date" className="block-input" value={form.debtor_dob} onChange={(e) => setForm(p => ({...p, debtor_dob: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Employer</label>
+              <input className="block-input" placeholder="Employer name" value={form.debtor_employer} onChange={(e) => setForm(p => ({...p, debtor_employer: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Monthly Income</label>
+              <input type="number" min={0} step="100" className="block-input" placeholder="0.00" value={form.debtor_income_monthly || ''} onChange={(e) => setForm(p => ({...p, debtor_income_monthly: parseFloat(e.target.value) || 0}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Bank Name</label>
+              <input className="block-input" placeholder="Bank name" value={form.debtor_bank_name} onChange={(e) => setForm(p => ({...p, debtor_bank_name: e.target.value}))} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Assets Description</label>
+              <textarea className="block-input" rows={2} placeholder="Known assets..." value={form.debtor_assets_description} onChange={(e) => setForm(p => ({...p, debtor_assets_description: e.target.value}))} style={{ resize: 'vertical' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 7 — Credit Score (Feature 6) & Currency (Feature 10) */}
+        <div className="block-card p-6 mb-4">
+          <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">
+            Credit & Currency
+          </h3>
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Credit Score</label>
+              <input type="number" min={0} max={850} className="block-input" placeholder="0" value={form.credit_score || ''} onChange={(e) => setForm(p => ({...p, credit_score: parseInt(e.target.value) || 0}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Score Date</label>
+              <input type="date" className="block-input" value={form.credit_score_date} onChange={(e) => setForm(p => ({...p, credit_score_date: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Score Source</label>
+              <select className="block-select" value={form.credit_score_source} onChange={(e) => setForm(p => ({...p, credit_score_source: e.target.value}))}>
+                <option value="">Select source...</option>
+                <option value="Equifax">Equifax</option>
+                <option value="Experian">Experian</option>
+                <option value="TransUnion">TransUnion</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Currency</label>
+              <select className="block-select" value={form.currency} onChange={(e) => setForm(p => ({...p, currency: e.target.value}))}>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="CAD">CAD</option>
+                <option value="AUD">AUD</option>
+                <option value="MXN">MXN</option>
+                <option value="JPY">JPY</option>
+              </select>
+            </div>
+            {form.currency !== 'USD' && (
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Exchange Rate (to USD)</label>
+                <input type="number" min={0} step="0.001" className="block-input" placeholder="1.00" value={form.exchange_rate} onChange={(e) => setForm(p => ({...p, exchange_rate: parseFloat(e.target.value) || 1}))} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Section 8 — Collection Costs (Feature 18) */}
+        <div className="block-card p-6 mb-4">
+          <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">
+            Collection Costs
+          </h3>
+          <div className="grid grid-cols-3 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Total Costs</label>
+              <input type="number" min={0} step="0.01" className="block-input" placeholder="0.00" value={form.collection_costs || ''} onChange={(e) => setForm(p => ({...p, collection_costs: parseFloat(e.target.value) || 0}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Agency Commission %</label>
+              <input type="number" min={0} max={100} step="0.5" className="block-input" placeholder="0" value={form.agency_commission_rate || ''} onChange={(e) => setForm(p => ({...p, agency_commission_rate: parseFloat(e.target.value) || 0}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Commission Paid</label>
+              <input type="number" min={0} step="0.01" className="block-input" placeholder="0.00" value={form.agency_commission_paid || ''} onChange={(e) => setForm(p => ({...p, agency_commission_paid: parseFloat(e.target.value) || 0}))} />
             </div>
           </div>
         </div>
