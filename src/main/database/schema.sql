@@ -553,6 +553,55 @@ CREATE INDEX IF NOT EXISTS idx_bank_transactions_account ON bank_transactions(ba
 CREATE INDEX IF NOT EXISTS idx_stripe_transactions_company ON stripe_transactions(company_id);
 
 -- ═══════════════════════════════════════════════════════
+-- STRIPE OFFLINE CACHE
+-- Generic per-resource cache so the Stripe browser works
+-- without network. Each row is one Stripe object, keyed by
+-- (company, resource, stripe_id). `data` is the raw JSON
+-- returned by Stripe so downstream code can rehydrate it.
+-- ═══════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS stripe_cache (
+  id TEXT PRIMARY KEY,                              -- uuid, not the stripe id
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  resource TEXT NOT NULL,                           -- e.g. 'charges', 'customers'
+  stripe_id TEXT NOT NULL,                          -- the Stripe object's id
+  data TEXT NOT NULL,                               -- JSON payload
+  stripe_created INTEGER,                           -- unix seconds from object.created (if present)
+  synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+  is_stale INTEGER NOT NULL DEFAULT 0,              -- marked true when a write was queued offline
+  UNIQUE(company_id, resource, stripe_id)
+);
+CREATE INDEX IF NOT EXISTS idx_stripe_cache_res ON stripe_cache(company_id, resource, synced_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stripe_cache_created ON stripe_cache(company_id, resource, stripe_created DESC);
+
+-- Queue for write operations performed while offline. Drained on reconnect.
+CREATE TABLE IF NOT EXISTS stripe_offline_queue (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  resource TEXT NOT NULL,
+  action TEXT NOT NULL,                             -- list/create/update/delete/custom action name
+  stripe_id TEXT,                                   -- target object id if update/delete/custom
+  params TEXT,                                      -- JSON encoded params
+  idempotency_key TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_attempt_at TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'            -- pending | done | failed
+);
+CREATE INDEX IF NOT EXISTS idx_stripe_queue_pending ON stripe_offline_queue(company_id, status);
+
+-- Per-resource sync metadata — drives "last updated" badge and incremental fetch cursors.
+CREATE TABLE IF NOT EXISTS stripe_sync_state (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  resource TEXT NOT NULL,
+  last_synced_at TEXT,
+  last_ok_at TEXT,
+  last_error TEXT,
+  UNIQUE(company_id, resource)
+);
+
+-- ═══════════════════════════════════════════════════════
 -- ENTERPRISE ADDITIONS v2.0
 -- ═══════════════════════════════════════════════════════
 

@@ -564,7 +564,7 @@ export function logAudit(
   companyId: string,
   entityType: string,
   entityId: string,
-  action: 'create' | 'update' | 'delete',
+  action: 'create' | 'update' | 'delete' | 'export_pdf' | 'email_pdf' | 'print' | (string & {}),
   changes: Record<string, any> = {}
 ): void {
   create('audit_log', {

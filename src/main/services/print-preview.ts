@@ -1,92 +1,142 @@
 /**
  * Print Preview Window Service
  * Opens HTML content in a dedicated preview window with Print / Save PDF / Close toolbar.
+ *
+ * Also exports headless helpers (htmlToPDFBuffer, saveHTMLAsPDF, printHTML)
+ * used by IPC handlers that need a PDF without showing the preview window.
  */
-import { BrowserWindow, dialog, ipcMain } from 'electron';
-import fs from 'fs';
+import { BrowserWindow, dialog, shell } from 'electron';
+import { promises as fsp } from 'fs';
+
+// ─── PDF page/margin options ────────────────────────────────
+// Centralised so all call sites emit PDFs with the same defaults.
+// Callers can override per-invocation (e.g. landscape for wide tables).
+export type PDFOptions = {
+  pageSize?: 'A4' | 'Letter' | 'Legal' | 'Tabloid';
+  landscape?: boolean;
+  margins?: { top: number; bottom: number; left: number; right: number };
+  printBackground?: boolean;
+};
+
+const DEFAULT_PDF_OPTIONS: Required<PDFOptions> = {
+  pageSize: 'A4',
+  landscape: false,
+  margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+  printBackground: true,
+};
+
+function resolvePDFOptions(opts?: PDFOptions): Required<PDFOptions> {
+  return {
+    pageSize: opts?.pageSize ?? DEFAULT_PDF_OPTIONS.pageSize,
+    landscape: opts?.landscape ?? DEFAULT_PDF_OPTIONS.landscape,
+    margins: opts?.margins ?? DEFAULT_PDF_OPTIONS.margins,
+    printBackground: opts?.printBackground ?? DEFAULT_PDF_OPTIONS.printBackground,
+  };
+}
+
+// ─── Safe filename builder ──────────────────────────────────
+// {doctype}-{identifier}-{yyyy-MM-dd}.pdf
+export function buildPdfFilename(doctype: string, identifier: string, date: Date = new Date()): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const safe = (s: string) => String(s || '').replace(/[^a-zA-Z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const doc = safe(doctype) || 'document';
+  const id = safe(identifier) || 'untitled';
+  return `${doc}-${id}-${yyyy}-${mm}-${dd}.pdf`;
+}
+
+// ─── Locked-down headless BrowserWindow factory ─────────────
+// nodeIntegration off, contextIsolation on, sandbox on, no preload.
+// Blocks navigation so an injected <meta http-equiv="refresh"> or
+// JS redirect in user-supplied HTML cannot read local files via file://.
+function createHeadlessWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    show: false,
+    width: 800,
+    height: 1100,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      javascript: true,
+    },
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('data:')) event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  return win;
+}
+
+async function renderHTMLToPDF(
+  htmlContent: string,
+  options?: PDFOptions
+): Promise<Buffer> {
+  const win = createHeadlessWindow();
+  try {
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    const resolved = resolvePDFOptions(options);
+    const pdfData = await win.webContents.printToPDF(resolved);
+    return Buffer.from(pdfData);
+  } finally {
+    // Guarantee cleanup to prevent renderer-process leak.
+    if (!win.isDestroyed()) win.destroy();
+  }
+}
 
 // ─── Wrap HTML content with a sticky toolbar ────────────────
 function wrapWithToolbar(html: string, title: string): string {
-  // Strip existing <html>/<head>/<body> wrappers so we can inject our own
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
   const headMatch = html.match(/<head[^>]*>([\s\S]*)<\/head>/i);
   const bodyContent = bodyMatch ? bodyMatch[1] : html;
   const headContent = headMatch ? headMatch[1] : '';
+  const safeTitle = title.replace(/[<>&"]/g, (c) =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] || c)
+  );
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${title}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: 'unsafe-inline'; img-src data: https:; script-src 'unsafe-inline';">
+  <title>${safeTitle}</title>
   ${headContent}
   <style>
-    /* ── Toolbar ──────────────────────────────── */
     .pp-toolbar {
-      position: sticky;
-      top: 0;
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 20px;
-      background: #1a1a1a;
-      border-bottom: 1px solid #333;
+      position: sticky; top: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px; background: #1a1a1a; border-bottom: 1px solid #333;
       font-family: -apple-system, system-ui, sans-serif;
-      -webkit-app-region: drag;
     }
-    .pp-toolbar-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #e0e0e0;
-      letter-spacing: -0.2px;
-    }
-    .pp-toolbar-actions {
-      display: flex;
-      gap: 8px;
-      -webkit-app-region: no-drag;
-    }
+    .pp-toolbar-title { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+    .pp-toolbar-actions { display: flex; gap: 8px; }
     .pp-toolbar-btn {
-      padding: 6px 16px;
-      font-size: 12px;
-      font-weight: 600;
-      border: 1px solid #444;
-      background: #2a2a2a;
-      color: #e0e0e0;
-      cursor: pointer;
-      border-radius: 2px;
-      transition: background 0.15s;
+      padding: 6px 16px; font-size: 12px; font-weight: 600;
+      border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
+      cursor: pointer; border-radius: 0;
     }
     .pp-toolbar-btn:hover { background: #3a3a3a; }
-    .pp-toolbar-btn-primary {
-      background: #3b82f6;
-      border-color: #3b82f6;
-      color: #fff;
-    }
-    .pp-toolbar-btn-primary:hover { background: #2563eb; }
-
-    /* ── Hide toolbar when printing ──────────── */
-    @media print {
-      .pp-toolbar { display: none !important; }
-    }
+    .pp-toolbar-btn-primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    @media print { .pp-toolbar { display: none !important; } }
   </style>
 </head>
 <body style="margin:0;padding:0;background:#fff;">
   <div class="pp-toolbar">
-    <span class="pp-toolbar-title">${title}</span>
+    <span class="pp-toolbar-title">${safeTitle}</span>
     <div class="pp-toolbar-actions">
-      <button class="pp-toolbar-btn" onclick="window.close()">Close</button>
+      <button class="pp-toolbar-btn" id="pp-close">Close</button>
       <button class="pp-toolbar-btn" id="pp-save-pdf">Save as PDF</button>
       <button class="pp-toolbar-btn pp-toolbar-btn-primary" id="pp-print">Print</button>
     </div>
   </div>
   ${bodyContent}
   <script>
-    document.getElementById('pp-print').addEventListener('click', () => {
-      window.print();
-    });
+    document.getElementById('pp-close').addEventListener('click', () => window.close());
+    document.getElementById('pp-print').addEventListener('click', () => window.print());
     document.getElementById('pp-save-pdf').addEventListener('click', () => {
-      // Signal main process via IPC (we use postMessage trick with a custom protocol)
-      if (window.__ppSavePDF) window.__ppSavePDF();
+      // Signal to main process via title-change sentinel.
+      document.title = '__PP_SAVE_PDF__';
     });
   </script>
 </body>
@@ -94,7 +144,11 @@ function wrapWithToolbar(html: string, title: string): string {
 }
 
 // ─── Open a print-preview window ────────────────────────────
-export function openPrintPreview(htmlContent: string, title: string): void {
+export function openPrintPreview(
+  htmlContent: string,
+  title: string,
+  pdfOptions?: PDFOptions & { defaultFilename?: string }
+): void {
   const previewWin = new BrowserWindow({
     width: 800,
     height: 1100,
@@ -105,107 +159,113 @@ export function openPrintPreview(htmlContent: string, title: string): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: undefined,
+      sandbox: true,
     },
   });
 
-  const wrappedHTML = wrapWithToolbar(htmlContent, title);
+  // Block navigation away from the data: URL — keeps arbitrary HTML from
+  // reading local files via file:// or exfiltrating over http.
+  previewWin.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('data:')) event.preventDefault();
+  });
+  previewWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  const wrappedHTML = wrapWithToolbar(htmlContent, title);
   previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(wrappedHTML)}`);
 
-  // Inject the save-PDF callback after the page loads
-  previewWin.webContents.on('did-finish-load', () => {
-    previewWin.webContents.executeJavaScript(`
-      window.__ppSavePDF = () => {
-        document.title = '__PP_SAVE_PDF__';
-      };
-    `);
-  });
-
-  // Listen for title change as a signal to save PDF
   previewWin.on('page-title-updated', async (event, newTitle) => {
-    if (newTitle === '__PP_SAVE_PDF__') {
-      event.preventDefault();
-      try {
-        const { filePath } = await dialog.showSaveDialog(previewWin, {
-          defaultPath: `${title.replace(/[^a-zA-Z0-9-_ ]/g, '')}.pdf`,
-          filters: [{ name: 'PDF', extensions: ['pdf'] }],
-        });
-        if (!filePath) return;
-        const pdfData = await previewWin.webContents.printToPDF({
-          pageSize: 'Letter',
-          margins: { top: 0.3, bottom: 0.3, left: 0.3, right: 0.3 },
-          printBackground: true,
-        });
-        fs.writeFileSync(filePath, Buffer.from(pdfData));
-      } catch (err) {
-        console.error('Print preview save-pdf error:', err);
+    if (newTitle !== '__PP_SAVE_PDF__') return;
+    event.preventDefault();
+    try {
+      const defaultName = pdfOptions?.defaultFilename
+        || buildPdfFilename('document', title, new Date());
+      const { filePath, canceled } = await dialog.showSaveDialog(previewWin, {
+        defaultPath: defaultName,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (canceled || !filePath) return;
+      const pdfData = await previewWin.webContents.printToPDF(resolvePDFOptions(pdfOptions));
+      await fsp.writeFile(filePath, Buffer.from(pdfData));
+    } catch (err) {
+      console.error('Print preview save-pdf error:', err);
+      dialog.showErrorBox('Save PDF failed', (err as Error)?.message || String(err));
+    } finally {
+      if (!previewWin.isDestroyed()) {
+        previewWin.webContents.executeJavaScript(
+          `document.title = ${JSON.stringify(title)};`
+        ).catch(() => {});
       }
-      // Restore original title
-      previewWin.webContents.executeJavaScript(`document.title = ${JSON.stringify(title)};`);
     }
   });
 }
 
-// ─── Render HTML to PDF Buffer (headless, no dialog) ────────
-// Used when we need a PDF in memory (e.g. attaching to an email) rather
-// than prompting the user to save it. Caller is responsible for writing
-// the buffer to disk or streaming it.
-export async function htmlToPDFBuffer(htmlContent: string): Promise<Buffer> {
-  const win = new BrowserWindow({ show: false, width: 800, height: 1100 });
-  try {
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
-    const pdfData = await win.webContents.printToPDF({
-      pageSize: 'Letter',
-      margins: { top: 0.3, bottom: 0.3, left: 0.3, right: 0.3 },
-      printBackground: true,
-    });
-    return Buffer.from(pdfData);
-  } finally {
-    win.close();
-  }
+// ─── Render HTML to PDF Buffer (headless) ───────────────────
+export async function htmlToPDFBuffer(
+  htmlContent: string,
+  options?: PDFOptions
+): Promise<Buffer> {
+  return renderHTMLToPDF(htmlContent, options);
 }
 
 // ─── Save HTML as PDF (headless — no preview window) ────────
-export async function saveHTMLAsPDF(htmlContent: string, title: string): Promise<string> {
-  const { filePath } = await dialog.showSaveDialog({
-    defaultPath: `${title.replace(/[^a-zA-Z0-9-_ ]/g, '')}.pdf`,
-    filters: [{ name: 'PDF', extensions: ['pdf'] }],
-  });
-
-  if (!filePath) return '';
-
-  const win = new BrowserWindow({ show: false, width: 800, height: 1100 });
+// Returns { path, cancelled?, error? } — callers should surface errors
+// instead of silently swallowing disk-full / permission-denied.
+export async function saveHTMLAsPDF(
+  htmlContent: string,
+  title: string,
+  opts?: PDFOptions & { defaultFilename?: string; parentWindow?: BrowserWindow }
+): Promise<{ path?: string; cancelled?: boolean; error?: string }> {
   try {
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
-    const pdfData = await win.webContents.printToPDF({
-      pageSize: 'Letter',
-      margins: { top: 0.3, bottom: 0.3, left: 0.3, right: 0.3 },
-      printBackground: true,
-    });
-    fs.writeFileSync(filePath, Buffer.from(pdfData));
-    return filePath;
-  } finally {
-    win.close();
+    const defaultName = opts?.defaultFilename
+      || buildPdfFilename('document', title, new Date());
+    const saveOpts = {
+      defaultPath: defaultName,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    };
+    const { filePath, canceled } = opts?.parentWindow
+      ? await dialog.showSaveDialog(opts.parentWindow, saveOpts)
+      : await dialog.showSaveDialog(saveOpts);
+    if (canceled || !filePath) return { cancelled: true };
+
+    const pdfBuffer = await renderHTMLToPDF(htmlContent, opts);
+    await fsp.writeFile(filePath, pdfBuffer);
+    return { path: filePath };
+  } catch (err: any) {
+    return { error: err?.message || 'PDF save failed' };
   }
 }
 
-// ─── Print HTML (opens system print dialog) ─────────────────
+// ─── Print HTML via system print dialog ─────────────────────
 export async function printHTML(htmlContent: string): Promise<void> {
-  const win = new BrowserWindow({ show: false, width: 800, height: 1100 });
+  const win = createHeadlessWindow();
+  let finished = false;
   try {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
-    win.webContents.print({ silent: false, printBackground: true });
-  } catch (err) {
-    win.close();
-    throw err;
+    await new Promise<void>((resolve, reject) => {
+      win.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
+        finished = true;
+        if (!success && failureReason && failureReason !== 'cancelled') {
+          reject(new Error(failureReason));
+        } else {
+          resolve();
+        }
+      });
+    });
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+    // Safety net — if print callback never fires (rare on some platforms),
+    // still tear the window down.
+    if (!finished) {
+      setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, 60_000);
+    }
   }
-  // The window will stay open while the print dialog is active; close on did-finish-load or after print
-  win.webContents.on('did-finish-load', () => {
-    // already loaded
-  });
-  // Close after a reasonable delay to let the print dialog open
-  setTimeout(() => {
-    if (!win.isDestroyed()) win.close();
-  }, 60000);
+}
+
+// ─── OS integration helpers ─────────────────────────────────
+export async function openPathInOS(p: string): Promise<string> {
+  return shell.openPath(p);
+}
+
+export function revealInFolder(p: string): void {
+  shell.showItemInFolder(p);
 }

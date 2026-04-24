@@ -196,7 +196,8 @@ const AuthScreen: React.FC = () => {
       fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
     }}>
       {/* Drag region for macOS hiddenInset title bar */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag' as any, zIndex: 10 }} />
+      {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag', zIndex: 10 }} />
 
       {/* ── Left branding panel ───────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px', minWidth: '300px' }}>
@@ -221,9 +222,10 @@ const AuthScreen: React.FC = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {[
-            { Icon: Shield,   color: '#60a5fa', bg: 'rgba(59,130,246,0.15)',  text: 'Secure, encrypted local storage' },
-            { Icon: BarChart3, color: '#34d399', bg: 'rgba(34,197,94,0.15)',   text: 'Real-time financial analytics' },
-            { Icon: Lock,     color: '#f87171', bg: 'rgba(239,68,68,0.15)',    text: 'Your data never leaves your device' },
+            // Neutral monochrome icons — the red/blue/green was fighting the logo
+            { Icon: Shield,    color: 'rgba(255,255,255,0.85)', bg: 'rgba(255,255,255,0.08)', text: 'Secure, encrypted local storage' },
+            { Icon: BarChart3, color: 'rgba(255,255,255,0.85)', bg: 'rgba(255,255,255,0.08)', text: 'Real-time financial analytics' },
+            { Icon: Lock,      color: 'rgba(255,255,255,0.85)', bg: 'rgba(255,255,255,0.08)', text: 'Your data never leaves your device' },
           ].map(({ Icon, color, bg, text }) => (
             <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

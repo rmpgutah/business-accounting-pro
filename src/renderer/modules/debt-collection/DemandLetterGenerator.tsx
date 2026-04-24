@@ -31,12 +31,20 @@ interface Debt {
   jurisdiction: string;
 }
 
+interface CompanyInfo {
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+}
+
 // ─── Merge field replacement ────────────────────────────
 function mergeFields(
   text: string,
   debt: Debt,
-  companyName: string
+  companyInfo: CompanyInfo
 ): string {
+  const companyName = companyInfo.name || '';
   const totalDue = (debt.balance_due || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0);
   const delinquent = debt.delinquent_date ? new Date(debt.delinquent_date) : null;
   const daysOverdue = delinquent && !isNaN(delinquent.getTime())
@@ -59,6 +67,9 @@ function mergeFields(
     .replace(/\{\{demand_deadline\}\}/g, formatDate(demandDeadlineIso))
     .replace(/\{\{jurisdiction\}\}/g, debt.jurisdiction || '')
     .replace(/\{\{company_name\}\}/g, companyName)
+    .replace(/\{\{company_address\}\}/g, companyInfo.address || '')
+    .replace(/\{\{company_phone\}\}/g, companyInfo.phone || '')
+    .replace(/\{\{company_email\}\}/g, companyInfo.email || '')
     .replace(/\{\{current_date\}\}/g, formatDate(new Date().toISOString()));
 }
 
@@ -75,7 +86,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [debt, setDebt] = useState<Debt | null>(null);
-  const [companyName, setCompanyName] = useState('');
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({ name: '' });
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -97,18 +108,27 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
           api.query('debt_templates', { company_id: activeCompany.id }),
           api.get('debts', debtId),
           api.rawQuery(
-            'SELECT name FROM companies WHERE id = ?',
+            'SELECT name, address_line1, address_line2, city, state, zip, phone, email FROM companies WHERE id = ?',
             [activeCompany.id]
           ),
         ]);
         if (cancelled) return;
         setTemplates(Array.isArray(tplData) ? tplData : []);
         setDebt(debtData || null);
-        setCompanyName(
-          Array.isArray(companyRows) && companyRows.length > 0
-            ? companyRows[0].name
-            : ''
-        );
+        if (Array.isArray(companyRows) && companyRows.length > 0) {
+          const c = companyRows[0];
+          const addr = [c.address_line1, c.address_line2, c.city, c.state, c.zip]
+            .filter(Boolean)
+            .join(', ');
+          setCompanyInfo({
+            name: c.name || '',
+            address: addr,
+            phone: c.phone || '',
+            email: c.email || '',
+          });
+        } else {
+          setCompanyInfo({ name: '' });
+        }
       } catch (err) {
         console.error('Failed to load demand letter data:', err);
       } finally {
@@ -127,13 +147,13 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   // ── Preview text ──
   const previewSubject = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.subject || '', debt, companyName);
-  }, [selectedTemplate, debt, companyName]);
+    return mergeFields(selectedTemplate.subject || '', debt, companyInfo);
+  }, [selectedTemplate, debt, companyInfo]);
 
   const previewBody = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.body || '', debt, companyName);
-  }, [selectedTemplate, debt, companyName]);
+    return mergeFields(selectedTemplate.body || '', debt, companyInfo);
+  }, [selectedTemplate, debt, companyInfo]);
 
   // ── Generate & Log ──
   const handleGenerate = useCallback(async () => {

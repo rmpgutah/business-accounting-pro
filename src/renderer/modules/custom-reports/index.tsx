@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
-import { FileBarChart, Plus, Play, Download, Save, Trash2 } from 'lucide-react';
+import { FileBarChart, Plus, Play, Download, Printer, Save, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import {
+  downloadCSVBlob,
+  dateStampedFilename,
+  humanizeHeader,
+  printWhenReady,
+  type CSVColumn,
+} from '../../lib/csv-export';
 
 const AVAILABLE_FIELDS: Record<string, string[]> = {
   invoices: ['invoice_number', 'client_id', 'status', 'issue_date', 'due_date', 'subtotal', 'tax_amount', 'total', 'amount_paid'],
@@ -39,6 +46,28 @@ const defaultConfig: ReportConfig = {
 };
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const CURRENCY_FIELD = /amount|total|price|rate|pay|cost|balance|fee|net|subtotal|paid|budget/i;
+const DATE_FIELD = /date|_at$/i;
+
+// Column totals — only sum numeric columns that look like money/quantities.
+function computeTotals(rows: any[], keys: string[]): Record<string, number | null> {
+  const totals: Record<string, number | null> = {};
+  for (const k of keys) {
+    if (!CURRENCY_FIELD.test(k) && !/count|quantity|minutes|hours/i.test(k)) {
+      totals[k] = null;
+      continue;
+    }
+    let sum = 0;
+    let any = false;
+    for (const r of rows) {
+      const v = r[k];
+      if (typeof v === 'number' && !isNaN(v)) { sum += v; any = true; }
+      else if (typeof v === 'string' && v !== '' && !isNaN(Number(v))) { sum += Number(v); any = true; }
+    }
+    totals[k] = any ? sum : null;
+  }
+  return totals;
+}
 
 export default function CustomReportsModule() {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -137,17 +166,45 @@ export default function CustomReportsModule() {
   };
 
   const exportCSV = () => {
-    if (!results || results.length === 0) return;
+    if (!results || results.length === 0) {
+      setError('Run the report first — there are no results to export.');
+      return;
+    }
     const headers = Object.keys(results[0]);
-    const rows = results.map((r) => headers.map((h) => String(r[h] ?? '')).join(','));
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${config.name.replace(/\s+/g, '_')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const columns: CSVColumn[] = headers.map((h) => ({
+      key: h,
+      label: humanizeHeader(h),
+      // Leave numbers raw so Excel can math them, but trim dates to yyyy-mm-dd.
+      format: (v) => {
+        if (v === null || v === undefined || v === '') return '';
+        if (DATE_FIELD.test(h) && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+          return v.slice(0, 10);
+        }
+        return v;
+      },
+    }));
+    // Append a totals row for summable columns.
+    const totals = computeTotals(results, headers);
+    const hasAnyTotal = Object.values(totals).some((t) => t !== null);
+    const rows = hasAnyTotal
+      ? [
+          ...results,
+          headers.reduce<Record<string, any>>((acc, k, i) => {
+            acc[k] = i === 0 ? 'TOTAL' : totals[k] ?? '';
+            return acc;
+          }, {}),
+        ]
+      : results;
+    const slug = config.name || `${config.table}-report`;
+    downloadCSVBlob(rows, dateStampedFilename(slug), columns);
+  };
+
+  const printReport = () => {
+    if (!results || results.length === 0) {
+      setError('Run the report first — there is nothing to print.');
+      return;
+    }
+    printWhenReady({ isReady: () => !loading });
   };
 
   return (
@@ -160,10 +217,16 @@ export default function CustomReportsModule() {
             {loading ? 'Running...' : 'Run Report'}
           </button>
           {results && results.length > 0 && (
-            <button className="block-btn flex items-center gap-2" onClick={exportCSV}>
-              <Download size={14} />
-              Export CSV
-            </button>
+            <>
+              <button className="block-btn flex items-center gap-2" onClick={exportCSV}>
+                <Download size={14} />
+                Export CSV
+              </button>
+              <button className="block-btn flex items-center gap-2" onClick={printReport}>
+                <Printer size={14} />
+                Print
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -292,22 +355,46 @@ export default function CustomReportsModule() {
                   <thead>
                     <tr>
                       {Object.keys(results[0]).map((h) => (
-                        <th key={h}>{h}</th>
+                        <th key={h} title={h}>{humanizeHeader(h)}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {results.map((row, i) => (
-                      <tr key={i}>
-                        {Object.values(row).map((val: any, j) => (
-                          <td key={j} className="text-text-secondary text-xs">
-                            {typeof val === 'number' && String(Object.keys(row)[j]).match(/amount|total|price|rate|pay|cost|balance|fee|net/)
-                              ? fmt.format(val)
-                              : String(val ?? '')}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
+                    {results.map((row, i) => {
+                      const keys = Object.keys(row);
+                      return (
+                        <tr key={i}>
+                          {keys.map((k, j) => {
+                            const val = row[k];
+                            const isCurrency = typeof val === 'number' && CURRENCY_FIELD.test(k);
+                            const isDate = typeof val === 'string' && DATE_FIELD.test(k) && /^\d{4}-\d{2}-\d{2}/.test(val);
+                            return (
+                              <td key={j} className="text-text-secondary text-xs">
+                                {isCurrency ? fmt.format(val) : isDate ? val.slice(0, 10) : String(val ?? '')}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                    {(() => {
+                      const keys = Object.keys(results[0]);
+                      const totals = computeTotals(results, keys);
+                      if (!Object.values(totals).some((t) => t !== null)) return null;
+                      return (
+                        <tr style={{ borderTop: '2px solid var(--color-border-secondary)', fontWeight: 600 }}>
+                          {keys.map((k, j) => (
+                            <td key={j} className="text-xs font-mono">
+                              {j === 0
+                                ? 'TOTAL'
+                                : totals[k] !== null
+                                ? (CURRENCY_FIELD.test(k) ? fmt.format(totals[k]!) : String(totals[k]))
+                                : ''}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>

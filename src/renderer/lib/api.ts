@@ -176,8 +176,23 @@ const api = {
   // Print / Preview
   printPreview: (html: string, title: string): Promise<{ success?: boolean }> =>
     window.electronAPI.invoke('print:preview', { html, title }),
-  saveToPDF: (html: string, title: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
-    window.electronAPI.invoke('print:save-pdf', { html, title }),
+  saveToPDF: (
+    html: string,
+    title: string,
+    opts?: {
+      doctype?: string;
+      identifier?: string;
+      pdfOptions?: {
+        pageSize?: 'A4' | 'Letter' | 'Legal' | 'Tabloid';
+        landscape?: boolean;
+        margins?: { top: number; bottom: number; left: number; right: number };
+        printBackground?: boolean;
+      };
+      openAfterSave?: boolean;
+      revealAfterSave?: boolean;
+    }
+  ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('print:save-pdf', { html, title, ...(opts || {}) }),
   print: (html: string): Promise<{ success?: boolean; error?: string }> =>
     window.electronAPI.invoke('print:print', { html }),
 
@@ -482,6 +497,50 @@ const api = {
     window.electronAPI.invoke('payroll:pto-adjust', { employeeId, policyId, hours, note }),
   getStateTaxRate: (state: string, grossPay: number, allowances: number, periodsPerYear: number): Promise<any> =>
     window.electronAPI.invoke('payroll:state-tax-rate', { state, grossPay, allowances, periodsPerYear }),
+
+  // ─── Stripe integration ────────────────────────────────
+  // Online-first client with local cache fallback. All methods accept a
+  // companyId so data is scoped per company.
+  stripe: {
+    /** Execute a Stripe REST call. Returns { ok, source: 'network'|'cache'|'queued', data|error }. */
+    call: (args: {
+      resource: string;
+      action: string;
+      id?: string;
+      params?: Record<string, unknown>;
+      companyId: string;
+      idempotencyKey?: string;
+    }): Promise<{ ok: boolean; source: 'network' | 'cache' | 'queued'; data?: any; error?: string; warning?: string }> =>
+      window.electronAPI.invoke('stripe:call', args),
+
+    /** Read cached objects for a resource (never hits the network). */
+    listCached: (resource: string, companyId: string, limit?: number): Promise<any[]> =>
+      window.electronAPI.invoke('stripe:listCached', { resource, companyId, limit }),
+
+    retrieveCached: (resource: string, companyId: string, stripeId: string): Promise<any | null> =>
+      window.electronAPI.invoke('stripe:retrieveCached', { resource, companyId, stripeId }),
+
+    /** Full refresh of one resource — paginates through Stripe and re-populates cache. */
+    sync: (resource: string, companyId: string): Promise<{ count: number; drained: number }> =>
+      window.electronAPI.invoke('stripe:sync', { resource, companyId }),
+
+    syncState: (companyId: string): Promise<Array<{ resource: string; last_synced_at: string | null; last_ok_at: string | null; last_error: string | null }>> =>
+      window.electronAPI.invoke('stripe:syncState', { companyId }),
+
+    queueStatus: (companyId: string): Promise<Array<{ status: string; count: number }>> =>
+      window.electronAPI.invoke('stripe:queueStatus', { companyId }),
+
+    drainQueue: (companyId: string): Promise<{ drained: number; failed: number }> =>
+      window.electronAPI.invoke('stripe:drainQueue', { companyId }),
+
+    resources: (): Promise<{
+      byGroup: Record<string, Array<{ key: string; label: string; preview: boolean }>>;
+      all: Record<string, { label: string; group?: string; actions: string[]; custom: string[]; preview: boolean }>;
+    }> => window.electronAPI.invoke('stripe:resources'),
+
+    testConnection: (companyId: string): Promise<{ ok: boolean; error?: string; account?: any }> =>
+      window.electronAPI.invoke('stripe:testConnection', { companyId }),
+  },
 
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),

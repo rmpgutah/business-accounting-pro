@@ -28,8 +28,8 @@ const fmtDate = (d: string) => {
 // ─── Shared base styles ─────────────────────────────────────
 const baseStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     color: #1a1a1a;
     font-size: 13px;
     line-height: 1.55;
@@ -37,9 +37,12 @@ const baseStyles = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  @page { margin: 0.45in; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 8px 12px; text-align: left; }
+  @page { size: letter; margin: 0.45in; }
+  table { width: 100%; border-collapse: collapse; table-layout: auto; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  th, td { padding: 8px 12px; text-align: left; word-wrap: break-word; overflow-wrap: anywhere; }
   th {
     font-size: 10px;
     font-weight: 700;
@@ -49,8 +52,8 @@ const baseStyles = `
     border-bottom: 2px solid #0f172a;
   }
   td { border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px; }
-  .text-right { text-align: right; }
-  .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Fira Code', monospace, system-ui; }
+  .text-right { text-align: right; font-variant-numeric: tabular-nums; }
+  .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Menlo', Consolas, 'Courier New', monospace; }
   .font-bold { font-weight: 700; }
   .text-muted { color: #64748b; }
   .text-dark { color: #0f172a; }
@@ -60,6 +63,10 @@ const baseStyles = `
     font-size: 10px; font-weight: 700; text-transform: uppercase;
     color: #64748b; letter-spacing: 0.8px; margin-bottom: 6px;
   }
+  h1, h2, h3, h4, h5, h6 { page-break-after: avoid; break-after: avoid; }
+  img { max-width: 100%; height: auto; }
+  /* Let totals/footer blocks stay together */
+  .totals, .totals-box, .balance-box, .net-pay-box, .signature-block, .sig-block, .footer-co { page-break-inside: avoid; break-inside: avoid; }
 `;
 
 // ─── Status stamp helper ─────────────────────────────────────
@@ -411,8 +418,11 @@ export function generateInvoiceHTML(
       th { border-bottom: 2px solid ${accent}; color: ${accent} !important; }
     `;
 
-  const logoHTML = logoData
-    ? `<img src="${logoData}" alt="${companyName}" style="max-height:56px;max-width:180px;object-fit:contain;display:block;margin-bottom:8px;">`
+  // Only embed logo if it's a data: URI or https: URL — file:// paths fail in
+  // Electron print-to-PDF renderers that load from data:text/html.
+  const safeLogo = logoData && /^(data:|https?:)/.test(String(logoData)) ? logoData : null;
+  const logoHTML = safeLogo
+    ? `<img src="${safeLogo}" alt="${companyName}" style="max-height:56px;max-width:180px;width:auto;height:auto;object-fit:contain;display:block;margin-bottom:8px;">`
     : '';
 
   // ── Header layout variants ──
@@ -580,8 +590,8 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     <div class="totals-box">
       <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
       ${taxBreakdownHTML}
-      ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>-${fmt(discountAmount)}</span></div>` : ''}
-      ${(invoice.discount_pct && invoice.discount_pct > 0) ? `<div class="totals-row" style="color:#ef4444"><span>Discount (${invoice.discount_pct}%)</span><span>-${fmt(Number(invoice.subtotal || 0) * invoice.discount_pct / 100)}</span></div>` : ''}
+      ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>\u2212${fmt(discountAmount)}</span></div>` : ''}
+      ${(invoice.discount_pct && invoice.discount_pct > 0) ? `<div class="totals-row" style="color:#16a34a"><span>Discount (${invoice.discount_pct}%)</span><span>\u2212${fmt(Number(invoice.subtotal || 0) * invoice.discount_pct / 100)}</span></div>` : ''}
       ${shippingAmount > 0 ? `<div class="totals-row"><span>Shipping</span><span>${fmt(shippingAmount)}</span></div>` : ''}
       <div class="totals-row totals-total">
         <span>${invoice.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}</span>
@@ -1045,7 +1055,7 @@ ${baseStyles}
         <tr><td>Original Principal</td><td class="text-right font-mono">${fmt(originalAmount)}</td></tr>
         ${interest > 0 ? `<tr><td>Accrued Interest</td><td class="text-right font-mono">${fmt(interest)}</td></tr>` : ''}
         ${fees > 0 ? `<tr><td>Fees &amp; Charges</td><td class="text-right font-mono">${fmt(fees)}</td></tr>` : ''}
-        ${totalPaid > 0 ? `<tr><td style="color:#16a34a;">Payments Received</td><td class="text-right font-mono" style="color:#16a34a;">-${fmt(totalPaid)}</td></tr>` : ''}
+        ${totalPaid > 0 ? `<tr><td style="color:#16a34a;">Payments Received</td><td class="text-right font-mono" style="color:#16a34a;">\u2212${fmt(totalPaid)}</td></tr>` : ''}
       </tbody>
     </table>
   </div>
@@ -1116,11 +1126,11 @@ export function generateCollectionLetterHTML(
   const thirtyDayDate = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const summaryTable = `<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:12px;">
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Original Amount</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmtAmt(originalAmt)}</td></tr>
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Interest</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmtAmt(interestAmt)}</td></tr>
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Fees</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmtAmt(feesAmt)}</td></tr>
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Payments</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;color:#16a34a;">-${fmtAmt(totalPaid)}</td></tr>
-  <tr style="font-weight:700;"><td style="padding:8px 12px;border:2px solid #111;">Balance Due</td><td style="padding:8px 12px;border:2px solid #111;text-align:right;font-family:monospace;">${fmtAmt(balanceDue)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Original Amount</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(originalAmt)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Interest</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(interestAmt)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Fees</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(feesAmt)}</td></tr>
+  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Payments</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;color:#16a34a;">\u2212${fmtAmt(totalPaid)}</td></tr>
+  <tr style="font-weight:700;"><td style="padding:8px 12px;border:2px solid #111;">Balance Due</td><td style="padding:8px 12px;border:2px solid #111;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(balanceDue)}</td></tr>
 </table>`;
 
   // Shared blocks
@@ -1278,7 +1288,11 @@ ${paymentInstructions}
   const letter = LETTERS[letterType] || LETTERS.reminder;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:Georgia,serif; font-size:13px; color:#111; background:#fff; padding:48px; line-height:1.7; }
+  @page { size: letter; margin: 0.5in; }
+  html, body { font-family:Georgia,'Times New Roman',serif; font-size:13px; color:#111; background:#fff; padding:48px; line-height:1.7; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  table { border-collapse: collapse; }
   .page { max-width:700px; margin:0 auto; }
   .hdr { border-bottom:3px solid ${letter.accent}; padding-bottom:20px; margin-bottom:32px; }
   .co { font-size:20px; font-weight:700; color:${letter.accent}; }
@@ -1547,13 +1561,18 @@ export function generateCourtPacketHTML(data: {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Times New Roman', Georgia, serif; font-size: 12px; line-height: 1.6; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @page { margin: 0.75in; }
+  @page { size: letter; margin: 0.75in; }
   @media print {
     .section { page-break-before: always; }
     .cover { page-break-after: always; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+    thead { display: table-header-group; }
+    h1, h2 { page-break-after: avoid; break-after: avoid; }
   }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-  th, td { padding: 6px 10px; text-align: left; border: 1px solid #ccc; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  th, td { padding: 6px 10px; text-align: left; border: 1px solid #ccc; font-size: 11px; word-wrap: break-word; overflow-wrap: anywhere; }
   th { background: #f0f0f0; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
   .cover { text-align: center; padding-top: 200px; }
   .cover h1 { font-size: 22px; font-weight: 700; letter-spacing: 2px; margin-bottom: 12px; }
@@ -1610,7 +1629,10 @@ export function generateVerificationAffidavitHTML(
   const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-  body { font-family: 'Times New Roman', Georgia, serif; font-size: 14px; color: #111; padding: 60px; line-height: 1.8; }
+  @page { size: letter; margin: 0.5in; }
+  html, body { font-family: 'Times New Roman', Georgia, serif; font-size: 14px; color: #111; padding: 60px; line-height: 1.8; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   .page { max-width: 650px; margin: 0 auto; }
   h1 { text-align: center; font-size: 18px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 32px; border-bottom: 2px solid #111; padding-bottom: 12px; }
   .section { margin-bottom: 24px; }

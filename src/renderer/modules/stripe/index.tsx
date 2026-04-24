@@ -8,11 +8,13 @@ import {
   ArrowDownUp,
   DollarSign,
   AlertCircle,
+  Globe,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import StripeExplorer from './StripeExplorer';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -43,6 +45,46 @@ function typeBadgeClass(type: string): string {
       return 'block-badge block-badge-purple';
   }
 }
+
+// ─── Stripe Module (tab-based) ──────────────────────────────
+// Two views:
+//   - "sync"     — original summary dashboard (transactions, totals, API key)
+//   - "explorer" — full resource browser that works offline via local cache
+const StripeModule: React.FC = () => {
+  const [tab, setTab] = useState<'sync' | 'explorer'>('sync');
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex items-center border-b border-border-primary bg-bg-secondary px-6 pt-3">
+        <div className="flex items-center gap-2 mr-6">
+          <CreditCard size={20} className="text-accent-purple" />
+          <h1 className="text-base font-bold text-text-primary">Stripe</h1>
+        </div>
+        <button
+          onClick={() => setTab('sync')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            tab === 'sync' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          <RefreshCw size={14} />
+          Overview
+        </button>
+        <button
+          onClick={() => setTab('explorer')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            tab === 'explorer' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          <Globe size={14} />
+          Explorer
+          <span className="text-[9px] uppercase tracking-wider px-1 py-0.5 bg-accent-blue/15 text-accent-blue ml-1">All APIs</span>
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        {tab === 'sync' ? <StripeSyncModule /> : <StripeExplorer />}
+      </div>
+    </div>
+  );
+};
 
 // ─── Stripe Sync Component ──────────────────────────────
 const StripeSyncModule: React.FC = () => {
@@ -354,4 +396,4 @@ const StripeSyncModule: React.FC = () => {
   );
 };
 
-export default StripeSyncModule;
+export default StripeModule;

@@ -5,7 +5,15 @@ import {
   DollarSign,
   Calculator,
   SlidersHorizontal,
+  Download,
+  Printer,
 } from 'lucide-react';
+import {
+  downloadCSVBlob,
+  dateStampedFilename,
+  printWhenReady,
+  type CSVColumn,
+} from '../../lib/csv-export';
 import {
   LineChart,
   Line,
@@ -327,6 +335,54 @@ const Forecasting: React.FC = () => {
   }, [projections, whatIfRevenue]);
 
   const activeProjections = whatIfProjections[activeScenario];
+
+  // ─── Export / Print ────────────────────────────────────
+  const handleExportCSV = useCallback(() => {
+    const columns: CSVColumn[] = [
+      { key: 'month', label: 'Month' },
+      { key: 'type', label: 'Type' },
+      { key: 'scenario', label: 'Scenario' },
+      { key: 'revenue', label: 'Revenue' },
+      { key: 'expenses', label: 'Expenses' },
+      { key: 'net', label: 'Net' },
+      { key: 'note', label: 'Note' },
+    ];
+
+    const rows: any[] = [];
+    // Historical rows.
+    for (const r of historicalRevenue) {
+      const exp = historicalExpenses.find((e) => e.month === r.month)?.total ?? 0;
+      rows.push({
+        month: r.month,
+        type: 'Actual',
+        scenario: '',
+        revenue: r.total,
+        expenses: exp,
+        net: r.total - exp,
+        note: '',
+      });
+    }
+    // Projections — one block per scenario, clearly marked as estimates.
+    for (const s of ['conservative', 'moderate', 'aggressive'] as Scenario[]) {
+      for (const p of whatIfProjections[s]) {
+        rows.push({
+          month: p.month,
+          type: 'Projected',
+          scenario: SCENARIO_CONFIG[s].label,
+          revenue: p.revenue,
+          expenses: p.expenses,
+          net: p.net,
+          note: `ESTIMATE — ${SCENARIO_CONFIG[s].description}`,
+        });
+      }
+    }
+    if (rows.length === 0) return;
+    downloadCSVBlob(rows, dateStampedFilename('forecasting'), columns);
+  }, [historicalRevenue, historicalExpenses, whatIfProjections]);
+
+  const handlePrint = useCallback(() => {
+    printWhenReady({ isReady: () => !loading });
+  }, [loading]);
   const totalProjectedRevenue = activeProjections.reduce((s, p) => s + p.revenue, 0);
   const totalProjectedExpenses = activeProjections.reduce((s, p) => s + p.expenses, 0);
   const totalProjectedCashflow = totalProjectedRevenue - totalProjectedExpenses;
@@ -347,9 +403,34 @@ const Forecasting: React.FC = () => {
           <Calculator size={20} className="text-accent-purple" />
           <h1 className="module-title">Financial Forecasting</h1>
         </div>
-        <span className="text-xs text-text-muted">
-          Based on {historicalRevenue.length} months of historical data
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-text-muted">
+            Based on {historicalRevenue.length} months of historical data
+          </span>
+          <button className="block-btn flex items-center gap-2" onClick={handleExportCSV}>
+            <Download size={14} />
+            Export CSV
+          </button>
+          <button className="block-btn flex items-center gap-2" onClick={handlePrint}>
+            <Printer size={14} />
+            Print
+          </button>
+        </div>
+      </div>
+
+      {/* Estimate disclaimer — always visible, prints too */}
+      <div
+        className="text-[11px] px-3 py-2"
+        style={{
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '6px',
+          color: '#f59e0b',
+        }}
+      >
+        <strong>Estimate:</strong> All projected figures below are linear-regression forecasts
+        based on the last 6 months of data. They are not guarantees and should not be used for
+        tax filing or legal purposes.
       </div>
 
       {/* ─── Scenario Selector ─── */}
@@ -649,7 +730,7 @@ const Forecasting: React.FC = () => {
       {/* Month-by-Month Projection Table */}
       <div className="block-card p-5" style={{ borderRadius: '6px' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-          Month-by-Month Projections ({SCENARIO_CONFIG[activeScenario].label})
+          Month-by-Month Projections — Estimate ({SCENARIO_CONFIG[activeScenario].label})
         </h2>
         <table className="block-table">
           <thead>

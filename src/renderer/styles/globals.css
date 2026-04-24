@@ -468,3 +468,103 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 8px;
   padding: 1.25rem;
 }
+
+/* ─── Print Styles ────────────────────────────────────── */
+/* Reports (BalanceSheet, P&L, Cash Flow, AP/AR Aging, Tax Summary, GL, Trial Balance,
+   Expense by Category) call window.print() directly on the live dark-themed app.
+   Without these overrides the dark background and sidebar would be printed. */
+
+@page {
+  size: letter;
+  margin: 0.5in;
+}
+
+@media print {
+  /* Kill dark theme — force white paper, dark text */
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: auto !important;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide app chrome when printing reports in-app */
+  aside,
+  nav.sidebar,
+  .app-sidebar,
+  .topbar,
+  .app-topbar,
+  .status-bar,
+  .app-statusbar,
+  .module-actions,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Let main content expand to full page */
+  main,
+  .app-shell,
+  .module-container,
+  .block-card {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Inputs/controls should not print */
+  button,
+  input[type="date"],
+  input[type="search"],
+  select,
+  .block-input {
+    display: none !important;
+  }
+
+  /* Undo gradient text — prints as transparent */
+  .module-title {
+    background: none !important;
+    -webkit-text-fill-color: #0f172a !important;
+    color: #0f172a !important;
+  }
+
+  /* Tables: repeat headers, keep rows together, tabular numerics */
+  table { border-collapse: collapse !important; width: 100% !important; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, .page-break-avoid { page-break-inside: avoid; break-inside: avoid; }
+  th, td {
+    color: #0f172a !important;
+    background: transparent !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Numeric columns line up */
+  .font-mono,
+  .text-right,
+  td.text-right,
+  th.text-right {
+    font-variant-numeric: tabular-nums;
+    font-family: 'SF Mono', 'Menlo', Consolas, monospace;
+  }
+
+  /* Don't orphan section headings */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #0f172a !important;
+  }
+
+  /* Links: print their href inline only for long-form content; keep anchors plain */
+  a { color: #0f172a !important; text-decoration: none !important; }
+
+  /* Prevent huge images from overflowing the page */
+  img, svg { max-width: 100% !important; height: auto !important; }
+}

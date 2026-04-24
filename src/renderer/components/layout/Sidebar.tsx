@@ -191,11 +191,11 @@ const Sidebar: React.FC = () => {
                   style={isActive ? {
                     background: 'linear-gradient(90deg, transparent, rgba(96,165,250,0.08))',
                     boxShadow: 'inset -2px 0 8px rgba(96,165,250,0.06)',
-                  } : {}}
+                    borderRadius: '0px',
+                  } : { borderRadius: '0px' }}
                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
                   title={sidebarCollapsed ? item.label : undefined}
-                  style={{ borderRadius: '0px' }}
                 >
                   <Icon size={16} className="shrink-0" />
                   {!sidebarCollapsed && (

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { downloadCSVBlob } from '../../lib/csv-export';
+import { downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -98,7 +98,8 @@ const BudgetVsActualReport: React.FC = () => {
       variance: totalVariance,
       variance_pct: totalVariancePct,
     });
-    downloadCSVBlob(rows, `budget-vs-actual-${budget?.name || 'report'}.csv`);
+    const slug = `budget-vs-actual-${budget?.name || 'report'}`;
+    downloadCSVBlob(rows, dateStampedFilename(slug));
   };
 
   const handlePrint = async () => {

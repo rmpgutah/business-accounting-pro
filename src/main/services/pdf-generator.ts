@@ -3,7 +3,8 @@
  * Uses Electron's webContents.printToPDF() with an HTML template.
  * No external dependencies required.
  */
-import { BrowserWindow } from 'electron';
+// BrowserWindow is no longer needed directly — rendering now goes through
+// the shared helper in print-preview.ts.
 
 // ─── Currency Formatter ──────────────────────────────────
 const fmt = (n: number) =>
@@ -194,26 +195,21 @@ export function buildInvoiceHTML(
 }
 
 // ─── Generate PDF Buffer ─────────────────────────────────
+// Delegates to the shared headless renderer (htmlToPDFBuffer) so PDF
+// options, security (nodeIntegration off), and window cleanup are handled
+// in one place. Previously this path hard-coded Letter + small margins
+// and used win.close() (which can leak if a throw occurs before it).
 export async function generateInvoicePDF(
   invoiceData: any,
   companyData: any,
   clientData: any,
-  lineItems: any[]
+  lineItems: any[],
+  options?: import('./print-preview').PDFOptions
 ): Promise<Buffer> {
+  // Lazy-require to avoid a circular dep between pdf-generator and print-preview.
+  const { htmlToPDFBuffer } = await import('./print-preview');
   const html = buildInvoiceHTML(companyData, clientData, invoiceData, lineItems);
-
-  const win = new BrowserWindow({ show: false, width: 800, height: 1100 });
-  try {
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    const pdfData = await win.webContents.printToPDF({
-      pageSize: 'Letter',
-      margins: { top: 0.3, bottom: 0.3, left: 0.3, right: 0.3 },
-      printBackground: true,
-    });
-    return Buffer.from(pdfData);
-  } finally {
-    win.close();
-  }
+  return htmlToPDFBuffer(html, options);
 }
 
 // NOTE: generateInvoiceHTML was removed. Renderer uses

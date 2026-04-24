@@ -3,7 +3,7 @@ import { ArrowLeft, FileText, Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { generatePayStubHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -112,7 +112,14 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
 
   const buildStubHTML = () => {
     if (!stub) return '';
-    return generatePayStubHTML(stub, ytd, activeCompany);
+    // Format ISO dates to human-readable strings before handing off to PDF template
+    const stubForPrint = {
+      ...stub,
+      period_start: formatDate(stub.period_start),
+      period_end:   formatDate(stub.period_end),
+      pay_date:     formatDate(stub.pay_date),
+    };
+    return generatePayStubHTML(stubForPrint, ytd, activeCompany);
   };
 
   const handlePrintStub = async () => {
@@ -196,7 +203,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             </div>
             <div className="text-right">
               <div className="text-[10px] text-text-muted uppercase">Pay Date</div>
-              <div className="text-sm font-mono text-text-primary">{stub.pay_date}</div>
+              <div className="text-sm font-mono text-text-primary">{formatDate(stub.pay_date)}</div>
             </div>
           </div>
         </div>
@@ -206,15 +213,15 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
           <div className="grid grid-cols-3 gap-4 text-xs">
             <div>
               <span className="text-text-muted">Period Start:</span>{' '}
-              <span className="font-mono text-text-primary">{stub.period_start}</span>
+              <span className="font-mono text-text-primary">{formatDate(stub.period_start)}</span>
             </div>
             <div>
               <span className="text-text-muted">Period End:</span>{' '}
-              <span className="font-mono text-text-primary">{stub.period_end}</span>
+              <span className="font-mono text-text-primary">{formatDate(stub.period_end)}</span>
             </div>
             <div>
               <span className="text-text-muted">Pay Date:</span>{' '}
-              <span className="font-mono text-text-primary">{stub.pay_date}</span>
+              <span className="font-mono text-text-primary">{formatDate(stub.pay_date)}</span>
             </div>
           </div>
         </div>

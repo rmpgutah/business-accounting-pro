@@ -529,10 +529,11 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   // ── Letter Generation ──
   const handleGenerateLetter = async (type: string) => {
     setShowLetterMenu(false);
+    if (!debt) return;
     try {
       const { generateCollectionLetterHTML } = await import('../../lib/print-templates');
       const html = generateCollectionLetterHTML(debt, payments, activeCompany, type);
-      await api.printPreview(html, `${type.replace(/_/g, ' ')} — ${debt?.debtor_name}`);
+      await api.printPreview(html, `${type.replace(/_/g, ' ')} — ${debt.debtor_name}`);
     } catch (err: any) {
       console.error('Failed to generate letter:', err);
       alert('Operation failed: ' + (err?.message || 'Unknown error'));

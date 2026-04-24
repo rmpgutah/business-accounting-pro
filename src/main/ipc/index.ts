@@ -8,9 +8,20 @@ import path from 'path';
 import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { sendInvoiceEmail } from '../services/email-sender';
+import { registerStripeIpc } from '../integrations/stripe';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
-import { openPrintPreview, saveHTMLAsPDF, printHTML, htmlToPDFBuffer } from '../services/print-preview';
+import {
+  openPrintPreview,
+  saveHTMLAsPDF,
+  printHTML,
+  htmlToPDFBuffer,
+  buildPdfFilename,
+  openPathInOS,
+  revealInFolder,
+  type PDFOptions,
+} from '../services/print-preview';
+import { promises as fsp } from 'fs';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
 import http from 'http';
 import https from 'https';
@@ -385,6 +396,10 @@ function postJournalEntry(
 }
 
 export function registerIpcHandlers(): void {
+  // Stripe integration — online-first with local SQLite cache fallback,
+  // lives in its own module so the renderer can use Stripe offline.
+  registerStripeIpc(ipcMain);
+
   // ─── Input Validation Helpers ──────────────────────────
   const VALID_TABLES = new Set([
     'invoices', 'invoice_line_items', 'expenses', 'expense_line_items',
@@ -889,9 +904,21 @@ export function registerIpcHandlers(): void {
   // ─── PDF Generate (Invoice) — Download via Save Dialog ──
   // Accepts optional pre-built HTML from the renderer so the saved PDF
   // matches the preview exactly (including settings, payment schedule, etc.)
-  ipcMain.handle('invoice:generate-pdf', async (_event, payload: string | { invoiceId: string; html?: string }) => {
+  ipcMain.handle('invoice:generate-pdf', async (
+    _event,
+    payload: string | {
+      invoiceId: string;
+      html?: string;
+      pdfOptions?: PDFOptions;
+      openAfterSave?: boolean;
+      revealAfterSave?: boolean;
+    }
+  ) => {
     const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
     const providedHTML = typeof payload === 'string' ? undefined : payload.html;
+    const pdfOptions = typeof payload === 'string' ? undefined : payload.pdfOptions;
+    const openAfterSave = typeof payload === 'string' ? false : !!payload.openAfterSave;
+    const revealAfterSave = typeof payload === 'string' ? false : !!payload.revealAfterSave;
 
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
@@ -899,17 +926,21 @@ export function registerIpcHandlers(): void {
     const invoice = db.getById('invoices', invoiceId);
     if (!invoice) return { error: 'Invoice not found' };
 
-    const { filePath } = await dialog.showSaveDialog({
-      defaultPath: `Invoice-${invoice.invoice_number}.pdf`,
+    // Default filename: invoice-{number}-{yyyy-MM-dd}.pdf
+    const defaultName = buildPdfFilename('invoice', String(invoice.invoice_number || invoiceId));
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      defaultPath: defaultName,
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      // showOverwriteConfirmation defaults to true, but be explicit for clarity.
+      properties: ['showOverwriteConfirmation', 'createDirectory'],
     });
 
-    if (!filePath) return { cancelled: true };
+    if (canceled || !filePath) return { cancelled: true };
 
     try {
       let pdfBuffer: Buffer;
       if (providedHTML) {
-        pdfBuffer = await htmlToPDFBuffer(providedHTML);
+        pdfBuffer = await htmlToPDFBuffer(providedHTML, pdfOptions);
       } else {
         const dbInstance = db.getDb();
         const client = db.getById('clients', invoice.client_id);
@@ -917,43 +948,114 @@ export function registerIpcHandlers(): void {
         const lineItems = dbInstance.prepare(
           'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
         ).all(invoiceId) as any[];
-        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems, pdfOptions);
       }
-      fs.writeFileSync(filePath, pdfBuffer);
+      // Async write — caller must not see "saved" before bytes are on disk.
+      await fsp.writeFile(filePath, pdfBuffer);
+
+      // Compliance: log PDF export of a financial document.
+      try {
+        db.logAudit(companyId, 'invoices', invoiceId, 'export_pdf', { path: filePath });
+      } catch { /* audit is best-effort */ }
+
+      if (openAfterSave) {
+        const openErr = await openPathInOS(filePath);
+        if (openErr) console.warn('openPath failed:', openErr);
+      } else if (revealAfterSave) {
+        revealInFolder(filePath);
+      }
+
       return { path: filePath };
     } catch (err: any) {
+      // Surface disk-full / permission-denied / EACCES to the renderer.
       return { error: err?.message || 'PDF generation failed' };
     }
   });
 
   // ─── Batch PDF Export ──────────────────────────────────
-  ipcMain.handle('invoice:batch-pdf', async (_event, { invoiceIds }: { invoiceIds: string[] }) => {
+  ipcMain.handle('invoice:batch-pdf', async (
+    event,
+    {
+      invoiceIds,
+      pdfOptions,
+      mode,
+    }: {
+      invoiceIds: string[];
+      pdfOptions?: PDFOptions;
+      // 'combined' = single PDF with page breaks; 'separate' = one PDF per invoice into a folder.
+      mode?: 'combined' | 'separate';
+    }
+  ) => {
     try {
       const companyId = db.getCurrentCompanyId();
       if (!companyId) return { error: 'No company selected' };
-
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: `Invoices-Batch-${new Date().toISOString().slice(0, 10)}.pdf`,
-        filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      });
-      if (!filePath) return { cancelled: true };
+      if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+        return { error: 'No invoices selected' };
+      }
 
       const dbInstance = db.getDb();
       const company = db.getById('companies', companyId);
-      const allHtml: string[] = [];
 
-      for (const invId of invoiceIds) {
+      // Progress helper — stream to the caller so a long batch shows a bar.
+      const sendProgress = (current: number, total: number, label: string) => {
+        try { event.sender.send('invoice:batch-pdf:progress', { current, total, label }); }
+        catch { /* receiver may be gone */ }
+      };
+
+      if (mode === 'separate') {
+        // Ask for a directory; write one PDF per invoice, serially.
+        const { filePaths, canceled } = await dialog.showOpenDialog({
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        if (canceled || !filePaths?.[0]) return { cancelled: true };
+        const outDir = filePaths[0];
+        const written: string[] = [];
+        for (let i = 0; i < invoiceIds.length; i++) {
+          const invId = invoiceIds[i];
+          const invoice = db.getById('invoices', invId);
+          if (!invoice) continue;
+          const client = db.getById('clients', invoice.client_id);
+          const lineItems = dbInstance.prepare(
+            'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+          ).all(invId) as any[];
+          const html = buildInvoiceHTML(company, client, invoice, lineItems);
+          sendProgress(i + 1, invoiceIds.length, `Invoice ${invoice.invoice_number}`);
+          // Serialize — printToPDF is heavy, racing many in parallel OOMs Electron.
+          const buf = await htmlToPDFBuffer(html, pdfOptions);
+          const name = buildPdfFilename('invoice', String(invoice.invoice_number || invId));
+          const full = path.join(outDir, name);
+          await fsp.writeFile(full, buf);
+          written.push(full);
+          try { db.logAudit(companyId, 'invoices', invId, 'export_pdf', { path: full, batch: true }); }
+          catch { /* audit best-effort */ }
+        }
+        return { dir: outDir, files: written, count: written.length };
+      }
+
+      // Combined mode
+      const defaultName = buildPdfFilename('invoices-batch', String(invoiceIds.length));
+      const { filePath, canceled } = await dialog.showSaveDialog({
+        defaultPath: defaultName,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        properties: ['showOverwriteConfirmation', 'createDirectory'],
+      });
+      if (canceled || !filePath) return { cancelled: true };
+
+      const allHtml: string[] = [];
+      const processedIds: string[] = [];
+      for (let i = 0; i < invoiceIds.length; i++) {
+        const invId = invoiceIds[i];
         const invoice = db.getById('invoices', invId);
         if (!invoice) continue;
         const client = db.getById('clients', invoice.client_id);
         const lineItems = dbInstance.prepare(
           'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
         ).all(invId) as any[];
-        const html = buildInvoiceHTML(company, client, invoice, lineItems);
-        allHtml.push(html);
+        sendProgress(i + 1, invoiceIds.length, `Invoice ${invoice.invoice_number}`);
+        allHtml.push(buildInvoiceHTML(company, client, invoice, lineItems));
+        processedIds.push(invId);
       }
 
-      // Combine all invoices into one HTML with page breaks
       const combinedHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
         @media print { .page-break { page-break-before: always; } }
         .page-break { page-break-before: always; }
@@ -964,8 +1066,12 @@ export function registerIpcHandlers(): void {
         }).join('')}
       </body></html>`;
 
-      const pdfBuffer = await htmlToPDFBuffer(combinedHTML);
-      fs.writeFileSync(filePath, pdfBuffer);
+      const pdfBuffer = await htmlToPDFBuffer(combinedHTML, pdfOptions);
+      await fsp.writeFile(filePath, pdfBuffer);
+      for (const id of processedIds) {
+        try { db.logAudit(companyId, 'invoices', id, 'export_pdf', { path: filePath, batch: true }); }
+        catch { /* audit best-effort */ }
+      }
       return { path: filePath, count: allHtml.length };
     } catch (err: any) {
       return { error: err?.message || 'Batch PDF failed' };
@@ -1010,10 +1116,21 @@ export function registerIpcHandlers(): void {
         pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
       }
 
-      const tmpDir = os.tmpdir();
-      const safeNumber = String(invoice.invoice_number || invoiceId).replace(/[^a-zA-Z0-9-_]/g, '');
-      const pdfPath = path.join(tmpDir, `Invoice-${safeNumber}.pdf`);
-      fs.writeFileSync(pdfPath, pdfBuffer);
+      // Write temp PDF into an isolated subdir so we can clean it up later
+      // without racing against other exports. Filename matches the new
+      // {doctype}-{id}-{date}.pdf convention.
+      const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bap-invoice-'));
+      const pdfPath = path.join(
+        tmpDir,
+        buildPdfFilename('invoice', String(invoice.invoice_number || invoiceId))
+      );
+      await fsp.writeFile(pdfPath, pdfBuffer);
+
+      // Schedule cleanup — mail client has the handle open by now; give it
+      // 10 minutes and then reap. Best-effort, silent on failure.
+      setTimeout(() => {
+        fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      }, 10 * 60 * 1000);
 
       // Open email client with pre-filled content
       const emailResult = await sendInvoiceEmail(invoice, company, client);
@@ -1043,7 +1160,10 @@ export function registerIpcHandlers(): void {
         );
 
         // Reveal the PDF in filesystem so user can attach it
-        shell.showItemInFolder(pdfPath);
+        revealInFolder(pdfPath);
+        try {
+          db.logAudit(companyId, 'invoices', invoiceId, 'email_pdf', { pdfPath });
+        } catch { /* audit best-effort */ }
         scheduleAutoBackup();
 
         return {
@@ -1941,14 +2061,37 @@ export function registerIpcHandlers(): void {
     return { success: true };
   });
 
-  ipcMain.handle('print:save-pdf', async (_event, { html, title }: { html: string; title: string }) => {
-    try {
-      const savedPath = await saveHTMLAsPDF(html, title);
-      if (!savedPath) return { cancelled: true };
-      return { path: savedPath };
-    } catch (err: any) {
-      return { error: err?.message || 'PDF save failed' };
+  ipcMain.handle('print:save-pdf', async (
+    _event,
+    {
+      html,
+      title,
+      doctype,
+      identifier,
+      pdfOptions,
+      openAfterSave,
+      revealAfterSave,
+    }: {
+      html: string;
+      title: string;
+      doctype?: string;
+      identifier?: string;
+      pdfOptions?: PDFOptions;
+      openAfterSave?: boolean;
+      revealAfterSave?: boolean;
     }
+  ) => {
+    const defaultFilename = buildPdfFilename(doctype || 'document', identifier || title);
+    const result = await saveHTMLAsPDF(html, title, { ...pdfOptions, defaultFilename });
+    if (result.path) {
+      if (openAfterSave) {
+        const err = await openPathInOS(result.path);
+        if (err) console.warn('openPath failed:', err);
+      } else if (revealAfterSave) {
+        revealInFolder(result.path);
+      }
+    }
+    return result;
   });
 
   ipcMain.handle('print:print', async (_event, { html }: { html: string }) => {
@@ -3798,7 +3941,18 @@ export function registerIpcHandlers(): void {
     html += `</body></html>`;
 
     const safeName = sanitizeFilename(debt.debtor_name || 'Unknown');
-    return saveHTMLAsPDF(html, `Debt Case File \u2014 ${safeName}`);
+    const result = await saveHTMLAsPDF(html, `Debt Case File \u2014 ${safeName}`, {
+      defaultFilename: buildPdfFilename('debt-case', safeName),
+    });
+    if (result.path) {
+      const companyId = db.getCurrentCompanyId();
+      if (companyId) {
+        try { db.logAudit(companyId, 'debts', debt.id, 'export_pdf', { path: result.path }); }
+        catch { /* audit best-effort */ }
+      }
+    }
+    // Preserve old contract: return the path string (empty if cancelled).
+    return result.path || '';
   });
 
   ipcMain.handle('debt:seed-automation', (_event, { companyId }: { companyId: string }) => {

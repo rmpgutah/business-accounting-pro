@@ -35,9 +35,9 @@ const StatusBar: React.FC = () => {
     };
   }, []);
 
-  const fiscalYear = activeCompany?.fiscal_year_end
-    ? `FY ${activeCompany.fiscal_year_end}`
-    : 'FY 2025';
+  const fiscalYear = (activeCompany as any)?.fiscal_year_end
+    ? `FY ${(activeCompany as any).fiscal_year_end}`
+    : `FY ${new Date().getFullYear()}`;
 
   return (
     <footer

@@ -271,45 +271,68 @@ const ExportSection: React.FC = () => {
   const [backupLoading, setBackupLoading] = useState(false);
 
   const handleExport = useCallback(async () => {
+    // Validate date range before hitting main.
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setExportMsg('“Date From” must be on or before “Date To”.');
+      setTimeout(() => setExportMsg(''), 5000);
+      return;
+    }
     setExporting(true);
-    setExportMsg('');
+    setExportMsg('Preparing export…');
     try {
       const filters: Record<string, any> = {};
       if (dateFrom) filters.created_at_gte = dateFrom;
-      if (dateTo) filters.created_at_lte = dateTo;
-      const result = await api.exportCsv(exportTable, Object.keys(filters).length > 0 ? filters : undefined);
+      // Make the "to" bound inclusive of the entire end day.
+      if (dateTo) filters.created_at_lte = `${dateTo} 23:59:59`;
+      const result = await api.exportCsv(
+        exportTable,
+        Object.keys(filters).length > 0 ? filters : undefined
+      );
       if (result?.path) {
         setExportMsg(`Exported to ${result.path}`);
       } else if (result?.error) {
-        setExportMsg(result.error);
+        setExportMsg(`Export failed: ${result.error}`);
       } else if (result?.cancelled) {
         setExportMsg('Export cancelled');
+      } else {
+        setExportMsg('Export completed.');
       }
     } catch (err: any) {
-      setExportMsg(err.message || 'Export failed');
+      // Surface permission / disk-full errors clearly.
+      const msg = err?.message || 'Export failed';
+      setExportMsg(/permission|EACCES|EPERM/i.test(msg)
+        ? `Export failed — write permission denied. Try a different folder. (${msg})`
+        : msg);
     } finally {
       setExporting(false);
-      setTimeout(() => setExportMsg(''), 5000);
+      setTimeout(() => setExportMsg(''), 8000);
     }
   }, [exportTable, dateFrom, dateTo]);
 
   const handleFullBackup = useCallback(async () => {
     setBackupLoading(true);
-    setBackupMsg('');
+    setBackupMsg('Creating backup — this may take a moment…');
     try {
       const result = await api.exportFullBackup();
       if (result?.path) {
-        setBackupMsg(`Backup saved: ${result.path} (${result.tableCount || '?'} tables)`);
+        setBackupMsg(
+          `Backup saved: ${result.path} (${result.tableCount ?? '?'} tables, ${result.rowCount ?? '?'} rows)`
+        );
       } else if (result?.error) {
-        setBackupMsg(result.error);
+        setBackupMsg(`Backup failed: ${result.error}`);
       } else if (result?.cancelled) {
         setBackupMsg('Backup cancelled');
+      } else {
+        setBackupMsg('Backup completed.');
       }
     } catch (err: any) {
-      setBackupMsg(err.message || 'Backup failed');
+      const msg = err?.message || 'Backup failed';
+      setBackupMsg(/permission|EACCES|EPERM|ENOSPC/i.test(msg)
+        ? `Backup failed — check disk space / write permissions. (${msg})`
+        : msg);
     } finally {
       setBackupLoading(false);
-      setTimeout(() => setBackupMsg(''), 8000);
+      setTimeout(() => setBackupMsg(''), 10000);
     }
   }, []);
 
