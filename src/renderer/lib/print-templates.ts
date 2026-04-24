@@ -664,12 +664,18 @@ export interface PayStubData {
   period_end: string;
   pay_date: string;
   hours: number;
+  hours_regular?: number;
+  hours_overtime?: number;
   gross_pay: number;
   federal_tax: number;
   state_tax: number;
   social_security: number;
   medicare: number;
   net_pay: number;
+  pretax_deductions?: number;
+  posttax_deductions?: number;
+  deduction_detail?: string;
+  check_number?: string;
 }
 
 export interface YtdData {
@@ -687,115 +693,387 @@ export function generatePayStubHTML(
   company: any
 ): string {
   const companyName = esc(company?.name || 'Company');
+  const companyLegal = esc(company?.legal_name || '');
   const companyAddr = esc([company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
     .filter(Boolean).join(', '));
+  const companyPhone = esc(company?.phone || '');
+  const companyEmail = esc(company?.email || '');
 
-  const totalDed = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
+  const taxDed = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
+  const preTax = stub.pretax_deductions ?? 0;
+  const postTax = stub.posttax_deductions ?? 0;
+  const totalDed = taxDed + preTax + postTax;
   const ytdTotalDed = ytd.federal_tax + ytd.state_tax + ytd.social_security + ytd.medicare;
+
+  const hoursRegular = stub.hours_regular ?? stub.hours ?? 0;
+  const hoursOvertime = stub.hours_overtime ?? 0;
+  const totalHours = hoursRegular + hoursOvertime;
+  const isSalaried = totalHours === 0;
+
+  // Compute approximate regular/OT pay split
+  const effectiveRate = totalHours > 0 ? stub.gross_pay / (hoursRegular + hoursOvertime * 1.5) : 0;
+  const regularPay = isSalaried ? stub.gross_pay : effectiveRate * hoursRegular;
+  const overtimePay = isSalaried ? 0 : effectiveRate * 1.5 * hoursOvertime;
+
+  // Parse deduction detail JSON
+  let deductionItems: [string, number][] = [];
+  if (stub.deduction_detail && stub.deduction_detail !== '{}') {
+    try {
+      const detail = JSON.parse(stub.deduction_detail);
+      deductionItems = Object.entries(detail).map(([k, v]) => [k, Number(v)]);
+    } catch { /* ignore */ }
+  }
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-${baseStyles}
-.stub { max-width: 640px; margin: 0 auto; padding: 48px 40px; }
-.stub-header { text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #0f172a; }
-.stub-company { font-size: 18px; font-weight: 800; color: #0f172a; }
-.stub-addr { font-size: 11px; color: #64748b; margin-top: 4px; }
-.stub-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-top: 12px; }
-.emp-row { display: flex; justify-content: space-between; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 2px; margin-bottom: 20px; }
-.emp-name { font-size: 15px; font-weight: 700; color: #0f172a; }
-.emp-meta { font-size: 11px; color: #64748b; }
-.section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 8px; margin-top: 20px; }
-.net-pay-box { text-align: center; padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 2px; margin-top: 24px; }
-.net-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
-.net-value { font-size: 28px; font-weight: 800; color: #16a34a; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.net-ytd { font-size: 12px; color: #64748b; margin-top: 4px; }
-.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #64748b; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: letter; margin: 0.4in 0.5in; }
+  body {
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    color: #1e293b;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 0;
+  }
+  .page { max-width: 680px; margin: 0 auto; padding: 36px 40px; }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 20px;
+    border-bottom: 3px solid #0f172a;
+    margin-bottom: 24px;
+  }
+  .co-name { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
+  .co-legal { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+  .co-detail { font-size: 10px; color: #64748b; margin-top: 6px; line-height: 1.6; }
+  .doc-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: #0f172a;
+    padding: 6px 16px;
+    border: 2px solid #0f172a;
+  }
+
+  /* ── Employee Info Grid ── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 0;
+    border: 1px solid #cbd5e1;
+    margin-bottom: 24px;
+  }
+  .info-cell {
+    padding: 10px 14px;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .info-cell:nth-child(4n) { border-right: none; }
+  .info-cell:nth-last-child(-n+4) { border-bottom: none; }
+  .info-label {
+    font-size: 8px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 2px;
+  }
+  .info-value { font-size: 12px; font-weight: 600; color: #0f172a; }
+  .info-value.emp-name { font-size: 14px; font-weight: 800; }
+
+  /* ── Section Headers ── */
+  .section {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; color: #fff;
+    padding: 5px 12px; margin-top: 20px; margin-bottom: 0;
+  }
+  .section-earn { background: #0f172a; }
+  .section-ded { background: #7f1d1d; }
+  .section-summary { background: #14532d; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    padding: 6px 12px; text-align: left;
+    font-size: 8px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #64748b;
+    border-bottom: 1px solid #cbd5e1;
+    background: #f8fafc;
+  }
+  td {
+    padding: 6px 12px; font-size: 11px; color: #334155;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .r { text-align: right; font-variant-numeric: tabular-nums; }
+  .mono { font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums; }
+  .b { font-weight: 700; }
+  .red { color: #dc2626; }
+  .green { color: #16a34a; }
+  .muted { color: #94a3b8; }
+  .dark { color: #0f172a; }
+  .total-row td { border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; }
+  .sub-row td { font-size: 10px; color: #64748b; padding-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #e2e8f0; }
+
+  /* ── Net Pay Box ── */
+  .net-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: #f0fdf4;
+    border: 2px solid #86efac;
+  }
+  .net-current { }
+  .net-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #16a34a; }
+  .net-amount { font-size: 32px; font-weight: 800; color: #15803d; font-variant-numeric: tabular-nums; margin-top: 2px; letter-spacing: -0.5px; }
+  .net-ytd-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; text-align: right; }
+  .net-ytd-amount { font-size: 16px; font-weight: 700; color: #334155; text-align: right; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* ── Waterfall Summary ── */
+  .waterfall { margin-top: 20px; }
+  .wf-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 14px;
+    font-size: 11px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .wf-row.wf-total {
+    border-top: 2px solid #0f172a;
+    border-bottom: none;
+    font-weight: 800;
+    font-size: 13px;
+    padding-top: 8px;
+    margin-top: 4px;
+    color: #0f172a;
+  }
+  .wf-label { color: #475569; }
+  .wf-value { font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 32px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #94a3b8;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { padding: 0; }
+    .no-break { page-break-inside: avoid; }
+  }
 </style></head>
 <body>
-<div class="stub">
-  <div class="stub-header">
-    <div class="stub-company">${companyName}</div>
-    ${companyAddr ? `<div class="stub-addr">${companyAddr}</div>` : ''}
-    <div class="stub-title">Earnings Statement</div>
-  </div>
+<div class="page">
 
-  <div class="emp-row">
+  <!-- Header -->
+  <div class="header">
     <div>
-      <div class="emp-name">${esc(stub.employee_name)}</div>
+      <div class="co-name">${companyName}</div>
+      ${companyLegal ? `<div class="co-legal">${companyLegal}</div>` : ''}
+      <div class="co-detail">
+        ${companyAddr ? companyAddr + '<br>' : ''}
+        ${companyPhone ? companyPhone : ''}${companyEmail ? (companyPhone ? ' &middot; ' : '') + companyEmail : ''}
+      </div>
     </div>
-    <div style="text-align:right;">
-      <div class="emp-meta">Period: ${esc(stub.period_start)} &ndash; ${esc(stub.period_end)}</div>
-      <div class="emp-meta">Pay Date: ${esc(stub.pay_date)}</div>
+    <div class="doc-label">Earnings Statement</div>
+  </div>
+
+  <!-- Employee Info Grid -->
+  <div class="info-grid">
+    <div class="info-cell" style="grid-column: span 2;">
+      <div class="info-label">Employee</div>
+      <div class="info-value emp-name">${esc(stub.employee_name)}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Pay Date</div>
+      <div class="info-value">${esc(stub.pay_date)}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Check #</div>
+      <div class="info-value">${esc(stub.check_number || '--')}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Period Start</div>
+      <div class="info-value">${esc(stub.period_start)}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Period End</div>
+      <div class="info-value">${esc(stub.period_end)}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Total Hours</div>
+      <div class="info-value">${isSalaried ? 'Salaried' : totalHours.toFixed(2)}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Pay Type</div>
+      <div class="info-value">${isSalaried ? 'Salary' : 'Hourly'}</div>
     </div>
   </div>
 
-  <div class="section-title">Earnings</div>
+  <!-- Earnings Section -->
+  <div class="section section-earn">Earnings</div>
   <table>
     <thead><tr>
-      <th>Description</th>
-      <th class="text-right">Hours</th>
-      <th class="text-right">Current</th>
-      <th class="text-right">YTD</th>
+      <th style="width:40%">Description</th>
+      <th class="r" style="width:12%">Hours</th>
+      <th class="r" style="width:12%">Rate</th>
+      <th class="r" style="width:18%">Current</th>
+      <th class="r" style="width:18%">YTD</th>
     </tr></thead>
     <tbody>
+      ${isSalaried ? `
       <tr>
-        <td>${stub.hours > 0 ? 'Regular Hours' : 'Salary'}</td>
-        <td class="text-right font-mono">${stub.hours > 0 ? stub.hours.toFixed(2) : '--'}</td>
-        <td class="text-right font-mono font-bold">${fmt(stub.gross_pay)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytd.gross_pay)}</td>
+        <td class="dark">Salary</td>
+        <td class="r mono muted">--</td>
+        <td class="r mono muted">--</td>
+        <td class="r mono b dark">${fmt(stub.gross_pay)}</td>
+        <td class="r mono muted">${fmt(ytd.gross_pay)}</td>
       </tr>
-      <tr style="border-top:2px solid #e2e8f0;">
-        <td class="font-bold">Gross Pay</td>
+      ` : `
+      <tr>
+        <td class="dark">Regular</td>
+        <td class="r mono">${hoursRegular.toFixed(2)}</td>
+        <td class="r mono">${fmt(effectiveRate)}</td>
+        <td class="r mono b dark">${fmt(regularPay)}</td>
+        <td class="r mono muted">--</td>
+      </tr>
+      ${hoursOvertime > 0 ? `
+      <tr>
+        <td class="dark">Overtime (1.5x)</td>
+        <td class="r mono">${hoursOvertime.toFixed(2)}</td>
+        <td class="r mono">${fmt(effectiveRate * 1.5)}</td>
+        <td class="r mono b dark">${fmt(overtimePay)}</td>
+        <td class="r mono muted">--</td>
+      </tr>
+      ` : ''}
+      `}
+      <tr class="total-row">
+        <td class="b dark">Gross Pay</td>
+        <td class="r mono b">${isSalaried ? '' : totalHours.toFixed(2)}</td>
         <td></td>
-        <td class="text-right font-mono font-bold">${fmt(stub.gross_pay)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytd.gross_pay)}</td>
+        <td class="r mono b dark" style="font-size:13px;">${fmt(stub.gross_pay)}</td>
+        <td class="r mono b muted">${fmt(ytd.gross_pay)}</td>
       </tr>
     </tbody>
   </table>
 
-  <div class="section-title">Deductions</div>
+  <!-- Deductions Section -->
+  <div class="section section-ded">Deductions</div>
   <table>
     <thead><tr>
-      <th>Description</th>
-      <th class="text-right">Current</th>
-      <th class="text-right">YTD</th>
+      <th style="width:52%">Description</th>
+      <th class="r" style="width:24%">Current</th>
+      <th class="r" style="width:24%">YTD</th>
     </tr></thead>
     <tbody>
+      <!-- Statutory Taxes -->
       <tr>
         <td>Federal Income Tax</td>
-        <td class="text-right font-mono text-red">${fmt(stub.federal_tax)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytd.federal_tax)}</td>
+        <td class="r mono red">${fmt(stub.federal_tax)}</td>
+        <td class="r mono muted">${fmt(ytd.federal_tax)}</td>
       </tr>
       <tr>
         <td>State Income Tax</td>
-        <td class="text-right font-mono text-red">${fmt(stub.state_tax)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytd.state_tax)}</td>
+        <td class="r mono red">${fmt(stub.state_tax)}</td>
+        <td class="r mono muted">${fmt(ytd.state_tax)}</td>
       </tr>
       <tr>
-        <td>Social Security (6.2%)</td>
-        <td class="text-right font-mono text-red">${fmt(stub.social_security)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytd.social_security)}</td>
+        <td>Social Security (OASDI) <span class="muted" style="font-size:9px;">6.2%</span></td>
+        <td class="r mono red">${fmt(stub.social_security)}</td>
+        <td class="r mono muted">${fmt(ytd.social_security)}</td>
       </tr>
       <tr>
-        <td>Medicare (1.45%)</td>
-        <td class="text-right font-mono text-red">${fmt(stub.medicare)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytd.medicare)}</td>
+        <td>Medicare (HI) <span class="muted" style="font-size:9px;">1.45%</span></td>
+        <td class="r mono red">${fmt(stub.medicare)}</td>
+        <td class="r mono muted">${fmt(ytd.medicare)}</td>
       </tr>
-      <tr style="border-top:2px solid #e2e8f0;">
-        <td class="font-bold">Total Deductions</td>
-        <td class="text-right font-mono font-bold text-red">${fmt(totalDed)}</td>
-        <td class="text-right font-mono text-muted">${fmt(ytdTotalDed)}</td>
+      ${preTax > 0 ? `
+      <tr>
+        <td class="b" style="padding-top:10px; border-bottom: none;">Pre-Tax Deductions</td>
+        <td class="r mono red b" style="padding-top:10px; border-bottom: none;">${fmt(preTax)}</td>
+        <td class="r mono muted" style="padding-top:10px; border-bottom: none;">--</td>
+      </tr>
+      ` : ''}
+      ${postTax > 0 ? `
+      <tr>
+        <td class="b" style="padding-top:10px; border-bottom: none;">Post-Tax Deductions</td>
+        <td class="r mono red b" style="padding-top:10px; border-bottom: none;">${fmt(postTax)}</td>
+        <td class="r mono muted" style="padding-top:10px; border-bottom: none;">--</td>
+      </tr>
+      ` : ''}
+      ${deductionItems.length > 0 ? deductionItems.map(([name, amount]) => `
+      <tr class="sub-row">
+        <td style="padding-left:24px;">${esc(name)}</td>
+        <td class="r mono" style="color:#94a3b8;">${fmt(amount)}</td>
+        <td class="r mono muted">--</td>
+      </tr>
+      `).join('') : ''}
+      <tr class="total-row">
+        <td class="b dark">Total Deductions</td>
+        <td class="r mono b red" style="font-size:13px;">${fmt(totalDed)}</td>
+        <td class="r mono b muted">${fmt(ytdTotalDed)}</td>
       </tr>
     </tbody>
   </table>
 
-  <div class="net-pay-box">
-    <div class="net-label">Net Pay</div>
-    <div class="net-value">${fmt(stub.net_pay)}</div>
-    <div class="net-ytd">YTD: ${fmt(ytd.net_pay)}</div>
+  <!-- Waterfall Summary -->
+  <div class="waterfall no-break">
+    <div class="section section-summary">Pay Summary</div>
+    <div class="wf-row" style="background:#f8fafc;">
+      <span class="wf-label b">Gross Earnings</span>
+      <span class="wf-value dark b">${fmt(stub.gross_pay)}</span>
+    </div>
+    <div class="wf-row">
+      <span class="wf-label">Statutory Taxes (Federal + State + FICA)</span>
+      <span class="wf-value red">-${fmt(taxDed)}</span>
+    </div>
+    ${preTax > 0 ? `
+    <div class="wf-row">
+      <span class="wf-label">Pre-Tax Deductions</span>
+      <span class="wf-value red">-${fmt(preTax)}</span>
+    </div>
+    ` : ''}
+    ${postTax > 0 ? `
+    <div class="wf-row">
+      <span class="wf-label">Post-Tax Deductions</span>
+      <span class="wf-value red">-${fmt(postTax)}</span>
+    </div>
+    ` : ''}
+    <div class="wf-row wf-total">
+      <span>Net Pay</span>
+      <span class="wf-value green" style="font-size:15px;">${fmt(stub.net_pay)}</span>
+    </div>
   </div>
 
-  <div class="footer-co">${companyName}</div>
+  <!-- Net Pay Callout -->
+  <div class="net-box no-break">
+    <div class="net-current">
+      <div class="net-label">Net Pay This Period</div>
+      <div class="net-amount">${fmt(stub.net_pay)}</div>
+    </div>
+    <div>
+      <div class="net-ytd-label">Year-to-Date Net</div>
+      <div class="net-ytd-amount">${fmt(ytd.net_pay)}</div>
+      <div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:4px;">
+        YTD Gross: ${fmt(ytd.gross_pay)}<br>
+        YTD Taxes: ${fmt(ytdTotalDed)}
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer no-break">
+    <span>${companyName}${companyLegal ? ' &middot; ' + companyLegal : ''}</span>
+    <span>Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+  </div>
+
 </div>
 </body></html>`;
 }
