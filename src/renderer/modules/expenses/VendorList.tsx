@@ -17,10 +17,11 @@ interface Vendor {
 interface VendorListProps {
   onNew: () => void;
   onEdit: (id: string) => void;
+  onView?: (id: string) => void;
 }
 
 // ─── Component ──────────────────────────────────────────
-const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
+const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState('');
@@ -138,7 +139,16 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
             <tbody>
               {filtered.map((v) => (
                 <tr key={v.id}>
-                  <td className="text-text-primary font-medium truncate max-w-[200px]">{v.name}</td>
+                  <td className="text-text-primary font-medium truncate max-w-[200px]">
+                    {onView ? (
+                      <button
+                        className="hover:text-accent-blue transition-colors text-left"
+                        onClick={() => onView(v.id)}
+                      >
+                        {v.name}
+                      </button>
+                    ) : v.name}
+                  </td>
                   <td className="text-text-secondary truncate max-w-[200px]">{v.email || '-'}</td>
                   <td className="text-text-secondary font-mono text-xs">{v.phone || '-'}</td>
                   <td>

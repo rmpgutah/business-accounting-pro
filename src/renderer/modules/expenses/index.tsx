@@ -4,6 +4,7 @@ import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
 import VendorList from './VendorList';
 import VendorForm from './VendorForm';
+import VendorDetail from './VendorDetail';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'expenses' | 'vendors';
@@ -39,6 +40,10 @@ const ExpensesModule: React.FC = () => {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseKey, setExpenseKey] = useState(0);
 
+  // Vendor view state
+  const [vendorView, setVendorView] = useState<'list' | 'detail'>('list');
+  const [viewingVendorId, setViewingVendorId] = useState<string | null>(null);
+
   // Vendor modal state
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
@@ -64,6 +69,17 @@ const ExpensesModule: React.FC = () => {
     setExpenseView('list');
     setEditingExpenseId(null);
     setExpenseKey((k) => k + 1);
+  }, []);
+
+  // ── Vendor detail handler ──
+  const handleViewVendor = useCallback((id: string) => {
+    setViewingVendorId(id);
+    setVendorView('detail');
+  }, []);
+
+  const handleVendorDetailBack = useCallback(() => {
+    setVendorView('list');
+    setViewingVendorId(null);
   }, []);
 
   // ── Vendor handlers ──
@@ -94,6 +110,10 @@ const ExpensesModule: React.FC = () => {
     if (t === 'expenses') {
       setExpenseView('list');
       setEditingExpenseId(null);
+    }
+    if (t === 'vendors') {
+      setVendorView('list');
+      setViewingVendorId(null);
     }
   }, []);
 
@@ -132,10 +152,19 @@ const ExpensesModule: React.FC = () => {
         />
       )}
 
-      {tab === 'vendors' && (
+      {tab === 'vendors' && vendorView === 'list' && (
         <VendorList
           key={vendorKey}
           onNew={handleNewVendor}
+          onEdit={handleEditVendor}
+          onView={handleViewVendor}
+        />
+      )}
+
+      {tab === 'vendors' && vendorView === 'detail' && viewingVendorId && (
+        <VendorDetail
+          vendorId={viewingVendorId}
+          onBack={handleVendorDetailBack}
           onEdit={handleEditVendor}
         />
       )}

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Users, Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -66,6 +66,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [error, setError] = useState('');
+  const [payrollData, setPayrollData] = useState<Record<string, any>>({});
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -79,6 +80,23 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }
+        // Enrich with payroll data
+        api.rawQuery(
+          `SELECT ps.employee_id,
+            MAX(pr.pay_date) as last_pay_date,
+            COALESCE(SUM(ps.gross_pay), 0) as ytd_gross
+           FROM pay_stubs ps
+           JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+           WHERE pr.pay_date >= ?
+           GROUP BY ps.employee_id`,
+          [new Date().getFullYear() + '-01-01']
+        ).then(payRows => {
+          if (!cancelled && Array.isArray(payRows)) {
+            const map: Record<string, any> = {};
+            for (const r of payRows) map[r.employee_id] = r;
+            setPayrollData(map);
+          }
+        }).catch(() => {});
       } catch (err: any) {
         console.error('Failed to load employees:', err);
         if (!cancelled) {
@@ -224,6 +242,8 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                 <SortableHeader field="pay_rate" label="Pay Rate" activeSortField={sortField} onSort={handleSort} />
                 <SortableHeader field="pay_schedule" label="Schedule" activeSortField={sortField} onSort={handleSort} />
                 <SortableHeader field="status" label="Status" activeSortField={sortField} onSort={handleSort} />
+                <th>Last Paid</th>
+                <th className="text-right">YTD Gross</th>
               </tr>
             </thead>
             <tbody>
@@ -269,6 +289,12 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                     >
                       {emp.status === 'active' ? 'Active' : 'Inactive'}
                     </span>
+                  </td>
+                  <td className="text-xs text-text-muted font-mono">
+                    {payrollData[emp.id]?.last_pay_date ? formatDate(payrollData[emp.id].last_pay_date) : '\u2014'}
+                  </td>
+                  <td className="text-right text-xs font-mono text-text-secondary">
+                    {payrollData[emp.id]?.ytd_gross ? formatCurrency(payrollData[emp.id].ytd_gross) : '\u2014'}
                   </td>
                 </tr>
               ))}

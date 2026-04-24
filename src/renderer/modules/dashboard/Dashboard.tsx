@@ -427,7 +427,7 @@ const Dashboard: React.FC = () => {
   const [rulesActivity, setRulesActivity] = useState<{ pricing_today: number; approvals_pending: number; alerts_week: number } | null>(null);
   const [debtStats, setDebtStats] = useState<{ count: number; total: number } | null>(null);
   const [billsStats, setBillsStats] = useState<{ unpaid_total: number; overdue_count: number } | null>(null);
-  const [payrollStats, setPayrollStats] = useState<{ active_count: number } | null>(null);
+  const [payrollStats, setPayrollStats] = useState<{ active_count: number; last_payroll_date?: string; ytd_payroll?: number } | null>(null);
 
   const { start, end } = useMemo(() => dateRange(period), [period]);
 
@@ -711,12 +711,19 @@ const Dashboard: React.FC = () => {
 
       // Payroll summary
       api.rawQuery(
-        'SELECT COUNT(*) as active_count FROM employees WHERE company_id = ? AND status = "active"',
-        [cid]
+        `SELECT COUNT(*) as active_count,
+          (SELECT MAX(pr.pay_date) FROM payroll_runs pr WHERE pr.company_id = ?) as last_payroll_date,
+          (SELECT COALESCE(SUM(pr.total_gross), 0) FROM payroll_runs pr WHERE pr.company_id = ? AND pr.pay_date >= ?) as ytd_payroll
+         FROM employees WHERE company_id = ? AND status = 'active'`,
+        [cid, cid, new Date().getFullYear() + '-01-01', cid]
       ).then(r => {
         if (!cancelled) {
           const row = Array.isArray(r) ? r[0] : r;
-          setPayrollStats(row ? { active_count: row.active_count ?? 0 } : null);
+          setPayrollStats(row ? {
+            active_count: row.active_count ?? 0,
+            last_payroll_date: row.last_payroll_date ?? undefined,
+            ytd_payroll: row.ytd_payroll ?? 0,
+          } : null);
         }
       }).catch(() => {});
 
@@ -974,6 +981,12 @@ const Dashboard: React.FC = () => {
           <span className="text-xs text-text-muted mt-1 block">
             active employee{(payrollStats?.active_count ?? 0) !== 1 ? 's' : ''}
           </span>
+          {payrollStats?.last_payroll_date && (
+            <p className="text-[11px] text-text-muted mt-0.5">Last run: {formatDate(payrollStats.last_payroll_date)}</p>
+          )}
+          {(payrollStats?.ytd_payroll ?? 0) > 0 && (
+            <p className="text-[11px] text-text-secondary font-mono mt-0.5">YTD: {formatCurrency(payrollStats!.ytd_payroll!)}</p>
+          )}
         </div>
       </div>
 
