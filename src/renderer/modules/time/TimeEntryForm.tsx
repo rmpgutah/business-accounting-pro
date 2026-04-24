@@ -162,15 +162,23 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     };
 
     try {
+      let result;
       if (isEditing && entry) {
-        await api.update('time_entries', entry.id, data);
+        result = await api.update('time_entries', entry.id, data);
       } else {
-        await api.create('time_entries', data);
+        result = await api.create('time_entries', data);
       }
+
+      // IPC handler returns { error: '...' } on failure instead of throwing
+      if (result && typeof result === 'object' && 'error' in result) {
+        throw new Error(result.error);
+      }
+
       onSaved();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save time entry:', err);
+      setFormError(err?.message || 'Failed to save time entry. Please try again.');
     } finally {
       setSaving(false);
     }

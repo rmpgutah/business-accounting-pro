@@ -62,6 +62,8 @@ const PayrollModule: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [runStubs, setRunStubs] = useState<Record<string, PayStubRecord[]>>({});
+  const [stubsLoading, setStubsLoading] = useState(false);
+  const [stubsError, setStubsError] = useState('');
   const [historyError, setHistoryError] = useState('');
 
   // Pay stub detail
@@ -100,23 +102,32 @@ const PayrollModule: React.FC = () => {
       return;
     }
     setExpandedRunId(runId);
-    if (!runStubs[runId]) {
-      try {
-        // JOIN employees so each stub row carries employee_name (pay_stubs has employee_id only)
-        const stubs = await api.rawQuery(
-          `SELECT ps.*, COALESCE(NULLIF(TRIM(e.first_name || ' ' || e.last_name), ''), e.email, 'Unknown') AS employee_name
-           FROM pay_stubs ps
-           LEFT JOIN employees e ON ps.employee_id = e.id
-           WHERE ps.payroll_run_id = ?`,
-          [runId]
-        );
-        setRunStubs((prev) => ({
-          ...prev,
-          [runId]: Array.isArray(stubs) ? stubs : [],
-        }));
-      } catch {
-        setRunStubs((prev) => ({ ...prev, [runId]: [] }));
-      }
+    setStubsError('');
+
+    // Always re-fetch when expanding (avoids stale cache issues)
+    setStubsLoading(true);
+    try {
+      // JOIN employees for name and payroll_runs for period dates
+      // employees table has a single `name` column (not first_name/last_name)
+      const stubs = await api.rawQuery(
+        `SELECT ps.*, COALESCE(e.name, e.email, 'Unknown') AS employee_name,
+                pr.pay_period_start AS period_start, pr.pay_period_end AS period_end, pr.pay_date
+         FROM pay_stubs ps
+         LEFT JOIN employees e ON ps.employee_id = e.id
+         LEFT JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+         WHERE ps.payroll_run_id = ?`,
+        [runId]
+      );
+      setRunStubs((prev) => ({
+        ...prev,
+        [runId]: Array.isArray(stubs) ? stubs : [],
+      }));
+    } catch (err: any) {
+      console.error('Failed to load pay stubs for run:', runId, err);
+      setStubsError(err?.message || 'Failed to load pay stubs');
+      setRunStubs((prev) => ({ ...prev, [runId]: [] }));
+    } finally {
+      setStubsLoading(false);
     }
   };
 
@@ -335,8 +346,15 @@ const PayrollModule: React.FC = () => {
                       {/* Expanded: Pay Stubs */}
                       {isExpanded && (
                         <div className="border-t border-border-primary bg-bg-tertiary/50 px-4 py-3">
-                          {stubs.length === 0 ? (
+                          {stubsError && (
+                            <div className="text-xs text-accent-expense bg-accent-expense/10 border border-accent-expense/20 px-3 py-2 mb-2" style={{ borderRadius: '6px' }}>
+                              {stubsError}
+                            </div>
+                          )}
+                          {stubsLoading ? (
                             <div className="text-xs text-text-muted py-2">Loading pay stubs...</div>
+                          ) : stubs.length === 0 ? (
+                            <div className="text-xs text-text-muted py-2">No pay stubs found for this run.</div>
                           ) : (
                             <>
                               <table className="w-full text-xs">

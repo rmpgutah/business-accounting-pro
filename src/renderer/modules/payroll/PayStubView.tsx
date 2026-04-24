@@ -67,21 +67,38 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
       setLoading(true);
       setError('');
       try {
-        const data = await api.get('pay_stubs', payStubId);
+        // JOIN payroll_runs for period/pay_date and employees for employee_name
+        // pay_stubs only has: hours_regular, hours_overtime (no `hours`, `period_start`, etc.)
+        const rows = await api.rawQuery(
+          `SELECT ps.*,
+                  (ps.hours_regular + ps.hours_overtime) AS hours,
+                  ps.hours_regular, ps.hours_overtime,
+                  pr.pay_period_start AS period_start,
+                  pr.pay_period_end AS period_end,
+                  pr.pay_date,
+                  COALESCE(e.name, e.email, 'Unknown') AS employee_name
+           FROM pay_stubs ps
+           LEFT JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+           LEFT JOIN employees e ON ps.employee_id = e.id
+           WHERE ps.id = ?`,
+          [payStubId]
+        );
+        const data = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
         if (cancelled || !data) return;
         setStub(data);
 
         // Fetch YTD: all pay stubs for this employee in the same year
+        // Must JOIN payroll_runs to access pay_date (pay_stubs doesn't have it)
         const year = data.pay_date?.slice(0, 4);
         if (data.employee_id && year) {
           try {
-            const allStubs = await api.query('pay_stubs', {
-              employee_id: data.employee_id,
-            });
-            if (!cancelled && Array.isArray(allStubs)) {
-              const yearStubs = allStubs.filter(
-                (s: PayStub) => s.pay_date?.startsWith(year)
-              );
+            const yearStubs = await api.rawQuery(
+              `SELECT ps.* FROM pay_stubs ps
+               JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+               WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?`,
+              [data.employee_id, `${year}-01-01`, `${year}-12-31`]
+            );
+            if (!cancelled && Array.isArray(yearStubs)) {
               const totals: YtdTotals = {
                 gross_pay: 0,
                 federal_tax: 0,

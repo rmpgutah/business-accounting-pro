@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 import TimerWidget from './TimerWidget';
 import TimeEntryList from './TimeEntryList';
 import TimeEntryForm from './TimeEntryForm';
@@ -60,20 +61,25 @@ const TimeTracking: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
-  // Load clients and projects once
+  // Load clients and projects once — use allSettled to avoid cascade failure
   useEffect(() => {
     const loadRefs = async () => {
       if (!activeCompany) return;
       try {
-        const [clientData, projectData] = await Promise.all([
+        const [clientRes, projectRes] = await Promise.allSettled([
           api.query('clients', { company_id: activeCompany.id }),
           api.query('projects', { company_id: activeCompany.id }),
         ]);
-        if (Array.isArray(clientData)) setClients(clientData);
-        if (Array.isArray(projectData)) setProjects(projectData);
+        if (clientRes.status === 'fulfilled' && Array.isArray(clientRes.value)) {
+          setClients(clientRes.value);
+        }
+        if (projectRes.status === 'fulfilled' && Array.isArray(projectRes.value)) {
+          setProjects(projectRes.value);
+        }
       } catch (err) {
         console.error('Failed to load clients/projects:', err);
       }
@@ -85,6 +91,7 @@ const TimeTracking: React.FC = () => {
   const loadEntries = useCallback(async () => {
     if (!activeCompany) return;
     setLoading(true);
+    setError('');
     const { start, end } = weekDateRange(weekStart);
     try {
       const data = await api.rawQuery(
@@ -94,8 +101,9 @@ const TimeTracking: React.FC = () => {
       if (Array.isArray(data)) {
         setEntries(data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load time entries:', err);
+      setError(err?.message || 'Failed to load time entries');
     } finally {
       setLoading(false);
     }
@@ -128,11 +136,15 @@ const TimeTracking: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await api.remove('time_entries', id);
+      const result = await api.remove('time_entries', id);
+      // IPC handler returns { error } on failure instead of throwing
+      if (result && typeof result === 'object' && 'error' in result) {
+        throw new Error(result.error);
+      }
       loadEntries();
     } catch (err: any) {
       console.error('Failed to delete time entry:', err);
-      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+      setError('Failed to delete entry: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -162,6 +174,15 @@ const TimeTracking: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <ErrorBanner
+          message={error}
+          title="Time Tracking Error"
+          onDismiss={() => setError('')}
+        />
+      )}
 
       {/* Timer Widget */}
       <TimerWidget
