@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, FileText, Printer, Download } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, Download, Ban, CreditCard } from 'lucide-react';
 import api from '../../lib/api';
 import { generatePayStubHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -57,6 +57,9 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Feature 7: Direct deposit detection (must be before early returns)
+  const [employee, setEmployee] = useState<any>(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -113,6 +116,13 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     return () => { cancelled = true; };
   }, [payStubId]);
 
+  // Feature 7: Load employee data for direct deposit detection / check printing
+  useEffect(() => {
+    if (stub?.employee_id) {
+      api.get('employees', stub.employee_id).then(e => setEmployee(e)).catch(() => {});
+    }
+  }, [stub?.employee_id]);
+
   const buildStubHTML = () => {
     if (!stub) return '';
     // Format ISO dates to human-readable strings before handing off to PDF template
@@ -158,6 +168,16 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
 
   const totalDeductions = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
   const ytdTotalDeductions = ytd.federal_tax + ytd.state_tax + ytd.social_security + ytd.medicare;
+  const isDirectDeposit = !!(employee?.routing_number);
+
+  // Feature 2: Print check handler
+  const handlePrintCheck = async (isVoid = false) => {
+    const { generatePaycheckHTML } = await import('../../lib/payroll-check-template');
+    const emp = employee || await api.get('employees', stub.employee_id);
+    const run = await api.get('payroll_runs', stub.payroll_run_id);
+    const html = generatePaycheckHTML(stub, emp, activeCompany, run, { isVoid });
+    await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`);
+  };
 
   // ─── Render ─────────────────────────────────────────
   return (
@@ -176,6 +196,10 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <FileText size={20} className="text-text-muted" />
             <h1 className="text-lg font-bold text-text-primary">Pay Stub</h1>
           </div>
+          {/* Feature 7: Direct deposit / check indicator */}
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 ${isDirectDeposit ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted bg-bg-tertiary'}`} style={{ borderRadius: '6px' }}>
+            {isDirectDeposit ? 'Direct Deposit' : 'Check'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -183,7 +207,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             onClick={handlePrintStub}
           >
             <Printer size={14} />
-            Print
+            Print Stub
           </button>
           <button
             className="block-btn flex items-center gap-2"
@@ -191,6 +215,22 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
           >
             <Download size={14} />
             Save PDF
+          </button>
+          {/* Feature 2: Print Check */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => handlePrintCheck(false)}
+          >
+            <CreditCard size={14} />
+            Print Check
+          </button>
+          {/* Feature 19: Void Check */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs text-accent-expense"
+            onClick={() => handlePrintCheck(true)}
+          >
+            <Ban size={14} />
+            Void Check
           </button>
         </div>
       </div>
@@ -242,6 +282,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
               </tr>
             </thead>
             <tbody>
+              {/* Feature 5: Show regular and overtime hours separately */}
               <tr>
                 <td className="py-1.5 text-text-primary">
                   {stub.hours > 0 ? 'Regular Hours' : 'Salary'}
@@ -249,9 +290,25 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
                 <td className="py-1.5 text-right font-mono text-text-secondary">
                   {stub.hours > 0 ? stub.hours.toFixed(2) : '--'}
                 </td>
-                <td className="py-1.5 text-right font-mono text-text-primary">{formatCurrency(stub.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-primary">
+                  {stub.hours > 0 && (stub as any).hours_overtime > 0
+                    ? formatCurrency(stub.gross_pay - ((stub as any).hours_overtime * ((stub.gross_pay / (stub.hours + (stub as any).hours_overtime * 0.5)) * 1.5)))
+                    : formatCurrency(stub.gross_pay)}
+                </td>
                 <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.gross_pay)}</td>
               </tr>
+              {(stub as any).hours_overtime > 0 && (
+                <tr>
+                  <td className="py-1.5 text-text-primary">Overtime (1.5x)</td>
+                  <td className="py-1.5 text-right font-mono text-text-secondary">
+                    {((stub as any).hours_overtime || 0).toFixed(2)}
+                  </td>
+                  <td className="py-1.5 text-right font-mono text-text-primary">
+                    {formatCurrency((stub as any).hours_overtime * ((stub.gross_pay / (stub.hours + (stub as any).hours_overtime * 0.5)) * 1.5))}
+                  </td>
+                  <td className="py-1.5 text-right font-mono text-text-secondary">--</td>
+                </tr>
+              )}
               <tr className="border-t border-border-primary font-semibold">
                 <td className="py-1.5 text-text-primary">Gross Pay</td>
                 <td />

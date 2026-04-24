@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Users, DollarSign, FileText, Calculator, Plus, Trash2 } from 'lucide-react';
+import { Users, DollarSign, FileText, Calculator, Plus, Trash2, Printer } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import EmployeeList from './EmployeeList';
@@ -14,20 +14,26 @@ type Tab = 'employees' | 'run' | 'history' | 'pto';
 
 interface PayrollRun {
   id: string;
-  period_start: string;
-  period_end: string;
+  // DB column names are pay_period_start / pay_period_end
+  pay_period_start: string;
+  pay_period_end: string;
+  period_start?: string; // alias if present
+  period_end?: string;   // alias if present
   pay_date: string;
   status: string;
   total_gross: number;
   total_taxes: number;
   total_net: number;
   employee_count: number;
+  notes?: string;
+  run_type?: string;
   created_at?: string;
 }
 
 interface PayStubRecord {
   id: string;
   payroll_run_id: string;
+  employee_id: string;
   employee_name: string;
   gross_pay: number;
   net_pay: number;
@@ -275,7 +281,7 @@ const PayrollModule: React.FC = () => {
                           <div>
                             <div className="text-xs text-text-muted">Pay Period</div>
                             <div className="text-sm font-mono text-text-primary">
-                              {run.period_start} to {run.period_end}
+                              {run.pay_period_start || run.period_start} to {run.pay_period_end || run.period_end}
                             </div>
                           </div>
                           <div>
@@ -332,36 +338,60 @@ const PayrollModule: React.FC = () => {
                           {stubs.length === 0 ? (
                             <div className="text-xs text-text-muted py-2">Loading pay stubs...</div>
                           ) : (
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="border-b border-border-primary">
-                                  <th className="text-left py-1 text-text-muted font-semibold">Employee</th>
-                                  <th className="text-right py-1 text-text-muted font-semibold">Gross</th>
-                                  <th className="text-right py-1 text-text-muted font-semibold">Net</th>
-                                  <th className="text-right py-1 text-text-muted font-semibold" />
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {stubs.map((s) => (
-                                  <tr key={s.id} className="border-b border-border-primary/50">
-                                    <td className="py-1.5 text-text-primary">{s.employee_name}</td>
-                                    <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(s.gross_pay ?? 0)}</td>
-                                    <td className="py-1.5 text-right font-mono font-semibold text-accent-income">{fmt.format(s.net_pay ?? 0)}</td>
-                                    <td className="py-1.5 text-right">
-                                      <button
-                                        className="text-accent-blue hover:underline text-[10px] font-semibold"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setViewStubId(s.id);
-                                        }}
-                                      >
-                                        View Stub
-                                      </button>
-                                    </td>
+                            <>
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="border-b border-border-primary">
+                                    <th className="text-left py-1 text-text-muted font-semibold">Employee</th>
+                                    <th className="text-right py-1 text-text-muted font-semibold">Gross</th>
+                                    <th className="text-right py-1 text-text-muted font-semibold">Net</th>
+                                    <th className="text-right py-1 text-text-muted font-semibold" />
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {stubs.map((s) => (
+                                    <tr key={s.id} className="border-b border-border-primary/50">
+                                      <td className="py-1.5 text-text-primary">{s.employee_name}</td>
+                                      <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(s.gross_pay ?? 0)}</td>
+                                      <td className="py-1.5 text-right font-mono font-semibold text-accent-income">{fmt.format(s.net_pay ?? 0)}</td>
+                                      <td className="py-1.5 text-right">
+                                        <button
+                                          className="text-accent-blue hover:underline text-[10px] font-semibold"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setViewStubId(s.id);
+                                          }}
+                                        >
+                                          View Stub
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {/* Feature 3: Print All Checks for this run */}
+                              <div className="flex gap-2 mt-3 pt-3 border-t border-border-primary">
+                                <button
+                                  className="block-btn flex items-center gap-1.5 text-[10px] px-3 py-1.5"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const { generatePaycheckHTML, extractCheckBody, wrapBatchChecks } = await import('../../lib/payroll-check-template');
+                                    const runData = await api.get('payroll_runs', run.id);
+                                    const bodies: string[] = [];
+                                    for (const s of stubs) {
+                                      const emp = await api.get('employees', s.employee_id);
+                                      const checkHtml = generatePaycheckHTML(s, emp, activeCompany, runData);
+                                      bodies.push(extractCheckBody(checkHtml));
+                                    }
+                                    const combined = wrapBatchChecks(bodies);
+                                    await api.printPreview(combined, `Payroll Checks — ${run.pay_date}`);
+                                  }}
+                                >
+                                  <Printer size={12} />
+                                  Print All Checks
+                                </button>
+                              </div>
+                            </>
                           )}
                         </div>
                       )}

@@ -427,6 +427,14 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE stripe_cache ADD COLUMN local_entity_type TEXT DEFAULT ''",
   "ALTER TABLE stripe_cache ADD COLUMN local_entity_id TEXT DEFAULT ''",
   "CREATE INDEX IF NOT EXISTS idx_stripe_cache_local ON stripe_cache(company_id, local_entity_type, local_entity_id)",
+  // Feature 9: Payroll run notes
+  "ALTER TABLE payroll_runs ADD COLUMN notes TEXT DEFAULT ''",
+  // Feature 22: Employee count stored on payroll run
+  "ALTER TABLE payroll_runs ADD COLUMN employee_count INTEGER DEFAULT 0",
+  // Feature 6: Pay rate effective date for history tracking
+  "ALTER TABLE employees ADD COLUMN pay_rate_effective_date TEXT DEFAULT ''",
+  // Feature 20: Check number on pay stubs
+  "ALTER TABLE pay_stubs ADD COLUMN check_number TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

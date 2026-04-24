@@ -1990,8 +1990,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('payroll:process', (_event, {
     periodStart, periodEnd, payDate,
     totalGross, totalTaxes, totalNet,
-    stubs, // Array<{ employeeId, hours, grossPay, federalTax, stateTax, ss, medicare, netPay, ytdGross, ytdTaxes, ytdNet, preTaxDeductions?, postTaxDeductions?, deductionDetail? }>
+    stubs, // Array<{ employeeId, hours, hoursOvertime, grossPay, federalTax, stateTax, ss, medicare, netPay, ytdGross, ytdTaxes, ytdNet, preTaxDeductions?, postTaxDeductions?, deductionDetail? }>
     runType,
+    notes,
+    employeeCount,
   }: any) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
@@ -2008,15 +2010,28 @@ export function registerIpcHandlers(): void {
     const tx = (dbInstance as any).transaction(() => {
       const runId = uuid();
       (dbInstance as any).prepare(`
-        INSERT INTO payroll_runs (id, company_id, pay_period_start, pay_period_end, pay_date, status, total_gross, total_taxes, total_deductions, total_net, run_type)
-        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, 0, ?, ?)
-      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet, runType || 'regular');
+        INSERT INTO payroll_runs (id, company_id, pay_period_start, pay_period_end, pay_date, status, total_gross, total_taxes, total_deductions, total_net, run_type, notes, employee_count)
+        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, 0, ?, ?, ?, ?)
+      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet, runType || 'regular', notes || '', employeeCount || stubs.length);
+
+      // Feature 20: Auto-generate sequential check numbers
+      let lastCheckNum = 1000;
+      try {
+        const lastCheck = (dbInstance as any).prepare(
+          `SELECT check_number FROM pay_stubs WHERE check_number != '' ORDER BY CAST(check_number AS INTEGER) DESC LIMIT 1`
+        ).get() as any;
+        if (lastCheck?.check_number) {
+          lastCheckNum = parseInt(lastCheck.check_number, 10) || 1000;
+        }
+      } catch { /* ignore — column may not exist yet */ }
 
       for (const s of stubs) {
+        lastCheckNum++;
+        const checkNumber = String(lastCheckNum).padStart(6, '0');
         (dbInstance as any).prepare(`
-          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net, pretax_deductions, posttax_deductions, deduction_detail)
-          VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
-        `).run(uuid(), runId, s.employeeId, s.hours, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}');
+          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net, pretax_deductions, posttax_deductions, deduction_detail, check_number)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuid(), runId, s.employeeId, s.hours, s.hoursOvertime || 0, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}', checkNumber);
       }
 
       // BUG 4: Break out taxes into separate GL lines instead of single lumped "Tax" line
