@@ -422,6 +422,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               localStorage.removeItem('invoiceFormPrefill');
             }
           }
+
+          // Consume nav:prefillClientId from sessionStorage (e.g., from ClientDetail "New Invoice")
+          const prefillClientId = sessionStorage.getItem('nav:prefillClientId');
+          if (prefillClientId) {
+            sessionStorage.removeItem('nav:prefillClientId');
+            if (!cancelled) {
+              setForm((prev) => ({ ...prev, client_id: prefillClientId }));
+            }
+          }
+
+          // Consume nav:prefillProjectId from sessionStorage
+          const prefillProjectId = sessionStorage.getItem('nav:prefillProjectId');
+          if (prefillProjectId) {
+            sessionStorage.removeItem('nav:prefillProjectId');
+            if (!cancelled) {
+              setForm((prev) => ({ ...prev, job_reference: prefillProjectId }));
+            }
+          }
         }
 
         if (invoiceId) {

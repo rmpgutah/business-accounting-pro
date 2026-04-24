@@ -77,7 +77,20 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   }, [setModule]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [activeTab, setActiveTab] = useState<StatusTab>('all');
+  const [activeTab, setActiveTab] = useState<StatusTab>(() => {
+    // Consume nav:invoiceFilter from sessionStorage on mount
+    const filterFlag = sessionStorage.getItem('nav:invoiceFilter');
+    if (filterFlag) {
+      sessionStorage.removeItem('nav:invoiceFilter');
+      try {
+        const filter = JSON.parse(filterFlag);
+        if (filter.status && ['all', 'draft', 'sent', 'paid', 'overdue', 'partial'].includes(filter.status)) {
+          return filter.status as StatusTab;
+        }
+      } catch (_) { /* ignore */ }
+    }
+    return 'all';
+  });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

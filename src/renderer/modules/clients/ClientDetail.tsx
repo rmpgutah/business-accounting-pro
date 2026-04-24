@@ -11,6 +11,7 @@ import {
   Clock,
   Paperclip,
   Edit,
+  Scale,
 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
@@ -45,7 +46,7 @@ interface SummaryStats {
   outstanding: number;
 }
 
-type Tab = 'invoices' | 'projects' | 'time' | 'documents';
+type Tab = 'invoices' | 'projects' | 'time' | 'documents' | 'debts';
 
 interface ClientDetailProps {
   clientId: string;
@@ -100,14 +101,26 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
     const loadTab = async () => {
       setTabLoading(true);
       try {
-        const tableMap: Record<Tab, string> = {
-          invoices: 'invoices',
-          projects: 'projects',
-          time: 'time_entries',
-          documents: 'documents',
-        };
-        const rows = await api.query(tableMap[activeTab], { client_id: clientId, company_id: activeCompany?.id });
-        if (!cancelled) setTabData(Array.isArray(rows) ? rows : []);
+        if (activeTab === 'debts') {
+          // Query debts linked by debtor_name matching client name, or by source invoice
+          const rows = await api.rawQuery(
+            `SELECT d.* FROM debts d WHERE d.company_id = ? AND (
+              d.debtor_name = (SELECT name FROM clients WHERE id = ?) OR
+              d.source_id IN (SELECT id FROM invoices WHERE client_id = ? AND company_id = ?)
+            ) ORDER BY d.created_at DESC`,
+            [activeCompany?.id, clientId, clientId, activeCompany?.id]
+          );
+          if (!cancelled) setTabData(Array.isArray(rows) ? rows : []);
+        } else {
+          const tableMap: Record<string, string> = {
+            invoices: 'invoices',
+            projects: 'projects',
+            time: 'time_entries',
+            documents: 'documents',
+          };
+          const rows = await api.query(tableMap[activeTab], { client_id: clientId, company_id: activeCompany?.id });
+          if (!cancelled) setTabData(Array.isArray(rows) ? rows : []);
+        }
       } catch (err) {
         console.error(`Failed to load ${activeTab}:`, err);
         if (!cancelled) setTabData([]);
@@ -125,6 +138,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
     { key: 'projects', label: 'Projects', icon: <FolderKanban size={14} /> },
     { key: 'time', label: 'Time Entries', icon: <Clock size={14} /> },
     { key: 'documents', label: 'Documents', icon: <Paperclip size={14} /> },
+    { key: 'debts', label: 'Debts', icon: <Scale size={14} /> },
   ];
 
   if (loading || !client) {
@@ -281,16 +295,18 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
                 activeTab === 'invoices' ? FileText
                 : activeTab === 'projects' ? FolderOpen
                 : activeTab === 'time' ? Clock
+                : activeTab === 'debts' ? Scale
                 : FileText
               }
               message={`No ${activeTab} found for this client`}
             />
           ) : (
             <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-              {activeTab === 'invoices' && <InvoicesTable data={tabData} />}
-              {activeTab === 'projects' && <ProjectsTable data={tabData} />}
+              {activeTab === 'invoices' && <InvoicesTable data={tabData} onNavigate={(id) => nav.goToInvoice(id)} />}
+              {activeTab === 'projects' && <ProjectsTable data={tabData} onNavigate={(id) => nav.goToProject(id)} />}
               {activeTab === 'time' && <TimeEntriesTable data={tabData} />}
               {activeTab === 'documents' && <DocumentsTable data={tabData} />}
+              {activeTab === 'debts' && <DebtsTable data={tabData} />}
             </div>
           )}
         </div>
@@ -300,7 +316,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 };
 
 // ─── Sub-Tables ─────────────────────────────────────────
-const InvoicesTable: React.FC<{ data: any[] }> = ({ data }) => (
+const InvoicesTable: React.FC<{ data: any[]; onNavigate?: (id: string) => void }> = ({ data, onNavigate }) => (
   <table className="block-table">
     <thead>
       <tr>
@@ -313,7 +329,11 @@ const InvoicesTable: React.FC<{ data: any[] }> = ({ data }) => (
     </thead>
     <tbody>
       {data.map((inv) => (
-        <tr key={inv.id}>
+        <tr
+          key={inv.id}
+          className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
+          onClick={() => onNavigate?.(inv.id)}
+        >
           <td className="font-mono text-text-primary">{inv.invoice_number ?? inv.id}</td>
           <td className="text-text-secondary text-xs">{inv.issue_date ?? inv.date ?? inv.created_at ?? '--'}</td>
           <td>
@@ -337,7 +357,7 @@ const InvoicesTable: React.FC<{ data: any[] }> = ({ data }) => (
   </table>
 );
 
-const ProjectsTable: React.FC<{ data: any[] }> = ({ data }) => (
+const ProjectsTable: React.FC<{ data: any[]; onNavigate?: (id: string) => void }> = ({ data, onNavigate }) => (
   <table className="block-table">
     <thead>
       <tr>
@@ -348,7 +368,11 @@ const ProjectsTable: React.FC<{ data: any[] }> = ({ data }) => (
     </thead>
     <tbody>
       {data.map((p) => (
-        <tr key={p.id}>
+        <tr
+          key={p.id}
+          className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
+          onClick={() => onNavigate?.(p.id)}
+        >
           <td className="text-text-primary font-medium">{p.name}</td>
           <td>
             <span className="block-badge block-badge-blue">{p.status ?? 'active'}</span>
@@ -404,6 +428,35 @@ const DocumentsTable: React.FC<{ data: any[] }> = ({ data }) => (
           <td className="text-text-primary font-medium">{d.name ?? d.filename ?? '--'}</td>
           <td className="text-text-secondary text-xs uppercase">{d.type ?? d.mime_type ?? '--'}</td>
           <td className="text-text-secondary text-xs">{d.created_at ?? '--'}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+);
+
+const DebtsTable: React.FC<{ data: any[] }> = ({ data }) => (
+  <table className="block-table">
+    <thead>
+      <tr>
+        <th>Debtor</th>
+        <th>Status</th>
+        <th>Original</th>
+        <th>Balance</th>
+        <th>Due Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {data.map((d) => (
+        <tr key={d.id}>
+          <td className="text-text-primary font-medium">{d.debtor_name}</td>
+          <td>
+            <span className={formatStatus(d.status).className}>
+              {formatStatus(d.status).label}
+            </span>
+          </td>
+          <td className="font-mono text-text-secondary">{formatCurrency(d.original_amount ?? 0)}</td>
+          <td className="font-mono text-text-primary">{formatCurrency(d.balance_due ?? 0)}</td>
+          <td className="text-text-secondary text-xs">{d.due_date ?? '--'}</td>
         </tr>
       ))}
     </tbody>

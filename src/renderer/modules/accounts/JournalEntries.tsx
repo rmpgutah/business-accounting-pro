@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Plus, Search, FileText, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -20,14 +21,6 @@ interface JournalEntriesProps {
   onNewEntry: () => void;
   onEditEntry: (entry: JournalEntry) => void;
 }
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Component ──────────────────────────────────────────
 const JournalEntries: React.FC<JournalEntriesProps> = ({
@@ -210,10 +203,10 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                   {entry.description || '—'}
                 </td>
                 <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
-                  {fmt.format(entry.total_debit ?? 0)}
+                  {formatCurrency(entry.total_debit ?? 0)}
                 </td>
                 <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
-                  {fmt.format(entry.total_credit ?? 0)}
+                  {formatCurrency(entry.total_credit ?? 0)}
                 </td>
                 <td className="px-4 py-2 text-center">
                   <span

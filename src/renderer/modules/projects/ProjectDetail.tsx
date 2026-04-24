@@ -376,11 +376,11 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
                 Record Expense
               </button>
             </div>
-            <ExpensesTab expenses={expenses} />
+            <ExpensesTab expenses={expenses} onNavigate={(id) => nav.goToExpense(id)} />
           </div>
         )}
         {activeTab === 'invoices' && (
-          <InvoicesTab invoices={invoices} />
+          <InvoicesTab invoices={invoices} onNavigate={(id) => nav.goToInvoice(id)} />
         )}
       </div>
     </div>
@@ -443,7 +443,7 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
 };
 
 // ─── Expenses Tab ───────────────────────────────────────
-const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
+const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => void }> = ({ expenses, onNavigate }) => {
   if (expenses.length === 0) {
     return (
       <div className="text-center py-8">
@@ -467,7 +467,11 @@ const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
         </thead>
         <tbody>
           {expenses.map((exp) => (
-            <tr key={exp.id}>
+            <tr
+              key={exp.id}
+              className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
+              onClick={() => onNavigate?.(exp.id)}
+            >
               <td className="text-text-secondary font-mono text-xs">
                 {formatDate(exp.date)}
               </td>
@@ -492,7 +496,7 @@ const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
 };
 
 // ─── Invoices Tab ───────────────────────────────────────
-const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
+const InvoicesTab: React.FC<{ invoices: Invoice[]; onNavigate?: (id: string) => void }> = ({ invoices, onNavigate }) => {
   if (invoices.length === 0) {
     return (
       <div className="text-center py-8">
@@ -523,7 +527,11 @@ const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
         </thead>
         <tbody>
           {invoices.map((inv) => (
-            <tr key={inv.id}>
+            <tr
+              key={inv.id}
+              className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
+              onClick={() => onNavigate?.(inv.id)}
+            >
               <td className="text-text-primary text-xs font-mono font-medium">
                 {inv.invoice_number || '--'}
               </td>

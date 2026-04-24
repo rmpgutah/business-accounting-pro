@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
+import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 
@@ -88,6 +89,7 @@ interface InvoiceDetailProps {
 const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const setModule = useAppStore((s) => s.setModule);
+  const nav = useNavigation();
 
   const sendToCollections = (id: string) => {
     sessionStorage.setItem('nav:source_invoice', id);
@@ -441,7 +443,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </span>
             {client ? (
               <div className="space-y-1 text-sm">
-                <p className="text-text-primary font-semibold text-base">{client.name}</p>
+                <p
+                  className="text-text-primary font-semibold text-base cursor-pointer hover:text-accent-blue transition-colors"
+                  onClick={() => nav.goToClient(client.id)}
+                  title="View client details"
+                >
+                  {client.name}
+                </p>
                 {client.email && <p className="text-text-secondary">{client.email}</p>}
                 {(() => {
                   const addr = [

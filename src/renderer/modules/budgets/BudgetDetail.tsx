@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, BarChart3, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -42,21 +43,6 @@ interface BudgetDetailProps {
   onEdit?: (id: string) => void;
 }
 
-// ─── Formatters ─────────────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-const fmtFull = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 // ─── Progress Bar Color ─────────────────────────────────
 function progressColor(pct: number): string {
   if (pct > 100) return 'var(--color-accent-expense)';
@@ -92,11 +78,11 @@ function MiniBarChart({ months }: { months: MonthBucket[] }) {
           <div key={m.month} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 72 }}>
               <div
-                title={`Budgeted: ${fmtFull.format(m.budgeted)}`}
+                title={`Budgeted: ${formatCurrency(m.budgeted)}`}
                 style={{ width: 8, height: bH, background: 'var(--color-accent-blue)', borderRadius: '2px 2px 0 0', opacity: 0.5 }}
               />
               <div
-                title={`Actual: ${fmtFull.format(m.actual)}`}
+                title={`Actual: ${formatCurrency(m.actual)}`}
                 style={{ width: 8, height: aH, background: over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)', borderRadius: '2px 2px 0 0' }}
               />
             </div>
@@ -273,16 +259,16 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
       <div className="grid grid-cols-4 gap-4">
         <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Budgeted</span>
-          <p className="text-2xl font-mono text-text-primary mt-1">{fmt.format(totals.budgeted)}</p>
+          <p className="text-2xl font-mono text-text-primary mt-1">{formatCurrency(totals.budgeted)}</p>
         </div>
         <div className="block-card p-4 border-l-2 border-l-accent-expense" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Actual Spent</span>
-          <p className="text-2xl font-mono text-text-primary mt-1">{fmt.format(totals.actual)}</p>
+          <p className="text-2xl font-mono text-text-primary mt-1">{formatCurrency(totals.actual)}</p>
         </div>
         <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Remaining</span>
           <p className={`text-2xl font-mono mt-1 ${totals.remaining >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
-            {fmt.format(Math.abs(totals.remaining))}
+            {formatCurrency(Math.abs(totals.remaining))}
             {totals.remaining < 0 && <span className="text-xs ml-1">over</span>}
           </p>
         </div>
@@ -343,12 +329,12 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                       {line.overBudget && <AlertTriangle size={11} className="text-accent-expense flex-shrink-0" />}
                       {line.category}
                     </td>
-                    <td className="text-right font-mono text-text-secondary text-sm">{fmtFull.format(line.amount)}</td>
+                    <td className="text-right font-mono text-text-secondary text-sm">{formatCurrency(line.amount)}</td>
                     <td className={`text-right font-mono text-sm ${line.overBudget ? 'text-accent-expense font-semibold' : 'text-text-secondary'}`}>
-                      {fmtFull.format(line.actual)}
+                      {formatCurrency(line.actual)}
                     </td>
                     <td className={`text-right font-mono text-sm ${line.variance >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
-                      {line.variance >= 0 ? '+' : ''}{fmtFull.format(line.variance)}
+                      {line.variance >= 0 ? '+' : ''}{formatCurrency(line.variance)}
                     </td>
                     <td className="text-right font-mono text-text-secondary text-sm">{line.percentUsed.toFixed(1)}%</td>
                     <td>
@@ -366,12 +352,12 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
               <tfoot>
                 <tr>
                   <td className="text-xs font-semibold text-text-muted uppercase tracking-wider">Totals</td>
-                  <td className="text-right font-mono font-bold text-text-primary">{fmtFull.format(totals.budgeted)}</td>
+                  <td className="text-right font-mono font-bold text-text-primary">{formatCurrency(totals.budgeted)}</td>
                   <td className={`text-right font-mono font-bold ${totals.actual > totals.budgeted ? 'text-accent-expense' : 'text-text-primary'}`}>
-                    {fmtFull.format(totals.actual)}
+                    {formatCurrency(totals.actual)}
                   </td>
                   <td className={`text-right font-mono font-bold ${totals.remaining >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
-                    {totals.remaining >= 0 ? '+' : ''}{fmtFull.format(totals.remaining)}
+                    {totals.remaining >= 0 ? '+' : ''}{formatCurrency(totals.remaining)}
                   </td>
                   <td className="text-right font-mono font-bold text-text-primary">{totalPct.toFixed(1)}%</td>
                   <td>
@@ -428,12 +414,12 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                 {monthBuckets.map(m => (
                   <tr key={m.month}>
                     <td className="font-medium text-text-primary text-sm">{m.label}</td>
-                    <td className="text-right font-mono text-text-secondary text-sm">{fmtFull.format(m.budgeted)}</td>
+                    <td className="text-right font-mono text-text-secondary text-sm">{formatCurrency(m.budgeted)}</td>
                     <td className={`text-right font-mono text-sm ${m.actual > m.budgeted ? 'text-accent-expense' : 'text-text-secondary'}`}>
-                      {fmtFull.format(m.actual)}
+                      {formatCurrency(m.actual)}
                     </td>
                     <td className={`text-right font-mono text-sm ${m.variance >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
-                      {m.variance >= 0 ? '+' : ''}{fmtFull.format(m.variance)}
+                      {m.variance >= 0 ? '+' : ''}{formatCurrency(m.variance)}
                     </td>
                     <td className="text-right">
                       {m.actual === 0
@@ -472,11 +458,11 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                       <div>
                         <p className="text-sm font-semibold text-text-primary">{l.category}</p>
                         <p className="text-xs text-text-muted mt-0.5">
-                          Spent {fmtFull.format(l.actual)} of {fmtFull.format(l.amount)} budgeted
+                          Spent {formatCurrency(l.actual)} of {formatCurrency(l.amount)} budgeted
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-mono font-bold text-accent-expense">{fmtFull.format(Math.abs(l.variance))} over</p>
+                        <p className="text-sm font-mono font-bold text-accent-expense">{formatCurrency(Math.abs(l.variance))} over</p>
                         <p className="text-xs text-text-muted">{l.percentUsed.toFixed(0)}% used</p>
                       </div>
                     </div>
@@ -491,11 +477,11 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                       <div>
                         <p className="text-sm font-semibold text-text-primary">{l.category}</p>
                         <p className="text-xs text-text-muted mt-0.5">
-                          Spent {fmtFull.format(l.actual)} of {fmtFull.format(l.amount)} budgeted
+                          Spent {formatCurrency(l.actual)} of {formatCurrency(l.amount)} budgeted
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-mono font-bold text-accent-warning">{fmtFull.format(l.remaining)} left</p>
+                        <p className="text-sm font-mono font-bold text-accent-warning">{formatCurrency(l.remaining)} left</p>
                         <p className="text-xs text-text-muted">{l.percentUsed.toFixed(0)}% used</p>
                       </div>
                     </div>

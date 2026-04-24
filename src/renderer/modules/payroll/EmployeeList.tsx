@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Users, Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -25,14 +26,6 @@ interface EmployeeListProps {
   onSelectEmployee: (id: string) => void;
   onNewEmployee: () => void;
 }
-
-// ─── Formatters ─────────────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 const scheduleLabels: Record<string, string> = {
   weekly: 'Weekly',
@@ -260,7 +253,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                   </td>
                   <td className="text-text-secondary capitalize">{emp.pay_type}</td>
                   <td className="text-text-secondary font-mono text-xs">
-                    {fmt.format(emp.pay_rate ?? 0)}
+                    {formatCurrency(emp.pay_rate ?? 0)}
                     {emp.pay_type === 'hourly' ? '/hr' : '/yr'}
                   </td>
                   <td className="text-text-secondary text-xs">

@@ -10,6 +10,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 import ErrorBanner from '../../components/ErrorBanner';
 
@@ -57,14 +58,6 @@ const TYPE_ACCENT: Record<AccountType, string> = {
   revenue: 'text-accent-income',
   expense: 'text-accent-expense',
 };
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Component ──────────────────────────────────────────
 const AccountsList: React.FC<AccountsListProps> = ({
@@ -253,7 +246,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
                     <td
                       className={`px-4 py-2 text-right font-mono text-xs font-semibold ${TYPE_ACCENT[type]}`}
                     >
-                      {fmt.format(total)}
+                      {formatCurrency(total)}
                     </td>
                   </tr>
 
@@ -286,7 +279,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
                           {account.subtype || '—'}
                         </td>
                         <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
-                          {fmt.format(account.balance ?? 0)}
+                          {formatCurrency(account.balance ?? 0)}
                         </td>
                       </tr>
                     ))}

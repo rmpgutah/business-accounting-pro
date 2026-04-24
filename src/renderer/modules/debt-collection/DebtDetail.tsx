@@ -27,6 +27,7 @@ import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useNavigation } from '../../lib/navigation';
 import { calcRiskScore, getRiskBadge } from './riskScore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -245,6 +246,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 }) => {
   // ── Store ──
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const nav = useNavigation();
 
   // ── State ──
   const [debt, setDebt] = useState<Debt | null>(null);
@@ -1087,7 +1089,15 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 <span className={statusBadge.className}>{statusBadge.label}</span>
               </InfoRow>
               <InfoRow label="Source">
-                {debt.source_type !== 'manual' ? (
+                {debt.source_type === 'invoice' && debt.source_id ? (
+                  <span
+                    className="text-accent-blue cursor-pointer hover:underline"
+                    onClick={() => nav.goToInvoice(debt.source_id)}
+                    title="View original invoice"
+                  >
+                    {sourceLabel}
+                  </span>
+                ) : debt.source_type !== 'manual' ? (
                   <span className="text-accent-blue">{sourceLabel}</span>
                 ) : (
                   sourceLabel
