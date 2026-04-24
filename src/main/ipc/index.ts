@@ -453,8 +453,11 @@ function postJournalEntry(
     resolved.push({ accountId, debit: line.debit, credit: line.credit, note: line.note ?? '' });
   }
 
+  // Find the highest entry number by extracting the numeric suffix.
+  // Cannot rely on created_at (same timestamp during bulk operations like gl:rebuild).
   const lastJE = (dbInstance as any).prepare(
-    `SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`
+    `SELECT entry_number FROM journal_entries WHERE company_id = ?
+     ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1`
   ).get(companyId) as any;
   let nextNum = 'JE-1001';
   if (lastJE?.entry_number) {
@@ -2023,7 +2026,7 @@ export function registerIpcHandlers(): void {
     if (!companyId) return 'JE-1001';
     const dbInstance = db.getDb();
     const row = dbInstance.prepare(
-      "SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY created_at DESC LIMIT 1"
+      "SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1"
     ).get(companyId) as any;
     if (row?.entry_number) {
       const match = row.entry_number.match(/(\d+)$/);
