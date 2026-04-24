@@ -294,12 +294,35 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     return () => { cancelled = true; };
   }, [activeCompany]);
 
+  // ─── Recalculate state tax when hours change ───────────
+  // The initial stateTaxMap was computed with DEFAULT hours. When the user
+  // changes hours in Step 2, we must recompute state tax on the ACTUAL gross.
+  // We use the employee's state rate (flat % from StateTaxEngine fallback)
+  // applied to the actual per-period gross.
+  const adjustedStateTaxMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const emp of employees) {
+      const periods = PAY_PERIODS_MAP[emp.pay_schedule] ?? 26;
+      const actualGross = emp.pay_type === 'salary'
+        ? emp.pay_rate / periods
+        : (hoursMap[emp.id] ?? DEFAULT_HOURS_MAP[emp.pay_schedule] ?? 80) * emp.pay_rate;
+      // Use the pre-fetched state tax map's ratio if available, else fallback 5%
+      const defaultGross = emp.pay_type === 'salary'
+        ? emp.pay_rate / periods
+        : (DEFAULT_HOURS_MAP[emp.pay_schedule] ?? 80) * emp.pay_rate;
+      const originalTax = stateTaxMap[emp.id] ?? (defaultGross * FALLBACK_STATE_TAX_RATE);
+      const effectiveRate = defaultGross > 0 ? originalTax / defaultGross : FALLBACK_STATE_TAX_RATE;
+      map[emp.id] = actualGross * effectiveRate;
+    }
+    return map;
+  }, [employees, hoursMap, stateTaxMap]);
+
   // ─── Calculations ─────────────────────────────────────
   const calculations = useMemo(() => {
     return employees.map((emp) =>
-      calcPayStub(emp, hoursMap[emp.id], stateTaxMap[emp.id], deductionsByEmployee[emp.id], runType)
+      calcPayStub(emp, hoursMap[emp.id], adjustedStateTaxMap[emp.id], deductionsByEmployee[emp.id], runType)
     );
-  }, [employees, hoursMap, stateTaxMap, deductionsByEmployee, runType]);
+  }, [employees, hoursMap, adjustedStateTaxMap, deductionsByEmployee, runType]);
 
   const totals = useMemo(() => {
     return calculations.reduce(
