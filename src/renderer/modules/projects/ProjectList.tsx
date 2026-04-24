@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { FolderKanban, Plus, Clock, Search, FolderOpen } from 'lucide-react';
+import { FolderKanban, Plus, Clock, Search, FolderOpen, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -84,6 +84,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -175,6 +177,33 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
     return counts;
   }, [projects]);
 
+  // ─── Selection ────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(item => item.id)));
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} project${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBatchDeleting(true);
+    try {
+      for (const id of selectedIds) {
+        await api.remove('projects', id);
+      }
+      setSelectedIds(new Set());
+      setProjects(prev => prev.filter(p => !selectedIds.has(p.id)));
+    } catch (err: any) {
+      console.error('Failed to batch delete projects:', err);
+      alert('Failed to delete projects: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchDeleting(false);
+    }
+  };
+
   // ─── Render ───────────────────────────────────────────
   return (
     <div className="p-6 space-y-5 overflow-y-auto h-full">
@@ -224,6 +253,31 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
         />
       </div>
 
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+          <span className="text-xs font-semibold text-text-primary">
+            {selectedIds.size} project{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              className="block-btn text-xs"
+              onClick={toggleSelectAll}
+            >
+              {selectedIds.size === filtered.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <button
+              className="block-btn-danger flex items-center gap-1.5 text-xs"
+              onClick={handleBatchDelete}
+              disabled={batchDeleting}
+            >
+              <Trash2 size={12} />
+              {batchDeleting ? 'Deleting...' : 'Delete Selected'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -259,13 +313,23 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                 {/* Card Header */}
                 <div className="p-4 pb-3">
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-semibold text-text-primary truncate">
-                        {project.name}
-                      </h3>
-                      <p className="text-xs text-text-muted truncate mt-0.5">
-                        {clientName}
-                      </p>
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(project.id)}
+                        onChange={(e) => { e.stopPropagation(); toggleSelect(project.id); }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="cursor-pointer mt-0.5 flex-shrink-0"
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold text-text-primary truncate">
+                          {project.name}
+                        </h3>
+                        <p className="text-xs text-text-muted truncate mt-0.5">
+                          {clientName}
+                        </p>
+                      </div>
                     </div>
                     <span className={formatStatus(project.status).className}>
                       {formatStatus(project.status).label}

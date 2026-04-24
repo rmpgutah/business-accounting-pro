@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Plus, Search, FileText, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -194,7 +194,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                 onClick={() => onEditEntry(entry)}
               >
                 <td className="px-4 py-2 text-xs text-text-secondary font-mono">
-                  {entry.date}
+                  {formatDate(entry.date)}
                 </td>
                 <td className="px-4 py-2 text-xs text-text-primary font-mono font-medium">
                   {entry.entry_number}

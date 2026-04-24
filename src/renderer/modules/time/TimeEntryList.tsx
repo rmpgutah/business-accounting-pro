@@ -73,13 +73,8 @@ function formatDateHeader(dateStr: string): string {
 function formatWeekRange(start: Date): string {
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  const startStr = start.toLocaleDateString('en-US', opts);
-  const endStr = end.toLocaleDateString('en-US', {
-    ...opts,
-    year: 'numeric',
-  });
+  const startStr = formatDate(start.toISOString());
+  const endStr = formatDate(end.toISOString());
   return `${startStr} - ${endStr}`;
 }
 

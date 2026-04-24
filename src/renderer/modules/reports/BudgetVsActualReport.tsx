@@ -3,6 +3,7 @@ import { Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -156,7 +157,7 @@ const BudgetVsActualReport: React.FC = () => {
             onChange={(e) => setSelectedBudgetId(e.target.value)}
           >
             {budgets.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} ({b.start_date} to {b.end_date})</option>
+              <option key={b.id} value={b.id}>{b.name} ({formatDate(b.start_date)} to {formatDate(b.end_date)})</option>
             ))}
           </select>
         </div>

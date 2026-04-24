@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, BarChart3, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -237,7 +237,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
         <div className="flex-1">
           <h2 className="text-lg font-bold text-text-primary">{budget.name}</h2>
           <p className="text-xs text-text-muted mt-0.5">
-            {budget.period} · {budget.start_date} to {budget.end_date}
+            {budget.period} · {formatDate(budget.start_date)} to {formatDate(budget.end_date)}
           </p>
         </div>
         {(overBudgetLines.length > 0) && (

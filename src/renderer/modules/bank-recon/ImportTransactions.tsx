@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Upload, FileText, Check, AlertTriangle, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface BankAccount {
@@ -378,7 +379,7 @@ const ImportTransactions: React.FC = () => {
                       />
                     </td>
                     <td className="px-4 py-2 text-xs font-mono text-text-secondary">
-                      {row.date}
+                      {formatDate(row.date)}
                     </td>
                     <td className="px-4 py-2 text-xs text-text-primary">
                       {row.description}

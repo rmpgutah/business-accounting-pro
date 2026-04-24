@@ -1247,7 +1247,7 @@ const Dashboard: React.FC = () => {
                             {inv.client_name || 'Unknown'}
                           </span>
                           <span className="text-[10px] text-text-muted font-mono ml-2">
-                            {inv.due_date}
+                            {formatDate(inv.due_date)}
                           </span>
                         </div>
                       </div>

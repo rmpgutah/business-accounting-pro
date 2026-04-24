@@ -4,7 +4,7 @@ import { Printer, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 
@@ -373,7 +373,7 @@ const GeneralLedger: React.FC = () => {
                       <tbody>
                         {acct.transactions.map((txn) => (
                           <tr key={txn.line_id}>
-                            <td className="font-mono text-text-secondary text-xs">{txn.date}</td>
+                            <td className="font-mono text-text-secondary text-xs">{formatDate(txn.date)}</td>
                             <td className="font-mono text-accent-blue text-xs">{txn.entry_number}</td>
                             <td className="text-text-secondary text-xs">{txn.description || '—'}</td>
                             <td className="text-text-muted text-xs">{txn.reference || '—'}</td>

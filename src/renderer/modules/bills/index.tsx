@@ -15,7 +15,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ───────────────────────────────────────────────
 type View = 'list' | 'form' | 'detail';
@@ -358,8 +358,8 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                   >
                     <td className="font-mono text-accent-blue text-xs">{bill.bill_number}</td>
                     <td className="text-text-primary">{vendorName}</td>
-                    <td className="font-mono text-text-secondary text-xs">{bill.issue_date}</td>
-                    <td className="font-mono text-text-secondary text-xs">{bill.due_date}</td>
+                    <td className="font-mono text-text-secondary text-xs">{formatDate(bill.issue_date)}</td>
+                    <td className="font-mono text-text-secondary text-xs">{formatDate(bill.due_date)}</td>
                     <td className="text-right font-mono text-text-primary">
                       {formatCurrency(bill.total)}
                     </td>
@@ -1054,10 +1054,10 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
             <span className="text-text-primary">{vendor?.name ?? '—'}</span>
 
             <span className="text-text-muted">Issue Date</span>
-            <span className="font-mono text-text-secondary">{bill.issue_date}</span>
+            <span className="font-mono text-text-secondary">{formatDate(bill.issue_date)}</span>
 
             <span className="text-text-muted">Due Date</span>
-            <span className="font-mono text-text-secondary">{bill.due_date}</span>
+            <span className="font-mono text-text-secondary">{formatDate(bill.due_date)}</span>
 
             <span className="text-text-muted">Status</span>
             <span className={badge.className}>{badge.label}</span>

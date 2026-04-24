@@ -407,13 +407,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <span className="text-text-muted flex items-center gap-1.5">
                   <Calendar size={12} /> Issue Date
                 </span>
-                <span className="text-text-primary">{invoice.issue_date}</span>
+                <span className="text-text-primary">{formatDate(invoice.issue_date)}</span>
               </div>
               <div>
                 <span className="text-text-muted flex items-center gap-1.5">
                   <Calendar size={12} /> Due Date
                 </span>
-                <span className="text-text-primary">{invoice.due_date}</span>
+                <span className="text-text-primary">{formatDate(invoice.due_date)}</span>
               </div>
             </div>
             {invoice.terms && (
@@ -622,7 +622,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             <tbody>
               {payments.map((p) => (
                 <tr key={p.id}>
-                  <td className="text-text-secondary">{p.date}</td>
+                  <td className="text-text-secondary">{formatDate(p.date)}</td>
                   <td className="text-text-secondary capitalize">{p.payment_method}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { CreditCard, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface TaxPayment {
@@ -399,7 +400,7 @@ const TaxPayments: React.FC = () => {
                   <td className="text-right font-mono text-accent-expense text-sm">
                     {fmt.format(p.amount)}
                   </td>
-                  <td className="font-mono text-text-secondary text-xs">{p.date}</td>
+                  <td className="font-mono text-text-secondary text-xs">{formatDate(p.date)}</td>
                   <td className="text-text-secondary text-sm">{p.period}</td>
                   <td className="font-mono text-text-secondary text-sm">{p.year}</td>
                   <td className="font-mono text-text-muted text-xs">

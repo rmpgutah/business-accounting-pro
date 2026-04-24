@@ -7,7 +7,7 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -412,7 +412,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     <td className="text-right font-mono text-accent-expense">
                       {formatCurrency((inv.total || 0) - (inv.amount_paid || 0))}
                     </td>
-                    <td className="text-right text-text-muted">{inv.due_date}</td>
+                    <td className="text-right text-text-muted">{formatDate(inv.due_date)}</td>
                     <td className="text-right">
                       <button
                         className="block-btn-primary text-xs py-1 px-3"
@@ -555,8 +555,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         {clientMap.get(inv.client_id) ?? 'Unknown'}
                       </button>
                     </td>
-                    <td className="text-text-secondary">{inv.issue_date}</td>
-                    <td className="text-text-secondary">{inv.due_date}</td>
+                    <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>
+                    <td className="text-text-secondary">{formatDate(inv.due_date)}</td>
                     <td className="text-right font-mono text-text-primary">
                       {formatCurrency(inv.total)}
                     </td>

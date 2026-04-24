@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Wallet, Plus, Trash2, Search } from 'lucide-react';
 import api from '../../lib/api';
-import { formatStatus } from '../../lib/format';
+import { formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -37,6 +37,8 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [opSuccess, setOpSuccess] = useState('');
   const [opError, setOpError] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   const loadBudgets = async () => {
     if (!activeCompany) return;
@@ -92,6 +94,41 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(item => item.id)));
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} budget${selectedIds.size !== 1 ? 's' : ''} and all their line items?`)) return;
+    setBatchDeleting(true);
+    try {
+      for (const id of selectedIds) {
+        const lines = await api.query('budget_lines', { budget_id: id });
+        if (Array.isArray(lines)) {
+          for (const line of lines) {
+            await api.remove('budget_lines', line.id);
+          }
+        }
+        await api.remove('budgets', id);
+      }
+      setSelectedIds(new Set());
+      await loadBudgets();
+      setOpSuccess(`Deleted ${selectedIds.size} budget${selectedIds.size !== 1 ? 's' : ''}`);
+      setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to batch delete budgets:', err);
+      setOpError('Failed to delete: ' + (err?.message || 'Unknown error'));
+      setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBatchDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-text-muted text-sm">
@@ -134,6 +171,23 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
         </div>
       )}
 
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+          <span className="text-xs font-semibold text-text-primary">
+            {selectedIds.size} budget{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <button
+            className="block-btn-danger flex items-center gap-1.5 text-xs"
+            onClick={handleBatchDelete}
+            disabled={batchDeleting}
+          >
+            <Trash2 size={12} />
+            {batchDeleting ? 'Deleting...' : 'Delete Selected'}
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="empty-state">
@@ -153,6 +207,15 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
           <table className="block-table">
             <thead>
               <tr>
+                <th style={{ width: '40px' }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <th className="cursor-pointer select-none" onClick={() => handleSort('name')}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="cursor-pointer select-none" onClick={() => handleSort('period')}><span className="inline-flex items-center gap-1">Period {sortField === 'period' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="cursor-pointer select-none" onClick={() => handleSort('start_date')}><span className="inline-flex items-center gap-1">Start Date {sortField === 'start_date' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
@@ -168,12 +231,21 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                   className="cursor-pointer"
                   onClick={() => onSelect(b.id)}
                 >
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(b.id)}
+                      onChange={() => toggleSelect(b.id)}
+                      className="cursor-pointer"
+                      style={{ accentColor: '#3b82f6' }}
+                    />
+                  </td>
                   <td className="text-text-primary font-medium text-sm">{b.name}</td>
                   <td className="text-text-secondary text-sm">
                     {periodLabel[b.period] || b.period}
                   </td>
-                  <td className="font-mono text-text-secondary text-xs">{b.start_date}</td>
-                  <td className="font-mono text-text-secondary text-xs">{b.end_date}</td>
+                  <td className="font-mono text-text-secondary text-xs">{formatDate(b.start_date)}</td>
+                  <td className="font-mono text-text-secondary text-xs">{formatDate(b.end_date)}</td>
                   <td className="text-center">
                     <span className={formatStatus(b.status).className}>
                       {formatStatus(b.status).label}

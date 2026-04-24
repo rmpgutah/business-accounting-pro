@@ -5,7 +5,7 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 
 // ─── Types ──────────────────────────────────────────────
@@ -333,7 +333,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                       />
                     </td>
                     <td className="font-mono text-text-secondary text-xs">
-                      {exp.date}
+                      {formatDate(exp.date)}
                     </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5">

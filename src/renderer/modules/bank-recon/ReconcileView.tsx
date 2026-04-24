@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface BankAccount {
@@ -357,7 +358,7 @@ const ReconcileView: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-[10px] text-text-muted font-mono">
-                        {txn.date}
+                        {formatDate(txn.date)}
                       </span>
                     </div>
                   ))
@@ -415,7 +416,7 @@ const ReconcileView: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-[10px] text-text-muted font-mono">
-                        {entry.entry_date}
+                        {formatDate(entry.entry_date)}
                       </span>
                     </div>
                   ))
@@ -494,7 +495,7 @@ const ReconcileView: React.FC = () => {
                           <td className="px-4 py-2 text-xs text-text-primary">
                             <div>{pair.bank.description}</div>
                             <div className="text-[10px] text-text-muted font-mono">
-                              {pair.bank.date}
+                              {formatDate(pair.bank.date)}
                             </div>
                           </td>
                           <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
@@ -513,7 +514,7 @@ const ReconcileView: React.FC = () => {
                           <td className="px-4 py-2 text-xs text-text-primary">
                             <div>{pair.book.memo || '(no memo)'}</div>
                             <div className="text-[10px] text-text-muted font-mono">
-                              {pair.book.entry_date}
+                              {formatDate(pair.book.entry_date)}
                             </div>
                           </td>
                           <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
