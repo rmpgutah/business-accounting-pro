@@ -368,7 +368,17 @@ const ACCOUNT_ALIASES: Record<string, string[]> = {
   'Social Security Payable': ['Payroll Liabilities', 'Social Security Payable', 'FICA Payable', 'Payroll Tax Expense'],
   'Medicare Payable':      ['Payroll Liabilities', 'Medicare Payable', 'FICA Payable', 'Payroll Tax Expense'],
   'Revenue':               ['Service Revenue', 'Sales Revenue', 'Revenue', 'Consulting Revenue', 'Project Revenue', 'Income'],
-  'Expense':               ['Cost of Services', 'General Expense', 'Operating Expense', 'Miscellaneous Expense'],
+  'Expense':               ['Cost of Services', 'Office Supplies', 'Miscellaneous Expense', 'General Expense', 'Operating Expense'],
+  'Advertising':           ['Advertising & Marketing', 'Marketing', 'Advertising'],
+  'Bank Fees':             ['Bank Fees', 'Bank Charges', 'Service Charges'],
+  'Contractors':           ['Contractors', 'Subcontractors', 'Contract Labor'],
+  'Insurance':             ['Insurance', 'Business Insurance'],
+  'Office Supplies':       ['Office Supplies', 'Supplies'],
+  'Professional Fees':     ['Professional Fees', 'Legal & Professional', 'Accounting Fees'],
+  'Rent':                  ['Rent', 'Rent Expense', 'Office Rent'],
+  'Software':              ['Software & Subscriptions', 'Software', 'Subscriptions'],
+  'Travel':                ['Travel & Meals', 'Travel', 'Travel Expense'],
+  'Utilities':             ['Utilities', 'Utility Expense'],
 };
 
 const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> = {
@@ -382,23 +392,52 @@ const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> 
   'Social Security Payable': { type: 'liability', subtype: 'current' },
   'Medicare Payable':      { type: 'liability', subtype: 'current' },
   'Revenue':               { type: 'revenue' },
-  'Expense':               { type: 'expense' },
+  'Expense':               { type: 'expense', subtype: 'operating' },
+  'Advertising':           { type: 'expense', subtype: 'operating' },
+  'Bank Fees':             { type: 'expense', subtype: 'operating' },
+  'Contractors':           { type: 'expense', subtype: 'operating' },
+  'Insurance':             { type: 'expense', subtype: 'operating' },
+  'Office Supplies':       { type: 'expense', subtype: 'operating' },
+  'Professional Fees':     { type: 'expense', subtype: 'operating' },
+  'Rent':                  { type: 'expense', subtype: 'operating' },
+  'Software':              { type: 'expense', subtype: 'operating' },
+  'Travel':                { type: 'expense', subtype: 'operating' },
+  'Utilities':             { type: 'expense', subtype: 'operating' },
 };
 
 function findAccount(dbInstance: any, companyId: string, nameHint: string): string | null {
-  // Strategy 1: Exact name match
+  // Determine expected account type (if known) to prevent cross-type matching
+  const expectedType = ACCOUNT_TYPE_FALLBACK[nameHint]?.type;
+  const typeFilter = expectedType ? ` AND type = '${expectedType}'` : '';
+
+  // Strategy 1: Exact name match (type-filtered if known)
   let acct = dbInstance.prepare(
-    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
+    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ?${typeFilter} LIMIT 1`
   ).get(companyId, nameHint) as any;
   if (acct) return acct.id;
 
-  // Strategy 2: LIKE match
-  acct = dbInstance.prepare(
-    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? LIMIT 1`
-  ).get(companyId, `%${nameHint}%`) as any;
-  if (acct) return acct.id;
+  // Strategy 1b: Exact name match without type filter
+  if (typeFilter) {
+    acct = dbInstance.prepare(
+      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
+    ).get(companyId, nameHint) as any;
+    if (acct) return acct.id;
+  }
 
-  // Strategy 3: Try known aliases
+  // Strategy 2: LIKE match (type-filtered to prevent cross-type matches like "Prepaid Expenses" for expense hint)
+  if (typeFilter) {
+    acct = dbInstance.prepare(
+      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ?${typeFilter} ORDER BY code LIMIT 1`
+    ).get(companyId, `%${nameHint}%`) as any;
+    if (acct) return acct.id;
+  } else {
+    acct = dbInstance.prepare(
+      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`
+    ).get(companyId, `%${nameHint}%`) as any;
+    if (acct) return acct.id;
+  }
+
+  // Strategy 3: Try known aliases (exact match first, then LIKE)
   const aliases = ACCOUNT_ALIASES[nameHint];
   if (aliases) {
     for (const alias of aliases) {
@@ -407,10 +446,9 @@ function findAccount(dbInstance: any, companyId: string, nameHint: string): stri
       ).get(companyId, alias) as any;
       if (acct) return acct.id;
     }
-    // Try LIKE with each alias
     for (const alias of aliases) {
       acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? LIMIT 1`
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`
       ).get(companyId, `%${alias}%`) as any;
       if (acct) return acct.id;
     }
@@ -419,13 +457,17 @@ function findAccount(dbInstance: any, companyId: string, nameHint: string): stri
   // Strategy 4: Fall back to type + subtype
   const fallback = ACCOUNT_TYPE_FALLBACK[nameHint];
   if (fallback) {
-    const query = fallback.subtype
-      ? `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? AND subtype = ? ORDER BY code LIMIT 1`
-      : `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? ORDER BY code LIMIT 1`;
-    const params = fallback.subtype
-      ? [companyId, fallback.type, fallback.subtype]
-      : [companyId, fallback.type];
-    acct = dbInstance.prepare(query).get(...params) as any;
+    // Try with subtype first
+    if (fallback.subtype) {
+      acct = dbInstance.prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? AND subtype = ? ORDER BY code LIMIT 1`
+      ).get(companyId, fallback.type, fallback.subtype) as any;
+      if (acct) return acct.id;
+    }
+    // Then try any account of that type
+    acct = dbInstance.prepare(
+      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? ORDER BY code LIMIT 1`
+    ).get(companyId, fallback.type) as any;
     if (acct) return acct.id;
   }
 
@@ -814,15 +856,23 @@ export function registerIpcHandlers(): void {
       const savedId = saveFn();
       if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
 
-      // Auto-post JE for new expenses: DR Expense / CR Cash (or Payable)
+      // Auto-post JE for new expenses: DR [category account] / CR Cash (or Payable)
       if (!isEdit && companyId) {
         const amount = Number(expenseData.amount) || 0;
         if (amount > 0) {
           const desc = expenseData.description || 'Expense';
           const isPaid = expenseData.status === 'paid';
+          // Try to find the expense account by category name for accurate GL posting
+          let expenseHint = 'Expense';
+          if (expenseData.category_id) {
+            try {
+              const cat = rawDb.prepare('SELECT name FROM categories WHERE id = ?').get(expenseData.category_id) as any;
+              if (cat?.name) expenseHint = cat.name;
+            } catch { /* ignore */ }
+          }
           postJournalEntry(rawDb, companyId, expenseData.date || new Date().toISOString().slice(0, 10),
             `Expense recorded - ${desc}`, [
-              { nameHint: 'Expense', debit: amount, credit: 0, note: desc },
+              { nameHint: expenseHint, debit: amount, credit: 0, note: desc },
               { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
             ]);
         }
@@ -2089,9 +2139,13 @@ export function registerIpcHandlers(): void {
       posted++;
     }
 
-    // 3. Expenses → DR Expense / CR Cash or Payable
+    // 3. Expenses → DR [category account] / CR Cash or Payable
     const expenses = dbInstance.prepare(
-      `SELECT id, description, date, amount, status FROM expenses WHERE company_id = ?`
+      `SELECT e.id, e.description, e.date, e.amount, e.status, e.category_id,
+              COALESCE(c.name, '') as category_name
+       FROM expenses e
+       LEFT JOIN categories c ON e.category_id = c.id
+       WHERE e.company_id = ?`
     ).all(companyId) as any[];
     for (const exp of expenses) {
       const desc = `Expense recorded - ${exp.description || exp.id.substring(0, 8)}`;
@@ -2099,8 +2153,10 @@ export function registerIpcHandlers(): void {
       const amount = Number(exp.amount) || 0;
       if (amount <= 0) continue;
       const isPaid = exp.status === 'paid';
+      // Use category name to find the right expense account
+      const expenseHint = exp.category_name || 'Expense';
       postJournalEntry(dbInstance, companyId, exp.date || new Date().toISOString().slice(0, 10), desc, [
-        { nameHint: 'Expense', debit: amount, credit: 0, note: exp.description || 'Expense' },
+        { nameHint: expenseHint, debit: amount, credit: 0, note: exp.description || 'Expense' },
         { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: isPaid ? 'Cash paid' : 'Accounts Payable' },
       ]);
       posted++;
