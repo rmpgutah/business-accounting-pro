@@ -2028,6 +2028,49 @@ export function registerIpcHandlers(): void {
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
       ]);
 
+      // ── PTO Auto-Accrual ──
+      // For each employee in this run, check if they have PTO policies and accrue hours
+      try {
+        const ptoPolicies = (dbInstance as any).prepare(
+          'SELECT pb.*, pp.accrual_rate, pp.accrual_unit, pp.cap_hours, pp.name as policy_name FROM pto_balances pb JOIN pto_policies pp ON pb.policy_id = pp.id WHERE pb.employee_id IN (' + stubs.map(() => '?').join(',') + ')'
+        ).all(...stubs.map((s: any) => s.employeeId)) as any[];
+
+        for (const pb of ptoPolicies) {
+          // Calculate accrual amount based on unit
+          let accrualHours = 0;
+          if (pb.accrual_unit === 'hours_per_pay_period') {
+            accrualHours = pb.accrual_rate;
+          } else if (pb.accrual_unit === 'annual') {
+            // Divide annual rate by number of pay periods (assume 26 for biweekly)
+            accrualHours = pb.accrual_rate / 26;
+          } else if (pb.accrual_unit === 'monthly') {
+            accrualHours = pb.accrual_rate; // 1 accrual per monthly run
+          }
+
+          if (accrualHours <= 0) continue;
+
+          // Check cap
+          const newBalance = (pb.balance_hours || 0) + accrualHours;
+          const cappedBalance = pb.cap_hours ? Math.min(newBalance, pb.cap_hours) : newBalance;
+          const actualAccrual = cappedBalance - (pb.balance_hours || 0);
+
+          if (actualAccrual <= 0) continue;
+
+          // Update balance
+          (dbInstance as any).prepare(
+            'UPDATE pto_balances SET balance_hours = ?, accrued_hours_ytd = accrued_hours_ytd + ?, updated_at = datetime(\'now\') WHERE id = ?'
+          ).run(cappedBalance, actualAccrual, pb.id);
+
+          // Log transaction
+          (dbInstance as any).prepare(
+            'INSERT INTO pto_transactions (id, employee_id, policy_id, type, hours, note, payroll_run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime(\'now\'))'
+          ).run(uuid(), pb.employee_id, pb.policy_id, 'accrual', actualAccrual, `Auto-accrual from payroll run ${periodStart} - ${periodEnd}`, runId);
+        }
+      } catch (ptoErr) {
+        console.warn('PTO accrual skipped:', ptoErr);
+        // PTO accrual is non-critical — don't fail the payroll run
+      }
+
       return { runId };
     });
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Pencil, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface EmployeeFormData {
@@ -78,13 +79,231 @@ const FILING_STATUS_LABELS: Record<string, string> = {
   head_household: 'Head of Household',
 };
 
+// ─── Pay History ────────────────────────────────────────
+const PayHistory: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [stubs, setStubs] = useState<any[]>([]);
+  useEffect(() => {
+    api.rawQuery(
+      `SELECT ps.*, pr.pay_date, pr.pay_period_start, pr.pay_period_end, pr.run_type
+       FROM pay_stubs ps
+       JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+       WHERE ps.employee_id = ?
+       ORDER BY pr.pay_date DESC LIMIT 12`,
+      [employeeId]
+    ).then(r => setStubs(Array.isArray(r) ? r : [])).catch(() => {});
+  }, [employeeId]);
+
+  if (stubs.length === 0) return null;
+
+  return (
+    <div className="block-card p-4 mt-4">
+      <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">Pay History (Last 12)</h3>
+      <div className="overflow-x-auto">
+        <table className="block-table">
+          <thead>
+            <tr>
+              <th>Pay Date</th>
+              <th>Period</th>
+              <th>Type</th>
+              <th className="text-right">Gross</th>
+              <th className="text-right">Taxes</th>
+              <th className="text-right">Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stubs.map((s: any) => (
+              <tr key={s.id}>
+                <td className="font-mono text-xs">{formatDate(s.pay_date)}</td>
+                <td className="text-xs text-text-muted">{formatDate(s.pay_period_start)} — {formatDate(s.pay_period_end)}</td>
+                <td><span className="capitalize text-xs">{s.run_type || 'regular'}</span></td>
+                <td className="text-right font-mono">{formatCurrency(s.gross_pay)}</td>
+                <td className="text-right font-mono text-accent-expense">{formatCurrency(s.federal_tax + s.state_tax + s.social_security + s.medicare)}</td>
+                <td className="text-right font-mono text-accent-income font-bold">{formatCurrency(s.net_pay)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ─── Employee Deductions Panel ──────────────────────────
+const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [deductions, setDeductions] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: '', type: 'deduction', calculation: 'fixed', amount: '',
+    is_pretax: 1, is_active: 1, effective_date: '', end_date: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    const rows = await api.query('employee_deductions', { employee_id: employeeId });
+    setDeductions(Array.isArray(rows) ? rows : []);
+  };
+
+  useEffect(() => { load(); }, [employeeId]);
+
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.amount) return;
+    setSaving(true);
+    try {
+      const payload = {
+        employee_id: employeeId,
+        name: form.name.trim(),
+        type: form.type,
+        calculation: form.calculation,
+        amount: parseFloat(form.amount) || 0,
+        is_pretax: form.is_pretax,
+        is_active: form.is_active,
+        effective_date: form.effective_date || null,
+        end_date: form.end_date || null,
+      };
+      if (editingId) {
+        await api.update('employee_deductions', editingId, payload);
+      } else {
+        await api.create('employee_deductions', payload);
+      }
+      setShowForm(false);
+      setEditingId(null);
+      setForm({ name: '', type: 'deduction', calculation: 'fixed', amount: '', is_pretax: 1, is_active: 1, effective_date: '', end_date: '' });
+      await load();
+    } catch (err: any) {
+      alert('Failed to save deduction: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEdit = (d: any) => {
+    setEditingId(d.id);
+    setForm({
+      name: d.name || '',
+      type: d.type || 'deduction',
+      calculation: d.calculation || 'fixed',
+      amount: String(d.amount || ''),
+      is_pretax: d.is_pretax ?? 1,
+      is_active: d.is_active ?? 1,
+      effective_date: d.effective_date || '',
+      end_date: d.end_date || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this deduction?')) return;
+    await api.remove('employee_deductions', id);
+    await load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">Employee Deductions</h3>
+        <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { setEditingId(null); setForm({ name: '', type: 'deduction', calculation: 'fixed', amount: '', is_pretax: 1, is_active: 1, effective_date: '', end_date: '' }); setShowForm(!showForm); }}>
+          <Plus size={12} /> {showForm ? 'Cancel' : 'Add Deduction'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Name *</label>
+              <input className="block-input" placeholder="e.g. Health Insurance" value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Type</label>
+              <select className="block-select" value={form.type} onChange={(e) => setForm(f => ({...f, type: e.target.value}))}>
+                <option value="deduction">Deduction</option>
+                <option value="benefit">Benefit</option>
+                <option value="garnishment">Garnishment</option>
+                <option value="retirement">Retirement (401k)</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Calculation</label>
+              <select className="block-select" value={form.calculation} onChange={(e) => setForm(f => ({...f, calculation: e.target.value}))}>
+                <option value="fixed">Fixed Amount</option>
+                <option value="percentage">Percentage of Gross</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Amount {form.calculation === 'percentage' ? '(%)' : '($)'}</label>
+              <input type="number" step="0.01" min="0" className="block-input font-mono" value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Tax Treatment</label>
+              <select className="block-select" value={String(form.is_pretax)} onChange={(e) => setForm(f => ({...f, is_pretax: parseInt(e.target.value)}))}>
+                <option value="1">Pre-Tax</option>
+                <option value="0">Post-Tax</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Effective Date</label>
+              <input type="date" className="block-input" value={form.effective_date} onChange={(e) => setForm(f => ({...f, effective_date: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">End Date</label>
+              <input type="date" className="block-input" value={form.end_date} onChange={(e) => setForm(f => ({...f, end_date: e.target.value}))} />
+            </div>
+          </div>
+          <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving || !form.name.trim()}>
+            {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      {deductions.length === 0 && !showForm ? (
+        <p className="text-sm text-text-muted">No deductions configured. Add health insurance, 401k, garnishments, etc.</p>
+      ) : (
+        <table className="block-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Tax</th>
+              <th>Status</th>
+              <th style={{width: 80}}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deductions.map((d: any) => (
+              <tr key={d.id}>
+                <td className="text-text-primary font-medium">{d.name}</td>
+                <td className="capitalize">{d.type}</td>
+                <td className="font-mono">{d.calculation === 'percentage' ? `${d.amount}%` : formatCurrency(d.amount)}</td>
+                <td>{d.is_pretax ? 'Pre-Tax' : 'Post-Tax'}</td>
+                <td>{d.is_active ? <span className="block-badge block-badge-income">Active</span> : <span className="block-badge">Inactive</span>}</td>
+                <td>
+                  <div className="flex gap-1">
+                    <button className="text-text-muted hover:text-accent-blue transition-colors p-0.5" onClick={() => handleEdit(d)} title="Edit"><Pencil size={12} /></button>
+                    <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDelete(d.id)} title="Delete"><Trash2 size={12} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
 // ─── Component ──────────────────────────────────────────
 const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved }) => {
   const [form, setForm] = useState<EmployeeFormData>({ ...EMPTY_FORM });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking' | 'deductions'>('general');
   const [ytdSummary, setYtdSummary] = useState<any>(null);
 
   const isEditing = Boolean(employeeId);
@@ -281,7 +500,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       <div className="block-card p-6" style={{ borderRadius: '6px' }}>
         {/* Tab bar */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-border-primary)', marginBottom: 20 }}>
-          {(['general', 'hr', 'banking'] as const).map((tab) => (
+          {(['general', 'hr', 'banking', 'deductions'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -294,7 +513,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                 color: activeTab === tab ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
               }}
             >
-              {tab === 'general' ? 'General' : tab === 'hr' ? 'HR & Profile' : 'Banking & Emergency'}
+              {tab === 'general' ? 'General' : tab === 'hr' ? 'HR & Profile' : tab === 'banking' ? 'Banking & Emergency' : 'Deductions'}
             </button>
           ))}
         </div>
@@ -615,6 +834,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             </div>
           </div>
         )}
+
+        {/* Deductions tab */}
+        {activeTab === 'deductions' && employeeId && (
+          <DeductionsPanel employeeId={employeeId} />
+        )}
+        {activeTab === 'deductions' && !employeeId && (
+          <p className="text-sm text-text-muted">Save the employee first to manage deductions.</p>
+        )}
       </div>
 
       {/* YTD Earnings Summary */}
@@ -644,6 +871,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             </p>
           )}
         </div>
+      )}
+
+      {/* Pay History */}
+      {isEditing && (
+        <PayHistory employeeId={employeeId!} />
       )}
 
       {/* Actions */}
