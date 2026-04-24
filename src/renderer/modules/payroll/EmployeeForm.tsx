@@ -257,7 +257,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary"
+          className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors"
           onClick={onBack}
         >
           <ArrowLeft size={16} />
@@ -649,7 +649,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       {/* Actions */}
       <div className="flex items-center gap-3 justify-end">
         <button
-          className="block-btn text-text-secondary hover:text-text-primary px-4 py-2 text-sm"
+          className="block-btn text-text-secondary hover:text-text-primary px-4 py-2 text-sm transition-colors"
           onClick={onBack}
         >
           Cancel

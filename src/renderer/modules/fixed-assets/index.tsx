@@ -272,7 +272,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                 statusFilter === s
                   ? 'bg-accent-blue text-white'
-                  : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors'
               }`}
               style={{ borderRadius: '0px' }}
             >
@@ -323,9 +323,9 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <tr key={a.id} className="hover:bg-bg-hover cursor-pointer" onClick={() => onView(a.id)}>
+                <tr key={a.id} className="hover:bg-bg-hover cursor-pointer transition-colors" onClick={() => onView(a.id)}>
                   <td className="font-mono text-xs text-accent-blue">{a.asset_code}</td>
-                  <td className="font-semibold text-text-primary">{a.name}</td>
+                  <td className="font-semibold text-text-primary truncate max-w-[200px]">{a.name}</td>
                   <td><span className="block-badge block-badge-blue">{CATEGORY_LABELS[a.category]}</span></td>
                   <td className="text-text-secondary text-xs">
                     {a.purchase_date ? format(parseISO(a.purchase_date), 'MMM d, yyyy') : '—'}
@@ -338,7 +338,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                       {a.status === 'fully_depreciated' ? 'Fully Dep.' : a.status.charAt(0).toUpperCase() + a.status.slice(1)}
                     </span>
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
                       <button onClick={() => onView(a.id)} className="block-btn p-1.5" title="View">
                         <Eye size={13} />
@@ -346,7 +346,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                       <button onClick={() => onEdit(a.id)} className="block-btn p-1.5" title="Edit">
                         <Edit2 size={13} />
                       </button>
-                      <button onClick={() => handleDelete(a.id)} className="block-btn p-1.5 text-accent-expense hover:text-accent-expense" title="Delete">
+                      <button onClick={() => handleDelete(a.id)} className="block-btn p-1.5 text-accent-expense hover:text-accent-expense transition-colors" title="Delete">
                         <Trash2 size={13} />
                       </button>
                     </div>
@@ -932,7 +932,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
-              tab === t.key ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-muted hover:text-text-primary'
+              tab === t.key ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-muted hover:text-text-primary transition-colors'
             }`}
           >
             {t.icon}

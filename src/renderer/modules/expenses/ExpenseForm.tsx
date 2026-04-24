@@ -592,11 +592,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     <div className="col-span-1 flex flex-col items-center gap-0.5">
                       {idx > 0 && (
                         <button type="button" onClick={() => moveLineItem(idx, idx - 1)}
-                          className="text-text-muted hover:text-text-primary text-[10px] leading-none" title="Move up">&#9650;</button>
+                          className="text-text-muted hover:text-text-primary text-[10px] leading-none transition-colors" title="Move up">&#9650;</button>
                       )}
                       {idx < lineItems.length - 1 && (
                         <button type="button" onClick={() => moveLineItem(idx, idx + 1)}
-                          className="text-text-muted hover:text-text-primary text-[10px] leading-none" title="Move down">&#9660;</button>
+                          className="text-text-muted hover:text-text-primary text-[10px] leading-none transition-colors" title="Move down">&#9660;</button>
                       )}
                     </div>
                     <div className="col-span-4">

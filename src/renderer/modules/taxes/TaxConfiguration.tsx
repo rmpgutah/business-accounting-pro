@@ -231,7 +231,7 @@ const TaxConfiguration: React.FC = () => {
                   className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                     selectedYear === y
                       ? 'bg-accent-blue text-white'
-                      : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'
+                      : 'text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors'
                   }`}
                   style={{ borderRadius: '0px' }}
                 >
@@ -289,7 +289,7 @@ const TaxConfiguration: React.FC = () => {
                   className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
                     filingStatus === t.key
                       ? 'border-accent-blue text-accent-blue'
-                      : 'border-transparent text-text-muted hover:text-text-primary'
+                      : 'border-transparent text-text-muted hover:text-text-primary transition-colors'
                   }`}
                 >
                   {t.label}

@@ -307,7 +307,7 @@ const Inventory: React.FC = () => {
             className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === key
                 ? key === 'low-stock' ? 'border-accent-expense text-accent-expense' : 'border-accent-blue text-accent-blue'
-                : 'border-transparent text-text-muted hover:text-text-secondary'
+                : 'border-transparent text-text-muted hover:text-text-secondary transition-colors'
             }`}
           >
             {label}
@@ -320,7 +320,7 @@ const Inventory: React.FC = () => {
         <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">{editingId ? 'Edit Inventory Item' : 'New Inventory Item'}</h3>
-            <button className="text-text-muted hover:text-text-primary" onClick={() => { setShowForm(false); setEditingId(null); setFormData(emptyForm); }}>
+            <button className="text-text-muted hover:text-text-primary transition-colors" onClick={() => { setShowForm(false); setEditingId(null); setFormData(emptyForm); }}>
               <X size={16} />
             </button>
           </div>
@@ -449,7 +449,7 @@ const Inventory: React.FC = () => {
       {/* History Drawer */}
       {historyItem && (
         <div className="fixed inset-0 z-50 flex items-end justify-end">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setHistoryItem(null)} />
+          <div className="absolute inset-0 bg-black/30 cursor-pointer" onClick={() => setHistoryItem(null)} />
           <div className="relative bg-bg-secondary border-l-2 border-border-primary h-full w-96 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-border-primary flex items-center justify-between">
               <div>
@@ -557,12 +557,12 @@ const Inventory: React.FC = () => {
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-2">
                         {isLow && <AlertTriangle size={12} className="text-accent-expense shrink-0" />}
-                        {item.name}
+                        <span className="block truncate max-w-[180px]">{item.name}</span>
                         {item.is_asset && <span className="block-badge text-[10px]">Asset</span>}
                       </div>
                     </td>
                     <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>
-                    <td className="text-text-secondary text-sm">{item.category || '—'}</td>
+                    <td className="text-text-secondary text-sm truncate max-w-[140px]">{item.category || '—'}</td>
                     <td className={`text-right font-mono font-semibold ${isLow ? 'text-accent-expense' : 'text-text-primary'}`}>
                       {item.quantity}
                       {isLow && item.reorder_qty > 0 && (
@@ -596,7 +596,7 @@ const Inventory: React.FC = () => {
                           <Pencil size={10} /> Edit
                         </button>
                         <button
-                          className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                          className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                           onClick={() => handleDelete(item.id)}
                           title="Delete item"
                         >

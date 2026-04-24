@@ -435,7 +435,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                 {analytics!.velocity.map((v) => (
                   <div
                     key={v.stage}
-                    className="grid grid-cols-2 gap-2 text-sm px-2 py-2 hover:bg-bg-hover"
+                    className="grid grid-cols-2 gap-2 text-sm px-2 py-2 hover:bg-bg-hover transition-colors"
                     style={{ borderRadius: '6px' }}
                   >
                     <span className="text-text-secondary capitalize">

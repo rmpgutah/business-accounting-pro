@@ -325,7 +325,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onEdit(exp.id)}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -339,7 +339,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                     </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5">
-                        {exp.description || '(no description)'}
+                        <span className="block truncate max-w-[200px]">{exp.description || '(no description)'}</span>
                         {exp.is_recurring ? (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>RECURRING</span>
                         ) : null}
@@ -348,19 +348,19 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                         )}
                       </div>
                     </td>
-                    <td className="text-text-secondary">
+                    <td className="text-text-secondary truncate max-w-[140px]">
                       {exp.category_name || '-'}
                     </td>
-                    <td className="text-text-secondary" onClick={(e) => e.stopPropagation()}>
+                    <td className="text-text-secondary cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       {exp.vendor_id && exp.vendor_name ? (
                         <button
                           className="text-accent-blue hover:underline text-left"
                           onClick={() => nav.goToVendor(exp.vendor_id!)}
                         >
-                          {exp.vendor_name}
+                          <span className="block truncate max-w-[150px]">{exp.vendor_name}</span>
                         </button>
                       ) : (
-                        exp.vendor_name || '-'
+                        <span className="block truncate max-w-[150px]">{exp.vendor_name || '-'}</span>
                       )}
                     </td>
                     <td className="text-right font-mono text-accent-expense">
@@ -378,10 +378,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                         <span className="text-text-muted">-</span>
                       )}
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => handleDuplicate(exp.id, e)}
-                        className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
+                        className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
                         title="Duplicate"
                       >
                         <Copy size={12} /> Dup

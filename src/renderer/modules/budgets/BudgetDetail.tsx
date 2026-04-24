@@ -294,7 +294,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
             className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors capitalize ${
               activeTab === tab
                 ? 'border-accent-blue text-accent-blue'
-                : 'border-transparent text-text-muted hover:text-text-secondary'
+                : 'border-transparent text-text-muted hover:text-text-secondary transition-colors'
             }`}
           >
             {tab === 'alerts' ? `Alerts (${overBudgetLines.length + nearLimitLines.length})` : tab === 'monthly' ? 'Monthly Trend' : 'Category Breakdown'}

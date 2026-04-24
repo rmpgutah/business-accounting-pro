@@ -163,7 +163,7 @@ const ImportSection: React.FC = () => {
                 Preview: {preview.totalRows} row{preview.totalRows !== 1 ? 's' : ''} found
               </span>
               <button
-                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1"
+                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1 transition-colors"
                 onClick={() => { setPreview(null); setResult(null); setColumnMapping({}); }}
               >
                 <X size={12} />

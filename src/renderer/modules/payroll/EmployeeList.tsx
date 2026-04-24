@@ -236,10 +236,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                   <td>
                     <div className="flex items-center gap-2">
                       <Users size={16} className="text-text-muted shrink-0" />
-                      <span className="text-text-primary font-medium">{emp.name}</span>
+                      <span className="text-text-primary font-medium block truncate max-w-[180px]">{emp.name}</span>
                     </div>
                   </td>
-                  <td className="text-text-secondary">{emp.email || '--'}</td>
+                  <td className="text-text-secondary truncate max-w-[200px]">{emp.email || '--'}</td>
                   <td>
                     <span
                       className={

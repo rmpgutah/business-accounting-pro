@@ -204,7 +204,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                   className={`p-2.5 border cursor-pointer transition-colors ${
                     editingId === item.id
                       ? 'border-accent-blue bg-accent-blue/5'
-                      : 'border-border-primary hover:bg-bg-hover'
+                      : 'border-border-primary hover:bg-bg-hover transition-colors'
                   }`}
                   style={{ borderRadius: '6px' }}
                   onClick={() => handleEdit(item)}

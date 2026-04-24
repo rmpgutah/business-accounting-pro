@@ -226,7 +226,7 @@ const StripeExplorer: React.FC = () => {
           <div key={g} className="border-b border-border-primary/50">
             <button
               onClick={() => setExpandedGroups((prev) => ({ ...prev, [g]: !prev[g] }))}
-              className="w-full px-3 py-2 flex items-center justify-between text-[11px] font-bold text-text-secondary hover:bg-bg-hover uppercase tracking-wider"
+              className="w-full px-3 py-2 flex items-center justify-between text-[11px] font-bold text-text-secondary hover:bg-bg-hover uppercase tracking-wider transition-colors"
             >
               <span className="flex items-center gap-1">
                 {expandedGroups[g] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -241,7 +241,7 @@ const StripeExplorer: React.FC = () => {
                 className={`block w-full text-left px-6 py-1.5 text-xs transition-colors ${
                   resource === r.key
                     ? 'bg-accent-blue/15 text-accent-blue font-semibold'
-                    : 'text-text-secondary hover:bg-bg-hover'
+                    : 'text-text-secondary hover:bg-bg-hover transition-colors'
                 }`}
               >
                 <span className="flex items-center justify-between">
@@ -386,7 +386,7 @@ const StripeExplorer: React.FC = () => {
                 </div>
                 <button
                   onClick={() => navigator.clipboard?.writeText(JSON.stringify(selected, null, 2))}
-                  className="p-1 text-text-muted hover:text-text-primary"
+                  className="p-1 text-text-muted hover:text-text-primary transition-colors"
                   title="Copy JSON"
                 >
                   <Copy size={12} />

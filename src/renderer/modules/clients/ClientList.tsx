@@ -313,7 +313,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onSelectClient(client.id)}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -325,10 +325,10 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     <td>
                       <div className="flex items-center gap-2">
                         <UserCircle size={16} className="text-text-muted shrink-0" />
-                        <span className="text-text-primary font-medium">{client.name}</span>
+                        <span className="text-text-primary font-medium block truncate max-w-[200px]">{client.name}</span>
                       </div>
                     </td>
-                    <td className="text-text-secondary">{client.email || '--'}</td>
+                    <td className="text-text-secondary truncate max-w-[200px]">{client.email || '--'}</td>
                     <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>
                     <td>
                       <span className={formatStatus(client.status).className}>

@@ -307,7 +307,7 @@ const RecurringTransactions: React.FC = () => {
           className={`px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${
             tab === 'templates'
               ? 'bg-bg-elevated text-text-primary'
-              : 'text-text-muted hover:text-text-secondary'
+              : 'text-text-muted hover:text-text-secondary transition-colors'
           }`}
           onClick={() => setTab('templates')}
         >
@@ -318,7 +318,7 @@ const RecurringTransactions: React.FC = () => {
           className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-border-primary flex items-center gap-1.5 ${
             tab === 'history'
               ? 'bg-bg-elevated text-text-primary'
-              : 'text-text-muted hover:text-text-secondary'
+              : 'text-text-muted hover:text-text-secondary transition-colors'
           }`}
           onClick={() => setTab('history')}
         >
@@ -333,7 +333,7 @@ const RecurringTransactions: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">New Recurring Template</h3>
             <button
-              className="text-text-muted hover:text-text-primary"
+              className="text-text-muted hover:text-text-primary transition-colors"
               onClick={() => { setShowForm(false); setFormData(emptyForm); }}
             >
               <X size={16} />
@@ -515,7 +515,7 @@ const RecurringTransactions: React.FC = () => {
                 <tbody>
                   {filtered.map((t) => (
                     <tr key={t.id}>
-                      <td className="text-text-primary font-medium">{t.name}</td>
+                      <td className="text-text-primary font-medium truncate max-w-[200px]">{t.name}</td>
                       <td>
                         <span className={typeBadge[t.type] || 'block-badge capitalize'}>{t.type}</span>
                       </td>
@@ -547,8 +547,8 @@ const RecurringTransactions: React.FC = () => {
                         <button
                           className={`p-1 rounded transition-colors ${
                             t.is_active
-                              ? 'text-accent-warning hover:bg-accent-warning-bg'
-                              : 'text-accent-income hover:bg-accent-income-bg'
+                              ? 'text-accent-warning hover:bg-accent-warning-bg transition-colors'
+                              : 'text-accent-income hover:bg-accent-income-bg transition-colors'
                           }`}
                           onClick={() => toggleActive(t)}
                           title={t.is_active ? 'Pause' : 'Resume'}

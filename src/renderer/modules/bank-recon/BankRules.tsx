@@ -461,7 +461,7 @@ const BankRules: React.FC = () => {
               {rules.map((rule) => (
                 <React.Fragment key={rule.id}>
                   <tr
-                    className={`hover:bg-bg-hover ${!rule.is_active ? 'opacity-50' : ''}`}
+                    className={`hover:bg-bg-hover ${!rule.is_active ? 'opacity-50' : ''} transition-colors`}
                   >
                     <td>
                       <button

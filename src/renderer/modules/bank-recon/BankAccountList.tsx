@@ -156,10 +156,10 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
                   className="border-b border-border-primary hover:bg-bg-hover transition-colors cursor-pointer"
                   onClick={() => onEdit(acct)}
                 >
-                  <td className="px-4 py-2.5 text-xs text-text-primary font-medium">
+                  <td className="px-4 py-2.5 text-xs text-text-primary font-medium truncate max-w-[180px]">
                     {acct.name}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-text-secondary">
+                  <td className="px-4 py-2.5 text-xs text-text-secondary truncate max-w-[160px]">
                     {acct.institution || '--'}
                   </td>
                   <td className="px-4 py-2.5 text-xs font-mono text-text-muted">

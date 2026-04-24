@@ -290,7 +290,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onEdit(q.id)}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -302,7 +302,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
                     <td className="font-mono text-text-primary text-xs font-semibold">
                       {q.quote_number}
                     </td>
-                    <td className="text-text-secondary">{q.client_name || '-'}</td>
+                    <td className="text-text-secondary truncate max-w-[180px]">{q.client_name || '-'}</td>
                     <td className="font-mono text-text-secondary text-xs">
                       {formatDate(q.issue_date)}
                     </td>
@@ -317,11 +317,11 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
                         {formatStatus(q.status).label}
                       </span>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => handleDuplicate(q.id, e)}
-                          className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
+                          className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
                           title="Duplicate"
                           style={{ borderRadius: '6px' }}
                         >

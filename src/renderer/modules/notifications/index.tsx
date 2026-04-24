@@ -259,7 +259,7 @@ const Notifications: React.FC = () => {
               className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-bg-elevated text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
+                  : 'text-text-muted hover:text-text-secondary transition-colors'
               }`}
               onClick={() => setFilter('all')}
             >
@@ -269,7 +269,7 @@ const Notifications: React.FC = () => {
               className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-border-primary ${
                 filter === 'unread'
                   ? 'bg-bg-elevated text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
+                  : 'text-text-muted hover:text-text-secondary transition-colors'
               }`}
               onClick={() => setFilter('unread')}
             >
@@ -312,7 +312,7 @@ const Notifications: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">Notification Preferences</h3>
             <button
-              className="text-text-muted hover:text-text-primary"
+              className="text-text-muted hover:text-text-primary transition-colors"
               onClick={() => setShowPreferences(false)}
             >
               <X size={16} />
@@ -358,7 +358,7 @@ const Notifications: React.FC = () => {
           className={`px-3 py-1 text-xs font-medium border transition-colors ${
             categoryFilter === ''
               ? 'bg-bg-elevated text-text-primary border-border-primary'
-              : 'text-text-muted border-transparent hover:text-text-secondary'
+              : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
           }`}
           style={{ borderRadius: '6px' }}
           onClick={() => setCategoryFilter('')}
@@ -374,7 +374,7 @@ const Notifications: React.FC = () => {
               className={`px-3 py-1 text-xs font-medium border transition-colors flex items-center gap-1.5 ${
                 categoryFilter === key
                   ? 'bg-bg-elevated text-text-primary border-border-primary'
-                  : 'text-text-muted border-transparent hover:text-text-secondary'
+                  : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
               }`}
               style={{ borderRadius: '6px' }}
               onClick={() => setCategoryFilter(categoryFilter === key ? '' : key as CategoryFilter)}

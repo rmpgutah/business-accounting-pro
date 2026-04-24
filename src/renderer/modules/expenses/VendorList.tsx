@@ -138,8 +138,8 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
             <tbody>
               {filtered.map((v) => (
                 <tr key={v.id}>
-                  <td className="text-text-primary font-medium">{v.name}</td>
-                  <td className="text-text-secondary">{v.email || '-'}</td>
+                  <td className="text-text-primary font-medium truncate max-w-[200px]">{v.name}</td>
+                  <td className="text-text-secondary truncate max-w-[200px]">{v.email || '-'}</td>
                   <td className="text-text-secondary font-mono text-xs">{v.phone || '-'}</td>
                   <td>
                     <span className={formatStatus(v.status).className}>

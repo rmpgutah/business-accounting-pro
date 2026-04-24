@@ -447,7 +447,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                 activeTab === tab.key
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+                  : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
               style={{ borderRadius: '6px' }}
             >
@@ -521,7 +521,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onViewInvoice(inv.id)}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -552,7 +552,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                           nav.goToClient(inv.client_id);
                         }}
                       >
-                        {clientMap.get(inv.client_id) ?? 'Unknown'}
+                        <span className="block truncate max-w-[180px]">{clientMap.get(inv.client_id) ?? 'Unknown'}</span>
                       </button>
                     </td>
                     <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>
@@ -579,7 +579,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         )}
                       </div>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       {inv.status === 'overdue' && (
                         <button
                           onClick={() => sendToCollections(inv.id)}

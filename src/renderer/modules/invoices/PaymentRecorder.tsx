@@ -114,7 +114,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       }}
     >
       <div
-        className="block-card-elevated w-full max-w-md"
+        className="block-card-elevated w-full max-w-md cursor-pointer"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

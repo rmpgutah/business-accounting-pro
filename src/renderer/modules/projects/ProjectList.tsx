@@ -230,7 +230,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
             className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
               statusFilter === tab.key
                 ? 'bg-accent-blue text-white'
-                : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+                : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
             }`}
             style={{ borderRadius: '6px' }}
           >

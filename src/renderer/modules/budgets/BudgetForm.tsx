@@ -334,7 +334,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
                     {lines.length > 1 && (
                       <button
                         type="button"
-                        className="text-text-muted hover:text-accent-expense p-1"
+                        className="text-text-muted hover:text-accent-expense p-1 transition-colors"
                         onClick={() => removeLine(idx)}
                       >
                         <Trash2 size={14} />

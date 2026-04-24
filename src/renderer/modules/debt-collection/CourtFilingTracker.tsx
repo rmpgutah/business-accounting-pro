@@ -562,7 +562,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
                 {items.map((item, idx) => (
                   <label
                     key={idx}
-                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-bg-hover cursor-pointer text-xs"
+                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-bg-hover cursor-pointer text-xs transition-colors"
                     style={{ borderRadius: '6px' }}
                   >
                     <input

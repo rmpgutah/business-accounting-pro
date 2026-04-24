@@ -198,7 +198,7 @@ const PayrollModule: React.FC = () => {
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
                 activeTab === tab.key
                   ? 'border-accent-blue text-accent-blue'
-                  : 'border-transparent text-text-muted hover:text-text-secondary'
+                  : 'border-transparent text-text-muted hover:text-text-secondary transition-colors'
               }`}
               onClick={() => {
                 if (tab.key === 'run') {

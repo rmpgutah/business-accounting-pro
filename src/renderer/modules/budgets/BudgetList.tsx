@@ -231,7 +231,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                   className="cursor-pointer"
                   onClick={() => onSelect(b.id)}
                 >
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.has(b.id)}
@@ -240,7 +240,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                       style={{ accentColor: '#3b82f6' }}
                     />
                   </td>
-                  <td className="text-text-primary font-medium text-sm">{b.name}</td>
+                  <td className="text-text-primary font-medium text-sm truncate max-w-[200px]">{b.name}</td>
                   <td className="text-text-secondary text-sm">
                     {periodLabel[b.period] || b.period}
                   </td>
@@ -253,7 +253,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                   </td>
                   <td className="text-center">
                     <button
-                      className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                      className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                       onClick={(e) => handleDelete(e, b.id)}
                       title="Delete budget"
                       aria-label="Delete budget"

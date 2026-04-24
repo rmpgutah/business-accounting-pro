@@ -197,7 +197,7 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
                   return (
                     <div
                       key={debt.id}
-                      className={`block-card-elevated mb-2 p-3 cursor-pointer hover:bg-bg-hover border-l-4 ${borderClass}`}
+                      className={`block-card-elevated mb-2 p-3 cursor-pointer hover:bg-bg-hover border-l-4 ${borderClass} transition-colors`}
                       style={{ borderRadius: '6px' }}
                       onClick={() => onViewDebt(debt.id)}
                     >

@@ -377,21 +377,21 @@ const AutomationsModule: React.FC = () => {
                   key={rule.id}
                   onClick={() => handleSelect(rule)}
                   className={`border-b border-border-primary p-3 cursor-pointer transition-colors ${
-                    isSelected ? 'bg-bg-hover' : 'hover:bg-bg-hover/50'
+                    isSelected ? 'bg-bg-hover' : 'hover:bg-bg-hover/50 transition-colors'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-1 mb-1">
                     <p className="text-xs font-semibold text-text-primary leading-tight truncate flex-1">{rule.name}</p>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        className="text-text-muted hover:text-accent-blue p-0.5"
+                        className="text-text-muted hover:text-accent-blue p-0.5 transition-colors"
                         onClick={e => { e.stopPropagation(); handleEdit(rule); }}
                         title="Edit"
                       >
                         <Edit2 size={11} />
                       </button>
                       <button
-                        className="text-text-muted hover:text-accent-expense p-0.5"
+                        className="text-text-muted hover:text-accent-expense p-0.5 transition-colors"
                         onClick={e => handleDelete(rule, e)}
                         disabled={deleting === rule.id}
                         title="Delete"

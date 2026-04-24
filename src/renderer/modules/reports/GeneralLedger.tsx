@@ -265,14 +265,14 @@ const GeneralLedger: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="text-xs text-text-muted hover:text-text-primary px-2 py-1"
+            className="text-xs text-text-muted hover:text-text-primary px-2 py-1 transition-colors"
             style={{ borderRadius: '6px' }}
             onClick={expandAll}
           >
             Expand All
           </button>
           <button
-            className="text-xs text-text-muted hover:text-text-primary px-2 py-1"
+            className="text-xs text-text-muted hover:text-text-primary px-2 py-1 transition-colors"
             style={{ borderRadius: '6px' }}
             onClick={collapseAll}
           >

@@ -218,7 +218,7 @@ const BudgetVsActualReport: React.FC = () => {
               {comparison.map((c) => {
                 const usagePct = c.budgeted > 0 ? Math.min(Math.round((c.actual / c.budgeted) * 100), 150) : 0;
                 return (
-                  <tr key={c.category} className="border-b border-border-primary/30 hover:bg-bg-hover/30">
+                  <tr key={c.category} className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
                     <td className="px-4 py-2 text-text-primary font-medium">{c.category}</td>
                     <td className="px-4 py-2 text-right font-mono text-text-secondary">{fmt.format(c.budgeted)}</td>
                     <td className="px-4 py-2 text-right font-mono text-text-primary">{fmt.format(c.actual)}</td>

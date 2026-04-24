@@ -48,7 +48,7 @@ const TabBtn: React.FC<{
     className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
       active
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
-        : 'text-text-muted hover:text-text-secondary'
+        : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
     style={{ borderRadius: '6px 6px 0 0' }}
   >
@@ -155,7 +155,7 @@ const DebtCollectionModule: React.FC = () => {
       {/* Right Panel — Tab Content */}
       <div className="flex-1 overflow-y-auto p-6">
       {/* Tabs */}
-      <div className="flex items-center border-b border-border-primary mb-6">
+      <div className="flex items-center border-b border-border-primary mb-6 cursor-pointer">
         <TabBtn
           active={tab === 'receivables'}
           icon={<ArrowDownCircle size={16} />}

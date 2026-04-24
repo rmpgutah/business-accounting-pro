@@ -348,7 +348,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
             className={`px-3 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
               activeTab === tab.key
                 ? 'border-accent-blue text-text-primary'
-                : 'border-transparent text-text-muted hover:text-text-secondary'
+                : 'border-transparent text-text-muted hover:text-text-secondary transition-colors'
             }`}
           >
             {tab.label}

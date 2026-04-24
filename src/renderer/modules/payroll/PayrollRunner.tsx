@@ -389,7 +389,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary"
+          className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors"
           onClick={onBack}
         >
           <ArrowLeft size={16} />
@@ -559,7 +559,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
 
           <div className="flex justify-between items-center">
             <button
-              className="block-btn text-text-secondary hover:text-text-primary px-4 py-2 text-sm"
+              className="block-btn text-text-secondary hover:text-text-primary px-4 py-2 text-sm transition-colors"
               onClick={() => setStep(1)}
             >
               Back
@@ -650,7 +650,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
 
           <div className="flex justify-between items-center">
             <button
-              className="block-btn text-text-secondary hover:text-text-primary px-4 py-2 text-sm"
+              className="block-btn text-text-secondary hover:text-text-primary px-4 py-2 text-sm transition-colors"
               onClick={() => setStep(2)}
             >
               Back

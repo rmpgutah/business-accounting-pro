@@ -39,12 +39,12 @@ const PaymentMatchReview: React.FC<PaymentMatchReviewProps> = ({ onClose, onDone
       <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} role="presentation" />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="block-card-elevated w-full max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col"
+          className="block-card-elevated w-full max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col cursor-pointer"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
             <h3 className="text-base font-bold text-text-primary">Review Suggested Payment Matches</h3>
-            <button onClick={onClose} className="text-text-muted hover:text-text-primary">
+            <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
               <X size={18} />
             </button>
           </div>

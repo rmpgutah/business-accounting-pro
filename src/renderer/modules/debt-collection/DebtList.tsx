@@ -448,7 +448,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           )}
           <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(true)} disabled={bulkProcessing}>Hold</button>
           <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(false)} disabled={bulkProcessing}>Release</button>
-          <button className="text-xs text-text-muted ml-auto hover:text-text-primary" onClick={() => setSelectedIds(new Set())}>Clear</button>
+          <button className="text-xs text-text-muted ml-auto hover:text-text-primary transition-colors" onClick={() => setSelectedIds(new Set())}>Clear</button>
         </div>
       )}
 
@@ -663,12 +663,12 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
                     </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span>{debt.debtor_name}</span>
+                        <span className="block truncate max-w-[160px]">{debt.debtor_name}</span>
                         {!!debt.has_plan && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
                         )}
@@ -735,7 +735,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         );
                       })()}
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
                           className="block-btn p-1"
@@ -754,7 +754,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                           <Pencil size={14} />
                         </button>
                         <button
-                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                           title="Delete"
                           aria-label="Delete debt"
                           onClick={() => handleDelete(debt.id, debt.debtor_name)}
@@ -770,12 +770,12 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     className="cursor-pointer"
                     onClick={() => onView(debt.id)}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
                     </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span>{debt.debtor_name}</span>
+                        <span className="block truncate max-w-[160px]">{debt.debtor_name}</span>
                         {!!debt.has_plan && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
                         )}
@@ -812,7 +812,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     <td>
                       <span className={statusBadge.className}>{statusBadge.label}</span>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
                           className="block-btn p-1"
@@ -831,7 +831,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                           <Pencil size={14} />
                         </button>
                         <button
-                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                          className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                           title="Delete"
                           aria-label="Delete debt"
                           onClick={() => handleDelete(debt.id, debt.debtor_name)}

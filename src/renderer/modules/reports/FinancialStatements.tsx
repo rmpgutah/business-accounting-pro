@@ -324,7 +324,7 @@ const FinancialStatements: React.FC = () => {
               className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                 tab === t.id
                   ? 'text-white'
-                  : 'text-text-secondary hover:text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary transition-colors'
               }`}
               style={{
                 borderRadius: '6px',

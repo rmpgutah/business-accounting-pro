@@ -404,7 +404,7 @@ const MultiCompany: React.FC = () => {
                   </button>
                   {!isActive && (
                     <button
-                      className="block-btn flex items-center gap-1.5 text-accent-expense hover:bg-accent-expense/10"
+                      className="block-btn flex items-center gap-1.5 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                       onClick={() => handleDelete(company)}
                       title="Delete company"
                     >

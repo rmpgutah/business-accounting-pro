@@ -62,7 +62,7 @@ const StripeModule: React.FC = () => {
         <button
           onClick={() => setTab('sync')}
           className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
-            tab === 'sync' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary'
+            tab === 'sync' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary transition-colors'
           }`}
         >
           <RefreshCw size={14} />
@@ -71,7 +71,7 @@ const StripeModule: React.FC = () => {
         <button
           onClick={() => setTab('explorer')}
           className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
-            tab === 'explorer' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary'
+            tab === 'explorer' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary transition-colors'
           }`}
         >
           <Globe size={14} />

@@ -222,7 +222,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
                   <Pencil size={10} />
                 </button>
                 <button
-                  className="block-btn text-xs px-1.5 py-0.5 text-accent-expense hover:bg-accent-expense/10"
+                  className="block-btn text-xs px-1.5 py-0.5 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                   onClick={() => handleDelete(ev.id)}
                   title="Delete event"
                 >

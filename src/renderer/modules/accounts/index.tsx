@@ -100,7 +100,7 @@ const AccountsModule: React.FC = () => {
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
               activeTab === tab.id
                 ? 'border-b-accent-blue text-text-primary'
-                : 'border-b-transparent text-text-muted hover:text-text-secondary'
+                : 'border-b-transparent text-text-muted hover:text-text-secondary transition-colors'
             }`}
           >
             {tab.icon}

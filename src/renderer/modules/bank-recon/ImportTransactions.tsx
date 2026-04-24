@@ -366,7 +366,7 @@ const ImportTransactions: React.FC = () => {
                     key={i}
                     className={`border-b border-border-primary/50 transition-colors ${
                       row.selected
-                        ? 'hover:bg-bg-hover/30'
+                        ? 'hover:bg-bg-hover/30 transition-colors'
                         : 'opacity-40'
                     }`}
                   >

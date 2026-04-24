@@ -94,8 +94,8 @@ export default function PortalModule() {
           <tbody>
             {clients.map((client) => (
               <tr key={client.id}>
-                <td className="text-text-primary font-medium">{client.name}</td>
-                <td className="text-text-secondary">{client.email}</td>
+                <td className="text-text-primary font-medium truncate max-w-[200px]">{client.name}</td>
+                <td className="text-text-secondary truncate max-w-[200px]">{client.email}</td>
                 <td>
                   {client.portal_token ? (
                     <span className="block-badge-income">Active</span>

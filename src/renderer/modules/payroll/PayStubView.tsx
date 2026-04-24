@@ -145,7 +145,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   if (!stub) {
     return (
       <div className="p-6">
-        <button className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary" onClick={onBack}>
+        <button className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors" onClick={onBack}>
           <ArrowLeft size={16} /> Back
         </button>
         <div className="text-center py-16 text-text-muted text-sm">Pay stub not found.</div>
@@ -164,7 +164,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
-            className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary"
+            className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors"
             onClick={onBack}
           >
             <ArrowLeft size={16} />

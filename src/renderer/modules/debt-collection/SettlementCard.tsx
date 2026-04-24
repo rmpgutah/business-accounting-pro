@@ -251,7 +251,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                     <Pencil size={10} />
                   </button>
                   <button
-                    className="block-btn text-xs py-1 px-2 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                    className="block-btn text-xs py-1 px-2 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                     onClick={() => handleDelete(s.id)}
                     title="Delete offer"
                   >

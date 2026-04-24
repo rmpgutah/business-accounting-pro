@@ -888,7 +888,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             Edit
           </button>
           <button
-            className="block-btn flex items-center gap-2 text-xs text-accent-expense hover:bg-accent-expense/10"
+            className="block-btn flex items-center gap-2 text-xs text-accent-expense hover:bg-accent-expense/10 transition-colors"
             onClick={async () => {
               if (!window.confirm(`Delete this debt for "${debt?.debtor_name}"? All related records will be removed.`)) return;
               try {

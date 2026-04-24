@@ -146,7 +146,7 @@ export default function EmailModule() {
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
                 tab === t.id
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-elevated text-text-secondary hover:bg-bg-hover border border-border-primary'
+                  : 'bg-bg-elevated text-text-secondary hover:bg-bg-hover border border-border-primary transition-colors'
               }`}
               style={{ borderRadius: '6px' }}
             >
@@ -193,8 +193,8 @@ export default function EmailModule() {
               <tbody>
                 {filteredLog.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="text-text-primary">{entry.recipient}</td>
-                    <td className="text-text-secondary">{entry.subject}</td>
+                    <td className="text-text-primary truncate max-w-[200px]">{entry.recipient}</td>
+                    <td className="text-text-secondary truncate max-w-[220px]">{entry.subject}</td>
                     <td>
                       <span className="block-badge-blue">{entry.entity_type}</span>
                     </td>

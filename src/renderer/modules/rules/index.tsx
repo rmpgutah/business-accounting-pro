@@ -82,8 +82,8 @@ const RulesModule: React.FC = () => {
                   <div className="text-xs text-text-muted">{a.record_type} · {a.record_id} · {formatDate(a.created_at)}</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleResolve(a.id, 'approved')} className="px-3 py-1 bg-green-600 text-white text-xs font-bold uppercase hover:bg-green-700">Approve</button>
-                  <button onClick={() => handleResolve(a.id, 'rejected')} className="px-3 py-1 bg-red-100 text-red-700 border border-red-300 text-xs font-bold uppercase hover:bg-red-200">Reject</button>
+                  <button onClick={() => handleResolve(a.id, 'approved')} className="px-3 py-1 bg-green-600 text-white text-xs font-bold uppercase hover:bg-green-700 transition-colors">Approve</button>
+                  <button onClick={() => handleResolve(a.id, 'rejected')} className="px-3 py-1 bg-red-100 text-red-700 border border-red-300 text-xs font-bold uppercase hover:bg-red-200 transition-colors">Reject</button>
                 </div>
               </div>
             ))}

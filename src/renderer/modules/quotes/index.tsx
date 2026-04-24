@@ -18,7 +18,7 @@ const TabBtn: React.FC<{
     className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
       active
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
-        : 'text-text-muted hover:text-text-secondary'
+        : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
     style={{ borderRadius: '6px 6px 0 0' }}
   >
@@ -57,7 +57,7 @@ const QuotesModule: React.FC = () => {
   return (
     <div className="p-6 h-full overflow-y-auto">
       {/* Tabs */}
-      <div className="flex border-b border-border-primary mb-6">
+      <div className="flex border-b border-border-primary mb-6 cursor-pointer">
         <TabBtn
           active={true}
           icon={<FileCheck size={16} />}

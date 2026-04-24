@@ -31,7 +31,7 @@ const TaxModule: React.FC = () => {
             className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
               activeTab === tab.key
                 ? 'border-b-accent-blue text-accent-blue'
-                : 'border-b-transparent text-text-muted hover:text-text-primary'
+                : 'border-b-transparent text-text-muted hover:text-text-primary transition-colors'
             }`}
             style={{ borderRadius: '6px 6px 0 0' }}
           >

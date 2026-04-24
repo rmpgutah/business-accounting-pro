@@ -233,14 +233,14 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/60 z-40"
+        className="fixed inset-0 bg-black/60 z-40 cursor-pointer"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="block-card-elevated w-full max-w-[700px] max-h-[90vh] overflow-y-auto"
+          className="block-card-elevated w-full max-w-[700px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
           style={{ borderRadius: '6px' }}
         >
@@ -300,7 +300,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                       {rules.map((rule) => (
                         <tr
                           key={rule.id}
-                          className="border-t border-border-primary hover:bg-bg-hover"
+                          className="border-t border-border-primary hover:bg-bg-hover transition-colors"
                         >
                           <td className="px-2 py-2 text-text-secondary capitalize text-xs">
                             {stageLabel(rule.from_stage)}
@@ -478,7 +478,7 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                   {templates.map((t) => (
                     <div key={t.id}>
                       <div
-                        className="flex items-center justify-between px-3 py-2 bg-bg-tertiary hover:bg-bg-hover"
+                        className="flex items-center justify-between px-3 py-2 bg-bg-tertiary hover:bg-bg-hover transition-colors"
                         style={{ borderRadius: '6px' }}
                       >
                         <div className="flex items-center gap-2 min-w-0">

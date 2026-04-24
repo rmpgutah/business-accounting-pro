@@ -340,7 +340,7 @@ const ReconcileView: React.FC = () => {
                       className={`px-4 py-2 border-b border-border-primary/50 cursor-pointer transition-colors ${
                         selectedBank === txn.id
                           ? 'bg-accent-blue/10 border-l-2 border-l-accent-blue'
-                          : 'hover:bg-bg-hover border-l-2 border-l-transparent'
+                          : 'hover:bg-bg-hover border-l-2 border-l-transparent transition-colors'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -398,7 +398,7 @@ const ReconcileView: React.FC = () => {
                       className={`px-4 py-2 border-b border-border-primary/50 cursor-pointer transition-colors ${
                         selectedBook === entry.id
                           ? 'bg-accent-blue/10 border-l-2 border-l-accent-blue'
-                          : 'hover:bg-bg-hover border-l-2 border-l-transparent'
+                          : 'hover:bg-bg-hover border-l-2 border-l-transparent transition-colors'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -490,7 +490,7 @@ const ReconcileView: React.FC = () => {
                       return (
                         <tr
                           key={`${pair.bank.id}:${pair.book.id}`}
-                          className="border-b border-border-primary/50 hover:bg-bg-hover/30"
+                          className="border-b border-border-primary/50 hover:bg-bg-hover/30 transition-colors"
                         >
                           <td className="px-4 py-2 text-xs text-text-primary">
                             <div>{pair.bank.description}</div>

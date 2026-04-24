@@ -285,7 +285,7 @@ const Documents: React.FC = () => {
                     <td>
                       <div className="flex items-center gap-2">
                         <FileIcon size={16} className="text-text-muted shrink-0" />
-                        <span className="text-text-primary font-medium">{doc.filename}</span>
+                        <span className="text-text-primary font-medium block truncate max-w-[200px]">{doc.filename}</span>
                       </div>
                     </td>
                     <td>
@@ -297,7 +297,7 @@ const Documents: React.FC = () => {
                         <span className="text-text-muted">-</span>
                       )}
                     </td>
-                    <td className="text-text-secondary">
+                    <td className="text-text-secondary truncate max-w-[160px]">
                       {doc.entity_name || doc.entity_id || '-'}
                     </td>
                     <td>
@@ -359,11 +359,11 @@ const Documents: React.FC = () => {
 
       {/* Edit Metadata Modal */}
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditingDoc(null)}>
-          <div className="block-card-elevated w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 cursor-pointer" onClick={() => setEditingDoc(null)}>
+          <div className="block-card-elevated w-full max-w-md space-y-4 cursor-pointer" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text-primary">Edit Document — {editingDoc.filename}</h3>
-              <button className="text-text-muted hover:text-text-primary" onClick={() => setEditingDoc(null)}>
+              <button className="text-text-muted hover:text-text-primary transition-colors" onClick={() => setEditingDoc(null)}>
                 <X size={16} />
               </button>
             </div>
@@ -404,17 +404,17 @@ const Documents: React.FC = () => {
       {/* Preview Modal */}
       {previewDoc && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 cursor-pointer"
           onClick={() => setPreviewDoc(null)}
         >
           <div
-            className="block-card-elevated w-full max-w-lg space-y-4"
+            className="block-card-elevated w-full max-w-lg space-y-4 cursor-pointer"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text-primary">Document Preview</h3>
               <button
-                className="text-text-muted hover:text-text-primary"
+                className="text-text-muted hover:text-text-primary transition-colors"
                 onClick={() => setPreviewDoc(null)}
               >
                 <Eye size={16} />

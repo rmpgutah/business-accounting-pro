@@ -248,7 +248,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                 className={`block-card text-left p-4 transition-colors cursor-pointer ${
                   isActive
                     ? 'ring-2 ring-accent-blue bg-bg-tertiary'
-                    : 'hover:bg-bg-hover'
+                    : 'hover:bg-bg-hover transition-colors'
                 }`}
                 style={{ borderRadius: '6px' }}
               >

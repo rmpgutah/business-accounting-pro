@@ -293,7 +293,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                 activeTab === tab.key
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+                  : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
               style={{ borderRadius: '6px' }}
             >
@@ -360,16 +360,16 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     onClick={() => onView(bill.id)}
                   >
                     <td className="font-mono text-accent-blue text-xs">{bill.bill_number}</td>
-                    <td className="text-text-primary" onClick={(e) => e.stopPropagation()}>
+                    <td className="text-text-primary cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       {bill.vendor_id && vendorName !== '—' ? (
                         <button
                           className="text-accent-blue hover:underline text-left"
                           onClick={() => nav.goToVendor(bill.vendor_id)}
                         >
-                          {vendorName}
+                          <span className="block truncate max-w-[180px]">{vendorName}</span>
                         </button>
                       ) : (
-                        vendorName
+                        <span className="block truncate max-w-[180px]">{vendorName}</span>
                       )}
                     </td>
                     <td className="font-mono text-text-secondary text-xs">{formatDate(bill.issue_date)}</td>
@@ -390,7 +390,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     <td>
                       <span className={badge.className}>{badge.label}</span>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <button
                         className="block-btn text-xs py-1 px-2"
                         style={{ borderRadius: '6px' }}
@@ -1027,7 +1027,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
         <div className="module-actions">
           <button
             onClick={handleDuplicate}
-            className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue"
+            className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
           >
             <Copy size={14} /> Duplicate
           </button>

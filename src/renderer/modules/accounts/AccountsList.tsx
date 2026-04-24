@@ -264,7 +264,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
                         <td className="px-4 py-2 font-mono text-xs text-text-secondary">
                           {account.code}
                         </td>
-                        <td className="px-4 py-2 text-xs text-text-primary font-medium">
+                        <td className="px-4 py-2 text-xs text-text-primary font-medium truncate max-w-[200px]">
                           {account.name}
                           {!account.is_active && (
                             <span className="ml-2 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '6px' }}>

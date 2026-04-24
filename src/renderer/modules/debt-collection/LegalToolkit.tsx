@@ -35,7 +35,7 @@ const SubTabBtn: React.FC<{
     className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors ${
       active
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
-        : 'text-text-muted hover:text-text-secondary'
+        : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
     style={{ borderRadius: '6px 6px 0 0' }}
   >
@@ -87,7 +87,7 @@ const AuditTrailView: React.FC<{ debtId: string }> = ({ debtId }) => {
               dispute_filed: 'Dispute Filed', record_deleted: 'Record Deleted', interest_recalculated: 'Interest Recalculated',
             };
             return (
-              <div key={entry.id} className="flex items-start gap-3 px-3 py-2 border-l-2 border-border-primary text-xs hover:bg-bg-hover" style={{ borderRadius: '0 6px 6px 0' }}>
+              <div key={entry.id} className="flex items-start gap-3 px-3 py-2 border-l-2 border-border-primary text-xs hover:bg-bg-hover transition-colors" style={{ borderRadius: '0 6px 6px 0' }}>
                 <span className="text-text-muted font-mono whitespace-nowrap">{formatDate(entry.performed_at, { style: 'short' })}</span>
                 <div className="flex-1 min-w-0">
                   <span className="text-text-primary font-semibold">{labels[entry.action] || entry.action}</span>
@@ -177,7 +177,7 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
       </div>
 
       {/* Sub-tab bar */}
-      <div className="flex border-b border-border-primary mb-4">
+      <div className="flex border-b border-border-primary mb-4 cursor-pointer">
         <SubTabBtn
           active={subTab === 'demand_letters'}
           icon={<FileText size={14} />}

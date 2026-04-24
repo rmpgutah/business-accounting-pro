@@ -170,7 +170,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
   // ─── Render ───────────────────────────────────────
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center cursor-pointer"
       style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();

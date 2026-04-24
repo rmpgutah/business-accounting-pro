@@ -234,7 +234,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                 className={`px-3 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
                   statusFilter === s
                     ? 'bg-accent-blue text-white'
-                    : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-border-primary'
+                    : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-border-primary transition-colors'
                 }`}
                 style={{ borderRadius: '6px' }}
               >
@@ -268,7 +268,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
               {filtered.map((po) => (
                 <tr key={po.id} className="hover:bg-bg-secondary transition-colors cursor-pointer" onClick={() => onView(po.id)}>
                   <td className="font-mono text-xs text-accent-blue">{po.po_number}</td>
-                  <td className="text-xs text-text-primary">{vendors[po.vendor_id]?.name ?? '—'}</td>
+                  <td className="text-xs text-text-primary truncate max-w-[180px]">{vendors[po.vendor_id]?.name ?? '—'}</td>
                   <td className="font-mono text-xs text-text-secondary">{formatDate(po.issue_date)}</td>
                   <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>
                   <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>
@@ -277,7 +277,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                       {formatStatus(po.status).label}
                     </span>
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="block-btn text-[10px] px-2 py-1"
                       onClick={() => onView(po.id)}

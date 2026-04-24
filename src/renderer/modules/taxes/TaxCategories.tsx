@@ -206,7 +206,7 @@ const TaxCategories: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-text-primary">{editingId ? 'Edit Tax Category' : 'New Tax Category'}</h3>
             <button
-              className="text-text-muted hover:text-text-primary"
+              className="text-text-muted hover:text-text-primary transition-colors"
               onClick={() => { setShowForm(false); setEditingId(null); setFormData(defaultForm); }}
             >
               <X size={16} />
@@ -318,8 +318,8 @@ const TaxCategories: React.FC = () => {
             <tbody>
               {filtered.map((cat) => (
                 <tr key={cat.id}>
-                  <td className="text-text-primary font-medium text-sm">{cat.name}</td>
-                  <td className="text-text-secondary text-sm">{cat.description || '-'}</td>
+                  <td className="text-text-primary font-medium text-sm truncate max-w-[180px]">{cat.name}</td>
+                  <td className="text-text-secondary text-sm truncate max-w-[200px]">{cat.description || '-'}</td>
                   <td className="font-mono text-text-secondary text-xs">
                     {cat.schedule_c_line || '-'}
                   </td>
@@ -340,7 +340,7 @@ const TaxCategories: React.FC = () => {
                         <Pencil size={10} /> Edit
                       </button>
                       <button
-                        className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10"
+                        className="block-btn text-xs px-2 py-1 inline-flex items-center gap-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                         onClick={() => handleDelete(cat.id)}
                         title="Delete category"
                       >

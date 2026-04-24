@@ -110,7 +110,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
         <div className="flex items-center gap-2">
           {plan && (
             <button
-              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2 text-accent-expense hover:bg-accent-expense/10"
+              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2 text-accent-expense hover:bg-accent-expense/10 transition-colors"
               onClick={handleDeletePlan}
               title="Delete plan"
             >

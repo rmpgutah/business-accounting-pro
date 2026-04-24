@@ -274,7 +274,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 -mb-px ${
                 activeTab === tab.key
                   ? 'text-accent-blue border-accent-blue'
-                  : 'text-text-muted border-transparent hover:text-text-secondary'
+                  : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
               }`}
             >
               {tab.icon}

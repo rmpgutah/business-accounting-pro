@@ -227,7 +227,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                   inputMode === 'range'
                     ? 'bg-accent-blue text-white'
-                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary'
+                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors'
                 }`}
                 style={{ borderRadius: '6px' }}
               >
@@ -238,7 +238,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                   inputMode === 'duration'
                     ? 'bg-accent-blue text-white'
-                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary'
+                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors'
                 }`}
                 style={{ borderRadius: '6px' }}
               >

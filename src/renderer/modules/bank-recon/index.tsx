@@ -117,7 +117,7 @@ const BankReconModule: React.FC = () => {
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-[1px] ${
               activeTab === tab.id
                 ? 'text-accent-blue border-accent-blue'
-                : 'text-text-muted hover:text-text-primary border-transparent'
+                : 'text-text-muted hover:text-text-primary border-transparent transition-colors'
             }`}
           >
             {tab.icon}

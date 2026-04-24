@@ -119,7 +119,7 @@ const DebtMiniList: React.FC<DebtMiniListProps> = ({ activeDebtId, onSelect }) =
                 className={`px-2.5 py-2 cursor-pointer transition-colors border-b border-border-primary/50 ${
                   isActive
                     ? 'bg-accent-blue/10 border-l-2 border-l-accent-blue'
-                    : 'hover:bg-bg-hover border-l-2 border-l-transparent'
+                    : 'hover:bg-bg-hover border-l-2 border-l-transparent transition-colors'
                 }`}
                 onClick={() => onSelect(d.id)}
               >

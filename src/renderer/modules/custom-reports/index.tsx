@@ -280,7 +280,7 @@ export default function CustomReportsModule() {
                   className={`px-2 py-1 text-xs font-medium transition-colors ${
                     config.fields.includes(f)
                       ? 'bg-accent-blue text-white'
-                      : 'bg-bg-tertiary text-text-secondary hover:bg-bg-hover border border-border-primary'
+                      : 'bg-bg-tertiary text-text-secondary hover:bg-bg-hover border border-border-primary transition-colors'
                   }`}
                   style={{ borderRadius: '6px' }}
                 >
@@ -308,7 +308,7 @@ export default function CustomReportsModule() {
                   <option value="LIKE">LIKE</option>
                 </select>
                 <input className="block-input text-xs" value={f.value} onChange={(e) => updateFilter(idx, 'value', e.target.value)} placeholder="Value" />
-                <button onClick={() => removeFilter(idx)} className="text-text-muted hover:text-accent-expense">
+                <button onClick={() => removeFilter(idx)} className="text-text-muted hover:text-accent-expense transition-colors">
                   <Trash2 size={12} />
                 </button>
               </div>

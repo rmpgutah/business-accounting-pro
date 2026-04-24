@@ -199,7 +199,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                 <td className="px-4 py-2 text-xs text-text-primary font-mono font-medium">
                   {entry.entry_number}
                 </td>
-                <td className="px-4 py-2 text-xs text-text-primary">
+                <td className="px-4 py-2 text-xs text-text-primary truncate max-w-[200px]">
                   {entry.description || '—'}
                 </td>
                 <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">
@@ -220,9 +220,9 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                     {entry.is_posted === 1 ? 'Posted' : 'Unposted'}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                <td className="px-4 py-2 text-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
                   <button
-                    className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10"
+                    className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                     title="Delete entry"
                     aria-label="Delete entry"
                     onClick={async () => {

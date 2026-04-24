@@ -776,7 +776,7 @@ const Dashboard: React.FC = () => {
               className={`px-3 py-1 text-xs font-semibold transition-colors ${
                 period === p
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+                  : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
               style={{ borderRadius: '6px' }}
             >
@@ -802,7 +802,7 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 cursor-pointer">
         <StatCard
           label="Revenue"
           value={stats.revenue}
@@ -1156,7 +1156,7 @@ const Dashboard: React.FC = () => {
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-4 cursor-pointer">
           <QuickAction
             icon={<FileText size={20} />}
             label="New Invoice"
