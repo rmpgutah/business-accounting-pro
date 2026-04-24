@@ -82,8 +82,9 @@ export default function EmailModule() {
   const saveTemplates = async (updated: EmailTemplate[]) => {
     try {
       await api.setSetting('email_templates', JSON.stringify(updated));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save email templates:', err);
+      alert('Failed to save email templates: ' + (err?.message || 'Unknown error'));
     }
   };
 

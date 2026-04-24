@@ -7,6 +7,7 @@ import DemandLetterGenerator from './DemandLetterGenerator';
 import CourtFilingTracker from './CourtFilingTracker';
 import StatuteTracker from './StatuteTracker';
 import BundleExport from './BundleExport';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 type SubTab = 'evidence' | 'demand_letters' | 'court_filings' | 'statute_tracker' | 'bundle' | 'audit_trail' | 'court_packet';
@@ -111,6 +112,7 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
   const [debts, setDebts] = useState<DebtOption[]>([]);
   const [selectedDebtId, setSelectedDebtId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // ── Load debts in collection/legal status ──
   useEffect(() => {
@@ -118,6 +120,7 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
       try {
         const data = await api.rawQuery(
           "SELECT id, debtor_name, balance_due, status FROM debts WHERE company_id = ? AND status IN ('active','in_collection','legal','disputed') ORDER BY debtor_name",
@@ -125,8 +128,9 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
         );
         if (cancelled) return;
         setDebts(Array.isArray(data) ? data : []);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load debts for legal toolkit:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load debts for legal toolkit');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -149,6 +153,7 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
 
   return (
     <div>
+      {error && <ErrorBanner message={error} title="Failed to load debts for legal toolkit" onDismiss={() => setError('')} />}
       {/* Debt Selector */}
       <div className="block-card mb-4">
         <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">

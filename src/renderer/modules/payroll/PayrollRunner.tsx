@@ -274,8 +274,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         if (!cancelled) {
           setStateTaxMap(taxMap);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load employees:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load employees');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -367,6 +368,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     } catch (err: any) {
       console.error('Failed to process payroll:', err);
       setError(err?.message ?? 'Failed to process payroll. Please try again.');
+      alert('Failed to process payroll: ' + (err?.message || 'Unknown error'));
     } finally {
       setProcessing(false);
     }

@@ -522,6 +522,8 @@ export default function SettingsModule() {
           <Field label="Company Name">
             <input
               className="block-input"
+              name="company_name"
+              autoComplete="organization"
               value={companyForm.name || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
               placeholder="Acme Corp"
@@ -530,6 +532,8 @@ export default function SettingsModule() {
           <Field label="Legal Name">
             <input
               className="block-input"
+              name="legal_name"
+              autoComplete="organization"
               value={companyForm.legal_name || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, legal_name: e.target.value })}
               placeholder="Acme Corporation LLC"
@@ -540,6 +544,9 @@ export default function SettingsModule() {
           <Field label="Email">
             <input
               className="block-input"
+              type="email"
+              name="email"
+              autoComplete="email"
               value={companyForm.email || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
               placeholder="info@company.com"
@@ -548,6 +555,9 @@ export default function SettingsModule() {
           <Field label="Phone">
             <input
               className="block-input"
+              type="tel"
+              name="phone"
+              autoComplete="tel"
               value={companyForm.phone || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
               placeholder="(555) 123-4567"
@@ -558,6 +568,8 @@ export default function SettingsModule() {
           <Field label="Address">
             <input
               className="block-input"
+              name="address_line1"
+              autoComplete="address-line1"
               value={companyForm.address_line1 || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, address_line1: e.target.value })}
               placeholder="123 Main St"
@@ -568,6 +580,8 @@ export default function SettingsModule() {
           <Field label="City">
             <input
               className="block-input"
+              name="city"
+              autoComplete="address-level2"
               value={companyForm.city || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
               placeholder="New York"
@@ -576,6 +590,8 @@ export default function SettingsModule() {
           <Field label="State">
             <input
               className="block-input"
+              name="state"
+              autoComplete="address-level1"
               value={companyForm.state || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
               placeholder="NY"
@@ -584,6 +600,8 @@ export default function SettingsModule() {
           <Field label="ZIP">
             <input
               className="block-input"
+              name="zip"
+              autoComplete="postal-code"
               value={companyForm.zip || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, zip: e.target.value })}
               placeholder="10001"
@@ -594,6 +612,8 @@ export default function SettingsModule() {
           <Field label="Tax ID (EIN)">
             <input
               className="block-input"
+              name="tax_id"
+              autoComplete="off"
               value={companyForm.tax_id || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, tax_id: e.target.value })}
               placeholder="XX-XXXXXXX"

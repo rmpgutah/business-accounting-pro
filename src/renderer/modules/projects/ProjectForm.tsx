@@ -118,6 +118,21 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
       return;
     }
 
+    if (form.start_date && form.end_date && form.start_date > form.end_date) {
+      setError('End date must be on or after start date.');
+      return;
+    }
+
+    if (form.budget.trim() !== '' && parseFloat(form.budget) < 0) {
+      setError('Budget cannot be negative.');
+      return;
+    }
+
+    if (form.hourly_rate.trim() !== '' && parseFloat(form.hourly_rate) < 0) {
+      setError('Hourly rate cannot be negative.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 

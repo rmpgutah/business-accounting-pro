@@ -190,6 +190,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       setError('Pay rate must be greater than zero.');
       return;
     }
+    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
+      setError('Email is not a valid format.');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -233,6 +237,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
     } catch (err: any) {
       console.error('Failed to save employee:', err);
       setError(err?.message ?? 'Failed to save employee.');
+      alert('Failed to save employee: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -305,6 +310,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Name *</label>
                   <input
                     className="block-input w-full"
+                    name="name"
+                    autoComplete="name"
                     value={form.name}
                     onChange={(e) => setField('name', e.target.value)}
                     placeholder="Full name"
@@ -315,6 +322,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <input
                     className="block-input w-full"
                     type="email"
+                    name="email"
+                    autoComplete="email"
                     value={form.email}
                     onChange={(e) => setField('email', e.target.value)}
                     placeholder="email@example.com"
@@ -325,6 +334,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <input
                     className="block-input w-full"
                     type="tel"
+                    name="phone"
+                    autoComplete="tel"
                     value={form.phone}
                     onChange={(e) => setField('phone', e.target.value)}
                     placeholder="(555) 000-0000"
@@ -386,6 +397,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Street Address</label>
                   <input
                     className="block-input w-full"
+                    name="address_line1"
+                    autoComplete="address-line1"
                     value={form.address_line1}
                     onChange={(e) => setField('address_line1', e.target.value)}
                     placeholder="123 Main St"
@@ -395,6 +408,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Address Line 2</label>
                   <input
                     className="block-input w-full"
+                    name="address_line2"
+                    autoComplete="address-line2"
                     value={form.address_line2}
                     onChange={(e) => setField('address_line2', e.target.value)}
                     placeholder="Apt, Suite, Unit (optional)"
@@ -404,6 +419,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <label className="block text-xs font-semibold text-text-secondary mb-1">City</label>
                   <input
                     className="block-input w-full"
+                    name="city"
+                    autoComplete="address-level2"
                     value={form.city}
                     onChange={(e) => setField('city', e.target.value)}
                     placeholder="City"
@@ -414,6 +431,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     <label className="block text-xs font-semibold text-text-secondary mb-1">State</label>
                     <input
                       className="block-input w-full"
+                      name="state"
+                      autoComplete="address-level1"
                       value={form.state}
                       onChange={(e) => setField('state', e.target.value)}
                       placeholder="CA"
@@ -424,6 +443,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     <label className="block text-xs font-semibold text-text-secondary mb-1">ZIP</label>
                     <input
                       className="block-input w-full font-mono"
+                      name="zip"
+                      autoComplete="postal-code"
                       value={form.zip}
                       onChange={(e) => setField('zip', e.target.value)}
                       placeholder="00000"
@@ -568,11 +589,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Routing Number</label>
-              <input className="block-input w-full font-mono" value={form.routing_number} onChange={(e) => setForm(p => ({ ...p, routing_number: e.target.value }))} placeholder="9 digits" maxLength={9} />
+              <input className="block-input w-full font-mono" name="routing_number" autoComplete="off" value={form.routing_number} onChange={(e) => setForm(p => ({ ...p, routing_number: e.target.value }))} placeholder="9 digits" maxLength={9} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Account Number</label>
-              <input className="block-input w-full font-mono" value={form.account_number} onChange={(e) => setForm(p => ({ ...p, account_number: e.target.value }))} placeholder="Account number" />
+              <input className="block-input w-full font-mono" name="account_number" autoComplete="off" value={form.account_number} onChange={(e) => setForm(p => ({ ...p, account_number: e.target.value }))} placeholder="Account number" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Account Type</label>
@@ -586,11 +607,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Contact Name</label>
-              <input className="block-input w-full" value={form.emergency_contact_name} onChange={(e) => setForm(p => ({ ...p, emergency_contact_name: e.target.value }))} placeholder="Full name" />
+              <input className="block-input w-full" name="emergency_contact_name" autoComplete="name" value={form.emergency_contact_name} onChange={(e) => setForm(p => ({ ...p, emergency_contact_name: e.target.value }))} placeholder="Full name" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Contact Phone</label>
-              <input className="block-input w-full" value={form.emergency_contact_phone} onChange={(e) => setForm(p => ({ ...p, emergency_contact_phone: e.target.value }))} placeholder="(555) 000-0000" />
+              <input className="block-input w-full" name="emergency_contact_phone" type="tel" autoComplete="tel" value={form.emergency_contact_phone} onChange={(e) => setForm(p => ({ ...p, emergency_contact_phone: e.target.value }))} placeholder="(555) 000-0000" />
             </div>
           </div>
         )}

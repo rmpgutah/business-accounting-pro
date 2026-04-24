@@ -61,8 +61,9 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
         if (!cancelled && Array.isArray(rows)) {
           setContacts(rows as Contact[]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load contacts:', err);
+        alert('Failed to load contacts: ' + (err?.message || 'Unknown error'));
       }
     };
     loadContacts();
@@ -92,8 +93,9 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
             logged_at: loggedAt,
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load communication:', err);
+        alert('Failed to load communication: ' + (err?.message || 'Unknown error'));
       } finally {
         if (!cancelled) setLoadingEdit(false);
       }

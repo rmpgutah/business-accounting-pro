@@ -5,6 +5,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { SummaryBar } from '../../components/SummaryBar';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -85,6 +86,7 @@ const ExpenseDetailReport: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [lineItemsMap, setLineItemsMap] = useState<Record<string, LineItem[]>>({});
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [error, setError] = useState('');
 
   // ─── Data Loading ───────────────────────────────────
   useEffect(() => {
@@ -93,6 +95,7 @@ const ExpenseDetailReport: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
 
       try {
         const rows: any[] = await api.rawQuery(
@@ -153,8 +156,9 @@ const ExpenseDetailReport: React.FC = () => {
         } else {
           setLineItemsMap({});
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load expense detail report:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load expense detail report');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -381,6 +385,7 @@ const ExpenseDetailReport: React.FC = () => {
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load expense detail report" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between flex-wrap gap-3"

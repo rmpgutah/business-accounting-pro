@@ -94,6 +94,10 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
       setBudgetError('Start date and end date are required.');
       return;
     }
+    if (startDate > endDate) {
+      setBudgetError('End date must be on or after start date.');
+      return;
+    }
     setBudgetError('');
     setSaving(true);
     try {

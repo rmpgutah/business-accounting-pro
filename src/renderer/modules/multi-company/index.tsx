@@ -175,7 +175,7 @@ const MultiCompany: React.FC = () => {
       {companies.length > 0 && !showForm && (
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input className="block-input pl-8" placeholder="Search companies..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="block-input pl-8" type="search" autoComplete="off" placeholder="Search companies..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       )}
 
@@ -192,6 +192,8 @@ const MultiCompany: React.FC = () => {
               </label>
               <input
                 className="block-input"
+                name="name"
+                autoComplete="organization"
                 placeholder="Acme Corp"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -203,6 +205,8 @@ const MultiCompany: React.FC = () => {
               </label>
               <input
                 className="block-input"
+                name="legal_name"
+                autoComplete="organization"
                 placeholder="Acme Corporation LLC"
                 value={formData.legal_name}
                 onChange={(e) => setFormData({ ...formData, legal_name: e.target.value })}
@@ -214,6 +218,8 @@ const MultiCompany: React.FC = () => {
               </label>
               <input
                 className="block-input"
+                name="tax_id"
+                autoComplete="off"
                 placeholder="XX-XXXXXXX"
                 value={formData.tax_id}
                 onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}

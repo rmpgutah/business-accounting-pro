@@ -32,6 +32,11 @@ const CompanySetup: React.FC = () => {
     e.preventDefault();
     if (!name.trim() || submitting) return;
 
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setError('Email is not a valid format.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
     try {
@@ -150,6 +155,8 @@ const CompanySetup: React.FC = () => {
             <label className={labelClass}>Company Name <span className="text-accent-expense">*</span></label>
             <input
               type="text"
+              name="company_name"
+              autoComplete="organization"
               className="block-input"
               style={{ width: '100%' }}
               placeholder="Acme Corp"
@@ -163,6 +170,8 @@ const CompanySetup: React.FC = () => {
             <label className={labelClass}>Legal Name</label>
             <input
               type="text"
+              name="legal_name"
+              autoComplete="organization"
               className="block-input"
               style={{ width: '100%' }}
               placeholder="Acme Corporation LLC"
@@ -176,6 +185,8 @@ const CompanySetup: React.FC = () => {
               <label className={labelClass}>Email</label>
               <input
                 type="email"
+                name="email"
+                autoComplete="email"
                 className="block-input"
                 style={{ width: '100%' }}
                 placeholder="hello@acme.com"
@@ -187,6 +198,8 @@ const CompanySetup: React.FC = () => {
               <label className={labelClass}>Phone</label>
               <input
                 type="tel"
+                name="phone"
+                autoComplete="tel"
                 className="block-input"
                 style={{ width: '100%' }}
                 placeholder="(555) 123-4567"
@@ -200,6 +213,8 @@ const CompanySetup: React.FC = () => {
             <label className={labelClass}>Address</label>
             <input
               type="text"
+              name="address"
+              autoComplete="street-address"
               className="block-input"
               style={{ width: '100%' }}
               placeholder="123 Main Street"
@@ -213,6 +228,8 @@ const CompanySetup: React.FC = () => {
               <label className={labelClass}>City</label>
               <input
                 type="text"
+                name="city"
+                autoComplete="address-level2"
                 className="block-input"
                 style={{ width: '100%' }}
                 placeholder="New York"
@@ -224,6 +241,8 @@ const CompanySetup: React.FC = () => {
               <label className={labelClass}>State</label>
               <input
                 type="text"
+                name="state"
+                autoComplete="address-level1"
                 className="block-input"
                 style={{ width: '100%' }}
                 placeholder="NY"
@@ -235,6 +254,8 @@ const CompanySetup: React.FC = () => {
               <label className={labelClass}>ZIP</label>
               <input
                 type="text"
+                name="zip"
+                autoComplete="postal-code"
                 className="block-input"
                 style={{ width: '100%' }}
                 placeholder="10001"
@@ -249,6 +270,8 @@ const CompanySetup: React.FC = () => {
               <label className={labelClass}>Tax ID (EIN)</label>
               <input
                 type="text"
+                name="tax_id"
+                autoComplete="off"
                 className="block-input"
                 style={{ width: '100%' }}
                 placeholder="XX-XXXXXXX"

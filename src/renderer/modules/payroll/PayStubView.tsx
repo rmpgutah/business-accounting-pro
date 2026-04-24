@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { generatePayStubHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface PayStub {
@@ -51,12 +52,14 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     net_pay: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       setLoading(true);
+      setError('');
       try {
         const data = await api.get('pay_stubs', payStubId);
         if (cancelled || !data) return;
@@ -95,8 +98,9 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             // YTD is non-critical, proceed with zeros
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load pay stub:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load pay stub');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -148,6 +152,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load pay stub" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

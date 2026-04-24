@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Plus, Search, FileText, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface JournalEntry {
@@ -39,6 +40,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [error, setError] = useState('');
 
   // Fetch journal entries
   useEffect(() => {
@@ -47,6 +49,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
       try {
         const data = await api.query(
           'journal_entries',
@@ -56,8 +59,9 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
         if (!cancelled && Array.isArray(data)) {
           setEntries(data);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load journal entries:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load journal entries');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -105,6 +109,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load journal entries" onDismiss={() => setError('')} />}
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
@@ -228,8 +233,9 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                       try {
                         await api.remove('journal_entries', entry.id);
                         setEntries((prev) => prev.filter((e) => e.id !== entry.id));
-                      } catch (err) {
+                      } catch (err: any) {
                         console.error('Failed to delete journal entry:', err);
+                        alert('Failed to delete journal entry: ' + (err?.message || 'Unknown error'));
                       }
                     }}
                   >

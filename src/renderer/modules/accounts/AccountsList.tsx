@@ -11,6 +11,7 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ImportWizard } from '../../components/ImportWizard';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Account {
@@ -76,6 +77,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showInactive, setShowInactive] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [error, setError] = useState('');
 
   // Fetch accounts
   useEffect(() => {
@@ -84,6 +86,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       setLoading(true);
+      setError('');
       try {
         const data = await api.query('accounts', {
           company_id: activeCompany.id,
@@ -91,8 +94,9 @@ const AccountsList: React.FC<AccountsListProps> = ({
         if (!cancelled && Array.isArray(data)) {
           setAccounts(data);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load accounts:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load accounts');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -159,6 +163,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load accounts" onDismiss={() => setError('')} />}
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

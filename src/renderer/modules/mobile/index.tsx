@@ -30,8 +30,9 @@ export default function MobileModule() {
       await api.setSetting('mobile_port', port);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save mobile port:', err);
+      alert('Failed to save mobile port: ' + (err?.message || 'Unknown error'));
     }
   };
 

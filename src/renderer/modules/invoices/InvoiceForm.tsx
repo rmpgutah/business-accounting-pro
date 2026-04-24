@@ -813,6 +813,26 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         : null,
     ];
     const validationErrors = [...validateForm(checks), ...lineItemErrors];
+    if (form.issue_date && form.due_date && form.due_date < form.issue_date) {
+      validationErrors.push('Due date must be on or after issue date');
+    }
+    if (form.discount && subtotal > 0 && form.discount > subtotal) {
+      validationErrors.push('Discount cannot exceed subtotal');
+    }
+    if (form.discount && form.discount < 0) {
+      validationErrors.push('Discount cannot be negative');
+    }
+    if (form.invoice_type !== 'credit_note' && total <= 0) {
+      validationErrors.push('Invoice total must be greater than zero');
+    }
+    activeLines.forEach((l, i) => {
+      const num = i + 1;
+      if (l.quantity === 0 && l.unit_price === 0) {
+        // skip empty-ish rows silently
+      } else if (l.quantity <= 0) {
+        validationErrors.push(`Line item ${num}: quantity must be greater than zero.`);
+      }
+    });
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;
@@ -1003,13 +1023,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
           {/* Issue Date */}
           <div>
-            <FieldLabel label="Issue Date" tooltip="Date the invoice is issued" />
+            <FieldLabel label="Issue Date" tooltip="Date the invoice is issued" required />
             <input type="date" className="block-input" value={form.issue_date} onChange={handleIssueDateChange} />
           </div>
 
           {/* Due Date */}
           <div>
-            <FieldLabel label="Due Date" tooltip="Auto-set from Terms · can be overridden manually" />
+            <FieldLabel label="Due Date" tooltip="Auto-set from Terms · can be overridden manually" required />
             <input type="date" className="block-input" value={form.due_date} onChange={(e) => updateField('due_date', e.target.value)} />
           </div>
 
@@ -1436,7 +1456,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       title="Tax rate override (blank = invoice rate)"
                       value={line.tax_rate_override >= 0 ? line.tax_rate_override : ''}
                       onChange={e => {
-                        const v = e.target.value === '' ? -1 : parseFloat(e.target.value);
+                        const parsed = parseFloat(e.target.value);
+                        const v = e.target.value === '' ? -1 : (isNaN(parsed) ? -1 : parsed);
                         updateLine(idx, 'tax_rate_override', v);
                       }}
                     />

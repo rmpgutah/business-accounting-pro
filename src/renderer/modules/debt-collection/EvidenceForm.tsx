@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Paperclip } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface EvidenceFormData {
@@ -43,12 +44,14 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
   const [form, setForm] = useState<EvidenceFormData>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!evidenceId);
+  const [error, setError] = useState('');
 
   // ── Load existing record for edit ──
   useEffect(() => {
     if (!evidenceId) return;
     let cancelled = false;
     const load = async () => {
+      setError('');
       try {
         const row = await api.get('debt_evidence', evidenceId);
         if (row && !cancelled) {
@@ -63,8 +66,9 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
             notes: row.notes || '',
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load evidence:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load evidence');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -117,8 +121,9 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
         await api.create('debt_evidence', payload);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save evidence:', err);
+      alert('Failed to save evidence: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -154,6 +159,7 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
             </button>
           </div>
 
+          {error && <ErrorBanner message={error} title="Failed to load evidence" onDismiss={() => setError('')} />}
           {loading ? (
             <div className="flex items-center justify-center py-12 text-text-muted text-sm">
               Loading...

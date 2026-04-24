@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface InventoryItem {
@@ -99,6 +100,7 @@ const Inventory: React.FC = () => {
   const [sortDir, setSortDir] = useState<InvSortDir>('asc');
   const [opSuccess, setOpSuccess] = useState('');
   const [opError, setOpError] = useState('');
+  const [error, setError] = useState('');
 
   // Adjust modal
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
@@ -115,11 +117,13 @@ const Inventory: React.FC = () => {
   // ─── Load ─────────────────────────────────────────────
   const loadItems = async () => {
     if (!activeCompany) return;
+    setError('');
     try {
       const rows = await api.query('inventory_items', { company_id: activeCompany.id });
       setItems(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load inventory:', err);
+      setError(err?.message || 'Failed to load inventory');
     } finally {
       setLoading(false);
     }
@@ -191,6 +195,7 @@ const Inventory: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to create inventory item:', err);
       setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+      alert('Failed to save: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -255,8 +260,9 @@ const Inventory: React.FC = () => {
     try {
       await api.remove('inventory_items', id);
       await loadItems();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete inventory item:', err);
+      alert('Failed to delete: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -270,6 +276,7 @@ const Inventory: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load inventory" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">

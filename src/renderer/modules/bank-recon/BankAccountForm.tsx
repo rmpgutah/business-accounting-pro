@@ -159,6 +159,8 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
             </label>
             <input
               type="text"
+              name="account_name"
+              autoComplete="off"
               className="block-input w-full"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -173,6 +175,8 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
             </label>
             <input
               type="text"
+              name="institution"
+              autoComplete="organization"
               className="block-input w-full"
               value={institution}
               onChange={(e) => setInstitution(e.target.value)}

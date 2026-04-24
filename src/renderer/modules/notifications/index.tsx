@@ -6,6 +6,7 @@ import {
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Notification {
@@ -86,14 +87,17 @@ const Notifications: React.FC = () => {
   const [showPreferences, setShowPreferences] = useState(false);
   const [preferences, setPreferences] = useState<Record<string, boolean>>({});
   const [prefsLoading, setPrefsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   const loadNotifications = useCallback(async () => {
+    setError('');
     try {
       const rows = await api.listNotifications(filter === 'unread' ? true : undefined);
       setNotifications(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load notifications:', err);
+      setError(err?.message || 'Failed to load notifications');
     } finally {
       setLoading(false);
     }
@@ -104,8 +108,9 @@ const Notifications: React.FC = () => {
     try {
       const prefs = await api.getNotificationPreferences();
       setPreferences(prefs || {});
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load preferences:', err);
+      setError(err?.message || 'Failed to load preferences');
     } finally {
       setPrefsLoading(false);
     }
@@ -153,8 +158,9 @@ const Notifications: React.FC = () => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to mark notification read:', err);
+      alert('Failed to mark as read: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -163,8 +169,9 @@ const Notifications: React.FC = () => {
       const unread = notifications.filter((n) => !n.is_read);
       await Promise.all(unread.map((n) => api.markNotificationRead(n.id)));
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to mark all read:', err);
+      alert('Failed to mark all read: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -174,8 +181,9 @@ const Notifications: React.FC = () => {
     try {
       await api.dismissNotification(id);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to dismiss notification:', err);
+      alert('Failed to dismiss: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -183,8 +191,9 @@ const Notifications: React.FC = () => {
     try {
       await api.clearAllNotifications();
       setNotifications((prev) => prev.filter((n) => !n.is_read));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to clear notifications:', err);
+      alert('Failed to clear: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -202,8 +211,9 @@ const Notifications: React.FC = () => {
     setPreferences(updated);
     try {
       await api.updateNotificationPreferences(updated);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update preferences:', err);
+      alert('Failed to update preferences: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -217,6 +227,7 @@ const Notifications: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load notifications" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">

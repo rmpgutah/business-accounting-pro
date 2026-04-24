@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plug, Key, Webhook, Copy, CheckCircle, RefreshCw, Save } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 const WEBHOOK_EVENTS = ['invoice.created', 'invoice.paid', 'expense.created', 'payment.received'];
 
@@ -13,9 +14,11 @@ export default function ApiModule() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookEvents, setWebhookEvents] = useState<string[]>([]);
   const [webhookSaved, setWebhookSaved] = useState(false);
+  const [error, setError] = useState('');
 
   const loadSettings = useCallback(async () => {
     if (!activeCompany) return;
+    setError('');
     try {
       // Bug fix: replace unscoped rawQuery on settings with scoped getSetting.
       const storedKey = await api.getSetting('api_key');
@@ -37,8 +40,9 @@ export default function ApiModule() {
           setWebhookEvents(JSON.parse(storedEvts));
         } catch { /* invalid JSON, ignore */ }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load API settings:', err);
+      setError(err?.message || 'Failed to load API settings');
     } finally {
       setLoading(false);
     }
@@ -60,8 +64,9 @@ export default function ApiModule() {
       const newKey = 'bap_' + crypto.randomUUID().replace(/-/g, '');
       await api.setSetting('api_key', newKey);
       setApiKey(newKey);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to regenerate API key:', err);
+      alert('Failed to regenerate API key: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -78,8 +83,9 @@ export default function ApiModule() {
       await api.setSetting('webhook_events', JSON.stringify(webhookEvents));
       setWebhookSaved(true);
       setTimeout(() => setWebhookSaved(false), 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save webhook config:', err);
+      alert('Failed to save webhook config: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -96,6 +102,7 @@ export default function ApiModule() {
       <div className="module-header">
         <h1 className="module-title">API & Integrations</h1>
       </div>
+      {error && <ErrorBanner message={error} title="Failed to load API settings" onDismiss={() => setError('')} />}
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">

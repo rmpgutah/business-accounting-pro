@@ -12,6 +12,7 @@ import {
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -54,6 +55,7 @@ const StripeSyncModule: React.FC = () => {
   const [savingKey, setSavingKey] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
+  const [error, setError] = useState('');
 
   // Summary stats
   const [totalPayments, setTotalPayments] = useState(0);
@@ -62,6 +64,7 @@ const StripeSyncModule: React.FC = () => {
 
   const loadData = useCallback(async () => {
     if (!activeCompany) return;
+    setError('');
     try {
       // Check for API key in settings
       const settingsResult = await api.query('settings', { key: 'stripe_api_key' });
@@ -91,8 +94,9 @@ const StripeSyncModule: React.FC = () => {
       setTotalPayments(payments);
       setTotalFees(fees);
       setNetRevenue(net);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Stripe data load failed:', err);
+      setError(err?.message || 'Failed to load Stripe data');
     } finally {
       setLoading(false);
     }
@@ -152,6 +156,7 @@ const StripeSyncModule: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load Stripe data" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-2">

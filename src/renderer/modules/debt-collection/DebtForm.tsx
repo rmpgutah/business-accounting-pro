@@ -374,6 +374,15 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
       required(form.due_date, 'Due Date'),
     ];
     const validationErrors = validateForm(checks);
+    if (form.debtor_email && !/^\S+@\S+\.\S+$/.test(form.debtor_email)) {
+      validationErrors.push('Email is not a valid format');
+    }
+    if (form.delinquent_date && form.due_date && form.delinquent_date < form.due_date) {
+      validationErrors.push('Delinquent date must be on or after due date');
+    }
+    if (form.interest_start_date && form.delinquent_date && form.interest_start_date < form.delinquent_date) {
+      validationErrors.push('Interest start date must be on or after delinquent date');
+    }
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;
@@ -563,6 +572,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               <input
                 type="text"
                 name="debtor_name"
+                autoComplete="name"
                 className="block-input"
                 placeholder="Full name or company"
                 value={form.debtor_name}
@@ -580,6 +590,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               <input
                 type="email"
                 name="debtor_email"
+                autoComplete="email"
                 className="block-input"
                 placeholder="email@example.com"
                 value={form.debtor_email}
@@ -596,6 +607,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               <input
                 type="tel"
                 name="debtor_phone"
+                autoComplete="tel"
                 className="block-input"
                 placeholder="(555) 123-4567"
                 value={form.debtor_phone}
@@ -612,6 +624,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               <input
                 type="text"
                 name="debtor_address"
+                autoComplete="street-address"
                 className="block-input"
                 placeholder="Street address, city, state"
                 value={form.debtor_address}
@@ -1009,7 +1022,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Attorney Phone</label>
-              <input className="block-input" value={form.debtor_attorney_phone} onChange={(e) => setForm(p => ({...p, debtor_attorney_phone: e.target.value}))} placeholder="(555) 000-0000" />
+              <input className="block-input" type="tel" name="debtor_attorney_phone" autoComplete="tel" value={form.debtor_attorney_phone} onChange={(e) => setForm(p => ({...p, debtor_attorney_phone: e.target.value}))} placeholder="(555) 000-0000" />
             </div>
           </div>
         </div>

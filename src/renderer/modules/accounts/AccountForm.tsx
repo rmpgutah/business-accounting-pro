@@ -111,7 +111,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
           setParentOptions(opts);
         }
       } catch (err) {
-        console.error('Failed to load parent accounts:', err);
+        console.warn('Failed to load parent accounts:', err);
       }
     };
     loadParents();
@@ -159,6 +159,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
     } catch (err: any) {
       console.error('Failed to save account:', err);
       setErrors({ _form: err?.message ?? 'Failed to save account' });
+      alert('Failed to save account: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }

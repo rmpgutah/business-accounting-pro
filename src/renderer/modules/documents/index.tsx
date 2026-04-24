@@ -5,6 +5,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Document {
@@ -62,16 +63,19 @@ const Documents: React.FC = () => {
   const [sortDir, setSortDir] = useState<DocSortDir>('desc');
   const [opSuccess, setOpSuccess] = useState('');
   const [opError, setOpError] = useState('');
+  const [error, setError] = useState('');
 
   const handleDocSort = (f: DocSortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
 
   const loadDocuments = async () => {
     if (!activeCompany) return;
+    setError('');
     try {
       const rows = await api.query('documents', { company_id: activeCompany.id }, { field: 'uploaded_at', dir: 'desc' });
       setDocuments(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load documents:', err);
+      setError(err?.message || 'Failed to load documents');
     } finally {
       setLoading(false);
     }
@@ -109,6 +113,7 @@ const Documents: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to upload document:', err);
       setOpError('Failed to upload: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+      alert('Failed to upload: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -131,6 +136,7 @@ const Documents: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to update document:', err);
       setOpError('Failed to update: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+      alert('Failed to update: ' + (err?.message || 'Unknown error'));
     } finally {
       setEditSaving(false);
     }
@@ -145,6 +151,7 @@ const Documents: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to delete document:', err);
       setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
+      alert('Failed to delete: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -184,6 +191,7 @@ const Documents: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load documents" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">

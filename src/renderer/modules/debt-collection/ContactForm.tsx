@@ -133,6 +133,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
             </h3>
             <button
               type="button"
+              aria-label="Close"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
               style={{ borderRadius: '6px' }}
@@ -175,6 +176,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                   <input
                     type="text"
                     name="company"
+                    autoComplete="organization"
                     className="block-input"
                     placeholder="Company / Firm"
                     value={form.company}
@@ -191,6 +193,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                 <input
                   type="text"
                   name="name"
+                  autoComplete="name"
                   className="block-input"
                   placeholder="Full name"
                   value={form.name}
@@ -206,8 +209,9 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                     Email
                   </label>
                   <input
-                    type="text"
+                    type="email"
                     name="email"
+                    autoComplete="email"
                     className="block-input"
                     placeholder="email@example.com"
                     value={form.email}
@@ -219,8 +223,9 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                     Phone
                   </label>
                   <input
-                    type="text"
+                    type="tel"
                     name="phone"
+                    autoComplete="tel"
                     className="block-input"
                     placeholder="(555) 555-5555"
                     value={form.phone}

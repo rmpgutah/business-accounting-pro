@@ -184,6 +184,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 <input
                   type="text"
                   name="name"
+                  autoComplete="organization"
                   className="block-input"
                   placeholder="Vendor name"
                   value={form.name}
@@ -207,6 +208,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   <input
                     type="email"
                     name="email"
+                    autoComplete="email"
                     className="block-input"
                     placeholder="vendor@email.com"
                     value={form.email}
@@ -220,6 +222,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   <input
                     type="tel"
                     name="phone"
+                    autoComplete="tel"
                     className="block-input"
                     placeholder="(555) 000-0000"
                     value={form.phone}
@@ -253,6 +256,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   <input
                     type="text"
                     name="tax_id"
+                    autoComplete="off"
                     className="block-input"
                     placeholder="XX-XXXXXXX"
                     value={form.tax_id}
@@ -341,11 +345,11 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Routing Number</label>
-                  <input className="block-input font-mono" value={form.ach_routing} onChange={(e) => setForm(p => ({ ...p, ach_routing: e.target.value }))} placeholder="9 digits" maxLength={9} />
+                  <input className="block-input font-mono" name="ach_routing" autoComplete="off" value={form.ach_routing} onChange={(e) => setForm(p => ({ ...p, ach_routing: e.target.value }))} placeholder="9 digits" maxLength={9} />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Account Number</label>
-                  <input className="block-input font-mono" value={form.ach_account} onChange={(e) => setForm(p => ({ ...p, ach_account: e.target.value }))} placeholder="Account number" />
+                  <input className="block-input font-mono" name="ach_account" autoComplete="off" value={form.ach_account} onChange={(e) => setForm(p => ({ ...p, ach_account: e.target.value }))} placeholder="Account number" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Account Type</label>

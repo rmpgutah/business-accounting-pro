@@ -7,6 +7,7 @@ import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface RecurringTemplate {
@@ -105,16 +106,19 @@ const RecurringTransactions: React.FC = () => {
   const [tab, setTab] = useState<TabView>('templates');
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   const loadTemplates = async () => {
     if (!activeCompany) return;
+    setError('');
     try {
       // Bug fix #14: was fetching all companies' templates — scoped to active company.
       const rows = await api.query('recurring_templates', { company_id: activeCompany.id }, { field: 'created_at', dir: 'desc' });
       setTemplates(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load recurring templates:', err);
+      setError(err?.message || 'Failed to load recurring templates');
     } finally {
       setLoading(false);
     }
@@ -134,8 +138,9 @@ const RecurringTransactions: React.FC = () => {
     try {
       const rows = await api.getRecurringHistory();
       setHistory(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load history:', err);
+      setError(err?.message || 'Failed to load history');
     } finally {
       setHistoryLoading(false);
     }
@@ -187,8 +192,9 @@ const RecurringTransactions: React.FC = () => {
       setShowForm(false);
       setLoading(true);
       await loadTemplates();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save template:', err);
+      alert('Failed to save template: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -205,8 +211,9 @@ const RecurringTransactions: React.FC = () => {
           t.id === template.id ? { ...t, is_active: !t.is_active } : t,
         ),
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to toggle template:', err);
+      alert('Failed to toggle template: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -224,8 +231,9 @@ const RecurringTransactions: React.FC = () => {
         setProcessFeedback('No templates were due for processing');
       }
       setTimeout(() => setProcessFeedback(''), 5000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to process recurring:', err);
+      alert('Failed to process recurring: ' + (err?.message || 'Unknown error'));
     } finally {
       setProcessing(false);
     }
@@ -241,6 +249,7 @@ const RecurringTransactions: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load recurring templates" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">

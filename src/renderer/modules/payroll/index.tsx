@@ -7,6 +7,7 @@ import EmployeeForm from './EmployeeForm';
 import PayrollRunner from './PayrollRunner';
 import PayStubView from './PayStubView';
 import PtoDashboard from './PtoDashboard';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'employees' | 'run' | 'history' | 'pto';
@@ -58,6 +59,7 @@ const PayrollModule: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [runStubs, setRunStubs] = useState<Record<string, PayStubRecord[]>>({});
+  const [historyError, setHistoryError] = useState('');
 
   // Pay stub detail
   const [viewStubId, setViewStubId] = useState<string | null>(null);
@@ -66,12 +68,14 @@ const PayrollModule: React.FC = () => {
   const loadHistory = useCallback(async () => {
     if (!activeCompany) return;
     setHistoryLoading(true);
+    setHistoryError('');
     try {
       const rows = await api.query('payroll_runs', { company_id: activeCompany.id }, { field: 'pay_date', dir: 'desc' });
       setRuns(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load payroll history:', err);
       setRuns([]);
+      setHistoryError(err?.message || 'Failed to load payroll history');
     } finally {
       setHistoryLoading(false);
     }
@@ -221,6 +225,7 @@ const PayrollModule: React.FC = () => {
         {/* History Tab */}
         {activeTab === 'history' && (
           <div className="p-6 space-y-4">
+            {historyError && <ErrorBanner message={historyError} title="Failed to load payroll history" onDismiss={() => setHistoryError('')} />}
             <div className="module-header">
               <h2 className="text-sm font-bold text-text-primary">Payroll History</h2>
             </div>

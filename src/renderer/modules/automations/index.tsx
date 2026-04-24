@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Zap, ToggleLeft, ToggleRight, Clock, Plus, Trash2, Edit2, X, Save } from 'lucide-react';
 import api from '../../lib/api';
 import { formatDate } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ───────────────────────────────────────────────
 interface AutomationRule {
@@ -216,13 +217,16 @@ const AutomationsModule: React.FC = () => {
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   const loadRules = async () => {
+    setError('');
     try {
       const data = await api.listAutomations();
       setRules(data ?? []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load automations:', err);
+      setError(err?.message || 'Failed to load automations');
     }
   };
 
@@ -288,8 +292,9 @@ const AutomationsModule: React.FC = () => {
       await loadRules();
       setShowBuilder(false);
       setEditingRule(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save automation:', err);
+      alert('Failed to save automation: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -331,7 +336,9 @@ const AutomationsModule: React.FC = () => {
   })() : undefined;
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
+      {error && <div className="px-4 pt-4"><ErrorBanner message={error} title="Failed to load automations" onDismiss={() => setError('')} /></div>}
+    <div className="flex flex-1 overflow-hidden">
       {/* ── Left Panel ── */}
       <div className="w-72 border-r-2 border-border-primary flex flex-col bg-bg-secondary shrink-0">
         <div className="border-b-2 border-border-primary p-4">
@@ -508,6 +515,7 @@ const AutomationsModule: React.FC = () => {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };

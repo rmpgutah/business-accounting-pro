@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Users, Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -71,6 +72,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [error, setError] = useState('');
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -79,13 +81,17 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
       if (!activeCompany) return;
       try {
         setLoading(true);
+        setError('');
         const rows = await api.query('employees', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' });
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load employees:', err);
-        if (!cancelled) setEmployees([]);
+        if (!cancelled) {
+          setEmployees([]);
+          setError(err?.message || 'Failed to load employees');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -139,6 +145,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load employees" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Employees</h1>

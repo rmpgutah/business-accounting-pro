@@ -540,8 +540,20 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
     const errs: string[] = [];
     if (!form.vendor_id) errs.push('Vendor is required.');
     if (!form.bill_number.trim()) errs.push('Bill number is required.');
+    if (!form.issue_date) errs.push('Issue date is required.');
+    if (!form.due_date) errs.push('Due date is required.');
+    if (form.issue_date && form.due_date && form.due_date < form.issue_date) {
+      errs.push('Due date must be on or after issue date.');
+    }
     const validLines = lines.filter((l) => l.description.trim() || l.unit_price > 0);
     if (validLines.length === 0) errs.push('At least one line item is required.');
+    validLines.forEach((l, i) => {
+      if (l.quantity <= 0) errs.push(`Line item ${i + 1}: quantity must be greater than zero.`);
+      if (l.unit_price < 0) errs.push(`Line item ${i + 1}: unit price cannot be negative.`);
+    });
+    if (total <= 0) errs.push('Bill total must be greater than zero.');
+    if (form.tax_pct < 0) errs.push('Tax percentage cannot be negative.');
+    if (form.tax_pct > 100) errs.push('Tax percentage cannot exceed 100%.');
     if (errs.length > 0) { setErrors(errs); return; }
     setErrors([]);
 

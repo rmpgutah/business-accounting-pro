@@ -4,6 +4,7 @@ import { format, startOfYear, endOfMonth, startOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 type StatementTab = 'pnl' | 'balance-sheet' | 'cash-flow';
@@ -228,9 +229,11 @@ const FinancialStatements: React.FC = () => {
   const [bsData, setBsData] = useState<BSData | null>(null);
   const [cfData, setCfData] = useState<CashFlowData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const loadData = async () => {
     setLoading(true);
+    setError('');
     try {
       if (tab === 'pnl') {
         const result = await api.reportProfitLoss(startDate, endDate);
@@ -242,8 +245,9 @@ const FinancialStatements: React.FC = () => {
         const result = await api.reportCashFlow(startDate, endDate);
         setCfData(result);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load financial statement:', err);
+      setError(err?.message || 'Failed to load financial statement');
     } finally {
       setLoading(false);
     }
@@ -309,6 +313,7 @@ const FinancialStatements: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {error && <ErrorBanner message={error} title="Failed to load financial statement" onDismiss={() => setError('')} />}
       {/* Tab bar + actions */}
       <div className="flex items-center justify-between">
         <div className="flex gap-1" style={{ borderRadius: '6px', overflow: 'hidden' }}>

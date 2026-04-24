@@ -49,19 +49,20 @@ const ClientContacts: React.FC<Props> = ({ contacts, onChange }) => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
           {contacts.map((c) => (
             <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto auto', gap: 8, alignItems: 'center' }}>
-              <input className="block-input" placeholder="Name" value={c.name} onChange={(e) => update(c.id, 'name', e.target.value)} />
-              <input className="block-input" placeholder="Title" value={c.title} onChange={(e) => update(c.id, 'title', e.target.value)} />
-              <input className="block-input" placeholder="Email" type="email" value={c.email} onChange={(e) => update(c.id, 'email', e.target.value)} />
-              <input className="block-input" placeholder="Phone" value={c.phone} onChange={(e) => update(c.id, 'phone', e.target.value)} />
+              <input className="block-input" name="name" autoComplete="name" placeholder="Name" value={c.name} onChange={(e) => update(c.id, 'name', e.target.value)} />
+              <input className="block-input" name="title" autoComplete="organization-title" placeholder="Title" value={c.title} onChange={(e) => update(c.id, 'title', e.target.value)} />
+              <input className="block-input" name="email" autoComplete="email" placeholder="Email" type="email" value={c.email} onChange={(e) => update(c.id, 'email', e.target.value)} />
+              <input className="block-input" name="phone" autoComplete="tel" type="tel" placeholder="Phone" value={c.phone} onChange={(e) => update(c.id, 'phone', e.target.value)} />
               <button
                 type="button"
+                aria-label={c.is_primary ? 'Primary contact' : 'Set as primary'}
                 title={c.is_primary ? 'Primary contact' : 'Set as primary'}
                 onClick={() => setPrimary(c.id)}
                 style={{ color: c.is_primary ? 'var(--color-accent)' : 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
               >
                 <Star size={14} fill={c.is_primary ? 'currentColor' : 'none'} />
               </button>
-              <button type="button" className="text-text-muted p-1" onClick={() => remove(c.id)} title="Remove">
+              <button type="button" aria-label="Remove contact" className="text-text-muted p-1" onClick={() => remove(c.id)} title="Remove">
                 <Trash2 size={13} />
               </button>
             </div>

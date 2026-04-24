@@ -184,6 +184,11 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       return;
     }
 
+    if (data.email && !/^\S+@\S+\.\S+$/.test(data.email)) {
+      setError('Email is not a valid format.');
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
@@ -237,6 +242,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
           </h2>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-text-muted hover:text-text-primary transition-colors p-1"
           >
             <X size={18} />
@@ -262,6 +268,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Client Name" span={2}>
                 <input
                   className="block-input"
+                  name="name"
+                  autoComplete="name"
                   placeholder="Enter client name"
                   value={data.name}
                   onChange={(e) => set('name', e.target.value)}
@@ -295,6 +303,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <input
                   className="block-input"
                   type="email"
+                  name="email"
+                  autoComplete="email"
                   placeholder="email@example.com"
                   value={data.email}
                   onChange={(e) => set('email', e.target.value)}
@@ -305,6 +315,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <input
                   className="block-input"
                   type="tel"
+                  name="phone"
+                  autoComplete="tel"
                   placeholder="(555) 000-0000"
                   value={data.phone}
                   onChange={(e) => set('phone', e.target.value)}
@@ -314,6 +326,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Address Line 1" span={2}>
                 <input
                   className="block-input"
+                  name="address_line1"
+                  autoComplete="address-line1"
                   placeholder="Street address"
                   value={data.address_line1}
                   onChange={(e) => set('address_line1', e.target.value)}
@@ -323,6 +337,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Address Line 2" span={2}>
                 <input
                   className="block-input"
+                  name="address_line2"
+                  autoComplete="address-line2"
                   placeholder="Apt, suite, unit, etc."
                   value={data.address_line2}
                   onChange={(e) => set('address_line2', e.target.value)}
@@ -332,6 +348,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="City">
                 <input
                   className="block-input"
+                  name="city"
+                  autoComplete="address-level2"
                   placeholder="City"
                   value={data.city}
                   onChange={(e) => set('city', e.target.value)}
@@ -341,6 +359,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="State">
                 <input
                   className="block-input"
+                  name="state"
+                  autoComplete="address-level1"
                   placeholder="State"
                   value={data.state}
                   onChange={(e) => set('state', e.target.value)}
@@ -350,6 +370,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="ZIP Code">
                 <input
                   className="block-input"
+                  name="zip"
+                  autoComplete="postal-code"
                   placeholder="00000"
                   value={data.zip}
                   onChange={(e) => set('zip', e.target.value)}
@@ -359,6 +381,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Country">
                 <input
                   className="block-input"
+                  name="country"
+                  autoComplete="country-name"
                   placeholder="US"
                   value={data.country}
                   onChange={(e) => set('country', e.target.value)}
@@ -378,6 +402,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Tax ID">
                 <input
                   className="block-input"
+                  name="tax_id"
+                  autoComplete="off"
                   placeholder="Tax identification number"
                   value={data.tax_id}
                   onChange={(e) => set('tax_id', e.target.value)}
@@ -405,7 +431,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Website</label>
-                <input className="block-input" type="url" value={data.website} onChange={(e) => setData(p => ({ ...p, website: e.target.value }))} placeholder="https://" />
+                <input className="block-input" type="url" name="website" autoComplete="url" value={data.website} onChange={(e) => setData(p => ({ ...p, website: e.target.value }))} placeholder="https://" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Company Size</label>
