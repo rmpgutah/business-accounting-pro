@@ -19,6 +19,8 @@ import { useNavigation } from '../../lib/navigation';
 import { formatCurrency, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ClientInsights from './ClientInsights';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -309,6 +311,12 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               {activeTab === 'debts' && <DebtsTable data={tabData} />}
             </div>
           )}
+        </div>
+
+        {/* Cross-entity integration: everything touching this client */}
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          <RelatedPanel entityType="client" entityId={clientId} />
+          <EntityTimeline entityType="clients" entityId={clientId} />
         </div>
       </div>
     </div>

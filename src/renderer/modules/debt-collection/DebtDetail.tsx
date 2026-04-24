@@ -29,6 +29,8 @@ import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useNavigation } from '../../lib/navigation';
 import { calcRiskScore, getRiskBadge } from './riskScore';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -1913,6 +1915,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Cross-entity integration ────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="debt" entityId={debtId} hide={['comms', 'evidence', 'contacts', 'payments']} />
+        <EntityTimeline entityType="debts" entityId={debtId} />
       </div>
 
       {/* Pulse animation */}

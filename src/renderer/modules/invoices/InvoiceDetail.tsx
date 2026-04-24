@@ -7,6 +7,8 @@ import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -743,6 +745,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           onSaved={handlePaymentSaved}
         />
       )}
+
+      {/* ── Cross-entity panels — related records + activity timeline ── */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="invoice" entityId={invoiceId} hide={['lines', 'payments']} />
+        <EntityTimeline entityType="invoices" entityId={invoiceId} />
+      </div>
     </div>
   );
 };

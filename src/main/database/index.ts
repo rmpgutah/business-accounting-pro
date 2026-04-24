@@ -398,6 +398,35 @@ export function initDatabase(): Database.Database {
   // Expense reimbursement tracking (2026-04-23)
   "ALTER TABLE expenses ADD COLUMN reimbursed INTEGER DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN reimbursed_date TEXT DEFAULT ''",
+  // ── Cross-entity integration layer (2026-04-24) ────────────────────
+  // NOTE: audit_log originally had CHECK(action IN ('create','update','delete'))
+  // which silently rejects export_pdf/email_pdf/print rows. We can't safely
+  // ALTER a CHECK constraint without a full table rebuild, and mid-release
+  // rebuilds are fragile. Writers now try the CHECK'd insert and fall back
+  // to a generic 'update' action if that fails — see logAudit().
+  // Generic entity relations — one place to record "X touches Y" so the
+  // Related panel doesn't need to know every table's join path. Populated
+  // both explicitly (handlers can record custom relations, e.g. bill↔PO)
+  // and implicitly (derived at query time from FK columns).
+  `CREATE TABLE IF NOT EXISTS entity_relations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    from_type TEXT NOT NULL,
+    from_id TEXT NOT NULL,
+    to_type TEXT NOT NULL,
+    to_id TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    metadata TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, from_type, from_id, to_type, to_id, relation)
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_entity_rel_from ON entity_relations(company_id, from_type, from_id)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_rel_to   ON entity_relations(company_id, to_type, to_id)",
+  // Stripe cache objects can link back to a local entity (invoice/client/
+  // expense/bill). Keeps the bidirectional graph complete.
+  "ALTER TABLE stripe_cache ADD COLUMN local_entity_type TEXT DEFAULT ''",
+  "ALTER TABLE stripe_cache ADD COLUMN local_entity_id TEXT DEFAULT ''",
+  "CREATE INDEX IF NOT EXISTS idx_stripe_cache_local ON stripe_cache(company_id, local_entity_type, local_entity_id)",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -574,14 +603,32 @@ export function logAudit(
   action: 'create' | 'update' | 'delete' | 'export_pdf' | 'email_pdf' | 'print' | (string & {}),
   changes: Record<string, any> = {}
 ): void {
-  create('audit_log', {
-    company_id: companyId,
-    entity_type: entityType,
-    entity_id: entityId,
-    action,
-    changes,
-    performed_by: 'user',
-  });
+  // Legacy CHECK constraint on audit_log.action only allows the original
+  // three values; fall back to 'update' while preserving the real action
+  // in `changes._action` so downstream UI still sees it.
+  try {
+    create('audit_log', {
+      company_id: companyId,
+      entity_type: entityType,
+      entity_id: entityId,
+      action,
+      changes,
+      performed_by: 'user',
+    });
+  } catch (err: any) {
+    if (/CHECK/i.test(err?.message ?? '')) {
+      create('audit_log', {
+        company_id: companyId,
+        entity_type: entityType,
+        entity_id: entityId,
+        action: 'update',
+        changes: { ...changes, _action: action },
+        performed_by: 'user',
+      });
+    } else {
+      throw err;
+    }
+  }
 }
 
 export function runQuery(sql: string, params: any[] = []): any[] {

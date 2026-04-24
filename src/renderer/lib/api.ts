@@ -499,6 +499,27 @@ const api = {
   getStateTaxRate: (state: string, grossPay: number, allowances: number, periodsPerYear: number): Promise<any> =>
     window.electronAPI.invoke('payroll:state-tax-rate', { state, grossPay, allowances, periodsPerYear }),
 
+  // ─── Cross-entity graph ────────────────────────────────
+  // Powers the Related / Timeline panels on detail pages. `graph` returns
+  // groups of related records across every module; `timeline` merges
+  // audit_log + email_log + notifications + documents for one entity.
+  entity: {
+    graph: (companyId: string, type: string, id: string): Promise<Array<{
+      key: string; label: string; entityType: string; rows: Array<Record<string, unknown>>; total?: number;
+    }>> => window.electronAPI.invoke('entity:graph', { companyId, type, id }),
+
+    timeline: (companyId: string, type: string, id: string, limit?: number): Promise<Array<{
+      id: string; at: string; kind: 'audit' | 'email' | 'notification' | 'document' | 'stripe';
+      action: string; title: string; detail?: string; source?: string; metadata?: Record<string, unknown>;
+    }>> => window.electronAPI.invoke('entity:timeline', { companyId, type, id, limit }),
+
+    link: (args: { companyId: string; fromType: string; fromId: string; toType: string; toId: string; relation: string; metadata?: Record<string, unknown> }): Promise<{ ok: boolean; error?: string }> =>
+      window.electronAPI.invoke('entity:link', args),
+
+    unlink: (args: { companyId: string; fromType: string; fromId: string; toType: string; toId: string; relation: string }): Promise<{ ok: boolean }> =>
+      window.electronAPI.invoke('entity:unlink', args),
+  },
+
   // ─── Stripe integration ────────────────────────────────
   // Online-first client with local cache fallback. All methods accept a
   // companyId so data is scoped per company.

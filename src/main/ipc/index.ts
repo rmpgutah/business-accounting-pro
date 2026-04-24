@@ -9,6 +9,7 @@ import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
+import { registerEntityGraphIpc } from '../integrations/entity-graph';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
 import {
@@ -399,6 +400,11 @@ export function registerIpcHandlers(): void {
   // Stripe integration — online-first with local SQLite cache fallback,
   // lives in its own module so the renderer can use Stripe offline.
   registerStripeIpc(ipcMain);
+
+  // Cross-entity integration layer — exposes `entity:graph` and
+  // `entity:timeline` so any detail page can render related records +
+  // audit/email/document timeline without hand-joining tables.
+  registerEntityGraphIpc(ipcMain);
 
   // ─── Input Validation Helpers ──────────────────────────
   const VALID_TABLES = new Set([
