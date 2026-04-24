@@ -37,21 +37,23 @@ const baseStyles = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  @page { size: letter; margin: 0.45in; }
+  @page { size: letter; margin: 0.5in 0.6in; }
   table { width: 100%; border-collapse: collapse; table-layout: auto; }
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
   th, td { padding: 8px 12px; text-align: left; word-wrap: break-word; overflow-wrap: anywhere; }
   th {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #64748b;
+    letter-spacing: 0.5px;
+    color: #475569;
     border-bottom: 2px solid #0f172a;
+    background: #f8fafc;
   }
   td { border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px; }
+  tr:nth-child(even) td { background: #fafafa; }
   .text-right { text-align: right; font-variant-numeric: tabular-nums; }
   .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Menlo', Consolas, 'Courier New', monospace; }
   .font-bold { font-weight: 700; }
@@ -88,7 +90,7 @@ function getStatusStamp(status: string): { label: string; color: string } | null
   switch (status) {
     case 'paid': return { label: 'PAID', color: '#16a34a' };
     case 'overdue': return { label: 'OVERDUE', color: '#dc2626' };
-    case 'draft': return { label: 'DRAFT', color: '#94a3b8' };
+    case 'draft': return { label: 'DRAFT', color: '#475569' };
     case 'cancelled': return { label: 'VOID', color: '#dc2626' };
     case 'partial': return { label: 'PARTIAL', color: '#d97706' };
     default: return null;
@@ -180,7 +182,7 @@ function qrPlaceholder(url: string): string {
   return `
   <div style="display:inline-block;border:2px solid #334155;padding:8px;text-align:center;border-radius:3px;">
     <div style="width:72px;height:72px;background:repeating-linear-gradient(45deg,#334155 0px,#334155 2px,#fff 2px,#fff 8px);margin-bottom:4px;"></div>
-    <div style="font-size:8px;color:#64748b;max-width:80px;word-break:break-all;">${url}</div>
+    <div style="font-size:8px;color:#64748b;max-width:80px;word-break:break-all;">${esc(url)}</div>
   </div>`;
 }
 
@@ -306,7 +308,7 @@ export function generateInvoiceHTML(
       const caption = esc(l.unit_label || '');
       return `<tr>
         <td colspan="${colSpan}" style="text-align:center;padding:12px;border-bottom:none;">
-          ${l.description ? `<img src="${l.description}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
+          ${l.description ? `<img src="${esc(l.description)}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
           ${caption ? `<div style="font-size:10px;color:#64748b;margin-top:4px;">${caption}</div>` : ''}
         </td>
       </tr>`;
@@ -422,7 +424,7 @@ export function generateInvoiceHTML(
   // Electron print-to-PDF renderers that load from data:text/html.
   const safeLogo = logoData && /^(data:|https?:)/.test(String(logoData)) ? logoData : null;
   const logoHTML = safeLogo
-    ? `<img src="${safeLogo}" alt="${companyName}" style="max-height:56px;max-width:180px;width:auto;height:auto;object-fit:contain;display:block;margin-bottom:8px;">`
+    ? `<img src="${esc(safeLogo)}" alt="${companyName}" style="max-height:56px;max-width:180px;width:auto;height:auto;object-fit:contain;display:block;margin-bottom:8px;">`
     : '';
 
   // ── Header layout variants ──
@@ -552,9 +554,33 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .footer-text { font-size: 11px; color: #64748b; line-height: 1.6; white-space: pre-line; }
 .footer-bottom { text-align: center; margin-top: 28px; font-size: 10px; color: #64748b; }
 .accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
+.print-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  color: #64748b;
+  padding: 4px 0;
+  border-top: 1px solid #e5e5e5;
+}
+.draft-watermark {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: 80px;
+  font-weight: 900;
+  color: rgba(200, 0, 0, 0.06);
+  letter-spacing: 15px;
+  pointer-events: none;
+  z-index: 1;
+}
 </style></head>
 <body>
 ${wmText ? `<div class="watermark">${esc(wmText)}</div>` : invoice.invoice_type === 'proforma' ? '<div class="watermark">PROFORMA</div>' : ''}
+${invoice.status === 'draft' && !wmText ? '<div class="draft-watermark">DRAFT</div>' : ''}
 ${style === 'modern' ? `<div class="accent-bar"></div>` : ''}
 ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 <div class="page">
@@ -621,6 +647,10 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
   </div>
 </div>
 </div>
+
+<div class="print-footer">
+  ${companyName} &middot; Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+</div>
 </body></html>`;
 }
 
@@ -656,9 +686,9 @@ export function generatePayStubHTML(
   ytd: YtdData,
   company: any
 ): string {
-  const companyName = company?.name || 'Company';
-  const companyAddr = [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
-    .filter(Boolean).join(', ');
+  const companyName = esc(company?.name || 'Company');
+  const companyAddr = esc([company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
+    .filter(Boolean).join(', '));
 
   const totalDed = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
   const ytdTotalDed = ytd.federal_tax + ytd.state_tax + ytd.social_security + ytd.medicare;
@@ -691,11 +721,11 @@ ${baseStyles}
 
   <div class="emp-row">
     <div>
-      <div class="emp-name">${stub.employee_name}</div>
+      <div class="emp-name">${esc(stub.employee_name)}</div>
     </div>
     <div style="text-align:right;">
-      <div class="emp-meta">Period: ${stub.period_start} &ndash; ${stub.period_end}</div>
-      <div class="emp-meta">Pay Date: ${stub.pay_date}</div>
+      <div class="emp-meta">Period: ${esc(stub.period_start)} &ndash; ${esc(stub.period_end)}</div>
+      <div class="emp-meta">Pay Date: ${esc(stub.pay_date)}</div>
     </div>
   </div>
 
@@ -796,7 +826,7 @@ export function generateReportHTML(
   summary?: ReportSummary[]
 ): string {
   const headerCells = columns
-    .map(c => `<th class="${c.align === 'right' ? 'text-right' : ''}">${c.label}</th>`)
+    .map(c => `<th class="${c.align === 'right' ? 'text-right' : ''}">${esc(c.label)}</th>`)
     .join('');
 
   const bodyRows = rows.map(row => {
@@ -804,7 +834,7 @@ export function generateReportHTML(
       const val = row[c.key];
       const align = c.align === 'right' ? 'text-right' : '';
       const mono = c.format === 'currency' ? 'font-mono' : '';
-      const display = c.format === 'currency' ? fmt(Number(val) || 0) : (val ?? '');
+      const display = c.format === 'currency' ? fmt(Number(val) || 0) : esc(String(val ?? ''));
       const bold = row._bold ? 'font-bold' : '';
       const accent = row._accent || '';
       return `<td class="${align} ${mono} ${bold} ${accent}">${display}</td>`;
@@ -820,8 +850,8 @@ export function generateReportHTML(
       ${summary.map(s => {
         const color = s.accent === 'green' ? '#16a34a' : s.accent === 'red' ? '#dc2626' : '#0f172a';
         return `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
-          <span style="font-weight:700;color:#0f172a;">${s.label}</span>
-          <span style="font-weight:700;color:${color};font-variant-numeric:tabular-nums;">${s.value}</span>
+          <span style="font-weight:700;color:#0f172a;">${esc(s.label)}</span>
+          <span style="font-weight:700;color:${color};font-variant-numeric:tabular-nums;">${esc(s.value)}</span>
         </div>`;
       }).join('')}
     </div>
@@ -840,9 +870,9 @@ ${baseStyles}
 <body>
 <div class="report">
   <div class="report-header">
-    <div class="report-company">${companyName}</div>
-    <div class="report-title">${title}</div>
-    <div class="report-dates">${dateRange}</div>
+    <div class="report-company">${esc(companyName)}</div>
+    <div class="report-title">${esc(title)}</div>
+    <div class="report-dates">${esc(dateRange)}</div>
   </div>
 
   <table>
@@ -852,7 +882,7 @@ ${baseStyles}
 
   ${summaryHTML}
 
-  <div class="footer-co">${companyName}</div>
+  <div class="footer-co">${esc(companyName)}</div>
 </div>
 </body></html>`;
 }
@@ -1346,7 +1376,7 @@ export function generateExpenseReportHTML(
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
       paid: '#16a34a', approved: '#16a34a', pending: '#d97706',
-      rejected: '#dc2626', draft: '#94a3b8',
+      rejected: '#dc2626', draft: '#475569',
     };
     const c = colors[status?.toLowerCase()] || '#64748b';
     return `<span style="font-size:10px;font-weight:600;color:${c};text-transform:uppercase;letter-spacing:0.5px;">${status || '—'}</span>`;
@@ -1355,9 +1385,9 @@ export function generateExpenseReportHTML(
   const expenseRows = expenses.map(e => {
     const mainRow = `<tr>
       <td>${fmtDate(e.date)}</td>
-      <td>${e.description || '—'}</td>
-      <td>${e.vendor_name || '—'}</td>
-      <td>${e.category_name || '—'}</td>
+      <td>${esc(e.description) || '\u2014'}</td>
+      <td>${esc(e.vendor_name) || '\u2014'}</td>
+      <td>${esc(e.category_name) || '\u2014'}</td>
       <td class="text-right font-mono">${fmt(Number(e.amount) || 0)}</td>
       <td>${statusBadge(e.status)}</td>
     </tr>`;
@@ -1373,7 +1403,7 @@ export function generateExpenseReportHTML(
             </tr></thead>
             <tbody>
               ${e.line_items.map(li => `<tr style="background:#f8fafc;">
-                <td style="padding:3px 8px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;">${li.description || '—'}</td>
+                <td style="padding:3px 8px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;">${esc(li.description) || '\u2014'}</td>
                 <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;border-bottom:1px solid #f1f5f9;">${li.quantity}</td>
                 <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid #f1f5f9;">${fmt(Number(li.unit_price) || 0)}</td>
                 <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid #f1f5f9;">${fmt(Number(li.amount) || 0)}</td>
@@ -1400,10 +1430,10 @@ ${baseStyles}
 <body>
 <div class="report">
   <div class="report-header">
-    <div class="report-company">${companyName}</div>
+    <div class="report-company">${esc(companyName)}</div>
     <div class="report-title">Expense Detail Report</div>
-    <div class="report-dates">${dateRange}</div>
-    ${groupBy && groupBy !== 'none' ? `<div style="font-size:11px;color:#475569;margin-top:2px;">Grouped by: ${groupBy}</div>` : ''}
+    <div class="report-dates">${esc(dateRange)}</div>
+    ${groupBy && groupBy !== 'none' ? `<div style="font-size:11px;color:#475569;margin-top:2px;">Grouped by: ${esc(groupBy)}</div>` : ''}
   </div>
 
   <table>
@@ -1425,7 +1455,7 @@ ${baseStyles}
     </div>
   </div>
 
-  <div class="footer-co">${companyName}</div>
+  <div class="footer-co">${esc(companyName)}</div>
 </div>
 </body></html>`;
 }

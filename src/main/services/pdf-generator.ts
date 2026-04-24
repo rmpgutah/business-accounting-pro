@@ -6,6 +6,17 @@
 // BrowserWindow is no longer needed directly — rendering now goes through
 // the shared helper in print-preview.ts.
 
+// ─── HTML escape helper (XSS prevention) ────────────────
+function esc(s: string | null | undefined): string {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Currency Formatter ──────────────────────────────────
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
@@ -17,50 +28,56 @@ export function buildInvoiceHTML(
   invoice: any,
   lineItems: any[]
 ): string {
-  const companyName = company?.name || 'Company';
-  const companyLegal = company?.legal_name || '';
-  const companyAddr = [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
+  const companyName = esc(company?.name || 'Company');
+  const companyLegal = esc(company?.legal_name || '');
+  const companyAddr = esc([company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
     .filter(Boolean)
-    .join(', ');
-  const companyEmail = company?.email || '';
-  const companyPhone = company?.phone || '';
-  const companyWebsite = company?.website || '';
+    .join(', '));
+  const companyEmail = esc(company?.email || '');
+  const companyPhone = esc(company?.phone || '');
+  const companyWebsite = esc(company?.website || '');
 
-  const clientName = client?.name || 'Client';
-  const clientEmail = client?.email || '';
-  const clientPhone = client?.phone || '';
-  const clientAddr = [client?.address_line1, client?.address_line2, client?.city, client?.state, client?.zip]
+  const clientName = esc(client?.name || 'Client');
+  const clientEmail = esc(client?.email || '');
+  const clientPhone = esc(client?.phone || '');
+  const clientAddr = esc([client?.address_line1, client?.address_line2, client?.city, client?.state, client?.zip]
     .filter(Boolean)
-    .join(', ');
+    .join(', '));
 
-  const lineRows = lineItems
+  const lineRows = (lineItems || [])
     .map(
-      (l) => `
-    <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #e2e2e2;color:#1a1a1a;">${l.description || ''}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #e2e2e2;text-align:right;color:#444;font-variant-numeric:tabular-nums;">${l.quantity || 1}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #e2e2e2;text-align:right;color:#444;font-variant-numeric:tabular-nums;">${fmt(l.unit_price)}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #e2e2e2;text-align:right;color:#444;font-variant-numeric:tabular-nums;">${l.tax_rate > 0 ? l.tax_rate + '%' : '--'}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #e2e2e2;text-align:right;font-weight:600;color:#1a1a1a;font-variant-numeric:tabular-nums;">${fmt(l.amount || l.quantity * l.unit_price)}</td>
+      (l, i) => `
+    <tr${i % 2 === 1 ? ' style="background:#fafafa;"' : ''}>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#1a1a1a;">${esc(l.description || '')}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${l.quantity || 1}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${fmt(l.unit_price || 0)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${l.tax_rate > 0 ? l.tax_rate + '%' : '\u2014'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1a1a1a;font-variant-numeric:tabular-nums;">${fmt(l.amount || (l.quantity || 1) * (l.unit_price || 0))}</td>
     </tr>
   `
     )
     .join('');
 
   const statusColors: Record<string, { bg: string; color: string }> = {
-    draft: { bg: '#f3f4f6', color: '#4b5563' },
+    draft: { bg: '#f3f4f6', color: '#1e293b' },
     sent: { bg: '#dbeafe', color: '#1e40af' },
     paid: { bg: '#dcfce7', color: '#166534' },
     overdue: { bg: '#fee2e2', color: '#991b1b' },
     partial: { bg: '#f3e8ff', color: '#6b21a8' },
-    cancelled: { bg: '#f3f4f6', color: '#6b7280' },
+    cancelled: { bg: '#f3f4f6', color: '#475569' },
   };
   const sc = statusColors[invoice.status] || statusColors.draft;
+
+  const isDraft = invoice.status === 'draft';
 
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page {
+    size: letter;
+    margin: 0.5in 0.6in;
+  }
   body {
     font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
     color: #1a1a1a;
@@ -69,6 +86,12 @@ export function buildInvoiceHTML(
     line-height: 1.55;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-break { page-break-inside: avoid; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
   }
 
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 44px; }
@@ -93,26 +116,28 @@ export function buildInvoiceHTML(
 
   .addresses { display: flex; justify-content: space-between; margin-bottom: 32px; }
   .addr-block { max-width: 48%; }
-  .addr-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; margin-bottom: 6px; }
+  .addr-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.8px; margin-bottom: 6px; }
   .addr-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
   .addr-detail { font-size: 12px; color: #64748b; line-height: 1.5; }
 
   .meta-row { display: flex; gap: 48px; margin-bottom: 32px; padding: 16px 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 2px; }
-  .meta-item .meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; display: block; margin-bottom: 3px; }
+  .meta-item .meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.8px; display: block; margin-bottom: 3px; }
   .meta-item .meta-value { font-size: 13px; font-weight: 600; color: #0f172a; }
 
   table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
   thead th {
-    padding: 10px 14px;
+    padding: 8px 12px;
     text-align: left;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
-    color: #64748b;
-    letter-spacing: 0.8px;
+    color: #475569;
+    letter-spacing: 0.5px;
     border-bottom: 2px solid #0f172a;
+    background: #f8fafc;
   }
   thead th:nth-child(2), thead th:nth-child(3), thead th:nth-child(4), thead th:nth-child(5) { text-align: right; }
+  tr:nth-child(even) td { background: #fafafa; }
 
   .totals-section { display: flex; justify-content: flex-end; }
   .totals-box { width: 280px; }
@@ -123,11 +148,38 @@ export function buildInvoiceHTML(
   .totals-balance { font-weight: 700; font-size: 15px; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 4px; }
 
   .footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
-  .footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.8px; margin-bottom: 6px; }
-  .footer-text { font-size: 12px; color: #64748b; line-height: 1.6; white-space: pre-line; }
+  .footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.8px; margin-bottom: 6px; }
+  .footer-text { font-size: 12px; color: #475569; line-height: 1.6; white-space: pre-line; }
   .footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9px;
+    color: #64748b;
+    padding: 4px 0;
+    border-top: 1px solid #e5e5e5;
+  }
+
+  .draft-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 80px;
+    font-weight: 900;
+    color: rgba(200, 0, 0, 0.06);
+    letter-spacing: 15px;
+    pointer-events: none;
+    z-index: 1;
+  }
 </style></head>
 <body>
+  ${isDraft ? '<div class="draft-watermark">DRAFT</div>' : ''}
+
   <div class="header">
     <div class="company-block">
       <div class="company-name">${companyName}</div>
@@ -140,8 +192,8 @@ export function buildInvoiceHTML(
     </div>
     <div class="invoice-block">
       <div class="invoice-title">Invoice</div>
-      <div class="invoice-number">#${invoice.invoice_number}</div>
-      <div class="status-badge" style="background:${sc.bg};color:${sc.color};">${(invoice.status || 'draft').toUpperCase()}</div>
+      <div class="invoice-number">#${esc(invoice.invoice_number || '')}</div>
+      <div class="status-badge" style="background:${sc.bg};color:${sc.color};">${esc((invoice.status || 'draft').toUpperCase())}</div>
     </div>
   </div>
 
@@ -158,9 +210,9 @@ export function buildInvoiceHTML(
   </div>
 
   <div class="meta-row">
-    <div class="meta-item"><span class="meta-label">Invoice Date</span><span class="meta-value">${invoice.issue_date || ''}</span></div>
-    <div class="meta-item"><span class="meta-label">Due Date</span><span class="meta-value">${invoice.due_date || ''}</span></div>
-    <div class="meta-item"><span class="meta-label">Payment Terms</span><span class="meta-value">${invoice.terms || 'Net 30'}</span></div>
+    <div class="meta-item"><span class="meta-label">Invoice Date</span><span class="meta-value">${esc(invoice.issue_date || '')}</span></div>
+    <div class="meta-item"><span class="meta-label">Due Date</span><span class="meta-value">${esc(invoice.due_date || '')}</span></div>
+    <div class="meta-item"><span class="meta-label">Payment Terms</span><span class="meta-value">${esc(invoice.terms || 'Net 30')}</span></div>
   </div>
 
   <table>
@@ -172,13 +224,13 @@ export function buildInvoiceHTML(
 
   <div class="totals-section">
     <div class="totals-box">
-      <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
+      <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal || 0)}</span></div>
       ${invoice.tax_amount ? `<div class="totals-row"><span>Tax</span><span>${fmt(invoice.tax_amount)}</span></div>` : ''}
       ${invoice.discount_amount ? `<div class="totals-row"><span>Discount</span><span>-${fmt(invoice.discount_amount)}</span></div>` : ''}
-      <div class="totals-row totals-total"><span>Total</span><span>${fmt(invoice.total)}</span></div>
+      <div class="totals-row totals-total"><span>Total</span><span>${fmt(invoice.total || 0)}</span></div>
       ${invoice.amount_paid > 0 ? `
         <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(invoice.amount_paid)}</span></div>
-        <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt(invoice.total - invoice.amount_paid)}</span></div>
+        <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt((invoice.total || 0) - (invoice.amount_paid || 0))}</span></div>
       ` : ''}
     </div>
   </div>
@@ -186,10 +238,14 @@ export function buildInvoiceHTML(
   ${(invoice.notes || invoice.terms_text) ? `
   <div class="footer">
     <div class="footer-grid">
-      ${invoice.notes ? `<div><div class="footer-label">Notes</div><div class="footer-text">${invoice.notes}</div></div>` : ''}
-      ${invoice.terms_text ? `<div><div class="footer-label">Terms & Conditions</div><div class="footer-text">${invoice.terms_text}</div></div>` : ''}
+      ${invoice.notes ? `<div><div class="footer-label">Notes</div><div class="footer-text">${esc(invoice.notes)}</div></div>` : ''}
+      ${invoice.terms_text ? `<div><div class="footer-label">Terms &amp; Conditions</div><div class="footer-text">${esc(invoice.terms_text)}</div></div>` : ''}
     </div>
   </div>` : ''}
+
+  <div class="print-footer">
+    ${companyName} &middot; Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+  </div>
 </body>
 </html>`;
 }

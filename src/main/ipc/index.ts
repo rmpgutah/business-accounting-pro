@@ -3904,7 +3904,7 @@ export function registerIpcHandlers(): void {
       th { background: #f1f5f9; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
       .label { font-weight: 600; width: 180px; color: #475569; }
       .meta { color: #64748b; font-size: 11px; margin-bottom: 4px; }
-      .empty { color: #94a3b8; font-style: italic; padding: 8px 0; }
+      .empty { color: #64748b; font-style: italic; padding: 8px 0; }
       .cover-line { padding: 3px 0; }
       .num { text-align: right; font-variant-numeric: tabular-nums; }
       .comm-card { margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 3px; padding: 10px 12px; }

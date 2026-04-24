@@ -104,33 +104,43 @@ const BudgetVsActualReport: React.FC = () => {
   };
 
   const handlePrint = async () => {
+    // HTML escape helper (XSS prevention for print output)
+    const escHtml = (s: string | null | undefined): string => {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
+
     const rows = comparison.map((c) =>
       `<tr>
-        <td style="padding:6px 12px;border:1px solid #ddd;">${c.category}</td>
-        <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmt.format(c.budgeted)}</td>
-        <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmt.format(c.actual)}</td>
-        <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;color:${c.variance >= 0 ? '#16a34a' : '#dc2626'}">${fmt.format(c.variance)}</td>
-        <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;">${c.variance_pct}%</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${escHtml(c.category)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(c.budgeted)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(c.actual)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;color:${c.variance >= 0 ? '#16a34a' : '#dc2626'}">${fmt.format(c.variance)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;">${c.variance_pct}%</td>
       </tr>`
     ).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      body { font-family: Arial, sans-serif; padding: 40px; color: #111; }
-      h1 { font-size: 18px; } h2 { font-size: 14px; color: #555; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      @page { size: letter; margin: 0.5in 0.6in; }
+      body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h1 { font-size: 18px; margin-bottom: 4px; } h2 { font-size: 14px; color: #475569; margin-bottom: 16px; }
       table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-      th { background: #f0f0f0; padding: 8px 12px; text-align: left; border: 1px solid #ddd; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
-      .total td { font-weight: 700; border-top: 2px solid #111; }
+      th { background: #f8fafc; padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #0f172a; color: #475569; }
+      tr:nth-child(even) td { background: #fafafa; }
+      @media print { tr { page-break-inside: avoid; } }
+      .total td { font-weight: 700; border-top: 2px solid #0f172a; }
     </style></head><body>
       <h1>Budget vs Actual Report</h1>
-      <h2>${budget?.name || 'Budget'} · ${budget?.start_date || ''} to ${budget?.end_date || ''}</h2>
+      <h2>${escHtml(budget?.name || 'Budget')} &middot; ${escHtml(budget?.start_date || '')} to ${escHtml(budget?.end_date || '')}</h2>
       <table><thead><tr><th>Category</th><th style="text-align:right">Budgeted</th><th style="text-align:right">Actual</th><th style="text-align:right">Variance</th><th style="text-align:right">%</th></tr></thead>
       <tbody>${rows}
         <tr class="total">
-          <td style="padding:8px 12px;border:1px solid #ddd;">Total</td>
-          <td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmt.format(totalBudgeted)}</td>
-          <td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;">${fmt.format(totalActual)}</td>
-          <td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-family:monospace;color:${totalVariance >= 0 ? '#16a34a' : '#dc2626'}">${fmt.format(totalVariance)}</td>
-          <td style="padding:8px 12px;border:1px solid #ddd;text-align:right;">${totalVariancePct}%</td>
+          <td style="padding:8px 12px;">Total</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(totalBudgeted)}</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(totalActual)}</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;color:${totalVariance >= 0 ? '#16a34a' : '#dc2626'}">${fmt.format(totalVariance)}</td>
+          <td style="padding:8px 12px;text-align:right;">${totalVariancePct}%</td>
         </tr>
       </tbody></table>
     </body></html>`;

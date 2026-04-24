@@ -62,38 +62,48 @@ const PayrollRegister: React.FC = () => {
   };
 
   const handlePrint = async () => {
+    // HTML escape helper (XSS prevention for print output)
+    const escHtml = (s: string | null | undefined): string => {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
+
     const rowsHtml = stubs.map(s => `<tr>
-      <td style="padding:6px 10px;border:1px solid #ddd;">${s.employee_name}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-transform:capitalize">${s.employee_type}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${s.hours_regular || 0}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(s.gross_pay)}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(s.federal_tax)}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(s.state_tax)}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(s.social_security)}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(s.medicare)}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;font-weight:700;">${formatCurrency(s.net_pay)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${escHtml(s.employee_name)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-transform:capitalize">${escHtml(s.employee_type)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${s.hours_regular || 0}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(s.gross_pay)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(s.federal_tax)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(s.state_tax)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(s.social_security)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(s.medicare)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${formatCurrency(s.net_pay)}</td>
     </tr>`).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      body { font-family: Arial, sans-serif; padding: 40px; color: #111; }
-      h1 { font-size: 18px; } h2 { font-size: 14px; color: #555; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      @page { size: letter; margin: 0.5in 0.6in; }
+      body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h1 { font-size: 18px; margin-bottom: 4px; } h2 { font-size: 14px; color: #475569; margin-bottom: 16px; }
       table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 11px; }
-      th { background: #f0f0f0; padding: 8px 10px; text-align: left; border: 1px solid #ddd; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
-      .total td { font-weight: 700; border-top: 2px solid #111; }
+      th { background: #f8fafc; padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #0f172a; color: #475569; }
+      tr:nth-child(even) td { background: #fafafa; }
+      @media print { tr { page-break-inside: avoid; } }
+      .total td { font-weight: 700; border-top: 2px solid #0f172a; }
     </style></head><body>
       <h1>Payroll Register</h1>
-      <h2>Pay Date: ${selectedRun?.pay_date || ''} · Period: ${selectedRun?.pay_period_start || ''} to ${selectedRun?.pay_period_end || ''} · Type: ${selectedRun?.run_type || 'Regular'}</h2>
+      <h2>Pay Date: ${escHtml(selectedRun?.pay_date || '')} &middot; Period: ${escHtml(selectedRun?.pay_period_start || '')} to ${escHtml(selectedRun?.pay_period_end || '')} &middot; Type: ${escHtml(selectedRun?.run_type || 'Regular')}</h2>
       <table>
         <thead><tr><th>Employee</th><th>Type</th><th style="text-align:right">Hours</th><th style="text-align:right">Gross</th><th style="text-align:right">Federal</th><th style="text-align:right">State</th><th style="text-align:right">SS</th><th style="text-align:right">Medicare</th><th style="text-align:right">Net</th></tr></thead>
         <tbody>${rowsHtml}
           <tr class="total">
-            <td style="padding:8px 10px;border:1px solid #ddd;" colspan="3">Total (${stubs.length} employees)</td>
-            <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(totals.gross)}</td>
-            <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(totals.federal)}</td>
-            <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(totals.state)}</td>
-            <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(totals.ss)}</td>
-            <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;">${formatCurrency(totals.medicare)}</td>
-            <td style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-family:monospace;font-weight:700;">${formatCurrency(totals.net)}</td>
+            <td style="padding:8px 12px;" colspan="3">Total (${stubs.length} employees)</td>
+            <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(totals.gross)}</td>
+            <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(totals.federal)}</td>
+            <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(totals.state)}</td>
+            <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(totals.ss)}</td>
+            <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${formatCurrency(totals.medicare)}</td>
+            <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${formatCurrency(totals.net)}</td>
           </tr>
         </tbody>
       </table>

@@ -7,6 +7,17 @@
  * Designed for letter-size (8.5 x 11 in) paper with micro-dotted fold lines.
  */
 
+// ─── HTML escape helper (XSS prevention) ────────────────
+function esc(s: string | null | undefined): string {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Currency Formatter ────────────────────────────────────
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n || 0);
@@ -60,11 +71,11 @@ export function generatePaycheckHTML(
   run: any,
   options?: { isVoid?: boolean; checkNumber?: string; memo?: string }
 ): string {
-  const companyName = company?.name || 'Company';
-  const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
-  const companyPhone = company?.phone || '';
-  const employeeName = employee?.name || stub?.employee_name || 'Employee';
-  const employeeAddr = [employee?.address_line1, employee?.city, employee?.state, employee?.zip].filter(Boolean).join(', ');
+  const companyName = esc(company?.name || 'Company');
+  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const companyPhone = esc(company?.phone || '');
+  const employeeName = esc(employee?.name || stub?.employee_name || 'Employee');
+  const employeeAddr = esc([employee?.address_line1, employee?.city, employee?.state, employee?.zip].filter(Boolean).join(', '));
   const employeeSSN = maskSSN(employee?.ssn || employee?.ssn_last4);
   const payDate = fmtDate(run?.pay_date || stub?.pay_date || '');
   const periodStart = fmtDate(run?.pay_period_start || stub?.period_start || '');
@@ -80,13 +91,13 @@ export function generatePaycheckHTML(
   const totalDeductions = federalTax + stateTax + ssTax + medicareTax + preTaxDed + postTaxDed;
   const hoursRegular = stub?.hours_regular || stub?.hours || 0;
   const hoursOvertime = stub?.hours_overtime || 0;
-  const checkNumber = options?.checkNumber || stub?.check_number || stub?.id?.substring(0, 6).toUpperCase() || '000001';
+  const checkNumber = esc(options?.checkNumber || stub?.check_number || stub?.id?.substring(0, 6).toUpperCase() || '000001');
   const ytdGross = stub?.ytd_gross || 0;
   const ytdTaxes = stub?.ytd_taxes || 0;
   const ytdNet = stub?.ytd_net || 0;
   const isVoid = options?.isVoid || false;
-  const memo = options?.memo || `Payroll ${periodStart} — ${periodEnd}`;
-  const payScheduleLabel = stub?.pay_schedule || run?.pay_schedule || '';
+  const memo = esc(options?.memo || `Payroll ${periodStart} — ${periodEnd}`);
+  const payScheduleLabel = esc(stub?.pay_schedule || run?.pay_schedule || '');
   const isDirectDeposit = !!(employee?.routing_number);
 
   // Payment method indicator
