@@ -307,25 +307,25 @@ const StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
   const isPositive = change >= 0;
   return (
     <div
-      className={`block-card p-4 border-l-2 ${accentClass} ${
-        onClick ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''
+      className={`block-card py-6 px-5 border-l-4 ${accentClass} ${
+        onClick ? 'cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''
       }`}
       style={{ borderRadius: '6px' }}
       onClick={onClick}
     >
-      <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+      <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
         {label}
       </span>
-      <p className="text-2xl font-mono text-text-primary mt-1">
+      <p className="text-3xl font-mono text-text-primary mt-2">
         {formatCurrency(value)}
       </p>
       <span
-        className={`text-xs font-mono ${
+        className={`text-xs font-mono mt-1 inline-block ${
           isPositive ? 'text-accent-income' : 'text-accent-expense'
         }`}
       >
         {isPositive ? '+' : ''}
-        {change.toFixed(1)}%
+        {change.toFixed(1)}% vs prior period
       </span>
     </div>
   );
@@ -370,14 +370,24 @@ interface QuickActionProps {
   onClick: () => void;
 }
 
-const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onClick }) => (
+interface QuickActionExtendedProps extends QuickActionProps {
+  description?: string;
+  accentClass?: string;
+}
+
+const QuickAction: React.FC<QuickActionExtendedProps> = ({ icon, label, description, accentClass, onClick }) => (
   <button
     onClick={onClick}
-    className="block-card flex flex-col items-center justify-center gap-2 p-4 hover:bg-bg-hover transition-colors cursor-pointer"
+    className={`block-card flex flex-col items-start gap-3 p-5 hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200 cursor-pointer text-left ${accentClass ? `border-l-4 ${accentClass}` : ''}`}
     style={{ borderRadius: '6px' }}
   >
     <span className="text-text-secondary">{icon}</span>
-    <span className="text-xs font-semibold text-text-secondary">{label}</span>
+    <div>
+      <span className="text-sm font-semibold text-text-primary block">{label}</span>
+      {description && (
+        <span className="text-[11px] text-text-muted mt-0.5 block">{description}</span>
+      )}
+    </div>
   </button>
 );
 
@@ -757,15 +767,20 @@ const Dashboard: React.FC = () => {
       : 1;
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
+    <div className="p-8 space-y-8 overflow-y-auto h-full">
+      <div className="max-w-[1400px] mx-auto space-y-8">
+
       {/* Header & Period Selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between py-4">
         <div>
-          <h1 className="text-lg font-bold text-text-primary">
+          <h1 className="text-2xl font-bold text-text-primary">
             {getGreeting()}{authUser?.display_name ? `, ${authUser.display_name.split(' ')[0]}` : ''}
           </h1>
-          <p className="text-xs text-text-muted mt-0.5">
-            {activeCompany?.name || 'Dashboard'} &middot; {format(new Date(), 'EEEE, MMMM d, yyyy')}
+          <p className="text-lg font-semibold text-text-secondary mt-1">
+            {activeCompany?.name || 'Dashboard'}
+          </p>
+          <p className="text-sm text-text-muted mt-0.5">
+            {format(new Date(), 'EEEE, MMMM d, yyyy')}
           </p>
         </div>
         <div className="flex gap-1" style={{ borderRadius: '6px' }}>
@@ -773,7 +788,7 @@ const Dashboard: React.FC = () => {
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`px-3 py-1 text-xs font-semibold transition-colors ${
+              className={`px-4 py-1.5 text-xs font-semibold transition-colors ${
                 period === p
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
@@ -802,7 +817,7 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4 cursor-pointer">
+      <div className="grid grid-cols-4 gap-5">
         <StatCard
           label="Revenue"
           value={stats.revenue}
@@ -837,47 +852,47 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* ─── Quick Metrics Row ─── */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <CalendarCheck size={14} className="text-accent-blue" />
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+      <div className="grid grid-cols-4 gap-5">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarCheck size={16} className="text-accent-blue" />
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Invoices Sent
             </span>
           </div>
-          <p className="text-2xl font-mono text-text-primary">
+          <p className="text-3xl font-mono text-text-primary">
             <AnimatedCounter value={quickMetrics.invoicesSentThisMonth} />
           </p>
-          <span className="text-[10px] text-text-muted">This month</span>
+          <span className="text-[11px] text-text-muted mt-1 block">This month</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Timer size={14} className="text-accent-warning" />
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Timer size={16} className="text-accent-warning" />
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Avg Days to Payment
             </span>
           </div>
-          <p className="text-2xl font-mono text-text-primary">
+          <p className="text-3xl font-mono text-text-primary">
             <AnimatedCounter value={quickMetrics.avgDaysToPayment} />
-            <span className="text-sm text-text-muted ml-1">days</span>
+            <span className="text-base text-text-muted ml-1">days</span>
           </p>
-          <span className="text-[10px] text-text-muted">Last 6 months</span>
+          <span className="text-[11px] text-text-muted mt-1 block">Last 6 months</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center gap-2 mb-2">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
             {quickMetrics.revenueGrowthPct >= 0 ? (
-              <TrendingUp size={14} className="text-accent-income" />
+              <TrendingUp size={16} className="text-accent-income" />
             ) : (
-              <TrendingDown size={14} className="text-accent-expense" />
+              <TrendingDown size={16} className="text-accent-expense" />
             )}
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Revenue Growth
             </span>
           </div>
           <p
-            className={`text-2xl font-mono ${
+            className={`text-3xl font-mono ${
               quickMetrics.revenueGrowthPct >= 0
                 ? 'text-accent-income'
                 : 'text-accent-expense'
@@ -888,87 +903,88 @@ const Dashboard: React.FC = () => {
               format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
             />
           </p>
-          <span className="text-[10px] text-text-muted">vs. last month</span>
+          <span className="text-[11px] text-text-muted mt-1 block">vs. last month</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Crown size={14} className="text-accent-purple" />
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Crown size={16} className="text-accent-purple" />
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Top Client
             </span>
           </div>
           <p className="text-sm font-semibold text-text-primary truncate">
             {quickMetrics.topClientName}
           </p>
-          <p className="text-lg font-mono text-accent-purple">
+          <p className="text-xl font-mono text-accent-purple mt-1">
             {formatCurrency(quickMetrics.topClientRevenue)}
           </p>
-          <span className="text-[10px] text-text-muted">This month</span>
+          <span className="text-[11px] text-text-muted mt-1 block">This month</span>
         </div>
       </div>
 
       {/* ─── Cross-Module Summary Cards ─── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-5">
         {/* Debt Collection */}
         <div
-          className="block-card p-4 border-l-2 border-l-accent-expense cursor-pointer hover:bg-bg-hover transition-colors"
+          className="block-card py-6 px-5 border-l-4 border-l-accent-expense cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
           style={{ borderRadius: '6px' }}
           onClick={() => setModule('debt-collection')}
         >
-          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
             Debt Collection
           </span>
-          <p className="text-2xl font-mono text-text-primary mt-1">
+          <p className="text-3xl font-mono text-text-primary mt-2">
             {debtStats ? formatCurrency(debtStats.total) : '$0.00'}
           </p>
-          <span className="text-xs text-text-muted">
+          <span className="text-xs text-text-muted mt-1 block">
             {debtStats?.count ?? 0} outstanding debt{(debtStats?.count ?? 0) !== 1 ? 's' : ''}
           </span>
         </div>
 
         {/* Bills / AP */}
         <div
-          className="block-card p-4 border-l-2 border-l-accent-warning cursor-pointer hover:bg-bg-hover transition-colors"
+          className="block-card py-6 px-5 border-l-4 border-l-accent-warning cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
           style={{ borderRadius: '6px' }}
           onClick={() => setModule('bills')}
         >
-          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
             Bills / AP
           </span>
-          <p className="text-2xl font-mono text-text-primary mt-1">
+          <p className="text-3xl font-mono text-text-primary mt-2">
             {billsStats ? formatCurrency(billsStats.unpaid_total) : '$0.00'}
           </p>
-          <span className="text-xs text-text-muted">
+          <span className="text-xs text-text-muted mt-1 block">
             {billsStats?.overdue_count ?? 0} overdue bill{(billsStats?.overdue_count ?? 0) !== 1 ? 's' : ''}
           </span>
         </div>
 
         {/* Payroll */}
         <div
-          className="block-card p-4 border-l-2 border-l-accent-purple cursor-pointer hover:bg-bg-hover transition-colors"
+          className="block-card py-6 px-5 border-l-4 border-l-accent-purple cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
           style={{ borderRadius: '6px' }}
           onClick={() => setModule('payroll')}
         >
-          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
             Payroll
           </span>
-          <p className="text-2xl font-mono text-text-primary mt-1">
+          <p className="text-3xl font-mono text-text-primary mt-2">
             {payrollStats?.active_count ?? 0}
           </p>
-          <span className="text-xs text-text-muted">
+          <span className="text-xs text-text-muted mt-1 block">
             active employee{(payrollStats?.active_count ?? 0) !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
 
       {/* ─── Revenue vs Expenses AreaChart (12 months) ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-          Revenue vs Expenses (Last 12 Months)
+      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+          Revenue vs Expenses
         </h2>
-        <div style={{ width: '100%', minHeight: 320 }}>
-          <ResponsiveContainer width="100%" height={320}>
+        <p className="text-[11px] text-text-muted mb-5">Trailing 12-month overview</p>
+        <div style={{ width: '100%', minHeight: 360 }}>
+          <ResponsiveContainer width="100%" height={360}>
             <AreaChart data={cashflow}>
               <defs>
                 <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -1015,26 +1031,27 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* ─── Income Sources Pie + Cash Flow Forecast ─── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-6">
         {/* Income Sources PieChart */}
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-          <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Income Sources Breakdown
+        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+            Income Sources
           </h2>
+          <p className="text-[11px] text-text-muted mb-5">Revenue breakdown by client</p>
           {clientRevenue.length === 0 ? (
-            <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+            <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
               <span className="text-xs text-text-muted">No revenue data available</span>
             </div>
           ) : (
-            <div style={{ width: '100%', minHeight: 300 }}>
-              <ResponsiveContainer width="100%" height={300}>
+            <div style={{ width: '100%', minHeight: 340 }}>
+              <ResponsiveContainer width="100%" height={340}>
                 <PieChart>
                   <Pie
                     data={clientRevenue}
                     cx="40%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={100}
+                    innerRadius={60}
+                    outerRadius={110}
                     paddingAngle={2}
                     dataKey="value"
                     nameKey="name"
@@ -1065,19 +1082,20 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Cash Flow Forecast */}
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-          <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Cash Flow Forecast (Next 3 Months)
+        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+            Cash Flow Forecast
           </h2>
+          <p className="text-[11px] text-text-muted mb-5">Projected next 3 months with confidence band</p>
           {cashForecast.length === 0 ? (
-            <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+            <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
               <span className="text-xs text-text-muted">
                 Insufficient historical data for forecast
               </span>
             </div>
           ) : (
-            <div style={{ width: '100%', minHeight: 300 }}>
-              <ResponsiveContainer width="100%" height={300}>
+            <div style={{ width: '100%', minHeight: 340 }}>
+              <ResponsiveContainer width="100%" height={340}>
                 <AreaChart data={cashForecast}>
                   <defs>
                     <linearGradient id="gradConfidence" x1="0" y1="0" x2="0" y2="1">
@@ -1128,17 +1146,18 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* ─── Expense Category Treemap ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-          Expense Breakdown by Category
+      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+          Expense Breakdown
         </h2>
+        <p className="text-[11px] text-text-muted mb-5">Spending by category (12 months)</p>
         {expenseCategories.length === 0 ? (
-          <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+          <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
             <span className="text-xs text-text-muted">No expense data available</span>
           </div>
         ) : (
-          <div style={{ width: '100%', minHeight: 300 }}>
-            <ResponsiveContainer width="100%" height={300}>
+          <div style={{ width: '100%', minHeight: 340 }}>
+            <ResponsiveContainer width="100%" height={340}>
               <Treemap
                 data={expenseCategories as any[]}
                 dataKey="size"
@@ -1153,41 +1172,50 @@ const Dashboard: React.FC = () => {
 
       {/* Quick Actions */}
       <div>
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-4 gap-4 cursor-pointer">
+        <p className="text-[11px] text-text-muted mb-4">Jump into common workflows</p>
+        <div className="grid grid-cols-4 gap-5">
           <QuickAction
-            icon={<FileText size={20} />}
+            icon={<FileText size={22} />}
             label="New Invoice"
+            description="Create and send an invoice"
+            accentClass="border-l-accent-income"
             onClick={() => setModule('invoicing')}
           />
           <QuickAction
-            icon={<Receipt size={20} />}
+            icon={<Receipt size={22} />}
             label="Record Expense"
+            description="Log a new business expense"
+            accentClass="border-l-accent-expense"
             onClick={() => setModule('expenses')}
           />
           <QuickAction
-            icon={<Clock size={20} />}
+            icon={<Clock size={22} />}
             label="Start Timer"
+            description="Track billable hours"
+            accentClass="border-l-accent-blue"
             onClick={() => setModule('time-tracking')}
           />
           <QuickAction
-            icon={<Users size={20} />}
+            icon={<Users size={22} />}
             label="Run Payroll"
+            description="Process employee payroll"
+            accentClass="border-l-accent-purple"
             onClick={() => setModule('payroll')}
           />
         </div>
       </div>
 
       {/* ─── Bottom 2-Column Grid: Activity + Due/Clients ─── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-6">
         {/* Left Column: Recent Activity (Enhanced) */}
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center justify-between mb-4">
+        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <Activity size={14} className="text-text-muted" />
-              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              <Activity size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
                 Recent Activity
               </h2>
             </div>
@@ -1264,25 +1292,25 @@ const Dashboard: React.FC = () => {
                 return (
                   <div
                     key={entry.id}
-                    className="flex items-center gap-3 py-2"
+                    className="flex items-center gap-3 py-3"
                     style={{ borderBottom: '1px solid #2e2e2e' }}
                   >
                     <span
-                      className="text-[10px] font-mono font-semibold uppercase px-2 py-0.5"
+                      className="text-[10px] font-mono font-semibold uppercase px-2 py-1"
                       style={{
                         backgroundColor: badge.bg,
                         color: badge.text,
                         borderRadius: '6px',
-                        minWidth: 52,
+                        minWidth: 56,
                         textAlign: 'center',
                       }}
                     >
                       {actionLabel}
                     </span>
-                    <span className="text-xs text-text-primary flex-1 truncate" title={richDescription}>
+                    <span className="text-sm text-text-primary flex-1 truncate" title={richDescription}>
                       {richDescription}
                     </span>
-                    <span className="text-[10px] text-text-muted font-mono whitespace-nowrap">
+                    <span className="text-[11px] text-text-muted font-mono whitespace-nowrap">
                       {relativeTime}
                     </span>
                   </div>
@@ -1293,12 +1321,12 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Right Column: Upcoming Due + Top Clients stacked */}
-        <div className="space-y-4">
+        <div className="space-y-6">
           {/* Upcoming Due */}
-          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle size={14} className="text-text-muted" />
-              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center gap-2 mb-5">
+              <AlertTriangle size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
                 Upcoming Due
               </h2>
             </div>
@@ -1314,32 +1342,32 @@ const Dashboard: React.FC = () => {
                   return (
                     <div
                       key={inv.id}
-                      className="flex items-center gap-3 py-2"
+                      className="flex items-center gap-3 py-3"
                       style={{ borderBottom: '1px solid #2e2e2e' }}
                     >
                       <span
                         style={{
-                          width: 6,
-                          height: 6,
+                          width: 8,
+                          height: 8,
                           backgroundColor: color,
-                          borderRadius: '1px',
+                          borderRadius: '2px',
                           flexShrink: 0,
                         }}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-text-primary font-semibold truncate">
+                          <span className="text-sm text-text-primary font-semibold truncate">
                             {inv.invoice_number}
                           </span>
-                          <span className="text-xs font-mono text-text-primary ml-2">
+                          <span className="text-sm font-mono font-semibold text-text-primary ml-2">
                             {formatCurrency(amountDue)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <span className="text-[10px] text-text-muted truncate">
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[11px] text-text-muted truncate">
                             {inv.client_name || 'Unknown'}
                           </span>
-                          <span className="text-[10px] text-text-muted font-mono ml-2">
+                          <span className="text-[11px] text-text-muted font-mono ml-2">
                             {formatDate(inv.due_date)}
                           </span>
                         </div>
@@ -1352,17 +1380,17 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Top Clients */}
-          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={14} className="text-text-muted" />
-              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center gap-2 mb-5">
+              <BarChart3 size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
                 Top Clients (90 Days)
               </h2>
             </div>
             {topClients.length === 0 ? (
               <p className="text-xs text-text-muted">No client revenue data</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {topClients.map((client, idx) => {
                   const pct =
                     maxClientRevenue > 0
@@ -1370,11 +1398,11 @@ const Dashboard: React.FC = () => {
                       : 0;
                   return (
                     <div key={idx}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-text-primary truncate">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm text-text-primary truncate">
                           {client.name}
                         </span>
-                        <span className="text-xs font-mono text-text-muted ml-2">
+                        <span className="text-sm font-mono font-semibold text-text-secondary ml-2">
                           {formatCurrency(client.total_paid)}
                         </span>
                       </div>
@@ -1407,8 +1435,8 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Intelligence Alerts ─── */}
       {anomalies.length > 0 && (
-        <div className="col-span-full border-2 border-orange-500 bg-accent-warning-bg p-5" style={{ borderRadius: '6px' }}>
-          <h2 className="text-xs font-black uppercase tracking-wider text-accent-warning mb-3">
+        <div className="col-span-full border-2 border-orange-500 bg-accent-warning-bg p-6" style={{ borderRadius: '6px' }}>
+          <h2 className="text-sm font-black uppercase tracking-wider text-accent-warning mb-4">
             Intelligence Alerts
           </h2>
           <div className="space-y-2">
@@ -1432,6 +1460,8 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      </div>{/* end max-w-[1400px] wrapper */}
     </div>
   );
 };
