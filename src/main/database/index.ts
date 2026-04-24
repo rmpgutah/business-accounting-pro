@@ -490,6 +490,11 @@ export function initDatabase(): Database.Database {
   // Company fiscal year end + base currency
   "ALTER TABLE companies ADD COLUMN fiscal_year_end TEXT DEFAULT '12'",
   "ALTER TABLE companies ADD COLUMN base_currency TEXT DEFAULT 'USD'",
+  // Company bank info for check printing (2026-04-24)
+  "ALTER TABLE companies ADD COLUMN bank_name TEXT DEFAULT ''",
+  "ALTER TABLE companies ADD COLUMN bank_routing_number TEXT DEFAULT ''",
+  "ALTER TABLE companies ADD COLUMN bank_account_number TEXT DEFAULT ''",
+  "ALTER TABLE companies ADD COLUMN bank_fraction_code TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

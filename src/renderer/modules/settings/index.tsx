@@ -636,6 +636,47 @@ export default function SettingsModule() {
             </select>
           </Field>
         </div>
+
+        {/* Bank Info for Check Printing */}
+        <div className="mt-4 pt-4 border-t border-border-primary">
+          <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider mb-3">Bank Information (Check Printing)</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Bank Name">
+              <input
+                className="block-input"
+                value={companyForm.bank_name || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_name: e.target.value })}
+                placeholder="First National Bank"
+              />
+            </Field>
+            <Field label="Routing Number">
+              <input
+                className="block-input"
+                value={companyForm.bank_routing_number || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_routing_number: e.target.value })}
+                placeholder="123456789"
+                maxLength={9}
+              />
+            </Field>
+            <Field label="Account Number">
+              <input
+                className="block-input"
+                value={companyForm.bank_account_number || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_account_number: e.target.value })}
+                placeholder="0001234567"
+              />
+            </Field>
+            <Field label="Fraction Code (optional)">
+              <input
+                className="block-input"
+                value={companyForm.bank_fraction_code || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_fraction_code: e.target.value })}
+                placeholder="12-345/6789"
+              />
+            </Field>
+          </div>
+        </div>
+
         <div className="flex justify-end mt-4">
           <button
             className="block-btn-primary flex items-center gap-1.5"
