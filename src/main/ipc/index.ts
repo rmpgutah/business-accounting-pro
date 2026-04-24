@@ -2096,90 +2096,112 @@ export function registerIpcHandlers(): void {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No active company' };
     const dbInstance = db.getDb();
-    let posted = 0;
 
-    // Track which invoices/expenses already have JEs (by description pattern)
-    const existingDescs = new Set<string>();
-    const allJEs = dbInstance.prepare(
-      `SELECT description FROM journal_entries WHERE company_id = ?`
-    ).all(companyId) as any[];
-    for (const je of allJEs) {
-      if (je.description) existingDescs.add(je.description);
+    // Auto-posted JE description prefixes — used to identify machine-generated entries
+    const AUTO_PREFIXES = [
+      'Invoice created -', 'Payment received -', 'Expense recorded -',
+      'Bill payment -', 'Payroll -',
+    ];
+
+    try {
+      // Wrap entire rebuild in a transaction for atomicity
+      const rebuildFn = (dbInstance as any).transaction(() => {
+        // ── Step 1: Delete all previously auto-posted JEs (clean slate) ──
+        // Find auto-posted JE ids by description prefix
+        const autoJEIds: string[] = [];
+        for (const prefix of AUTO_PREFIXES) {
+          const rows = (dbInstance as any).prepare(
+            `SELECT id FROM journal_entries WHERE company_id = ? AND description LIKE ?`
+          ).all(companyId, `${prefix}%`) as any[];
+          for (const r of rows) autoJEIds.push(r.id);
+        }
+
+        // Delete their lines first (FK constraint), then the entries
+        for (const jeId of autoJEIds) {
+          (dbInstance as any).prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`).run(jeId);
+          (dbInstance as any).prepare(`DELETE FROM journal_entries WHERE id = ?`).run(jeId);
+        }
+        const deleted = autoJEIds.length;
+
+        let posted = 0;
+
+        // ── Step 2: Post invoice JEs (DR Receivable / CR Revenue) ──
+        const invoices = (dbInstance as any).prepare(
+          `SELECT id, invoice_number, issue_date, total, subtotal FROM invoices WHERE company_id = ? AND status != 'draft'`
+        ).all(companyId) as any[];
+        for (const inv of invoices) {
+          const total = Number(inv.total || inv.subtotal) || 0;
+          if (total <= 0) continue;
+          const num = inv.invoice_number || inv.id.substring(0, 8);
+          postJournalEntry(dbInstance, companyId, inv.issue_date || new Date().toISOString().slice(0, 10),
+            `Invoice created - #${num}`, [
+              { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${num}` },
+              { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${num}` },
+            ]);
+          posted++;
+        }
+
+        // ── Step 3: Post invoice payment JEs (DR Cash / CR Receivable) ──
+        const payments = (dbInstance as any).prepare(
+          `SELECT p.*, i.invoice_number FROM payments p LEFT JOIN invoices i ON p.invoice_id = i.id WHERE p.company_id = ?`
+        ).all(companyId) as any[];
+        for (const p of payments) {
+          const amount = Number(p.amount) || 0;
+          if (amount <= 0) continue;
+          postJournalEntry(dbInstance, companyId, p.date || new Date().toISOString().slice(0, 10),
+            `Payment received - ${p.invoice_number || p.invoice_id?.substring(0, 8) || 'unknown'}`, [
+              { nameHint: 'Cash', debit: amount, credit: 0, note: 'Cash received' },
+              { nameHint: 'Receivable', debit: 0, credit: amount, note: 'Clear AR' },
+            ]);
+          posted++;
+        }
+
+        // ── Step 4: Post expense JEs (DR [category] / CR Cash or Payable) ──
+        const expenses = (dbInstance as any).prepare(
+          `SELECT e.id, e.description, e.date, e.amount, e.status, e.category_id,
+                  COALESCE(c.name, '') as category_name
+           FROM expenses e
+           LEFT JOIN categories c ON e.category_id = c.id
+           WHERE e.company_id = ?`
+        ).all(companyId) as any[];
+        for (const exp of expenses) {
+          const amount = Number(exp.amount) || 0;
+          if (amount <= 0) continue;
+          const isPaid = ['paid', 'approved'].includes(exp.status);
+          const expenseHint = exp.category_name || 'Expense';
+          postJournalEntry(dbInstance, companyId, exp.date || new Date().toISOString().slice(0, 10),
+            `Expense recorded - ${exp.description || exp.id.substring(0, 8)}`, [
+              { nameHint: expenseHint, debit: amount, credit: 0, note: exp.description || 'Expense' },
+              { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: isPaid ? 'Cash paid' : 'Accounts Payable' },
+            ]);
+          posted++;
+        }
+
+        // ── Step 5: Post bill payment JEs (DR Payable / CR Cash) ──
+        const billPayments = (dbInstance as any).prepare(
+          `SELECT bp.*, b.bill_number FROM bill_payments bp LEFT JOIN bills b ON bp.bill_id = b.id WHERE bp.company_id = ?`
+        ).all(companyId) as any[];
+        for (const bp of billPayments) {
+          const amount = Number(bp.amount) || 0;
+          if (amount <= 0) continue;
+          postJournalEntry(dbInstance, companyId, bp.date || new Date().toISOString().slice(0, 10),
+            `Bill payment - ${bp.bill_number || bp.bill_id?.substring(0, 8) || 'unknown'}`, [
+              { nameHint: 'Payable', debit: amount, credit: 0, note: 'AP cleared' },
+              { nameHint: 'Cash', debit: 0, credit: amount, note: 'Cash paid' },
+            ]);
+          posted++;
+        }
+
+        return { deleted, posted };
+      });
+
+      const { deleted, posted } = rebuildFn();
+      scheduleAutoBackup();
+      return { posted, message: `Rebuilt GL: cleared ${deleted} old entries, posted ${posted} new journal entries.` };
+    } catch (err: any) {
+      console.error('gl:rebuild failed:', err);
+      return { error: err instanceof Error ? err.message : String(err) };
     }
-
-    // 1. Invoices → DR Receivable / CR Revenue
-    const invoices = dbInstance.prepare(
-      `SELECT id, invoice_number, issue_date, total, subtotal FROM invoices WHERE company_id = ? AND status != 'draft'`
-    ).all(companyId) as any[];
-    for (const inv of invoices) {
-      const desc = `Invoice created - #${inv.invoice_number || inv.id.substring(0, 8)}`;
-      if (existingDescs.has(desc)) continue;
-      const total = Number(inv.total || inv.subtotal) || 0;
-      if (total <= 0) continue;
-      postJournalEntry(dbInstance, companyId, inv.issue_date || new Date().toISOString().slice(0, 10), desc, [
-        { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${inv.invoice_number || ''}` },
-        { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${inv.invoice_number || ''}` },
-      ]);
-      posted++;
-    }
-
-    // 2. Invoice payments → DR Cash / CR Receivable (already handled by record-payment, but catch old ones)
-    const payments = dbInstance.prepare(
-      `SELECT p.*, i.invoice_number FROM payments p LEFT JOIN invoices i ON p.invoice_id = i.id WHERE p.company_id = ?`
-    ).all(companyId) as any[];
-    for (const p of payments) {
-      const desc = `Payment received - ${p.invoice_number || p.invoice_id?.substring(0, 8) || ''}`;
-      if (existingDescs.has(desc)) continue;
-      const amount = Number(p.amount) || 0;
-      if (amount <= 0) continue;
-      postJournalEntry(dbInstance, companyId, p.date || new Date().toISOString().slice(0, 10), desc, [
-        { nameHint: 'Cash', debit: amount, credit: 0, note: `Cash received` },
-        { nameHint: 'Receivable', debit: 0, credit: amount, note: `Clear AR` },
-      ]);
-      posted++;
-    }
-
-    // 3. Expenses → DR [category account] / CR Cash or Payable
-    const expenses = dbInstance.prepare(
-      `SELECT e.id, e.description, e.date, e.amount, e.status, e.category_id,
-              COALESCE(c.name, '') as category_name
-       FROM expenses e
-       LEFT JOIN categories c ON e.category_id = c.id
-       WHERE e.company_id = ?`
-    ).all(companyId) as any[];
-    for (const exp of expenses) {
-      const desc = `Expense recorded - ${exp.description || exp.id.substring(0, 8)}`;
-      if (existingDescs.has(desc)) continue;
-      const amount = Number(exp.amount) || 0;
-      if (amount <= 0) continue;
-      const isPaid = exp.status === 'paid';
-      // Use category name to find the right expense account
-      const expenseHint = exp.category_name || 'Expense';
-      postJournalEntry(dbInstance, companyId, exp.date || new Date().toISOString().slice(0, 10), desc, [
-        { nameHint: expenseHint, debit: amount, credit: 0, note: exp.description || 'Expense' },
-        { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: isPaid ? 'Cash paid' : 'Accounts Payable' },
-      ]);
-      posted++;
-    }
-
-    // 4. Bill payments → DR Payable / CR Cash (already handled by bills:pay, but catch old ones)
-    const billPayments = dbInstance.prepare(
-      `SELECT bp.*, b.bill_number FROM bill_payments bp LEFT JOIN bills b ON bp.bill_id = b.id WHERE bp.company_id = ?`
-    ).all(companyId) as any[];
-    for (const bp of billPayments) {
-      const desc = `Bill payment - ${bp.bill_number || bp.bill_id?.substring(0, 8) || ''}`;
-      if (existingDescs.has(desc)) continue;
-      const amount = Number(bp.amount) || 0;
-      if (amount <= 0) continue;
-      postJournalEntry(dbInstance, companyId, bp.date || new Date().toISOString().slice(0, 10), desc, [
-        { nameHint: 'Payable', debit: amount, credit: 0, note: 'AP cleared' },
-        { nameHint: 'Cash', debit: 0, credit: amount, note: 'Cash paid' },
-      ]);
-      posted++;
-    }
-
-    scheduleAutoBackup();
-    return { posted, message: `Rebuilt GL: ${posted} journal entries posted.` };
   });
 
   // ─── Invoice Record Payment ───────────────────────────────
