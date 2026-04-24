@@ -120,29 +120,53 @@ const BudgetVsActualReport: React.FC = () => {
       </tr>`
     ).join('');
 
+    const utilizationPct = totalBudgeted > 0 ? ((totalActual / totalBudgeted) * 100).toFixed(1) : '0.0';
+    const utilizationColor = parseFloat(utilizationPct) > 100 ? '#dc2626' : parseFloat(utilizationPct) > 85 ? '#eab308' : '#16a34a';
+    const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const companyName = escHtml(activeCompany?.name || 'Company');
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       @page { size: letter; margin: 0.5in 0.6in; }
-      body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      h1 { font-size: 18px; margin-bottom: 4px; } h2 { font-size: 14px; color: #475569; margin-bottom: 16px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-      th { background: #f8fafc; padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #0f172a; color: #475569; }
-      tr:nth-child(even) td { background: #fafafa; }
-      @media print { tr { page-break-inside: avoid; } }
-      .total td { font-weight: 700; border-top: 2px solid #0f172a; }
+      body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; padding: 40px 44px; color: #1e293b; font-size: 11px; line-height: 1.5; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 14px; margin-bottom: 20px; }
+      .co { font-size: 20px; font-weight: 800; color: #0f172a; }
+      .co-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+      .badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #0f172a; padding: 5px 14px; border: 2px solid #0f172a; }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+      .stat { border: 1px solid #e2e8f0; padding: 12px 14px; background: #f8fafc; }
+      .stat-lbl { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #94a3b8; margin-bottom: 3px; }
+      .stat-val { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #f8fafc; padding: 7px 12px; text-align: left; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 2px solid #0f172a; color: #64748b; }
+      td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; color: #334155; }
+      tr:nth-child(even) td { background: rgba(248,250,252,0.5); }
+      .total td { font-weight: 800; border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; font-size: 12px; }
+      .r { text-align: right; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+      .footer { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; }
+      @media print { tr { page-break-inside: avoid; } body { padding: 0; } }
     </style></head><body>
-      <h1>Budget vs Actual Report</h1>
-      <h2>${escHtml(budget?.name || 'Budget')} &middot; ${escHtml(budget?.start_date || '')} to ${escHtml(budget?.end_date || '')}</h2>
-      <table><thead><tr><th>Category</th><th style="text-align:right">Budgeted</th><th style="text-align:right">Actual</th><th style="text-align:right">Variance</th><th style="text-align:right">%</th></tr></thead>
+      <div class="hdr"><div><div class="co">${companyName}</div><div class="co-sub">${escHtml(budget?.start_date || '')} through ${escHtml(budget?.end_date || '')}</div></div><div class="badge">Budget vs Actual</div></div>
+
+      <div class="stats">
+        <div class="stat" style="border-left:3px solid #0f172a;"><div class="stat-lbl">Budget</div><div class="stat-val">${fmt.format(totalBudgeted)}</div></div>
+        <div class="stat" style="border-left:3px solid #2563eb;"><div class="stat-lbl">Actual Spend</div><div class="stat-val" style="color:#2563eb;">${fmt.format(totalActual)}</div></div>
+        <div class="stat" style="border-left:3px solid ${totalVariance >= 0 ? '#16a34a' : '#dc2626'};"><div class="stat-lbl">Variance</div><div class="stat-val" style="color:${totalVariance >= 0 ? '#16a34a' : '#dc2626'};">${fmt.format(totalVariance)}</div></div>
+        <div class="stat" style="border-left:3px solid ${utilizationColor};"><div class="stat-lbl">Utilization</div><div class="stat-val" style="color:${utilizationColor};">${utilizationPct}%</div></div>
+      </div>
+
+      <table><thead><tr><th>Category</th><th class="r">Budgeted</th><th class="r">Actual</th><th class="r">Variance</th><th class="r">%</th></tr></thead>
       <tbody>${rows}
         <tr class="total">
-          <td style="padding:8px 12px;">Total</td>
-          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(totalBudgeted)}</td>
-          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(totalActual)}</td>
-          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;color:${totalVariance >= 0 ? '#16a34a' : '#dc2626'}">${fmt.format(totalVariance)}</td>
-          <td style="padding:8px 12px;text-align:right;">${totalVariancePct}%</td>
+          <td>Total</td>
+          <td class="r">${fmt.format(totalBudgeted)}</td>
+          <td class="r">${fmt.format(totalActual)}</td>
+          <td class="r" style="color:${totalVariance >= 0 ? '#16a34a' : '#dc2626'}">${fmt.format(totalVariance)}</td>
+          <td class="r">${totalVariancePct}%</td>
         </tr>
       </tbody></table>
+
+      <div class="footer"><span>${companyName}</span><span>Generated ${generatedDate}</span></div>
     </body></html>`;
     await api.printPreview(html, 'Budget vs Actual Report');
   };

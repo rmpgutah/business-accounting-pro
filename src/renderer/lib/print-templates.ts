@@ -29,9 +29,9 @@ const fmtDate = (d: string) => {
 const baseStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    color: #1a1a1a;
-    font-size: 13px;
+    font-family: -apple-system, 'Helvetica Neue', Arial, system-ui, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+    font-size: 12px;
     line-height: 1.55;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -42,25 +42,26 @@ const baseStyles = `
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
-  th, td { padding: 8px 12px; text-align: left; word-wrap: break-word; overflow-wrap: anywhere; }
+  th, td { padding: 7px 12px; text-align: left; word-wrap: break-word; overflow-wrap: anywhere; }
   th {
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #475569;
+    letter-spacing: 0.6px;
+    color: #64748b;
     border-bottom: 2px solid #0f172a;
     background: #f8fafc;
   }
-  td { border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px; }
-  tr:nth-child(even) td { background: #fafafa; }
+  td { border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 11px; }
+  tr:nth-child(even) td { background: rgba(248,250,252,0.5); }
   .text-right { text-align: right; font-variant-numeric: tabular-nums; }
   .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Menlo', Consolas, 'Courier New', monospace; }
   .font-bold { font-weight: 700; }
-  .text-muted { color: #64748b; }
+  .text-muted { color: #94a3b8; }
   .text-dark { color: #0f172a; }
   .text-green { color: #16a34a; }
   .text-red { color: #dc2626; }
+  .text-blue { color: #2563eb; }
   .section-label {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
     color: #64748b; letter-spacing: 0.8px; margin-bottom: 6px;
@@ -69,7 +70,42 @@ const baseStyles = `
   img { max-width: 100%; height: auto; }
   /* Let totals/footer blocks stay together */
   .totals, .totals-box, .balance-box, .net-pay-box, .signature-block, .sig-block, .footer-co { page-break-inside: avoid; break-inside: avoid; }
+  /* ── Enhanced report utilities ── */
+  .rpt-page { padding: 40px 44px; }
+  .rpt-hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px; }
+  .rpt-co { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
+  .rpt-co-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .rpt-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #0f172a; padding: 5px 14px; border: 2px solid #0f172a; }
+  .rpt-meta { display: flex; gap: 24px; margin-bottom: 20px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; }
+  .rpt-meta-item .rpt-meta-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #94a3b8; display: block; margin-bottom: 1px; }
+  .rpt-meta-item .rpt-meta-val { font-size: 12px; font-weight: 600; color: #0f172a; }
+  .rpt-section { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #fff; padding: 5px 12px; margin-top: 24px; margin-bottom: 0; background: #0f172a; }
+  .rpt-section-alt { background: #334155; }
+  .rpt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .rpt-stat { border: 1px solid #e2e8f0; padding: 12px 14px; background: #f8fafc; }
+  .rpt-stat-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #94a3b8; margin-bottom: 3px; }
+  .rpt-stat-val { font-size: 18px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .rpt-stat-sub { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+  .rpt-total td { border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; font-weight: 700; }
+  .rpt-footer { display: flex; justify-content: space-between; margin-top: 28px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; }
+  @media print { .rpt-page { padding: 0; } .no-break { page-break-inside: avoid; } }
 `;
+
+// ─── Shared report header builder ──────────────────────────
+function reportHeader(companyName: string, docTitle: string, dateRange?: string): string {
+  return `<div class="rpt-hdr">
+    <div>
+      <div class="rpt-co">${esc(companyName)}</div>
+      ${dateRange ? `<div class="rpt-co-sub">${esc(dateRange)}</div>` : ''}
+    </div>
+    <div class="rpt-badge">${esc(docTitle)}</div>
+  </div>`;
+}
+
+function reportFooter(companyName: string): string {
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `<div class="rpt-footer"><span>${esc(companyName)}</span><span>Generated ${date}</span></div>`;
+}
 
 // ─── Status stamp helper ─────────────────────────────────────
 function statusStampCSS(color: string): string {
@@ -1118,39 +1154,39 @@ export function generateReportHTML(
       return `<td class="${align} ${mono} ${bold} ${accent}">${display}</td>`;
     }).join('');
 
-    const trClass = row._separator ? 'style="border-top:2px solid #0f172a;"' : '';
-    const bgClass = row._highlight ? 'style="background:#f8fafc;"' : '';
+    const trClass = row._separator ? 'class="rpt-total"' : '';
+    const bgClass = row._highlight ? 'style="background:#f1f5f9;"' : '';
     return `<tr ${trClass} ${bgClass}>${cells}</tr>`;
   }).join('');
 
   const summaryHTML = summary && summary.length > 0 ? `
-    <div style="margin-top:24px;padding-top:16px;border-top:2px solid #0f172a;">
-      ${summary.map(s => {
+    <div class="no-break" style="margin-top:20px;">
+      <div class="rpt-section" style="margin-top:0;">Summary</div>
+      ${summary.map((s, i) => {
         const color = s.accent === 'green' ? '#16a34a' : s.accent === 'red' ? '#dc2626' : '#0f172a';
-        return `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
+        const bg = i % 2 === 0 ? 'background:#f8fafc;' : '';
+        return `<div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;border-bottom:1px solid #f1f5f9;${bg}">
           <span style="font-weight:700;color:#0f172a;">${esc(s.label)}</span>
-          <span style="font-weight:700;color:${color};font-variant-numeric:tabular-nums;">${esc(s.value)}</span>
+          <span style="font-weight:800;color:${color};font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${esc(s.value)}</span>
         </div>`;
       }).join('')}
     </div>
   ` : '';
 
+  const rowCount = rows.filter(r => !r._separator && !r._bold).length;
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 ${baseStyles}
-.report { padding: 48px; }
-.report-header { text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
-.report-company { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #0f172a; }
-.report-title { font-size: 12px; color: #475569; margin-top: 4px; }
-.report-dates { font-size: 11px; color: #475569; margin-top: 2px; }
-.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #64748b; }
 </style></head>
 <body>
-<div class="report">
-  <div class="report-header">
-    <div class="report-company">${esc(companyName)}</div>
-    <div class="report-title">${esc(title)}</div>
-    <div class="report-dates">${esc(dateRange)}</div>
+<div class="rpt-page">
+  ${reportHeader(companyName, title, dateRange)}
+
+  <div class="rpt-meta">
+    <div class="rpt-meta-item"><span class="rpt-meta-label">Report</span><span class="rpt-meta-val">${esc(title)}</span></div>
+    <div class="rpt-meta-item"><span class="rpt-meta-label">Period</span><span class="rpt-meta-val">${esc(dateRange)}</span></div>
+    <div class="rpt-meta-item"><span class="rpt-meta-label">Entries</span><span class="rpt-meta-val">${rowCount}</span></div>
   </div>
 
   <table>
@@ -1160,7 +1196,7 @@ ${baseStyles}
 
   ${summaryHTML}
 
-  <div class="footer-co">${esc(companyName)}</div>
+  ${reportFooter(companyName)}
 </div>
 </body></html>`;
 }
@@ -1221,49 +1257,87 @@ export function generateDebtPortfolioReportHTML(
     </tr>`;
   }).join('');
 
+  // Aging bar chart widths
+  const maxBucket = Math.max(...Object.values(buckets).map(b => b.amount), 1);
+  const bucketColors: Record<string, string> = { '0-30': '#22c55e', '31-90': '#eab308', '91-180': '#f97316', '180+': '#dc2626' };
+
+  const agingBars = Object.entries(buckets).map(([label, { count, amount }]) => {
+    const pct = maxBucket > 0 ? (amount / maxBucket) * 100 : 0;
+    const color = bucketColors[label] || '#64748b';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+      <span style="width:60px;font-size:11px;font-weight:600;color:#334155;">${label}d</span>
+      <div style="flex:1;height:18px;background:#f1f5f9;position:relative;">
+        <div style="height:100%;width:${pct}%;background:${color};min-width:${amount > 0 ? '2px' : '0'};"></div>
+      </div>
+      <span style="width:40px;text-align:right;font-size:10px;color:#64748b;">${count}</span>
+      <span style="width:90px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(amount)}</span>
+      <span style="width:45px;text-align:right;font-size:10px;color:#94a3b8;">${totalBalance > 0 ? ((amount / totalBalance) * 100).toFixed(1) : '0.0'}%</span>
+    </div>`;
+  }).join('');
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Debt Portfolio Report</title><style>
 ${baseStyles}
-.page { padding: 48px; }
-.report-header { border-bottom: 3px solid #0f172a; padding-bottom: 16px; margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-end; }
-.report-title { font-size: 22px; font-weight: 800; color: #0f172a; }
-.report-date { font-size: 11px; color: #64748b; }
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
-.stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 14px 16px; }
-.stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 4px; }
-.stat-value { font-size: 20px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
-.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #0f172a; margin: 24px 0 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
-.text-right { text-align: right; }
-.text-muted { color: #64748b; }
-.font-mono { font-variant-numeric: tabular-nums; }
 </style></head>
-<body><div class="page">
-  <div class="report-header">
-    <div>
-      <div class="report-title">Debt Portfolio Report</div>
-      <div style="font-size:13px;color:#64748b;margin-top:4px;">${companyName}</div>
+<body><div class="rpt-page">
+  ${reportHeader(companyName, 'Debt Portfolio Report')}
+
+  <!-- KPI Cards -->
+  <div class="rpt-stats">
+    <div class="rpt-stat" style="border-left:3px solid #0f172a;">
+      <div class="rpt-stat-label">Total Accounts</div>
+      <div class="rpt-stat-val">${debts.length}</div>
     </div>
-    <div class="report-date">Generated ${today}</div>
+    <div class="rpt-stat" style="border-left:3px solid #dc2626;">
+      <div class="rpt-stat-label">Total Balance Due</div>
+      <div class="rpt-stat-val" style="color:#dc2626;">${fmt(totalBalance)}</div>
+      <div class="rpt-stat-sub">Original: ${fmt(totalOriginal)}</div>
+    </div>
+    <div class="rpt-stat" style="border-left:3px solid #16a34a;">
+      <div class="rpt-stat-label">Collected YTD</div>
+      <div class="rpt-stat-val" style="color:#16a34a;">${fmt(collectedYtd)}</div>
+    </div>
+    <div class="rpt-stat" style="border-left:3px solid #2563eb;">
+      <div class="rpt-stat-label">Recovery Rate</div>
+      <div class="rpt-stat-val">${recoveryRate}%</div>
+    </div>
   </div>
 
-  <div class="stats-grid">
-    <div class="stat-box"><div class="stat-label">Total Accounts</div><div class="stat-value">${debts.length}</div></div>
-    <div class="stat-box"><div class="stat-label">Total Balance</div><div class="stat-value">${fmt(totalBalance)}</div></div>
-    <div class="stat-box"><div class="stat-label">Collected YTD</div><div class="stat-value" style="color:#16a34a">${fmt(collectedYtd)}</div></div>
-    <div class="stat-box"><div class="stat-label">Recovery Rate</div><div class="stat-value">${recoveryRate}%</div></div>
+  <!-- Aging Breakdown (bar chart) -->
+  <div class="rpt-section">Aging Breakdown</div>
+  <div style="padding:12px 0;">
+    <div style="display:flex;gap:12px;padding:0 0 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;border-bottom:1px solid #e2e8f0;">
+      <span style="width:60px;">Bucket</span><span style="flex:1;">Distribution</span><span style="width:40px;text-align:right;">Accts</span><span style="width:90px;text-align:right;">Balance</span><span style="width:45px;text-align:right;">%</span>
+    </div>
+    ${agingBars}
   </div>
 
-  <div class="section-title">Aging Breakdown</div>
-  <table><thead><tr><th>Bucket</th><th class="text-right">Accounts</th><th class="text-right">Balance</th><th class="text-right">% of Total</th></tr></thead>
-  <tbody>${agingRows}</tbody></table>
+  <!-- Pipeline Stages -->
+  <div class="rpt-section rpt-section-alt">Pipeline Stage Breakdown</div>
+  <table><thead><tr><th>Stage</th><th class="text-right">Count</th><th class="text-right">% of Total</th></tr></thead>
+  <tbody>${Object.entries(stages).map(([stage, count]) => `
+    <tr>
+      <td style="text-transform:capitalize;">${esc(stage.replace(/_/g, ' '))}</td>
+      <td class="text-right font-mono">${count}</td>
+      <td class="text-right text-muted">${debts.length > 0 ? ((count / debts.length) * 100).toFixed(1) : '0.0'}%</td>
+    </tr>`).join('')}</tbody></table>
 
-  <div class="section-title">Pipeline Stage Breakdown</div>
-  <table><thead><tr><th>Stage</th><th class="text-right">Count</th></tr></thead>
-  <tbody>${stageRows}</tbody></table>
+  <!-- Top 10 -->
+  <div class="rpt-section">Top 10 Accounts by Balance</div>
+  <table><thead><tr><th style="width:5%">#</th><th>Debtor</th><th class="text-right">Balance</th><th class="text-right">Age</th><th>Stage</th></tr></thead>
+  <tbody>${top10.map((d, i) => {
+    const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
+    const ageColor = days > 180 ? '#dc2626' : days > 90 ? '#f97316' : days > 30 ? '#eab308' : '#22c55e';
+    return `<tr>
+      <td style="color:#94a3b8;font-size:10px;">${i + 1}</td>
+      <td class="font-bold">${esc(d.debtor_name || '\u2014')}</td>
+      <td class="text-right font-mono font-bold">${fmt(Number(d.balance_due || 0))}</td>
+      <td class="text-right" style="color:${ageColor};font-weight:600;">${days}d</td>
+      <td style="text-transform:capitalize;color:#64748b;">${esc((d.current_stage || '').replace(/_/g, ' '))}</td>
+    </tr>`;
+  }).join('')}</tbody></table>
 
-  <div class="section-title">Top 10 Accounts by Balance</div>
-  <table><thead><tr><th>Debtor</th><th class="text-right">Balance</th><th class="text-right">Age</th><th>Stage</th></tr></thead>
-  <tbody>${top10Rows}</tbody></table>
+  ${reportFooter(companyName)}
 </div></body></html>`;
 }
 
@@ -1596,32 +1670,45 @@ ${paymentInstructions}
   const letter = LETTERS[letterType] || LETTERS.reminder;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
   * { box-sizing:border-box; margin:0; padding:0; }
-  @page { size: letter; margin: 0.5in; }
-  html, body { font-family:Georgia,'Times New Roman',serif; font-size:13px; color:#111; background:#fff; padding:48px; line-height:1.7; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @page { size: letter; margin: 0.6in 0.7in; }
+  html, body { font-family:Georgia,'Times New Roman',serif; font-size:13px; color:#111; background:#fff; padding:48px 56px; line-height:1.7; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   thead { display: table-header-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
-  table { border-collapse: collapse; }
+  table { border-collapse: collapse; width: 100%; }
   .page { max-width:700px; margin:0 auto; }
-  .hdr { border-bottom:3px solid ${letter.accent}; padding-bottom:20px; margin-bottom:32px; }
-  .co { font-size:20px; font-weight:700; color:${letter.accent}; }
-  .co-info { font-size:11px; color:#555; margin-top:4px; }
-  .dt { text-align:right; font-size:12px; color:#555; margin-bottom:24px; }
+  .hdr { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid ${letter.accent}; padding-bottom:18px; margin-bottom:28px; }
+  .co { font-size:22px; font-weight:800; color:${letter.accent}; letter-spacing:-0.3px; }
+  .co-info { font-size:10px; color:#666; margin-top:6px; line-height:1.6; }
+  .dt { text-align:right; font-size:11px; color:#666; }
+  .ref-num { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:${letter.accent}; margin-top:4px; }
   .addr { margin-bottom:24px; font-size:12px; line-height:1.6; }
-  .ttl { font-size:16px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:${letter.accent}; border-bottom:1px solid #ddd; padding-bottom:8px; margin-bottom:20px; }
-  .bd p { margin-bottom:12px; } .bd ul { margin:12px 0; padding-left:24px; }
-  .sig { margin-top:40px; }
-  .sl { width:200px; border-top:1px solid #333; margin-top:48px; padding-top:4px; }
-  .ft { border-top:1px solid #ddd; margin-top:40px; padding-top:12px; text-align:center; font-size:10px; color:#555; }
+  .ttl { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:${letter.accent}; border-bottom:2px solid ${letter.accent}; padding-bottom:8px; margin-bottom:20px; }
+  .bd p { margin-bottom:14px; font-size:12.5px; } .bd ul { margin:12px 0; padding-left:24px; font-size:12.5px; }
+  .sig { margin-top:44px; page-break-inside:avoid; }
+  .sl { width:220px; border-top:1px solid #333; margin-top:48px; padding-top:6px; }
+  .ft { border-top:2px solid #ddd; margin-top:44px; padding-top:12px; text-align:center; font-size:9px; color:#888; line-height:1.6; }
+  .ft-warn { font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
   @media print { body { padding:0; } }
 </style></head><body>
 <div class="page">
-  <div class="hdr"><div class="co">${companyName}</div><div class="co-info">${companyAddr}${companyPhone ? ' · ' + companyPhone : ''}${companyEmail ? ' · ' + companyEmail : ''}</div></div>
-  <div class="dt">${todayLong}</div>
-  <div class="addr"><strong>${debtorName}</strong><br>${debtorAddr || '—'}</div>
+  <div class="hdr">
+    <div>
+      <div class="co">${companyName}</div>
+      <div class="co-info">${companyAddr}${companyPhone ? '<br>' + companyPhone : ''}${companyEmail ? (companyPhone ? ' &middot; ' : '<br>') + companyEmail : ''}</div>
+    </div>
+    <div>
+      <div class="dt">${todayLong}</div>
+      <div class="ref-num">Ref: ${accountRef}</div>
+    </div>
+  </div>
+  <div class="addr"><strong>${debtorName}</strong><br>${debtorAddr || '\u2014'}</div>
   <div class="ttl">${letter.title}</div>
   <div class="bd"><p>Dear ${debtorName},</p>${letter.body}</div>
   <div class="sig"><p>Sincerely,</p><div class="sl"><strong>${companyName}</strong><br><span style="font-size:11px;color:#555;">Collections Department</span></div></div>
-  <div class="ft">This is an attempt to collect a debt. Any information obtained will be used for that purpose.<br>${companyName} · ${todayLong}</div>
+  <div class="ft">
+    <div class="ft-warn">This is an attempt to collect a debt. Any information obtained will be used for that purpose.</div>
+    ${companyName} &middot; ${todayLong}
+  </div>
 </div></body></html>`;
 }
 
@@ -1694,26 +1781,63 @@ export function generateExpenseReportHTML(
     return mainRow + lineItemRows;
   }).join('');
 
+  // Compute stats
+  const totalTax = expenses.reduce((s, e) => s + (Number(e.tax_amount) || 0), 0);
+  const avgExpense = expenses.length > 0 ? grandTotal / expenses.length : 0;
+
+  // Category breakdown
+  const catTotals: Record<string, number> = {};
+  expenses.forEach(e => { const c = e.category_name || 'Uncategorized'; catTotals[c] = (catTotals[c] || 0) + (Number(e.amount) || 0); });
+  const topCategories = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxCat = Math.max(...topCategories.map(([, v]) => v), 1);
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 ${baseStyles}
-.report { padding: 48px; }
-.report-header { text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
-.report-company { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #0f172a; }
-.report-title { font-size: 12px; color: #475569; margin-top: 4px; }
-.report-dates { font-size: 11px; color: #475569; margin-top: 2px; }
-.footer-co { text-align: center; margin-top: 32px; font-size: 10px; color: #64748b; }
-@media print { .report { padding: 0; } tr { page-break-inside: avoid; } }
 </style></head>
 <body>
-<div class="report">
-  <div class="report-header">
-    <div class="report-company">${esc(companyName)}</div>
-    <div class="report-title">Expense Detail Report</div>
-    <div class="report-dates">${esc(dateRange)}</div>
-    ${groupBy && groupBy !== 'none' ? `<div style="font-size:11px;color:#475569;margin-top:2px;">Grouped by: ${esc(groupBy)}</div>` : ''}
+<div class="rpt-page">
+  ${reportHeader(companyName, 'Expense Detail Report', dateRange)}
+
+  <!-- Stats -->
+  <div class="rpt-stats">
+    <div class="rpt-stat" style="border-left:3px solid #dc2626;">
+      <div class="rpt-stat-label">Grand Total</div>
+      <div class="rpt-stat-val" style="color:#dc2626;">${fmt(grandTotal)}</div>
+    </div>
+    <div class="rpt-stat" style="border-left:3px solid #0f172a;">
+      <div class="rpt-stat-label">Transactions</div>
+      <div class="rpt-stat-val">${expenses.length}</div>
+    </div>
+    <div class="rpt-stat" style="border-left:3px solid #64748b;">
+      <div class="rpt-stat-label">Average</div>
+      <div class="rpt-stat-val">${fmt(avgExpense)}</div>
+    </div>
+    <div class="rpt-stat" style="border-left:3px solid #eab308;">
+      <div class="rpt-stat-label">Total Tax</div>
+      <div class="rpt-stat-val">${fmt(totalTax)}</div>
+    </div>
   </div>
 
+  <!-- Top Categories Mini-Chart -->
+  ${topCategories.length > 0 ? `
+  <div class="rpt-section rpt-section-alt">Top Categories</div>
+  <div style="padding:8px 0 16px;">
+    ${topCategories.map(([cat, amount]) => {
+      const pct = maxCat > 0 ? (amount / maxCat) * 100 : 0;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
+        <span style="width:120px;font-size:10px;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(cat)}</span>
+        <div style="flex:1;height:14px;background:#f1f5f9;">
+          <div style="height:100%;width:${pct}%;background:#ef4444;opacity:0.7;"></div>
+        </div>
+        <span style="width:80px;text-align:right;font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(amount)}</span>
+      </div>`;
+    }).join('')}
+  </div>
+  ` : ''}
+
+  <!-- Detail Table -->
+  <div class="rpt-section">Transaction Detail</div>
   <table>
     <thead><tr>
       <th>Date</th>
@@ -1726,14 +1850,16 @@ ${baseStyles}
     <tbody>${expenseRows}</tbody>
   </table>
 
-  <div style="margin-top:24px;padding-top:16px;border-top:2px solid #0f172a;">
-    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
-      <span style="font-weight:700;color:#0f172a;">Grand Total</span>
-      <span style="font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fmt(grandTotal)}</span>
+  <!-- Grand Total -->
+  <div class="no-break" style="margin-top:16px;">
+    <div class="rpt-section" style="background:#7f1d1d;margin-top:0;">Total</div>
+    <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#fef2f2;font-size:13px;">
+      <span style="font-weight:800;color:#0f172a;">Grand Total (${expenses.length} transactions)</span>
+      <span style="font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(grandTotal)}</span>
     </div>
   </div>
 
-  <div class="footer-co">${esc(companyName)}</div>
+  ${reportFooter(companyName)}
 </div>
 </body></html>`;
 }

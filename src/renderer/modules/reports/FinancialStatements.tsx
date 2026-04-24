@@ -39,6 +39,34 @@ interface CashFlowData {
   financing: AccountLine[];
 }
 
+// ─── Shared Financial Statement Styles ──────────────────
+const FS_STYLES = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: letter; margin: 0.5in 0.6in; }
+  body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 11px; line-height: 1.5; background: #fff; padding: 40px 44px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .fs-page { max-width: 720px; margin: 0 auto; }
+  .fs-hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 14px; margin-bottom: 20px; }
+  .fs-co { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
+  .fs-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .fs-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #0f172a; padding: 5px 14px; border: 2px solid #0f172a; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; }
+  .fs-section td { padding: 6px 14px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #fff; background: #0f172a; border: none; }
+  .fs-section-alt td { background: #334155; }
+  .fs-subsec td { padding: 3px 14px 3px 28px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #94a3b8; border-bottom: 1px solid #f1f5f9; }
+  .fs-line td { padding: 5px 14px; font-size: 11px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+  .fs-line td:first-child { padding-left: 36px; }
+  .fs-line-deep td:first-child { padding-left: 52px; font-size: 10px; color: #64748b; }
+  .fs-total td { padding: 6px 14px; font-weight: 700; color: #0f172a; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+  .fs-subtotal td { padding: 5px 14px; font-weight: 600; color: #0f172a; border-top: 1px solid #e2e8f0; }
+  .fs-grand td { padding: 10px 14px; font-weight: 800; font-size: 13px; color: #0f172a; border-top: 3px solid #0f172a; border-bottom: none; background: #f8fafc; }
+  .r { text-align: right; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  .green { color: #16a34a; }
+  .red { color: #dc2626; }
+  .fs-footer { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; }
+  @media print { body { padding: 0; } }
+`;
+const fsDate = () => new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
 // ─── Statement HTML generators for print/PDF ────────────
 function buildPnLHTML(data: PnLData, companyName: string, startDate: string, endDate: string): string {
   const totalRevenue = (data.revenue || []).reduce((s, a) => s + (a.total || 0), 0);
@@ -46,33 +74,57 @@ function buildPnLHTML(data: PnLData, companyName: string, startDate: string, end
   const grossProfit = totalRevenue - totalCOGS;
   const allOpex = Object.values(data.operatingExpenses || {}).flat();
   const totalOpex = allOpex.reduce((s, a) => s + (a.total || 0), 0);
-  const netIncome = grossProfit - totalOpex;
+  const totalOtherInc = (data.otherIncome || []).reduce((s, a) => s + (a.total || 0), 0);
+  const totalOtherExp = (data.otherExpenses || []).reduce((s, a) => s + (a.total || 0), 0);
+  const netIncome = grossProfit - totalOpex + totalOtherInc - totalOtherExp;
+  const grossMargin = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : '0.0';
+  const netMargin = totalRevenue > 0 ? ((netIncome / totalRevenue) * 100).toFixed(1) : '0.0';
 
-  const lineRow = (name: string, amount: number, indent = 0, bold = false) =>
-    `<tr><td style="padding-left:${16 + indent * 20}px;${bold ? 'font-weight:700;' : ''}">${name}</td><td style="text-align:right;font-family:monospace;${bold ? 'font-weight:700;' : ''}">${formatCurrency(amount)}</td></tr>`;
-
-  const sectionHeader = (label: string) =>
-    `<tr style="background:rgba(255,255,255,0.03);"><td colspan="2" style="padding:8px 16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">${label}</td></tr>`;
+  const line = (name: string, amount: number) => `<tr class="fs-line"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const lineDeep = (name: string, amount: number) => `<tr class="fs-line fs-line-deep"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const subtotal = (name: string, amount: number) => `<tr class="fs-subtotal"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const total = (name: string, amount: number) => `<tr class="fs-total"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const section = (name: string, alt = false) => `<tr class="fs-section${alt ? ' fs-section-alt' : ''}"><td colspan="2">${name}</td></tr>`;
+  const subsec = (name: string) => `<tr class="fs-subsec"><td colspan="2">${name}</td></tr>`;
 
   let rows = '';
-  rows += sectionHeader('Revenue');
-  (data.revenue || []).forEach(a => { rows += lineRow(a.account_name, a.total || 0, 1); });
-  rows += lineRow('Total Revenue', totalRevenue, 0, true);
-  rows += sectionHeader('Cost of Goods Sold');
-  (data.costOfServices || []).forEach(a => { rows += lineRow(a.account_name, a.total || 0, 1); });
-  rows += lineRow('Total COGS', totalCOGS, 0, true);
-  rows += lineRow('Gross Profit', grossProfit, 0, true);
-  rows += sectionHeader('Operating Expenses');
+  rows += section('Revenue');
+  (data.revenue || []).forEach(a => { rows += line(a.account_name, a.total || 0); });
+  rows += total('Total Revenue', totalRevenue);
+
+  rows += section('Cost of Goods Sold', true);
+  (data.costOfServices || []).forEach(a => { rows += line(a.account_name, a.total || 0); });
+  rows += total('Total COGS', totalCOGS);
+  rows += `<tr class="fs-total"><td style="font-size:12px;">Gross Profit <span style="font-size:9px;color:#94a3b8;font-weight:400;margin-left:8px;">${grossMargin}% margin</span></td><td class="r" style="font-size:12px;color:${grossProfit >= 0 ? '#16a34a' : '#dc2626'};">${formatCurrency(grossProfit)}</td></tr>`;
+
+  rows += section('Operating Expenses');
   for (const [cat, items] of Object.entries(data.operatingExpenses || {})) {
     if (items.length > 0) {
-      rows += `<tr><td colspan="2" style="padding:4px 16px 2px 24px;font-size:10px;font-weight:600;text-transform:uppercase;color:#888;">${cat}</td></tr>`;
-      items.forEach(a => { rows += lineRow(a.account_name, a.total || 0, 2); });
+      rows += subsec(cat);
+      items.forEach(a => { rows += lineDeep(a.account_name, a.total || 0); });
     }
   }
-  rows += lineRow('Total Operating Expenses', totalOpex, 0, true);
-  rows += `<tr style="border-top:2px solid #333;"><td style="padding:8px 16px;font-weight:700;font-size:14px;">Net Income</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:14px;color:${netIncome >= 0 ? '#10b981' : '#ef4444'};">${formatCurrency(netIncome)}</td></tr>`;
+  rows += total('Total Operating Expenses', totalOpex);
 
-  return `<html><head><style>body{font-family:-apple-system,sans-serif;padding:40px;color:#222;max-width:800px;margin:0 auto;}table{width:100%;border-collapse:collapse;}td{padding:4px 16px;font-size:12px;border-bottom:1px solid #eee;}</style></head><body><h1 style="font-size:18px;margin-bottom:4px;">${companyName}</h1><h2 style="font-size:14px;font-weight:400;color:#666;margin-bottom:24px;">Profit & Loss Statement: ${startDate} to ${endDate}</h2><table>${rows}</table></body></html>`;
+  if ((data.otherIncome || []).length > 0) {
+    rows += section('Other Income', true);
+    data.otherIncome.forEach(a => { rows += line(a.account_name, a.total || 0); });
+    rows += subtotal('Total Other Income', totalOtherInc);
+  }
+  if ((data.otherExpenses || []).length > 0) {
+    rows += section('Other Expenses', true);
+    data.otherExpenses.forEach(a => { rows += line(a.account_name, a.total || 0); });
+    rows += subtotal('Total Other Expenses', totalOtherExp);
+  }
+
+  rows += `<tr class="fs-grand"><td>Net Income <span style="font-size:9px;color:#94a3b8;font-weight:400;margin-left:8px;">${netMargin}% margin</span></td><td class="r ${netIncome >= 0 ? 'green' : 'red'}">${formatCurrency(netIncome)}</td></tr>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${FS_STYLES}</style></head><body>
+<div class="fs-page">
+  <div class="fs-hdr"><div><div class="fs-co">${companyName}</div><div class="fs-sub">${startDate} through ${endDate}</div></div><div class="fs-badge">Profit & Loss</div></div>
+  <table>${rows}</table>
+  <div class="fs-footer"><span>${companyName}</span><span>Generated ${fsDate()}</span></div>
+</div></body></html>`;
 }
 
 function buildBSHTML(data: BSData, companyName: string, asOfDate: string): string {
@@ -85,36 +137,46 @@ function buildBSHTML(data: BSData, companyName: string, asOfDate: string): strin
   const totalLiabilities = totalCurrentLiab + totalLongTermLiab;
   const totalEquity = sumBal(data.equity);
 
-  const lineRow = (name: string, amount: number, indent = 0, bold = false) =>
-    `<tr><td style="padding-left:${16 + indent * 20}px;${bold ? 'font-weight:700;' : ''}">${name}</td><td style="text-align:right;font-family:monospace;${bold ? 'font-weight:700;' : ''}">${formatCurrency(amount)}</td></tr>`;
-  const sectionHeader = (label: string) =>
-    `<tr style="background:rgba(0,0,0,0.03);"><td colspan="2" style="padding:8px 16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">${label}</td></tr>`;
+  const line = (name: string, amount: number) => `<tr class="fs-line"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const subtotal = (name: string, amount: number) => `<tr class="fs-subtotal"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const total = (name: string, amount: number) => `<tr class="fs-total"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const section = (name: string, alt = false) => `<tr class="fs-section${alt ? ' fs-section-alt' : ''}"><td colspan="2">${name}</td></tr>`;
+  const subsec = (name: string) => `<tr class="fs-subsec"><td colspan="2">${name}</td></tr>`;
 
   let rows = '';
-  rows += sectionHeader('Assets');
-  rows += `<tr><td colspan="2" style="padding:2px 16px 2px 24px;font-size:10px;font-weight:600;text-transform:uppercase;color:#888;">Current Assets</td></tr>`;
-  (data.currentAssets || []).forEach(a => { rows += lineRow(a.account_name, a.balance || 0, 2); });
-  rows += lineRow('Total Current Assets', totalCurrentAssets, 1, true);
-  rows += `<tr><td colspan="2" style="padding:2px 16px 2px 24px;font-size:10px;font-weight:600;text-transform:uppercase;color:#888;">Fixed Assets</td></tr>`;
-  (data.fixedAssets || []).forEach(a => { rows += lineRow(a.account_name, a.balance || 0, 2); });
-  rows += lineRow('Total Fixed Assets', totalFixedAssets, 1, true);
-  rows += lineRow('Total Assets', totalAssets, 0, true);
-  rows += sectionHeader('Liabilities');
-  rows += `<tr><td colspan="2" style="padding:2px 16px 2px 24px;font-size:10px;font-weight:600;text-transform:uppercase;color:#888;">Current Liabilities</td></tr>`;
-  (data.currentLiabilities || []).forEach(a => { rows += lineRow(a.account_name, a.balance || 0, 2); });
-  rows += lineRow('Total Current Liabilities', totalCurrentLiab, 1, true);
-  if ((data.longTermLiabilities || []).length > 0) {
-    rows += `<tr><td colspan="2" style="padding:2px 16px 2px 24px;font-size:10px;font-weight:600;text-transform:uppercase;color:#888;">Long-Term Liabilities</td></tr>`;
-    data.longTermLiabilities.forEach(a => { rows += lineRow(a.account_name, a.balance || 0, 2); });
-    rows += lineRow('Total Long-Term Liabilities', totalLongTermLiab, 1, true);
-  }
-  rows += lineRow('Total Liabilities', totalLiabilities, 0, true);
-  rows += sectionHeader('Equity');
-  (data.equity || []).forEach(a => { rows += lineRow(a.account_name, a.balance || 0, 1); });
-  rows += lineRow('Total Equity', totalEquity, 0, true);
-  rows += `<tr style="border-top:2px solid #333;"><td style="padding:8px 16px;font-weight:700;font-size:14px;">Total Liabilities + Equity</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:14px;">${formatCurrency(totalLiabilities + totalEquity)}</td></tr>`;
+  rows += section('Assets');
+  rows += subsec('Current Assets');
+  (data.currentAssets || []).forEach(a => { rows += line(a.account_name, a.balance || 0); });
+  rows += subtotal('Total Current Assets', totalCurrentAssets);
+  rows += subsec('Fixed Assets');
+  (data.fixedAssets || []).forEach(a => { rows += line(a.account_name, a.balance || 0); });
+  rows += subtotal('Total Fixed Assets', totalFixedAssets);
+  rows += total('Total Assets', totalAssets);
 
-  return `<html><head><style>body{font-family:-apple-system,sans-serif;padding:40px;color:#222;max-width:800px;margin:0 auto;}table{width:100%;border-collapse:collapse;}td{padding:4px 16px;font-size:12px;border-bottom:1px solid #eee;}</style></head><body><h1 style="font-size:18px;margin-bottom:4px;">${companyName}</h1><h2 style="font-size:14px;font-weight:400;color:#666;margin-bottom:24px;">Balance Sheet as of ${asOfDate}</h2><table>${rows}</table></body></html>`;
+  rows += section('Liabilities', true);
+  rows += subsec('Current Liabilities');
+  (data.currentLiabilities || []).forEach(a => { rows += line(a.account_name, a.balance || 0); });
+  rows += subtotal('Total Current Liabilities', totalCurrentLiab);
+  if ((data.longTermLiabilities || []).length > 0) {
+    rows += subsec('Long-Term Liabilities');
+    data.longTermLiabilities.forEach(a => { rows += line(a.account_name, a.balance || 0); });
+    rows += subtotal('Total Long-Term Liabilities', totalLongTermLiab);
+  }
+  rows += total('Total Liabilities', totalLiabilities);
+
+  rows += section('Equity');
+  (data.equity || []).forEach(a => { rows += line(a.account_name, a.balance || 0); });
+  rows += total('Total Equity', totalEquity);
+
+  const balanced = Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01;
+  rows += `<tr class="fs-grand"><td>Total Liabilities + Equity ${balanced ? '<span style="font-size:9px;color:#16a34a;margin-left:8px;">&#x2713; Balanced</span>' : '<span style="font-size:9px;color:#dc2626;margin-left:8px;">&#x2717; Unbalanced</span>'}</td><td class="r">${formatCurrency(totalLiabilities + totalEquity)}</td></tr>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${FS_STYLES}</style></head><body>
+<div class="fs-page">
+  <div class="fs-hdr"><div><div class="fs-co">${companyName}</div><div class="fs-sub">As of ${asOfDate}</div></div><div class="fs-badge">Balance Sheet</div></div>
+  <table>${rows}</table>
+  <div class="fs-footer"><span>${companyName}</span><span>Generated ${fsDate()}</span></div>
+</div></body></html>`;
 }
 
 function buildCFHTML(data: CashFlowData, companyName: string, startDate: string, endDate: string): string {
@@ -124,24 +186,31 @@ function buildCFHTML(data: CashFlowData, companyName: string, startDate: string,
   const totalFin = sumTotal(data.financing);
   const netChange = totalOp + totalInv + totalFin;
 
-  const lineRow = (name: string, amount: number, indent = 0, bold = false) =>
-    `<tr><td style="padding-left:${16 + indent * 20}px;${bold ? 'font-weight:700;' : ''}">${name}</td><td style="text-align:right;font-family:monospace;${bold ? 'font-weight:700;' : ''}">${formatCurrency(amount)}</td></tr>`;
-  const sectionHeader = (label: string) =>
-    `<tr style="background:rgba(0,0,0,0.03);"><td colspan="2" style="padding:8px 16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">${label}</td></tr>`;
+  const line = (name: string, amount: number) => `<tr class="fs-line"><td>${name}</td><td class="r">${formatCurrency(amount)}</td></tr>`;
+  const total = (name: string, amount: number, color?: string) => `<tr class="fs-total"><td>${name}</td><td class="r" ${color ? `style="color:${color};"` : ''}>${formatCurrency(amount)}</td></tr>`;
+  const section = (name: string, alt = false) => `<tr class="fs-section${alt ? ' fs-section-alt' : ''}"><td colspan="2">${name}</td></tr>`;
 
   let rows = '';
-  rows += sectionHeader('Operating Activities');
-  (data.operating || []).forEach(a => { rows += lineRow(a.account_name, a.total || a.balance || 0, 1); });
-  rows += lineRow('Net Cash from Operating', totalOp, 0, true);
-  rows += sectionHeader('Investing Activities');
-  (data.investing || []).forEach(a => { rows += lineRow(a.account_name, a.total || a.balance || 0, 1); });
-  rows += lineRow('Net Cash from Investing', totalInv, 0, true);
-  rows += sectionHeader('Financing Activities');
-  (data.financing || []).forEach(a => { rows += lineRow(a.account_name, a.total || a.balance || 0, 1); });
-  rows += lineRow('Net Cash from Financing', totalFin, 0, true);
-  rows += `<tr style="border-top:2px solid #333;"><td style="padding:8px 16px;font-weight:700;font-size:14px;">Net Change in Cash</td><td style="text-align:right;font-family:monospace;font-weight:700;font-size:14px;color:${netChange >= 0 ? '#10b981' : '#ef4444'};">${formatCurrency(netChange)}</td></tr>`;
+  rows += section('Operating Activities');
+  (data.operating || []).forEach(a => { rows += line(a.account_name, a.total || a.balance || 0); });
+  rows += total('Net Cash from Operating', totalOp, totalOp >= 0 ? '#16a34a' : '#dc2626');
 
-  return `<html><head><style>body{font-family:-apple-system,sans-serif;padding:40px;color:#222;max-width:800px;margin:0 auto;}table{width:100%;border-collapse:collapse;}td{padding:4px 16px;font-size:12px;border-bottom:1px solid #eee;}</style></head><body><h1 style="font-size:18px;margin-bottom:4px;">${companyName}</h1><h2 style="font-size:14px;font-weight:400;color:#666;margin-bottom:24px;">Cash Flow Statement: ${startDate} to ${endDate}</h2><table>${rows}</table></body></html>`;
+  rows += section('Investing Activities', true);
+  (data.investing || []).forEach(a => { rows += line(a.account_name, a.total || a.balance || 0); });
+  rows += total('Net Cash from Investing', totalInv, totalInv >= 0 ? '#16a34a' : '#dc2626');
+
+  rows += section('Financing Activities');
+  (data.financing || []).forEach(a => { rows += line(a.account_name, a.total || a.balance || 0); });
+  rows += total('Net Cash from Financing', totalFin, totalFin >= 0 ? '#16a34a' : '#dc2626');
+
+  rows += `<tr class="fs-grand"><td>Net Change in Cash</td><td class="r ${netChange >= 0 ? 'green' : 'red'}">${formatCurrency(netChange)}</td></tr>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${FS_STYLES}</style></head><body>
+<div class="fs-page">
+  <div class="fs-hdr"><div><div class="fs-co">${companyName}</div><div class="fs-sub">${startDate} through ${endDate}</div></div><div class="fs-badge">Cash Flow Statement</div></div>
+  <table>${rows}</table>
+  <div class="fs-footer"><span>${companyName}</span><span>Generated ${fsDate()}</span></div>
+</div></body></html>`;
 }
 
 // ─── Render helpers ─────────────────────────────────────
