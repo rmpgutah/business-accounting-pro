@@ -91,9 +91,11 @@ interface StatCardProps {
   label: string;
   value: string;
   accentClass: string;
+  subtitle?: string;
+  subtitleColor?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass }) => (
+const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass, subtitle, subtitleColor }) => (
   <div
     className={`block-card p-4 border-l-2 ${accentClass}`}
     style={{ borderRadius: '6px' }}
@@ -105,6 +107,11 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass }) 
       </span>
     </div>
     <p className="text-xl font-mono text-text-primary font-bold">{value}</p>
+    {subtitle && (
+      <p className="text-[11px] font-mono mt-0.5" style={{ color: subtitleColor || 'var(--color-text-muted)' }}>
+        {subtitle}
+      </p>
+    )}
   </div>
 );
 
@@ -190,8 +197,14 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
     const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount ?? 0), 0);
     const totalHours = timeEntries.reduce((sum, t) => sum + (t.hours ?? 0), 0);
     const profitLoss = totalRevenue - totalExpenses;
-    return { totalRevenue, totalExpenses, totalHours, profitLoss };
-  }, [lineItems, expenses, timeEntries]);
+    const profitMargin = totalRevenue > 0
+      ? ((profitLoss / totalRevenue) * 100).toFixed(1)
+      : '0.0';
+    const budgetUsed = project?.budget && project.budget > 0
+      ? ((totalExpenses / project.budget) * 100).toFixed(1)
+      : null;
+    return { totalRevenue, totalExpenses, totalHours, profitLoss, profitMargin, budgetUsed };
+  }, [lineItems, expenses, timeEntries, project]);
 
   // ─── Create Invoice from Time ─────────────────────────
   const handleCreateInvoice = async () => {
@@ -309,7 +322,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
       )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${stats.budgetUsed !== null ? 'grid-cols-5' : 'grid-cols-4'}`}>
         <StatCard
           icon={<DollarSign size={14} />}
           label="Total Revenue"
@@ -333,7 +346,18 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           label="Profit / Loss"
           value={formatCurrency(stats.profitLoss)}
           accentClass={stats.profitLoss >= 0 ? 'border-l-accent-income' : 'border-l-accent-expense'}
+          subtitle={`${stats.profitMargin}% margin`}
+          subtitleColor={stats.profitLoss >= 0 ? '#34d399' : '#f87171'}
         />
+        {stats.budgetUsed !== null && (
+          <StatCard
+            icon={<DollarSign size={14} />}
+            label="Budget Used"
+            value={`${stats.budgetUsed}%`}
+            accentClass={parseFloat(stats.budgetUsed!) > 90 ? 'border-l-accent-expense' : parseFloat(stats.budgetUsed!) > 70 ? 'border-l-[#fbbf24]' : 'border-l-accent-income'}
+            subtitle={`${formatCurrency(stats.totalExpenses)} / ${formatCurrency(project?.budget ?? 0)}`}
+          />
+        )}
       </div>
 
       {/* Project Profitability */}

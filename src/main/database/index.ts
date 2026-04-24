@@ -395,6 +395,9 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE pay_stubs ADD COLUMN pretax_deductions REAL DEFAULT 0",
   "ALTER TABLE pay_stubs ADD COLUMN posttax_deductions REAL DEFAULT 0",
   "ALTER TABLE pay_stubs ADD COLUMN deduction_detail TEXT DEFAULT '{}'",
+  // Expense reimbursement tracking (2026-04-23)
+  "ALTER TABLE expenses ADD COLUMN reimbursed INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN reimbursed_date TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

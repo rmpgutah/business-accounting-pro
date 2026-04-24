@@ -170,6 +170,8 @@ export interface Expense {
   reference: string;
   is_billable: boolean;
   is_reimbursable: boolean;
+  reimbursed: boolean;
+  reimbursed_date: string;
   project_id: string | null;
   client_id: string | null;
   receipt_path: string | null;

@@ -21,6 +21,9 @@ interface ExpenseFormData {
   project_id: string;
   client_id: string;
   is_billable: boolean;
+  is_reimbursable: boolean;
+  reimbursed: boolean;
+  reimbursed_date: string;
   reference: string;
   tags: string;
   status: string;
@@ -204,6 +207,9 @@ const emptyForm: ExpenseFormData = {
   project_id: '',
   client_id: '',
   is_billable: false,
+  is_reimbursable: false,
+  reimbursed: false,
+  reimbursed_date: '',
   reference: '',
   tags: '',
   status: 'pending',
@@ -344,6 +350,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               project_id: existing.project_id || '',
               client_id: existing.client_id || '',
               is_billable: !!existing.is_billable,
+              is_reimbursable: !!existing.is_reimbursable,
+              reimbursed: !!existing.reimbursed,
+              reimbursed_date: existing.reimbursed_date || '',
               reference: existing.reference || '',
               tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : (existing.tags || ''),
               status: existing.status || 'pending',
@@ -422,6 +431,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         project_id: form.project_id || null,
         client_id: form.client_id || null,
         is_billable: form.is_billable ? 1 : 0,
+        is_reimbursable: form.is_reimbursable ? 1 : 0,
+        reimbursed: form.reimbursed ? 1 : 0,
+        reimbursed_date: form.reimbursed_date || '',
         reference: form.reference.trim() || null,
         receipt_path: receiptPath || null,
         status: form.status || 'pending',
@@ -788,8 +800,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             />
           </div>
 
-          {/* Billable Checkbox */}
-          <div className="flex items-end pb-1">
+          {/* Billable & Reimbursable Checkboxes */}
+          <div className="flex items-end pb-1 gap-6">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -800,7 +812,49 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               />
               <span className="text-sm text-text-secondary">Billable to client</span>
             </label>
+            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.is_reimbursable}
+                onChange={(e) => setForm(p => ({...p, is_reimbursable: e.target.checked}))}
+                className="w-4 h-4 accent-accent-blue"
+              />
+              <span className="font-semibold uppercase tracking-wider">Reimbursable Expense</span>
+            </label>
           </div>
+
+          {/* Reimbursement Status — only shown if reimbursable */}
+          {form.is_reimbursable && (
+            <div className="col-span-3">
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.reimbursed}
+                    onChange={(e) => setForm(p => ({
+                      ...p,
+                      reimbursed: e.target.checked,
+                      reimbursed_date: e.target.checked && !p.reimbursed_date ? new Date().toISOString().split('T')[0] : p.reimbursed_date,
+                    }))}
+                    className="w-4 h-4 accent-accent-income"
+                  />
+                  <span className="font-semibold uppercase tracking-wider">Reimbursed</span>
+                </label>
+                {form.reimbursed && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-muted font-semibold uppercase tracking-wider">Date:</span>
+                    <input
+                      type="date"
+                      className="block-input"
+                      style={{ width: 'auto' }}
+                      value={form.reimbursed_date}
+                      onChange={(e) => setForm(p => ({...p, reimbursed_date: e.target.value}))}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ─── Category-Specific Details ──────────────── */}
           {detailFields.length > 0 && (

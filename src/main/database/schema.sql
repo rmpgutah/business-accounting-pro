@@ -210,6 +210,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   reference TEXT DEFAULT '',
   is_billable INTEGER DEFAULT 0,
   is_reimbursable INTEGER DEFAULT 0,
+  reimbursed INTEGER DEFAULT 0,
+  reimbursed_date TEXT DEFAULT '',
   project_id TEXT REFERENCES projects(id),
   client_id TEXT REFERENCES clients(id),
   receipt_path TEXT,
