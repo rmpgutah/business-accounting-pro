@@ -1,10 +1,13 @@
 /**
  * Payroll Check Print Template
- * Generates HTML for a standard check-on-top format:
- *   Top third: Negotiable check
- *   Middle third: Employee stub (detach and retain)
- *   Bottom third: Employer stub (for records)
- * Designed for letter-size (8.5 x 11 in) paper with micro-dotted fold lines.
+ * Generates HTML for a standard check-on-top format (3-part):
+ *   Top third:    Negotiable check (aligns with blue security border area)
+ *   Middle third: Employee earnings stub (detach and retain)
+ *   Bottom third: Employer stub with YTD summary (for records)
+ *
+ * Designed for letter-size (8.5 x 11 in) blank check paper.
+ * Font: Calibri / sans-serif dominant.
+ * Perforation lines align at exactly 1/3 and 2/3 page height.
  */
 
 // ─── HTML escape helper (XSS prevention) ────────────────
@@ -26,6 +29,15 @@ const fmtDate = (d: string) => {
   if (!d) return '';
   try {
     return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch {
+    return d;
+  }
+};
+
+const fmtDateShort = (d: string) => {
+  if (!d) return '';
+  try {
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
   } catch {
     return d;
   }
@@ -63,6 +75,114 @@ function maskSSN(ssn: string | undefined | null): string {
   return '***-**-' + digits.slice(-4);
 }
 
+// ─── Shared CSS ────────────────────────────────────────────
+const CHECK_STYLES = `
+  @page { size: letter; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Calibri, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11px;
+    color: #1a1a1a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 8.5in;
+    height: 11in;
+    position: relative;
+  }
+  /* Each section is exactly 1/3 of the page */
+  .check-section {
+    height: 3.667in;
+    padding: 0.25in 0.45in 0.35in;
+    position: relative;
+    overflow: hidden;
+  }
+  .stub-section {
+    height: 3.667in;
+    padding: 0.15in 0.4in 0.1in;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── Typography ── */
+  .font-cal { font-family: Calibri, 'Segoe UI', -apple-system, sans-serif; }
+  .font-mono { font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums; }
+  .upper { text-transform: uppercase; letter-spacing: 0.5px; }
+  .bold { font-weight: 700; }
+  .light { color: #64748b; }
+  .xs { font-size: 8px; }
+  .sm { font-size: 9px; }
+  .md { font-size: 10px; }
+  .lg { font-size: 12px; }
+
+  /* ── Tables (stubs) ── */
+  .stub-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+  .stub-table th {
+    padding: 3px 6px;
+    text-align: left;
+    font-size: 7.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #64748b;
+    border-bottom: 1.5px solid #334155;
+    background: #f1f5f9;
+  }
+  .stub-table th.r { text-align: right; }
+  .stub-table td {
+    padding: 2.5px 6px;
+    font-size: 9px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+  }
+  .stub-table td.r { text-align: right; font-variant-numeric: tabular-nums; font-family: Calibri, sans-serif; }
+  .stub-table tr.total-row td {
+    border-top: 1.5px solid #334155;
+    border-bottom: none;
+    font-weight: 700;
+    color: #0f172a;
+    padding-top: 4px;
+  }
+
+  /* ── Net Pay Box ── */
+  .net-box {
+    border: 2px solid #0f172a;
+    text-align: center;
+    padding: 5px 8px;
+  }
+  .net-label { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
+  .net-amount { font-size: 16px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+  /* ── MICR ── */
+  .micr-line {
+    font-family: 'MICR', 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #333;
+    position: absolute;
+    bottom: 0.25in;
+    left: 0.5in;
+  }
+
+  /* ── Void Watermark ── */
+  .void-watermark {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 60px;
+    font-weight: 900;
+    color: rgba(200, 0, 0, 0.12);
+    letter-spacing: 12px;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+`;
+
 // ─── Main generator ────────────────────────────────────────
 export function generatePaycheckHTML(
   stub: any,
@@ -72,14 +192,19 @@ export function generatePaycheckHTML(
   options?: { isVoid?: boolean; checkNumber?: string; memo?: string }
 ): string {
   const companyName = esc(company?.name || 'Company');
-  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const companyLegal = esc(company?.legal_name || '');
+  const companyAddr = esc([company?.address_line1, company?.address_line2].filter(Boolean).join(', '));
+  const companyCityState = esc([company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
   const companyPhone = esc(company?.phone || '');
+  const companyEmail = esc(company?.email || '');
   const employeeName = esc(employee?.name || stub?.employee_name || 'Employee');
   const employeeAddr = esc([employee?.address_line1, employee?.city, employee?.state, employee?.zip].filter(Boolean).join(', '));
   const employeeSSN = maskSSN(employee?.ssn || employee?.ssn_last4);
+  const employeeId = esc(employee?.id?.substring(0, 8)?.toUpperCase() || '');
   const payDate = fmtDate(run?.pay_date || stub?.pay_date || '');
-  const periodStart = fmtDate(run?.pay_period_start || stub?.period_start || '');
-  const periodEnd = fmtDate(run?.pay_period_end || stub?.period_end || '');
+  const payDateShort = fmtDateShort(run?.pay_date || stub?.pay_date || '');
+  const periodStart = fmtDateShort(run?.pay_period_start || stub?.period_start || '');
+  const periodEnd = fmtDateShort(run?.pay_period_end || stub?.period_end || '');
   const netPay = stub?.net_pay || 0;
   const grossPay = stub?.gross_pay || 0;
   const federalTax = stub?.federal_tax || 0;
@@ -91,198 +216,244 @@ export function generatePaycheckHTML(
   const totalDeductions = federalTax + stateTax + ssTax + medicareTax + preTaxDed + postTaxDed;
   const hoursRegular = stub?.hours_regular || stub?.hours || 0;
   const hoursOvertime = stub?.hours_overtime || 0;
+  const totalHours = hoursRegular + hoursOvertime;
   const checkNumber = esc(options?.checkNumber || stub?.check_number || stub?.id?.substring(0, 6).toUpperCase() || '000001');
   const ytdGross = stub?.ytd_gross || 0;
   const ytdTaxes = stub?.ytd_taxes || 0;
   const ytdNet = stub?.ytd_net || 0;
   const isVoid = options?.isVoid || false;
   const memo = esc(options?.memo || `Payroll ${periodStart} — ${periodEnd}`);
-  const payScheduleLabel = esc(stub?.pay_schedule || run?.pay_schedule || '');
+  const payScheduleLabel = esc(stub?.pay_schedule || run?.pay_schedule || employee?.pay_schedule || '');
   const isDirectDeposit = !!(employee?.routing_number);
+  const payType = esc(employee?.pay_type || (hoursRegular > 0 ? 'hourly' : 'salary'));
+  const payRate = employee?.pay_rate || 0;
 
-  // Payment method indicator
-  const paymentMethod = isDirectDeposit ? 'DIRECT DEPOSIT' : 'CHECK';
+  // Computed values
+  const effectiveRate = totalHours > 0 ? grossPay / (hoursRegular + hoursOvertime * 1.5) : payRate;
+  const regularPay = totalHours > 0 ? effectiveRate * hoursRegular : grossPay;
+  const overtimePay = totalHours > 0 ? effectiveRate * 1.5 * hoursOvertime : 0;
+  const ytdFederalTax = stub?.ytd_federal_tax || 0;
+  const ytdStateTax = stub?.ytd_state_tax || 0;
+  const ytdSS = stub?.ytd_social_security || 0;
+  const ytdMedicare = stub?.ytd_medicare || 0;
 
-  // Earnings detail rows
-  let earningsRows = '';
-  if (hoursRegular > 0) {
-    const regularRate = hoursOvertime > 0 && hoursRegular > 0
-      ? (grossPay - (hoursOvertime * (grossPay / (hoursRegular + hoursOvertime * 1.5)) * 1.5)) / hoursRegular
-      : (hoursRegular > 0 ? grossPay / hoursRegular : 0);
-    earningsRows += `<tr>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;">Regular</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">${hoursRegular.toFixed(2)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">${hoursRegular > 0 ? fmt(regularRate) : '—'}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;font-weight:600;">${fmt(hoursRegular * regularRate)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">${fmt(ytdGross)}</td>
-    </tr>`;
-    if (hoursOvertime > 0) {
-      const otRate = regularRate * 1.5;
-      earningsRows += `<tr>
-        <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;">Overtime (1.5x)</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">${hoursOvertime.toFixed(2)}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">${fmt(otRate)}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;font-weight:600;">${fmt(hoursOvertime * otRate)}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">—</td>
-      </tr>`;
-    }
-  } else {
-    earningsRows += `<tr>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;">Salary</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">—</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">—</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;font-weight:600;">${fmt(grossPay)}</td>
-      <td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;text-align:right;">${fmt(ytdGross)}</td>
-    </tr>`;
+  // Parse deduction detail
+  let deductionItems: [string, number][] = [];
+  if (stub?.deduction_detail && stub.deduction_detail !== '{}') {
+    try {
+      const detail = JSON.parse(stub.deduction_detail);
+      deductionItems = Object.entries(detail).map(([k, v]) => [k, Number(v)]);
+    } catch { /* ignore */ }
   }
 
-  // Deductions detail
-  const deductionItems = [
-    { name: 'Federal Income Tax', amount: federalTax },
-    { name: 'State Income Tax', amount: stateTax },
-    { name: 'Social Security (6.2%)', amount: ssTax },
-    { name: 'Medicare (1.45%)', amount: medicareTax },
-    ...(preTaxDed > 0 ? [{ name: 'Pre-Tax Deductions', amount: preTaxDed }] : []),
-    ...(postTaxDed > 0 ? [{ name: 'Post-Tax Deductions', amount: postTaxDed }] : []),
-  ];
-  const deductionRows = deductionItems.map(d => `<tr>
-    <td style="padding:3px 8px;border-bottom:1px solid #e5e5e5;font-size:10px;">${d.name}</td>
-    <td style="padding:3px 8px;border-bottom:1px solid #e5e5e5;text-align:right;font-size:10px;font-family:monospace;">${fmt(d.amount)}</td>
-  </tr>`).join('');
+  const voidWatermark = isVoid ? '<div class="void-watermark">VOID</div>' : '';
+  const ddBanner = isDirectDeposit
+    ? `<div style="position:absolute;top:0.2in;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#2563eb;letter-spacing:2px;text-transform:uppercase;font-family:Calibri,sans-serif;">*** NON-NEGOTIABLE &mdash; DIRECT DEPOSIT ***</div>`
+    : '';
 
-  // Stub section (used twice -- employee copy and employer copy)
-  const stubSection = `
-    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+  // ═══════════════════════════════════════════════════════
+  // STUB SECTION BUILDER (used for both employee + employer)
+  // ═══════════════════════════════════════════════════════
+  const buildStub = (label: string, showYTDDetail: boolean) => `
+    <div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;margin-bottom:4px;">${label}</div>
+
+    <!-- Stub Header: Company + Employee + Pay Info -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
       <div>
-        <div style="font-size:14px;font-weight:700;">${companyName}</div>
-        <div style="font-size:10px;color:#555;">${companyAddr}</div>
+        <div style="font-size:12px;font-weight:800;color:#0f172a;">${companyName}</div>
+        <div style="font-size:8px;color:#64748b;">${companyAddr}${companyCityState ? (companyAddr ? ', ' : '') + companyCityState : ''}</div>
       </div>
-      <div style="text-align:right;">
-        <div style="font-size:10px;color:#555;">Pay Date: <strong>${payDate}</strong></div>
-        <div style="font-size:10px;color:#555;">Period: ${periodStart} — ${periodEnd}</div>
-        <div style="font-size:10px;color:#555;">Check #${checkNumber}</div>
-        ${payScheduleLabel ? `<div style="font-size:10px;color:#555;text-transform:capitalize;">${payScheduleLabel} Pay</div>` : ''}
-        <div style="font-size:10px;color:#555;font-weight:600;">${paymentMethod}</div>
+      <div style="text-align:right;font-size:8.5px;color:#475569;line-height:1.5;">
+        <div><strong>Pay Date:</strong> ${payDateShort}</div>
+        <div><strong>Period:</strong> ${periodStart} &ndash; ${periodEnd}</div>
+        <div><strong>Check #:</strong> ${checkNumber} &nbsp;|&nbsp; ${isDirectDeposit ? 'Direct Deposit' : 'Check'}</div>
       </div>
     </div>
-    <div style="display:flex;gap:4px;margin-bottom:6px;">
-      <div style="font-size:11px;"><strong>${employeeName}</strong></div>
-      ${employeeSSN ? `<div style="font-size:10px;color:#555;margin-left:8px;">SSN: ${employeeSSN}</div>` : ''}
-      ${employeeAddr ? `<div style="font-size:10px;color:#555;margin-left:8px;">${employeeAddr}</div>` : ''}
+
+    <!-- Employee Info Bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;padding:4px 8px;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div style="font-size:11px;font-weight:700;color:#0f172a;">${employeeName}</div>
+        ${employeeSSN ? `<div style="font-size:8px;color:#64748b;">SSN: ${employeeSSN}</div>` : ''}
+        ${employeeId ? `<div style="font-size:8px;color:#64748b;">ID: ${employeeId}</div>` : ''}
+      </div>
+      <div style="font-size:8px;color:#64748b;text-transform:capitalize;">${payType} ${payScheduleLabel ? '&middot; ' + payScheduleLabel : ''}</div>
     </div>
-    <div style="display:flex;gap:16px;">
-      <div style="flex:1;">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:4px;">Earnings</div>
-        <table style="width:100%;border-collapse:collapse;font-size:10px;">
-          <thead><tr style="background:#f0f0f0;">
-            <th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;">Type</th>
-            <th style="padding:3px 8px;text-align:right;font-size:8px;">Hours</th>
-            <th style="padding:3px 8px;text-align:right;font-size:8px;">Rate</th>
-            <th style="padding:3px 8px;text-align:right;font-size:8px;">Current</th>
-            <th style="padding:3px 8px;text-align:right;font-size:8px;">YTD</th>
+
+    <!-- Main Content: Earnings | Deductions | Net Pay -->
+    <div style="display:flex;gap:8px;">
+
+      <!-- EARNINGS TABLE -->
+      <div style="flex:1.2;">
+        <table class="stub-table">
+          <thead><tr>
+            <th>Earnings</th>
+            <th class="r">Hours</th>
+            <th class="r">Rate</th>
+            <th class="r">Current</th>
+            <th class="r">YTD</th>
           </tr></thead>
-          <tbody>${earningsRows}
-            <tr style="font-weight:700;"><td colspan="3" style="padding:3px 8px;">Gross Pay</td><td style="padding:3px 8px;text-align:right;">${fmt(grossPay)}</td><td style="padding:3px 8px;text-align:right;">${fmt(ytdGross)}</td></tr>
+          <tbody>
+            ${totalHours > 0 ? `
+            <tr>
+              <td>Regular</td>
+              <td class="r">${hoursRegular.toFixed(2)}</td>
+              <td class="r">${fmt(effectiveRate)}</td>
+              <td class="r bold">${fmt(regularPay)}</td>
+              <td class="r light">—</td>
+            </tr>
+            ${hoursOvertime > 0 ? `
+            <tr>
+              <td>Overtime (1.5x)</td>
+              <td class="r">${hoursOvertime.toFixed(2)}</td>
+              <td class="r">${fmt(effectiveRate * 1.5)}</td>
+              <td class="r bold">${fmt(overtimePay)}</td>
+              <td class="r light">—</td>
+            </tr>` : ''}
+            ` : `
+            <tr>
+              <td>Salary</td>
+              <td class="r light">—</td>
+              <td class="r">${payRate > 0 ? fmt(payRate) : '—'}</td>
+              <td class="r bold">${fmt(grossPay)}</td>
+              <td class="r light">—</td>
+            </tr>
+            `}
+            <tr class="total-row">
+              <td>Gross Pay</td>
+              <td class="r">${totalHours > 0 ? totalHours.toFixed(2) : ''}</td>
+              <td></td>
+              <td class="r">${fmt(grossPay)}</td>
+              <td class="r">${fmt(ytdGross)}</td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      <!-- DEDUCTIONS TABLE -->
       <div style="flex:1;">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:4px;">Deductions</div>
-        <table style="width:100%;border-collapse:collapse;font-size:10px;">
-          <thead><tr style="background:#f0f0f0;"><th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;">Description</th><th style="padding:3px 8px;text-align:right;font-size:8px;">Amount</th></tr></thead>
-          <tbody>${deductionRows}
-            <tr style="font-weight:700;"><td style="padding:3px 8px;">Total Deductions</td><td style="padding:3px 8px;text-align:right;">${fmt(totalDeductions)}</td></tr>
+        <table class="stub-table">
+          <thead><tr>
+            <th>Deductions</th>
+            <th class="r">Current</th>
+            ${showYTDDetail ? '<th class="r">YTD</th>' : ''}
+          </tr></thead>
+          <tbody>
+            <tr><td>Federal Income Tax</td><td class="r">${fmt(federalTax)}</td>${showYTDDetail ? `<td class="r light">${ytdFederalTax > 0 ? fmt(ytdFederalTax) : '—'}</td>` : ''}</tr>
+            <tr><td>State Income Tax</td><td class="r">${fmt(stateTax)}</td>${showYTDDetail ? `<td class="r light">${ytdStateTax > 0 ? fmt(ytdStateTax) : '—'}</td>` : ''}</tr>
+            <tr><td>Social Security (6.2%)</td><td class="r">${fmt(ssTax)}</td>${showYTDDetail ? `<td class="r light">${ytdSS > 0 ? fmt(ytdSS) : '—'}</td>` : ''}</tr>
+            <tr><td>Medicare (1.45%)</td><td class="r">${fmt(medicareTax)}</td>${showYTDDetail ? `<td class="r light">${ytdMedicare > 0 ? fmt(ytdMedicare) : '—'}</td>` : ''}</tr>
+            ${preTaxDed > 0 ? `<tr><td>Pre-Tax Deductions</td><td class="r">${fmt(preTaxDed)}</td>${showYTDDetail ? '<td class="r light">—</td>' : ''}</tr>` : ''}
+            ${postTaxDed > 0 ? `<tr><td>Post-Tax Deductions</td><td class="r">${fmt(postTaxDed)}</td>${showYTDDetail ? '<td class="r light">—</td>' : ''}</tr>` : ''}
+            ${deductionItems.map(([name, amount]) =>
+              `<tr><td style="padding-left:14px;font-size:8px;color:#64748b;">${esc(name)}</td><td class="r" style="font-size:8px;color:#64748b;">${fmt(amount)}</td>${showYTDDetail ? '<td class="r light">—</td>' : ''}</tr>`
+            ).join('')}
+            <tr class="total-row"><td>Total Deductions</td><td class="r">${fmt(totalDeductions)}</td>${showYTDDetail ? `<td class="r">${fmt(ytdTaxes)}</td>` : ''}</tr>
           </tbody>
         </table>
       </div>
-      <div style="width:140px;text-align:center;border:2px solid #111;padding:8px;">
-        <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#555;">Net Pay</div>
-        <div style="font-size:20px;font-weight:800;font-family:monospace;">${fmt(netPay)}</div>
+
+      <!-- NET PAY BOX -->
+      <div style="width:115px;display:flex;flex-direction:column;justify-content:space-between;">
+        <div class="net-box">
+          <div class="net-label">Net Pay</div>
+          <div class="net-amount">${fmt(netPay)}</div>
+        </div>
+        ${showYTDDetail ? `
+        <div style="margin-top:4px;border:1px solid #e2e8f0;padding:4px 6px;">
+          <div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#94a3b8;margin-bottom:2px;">YTD Summary</div>
+          <div style="display:flex;justify-content:space-between;font-size:8px;"><span class="light">Gross</span><span class="bold">${fmt(ytdGross)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:8px;"><span class="light">Taxes</span><span style="color:#dc2626;">${fmt(ytdTaxes)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:8px;border-top:1px solid #e2e8f0;padding-top:2px;margin-top:2px;"><span class="bold">Net</span><span class="bold" style="color:#16a34a;">${fmt(ytdNet)}</span></div>
+        </div>
+        ` : `
+        <div style="text-align:center;margin-top:4px;">
+          <div style="font-size:7px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">YTD Net</div>
+          <div style="font-size:10px;font-weight:700;">${fmt(ytdNet)}</div>
+        </div>
+        `}
       </div>
     </div>`;
 
-  const voidWatermark = isVoid ? '<div class="void-watermark">VOID</div>' : '';
-  const directDepositBanner = isDirectDeposit
-    ? `<div style="position:absolute;top:0.3in;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:#0066cc;letter-spacing:2px;text-transform:uppercase;">*** NON-NEGOTIABLE — DIRECT DEPOSIT ***</div>`
-    : '';
-
+  // ═══════════════════════════════════════════════════════
+  // FULL PAGE HTML
+  // ═══════════════════════════════════════════════════════
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-  @page { size: letter; margin: 0; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Courier New', monospace; font-size: 11px; color: #111; }
-  .page { width: 8.5in; height: 11in; position: relative; }
-  .check-section { height: 3.667in; padding: 0.3in 0.5in; position: relative; border-bottom: 1px dashed #999; }
-  .stub-section { height: 3.667in; padding: 0.25in 0.5in; position: relative; border-bottom: 1px dashed #999; }
-  .stub-section:last-child { border-bottom: none; }
-  .fold-guide { position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-bottom: 1px dashed #bbb; }
-  .fold-label { position: absolute; right: 0.5in; bottom: 2px; font-size: 7px; color: #bbb; letter-spacing: 1px; }
-  .micr-line { font-family: 'MICR', 'Courier New', monospace; font-size: 12px; letter-spacing: 2px; color: #333; position: absolute; bottom: 0.3in; left: 0.5in; }
-  .void-watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; font-weight: 900; color: rgba(200,0,0,0.15); letter-spacing: 10px; pointer-events: none; z-index: 10; }
-  @media print {
-    .fold-guide { border-bottom-style: dashed !important; }
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+${CHECK_STYLES}
 </style></head><body>
 <div class="page">
-  <!-- CHECK (Top Third) -->
+
+  <!-- ═══ CHECK (Top Third) ═══ -->
   <div class="check-section">
     ${voidWatermark}
-    ${directDepositBanner}
-    <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+    ${ddBanner}
+
+    <!-- Company Info + Check Number -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
       <div>
-        <div style="font-size:16px;font-weight:800;">${companyName}</div>
-        <div style="font-size:10px;color:#555;">${companyAddr}</div>
-        ${companyPhone ? `<div style="font-size:10px;color:#555;">${companyPhone}</div>` : ''}
+        <div style="font-size:16px;font-weight:800;color:#0f172a;letter-spacing:-0.2px;">${companyName}</div>
+        ${companyLegal && companyLegal !== companyName ? `<div style="font-size:8px;color:#94a3b8;">${companyLegal}</div>` : ''}
+        <div style="font-size:9px;color:#64748b;margin-top:3px;line-height:1.4;">
+          ${companyAddr ? companyAddr + '<br>' : ''}
+          ${companyCityState || ''}
+          ${companyPhone ? '<br>' + companyPhone : ''}${companyEmail ? (companyPhone ? ' &middot; ' : '<br>') + companyEmail : ''}
+        </div>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:10px;color:#555;">Check #</div>
-        <div style="font-size:18px;font-weight:700;font-family:monospace;">${checkNumber}</div>
-        <div style="font-size:11px;margin-top:4px;">Date: <strong>${payDate}</strong></div>
+        <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Check No.</div>
+        <div style="font-size:20px;font-weight:800;font-family:Calibri,sans-serif;color:#0f172a;letter-spacing:1px;">${checkNumber}</div>
+        <div style="font-size:10px;color:#334155;margin-top:6px;">
+          <span style="font-weight:700;">Date:</span> ${payDate}
+        </div>
       </div>
     </div>
 
-    <div style="margin-bottom:12px;">
-      <div style="font-size:10px;color:#555;margin-bottom:2px;">PAY TO THE ORDER OF</div>
-      <div style="display:flex;justify-content:space-between;border-bottom:1px solid #111;padding-bottom:4px;">
-        <div style="font-size:14px;font-weight:700;">${employeeName}</div>
-        <div style="font-size:16px;font-weight:800;font-family:monospace;border:2px solid #111;padding:2px 12px;">
+    <!-- PAY TO THE ORDER OF -->
+    <div style="margin-bottom:8px;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:3px;">Pay to the Order of</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f172a;padding-bottom:3px;">
+        <div style="font-size:15px;font-weight:700;color:#0f172a;">${employeeName}</div>
+        <div style="font-size:17px;font-weight:800;font-family:Calibri,sans-serif;border:2px solid #0f172a;padding:2px 14px;color:#0f172a;letter-spacing:0.5px;">
           ${fmt(netPay)}
         </div>
       </div>
     </div>
 
-    <div style="border-bottom:1px solid #111;padding-bottom:4px;margin-bottom:12px;">
-      <div style="font-size:11px;">${amountToWords(netPay)} ************************************</div>
+    <!-- Amount in Words -->
+    <div style="border-bottom:1.5px solid #334155;padding-bottom:3px;margin-bottom:10px;">
+      <span style="font-size:10px;color:#0f172a;">${amountToWords(netPay)}</span>
+      <span style="font-size:10px;color:#94a3b8;"> ************************************</span>
     </div>
 
-    <div style="display:flex;justify-content:space-between;">
+    <!-- Memo + Signature -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;">
       <div>
-        <div style="font-size:10px;color:#555;">Memo: ${memo}</div>
+        <div style="font-size:8px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:1px;">Memo</div>
+        <div style="font-size:9px;color:#334155;">${memo}</div>
       </div>
       <div style="text-align:right;">
-        <div style="border-top:1px solid #111;width:200px;padding-top:4px;font-size:10px;">Authorized Signature</div>
+        <div style="border-top:1.5px solid #334155;width:200px;padding-top:3px;">
+          <span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;">Authorized Signature</span>
+        </div>
       </div>
     </div>
 
+    <!-- MICR Line -->
     <div class="micr-line">&#9416;${checkNumber}&#9416; &#9414;000000000&#9414; 0000000000&#9416;</div>
-    <div class="fold-guide"><span class="fold-label">— FOLD HERE —</span></div>
   </div>
 
-  <!-- EMPLOYEE STUB (Middle Third) -->
+  <!-- ═══ EMPLOYEE STUB (Middle Third) ═══ -->
   <div class="stub-section">
     ${voidWatermark}
-    <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#999;margin-bottom:6px;">Employee Copy — Detach and Retain</div>
-    ${stubSection}
-    <div class="fold-guide"><span class="fold-label">— FOLD HERE —</span></div>
+    ${buildStub('Employee Copy &mdash; Detach and Retain', false)}
   </div>
 
-  <!-- EMPLOYER STUB (Bottom Third) -->
+  <!-- ═══ EMPLOYER STUB (Bottom Third) ═══ -->
   <div class="stub-section">
     ${voidWatermark}
-    <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#999;margin-bottom:6px;">Employer Copy — For Records</div>
-    ${stubSection}
+    ${buildStub('Employer Copy &mdash; For Records', true)}
   </div>
+
 </div>
 </body></html>`;
 }
@@ -297,17 +468,6 @@ export function extractCheckBody(html: string): string {
 export function wrapBatchChecks(bodies: string[]): string {
   const combined = bodies.join('<div style="page-break-before:always;"></div>');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    @page { size: letter; margin: 0; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Courier New', monospace; font-size: 11px; color: #111; }
-    .page { width: 8.5in; height: 11in; position: relative; }
-    .check-section { height: 3.667in; padding: 0.3in 0.5in; position: relative; border-bottom: 1px dashed #999; }
-    .stub-section { height: 3.667in; padding: 0.25in 0.5in; position: relative; border-bottom: 1px dashed #999; }
-    .stub-section:last-child { border-bottom: none; }
-    .fold-guide { position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-bottom: 1px dashed #bbb; }
-    .fold-label { position: absolute; right: 0.5in; bottom: 2px; font-size: 7px; color: #bbb; letter-spacing: 1px; }
-    .micr-line { font-family: 'MICR', 'Courier New', monospace; font-size: 12px; letter-spacing: 2px; color: #333; position: absolute; bottom: 0.3in; left: 0.5in; }
-    .void-watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 60px; font-weight: 900; color: rgba(200,0,0,0.15); letter-spacing: 10px; pointer-events: none; z-index: 10; }
-    @media print { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  </style></head><body>${combined}</body></html>`;
+${CHECK_STYLES}
+</style></head><body>${combined}</body></html>`;
 }
