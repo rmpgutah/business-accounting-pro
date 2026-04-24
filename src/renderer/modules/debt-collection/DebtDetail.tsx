@@ -142,10 +142,10 @@ interface InterestCalc {
 
 // ─── Priority Colors ────────────────────────────────────
 const priorityDot: Record<string, string> = {
-  low: 'bg-accent-income-bg0',
+  low: 'bg-accent-income-bg',
   medium: 'bg-blue-500',
-  high: 'bg-accent-warning-bg0',
-  critical: 'bg-accent-expense-bg0',
+  high: 'bg-accent-warning-bg',
+  critical: 'bg-accent-expense-bg',
 };
 
 // ─── Communication Icon Map ─────────────────────────────
@@ -163,11 +163,11 @@ const commIcon: Record<string, React.ReactNode> = {
 const stageColor: Record<string, string> = {
   reminder: 'bg-blue-500',
   warning: 'bg-yellow-500',
-  final_notice: 'bg-accent-warning-bg0',
-  demand_letter: 'bg-accent-expense-bg0',
+  final_notice: 'bg-accent-warning-bg',
+  demand_letter: 'bg-accent-expense-bg',
   collections_agency: 'bg-purple-500',
   legal_action: 'bg-red-600',
-  judgment: 'bg-accent-income-bg0',
+  judgment: 'bg-accent-income-bg',
   garnishment: 'bg-yellow-600',
 };
 
@@ -700,7 +700,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             </button>
             <h2 className="text-xl font-bold text-text-primary">{debt.debtor_name}</h2>
             <div
-              className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-bg-secondary0'}`}
+              className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-bg-secondary'}`}
               style={{ borderRadius: '6px' }}
               title={`Priority: ${debt.priority ? debt.priority.charAt(0).toUpperCase() + debt.priority.slice(1) : ''}`}
             />
@@ -1853,7 +1853,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   {pipelineStages.map((ps, idx) => {
                     const isCurrent = !ps.exited_at;
                     const stgBadge = formatStatus(ps.stage);
-                    const dotColor = stageColor[ps.stage] || 'bg-bg-secondary0';
+                    const dotColor = stageColor[ps.stage] || 'bg-bg-secondary';
                     return (
                       <div key={ps.id} className="relative flex gap-3 items-start">
                         {/* Dot */}

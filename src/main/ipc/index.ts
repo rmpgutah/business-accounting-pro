@@ -3546,31 +3546,72 @@ export function registerIpcHandlers(): void {
     const template = db.getDb().prepare('SELECT * FROM debt_templates WHERE id = ?').get(templateId) as any;
     if (!debt || !template) return { html: '' };
     const company = db.getDb().prepare('SELECT * FROM companies WHERE id = ?').get(debt.company_id) as any;
-    const total = debt.original_amount + debt.interest_accrued + debt.fees_accrued - debt.payments_made;
-    const daysOverdue = debt.delinquent_date ? Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86400000) : 0;
-    const demandDeadline = new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0];
-    const fields: Record<string, string> = {
-      '{{debtor_name}}': debt.debtor_name || '',
-      '{{debtor_address}}': debt.debtor_address || '',
-      '{{original_amount}}': `$${(debt.original_amount || 0).toFixed(2)}`,
-      '{{interest_accrued}}': `$${(debt.interest_accrued || 0).toFixed(2)}`,
-      '{{fees_accrued}}': `$${(debt.fees_accrued || 0).toFixed(2)}`,
-      '{{total_due}}': `$${total.toFixed(2)}`,
-      '{{due_date}}': debt.due_date || '',
-      '{{demand_deadline}}': demandDeadline,
-      '{{days_overdue}}': String(daysOverdue),
-      '{{company_name}}': company?.name || '',
-      '{{company_address}}': [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '),
-      '{{company_phone}}': company?.phone || '',
-      '{{company_email}}': company?.email || '',
+
+    // Escape merge VALUES (from DB) so debtor data can't break template HTML.
+    // Template body/subject itself is admin-authored and may legitimately contain HTML,
+    // so we don't escape those — only the values substituted into them.
+    const escVal = (s: unknown): string => {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     };
+    const fmtMoney = (n: number) =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+    const fmtDate = (d: unknown) => {
+      if (!d) return '';
+      try {
+        const s = String(d);
+        const dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+        if (isNaN(dt.getTime())) return escVal(s);
+        return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      } catch { return escVal(d); }
+    };
+
+    const total = (debt.original_amount || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0) - (debt.payments_made || 0);
+    const daysOverdue = debt.delinquent_date ? Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86400000) : 0;
+    const demandDeadlineDate = new Date(Date.now() + 10 * 86400000);
+
+    const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
+
+    const fields: Record<string, string> = {
+      '{{debtor_name}}': escVal(debt.debtor_name),
+      '{{debtor_address}}': escVal(debt.debtor_address),
+      '{{original_amount}}': fmtMoney(debt.original_amount),
+      '{{interest_accrued}}': fmtMoney(debt.interest_accrued),
+      '{{fees_accrued}}': fmtMoney(debt.fees_accrued),
+      '{{total_due}}': fmtMoney(total),
+      '{{due_date}}': fmtDate(debt.due_date),
+      '{{demand_deadline}}': fmtDate(demandDeadlineDate.toISOString().split('T')[0]),
+      '{{days_overdue}}': String(daysOverdue),
+      '{{company_name}}': escVal(company?.name),
+      '{{company_address}}': escVal(companyAddr),
+      '{{company_phone}}': escVal(company?.phone),
+      '{{company_email}}': escVal(company?.email),
+    };
+
     let body = template.body || '';
     let subject = template.subject || '';
     for (const [key, val] of Object.entries(fields)) {
       body = body.split(key).join(val);
       subject = subject.split(key).join(val);
     }
-    return { html: `<h2>${subject}</h2>${body.replace(/\n/g, '<br>')}` };
+
+    // Wrap in a print-ready letterhead for proper PDF output
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Demand Letter</title><style>
+      * { box-sizing: border-box; }
+      body { font-family: 'Georgia', 'Times New Roman', serif; color: #0f172a; padding: 60px; max-width: 720px; margin: 0 auto; font-size: 13px; line-height: 1.65; background: #fff; }
+      h2 { font-size: 18px; font-weight: 700; color: #0f172a; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin: 0 0 24px; }
+      .letter-body { white-space: pre-wrap; }
+    </style></head><body>
+      <h2>${subject}</h2>
+      <div class="letter-body">${body}</div>
+    </body></html>`;
+
+    return { html };
   });
 
   ipcMain.handle('debt:export-bundle', async (_event, { debtId }: { debtId: string }) => {
@@ -3583,98 +3624,181 @@ export function registerIpcHandlers(): void {
     const legalActions = db.getDb().prepare('SELECT * FROM debt_legal_actions WHERE debt_id = ? ORDER BY created_at').all(debtId) as any[];
     const stages = db.getDb().prepare('SELECT * FROM debt_pipeline_stages WHERE debt_id = ? ORDER BY entered_at').all(debtId) as any[];
 
-    const total = debt.original_amount + debt.interest_accrued + debt.fees_accrued - debt.payments_made;
+    // ── Formatting helpers ────────────────────────────────
+    const esc = (s: unknown): string => {
+      if (s === null || s === undefined || s === '') return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+    const fmtMoney = (n: unknown): string =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n) || 0);
+    const fmtDate = (d: unknown): string => {
+      if (!d) return '\u2014';
+      try {
+        const s = String(d);
+        // Date-only (YYYY-MM-DD) → parse as local noon to avoid TZ shifting the day
+        const dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+        if (isNaN(dt.getTime())) return esc(s);
+        return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch { return esc(d); }
+    };
+    const fmtDateTime = (d: unknown): string => {
+      if (!d) return '\u2014';
+      try {
+        const dt = new Date(String(d));
+        if (isNaN(dt.getTime())) return esc(d);
+        return dt.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      } catch { return esc(d); }
+    };
+    // "collections_agency" → "Collections Agency"
+    const titleCase = (s: unknown): string => {
+      if (!s) return '\u2014';
+      return String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    };
+    const sanitizeFilename = (s: string): string =>
+      s.replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Case File';
 
-    let html = `<html><head><style>
-      body { font-family: Arial, sans-serif; color: #111; padding: 40px; }
-      h1 { font-size: 22px; border-bottom: 2px solid #111; padding-bottom: 8px; }
-      h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #999; padding-bottom: 4px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
-      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
-      th { background: #f5f5f5; font-weight: bold; }
-      .label { font-weight: bold; width: 180px; }
-      .meta { color: #666; font-size: 12px; }
+    const total = (debt.original_amount || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0) - (debt.payments_made || 0);
+
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debt Case File</title><style>
+      * { box-sizing: border-box; }
+      body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; color: #0f172a; padding: 40px; font-size: 13px; line-height: 1.5; }
+      h1 { font-size: 22px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin: 0 0 16px; }
+      h2 { font-size: 15px; margin: 28px 0 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; color: #0f172a; }
+      p { margin: 4px 0; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+      th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; }
+      th { background: #f1f5f9; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+      .label { font-weight: 600; width: 180px; color: #475569; }
+      .meta { color: #64748b; font-size: 11px; margin-bottom: 4px; }
+      .empty { color: #94a3b8; font-style: italic; padding: 8px 0; }
+      .cover-line { padding: 3px 0; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; }
+      .comm-card { margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 3px; padding: 10px 12px; }
+      .comm-subject { font-weight: 700; color: #0f172a; }
+      .comm-body { white-space: pre-wrap; color: #334155; margin-top: 4px; }
     </style></head><body>`;
 
     // Cover
     html += `<h1>Debt Collection Case File</h1>`;
-    html += `<p><strong>Debtor:</strong> ${debt.debtor_name}</p>`;
-    html += `<p><strong>Company:</strong> ${company?.name || ''}</p>`;
-    html += `<p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>`;
-    html += `<p><strong>Total Due:</strong> $${total.toFixed(2)}</p>`;
+    html += `<p class="cover-line"><strong>Debtor:</strong> ${esc(debt.debtor_name)}</p>`;
+    html += `<p class="cover-line"><strong>Company:</strong> ${esc(company?.name || '')}</p>`;
+    html += `<p class="cover-line"><strong>Generated:</strong> ${fmtDateTime(new Date())}</p>`;
+    html += `<p class="cover-line"><strong>Total Due:</strong> ${fmtMoney(total)}</p>`;
 
     // Debt Summary
     html += `<h2>1. Debt Summary</h2><table>`;
-    const summaryRows: [string, any][] = [
-      ['Type', debt.type], ['Status', debt.status], ['Original Amount', `$${(debt.original_amount||0).toFixed(2)}`],
-      ['Interest Accrued', `$${(debt.interest_accrued||0).toFixed(2)}`], ['Fees', `$${(debt.fees_accrued||0).toFixed(2)}`],
-      ['Payments Made', `$${(debt.payments_made||0).toFixed(2)}`], ['Balance Due', `$${total.toFixed(2)}`],
-      ['Due Date', debt.due_date || '\u2014'], ['Delinquent Date', debt.delinquent_date || '\u2014'],
-      ['Interest Rate', `${((debt.interest_rate||0)*100).toFixed(2)}% (${debt.interest_type})`],
-      ['Jurisdiction', debt.jurisdiction || '\u2014'], ['Current Stage', debt.current_stage],
+    const summaryRows: [string, string][] = [
+      ['Type', titleCase(debt.type)],
+      ['Status', titleCase(debt.status)],
+      ['Original Amount', fmtMoney(debt.original_amount)],
+      ['Interest Accrued', fmtMoney(debt.interest_accrued)],
+      ['Fees', fmtMoney(debt.fees_accrued)],
+      ['Payments Made', fmtMoney(debt.payments_made)],
+      ['Balance Due', fmtMoney(total)],
+      ['Due Date', fmtDate(debt.due_date)],
+      ['Delinquent Date', fmtDate(debt.delinquent_date)],
+      ['Interest Rate', `${((debt.interest_rate || 0) * 100).toFixed(2)}% (${esc(debt.interest_type || 'simple')})`],
+      ['Jurisdiction', esc(debt.jurisdiction) || '\u2014'],
+      ['Current Stage', titleCase(debt.current_stage)],
     ];
-    for (const [label, value] of summaryRows) html += `<tr><td class="label">${label}</td><td>${value}</td></tr>`;
+    for (const [label, value] of summaryRows) {
+      html += `<tr><td class="label">${esc(label)}</td><td>${value}</td></tr>`;
+    }
     html += `</table>`;
 
     // Payment History
     html += `<h2>2. Payment History</h2>`;
-    if (payments.length === 0) { html += `<p>No payments recorded.</p>`; }
-    else {
-      html += `<table><tr><th>Date</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th></tr>`;
-      for (const p of payments) html += `<tr><td>${p.received_date}</td><td>$${(p.amount||0).toFixed(2)}</td><td>${p.method}</td><td>${p.reference_number||''}</td><td>${p.notes||''}</td></tr>`;
-      html += `</table>`;
+    if (payments.length === 0) {
+      html += `<div class="empty">No payments recorded.</div>`;
+    } else {
+      html += `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>Method</th><th>Reference</th><th>Notes</th></tr></thead><tbody>`;
+      for (const p of payments) {
+        html += `<tr>
+          <td>${fmtDate(p.received_date)}</td>
+          <td class="num">${fmtMoney(p.amount)}</td>
+          <td>${titleCase(p.method)}</td>
+          <td>${esc(p.reference_number) || '\u2014'}</td>
+          <td>${esc(p.notes)}</td>
+        </tr>`;
+      }
+      html += `</tbody></table>`;
     }
 
     // Communication Log
     html += `<h2>3. Communication Log</h2>`;
-    if (comms.length === 0) { html += `<p>No communications recorded.</p>`; }
-    else {
+    if (comms.length === 0) {
+      html += `<div class="empty">No communications recorded.</div>`;
+    } else {
       for (const c of comms) {
-        html += `<div style="margin-bottom:16px;border-bottom:1px solid #eee;padding-bottom:8px;">`;
-        html += `<p class="meta">${c.logged_at} | ${c.type} | ${c.direction}</p>`;
-        html += `<p><strong>${c.subject || '(No subject)'}</strong></p>`;
-        html += `<p>${(c.body || '').replace(/\n/g, '<br>')}</p>`;
-        if (c.outcome) html += `<p><em>Outcome: ${c.outcome}</em></p>`;
-        html += `</div>`;
+        html += `<div class="comm-card">
+          <div class="meta">${fmtDateTime(c.logged_at)} \u2022 ${titleCase(c.type)} \u2022 ${titleCase(c.direction)}</div>
+          <div class="comm-subject">${esc(c.subject) || '(No subject)'}</div>
+          <div class="comm-body">${esc(c.body)}</div>
+          ${c.outcome ? `<div style="margin-top:6px;color:#64748b;"><em>Outcome:</em> ${esc(c.outcome)}</div>` : ''}
+        </div>`;
       }
     }
 
     // Evidence Timeline
     html += `<h2>4. Evidence Timeline</h2>`;
-    if (evidence.length === 0) { html += `<p>No evidence items.</p>`; }
-    else {
-      html += `<table><tr><th>Date</th><th>Type</th><th>Title</th><th>Description</th><th>Relevance</th></tr>`;
-      for (const e of evidence) html += `<tr><td>${e.date_of_evidence||'\u2014'}</td><td>${e.type}</td><td>${e.title}</td><td>${e.description||''}</td><td>${e.court_relevance}</td></tr>`;
-      html += `</table>`;
+    if (evidence.length === 0) {
+      html += `<div class="empty">No evidence items.</div>`;
+    } else {
+      html += `<table><thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Description</th><th>Relevance</th></tr></thead><tbody>`;
+      for (const e of evidence) {
+        html += `<tr>
+          <td>${fmtDate(e.date_of_evidence)}</td>
+          <td>${titleCase(e.type)}</td>
+          <td>${esc(e.title)}</td>
+          <td>${esc(e.description)}</td>
+          <td>${titleCase(e.court_relevance)}</td>
+        </tr>`;
+      }
+      html += `</tbody></table>`;
     }
 
     // Interest Breakdown
     html += `<h2>5. Interest Calculation</h2>`;
-    html += `<p>Type: ${debt.interest_type} | Rate: ${((debt.interest_rate||0)*100).toFixed(2)}% | Start: ${debt.interest_start_date||'\u2014'}</p>`;
-    html += `<p>Accrued: $${(debt.interest_accrued||0).toFixed(2)}</p>`;
+    html += `<p><strong>Type:</strong> ${titleCase(debt.interest_type || 'simple')} &nbsp;|&nbsp; <strong>Rate:</strong> ${((debt.interest_rate || 0) * 100).toFixed(2)}% &nbsp;|&nbsp; <strong>Start:</strong> ${fmtDate(debt.interest_start_date)}</p>`;
+    html += `<p><strong>Accrued:</strong> ${fmtMoney(debt.interest_accrued)}</p>`;
 
     // Legal Actions
     html += `<h2>6. Legal Actions</h2>`;
-    if (legalActions.length === 0) { html += `<p>No legal actions.</p>`; }
-    else {
+    if (legalActions.length === 0) {
+      html += `<div class="empty">No legal actions.</div>`;
+    } else {
       for (const la of legalActions) {
-        html += `<div style="margin-bottom:12px;">`;
-        html += `<p><strong>${la.action_type}</strong> \u2014 Status: ${la.status} | Case: ${la.case_number||'\u2014'}</p>`;
-        if (la.hearing_date) html += `<p>Hearing: ${la.hearing_date} ${la.hearing_time||''}</p>`;
-        if (la.judgment_amount) html += `<p>Judgment: $${la.judgment_amount.toFixed(2)}</p>`;
+        html += `<div style="margin-bottom:12px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:3px;">`;
+        html += `<p><strong>${titleCase(la.action_type)}</strong> \u2014 Status: ${titleCase(la.status)} | Case: ${esc(la.case_number) || '\u2014'}</p>`;
+        if (la.hearing_date) html += `<p class="meta">Hearing: ${fmtDate(la.hearing_date)} ${esc(la.hearing_time) || ''}</p>`;
+        if (la.judgment_amount) html += `<p class="meta">Judgment: ${fmtMoney(la.judgment_amount)}</p>`;
         html += `</div>`;
       }
     }
 
     // Pipeline History
     html += `<h2>7. Pipeline History</h2>`;
-    html += `<table><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Auto</th><th>Notes</th></tr>`;
-    for (const s of stages) html += `<tr><td>${s.stage}</td><td>${s.entered_at}</td><td>${s.exited_at||'\u2014'}</td><td>${s.auto_advanced?'Yes':'No'}</td><td>${s.notes||''}</td></tr>`;
-    html += `</table>`;
+    html += `<table><thead><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Auto</th><th>Notes</th></tr></thead><tbody>`;
+    for (const s of stages) {
+      html += `<tr>
+        <td>${titleCase(s.stage)}</td>
+        <td>${fmtDateTime(s.entered_at)}</td>
+        <td>${s.exited_at ? fmtDateTime(s.exited_at) : '\u2014'}</td>
+        <td>${s.auto_advanced ? 'Yes' : 'No'}</td>
+        <td>${esc(s.notes)}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
 
     html += `</body></html>`;
 
-    return saveHTMLAsPDF(html, `Debt Case File \u2014 ${debt.debtor_name}`);
+    const safeName = sanitizeFilename(debt.debtor_name || 'Unknown');
+    return saveHTMLAsPDF(html, `Debt Case File \u2014 ${safeName}`);
   });
 
   ipcMain.handle('debt:seed-automation', (_event, { companyId }: { companyId: string }) => {

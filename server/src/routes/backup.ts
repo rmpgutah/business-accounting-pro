@@ -9,15 +9,12 @@ const BACKUP_DIR_UNRESOLVED = path.resolve(__dirname, '..', '..', 'data', 'backu
 if (!fs.existsSync(BACKUP_DIR_UNRESOLVED)) fs.mkdirSync(BACKUP_DIR_UNRESOLVED, { recursive: true });
 const BACKUP_DIR = fs.realpathSync(BACKUP_DIR_UNRESOLVED);
 
-/** Sanitize email into a safe filename component and validate resulting path is inside BACKUP_DIR */
-function safePath(email: string, suffix: string): string {
-  const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
-  const resolved = path.resolve(BACKUP_DIR, `${safeEmail}${suffix}`);
-  // Ensure the resolved path is exactly BACKUP_DIR or a descendant of it
-  if (!(resolved === BACKUP_DIR || resolved.startsWith(BACKUP_DIR + path.sep))) {
-    throw new Error('Path traversal attempt blocked');
-  }
-  return safe;
+/** Sanitize email into a safe filename component (no path traversal). */
+function sanitizeEmail(email: string): string {
+  if (!email || typeof email !== 'string') throw new Error('Invalid email');
+  const cleaned = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+  if (!cleaned) throw new Error('Invalid email');
+  return cleaned;
 }
 
 function verifySignature(body: Buffer, signature: string): boolean {

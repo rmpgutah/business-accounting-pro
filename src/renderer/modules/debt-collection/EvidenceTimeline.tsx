@@ -31,13 +31,13 @@ const TYPE_DOT_COLORS: Record<string, string> = {
   payment_record:    'bg-emerald-500',
   delivery_proof:    'bg-emerald-500',
   signed_agreement:  'bg-accent-blue',
-  witness_statement: 'bg-accent-expense-bg0',
+  witness_statement: 'bg-accent-expense',
   photo:             'bg-purple-500',
-  other:             'bg-bg-secondary0',
+  other:             'bg-text-muted',
 };
 
 const RELEVANCE_STYLES: Record<string, string> = {
-  high:   'bg-accent-expense-bg0/20 text-red-400',
+  high:   'bg-accent-expense/20 text-accent-expense',
   medium: 'bg-amber-500/20 text-amber-400',
   low:    'bg-accent-blue/20 text-accent-blue',
 };
@@ -49,18 +49,38 @@ function typeLabel(type: string): string {
     .join(' ');
 }
 
+// ─── HTML escape (XSS safety + correct rendering with special chars) ──
+function esc(s: unknown): string {
+  if (s === null || s === undefined || s === '') return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── PDF export HTML builder ────────────────────────────
 function buildTimelineHTML(items: EvidenceItem[]): string {
+  const fmtDate = (d: string) => {
+    if (!d) return '—';
+    try {
+      const dt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T12:00:00') : new Date(d);
+      if (isNaN(dt.getTime())) return esc(d);
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return esc(d); }
+  };
+
   const rows = items
     .map(
       (item) => `
     <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #333;">${item.date_of_evidence ? new Date(item.date_of_evidence).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #333;">${typeLabel(item.type)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #333;font-weight:600;">${item.title}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #333;">${item.description || '—'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #333;text-transform:capitalize;">${item.court_relevance || '—'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #333;">${item.file_name || '—'}</td>
+      <td>${fmtDate(item.date_of_evidence || '')}</td>
+      <td>${esc(typeLabel(item.type))}</td>
+      <td style="font-weight:600;">${esc(item.title)}</td>
+      <td>${esc(item.description) || '—'}</td>
+      <td style="text-transform:capitalize;">${esc(item.court_relevance) || '—'}</td>
+      <td>${esc(item.file_name) || '—'}</td>
     </tr>`
     )
     .join('');
@@ -71,12 +91,13 @@ function buildTimelineHTML(items: EvidenceItem[]): string {
   <meta charset="utf-8" />
   <title>Evidence Timeline</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #111; margin: 24px; }
-    h1 { font-size: 20px; margin-bottom: 4px; }
-    p.meta { color: #666; font-size: 12px; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #222; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
-    td { vertical-align: top; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #0f172a; margin: 32px; font-size: 13px; line-height: 1.5; }
+    h1 { font-size: 22px; margin: 0 0 4px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
+    p.meta { color: #64748b; font-size: 12px; margin: 4px 0 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 8px 12px; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; font-weight: 700; }
+    td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
   </style>
 </head>
 <body>
@@ -167,7 +188,7 @@ const EvidenceTimeline: React.FC<EvidenceTimelineProps> = ({ debtId, onAdd, onEd
       {items.length > 0 && (
         <div className="space-y-0">
           {items.map((item) => {
-            const dotColor = TYPE_DOT_COLORS[item.type] || 'bg-bg-secondary0';
+            const dotColor = TYPE_DOT_COLORS[item.type] || 'bg-bg-secondary';
             const relStyle = RELEVANCE_STYLES[item.court_relevance] || RELEVANCE_STYLES.low;
 
             return (

@@ -232,7 +232,7 @@ const BundleExport: React.FC<BundleExportProps> = ({ debtId }) => {
             resultType === 'success'
               ? 'bg-emerald-500/10 text-emerald-400'
               : resultType === 'error'
-                ? 'bg-accent-expense-bg0/10 text-red-400'
+                ? 'bg-accent-expense/10 text-red-400'
                 : 'bg-bg-tertiary text-text-muted'
           }`}
           style={{ borderRadius: '6px' }}
