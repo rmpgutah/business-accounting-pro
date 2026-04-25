@@ -38,7 +38,7 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 .pg { width: 8.5in; height: 11in; position: relative; }
 
 .chk { height: 3.667in; padding: 0.18in 0.42in 0.3in; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
-.stb { height: 3.667in; padding: 0.1in 0.3in 0.06in; position: relative; overflow: hidden; }
+.stb { height: 3.667in; padding: 0.06in 0.3in 0.04in; position: relative; overflow: hidden; }
 
 /* Check face */
 .chk-co { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
@@ -77,7 +77,7 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 /* Info grid */
 .ig { display: grid; border: 1.5px solid #000; margin-bottom: 4px; }
 .ig7 { grid-template-columns: repeat(7, 1fr); }
-.ig-c { padding: 3px 5px; border-right: 0.5px solid #bbb; border-bottom: 0.5px solid #bbb; }
+.ig-c { padding: 2px 4px; border-right: 0.5px solid #bbb; border-bottom: 0.5px solid #bbb; }
 .ig-c:nth-child(7n) { border-right: none; }
 .ig-c:nth-last-child(-n+7) { border-bottom: none; }
 .ig-c.s2 { grid-column: span 2; }
@@ -108,8 +108,8 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 .net-box .lbl { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
 .net-box .amt { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 1px 0; }
 .net-box .sub { font-size: 6.5px; }
-.sum-box { border: 1.5px solid #000; padding: 4px 5px; font-size: 7.5px; line-height: 1.6; margin-bottom: 3px; }
-.sum-box .stitle { font-weight: 700; text-transform: uppercase; font-size: 6px; letter-spacing: 0.5px; background: #000; color: #fff; margin: -4px -5px 3px; padding: 2px 5px; }
+.sum-box { border: 1.5px solid #000; padding: 3px 5px; font-size: 7px; line-height: 1.5; margin-bottom: 3px; }
+.sum-box .stitle { font-weight: 700; text-transform: uppercase; font-size: 5.5px; letter-spacing: 0.5px; background: #000; color: #fff; margin: -3px -5px 2px; padding: 1.5px 5px; }
 .sr { display: flex; justify-content: space-between; }
 .sr-tot { border-top: 1.5px solid #000; padding-top: 2px; margin-top: 2px; font-weight: 700; }
 
@@ -192,6 +192,8 @@ export function generatePaycheckHTML(
   const totPct = gross > 0 ? ((totalDed / gross) * 100).toFixed(1) : '0.0';
   const employerFICA = ss + med;
   const employerTotal = gross + employerFICA;
+  // YTD hours estimate (for hourly: ytdGross / effective rate; salaried: n/a)
+  const ytdHours = hrsTot > 0 && effRate > 0 ? Math.round((ytdG / effRate) * 100) / 100 : 0;
   const isVoid = options?.isVoid || false;
   const memo = esc(options?.memo || `Payroll ${pStart} — ${pEnd}`);
   let dedItems: [string, number][] = [];
@@ -278,6 +280,7 @@ export function generatePaycheckHTML(
     </div>
     <div class="sum-box">
       <div class="stitle">Year-to-Date</div>
+      ${ytdHours > 0 ? `<div class="sr"><span>Hours</span><span style="font-weight:700;">${ytdHours.toFixed(1)}</span></div>` : ''}
       <div class="sr"><span>Gross</span><span style="font-weight:700;">${fmt(ytdG)}</span></div>
       <div class="sr"><span>Taxes</span><span style="font-weight:700;color:#dc2626;">${fmt(ytdT)}</span></div>
       <div class="sr sr-tot"><span>Net</span><span style="color:#16a34a;">${fmt(ytdN)}</span></div>
@@ -384,20 +387,17 @@ export function generatePaycheckHTML(
       </div>
       <div style="width:125px;">
         ${summaryCol}
-        <!-- Employer cost summary -->
-        <div class="sum-box">
-          <div class="stitle">Employer Cost</div>
-          <div class="sr"><span>Gross Pay</span><span>${fmt(gross)}</span></div>
-          <div class="sr"><span>FICA Match</span><span>${fmt(employerFICA)}</span></div>
-          <div class="sr sr-tot"><span>Total</span><span style="font-weight:700;">${fmt(employerTotal)}</span></div>
-        </div>
       </div>
     </div>
-    <!-- Employer footer -->
-    <div class="emp-ft">
-      <div class="emp-ft-c"><strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span> &nbsp;|&nbsp; <strong>Employer Total:</strong> ${fmt(employerTotal)}</div>
-      ${empEmail ? `<div class="emp-ft-c" style="flex:0.5;"><strong>Employee:</strong> ${empEmail}</div>` : ''}
-      <div class="emp-ft-c" style="flex:0.4;"><strong>Pay Date:</strong> ${payDateS} &nbsp;|&nbsp; <strong>Check:</strong> ${chk}</div>
+    <!-- Employer footer: compact single row with cost + metadata -->
+    <div style="display:flex;gap:3px;margin-top:2px;font-size:6.5px;">
+      <div style="flex:1;border:1px solid #999;padding:1.5px 4px;background:#e8e8e8;">
+        <strong>Employer Cost:</strong> Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong>
+      </div>
+      <div style="flex:0.5;border:1px solid #999;padding:1.5px 4px;background:#f0f0f0;">
+        <strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span>
+      </div>
+      ${empEmail ? `<div style="flex:0.4;border:1px solid #999;padding:1.5px 4px;background:#f0f0f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
     </div>
   </div>`;
 
