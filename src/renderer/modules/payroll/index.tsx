@@ -34,6 +34,11 @@ interface PayStubRecord {
   employee_name: string;
   gross_pay: number;
   net_pay: number;
+  ytd_federal_tax?: number;
+  ytd_state_tax?: number;
+  ytd_social_security?: number;
+  ytd_medicare?: number;
+  [key: string]: any;
 }
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -395,10 +400,19 @@ const PayrollModule: React.FC = () => {
                                     e.stopPropagation();
                                     const { generatePaycheckHTML, extractCheckBody, wrapBatchChecks } = await import('../../lib/payroll-check-template');
                                     const runData = await api.get('payroll_runs', run.id);
+                                    const payYear = (run.pay_date || '').substring(0, 4) || new Date().getFullYear();
                                     const bodies: string[] = [];
                                     for (const s of stubs) {
                                       const emp = await api.get('employees', s.employee_id);
-                                      const checkHtml = generatePaycheckHTML(s, emp, activeCompany, runData);
+                                      // Ensure per-tax YTD is available
+                                      let stubData = s;
+                                      if (!s.ytd_federal_tax && s.employee_id) {
+                                        try {
+                                          const ytd = await api.payrollYtd(s.employee_id, Number(payYear));
+                                          stubData = { ...s, ytd_federal_tax: ytd.ytd_federal_tax, ytd_state_tax: ytd.ytd_state_tax, ytd_social_security: ytd.ytd_social_security, ytd_medicare: ytd.ytd_medicare };
+                                        } catch { /* use stub as-is */ }
+                                      }
+                                      const checkHtml = generatePaycheckHTML(stubData, emp, activeCompany, runData);
                                       bodies.push(extractCheckBody(checkHtml));
                                     }
                                     const combined = wrapBatchChecks(bodies);

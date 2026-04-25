@@ -495,6 +495,11 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE companies ADD COLUMN bank_routing_number TEXT DEFAULT ''",
   "ALTER TABLE companies ADD COLUMN bank_account_number TEXT DEFAULT ''",
   "ALTER TABLE companies ADD COLUMN bank_fraction_code TEXT DEFAULT ''",
+  // Per-tax YTD columns on pay_stubs for check printing (2026-04-24)
+  "ALTER TABLE pay_stubs ADD COLUMN ytd_federal_tax REAL DEFAULT 0",
+  "ALTER TABLE pay_stubs ADD COLUMN ytd_state_tax REAL DEFAULT 0",
+  "ALTER TABLE pay_stubs ADD COLUMN ytd_social_security REAL DEFAULT 0",
+  "ALTER TABLE pay_stubs ADD COLUMN ytd_medicare REAL DEFAULT 0",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }

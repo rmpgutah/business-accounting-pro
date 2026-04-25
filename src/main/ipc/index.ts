@@ -2251,7 +2251,11 @@ export function registerIpcHandlers(): void {
       SELECT
         COALESCE(SUM(ps.gross_pay), 0) AS ytd_gross,
         COALESCE(SUM(ps.federal_tax + ps.state_tax + ps.social_security + ps.medicare), 0) AS ytd_taxes,
-        COALESCE(SUM(ps.net_pay), 0) AS ytd_net
+        COALESCE(SUM(ps.net_pay), 0) AS ytd_net,
+        COALESCE(SUM(ps.federal_tax), 0) AS ytd_federal_tax,
+        COALESCE(SUM(ps.state_tax), 0) AS ytd_state_tax,
+        COALESCE(SUM(ps.social_security), 0) AS ytd_social_security,
+        COALESCE(SUM(ps.medicare), 0) AS ytd_medicare
       FROM pay_stubs ps
       JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
       WHERE ps.employee_id = ?
@@ -2263,6 +2267,10 @@ export function registerIpcHandlers(): void {
       ytd_gross: row?.ytd_gross ?? 0,
       ytd_taxes: row?.ytd_taxes ?? 0,
       ytd_net: row?.ytd_net ?? 0,
+      ytd_federal_tax: row?.ytd_federal_tax ?? 0,
+      ytd_state_tax: row?.ytd_state_tax ?? 0,
+      ytd_social_security: row?.ytd_social_security ?? 0,
+      ytd_medicare: row?.ytd_medicare ?? 0,
     };
   });
 
@@ -2310,10 +2318,26 @@ export function registerIpcHandlers(): void {
       for (const s of stubs) {
         lastCheckNum++;
         const checkNumber = String(lastCheckNum).padStart(6, '0');
+
+        // Compute per-tax YTD by summing all prior stubs for this employee in the same year
+        const payYear = (payDate || '').substring(0, 4);
+        let ytdFederal = s.federalTax || 0, ytdState = s.stateTax || 0, ytdSS = s.ss || 0, ytdMedicare = s.medicare || 0;
+        if (payYear && s.employeeId) {
+          try {
+            const prior = (dbInstance as any).prepare(`
+              SELECT COALESCE(SUM(ps.federal_tax), 0) AS f, COALESCE(SUM(ps.state_tax), 0) AS st,
+                     COALESCE(SUM(ps.social_security), 0) AS ss, COALESCE(SUM(ps.medicare), 0) AS m
+              FROM pay_stubs ps JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+              WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ? AND pr.status != 'draft'
+            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`) as any;
+            if (prior) { ytdFederal += prior.f || 0; ytdState += prior.st || 0; ytdSS += prior.ss || 0; ytdMedicare += prior.m || 0; }
+          } catch { /* ignore */ }
+        }
+
         (dbInstance as any).prepare(`
-          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net, pretax_deductions, posttax_deductions, deduction_detail, check_number)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(uuid(), runId, s.employeeId, s.hours, s.hoursOvertime || 0, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}', checkNumber);
+          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net, pretax_deductions, posttax_deductions, deduction_detail, check_number, ytd_federal_tax, ytd_state_tax, ytd_social_security, ytd_medicare)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuid(), runId, s.employeeId, s.hours, s.hoursOvertime || 0, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}', checkNumber, ytdFederal, ytdState, ytdSS, ytdMedicare);
       }
 
       // BUG 4: Break out taxes into separate GL lines instead of single lumped "Tax" line

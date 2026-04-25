@@ -223,7 +223,10 @@ const api = {
 
   // Payroll YTD
   // Bug fix #37-39: YTD values are now calculated from actual prior pay stubs.
-  payrollYtd: (employeeId: string, year: number): Promise<{ ytd_gross: number; ytd_taxes: number; ytd_net: number }> =>
+  payrollYtd: (employeeId: string, year: number): Promise<{
+    ytd_gross: number; ytd_taxes: number; ytd_net: number;
+    ytd_federal_tax: number; ytd_state_tax: number; ytd_social_security: number; ytd_medicare: number;
+  }> =>
     window.electronAPI.invoke('payroll:ytd-totals', { employeeId, year }),
 
   // Settings (company-scoped)

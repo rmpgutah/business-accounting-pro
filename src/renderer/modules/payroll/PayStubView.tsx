@@ -25,6 +25,10 @@ interface PayStub {
   pretax_deductions?: number;
   posttax_deductions?: number;
   deduction_detail?: string;
+  ytd_federal_tax?: number;
+  ytd_state_tax?: number;
+  ytd_social_security?: number;
+  ytd_medicare?: number;
 }
 
 interface YtdTotals {
@@ -187,12 +191,22 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   const ytdTotalDeductions = ytd.federal_tax + ytd.state_tax + ytd.social_security + ytd.medicare;
   const isDirectDeposit = !!(employee?.routing_number);
 
-  // Feature 2: Print check handler
+  // Feature 2: Print check handler — merge per-tax YTD into stub data
   const handlePrintCheck = async (isVoid = false) => {
     const { generatePaycheckHTML } = await import('../../lib/payroll-check-template');
     const emp = employee || await api.get('employees', stub.employee_id);
     const run = await api.get('payroll_runs', stub.payroll_run_id);
-    const html = generatePaycheckHTML(stub, emp, activeCompany, run, { isVoid });
+
+    // If per-tax YTD isn't stored on the stub, compute it from the view's ytd state
+    const stubWithYTD = {
+      ...stub,
+      ytd_federal_tax: stub.ytd_federal_tax || ytd.federal_tax || 0,
+      ytd_state_tax: stub.ytd_state_tax || ytd.state_tax || 0,
+      ytd_social_security: stub.ytd_social_security || ytd.social_security || 0,
+      ytd_medicare: stub.ytd_medicare || ytd.medicare || 0,
+    };
+
+    const html = generatePaycheckHTML(stubWithYTD, emp, activeCompany, run, { isVoid });
     await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`);
   };
 

@@ -1042,10 +1042,19 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                       [completedRunId]
                     );
                     const run = await api.get('payroll_runs', completedRunId);
+                    const payYear = (run?.pay_date || '').substring(0, 4) || new Date().getFullYear();
                     const bodies: string[] = [];
                     for (const s of (stubs || [])) {
                       const emp = await api.get('employees', s.employee_id);
-                      const checkHtml = generatePaycheckHTML(s, emp, activeCompany, run, {
+                      // Ensure per-tax YTD is available
+                      let stubData = s;
+                      if (!s.ytd_federal_tax && s.employee_id) {
+                        try {
+                          const ytd = await api.payrollYtd(s.employee_id, Number(payYear));
+                          stubData = { ...s, ...ytd };
+                        } catch { /* use stub as-is */ }
+                      }
+                      const checkHtml = generatePaycheckHTML(stubData, emp, activeCompany, run, {
                         memo: checkMemo || undefined,
                       });
                       bodies.push(extractCheckBody(checkHtml));
