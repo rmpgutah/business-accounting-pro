@@ -7,6 +7,8 @@ import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { SummaryBar } from '../../components/SummaryBar';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import ErrorBanner from '../../components/ErrorBanner';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -395,6 +397,7 @@ const ExpenseDetailReport: React.FC = () => {
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Expense Detail Report" periodLabel="period" periodEnd={endDate} />
       {error && <ErrorBanner message={error} title="Failed to load expense detail report" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
@@ -552,6 +555,7 @@ const ExpenseDetailReport: React.FC = () => {
           </div>
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

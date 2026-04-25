@@ -6,6 +6,8 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -222,6 +224,7 @@ const GeneralLedger: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="General Ledger" periodLabel="period" periodEnd={endDate} />
       {error && <ErrorBanner message={error} title="Failed to load General Ledger" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: '6px' }}>
@@ -422,6 +425,7 @@ const GeneralLedger: React.FC = () => {
           })}
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

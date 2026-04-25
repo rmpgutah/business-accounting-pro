@@ -4,6 +4,8 @@ import { format, endOfMonth, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Types ──────────────────────────────────────────────
@@ -269,6 +271,7 @@ const BalanceSheet: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Balance Sheet" periodEnd={asOfDate} />
       {error && <ErrorBanner message={error} title="Failed to load Balance Sheet" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
@@ -507,6 +510,7 @@ const BalanceSheet: React.FC = () => {
           </div>
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

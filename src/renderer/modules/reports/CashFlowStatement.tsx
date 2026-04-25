@@ -5,6 +5,8 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -227,6 +229,7 @@ const CashFlowStatement: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Statement of Cash Flows" periodLabel="period" periodEnd={endDate} />
       {error && <ErrorBanner message={error} title="Failed to load Cash Flow Statement" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
@@ -397,6 +400,7 @@ const CashFlowStatement: React.FC = () => {
           </table>
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

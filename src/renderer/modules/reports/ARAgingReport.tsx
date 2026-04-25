@@ -6,6 +6,8 @@ import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import EntityChip from '../../components/EntityChip';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -146,6 +148,7 @@ const ARAgingReport: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="A/R Aging Summary" periodEnd={new Date()} />
       {error && <ErrorBanner message={error} title="Failed to load AR Aging" onDismiss={() => setError('')} />}
 
       {/* Controls */}
@@ -283,6 +286,7 @@ const ARAgingReport: React.FC = () => {
           )}
         </>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

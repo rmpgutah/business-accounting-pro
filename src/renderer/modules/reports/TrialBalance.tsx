@@ -6,6 +6,8 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -140,6 +142,7 @@ const TrialBalance: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Trial Balance" periodLabel="period" periodEnd={endDate} />
       {error && <ErrorBanner message={error} title="Failed to load Trial Balance" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
@@ -296,6 +299,7 @@ const TrialBalance: React.FC = () => {
           )}
         </>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

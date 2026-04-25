@@ -7,6 +7,8 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 
 // ─── Types ──────────────────────────────────────────────
@@ -143,6 +145,7 @@ const APAgingReport: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="A/P Aging Summary" periodEnd={new Date()} />
       {error && <ErrorBanner message={error} title="Failed to load AP Aging" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
@@ -268,6 +271,7 @@ const APAgingReport: React.FC = () => {
           )}
         </>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

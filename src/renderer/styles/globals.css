@@ -568,3 +568,193 @@ h1, h2, h3, h4, h5, h6 {
   /* Prevent huge images from overflowing the page */
   img, svg { max-width: 100% !important; height: auto !important; }
 }
+
+/* ─── Corporate Report Print System ───────────────────── */
+/* Reusable styling for the print-only PrintReportHeader / PrintReportFooter
+   components and shared report typography. Applied across all financial
+   reports (P&L, Balance Sheet, Cash Flow, AR/AP Aging, Trial Balance,
+   General Ledger, Tax Summary, Expense by Category, Budget vs Actual). */
+
+/* Hide print-only elements on screen */
+.print-report-header,
+.print-report-footer {
+  display: none;
+}
+
+/* Negative-amount accounting parentheses helper */
+.acc-neg::before { content: "("; }
+.acc-neg::after  { content: ")"; }
+
+@page {
+  size: letter;
+  margin: 0.6in 0.5in 0.7in 0.5in;
+}
+@page :first {
+  margin-top: 0.5in;
+}
+
+@media print {
+  /* ── Show & style report header ───────────────────── */
+  .print-report-header {
+    display: block !important;
+    margin: 0 0 0.25in 0;
+    padding: 0;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: #0b1220 !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .print-report-header-top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.5in;
+  }
+  .print-report-header-left { text-align: left; }
+  .print-report-header-right { text-align: right; }
+  .print-report-company {
+    font-size: 18pt;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.1;
+    color: #0b1220 !important;
+  }
+  .print-report-title {
+    font-size: 12pt;
+    font-weight: 600;
+    margin-top: 2pt;
+    color: #1d4ed8 !important;
+    letter-spacing: 0.02em;
+  }
+  .print-report-period {
+    font-size: 9.5pt;
+    margin-top: 1pt;
+    color: #334155 !important;
+  }
+  .print-report-prepared {
+    font-size: 8.5pt;
+    color: #475569 !important;
+  }
+  .print-report-rule {
+    margin-top: 6pt;
+    border: 0;
+    border-top: 2px solid #1d4ed8;
+    height: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Show & style report footer ───────────────────── */
+  /* Fixed-position footer renders on every page in Chromium. */
+  .print-report-footer {
+    display: flex !important;
+    position: fixed;
+    bottom: 0.2in;
+    left: 0.5in;
+    right: 0.5in;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5in;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 7.5pt;
+    color: #475569 !important;
+    border-top: 1px solid #cbd5e1;
+    padding-top: 4pt;
+  }
+  .print-report-footer-left,
+  .print-report-footer-center,
+  .print-report-footer-right { flex: 1; }
+  .print-report-footer-center { text-align: center; }
+  .print-report-footer-right { text-align: right; }
+  .print-report-pageno::before {
+    content: "Page " counter(page) " of " counter(pages);
+  }
+
+  /* ── Body / page setup ─────────────────────────────── */
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+    font-size: 9.5pt;
+  }
+
+  /* ── Tabular numerics across every report ──────────── */
+  .font-mono,
+  .text-right,
+  td.text-right,
+  th.text-right,
+  .print-num {
+    font-variant-numeric: tabular-nums;
+    font-family: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  /* ── Section heading hierarchy (P&L / BS / CF) ─────── */
+  .report-section-heading {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 9pt;
+    color: #0b1220 !important;
+  }
+  .report-subtotal-row td {
+    border-top: 1px solid #000 !important;
+    border-bottom: 1px solid #000 !important;
+    font-weight: 600;
+  }
+  .report-grand-total-row td {
+    border-top: 1px solid #000 !important;
+    border-bottom: 3px double #000 !important;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Aging report: 90+ tint, bucket strip ──────────── */
+  .aging-bucket-strip {
+    display: flex !important;
+    gap: 0;
+    border: 1px solid #94a3b8;
+    margin-bottom: 0.15in;
+  }
+  .aging-bucket-strip > * {
+    flex: 1;
+    padding: 6pt 8pt;
+    border-right: 1px solid #cbd5e1;
+    background: #ffffff !important;
+    color: #0b1220 !important;
+  }
+  .aging-bucket-strip > *:last-child { border-right: 0; }
+  .aging-row-90plus td {
+    background: #fef2f2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .aging-client-subtotal td {
+    border-top: 1px dotted #94a3b8 !important;
+    font-weight: 600;
+  }
+
+  /* ── Trial Balance imbalance flag ──────────────────── */
+  .tb-out-of-balance {
+    color: #b91c1c !important;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Multi-page table behavior ─────────────────────── */
+  table { border-collapse: collapse !important; width: 100% !important; }
+  thead { display: table-header-group !important; }
+  tfoot { display: table-footer-group !important; }
+  tr, .page-break-avoid {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* ── Hide every report's on-screen action bar ──────── */
+  .module-actions,
+  .report-controls,
+  .no-print { display: none !important; }
+
+  /* ── Reserve room for fixed footer ─────────────────── */
+  main, .app-shell, .module-container { padding-bottom: 0.5in !important; }
+}
+

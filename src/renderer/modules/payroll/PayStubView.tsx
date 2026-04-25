@@ -148,12 +148,31 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
 
   const buildStubHTML = () => {
     if (!stub) return '';
+    // ── Privacy: only pass last-4 SSN and last-4 bank account to the PDF.
+    // Full SSN and full account number are never sent to the print template.
+    const ssnLast4 = (employee?.ssn_last4 || '').toString().replace(/\D/g, '').slice(-4)
+      || (employee?.ssn || '').toString().replace(/\D/g, '').slice(-4);
+    const acctLast4 = (employee?.account_number || '').toString().replace(/\D/g, '').slice(-4);
+    const addressParts = [
+      employee?.address_line1,
+      employee?.address_line2,
+      employee?.city,
+      employee?.state,
+      employee?.zip,
+    ].filter(Boolean);
+
     // Format ISO dates to human-readable strings before handing off to PDF template
     const stubForPrint = {
       ...stub,
       period_start: formatDate(stub.period_start),
       period_end:   formatDate(stub.period_end),
       pay_date:     formatDate(stub.pay_date),
+      // Privacy-enforced employee fields
+      employee_id_short: employee?.employee_id || employee?.id_short || undefined,
+      employee_address: addressParts.length ? addressParts.join(', ') : undefined,
+      ssn_last4: ssnLast4 || undefined,
+      bank_name: employee?.bank_name || undefined,
+      bank_account_last4: acctLast4 || undefined,
     };
     return generatePayStubHTML(stubForPrint, ytd, activeCompany);
   };

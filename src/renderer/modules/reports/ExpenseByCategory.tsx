@@ -3,6 +3,8 @@ import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Types ──────────────────────────────────────────────
 interface CategoryRow {
@@ -136,6 +138,7 @@ const ExpenseByCategory: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Expense by Category" periodLabel="period" periodEnd={endDate} />
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
@@ -310,6 +313,7 @@ const ExpenseByCategory: React.FC = () => {
         <h3 className="text-sm font-semibold text-text-primary mb-3">Top Vendors by Spend</h3>
         <VendorSpendTable startDate={startDate} endDate={endDate} />
       </div>
+      <PrintReportFooter />
     </div>
   );
 };

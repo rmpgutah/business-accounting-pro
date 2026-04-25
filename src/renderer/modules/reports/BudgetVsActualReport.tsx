@@ -4,6 +4,8 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
 import { formatDate } from '../../lib/format';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -181,6 +183,7 @@ const BudgetVsActualReport: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Budget vs Actual" periodEnd={budget?.end_date ?? new Date()} />
       {/* Controls */}
       <div className="flex items-center gap-4">
         <div>
@@ -288,6 +291,7 @@ const BudgetVsActualReport: React.FC = () => {
           </table>
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

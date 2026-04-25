@@ -6,6 +6,8 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { generateReportHTML } from '../../lib/print-templates';
 import type { ReportColumn, ReportSummary } from '../../lib/print-templates';
 import ErrorBanner from '../../components/ErrorBanner';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -442,6 +444,12 @@ const ProfitAndLoss: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader
+        title="Profit & Loss Statement"
+        periodLabel="period"
+        periodEnd={endDate}
+        periodText={`${format(parseISO(startDate), 'MMMM d, yyyy')} – ${format(parseISO(endDate), 'MMMM d, yyyy')}`}
+      />
       {error && <ErrorBanner message={error} title="Failed to load Profit & Loss" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
@@ -705,6 +713,7 @@ const ProfitAndLoss: React.FC = () => {
           </table>
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

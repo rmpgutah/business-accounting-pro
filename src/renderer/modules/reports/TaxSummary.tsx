@@ -4,6 +4,8 @@ import { format, startOfYear, endOfYear, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -215,6 +217,7 @@ const TaxSummary: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <PrintReportHeader title="Tax Summary" periodLabel="period" periodEnd={endDate} />
       {error && <ErrorBanner message={error} title="Failed to load Tax Summary" onDismiss={() => setError('')} />}
       {/* Controls */}
       <div
@@ -399,6 +402,7 @@ const TaxSummary: React.FC = () => {
           </div>
         </div>
       )}
+      <PrintReportFooter />
     </div>
   );
 };

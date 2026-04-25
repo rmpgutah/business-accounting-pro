@@ -89,6 +89,79 @@ const baseStyles = `
   .rpt-total td { border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; font-weight: 700; }
   .rpt-footer { display: flex; justify-content: space-between; margin-top: 28px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; }
   @media print { .rpt-page { padding: 0; } .no-break { page-break-inside: avoid; } }
+
+  /* ── Legal document utilities (demand letters, affidavits, court packets) ── */
+  .legal-page { font-family: Georgia, 'Times New Roman', 'Liberation Serif', serif; color: #111; font-size: 12pt; line-height: 1.65; }
+  .legal-page p, .legal-page li { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.7; }
+  .legal-letterhead { border-bottom: 3px double #000; padding-bottom: 14px; margin-bottom: 28px; text-align: center; }
+  .legal-letterhead .lh-name { font-family: Georgia, 'Times New Roman', serif; font-size: 22pt; font-weight: 700; letter-spacing: 3px; color: #000; text-transform: uppercase; }
+  .legal-letterhead .lh-rule { width: 60px; height: 2px; background: #000; margin: 8px auto; }
+  .legal-letterhead .lh-meta { font-size: 10pt; color: #333; line-height: 1.5; font-family: Georgia, serif; font-style: italic; }
+  .legal-date { text-align: right; font-size: 11pt; margin-bottom: 24px; font-family: Georgia, serif; }
+  .legal-recipient { margin-left: 0; margin-bottom: 24px; font-size: 11pt; line-height: 1.5; font-family: Georgia, serif; }
+  .legal-subject { font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0; font-family: Georgia, serif; font-size: 11pt; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 8px 0; }
+  .legal-body { text-align: justify; }
+  .legal-body p { margin-bottom: 14px; text-indent: 0.4in; }
+  .legal-body p.no-indent { text-indent: 0; }
+  .legal-amount-table { width: 80%; margin: 18px auto; border-collapse: collapse; font-family: Georgia, serif; }
+  .legal-amount-table td { border: 1px solid #000; padding: 8px 14px; font-size: 11pt; }
+  .legal-amount-table td.amt { text-align: right; font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Menlo', Consolas, 'Courier New', monospace; }
+  .legal-amount-table tr.total td { border-top: 2px solid #000; border-bottom: 3px double #000; font-weight: 700; background: #f4f4f0; }
+  .legal-notice { border: 1.5px solid #000; padding: 14px 18px; margin: 22px 0; font-size: 10.5pt; line-height: 1.6; background: #fafaf6; font-family: Georgia, serif; }
+  .legal-notice .ln-heading { font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-size: 10pt; }
+  .legal-mini-miranda { border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 0; margin: 22px 0; font-size: 10.5pt; font-style: italic; text-align: center; font-family: Georgia, serif; }
+  .legal-signature { margin-top: 48px; page-break-inside: avoid; }
+  .legal-sig-line { border-bottom: 1px solid #000; width: 320px; margin-top: 56px; }
+  .legal-sig-name { font-weight: 700; margin-top: 4px; font-family: Georgia, serif; font-size: 11pt; }
+  .legal-sig-title { font-style: italic; color: #333; font-size: 10.5pt; font-family: Georgia, serif; }
+  .legal-confidential-footer { border-top: 1px solid #000; margin-top: 36px; padding-top: 8px; font-size: 9pt; color: #444; text-align: center; font-style: italic; font-family: Georgia, serif; }
+  .legal-caption { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.7; margin-bottom: 24px; border-bottom: 3px double #000; padding-bottom: 16px; }
+  .legal-caption .cap-state { font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .legal-caption .cap-title { font-weight: 700; text-transform: uppercase; letter-spacing: 3px; font-size: 14pt; margin-top: 12px; }
+  .legal-numbered { counter-reset: legalpara; }
+  .legal-numbered > p.lp { counter-increment: legalpara; padding-left: 36px; position: relative; text-indent: 0; margin-bottom: 14px; text-align: justify; }
+  .legal-numbered > p.lp::before { content: counter(legalpara) "."; position: absolute; left: 0; top: 0; font-weight: 700; width: 28px; text-align: right; }
+  .legal-jurat { border: 1.5px solid #000; padding: 18px 22px; margin-top: 36px; font-family: Georgia, serif; font-size: 11pt; line-height: 1.9; page-break-inside: avoid; }
+  .legal-jurat .jurat-title { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 11pt; margin-bottom: 12px; border-bottom: 1px solid #000; padding-bottom: 6px; }
+  .legal-jurat .jurat-blank { display: inline-block; border-bottom: 1px solid #000; min-width: 60px; padding: 0 4px; }
+  .legal-jurat .seal-box { float: right; width: 130px; height: 130px; border: 2px dashed #555; margin-left: 16px; text-align: center; padding: 50px 6px; font-size: 9pt; color: #777; font-style: italic; }
+  .legal-exhibit-cover { text-align: center; padding-top: 2.5in; font-family: Georgia, 'Times New Roman', serif; page-break-after: always; page-break-before: always; }
+  .legal-exhibit-cover .ex-tab { display: inline-block; border: 3px solid #000; padding: 24px 48px; font-size: 60pt; font-weight: 700; letter-spacing: 8px; }
+  .legal-exhibit-cover .ex-label { font-size: 16pt; text-transform: uppercase; letter-spacing: 4px; margin-top: 24px; }
+  .legal-remit { border: 2px dashed #000; margin-top: 36px; padding: 18px 22px; font-family: Georgia, serif; font-size: 10.5pt; }
+  .legal-remit .remit-tear { text-align: center; font-size: 10pt; color: #555; letter-spacing: 4px; margin-bottom: 14px; }
+
+  /* ── Customer-facing financial document utilities ── */
+  .fd-font { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+  .fd-tnum { font-variant-numeric: tabular-nums; }
+  .fd-mono { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+  .fd-letterhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 22px; }
+  .fd-letterhead-left { flex: 1; min-width: 0; }
+  .fd-letterhead-right { text-align: right; min-width: 200px; }
+  .fd-co-name { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.2px; }
+  .fd-co-line { font-size: 10.5px; color: #475569; line-height: 1.55; margin-top: 2px; }
+  .fd-doc-type { font-size: 28px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase; line-height: 1; }
+  .fd-doc-num { font-size: 12px; color: #475569; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .fd-doc-date { font-size: 10.5px; color: #64748b; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .fd-meta-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 28px; padding: 10px 14px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px; }
+  .fd-meta-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10.5px; }
+  .fd-meta-row .lbl { color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 9px; }
+  .fd-meta-row .val { color: #0f172a; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fd-addr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .fd-addr-grid.single { grid-template-columns: 1fr; max-width: 50%; }
+  .fd-addr-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 11px 14px; }
+  .fd-addr-lbl { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #64748b; margin-bottom: 5px; }
+  .fd-addr-name { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
+  .fd-addr-detail { font-size: 10.5px; color: #475569; line-height: 1.55; }
+  .fd-row-chip { display: inline-block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #64748b; background: #f1f5f9; padding: 1px 5px; border-radius: 2px; margin-left: 6px; vertical-align: middle; }
+  .fd-status-badge { display: inline-block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px; vertical-align: middle; margin-left: 8px; }
+  .fd-totals-card { float: right; min-width: 280px; max-width: 320px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .fd-quote-sig { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .fd-sig-line { border-bottom: 1px solid #0f172a; height: 32px; }
+  .fd-sig-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-top: 4px; }
+  @media print {
+    .fd-totals-card { background: #f8fafc !important; }
+  }
 `;
 
 // ─── Shared report header builder ──────────────────────────
@@ -385,7 +458,13 @@ export function generateInvoiceHTML(
       let val = '';
       switch (c.key) {
         case 'item_code':    val = l.item_code ? `<span style="font-size:9px;background:#f1f5f9;padding:1px 4px;border-radius:2px;color:#64748b;">${esc(l.item_code)}</span>` : ''; break;
-        case 'description':  val = esc(l.description || ''); break;
+        case 'description': {
+          const desc = esc(l.description || '');
+          const isService = String(l.row_type || 'item') === 'item' && (l.is_service || /service|consult|labor|hour/i.test(String(l.description || '')));
+          const chip = isService ? `<span class="fd-row-chip">SVC</span>` : '';
+          val = `${desc}${chip}`;
+          break;
+        }
         case 'quantity':     val = String(l.quantity ?? 1); break;
         case 'unit_label':   val = esc(l.unit_label || ''); break;
         case 'unit_price':   val = fmt(l.unit_price || 0); break;
@@ -472,20 +551,41 @@ export function generateInvoiceHTML(
       ${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}
     </div>`;
 
-  const invoiceTypeLabel = invoice.invoice_type === 'credit_note' ? 'Credit Note'
+  const isCreditNote = invoice.invoice_type === 'credit_note';
+  const isQuote = invoice.invoice_type === 'quote' || invoice.document_type === 'quote';
+  const invoiceTypeLabel = isCreditNote ? 'Credit Note'
+    : isQuote ? 'Quote'
     : invoice.invoice_type === 'proforma' ? 'Proforma Invoice'
     : invoice.invoice_type === 'retainer' ? 'Retainer Invoice'
     : invoice.invoice_type === 'service' ? 'Service Invoice'
     : invoice.invoice_type === 'product' ? 'Invoice'
     : 'Invoice';
+
+  // Status badge near the doc number (only for sent/paid/overdue/void)
+  const badgeMap: Record<string, { label: string; bg: string; fg: string }> = {
+    paid:      { label: 'PAID',     bg: '#dcfce7', fg: '#166534' },
+    overdue:   { label: 'OVERDUE',  bg: '#fee2e2', fg: '#991b1b' },
+    cancelled: { label: 'VOID',     bg: '#fee2e2', fg: '#991b1b' },
+    void:      { label: 'VOID',     bg: '#fee2e2', fg: '#991b1b' },
+    sent:      { label: 'SENT',     bg: '#dbeafe', fg: '#1e40af' },
+    accepted:  { label: 'ACCEPTED', bg: '#dcfce7', fg: '#166534' },
+    declined:  { label: 'DECLINED', bg: '#fee2e2', fg: '#991b1b' },
+  };
+  const badge = badgeMap[String(invoice.status || '').toLowerCase()];
+  const statusBadgeHTML = badge
+    ? `<span class="fd-status-badge" style="background:${badge.bg};color:${badge.fg};">${badge.label}</span>`
+    : '';
   const currencyLabel = invoice.currency && invoice.currency !== 'USD' ? ` (${invoice.currency})` : '';
   const shippingAmount = Number(invoice.shipping_amount || 0);
 
+  const docNumberField = invoice.invoice_number || invoice.quote_number || invoice.document_number || '';
   const invBlock = `
     <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
-    <div class="inv-number">#${esc(invoice.invoice_number || '')}</div>
+    <div class="inv-number">#${esc(docNumberField)}${statusBadgeHTML}</div>
+    ${isCreditNote && invoice.reference_invoice_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Re: Invoice #${esc(invoice.reference_invoice_number)}</div>` : ''}
     ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${esc(invoice.po_number)}</div>` : ''}
-    ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}`;
+    ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}
+    ${isQuote && invoice.valid_until ? `<div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:6px;border-top:2px solid ${accent};padding-top:4px;display:inline-block;">Valid until ${fmtDate(invoice.valid_until)}</div>` : ''}`;
 
   let headerHTML = '';
   if (style === 'executive') {
@@ -623,24 +723,37 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 <div class="content">
   ${headerHTML}
 
-  <div class="addresses">
-    <div class="addr-block">
-      <div class="section-label">Bill To</div>
-      <div class="addr-name">${clientName}</div>
-      <div class="addr-detail">
-        ${clientEmail ? clientEmail + '<br>' : ''}
-        ${clientAddr ? clientAddr + '<br>' : ''}
-        ${clientPhone || ''}
-      </div>
-    </div>
-  </div>
+  ${(() => {
+    const shipName = esc(invoice.ship_to_name || '');
+    const shipAddr = esc([invoice.ship_to_address_line1, invoice.ship_to_address_line2, invoice.ship_to_city, invoice.ship_to_state, invoice.ship_to_zip].filter(Boolean).join(', '));
+    const hasShip = !!(shipName || shipAddr);
+    const billCard = `
+      <div class="fd-addr-card">
+        <div class="fd-addr-lbl">${isQuote ? 'Quote For' : 'Bill To'}</div>
+        <div class="fd-addr-name">${clientName}</div>
+        <div class="fd-addr-detail">
+          ${clientAddr ? clientAddr + '<br>' : ''}
+          ${clientEmail ? clientEmail + (clientPhone ? ' &middot; ' + clientPhone : '') : (clientPhone || '')}
+        </div>
+      </div>`;
+    const shipCard = hasShip ? `
+      <div class="fd-addr-card">
+        <div class="fd-addr-lbl">Ship To</div>
+        <div class="fd-addr-name">${shipName || clientName}</div>
+        <div class="fd-addr-detail">${shipAddr || ''}</div>
+      </div>` : '';
+    return `<div class="fd-addr-grid${hasShip ? '' : ' single'}">${billCard}${shipCard}</div>`;
+  })()}
 
-  <div class="meta-row">
-    <div><div class="meta-label">Invoice Date</div><div class="meta-value">${fmtDate(invoice.issue_date)}</div></div>
-    <div><div class="meta-label">Due Date</div><div class="meta-value">${fmtDate(invoice.due_date)}</div></div>
-    <div><div class="meta-label">Terms</div><div class="meta-value">${esc(invoice.terms || 'Net 30')}</div></div>
-    <div><div class="meta-label">Status</div><div class="meta-value" style="color:${stamp?.color || '#0f172a'}">${(invoice.status || 'draft').toUpperCase()}</div></div>
-    ${customFieldRows}
+  <div class="fd-meta-strip">
+    <div class="fd-meta-row"><span class="lbl">${isQuote ? 'Quote Date' : isCreditNote ? 'Credit Date' : 'Issue Date'}</span><span class="val">${fmtDate(invoice.issue_date)}</span></div>
+    ${isQuote
+      ? `<div class="fd-meta-row"><span class="lbl">Valid Until</span><span class="val">${fmtDate(invoice.valid_until || '')}</span></div>`
+      : `<div class="fd-meta-row"><span class="lbl">${isCreditNote ? 'Ref Invoice' : 'Due Date'}</span><span class="val">${isCreditNote ? esc(invoice.reference_invoice_number || '—') : fmtDate(invoice.due_date)}</span></div>`}
+    ${invoice.po_number ? `<div class="fd-meta-row"><span class="lbl">PO Number</span><span class="val">${esc(invoice.po_number)}</span></div>` : ''}
+    ${invoice.job_reference ? `<div class="fd-meta-row"><span class="lbl">Project</span><span class="val">${esc(invoice.job_reference)}</span></div>` : ''}
+    <div class="fd-meta-row"><span class="lbl">Currency</span><span class="val">${esc(invoice.currency || 'USD')}</span></div>
+    <div class="fd-meta-row"><span class="lbl">Terms</span><span class="val">${esc(invoice.terms || (isQuote ? 'Quote' : 'Net 30'))}</span></div>
   </div>
 
   <table>
@@ -677,15 +790,35 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     </div>
   </div>` : ''}
 
+  ${isQuote ? `
+  <div class="fd-quote-sig">
+    <div>
+      <div class="fd-sig-line"></div>
+      <div class="fd-sig-lbl">Authorized Signature &middot; ${companyName}</div>
+    </div>
+    <div>
+      <div class="fd-sig-line"></div>
+      <div class="fd-sig-lbl">Accepted by ${clientName} &middot; Date</div>
+    </div>
+  </div>
+  <div style="font-size:10px;color:#64748b;font-style:italic;margin-top:10px;line-height:1.5;">
+    By signing above, the customer accepts the goods and services described in this quote at the prices stated, subject to the terms above. This quote is valid${invoice.valid_until ? ` until ${fmtDate(invoice.valid_until)}` : ''}.
+  </div>` : ''}
+
+  ${isCreditNote ? `
+  <div style="font-size:10px;color:#64748b;font-style:italic;margin-top:14px;line-height:1.5;">
+    Amounts shown are credits to the customer's account. Negative values or "(CR)" indicate funds owed to the customer${invoice.reference_invoice_number ? ` against Invoice #${esc(invoice.reference_invoice_number)}` : ''}.
+  </div>` : ''}
+
   <div class="footer-bottom">
     ${esc(footerText) || companyName}
-    ${invoice.late_fee_pct && invoice.late_fee_pct > 0 ? `<p style="font-size:10px;color:#64748b;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
+    ${invoice.late_fee_pct && invoice.late_fee_pct > 0 && !isQuote && !isCreditNote ? `<p style="font-size:10px;color:#64748b;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
   </div>
 </div>
 </div>
 
-<div class="print-footer">
-  ${companyName} &middot; Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+<div class="print-footer fd-mono">
+  ${companyName} &middot; ${esc(invoiceTypeLabel)} #${esc(docNumberField)} &middot; Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
 </div>
 </body></html>`;
 }
@@ -712,6 +845,22 @@ export interface PayStubData {
   posttax_deductions?: number;
   deduction_detail?: string;
   check_number?: string;
+  // ── Optional employee/identity fields (privacy-enforced) ──
+  employee_id_short?: string;        // HR id / employee number, NOT SSN
+  employee_address?: string;         // pre-formatted single-line address
+  ssn?: string;                      // ANY length input — only last 4 ever rendered
+  ssn_last4?: string;                // explicit last-4 (preferred)
+  // ── Direct deposit (privacy-enforced) ──
+  bank_name?: string;
+  account_number?: string;           // ANY length — only last 4 ever rendered
+  bank_account_last4?: string;       // explicit last-4 (preferred)
+  // ── Employer-side contributions (informational, not deducted) ──
+  employer_social_security?: number;
+  employer_medicare?: number;
+  employer_futa?: number;
+  employer_suta?: number;
+  employer_retirement_match?: number;
+  employer_health_contribution?: number;
 }
 
 export interface YtdData {
@@ -759,6 +908,31 @@ export function generatePayStubHTML(
       deductionItems = Object.entries(detail).map(([k, v]) => [k, Number(v)]);
     } catch { /* ignore */ }
   }
+
+  // ── PRIVACY: enforce last-4-only rendering for SSN and bank account ──
+  // Even if a caller mistakenly hands us a full SSN or full account number,
+  // we strip everything except the trailing 4 digits before rendering.
+  const last4 = (raw: string | undefined | null): string => {
+    if (!raw) return '';
+    const digits = String(raw).replace(/\D/g, '');
+    return digits.slice(-4);
+  };
+  const ssnLast4 = last4(stub.ssn_last4 || stub.ssn);
+  const ssnDisplay = ssnLast4 ? `XXX-XX-${ssnLast4}` : '';
+  const bankAcctLast4 = last4(stub.bank_account_last4 || stub.account_number);
+  const bankAcctDisplay = bankAcctLast4 ? `••••${bankAcctLast4}` : '';
+  const employeeAddress = esc(stub.employee_address || '');
+  const employeeIdShort = esc(stub.employee_id_short || '');
+
+  // ── Employer contributions (informational, NOT deducted from pay) ──
+  const empSS = stub.employer_social_security ?? 0;
+  const empMed = stub.employer_medicare ?? 0;
+  const empFuta = stub.employer_futa ?? 0;
+  const empSuta = stub.employer_suta ?? 0;
+  const empMatch = stub.employer_retirement_match ?? 0;
+  const empHealth = stub.employer_health_contribution ?? 0;
+  const employerTotal = empSS + empMed + empFuta + empSuta + empMatch + empHealth;
+  const hasEmployerContribs = employerTotal > 0;
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -826,6 +1000,61 @@ export function generatePayStubHTML(
   .section-earn { background: #0f172a; }
   .section-ded { background: #7f1d1d; }
   .section-summary { background: #14532d; }
+  .section-employer { background: #475569; }
+  .section-deposit { background: #1e3a8a; }
+
+  /* ── Employee identity block ── */
+  .id-block {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 0;
+    border: 1px solid #cbd5e1;
+    margin-bottom: 16px;
+  }
+  .id-cell {
+    padding: 12px 14px;
+    border-right: 1px solid #e2e8f0;
+  }
+  .id-cell:last-child { border-right: none; }
+  .id-cell .info-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 4px; }
+  .id-name { font-size: 14px; font-weight: 800; color: #0f172a; }
+  .id-meta-row { font-size: 10px; color: #475569; margin-top: 2px; }
+  .id-period-row { display: flex; justify-content: space-between; font-size: 10px; margin-top: 6px; }
+  .id-period-row .id-pl { color: #94a3b8; text-transform: uppercase; letter-spacing: 0.6px; font-size: 8px; font-weight: 700; }
+  .id-period-row .id-pv { font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+  /* ── Employer contributions ── */
+  .employer-note {
+    font-size: 8px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: #64748b;
+    background: #f1f5f9; padding: 4px 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .employer-table td { font-size: 10px; color: #475569; }
+  .employer-table .total-row td { background: #f1f5f9; }
+
+  /* ── Direct deposit block ── */
+  .deposit-block {
+    margin-top: 6px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+  }
+  .deposit-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
+  .deposit-val { font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+  /* ── Confidential footer ── */
+  .confidential {
+    margin-top: 16px; padding: 8px 12px;
+    border: 1px dashed #cbd5e1; background: #fafaf9;
+    text-align: center; font-size: 9px;
+    color: #64748b; letter-spacing: 0.6px;
+    text-transform: uppercase; font-weight: 600;
+  }
 
   /* ── Tables ── */
   table { width: 100%; border-collapse: collapse; }
@@ -920,6 +1149,26 @@ export function generatePayStubHTML(
     </div>
     <div class="doc-label">Earnings Statement</div>
   </div>
+
+  <!-- Employee Identity & Period block -->
+  ${(employeeAddress || ssnDisplay || employeeIdShort) ? `
+  <div class="id-block">
+    <div class="id-cell">
+      <div class="info-label">Employee</div>
+      <div class="id-name">${esc(stub.employee_name)}</div>
+      ${employeeIdShort ? `<div class="id-meta-row">Employee ID: <span class="b dark">${employeeIdShort}</span></div>` : ''}
+      ${employeeAddress ? `<div class="id-meta-row">${employeeAddress}</div>` : ''}
+      ${ssnDisplay ? `<div class="id-meta-row">SSN: <span class="mono b dark">${ssnDisplay}</span> <span class="muted" style="font-size:8px;">(last 4 only)</span></div>` : ''}
+    </div>
+    <div class="id-cell">
+      <div class="info-label">Pay Period</div>
+      <div class="id-period-row"><span class="id-pl">Start</span><span class="id-pv">${esc(stub.period_start)}</span></div>
+      <div class="id-period-row"><span class="id-pl">End</span><span class="id-pv">${esc(stub.period_end)}</span></div>
+      <div class="id-period-row"><span class="id-pl">Pay Date</span><span class="id-pv">${esc(stub.pay_date)}</span></div>
+      ${stub.check_number ? `<div class="id-period-row"><span class="id-pl">Check #</span><span class="id-pv">${esc(stub.check_number)}</span></div>` : ''}
+    </div>
+  </div>
+  ` : ''}
 
   <!-- Employee Info Grid -->
   <div class="info-grid">
@@ -1103,6 +1352,48 @@ export function generatePayStubHTML(
       </div>
     </div>
   </div>
+
+  <!-- Employer Contributions (informational, NOT deducted from pay) -->
+  ${hasEmployerContribs ? `
+  <div class="section section-employer no-break">Employer Contributions</div>
+  <div class="employer-note">Informational — Not deducted from pay</div>
+  <table class="employer-table">
+    <thead><tr>
+      <th style="width:64%">Description</th>
+      <th class="r" style="width:36%">Current</th>
+    </tr></thead>
+    <tbody>
+      ${empSS > 0 ? `<tr><td>Social Security (Employer Share)</td><td class="r mono">${fmt(empSS)}</td></tr>` : ''}
+      ${empMed > 0 ? `<tr><td>Medicare (Employer Share)</td><td class="r mono">${fmt(empMed)}</td></tr>` : ''}
+      ${empFuta > 0 ? `<tr><td>Federal Unemployment (FUTA)</td><td class="r mono">${fmt(empFuta)}</td></tr>` : ''}
+      ${empSuta > 0 ? `<tr><td>State Unemployment (SUTA)</td><td class="r mono">${fmt(empSuta)}</td></tr>` : ''}
+      ${empMatch > 0 ? `<tr><td>Retirement Match</td><td class="r mono">${fmt(empMatch)}</td></tr>` : ''}
+      ${empHealth > 0 ? `<tr><td>Health Plan Contribution</td><td class="r mono">${fmt(empHealth)}</td></tr>` : ''}
+      <tr class="total-row">
+        <td class="b dark">Total Employer Contributions</td>
+        <td class="r mono b dark">${fmt(employerTotal)}</td>
+      </tr>
+    </tbody>
+  </table>
+  ` : ''}
+
+  <!-- Direct Deposit Info (last-4 only — full account never rendered) -->
+  ${(stub.bank_name || bankAcctDisplay) ? `
+  <div class="section section-deposit no-break">Direct Deposit</div>
+  <div class="deposit-block no-break">
+    <div>
+      <div class="deposit-label">Bank</div>
+      <div class="deposit-val">${esc(stub.bank_name || '')}</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="deposit-label">Account</div>
+      <div class="deposit-val">${bankAcctDisplay || '--'} <span class="muted" style="font-weight:400;font-size:9px;">(last 4 only)</span></div>
+    </div>
+  </div>
+  ` : ''}
+
+  <!-- Confidential notice -->
+  <div class="confidential no-break">Confidential — Pay Information</div>
 
   <!-- Footer -->
   <div class="footer no-break">
@@ -1338,6 +1629,9 @@ ${baseStyles}
   }).join('')}</tbody></table>
 
   ${reportFooter(companyName)}
+  <div style="margin-top:12px;border-top:1px solid #000;padding-top:8px;font-family:Georgia,'Times New Roman',serif;font-size:9pt;color:#444;text-align:center;font-style:italic;">
+    This communication may contain privileged or confidential information. Unauthorized disclosure is prohibited.
+  </div>
 </div></body></html>`;
 }
 
@@ -1380,102 +1674,89 @@ export function generateDemandLetterHTML(
       </tr>`).join('')
     : `<tr><td colspan="4" style="text-align:center;color:#64748b;font-style:italic;">No payments received</td></tr>`;
 
+  const acctNum = (debt.debt_number || debt.id || '').toString().slice(0, 12).toUpperCase() || 'N/A';
+  const phone = esc(company?.phone || '');
+  const email = esc(company?.email || '');
+  const jurisdiction = esc(debt?.jurisdiction || '[your state of residence]');
+  const sigName = esc(options.signatory_name || 'Authorized Representative');
+  const sigTitle = esc(options.signatory_title || 'Accounts Receivable Manager');
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Demand Letter — ${esc(debt.debtor_name)}</title><style>
 ${baseStyles}
-.page { padding: 60px; max-width: 720px; margin: 0 auto; }
-.letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-.company-name { font-size: 20px; font-weight: 800; color: #0f172a; }
-.company-addr { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.6; }
-.date-line { font-size: 12px; color: #334155; text-align: right; }
-.re-block { background: #f8fafc; border-left: 4px solid #0f172a; padding: 12px 16px; margin: 28px 0; }
-.re-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; }
-.re-value { font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px; }
-.body-text { font-size: 12px; color: #334155; line-height: 1.8; margin-bottom: 16px; }
-.balance-box { border: 2px solid #0f172a; border-radius: 4px; padding: 20px 24px; text-align: center; margin: 24px 0; }
-.balance-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
-.balance-amount { font-size: 36px; font-weight: 900; color: #dc2626; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.signature-block { margin-top: 48px; }
-.sig-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 32px; }
-.sig-title { font-size: 12px; color: #64748b; }
-.text-right { text-align: right; }
-.text-muted { color: #64748b; }
-.font-mono { font-variant-numeric: tabular-nums; }
+@page { size: letter; margin: 1in; }
+body { background: #fff; }
+.legal-wrap { max-width: 6.5in; margin: 0 auto; }
 </style></head>
-<body><div class="page">
-  <div class="letterhead">
-    <div>
-      <div class="company-name">${companyName}</div>
-      <div class="company-addr">${companyAddr}</div>
+<body><div class="legal-page legal-wrap">
+  <div class="legal-letterhead">
+    <div class="lh-name">${companyName}</div>
+    <div class="lh-rule"></div>
+    <div class="lh-meta">
+      ${companyAddr || ''}${phone ? ` &middot; Tel: ${phone}` : ''}${email ? ` &middot; ${email}` : ''}
     </div>
-    <div class="date-line">${todayLong}</div>
   </div>
 
-  <div style="margin-bottom:28px;">
-    <div style="font-size:12px;color:#334155;font-weight:600;">${esc(debt.debtor_name || 'To Whom It May Concern')}</div>
-    ${debt.debtor_address ? `<div style="font-size:12px;color:#64748b;">${esc(debt.debtor_address)}</div>` : ''}
-    ${debt.debtor_email ? `<div style="font-size:12px;color:#64748b;">${esc(debt.debtor_email)}</div>` : ''}
+  <div class="legal-date">${todayLong}</div>
+
+  <div class="legal-recipient">
+    <strong>${esc(debt.debtor_name || 'To Whom It May Concern')}</strong><br>
+    ${debt.debtor_address ? esc(debt.debtor_address).replace(/\n/g, '<br>') + '<br>' : ''}
+    ${debt.debtor_email ? esc(debt.debtor_email) : ''}
   </div>
 
-  <div class="re-block">
-    <div class="re-label">RE: Formal Demand for Payment</div>
-    <div class="re-value">Account #${(debt.id || '').slice(0, 8).toUpperCase() || 'N/A'} — Balance Due: ${fmt(balanceDue)}</div>
-  </div>
+  <div class="legal-subject">RE: Outstanding Debt — Account #${acctNum}</div>
 
-  <p class="body-text">Dear ${esc(debt.debtor_name || 'Account Holder')},</p>
+  <div class="legal-body">
+    <p class="no-indent">Dear ${esc(debt.debtor_name || 'Sir or Madam')}:</p>
 
-  <p class="body-text">
-    This letter constitutes a formal demand for payment of the outstanding balance owed to <strong>${companyName}</strong>.
-    Our records reflect that an account was established with an original principal of <strong>${fmt(originalAmount)}</strong>.
-    Despite prior notices, this balance remains unpaid as of the date of this letter.
-  </p>
+    <p>This letter constitutes formal demand for payment of an outstanding obligation owed by you to <strong>${companyName}</strong>. Our records establish that you are indebted to ${companyName} in the sum identified below, and that despite the passage of the applicable due date this balance remains unsatisfied.</p>
 
-  <div style="margin:20px 0;">
-    <table>
-      <thead><tr><th>Description</th><th class="text-right">Amount</th></tr></thead>
+    <table class="legal-amount-table">
       <tbody>
-        <tr><td>Original Principal</td><td class="text-right font-mono">${fmt(originalAmount)}</td></tr>
-        ${interest > 0 ? `<tr><td>Accrued Interest</td><td class="text-right font-mono">${fmt(interest)}</td></tr>` : ''}
-        ${fees > 0 ? `<tr><td>Fees &amp; Charges</td><td class="text-right font-mono">${fmt(fees)}</td></tr>` : ''}
-        ${totalPaid > 0 ? `<tr><td style="color:#16a34a;">Payments Received</td><td class="text-right font-mono" style="color:#16a34a;">\u2212${fmt(totalPaid)}</td></tr>` : ''}
+        <tr><td>Original Principal Amount</td><td class="amt">${fmt(originalAmount)}</td></tr>
+        <tr><td>Interest Accrued</td><td class="amt">${fmt(interest)}</td></tr>
+        <tr><td>Fees and Charges Accrued</td><td class="amt">${fmt(fees)}</td></tr>
+        <tr><td>Payments Received and Applied</td><td class="amt">(${fmt(totalPaid)})</td></tr>
+        <tr class="total"><td>TOTAL DUE</td><td class="amt">${fmt(balanceDue)}</td></tr>
       </tbody>
     </table>
+
+    ${payments.length > 0 ? `
+    <p class="no-indent" style="margin-top:18px;font-weight:700;font-size:10.5pt;text-transform:uppercase;letter-spacing:0.5px;">Schedule of Payments Received</p>
+    <table class="legal-amount-table" style="width:100%;">
+      <thead><tr><td style="font-weight:700;">Date</td><td style="font-weight:700;" class="amt">Amount</td><td style="font-weight:700;">Method</td><td style="font-weight:700;">Reference</td></tr></thead>
+      <tbody>${paymentRows}</tbody>
+    </table>` : ''}
+
+    <p><strong>YOU ARE HEREBY DEMANDED to pay the sum of ${fmt(balanceDue)} within ${deadlineDays} days from the date of this letter, on or before ${deadlineDate}.</strong> Payment must be tendered in certified funds and made payable to ${companyName}${options.payment_address ? `, addressed to ${esc(options.payment_address)}` : ''}.${options.online_payment_url ? ` Electronic remittance may be made at ${esc(options.online_payment_url)}.` : ''}</p>
+
+    <p>Should you fail to remit payment in full by the date stated above, ${companyName} will have no alternative but to pursue all lawful remedies available to it under the laws of ${jurisdiction}, including but not limited to the institution of civil proceedings to obtain a money judgment, recovery of court costs and reasonable attorneys' fees as permitted by contract or statute, post-judgment enforcement (including wage garnishment, bank levy, and judgment liens upon real property), and reporting of the delinquency to consumer credit reporting agencies.</p>
+
+    <div class="legal-notice">
+      <div class="ln-heading">Notice of Your Rights — Validation of Debt (15 U.S.C. &sect; 1692g)</div>
+      <p style="text-indent:0;margin-bottom:8px;">Unless you notify this office within 30 days after receiving this notice that you dispute the validity of this debt or any portion thereof, this office will assume this debt is valid. If you notify this office in writing within 30 days from receiving this notice that you dispute the validity of this debt or any portion thereof, this office will obtain verification of the debt or obtain a copy of a judgment and mail you a copy of such judgment or verification. If you request of this office in writing within 30 days after receiving this notice, this office will provide you with the name and address of the original creditor, if different from the current creditor.</p>
+    </div>
+
+    <div class="legal-mini-miranda">
+      This communication is from a debt collector. This is an attempt to collect a debt and any information obtained will be used for that purpose.
+    </div>
+
+    <p>If you believe this debt has been satisfied or has been asserted in error, or if you wish to discuss a mutually acceptable resolution, please contact the undersigned in writing at the address above${phone ? ` or by telephone at ${phone}` : ''}${email ? ` or by email at ${email}` : ''} prior to the deadline stated herein.</p>
+
+    <p class="no-indent" style="margin-top:28px;">Respectfully,</p>
+
+    <div class="legal-signature">
+      <div class="legal-sig-line"></div>
+      <div class="legal-sig-name">${sigName}</div>
+      <div class="legal-sig-title">${sigTitle}</div>
+      <div class="legal-sig-title">${companyName}</div>
+    </div>
   </div>
 
-  ${payments.length > 0 ? `
-  <div class="section-title" style="margin-top:20px;margin-bottom:8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;">Payment History</div>
-  <table>
-    <thead><tr><th>Date</th><th class="text-right">Amount</th><th>Method</th><th>Reference</th></tr></thead>
-    <tbody>${paymentRows}</tbody>
-  </table>` : ''}
-
-  <div class="balance-box">
-    <div class="balance-label">Total Amount Now Due</div>
-    <div class="balance-amount">${fmt(balanceDue)}</div>
-  </div>
-
-  <p class="body-text">
-    <strong>You are hereby demanded to remit payment in full no later than ${deadlineDate}.</strong>
-    ${options.payment_address ? ` Payment by check should be made payable to <strong>${companyName}</strong> and mailed to: <strong>${esc(options.payment_address)}</strong>.` : ''}
-    ${options.online_payment_url ? ` Payment may also be submitted online at: <strong>${esc(options.online_payment_url)}</strong>.` : ''}
-  </p>
-
-  <p class="body-text">
-    Failure to remit payment by the deadline may result in escalated collection activity, referral to a collection agency,
-    reporting to credit bureaus, and/or legal action to recover the full amount owed, including court costs and attorney fees
-    as permitted by applicable law.
-  </p>
-
-  <p class="body-text">
-    If you believe this amount is in error or wish to discuss a payment arrangement, please contact us immediately at
-    ${esc(company?.email || 'our office')} or ${esc(company?.phone || 'the number on file')}.
-  </p>
-
-  <div class="signature-block">
-    <p class="body-text">Sincerely,</p>
-    <div class="sig-name">${esc(options.signatory_name) || companyName}</div>
-    <div class="sig-title">${esc(options.signatory_title || 'Accounts Receivable')}</div>
-    <div style="font-size:12px;color:#64748b;margin-top:2px;">${companyName}</div>
+  <div class="legal-confidential-footer">
+    This communication may contain privileged or confidential information intended solely for the addressee.<br>
+    Sent on ${todayLong} via U.S. First Class Mail. Account #${acctNum}.
   </div>
 </div></body></html>`;
 }
@@ -1668,47 +1949,79 @@ ${paymentInstructions}
   };
 
   const letter = LETTERS[letterType] || LETTERS.reminder;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  @page { size: letter; margin: 0.6in 0.7in; }
-  html, body { font-family:Georgia,'Times New Roman',serif; font-size:13px; color:#111; background:#fff; padding:48px 56px; line-height:1.7; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  thead { display: table-header-group; }
-  tr { page-break-inside: avoid; break-inside: avoid; }
-  table { border-collapse: collapse; width: 100%; }
-  .page { max-width:700px; margin:0 auto; }
-  .hdr { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid ${letter.accent}; padding-bottom:18px; margin-bottom:28px; }
-  .co { font-size:22px; font-weight:800; color:${letter.accent}; letter-spacing:-0.3px; }
-  .co-info { font-size:10px; color:#666; margin-top:6px; line-height:1.6; }
-  .dt { text-align:right; font-size:11px; color:#666; }
-  .ref-num { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:${letter.accent}; margin-top:4px; }
-  .addr { margin-bottom:24px; font-size:12px; line-height:1.6; }
-  .ttl { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:${letter.accent}; border-bottom:2px solid ${letter.accent}; padding-bottom:8px; margin-bottom:20px; }
-  .bd p { margin-bottom:14px; font-size:12.5px; } .bd ul { margin:12px 0; padding-left:24px; font-size:12.5px; }
-  .sig { margin-top:44px; page-break-inside:avoid; }
-  .sl { width:220px; border-top:1px solid #333; margin-top:48px; padding-top:6px; }
-  .ft { border-top:2px solid #ddd; margin-top:44px; padding-top:12px; text-align:center; font-size:9px; color:#888; line-height:1.6; }
-  .ft-warn { font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
-  @media print { body { padding:0; } }
+
+  const remitSlip = `<div class="legal-remit">
+  <div class="remit-tear">&#9986; &nbsp; D E T A C H &nbsp; A N D &nbsp; R E T U R N &nbsp; W I T H &nbsp; P A Y M E N T &nbsp; &#9986;</div>
+  <table>
+    <tr><td style="width:55%;"><strong>Remit To:</strong><br>${companyName}<br>${companyAddr || ''}</td>
+        <td style="vertical-align:top;"><strong>From:</strong><br>${debtorName}<br>${debtorAddr || ''}</td></tr>
+    <tr><td><strong>Account Reference:</strong> ${accountRef}</td>
+        <td><strong>Amount Enclosed:</strong> $ ____________________</td></tr>
+    <tr><td><strong>Balance Due:</strong> ${fmtAmt(balanceDue)}</td>
+        <td><strong>Date:</strong> ____________________</td></tr>
+  </table>
+  <p style="font-size:9.5pt;color:#444;margin-top:8px;font-style:italic;">Make checks payable to ${companyName}. Write account reference ${accountRef} on the memo line.</p>
+</div>`;
+
+  const paymentOptions = `<div class="legal-notice">
+  <div class="ln-heading">Payment Options</div>
+  <p style="text-indent:0;margin:4px 0;"><strong>By Mail:</strong> Send check or money order to ${companyName}, ${companyAddr || '[Company Address]'}.</p>
+  <p style="text-indent:0;margin:4px 0;"><strong>By ACH / Bank Transfer:</strong> Contact our office${companyPhone ? ' at ' + companyPhone : ''} for routing instructions.</p>
+  <p style="text-indent:0;margin:4px 0;"><strong>Online:</strong> Visit our payment portal or contact us${companyEmail ? ' at ' + companyEmail : ''} for the secure payment link.</p>
+</div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(letter.title)} — ${debtorName}</title><style>
+${baseStyles}
+@page { size: letter; margin: 1in; }
+body { background: #fff; }
+.legal-wrap { max-width: 6.5in; margin: 0 auto; }
+.cl-title { font-family: Georgia, 'Times New Roman', serif; font-size: 13pt; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #000; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px 0; margin: 16px 0 22px; text-align: center; }
+.cl-body { font-family: Georgia, 'Times New Roman', serif; font-size: 11.5pt; line-height: 1.7; color: #111; }
+.cl-body p { margin-bottom: 12px; }
+.cl-body ul { margin: 10px 0 14px; padding-left: 28px; }
+.cl-body ul li { margin-bottom: 4px; }
 </style></head><body>
-<div class="page">
-  <div class="hdr">
-    <div>
-      <div class="co">${companyName}</div>
-      <div class="co-info">${companyAddr}${companyPhone ? '<br>' + companyPhone : ''}${companyEmail ? (companyPhone ? ' &middot; ' : '<br>') + companyEmail : ''}</div>
-    </div>
-    <div>
-      <div class="dt">${todayLong}</div>
-      <div class="ref-num">Ref: ${accountRef}</div>
+<div class="legal-page legal-wrap">
+  <div class="legal-letterhead">
+    <div class="lh-name">${companyName}</div>
+    <div class="lh-rule"></div>
+    <div class="lh-meta">
+      ${companyAddr || ''}${companyPhone ? ` &middot; Tel: ${companyPhone}` : ''}${companyEmail ? ` &middot; ${companyEmail}` : ''}
     </div>
   </div>
-  <div class="addr"><strong>${debtorName}</strong><br>${debtorAddr || '\u2014'}</div>
-  <div class="ttl">${letter.title}</div>
-  <div class="bd"><p>Dear ${debtorName},</p>${letter.body}</div>
-  <div class="sig"><p>Sincerely,</p><div class="sl"><strong>${companyName}</strong><br><span style="font-size:11px;color:#555;">Collections Department</span></div></div>
-  <div class="ft">
-    <div class="ft-warn">This is an attempt to collect a debt. Any information obtained will be used for that purpose.</div>
-    ${companyName} &middot; ${todayLong}
+
+  <div class="legal-date">${todayLong}<br><span style="font-size:10pt;font-style:italic;">Account Reference: ${accountRef}</span></div>
+
+  <div class="legal-recipient">
+    <strong>${debtorName}</strong><br>
+    ${debtorAddr || ''}
   </div>
+
+  <div class="cl-title">${esc(letter.title)}</div>
+
+  <div class="cl-body">
+    <p>Dear ${debtorName}:</p>
+    ${letter.body}
+  </div>
+
+  ${paymentOptions}
+
+  <div class="legal-mini-miranda">
+    This communication is from a debt collector. This is an attempt to collect a debt and any information obtained will be used for that purpose.
+  </div>
+
+  <div class="legal-signature">
+    <p style="margin-top:22px;">Sincerely,</p>
+    <div class="legal-sig-line"></div>
+    <div class="legal-sig-name">${companyName}</div>
+    <div class="legal-sig-title">Collections Department</div>
+  </div>
+
+  <div class="legal-confidential-footer">
+    This communication may contain privileged or confidential information intended solely for the addressee.
+  </div>
+
+  ${remitSlip}
 </div></body></html>`;
 }
 
@@ -1991,11 +2304,28 @@ export function generateCourtPacketHTML(data: {
     </div>
   </div>`;
 
+  const exhibitLetter = (n: number) => String.fromCharCode(64 + n); // 1->A
+  const exhibits = [
+    { letter: exhibitLetter(1), title: 'Account Summary & Itemized Statement' },
+    { letter: exhibitLetter(2), title: 'Communications Log' },
+    { letter: exhibitLetter(3), title: 'Payment History' },
+    { letter: exhibitLetter(4), title: 'Evidence Inventory' },
+    { letter: exhibitLetter(5), title: 'FDCPA / TCPA Compliance Timeline' },
+    { letter: exhibitLetter(6), title: 'Chain of Custody (Audit Trail)' },
+    { letter: exhibitLetter(7), title: 'Settlement History' },
+    { letter: exhibitLetter(8), title: 'Contact Directory' },
+    { letter: exhibitLetter(9), title: 'Dispute History' },
+    { letter: exhibitLetter(10), title: 'Legal Actions' },
+    { letter: exhibitLetter(11), title: 'Custodian Certification' },
+  ];
+  const jurisdiction = esc(debt?.jurisdiction || '________________');
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Court Packet — ${esc(debt.debtor_name)}</title>
 <style>
+${baseStyles}
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12px; line-height: 1.6; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @page { size: letter; margin: 0.75in; }
+  body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { size: letter; margin: 1in 1in 1.1in 1in; }
   @media print {
     .section { page-break-before: always; }
     .cover { page-break-after: always; }
@@ -2006,45 +2336,60 @@ export function generateCourtPacketHTML(data: {
   table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
   thead { display: table-header-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
-  th, td { padding: 6px 10px; text-align: left; border: 1px solid #ccc; font-size: 11px; word-wrap: break-word; overflow-wrap: anywhere; }
-  th { background: #f0f0f0; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
-  .cover { text-align: center; padding-top: 200px; }
-  .cover h1 { font-size: 22px; font-weight: 700; letter-spacing: 2px; margin-bottom: 12px; }
-  .cover .subtitle { font-size: 16px; color: #333; margin-bottom: 8px; }
-  .cover .meta { font-size: 13px; color: #555; margin-bottom: 6px; }
-  .cover .confidential { margin-top: 60px; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: #b91c1c; text-transform: uppercase; }
-  .toc { padding-top: 40px; }
-  .toc h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #333; padding-bottom: 8px; }
-  .toc-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #ccc; font-size: 12px; }
-  .toc-item .count { color: #666; font-size: 11px; }
+  th, td { padding: 7px 10px; text-align: left; border: 1px solid #555; font-size: 10.5pt; word-wrap: break-word; overflow-wrap: anywhere; font-family: Georgia, 'Times New Roman', serif; }
+  th { background: #ececec; font-weight: 700; text-transform: uppercase; font-size: 9.5pt; letter-spacing: 0.6px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  .court-cover { text-align: center; padding-top: 0.5in; font-family: Georgia, 'Times New Roman', serif; }
+  .court-caption { border-top: 3px double #000; border-bottom: 3px double #000; padding: 16px 0; margin-bottom: 36px; }
+  .court-caption .court-name { font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 12pt; }
+  .court-caption .case-line { font-style: italic; font-size: 11pt; margin-top: 6px; }
+  .cover h1 { font-size: 26pt; font-weight: 700; letter-spacing: 5px; margin: 36px 0 14px; text-transform: uppercase; }
+  .cover .subtitle { font-size: 13pt; color: #333; margin-bottom: 8px; font-style: italic; }
+  .cover .meta { font-size: 12pt; color: #222; margin-bottom: 4px; }
+  .cover .confidential { margin-top: 60px; font-size: 11pt; font-weight: 700; letter-spacing: 2px; color: #000; text-transform: uppercase; border: 2px solid #000; display: inline-block; padding: 8px 20px; }
+  .exhibit-list { margin: 36px auto; max-width: 5in; text-align: left; border: 1px solid #000; padding: 18px 22px; }
+  .exhibit-list h3 { font-size: 12pt; text-transform: uppercase; letter-spacing: 2px; text-align: center; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 6px; }
+  .exhibit-list .ex-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11pt; border-bottom: 1px dotted #aaa; }
+  .exhibit-list .ex-row:last-child { border-bottom: none; }
+  .exhibit-list .ex-letter { font-weight: 700; width: 1.2in; }
+  .ex-cover-page { text-align: center; padding-top: 2.8in; page-break-before: always; page-break-after: always; }
+  .ex-cover-page .ex-tab { display: inline-block; border: 4px solid #000; padding: 26px 56px; font-size: 64pt; font-weight: 700; letter-spacing: 10px; font-family: Georgia, 'Times New Roman', serif; }
+  .ex-cover-page .ex-label { font-size: 16pt; text-transform: uppercase; letter-spacing: 4px; margin-top: 28px; font-style: italic; }
+  .bates-footer { position: fixed; bottom: 0.4in; right: 0.7in; font-size: 9pt; color: #333; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+  .court-conf-footer { position: fixed; bottom: 0.4in; left: 0.7in; font-size: 8.5pt; color: #555; font-style: italic; font-family: Georgia, serif; }
 </style></head><body>
 
+<div class="bates-footer">BAP-${caseRef.padStart(6, '0')}</div>
+<div class="court-conf-footer">Confidential — Prepared for Legal Proceedings</div>
+
 <div class="cover">
-  <div style="font-size:13px;color:#666;margin-bottom:40px;">${companyName}</div>
-  <h1>COURT PACKET</h1>
-  <div class="subtitle">DEBT COLLECTION FILE</div>
-  <div class="meta" style="margin-top:30px;font-size:14px;font-weight:700;">${esc(debt.debtor_name)}</div>
-  <div class="meta">Case Reference: ${caseRef}</div>
-  <div class="meta">Generated: ${generatedDate}</div>
-  <div class="confidential">CONFIDENTIAL &mdash; PREPARED FOR LEGAL PROCEEDINGS</div>
+  <div class="court-caption">
+    <div class="court-name">In the Court of Competent Jurisdiction</div>
+    <div class="court-name" style="margin-top:4px;">${jurisdiction}</div>
+    <div class="case-line" style="margin-top:14px;">${companyName},<br><span style="font-size:10pt;font-style:normal;">Plaintiff,</span></div>
+    <div style="text-align:center;margin:6px 0;font-style:italic;">vs.</div>
+    <div class="case-line">${esc(debt.debtor_name)},<br><span style="font-size:10pt;font-style:normal;">Defendant.</span></div>
+    <div style="margin-top:14px;font-size:10pt;">Case Ref. No. BAP-${caseRef}</div>
+  </div>
+  <h1>Court Packet</h1>
+  <div class="subtitle">Bates-Numbered Evidentiary Bundle</div>
+  <div class="meta" style="margin-top:18px;">Compiled by: <strong>${companyName}</strong></div>
+  <div class="meta">Date of Compilation: ${generatedDate}</div>
+
+  <div class="exhibit-list">
+    <h3>List of Exhibits</h3>
+    ${exhibits.map(ex => `<div class="ex-row"><span class="ex-letter">Exhibit ${ex.letter}</span><span>${esc(ex.title)}</span></div>`).join('')}
+  </div>
+
+  <div class="confidential">Confidential &mdash; For Legal Proceedings Only</div>
 </div>
 
-<div class="section toc">
-  <h2>Table of Contents</h2>
-  ${sectionCounts.map((s, i) => `<div class="toc-item"><span>Section ${i + 1}: ${s.title}</span><span class="count">${s.count} item${s.count !== 1 ? 's' : ''}</span></div>`).join('')}
+${[section1, section2, section3, section4, section5, section6, section7, section8, section9, section10, section11].map((s, i) => `
+<div class="ex-cover-page">
+  <div class="ex-tab">${exhibits[i].letter}</div>
+  <div class="ex-label">Exhibit ${exhibits[i].letter}</div>
+  <div class="ex-label" style="font-size:13pt;letter-spacing:2px;font-style:normal;margin-top:8px;">${esc(exhibits[i].title)}</div>
 </div>
-
-${section1}
-${section2}
-${section3}
-${section4}
-${section5}
-${section6}
-${section7}
-${section8}
-${section9}
-${section10}
-${section11}
+${s}`).join('')}
 
 </body></html>`;
 }
@@ -2062,82 +2407,81 @@ export function generateVerificationAffidavitHTML(
   const fmtAmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
   const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-  @page { size: letter; margin: 0.5in; }
-  html, body { font-family: 'Times New Roman', Georgia, serif; font-size: 14px; color: #111; padding: 60px; line-height: 1.8; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  thead { display: table-header-group; }
-  tr { page-break-inside: avoid; break-inside: avoid; }
-  .page { max-width: 650px; margin: 0 auto; }
-  h1 { text-align: center; font-size: 18px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 32px; border-bottom: 2px solid #111; padding-bottom: 12px; }
-  .section { margin-bottom: 24px; }
-  .section-title { font-weight: 700; text-decoration: underline; margin-bottom: 8px; }
-  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-  td { padding: 6px 12px; border: 1px solid #ccc; font-size: 13px; }
-  td:first-child { font-weight: 600; width: 40%; background: #f9f9f9; }
-  .sig-block { margin-top: 48px; }
-  .sig-line { border-top: 1px solid #111; width: 300px; margin-top: 48px; padding-top: 4px; }
-  .notary { margin-top: 40px; border: 1px solid #ccc; padding: 20px; background: #fafafa; }
-  .notary-title { font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; margin-bottom: 12px; }
-  @media print { body { padding: 0; } }
+  const stateName = esc(debt?.jurisdiction_state || debt?.jurisdiction || '________________');
+  const countyName = esc(debt?.jurisdiction_county || '________________');
+  const acctNum = (debt?.debt_number || debt?.id || '').toString().slice(0, 12).toUpperCase() || 'N/A';
+  const sigTitle = esc(debt?.signatory_title || 'Authorized Custodian of Records');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Affidavit of Debt Verification</title><style>
+${baseStyles}
+@page { size: letter; margin: 1in; }
+body { background: #fff; }
+.legal-wrap { max-width: 6.5in; margin: 0 auto; }
 </style></head><body>
-<div class="page">
-  <h1>Verification of Debt &mdash; Affidavit</h1>
+<div class="legal-page legal-wrap">
 
-  <div class="section">
-    <p>I, <strong>${sigName}</strong>, being duly sworn, depose and state as follows:</p>
+  <div class="legal-caption">
+    <div class="cap-state">STATE OF ${stateName}</div>
+    <div class="cap-state">COUNTY OF ${countyName}</div>
+    <div class="cap-title">Affidavit of Debt Verification</div>
+    <div style="font-size:10pt;font-style:italic;margin-top:6px;">Account No. ${acctNum}</div>
   </div>
 
-  <div class="section">
-    <div class="section-title">1. Identity and Authority</div>
-    <p>I am an authorized representative of <strong>${companyName}</strong>, located at ${companyAddr || '[Company Address]'}. I have personal knowledge of the business records and accounts maintained by ${companyName}, and I am authorized to make this verification on behalf of the company.</p>
+  <p style="margin-bottom:18px;">BEFORE ME, the undersigned authority, personally appeared <strong>${sigName}</strong>, who, being first duly sworn upon oath, deposes and states as follows:</p>
+
+  <div class="legal-numbered">
+    <p class="lp">I am the ${sigTitle} of ${companyName}, with its principal place of business located at ${companyAddr || '________________'}. I am over the age of eighteen (18) years and competent to testify to the matters set forth herein.</p>
+
+    <p class="lp">I am authorized to make this Affidavit on behalf of ${companyName}, and the statements set forth herein are made upon my personal knowledge derived from the business records of ${companyName} maintained in the regular and ordinary course of its business.</p>
+
+    <p class="lp">The records of ${companyName} are made at or near the time of the events recorded by, or from information transmitted by, persons with knowledge of those events; such records are kept in the course of regularly conducted business activity, and the making of such records is a regular practice of that business activity.</p>
+
+    <p class="lp">The records of ${companyName} reflect that <strong>${debtorName}</strong> ("Debtor") is indebted to ${companyName} in connection with Account No. ${acctNum}, and as of ${todayLong} the indebtedness is itemized as follows:</p>
   </div>
 
-  <div class="section">
-    <div class="section-title">2. Debt Verification</div>
-    <p>The following debt is a true and accurate representation of the obligation owed by <strong>${debtorName}</strong> to ${companyName}:</p>
-    <table>
-      <tr><td>Debtor Name</td><td>${debtorName}</td></tr>
-      <tr><td>Original Amount</td><td>${fmtAmt(debt?.original_amount)}</td></tr>
-      <tr><td>Interest Accrued</td><td>${fmtAmt(debt?.interest_accrued)}</td></tr>
-      <tr><td>Fees Accrued</td><td>${fmtAmt(debt?.fees_accrued)}</td></tr>
-      <tr><td>Payments Made</td><td>${fmtAmt(debt?.payments_made)}</td></tr>
-      <tr><td>Current Balance Due</td><td><strong>${fmtAmt(debt?.balance_due)}</strong></td></tr>
-      <tr><td>Date of Original Obligation</td><td>${esc(debt?.due_date || '[Date]')}</td></tr>
-      <tr><td>Source Reference</td><td>${debt?.source_type === 'invoice' ? 'Invoice #' + esc(debt?.source_id?.substring(0, 8).toUpperCase() || '') : 'Manual Entry'}</td></tr>
-      <tr><td>Jurisdiction</td><td>${esc(debt?.jurisdiction || '[Jurisdiction]')}</td></tr>
-    </table>
+  <table class="legal-amount-table">
+    <tbody>
+      <tr><td>Original Principal Amount</td><td class="amt">${fmtAmt(debt?.original_amount)}</td></tr>
+      <tr><td>Interest Accrued</td><td class="amt">${fmtAmt(debt?.interest_accrued)}</td></tr>
+      <tr><td>Fees and Charges Accrued</td><td class="amt">${fmtAmt(debt?.fees_accrued)}</td></tr>
+      <tr><td>Payments Received and Applied</td><td class="amt">(${fmtAmt(debt?.payments_made)})</td></tr>
+      <tr class="total"><td>TOTAL AMOUNT DUE AND OWING</td><td class="amt">${fmtAmt(debt?.balance_due)}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="legal-numbered" style="counter-reset: legalpara 4;">
+    <p class="lp">Demand has been duly made upon the Debtor for the payment of said indebtedness; however, no portion of said indebtedness has been paid except as credited above, and the entire balance set forth above remains due, owing, and unpaid.</p>
+
+    <p class="lp">${companyName} is the lawful owner and holder of the debt described herein, and no other person or entity has any interest in or claim to said debt.</p>
+
+    <p class="lp">I declare under penalty of perjury under the laws of the State of ${stateName} that the foregoing is true and correct.</p>
   </div>
 
-  <div class="section">
-    <div class="section-title">3. Basis of Knowledge</div>
-    <p>The information set forth herein is based upon the business records of ${companyName}, which are kept in the regular course of business, made at or near the time of the events recorded, and maintained by persons with knowledge of the recorded acts and events.</p>
+  <p style="margin-top:30px;">FURTHER AFFIANT SAYETH NAUGHT.</p>
+
+  <div class="legal-signature">
+    <div class="legal-sig-line"></div>
+    <div class="legal-sig-name">${sigName}</div>
+    <div class="legal-sig-title">${sigTitle}, ${companyName}</div>
   </div>
 
-  <div class="section">
-    <div class="section-title">4. Verification Statement</div>
-    <p>I verify under penalty of perjury that the foregoing statements are true and correct to the best of my knowledge, information, and belief. This verification is made pursuant to 15 U.S.C. &sect; 1692g of the Fair Debt Collection Practices Act.</p>
-  </div>
-
-  <div class="sig-block">
-    <div class="sig-line">
-      <strong>${sigName}</strong><br>
-      <span style="font-size:12px;color:#555;">Authorized Representative, ${companyName}</span>
+  <div class="legal-jurat">
+    <div class="seal-box">[NOTARY<br>SEAL]</div>
+    <div class="jurat-title">Jurat</div>
+    <p style="text-indent:0;">STATE OF <span class="jurat-blank">${stateName}</span></p>
+    <p style="text-indent:0;">COUNTY OF <span class="jurat-blank">${countyName}</span></p>
+    <p style="text-indent:0;margin-top:10px;">Subscribed and sworn to (or affirmed) before me this <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> day of <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>, 20<span class="jurat-blank">&nbsp;&nbsp;&nbsp;</span>, by ${sigName}, who is personally known to me or who has produced satisfactory identification.</p>
+    <div style="margin-top:36px;clear:both;">
+      <div style="border-top: 1px solid #000; width: 280px; padding-top: 4px;">
+        Notary Public — Signature
+      </div>
+      <p style="text-indent:0;margin-top:8px;">Printed Name: <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>
+      <p style="text-indent:0;">My Commission Expires: <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>
     </div>
-    <p style="margin-top:12px;">Date: ${todayLong}</p>
   </div>
 
-  <div class="notary">
-    <div class="notary-title">Notary Acknowledgment</div>
-    <p>State of _________________ &nbsp;&nbsp; County of _________________</p>
-    <p>Subscribed and sworn to before me this ______ day of _________________, 20_____.</p>
-    <div style="margin-top:32px;border-top:1px solid #111;width:250px;padding-top:4px;">
-      Notary Public<br>
-      <span style="font-size:11px;">My commission expires: _______________</span>
-    </div>
-  </div>
-
-  <div style="margin-top:40px;text-align:center;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:12px;">
-    Generated by ${companyName} &middot; ${todayLong}
+  <div class="legal-confidential-footer">
+    This communication may contain privileged or confidential information intended solely for the addressee.
   </div>
 </div></body></html>`;
 }
