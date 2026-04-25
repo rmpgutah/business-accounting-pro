@@ -37,7 +37,7 @@ const CSS = `
 body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-size: 10px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .pg { width: 8.5in; height: 11in; position: relative; }
 
-.chk { height: 3.667in; padding: 0.22in 0.42in 0.32in; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+.chk { height: 3.667in; padding: 0.18in 0.42in 0.3in; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
 .stb { height: 3.667in; padding: 0.1in 0.3in 0.06in; position: relative; overflow: hidden; }
 
 /* Check face */
