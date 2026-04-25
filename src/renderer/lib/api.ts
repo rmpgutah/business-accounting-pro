@@ -173,6 +173,24 @@ const api = {
   exportFullBackup: () =>
     window.electronAPI.invoke('export:full-backup'),
 
+  // Chart of Accounts
+  accountsSuggestCode: (companyId: string, type: string): Promise<{ code: string; range?: [number, number]; error?: string }> =>
+    window.electronAPI.invoke('accounts:suggest-code', { companyId, type }),
+  accountsMerge: (sourceId: string, targetId: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('accounts:merge', { sourceId, targetId }),
+  accountsBulkToggleActive: (ids: string[], isActive: boolean): Promise<{ success?: boolean; count?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:bulk-toggle-active', { ids, isActive }),
+  accountsSetOpeningBalance: (companyId: string, accountId: string, amount: number, date: string): Promise<{ success?: boolean; entry_id?: string; error?: string }> =>
+    window.electronAPI.invoke('accounts:set-opening-balance', { companyId, accountId, amount, date }),
+  accountsCloseToRetainedEarnings: (companyId: string, periodEndDate: string): Promise<{ success?: boolean; entry_id?: string; accounts_closed?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:close-to-retained-earnings', { companyId, periodEndDate }),
+  accountsStats: (companyId: string): Promise<any[]> =>
+    window.electronAPI.invoke('accounts:stats', { companyId }),
+  accountsHistoryPdf: (accountId: string, companyId: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('accounts:history-pdf', { accountId, companyId }),
+  accountsApplyTemplate: (companyId: string, accounts: Array<{ code: string; name: string; type: string; subtype?: string }>): Promise<{ success?: boolean; created?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:apply-template', { companyId, accounts }),
+
   // Print / Preview
   printPreview: (html: string, title: string): Promise<{ success?: boolean }> =>
     window.electronAPI.invoke('print:preview', { html, title }),

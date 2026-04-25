@@ -559,6 +559,7 @@ export function registerIpcHandlers(): void {
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
     'pto_policies', 'pto_balances', 'pto_transactions',
     'state_tax_brackets', 'approval_queue',
+    'je_comments',
   ]);
 
   function validateTable(table: string): boolean {
@@ -6169,6 +6170,197 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
+  // ─── Chart of Accounts (CoA) Enhancements ──────────────────────
+  ipcMain.handle('accounts:suggest-code', (_event, { companyId, type }: { companyId: string; type: string }) => {
+    try {
+      const ranges: Record<string, [number, number]> = {
+        asset: [1000, 1999], liability: [2000, 2999], equity: [3000, 3999],
+        revenue: [4000, 4999], expense: [5000, 9999],
+      };
+      const range = ranges[type] || [1000, 9999];
+      const rows = db.runQuery(
+        `SELECT code FROM accounts WHERE company_id = ? AND CAST(code AS INTEGER) BETWEEN ? AND ? ORDER BY CAST(code AS INTEGER)`,
+        [companyId, range[0], range[1]]
+      );
+      const used = new Set<number>(rows.map((r: any) => parseInt(r.code, 10)).filter((n: number) => !isNaN(n)));
+      let candidate = range[0];
+      if (used.size > 0) {
+        const max = Math.max(...Array.from(used));
+        candidate = Math.floor(max / 10) * 10 + 10;
+      }
+      while (used.has(candidate) && candidate <= range[1]) candidate += 10;
+      return { code: String(candidate), range };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('accounts:merge', (_event, { sourceId, targetId }: { sourceId: string; targetId: string }) => {
+    try {
+      const dbi = db.getDb();
+      const tx = dbi.transaction(() => {
+        dbi.prepare('UPDATE journal_entry_lines SET account_id = ? WHERE account_id = ?').run(targetId, sourceId);
+        try { dbi.prepare('UPDATE invoice_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE expenses SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE bills SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE bill_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE bill_payments SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE expense_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE bank_accounts SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE budget_lines SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE po_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE credit_note_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
+        try { dbi.prepare('UPDATE accounts SET parent_id = ? WHERE parent_id = ?').run(targetId, sourceId); } catch {}
+        dbi.prepare('DELETE FROM accounts WHERE id = ?').run(sourceId);
+      });
+      tx();
+      return { success: true };
+    } catch (err: any) { return { error: err?.message || String(err) }; }
+  });
+
+  ipcMain.handle('accounts:bulk-toggle-active', (_event, { ids, isActive }: { ids: string[]; isActive: boolean }) => {
+    try {
+      const dbi = db.getDb();
+      const stmt = dbi.prepare("UPDATE accounts SET is_active = ?, updated_at = datetime('now') WHERE id = ?");
+      const tx = dbi.transaction((rows: string[]) => { for (const id of rows) stmt.run(isActive ? 1 : 0, id); });
+      tx(ids);
+      return { success: true, count: ids.length };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('accounts:set-opening-balance', (_event, { companyId, accountId, amount, date }: { companyId: string; accountId: string; amount: number; date: string }) => {
+    try {
+      const dbi = db.getDb();
+      const acct = dbi.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as any;
+      if (!acct) return { error: 'Account not found' };
+      let obe = dbi.prepare("SELECT * FROM accounts WHERE company_id = ? AND name = 'Opening Balance Equity' LIMIT 1").get(companyId) as any;
+      if (!obe) {
+        obe = db.create('accounts', {
+          company_id: companyId, code: '3900', name: 'Opening Balance Equity',
+          type: 'equity', subtype: "Owner's Equity",
+        });
+      }
+      const isDebitNormal = ['asset', 'expense'].includes(acct.type);
+      const acctDebit = isDebitNormal ? amount : 0;
+      const acctCredit = isDebitNormal ? 0 : amount;
+      const obeDebit = isDebitNormal ? 0 : amount;
+      const obeCredit = isDebitNormal ? amount : 0;
+      const entryNumber = `OB-${Date.now()}`;
+      const je = db.create('journal_entries', {
+        company_id: companyId, entry_number: entryNumber, date,
+        description: `Opening balance: ${acct.name}`, is_posted: 1, is_adjusting: 1,
+      });
+      db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: accountId, debit: acctDebit, credit: acctCredit, description: 'Opening balance' });
+      db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: obe.id, debit: obeDebit, credit: obeCredit, description: 'Opening balance offset' });
+      return { success: true, entry_id: je.id };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('accounts:close-to-retained-earnings', (_event, { companyId, periodEndDate }: { companyId: string; periodEndDate: string }) => {
+    try {
+      const dbi = db.getDb();
+      let re = dbi.prepare("SELECT * FROM accounts WHERE company_id = ? AND name = 'Retained Earnings' LIMIT 1").get(companyId) as any;
+      if (!re) {
+        re = db.create('accounts', { company_id: companyId, code: '3200', name: 'Retained Earnings', type: 'equity', subtype: 'Retained Earnings' });
+      }
+      const accts = dbi.prepare(
+        `SELECT a.id, a.type, a.name, COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
+            JOIN journal_entries je ON jel.journal_entry_id = je.id
+            WHERE jel.account_id = a.id AND je.company_id = ? AND je.date <= ?), 0) as net_dr
+          FROM accounts a WHERE a.company_id = ? AND a.type IN ('revenue','expense')`
+      ).all(companyId, periodEndDate, companyId) as any[];
+      const entryNumber = `CLOSE-${periodEndDate}`;
+      const je = db.create('journal_entries', {
+        company_id: companyId, entry_number: entryNumber, date: periodEndDate,
+        description: `Year-end closing entries — ${periodEndDate}`, is_posted: 1, is_adjusting: 1,
+      });
+      let reDr = 0, reCr = 0;
+      for (const a of accts) {
+        const net = Number(a.net_dr) || 0;
+        if (Math.abs(net) < 0.005) continue;
+        if (net > 0) {
+          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: 0, credit: net, description: `Close ${a.name}` });
+          reDr += net;
+        } else {
+          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: -net, credit: 0, description: `Close ${a.name}` });
+          reCr += -net;
+        }
+      }
+      const reNet = reCr - reDr;
+      if (reNet > 0) db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: re.id, debit: 0, credit: reNet, description: 'Net income to RE' });
+      else if (reNet < 0) db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: re.id, debit: -reNet, credit: 0, description: 'Net loss to RE' });
+      return { success: true, entry_id: je.id, accounts_closed: accts.length };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('accounts:stats', (_event, { companyId }: { companyId: string }) => {
+    try {
+      return db.runQuery(
+        `SELECT a.id, a.type,
+          COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
+            JOIN journal_entries je ON jel.journal_entry_id = je.id
+            WHERE jel.account_id = a.id AND je.company_id = ?), 0) as net_dr,
+          (SELECT MAX(je.date) FROM journal_entry_lines jel
+            JOIN journal_entries je ON jel.journal_entry_id = je.id
+            WHERE jel.account_id = a.id AND je.company_id = ?) as last_txn_date,
+          (SELECT COUNT(*) FROM journal_entry_lines jel
+            JOIN journal_entries je ON jel.journal_entry_id = je.id
+            WHERE jel.account_id = a.id AND je.company_id = ? AND je.date >= date('now','-90 days')) as activity_90d
+        FROM accounts a WHERE a.company_id = ?`,
+        [companyId, companyId, companyId, companyId]
+      );
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('accounts:history-pdf', async (_event, { accountId, companyId }: { accountId: string; companyId: string }) => {
+    try {
+      const acct = db.getById('accounts', accountId);
+      if (!acct) return { error: 'Account not found' };
+      const lines = db.runQuery(
+        `SELECT je.date, je.entry_number, je.description as je_desc, jel.debit, jel.credit, jel.description as line_desc
+         FROM journal_entry_lines jel JOIN journal_entries je ON jel.journal_entry_id = je.id
+         WHERE jel.account_id = ? AND je.company_id = ? ORDER BY je.date, je.entry_number`,
+        [accountId, companyId]
+      );
+      const company = db.getById('companies', companyId) || {};
+      let runningBal = 0;
+      const rowHtml = lines.map((l: any) => {
+        runningBal += (Number(l.debit) || 0) - (Number(l.credit) || 0);
+        return `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">${l.date}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee">${l.entry_number || ''}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee">${String(l.line_desc || l.je_desc || '').replace(/</g, '&lt;')}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${Number(l.debit || 0).toFixed(2)}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${Number(l.credit || 0).toFixed(2)}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${runningBal.toFixed(2)}</td></tr>`;
+      }).join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Account History — ${acct.code}</title>
+        <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;color:#666;font-weight:normal;margin:0 0 16px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f5f5f5;text-align:left;padding:6px 8px;border-bottom:2px solid #333}</style></head>
+        <body><h1>${(company as any).name || ''}</h1><h2>Account History — ${acct.code} ${acct.name}</h2>
+        <p style="font-size:11px;color:#555">Type: ${acct.type} • Subtype: ${acct.subtype || '—'} • Generated: ${new Date().toISOString().slice(0, 10)}</p>
+        <table><thead><tr><th>Date</th><th>Entry #</th><th>Description</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
+        <tbody>${rowHtml || '<tr><td colspan="6" style="padding:16px;text-align:center;color:#888">No transactions</td></tr>'}</tbody></table>
+        </body></html>`;
+      return await openPrintPreview(html, `Account ${acct.code} History`);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('accounts:apply-template', (_event, { companyId, accounts }: { companyId: string; accounts: Array<{ code: string; name: string; type: string; subtype?: string }> }) => {
+    try {
+      const dbi = db.getDb();
+      const existing = new Set<string>(
+        (dbi.prepare('SELECT code FROM accounts WHERE company_id = ?').all(companyId) as any[]).map(r => r.code)
+      );
+      let created = 0;
+      const tx = dbi.transaction(() => {
+        for (const a of accounts) {
+          if (existing.has(a.code)) continue;
+          db.create('accounts', { company_id: companyId, ...a });
+          created++;
+        }
+      });
+      tx();
+      return { success: true, created };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
   ipcMain.handle('backup:restore-from-vps', async () => {
     try {
       const dbPath = db.getDbPath();
@@ -6191,6 +6383,421 @@ export function registerIpcHandlers(): void {
       console.error('VPS restore failed:', err);
       return { error: err?.message || 'Restore failed' };
     }
+  });
+
+  // ═══ Period close + Reconciliation + Compliance (2026-04-23) ═══
+
+  ipcMain.handle('close:check-date-lock', (_e, { companyId, date }: { companyId: string; date: string }) => {
+    try {
+      const row = db.getDb().prepare(
+        `SELECT id, period_start, period_end, reason, locked_through_date
+         FROM period_locks
+         WHERE company_id = ? AND (unlocked_at IS NULL OR unlocked_at = '')
+           AND (
+             (period_start != '' AND period_end != '' AND ? >= period_start AND ? <= period_end)
+             OR (locked_through_date != '' AND ? <= locked_through_date)
+           )
+         ORDER BY created_at DESC LIMIT 1`
+      ).get(companyId, date, date, date) as any;
+      return { locked: !!row, lock: row || null };
+    } catch (err: any) { return { locked: false, error: err?.message }; }
+  });
+
+  ipcMain.handle('close:list-locks', (_e, { companyId }: { companyId: string }) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT * FROM period_locks WHERE company_id = ? ORDER BY created_at DESC`
+      ).all(companyId);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('close:lock-period', (_e, { companyId, periodStart, periodEnd, lockedBy, reason }: any) => {
+    try {
+      const id = uuid();
+      db.getDb().prepare(
+        `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason, note)
+         VALUES (?,?,?,?,?,?,?,?)`
+      ).run(id, companyId, periodStart || '', periodEnd || '', periodEnd || '', lockedBy || '', reason || '', reason || '');
+      db.logAudit(companyId, 'period_lock', id, 'create', { periodStart, periodEnd, reason });
+      return { id };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('close:unlock-period', (_e, { lockId, unlockedBy, reason, override }: any) => {
+    try {
+      const lock = db.getDb().prepare(`SELECT * FROM period_locks WHERE id = ?`).get(lockId) as any;
+      if (!lock) return { error: 'Lock not found' };
+      db.getDb().prepare(
+        `UPDATE period_locks SET unlocked_at = datetime('now'), unlocked_by = ?, unlock_reason = ? WHERE id = ?`
+      ).run(unlockedBy || '', reason || '', lockId);
+      db.logAudit(lock.company_id, 'period_lock', lockId, override ? 'override' : 'unlock', { reason, by: unlockedBy });
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('close:checklist-list', (_e, { companyId, periodLabel }: { companyId: string; periodLabel: string }) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT * FROM period_close_checklist WHERE company_id = ? AND period_label = ? ORDER BY created_at`
+      ).all(companyId, periodLabel);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('close:checklist-toggle', (_e, { companyId, periodLabel, itemKey, itemLabel, completed, skipped, by, note }: any) => {
+    try {
+      const existing = db.getDb().prepare(
+        `SELECT id FROM period_close_checklist WHERE company_id = ? AND period_label = ? AND item_key = ?`
+      ).get(companyId, periodLabel, itemKey) as any;
+      const now = new Date().toISOString();
+      if (existing) {
+        db.getDb().prepare(
+          `UPDATE period_close_checklist SET completed_at = ?, completed_by = ?, skipped = ?, note = ? WHERE id = ?`
+        ).run(completed ? now : '', by || '', skipped ? 1 : 0, note || '', existing.id);
+        return { id: existing.id };
+      }
+      const id = uuid();
+      db.getDb().prepare(
+        `INSERT INTO period_close_checklist (id, company_id, period_label, item_key, item_label, completed_at, completed_by, skipped, note)
+         VALUES (?,?,?,?,?,?,?,?,?)`
+      ).run(id, companyId, periodLabel, itemKey, itemLabel, completed ? now : '', by || '', skipped ? 1 : 0, note || '');
+      return { id };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  function buildClosingPreview(companyId: string, periodStart: string, periodEnd: string) {
+    const lines = db.getDb().prepare(
+      `SELECT a.id AS account_id, a.code, a.name, a.type,
+              SUM(COALESCE(jel.debit,0)) AS debit_sum,
+              SUM(COALESCE(jel.credit,0)) AS credit_sum
+       FROM accounts a
+       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
+       LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
+         AND je.company_id = ? AND je.is_posted = 1
+         AND je.date >= ? AND je.date <= ?
+       WHERE a.company_id = ? AND a.type IN ('revenue','expense')
+       GROUP BY a.id`
+    ).all(companyId, periodStart, periodEnd, companyId) as any[];
+
+    const closing: Array<{ account_id: string; code: string; name: string; type: string; debit: number; credit: number }> = [];
+    let netIncome = 0;
+    for (const r of lines) {
+      const revBal = (r.credit_sum || 0) - (r.debit_sum || 0);
+      const expBal = (r.debit_sum || 0) - (r.credit_sum || 0);
+      if (r.type === 'revenue') {
+        if (Math.abs(revBal) < 0.005) continue;
+        closing.push({ account_id: r.account_id, code: r.code, name: r.name, type: r.type, debit: revBal, credit: 0 });
+        netIncome += revBal;
+      } else {
+        if (Math.abs(expBal) < 0.005) continue;
+        closing.push({ account_id: r.account_id, code: r.code, name: r.name, type: r.type, debit: 0, credit: expBal });
+        netIncome -= expBal;
+      }
+    }
+    const re = db.getDb().prepare(
+      `SELECT id, code, name FROM accounts WHERE company_id = ? AND subtype='retained' LIMIT 1`
+    ).get(companyId) as any;
+    return { lines: closing, netIncome, retainedEarnings: re || null };
+  }
+
+  ipcMain.handle('close:closing-preview', (_e, { companyId, periodStart, periodEnd }: any) => {
+    try { return buildClosingPreview(companyId, periodStart, periodEnd); }
+    catch (err: any) { return { error: err?.message, lines: [], netIncome: 0, retainedEarnings: null }; }
+  });
+
+  ipcMain.handle('close:closing-commit', (_e, { companyId, periodStart, periodEnd, closedBy }: any) => {
+    try {
+      const preview = buildClosingPreview(companyId, periodStart, periodEnd);
+      if (!preview.retainedEarnings) return { error: 'No Retained Earnings account found.' };
+      if (!preview.lines.length) return { error: 'No revenue/expense balances to close.' };
+
+      const jeId = uuid();
+      const entryNumber = `CLOSE-${periodEnd}`;
+      db.getDb().prepare(
+        `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by)
+         VALUES (?,?,?,?,?,1,1,?)`
+      ).run(jeId, companyId, entryNumber, periodEnd, `Year-end closing entries (${periodStart} to ${periodEnd})`, closedBy || '');
+
+      let lineNo = 0;
+      for (const l of preview.lines) {
+        db.getDb().prepare(
+          `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
+           VALUES (?,?,?,?,?,?,?)`
+        ).run(uuid(), jeId, l.account_id, l.debit, l.credit, `Close ${l.code} ${l.name}`, lineNo++);
+      }
+      const reDebit = preview.netIncome < 0 ? Math.abs(preview.netIncome) : 0;
+      const reCredit = preview.netIncome > 0 ? preview.netIncome : 0;
+      db.getDb().prepare(
+        `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
+         VALUES (?,?,?,?,?,?,?)`
+      ).run(uuid(), jeId, preview.retainedEarnings.id, reDebit, reCredit, 'To Retained Earnings', lineNo++);
+
+      const logId = uuid();
+      db.getDb().prepare(
+        `INSERT INTO period_close_log (id, company_id, period_start, period_end, closed_at, closed_by, closing_je_id, net_income)
+         VALUES (?,?,?,?,datetime('now'),?,?,?)`
+      ).run(logId, companyId, periodStart, periodEnd, closedBy || '', jeId, preview.netIncome);
+
+      const lockId = uuid();
+      db.getDb().prepare(
+        `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason)
+         VALUES (?,?,?,?,?,?,?)`
+      ).run(lockId, companyId, periodStart, periodEnd, periodEnd, closedBy || '', 'Year-end close');
+
+      db.logAudit(companyId, 'period_close', logId, 'create', { periodStart, periodEnd, netIncome: preview.netIncome, jeId });
+      return { ok: true, journalEntryId: jeId, netIncome: preview.netIncome, logId };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('close:log-list', (_e, { companyId }: { companyId: string }) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT pcl.*, je.entry_number AS je_number
+         FROM period_close_log pcl
+         LEFT JOIN journal_entries je ON je.id = pcl.closing_je_id
+         WHERE pcl.company_id = ? ORDER BY pcl.closed_at DESC`
+      ).all(companyId);
+    } catch { return []; }
+  });
+
+  function _glBalanceFor(companyId: string, accountId: string, asOfDate: string): number {
+    const r = db.getDb().prepare(
+      `SELECT SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS bal
+       FROM journal_entry_lines jel
+       JOIN journal_entries je ON je.id = jel.journal_entry_id
+       WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?`
+    ).get(accountId, companyId, asOfDate) as any;
+    return r?.bal || 0;
+  }
+
+  function _subLedgerForAccount(companyId: string, account: any, asOfDate: string): { total: number; items: any[] } {
+    const sub = (account.subtype || '').toLowerCase();
+    const name = (account.name || '').toLowerCase();
+    if (name.includes('receivable') || sub === 'ar') {
+      const items = db.getDb().prepare(
+        `SELECT id, invoice_number AS reference, date, total - COALESCE(amount_paid,0) AS amount, client_id, status
+         FROM invoices WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
+      ).all(companyId, asOfDate) as any[];
+      return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
+    }
+    if (name.includes('payable') && !name.includes('payroll') && !name.includes('tax')) {
+      try {
+        const items = db.getDb().prepare(
+          `SELECT id, bill_number AS reference, date, total - COALESCE(amount_paid,0) AS amount, vendor_id, status
+           FROM bills WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
+        ).all(companyId, asOfDate) as any[];
+        return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
+      } catch { return { total: 0, items: [] }; }
+    }
+    if (name.includes('inventory') || sub === 'inventory') {
+      try {
+        const items = db.getDb().prepare(
+          `SELECT id, sku AS reference, name, quantity_on_hand AS qty, unit_cost,
+                  quantity_on_hand * unit_cost AS amount FROM inventory_items WHERE company_id = ?`
+        ).all(companyId) as any[];
+        return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
+      } catch { return { total: 0, items: [] }; }
+    }
+    return { total: 0, items: [] };
+  }
+
+  ipcMain.handle('recon:compute', (_e, { companyId, accountId, asOfDate }: any) => {
+    try {
+      const account = db.getById('accounts', accountId);
+      if (!account) return { error: 'Account not found' };
+      const sub = _subLedgerForAccount(companyId, account, asOfDate);
+      const gl = _glBalanceFor(companyId, accountId, asOfDate);
+      const glDisplay = account.type === 'liability' ? -gl : gl;
+      return {
+        account, asOfDate,
+        sub_ledger_total: sub.total, gl_total: glDisplay,
+        variance: sub.total - glDisplay,
+        sub_ledger_items: sub.items,
+      };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('recon:auto-match', (_e, { companyId, accountId, asOfDate }: any) => {
+    try {
+      const account = db.getById('accounts', accountId);
+      if (!account) return { matches: [], suggestions: [] };
+      const sub = _subLedgerForAccount(companyId, account, asOfDate);
+      const glLines = db.getDb().prepare(
+        `SELECT jel.id, jel.debit, jel.credit, jel.description, je.entry_number, je.date
+         FROM journal_entry_lines jel
+         JOIN journal_entries je ON je.id = jel.journal_entry_id
+         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?`
+      ).all(accountId, companyId, asOfDate) as any[];
+
+      const matches: any[] = [];
+      const suggestions: any[] = [];
+      for (const subItem of sub.items) {
+        const refMatch = glLines.find(g => subItem.reference && (g.entry_number === subItem.reference || (g.description || '').includes(subItem.reference)));
+        if (refMatch) { matches.push({ sub: subItem, gl: refMatch, reason: 'reference' }); continue; }
+        const subAmt = Math.abs(subItem.amount || 0);
+        const subDate = new Date(subItem.date).getTime();
+        const candidate = glLines.find(g => {
+          const glAmt = Math.abs((g.debit || 0) - (g.credit || 0));
+          const dayDiff = Math.abs((new Date(g.date).getTime() - subDate) / 86400000);
+          return Math.abs(glAmt - subAmt) <= 1 && dayDiff <= 3;
+        });
+        if (candidate) suggestions.push({ sub: subItem, gl: candidate, reason: 'amount+date' });
+      }
+      return { matches, suggestions };
+    } catch (err: any) { return { error: err?.message, matches: [], suggestions: [] }; }
+  });
+
+  ipcMain.handle('recon:save', (_e, data: any) => {
+    try {
+      const id = uuid();
+      db.getDb().prepare(
+        `INSERT INTO account_reconciliations
+         (id, company_id, account_id, as_of_date, sub_ledger_total, gl_total, variance, reconciled_at, reconciled_by, notes, matches)
+         VALUES (?,?,?,?,?,?,?,datetime('now'),?,?,?)`
+      ).run(
+        id, data.companyId, data.accountId, data.asOfDate,
+        data.subLedgerTotal || 0, data.glTotal || 0, data.variance || 0,
+        data.reconciledBy || '', data.notes || '', JSON.stringify(data.matches || [])
+      );
+      db.logAudit(data.companyId, 'account_reconciliation', id, 'create', { accountId: data.accountId, asOfDate: data.asOfDate });
+      return { id };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('recon:history', (_e, { companyId, accountId }: any) => {
+    try {
+      if (accountId) {
+        return db.getDb().prepare(
+          `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id
+           WHERE r.company_id = ? AND r.account_id = ? ORDER BY r.as_of_date DESC`
+        ).all(companyId, accountId);
+      }
+      return db.getDb().prepare(
+        `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id
+         WHERE r.company_id = ? ORDER BY r.as_of_date DESC`
+      ).all(companyId);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('recon:intercompany', () => {
+    try {
+      return db.getDb().prepare(
+        `SELECT a.company_id, c.name AS company_name, a.id AS account_id, a.code, a.name,
+                SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS balance
+         FROM accounts a
+         LEFT JOIN companies c ON c.id = a.company_id
+         LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
+         LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id AND je.is_posted = 1
+         WHERE LOWER(a.name) LIKE '%due to%' OR LOWER(a.name) LIKE '%due from%' OR LOWER(a.name) LIKE '%intercompany%'
+         GROUP BY a.id ORDER BY c.name, a.code`
+      ).all();
+    } catch { return []; }
+  });
+
+  ipcMain.handle('compliance:account-audit', (_e, { companyId, accountId, limit = 200 }: any) => {
+    try {
+      const acctChanges = db.getDb().prepare(
+        `SELECT * FROM audit_log WHERE company_id = ? AND entity_type = 'accounts' AND entity_id = ? ORDER BY timestamp DESC LIMIT ?`
+      ).all(companyId, accountId, limit);
+      const jeTouches = db.getDb().prepare(
+        `SELECT DISTINCT je.id, je.entry_number, je.date, je.description, je.is_posted, je.posted_by, je.approved_by, je.created_at
+         FROM journal_entries je
+         JOIN journal_entry_lines jel ON jel.journal_entry_id = je.id
+         WHERE je.company_id = ? AND jel.account_id = ?
+         ORDER BY je.created_at DESC LIMIT ?`
+      ).all(companyId, accountId, limit);
+      return { account_changes: acctChanges, journal_touches: jeTouches };
+    } catch (err: any) { return { error: err?.message, account_changes: [], journal_touches: [] }; }
+  });
+
+  ipcMain.handle('compliance:validate-je', (_e, { companyId, journalEntryId, date }: any) => {
+    try {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+      const locked = db.getDb().prepare(
+        `SELECT * FROM period_locks WHERE company_id = ? AND (unlocked_at IS NULL OR unlocked_at = '')
+           AND ((period_start != '' AND period_end != '' AND ? >= period_start AND ? <= period_end)
+                OR (locked_through_date != '' AND ? <= locked_through_date))
+         LIMIT 1`
+      ).get(companyId, date, date, date);
+      if (locked) errors.push(`Period is locked through ${(locked as any).period_end || (locked as any).locked_through_date}.`);
+
+      const lines = db.getDb().prepare(
+        `SELECT jel.*, a.name AS account_name, a.code, a.allow_direct_posting, a.attachment_required, a.attachment_threshold
+         FROM journal_entry_lines jel
+         JOIN accounts a ON a.id = jel.account_id
+         WHERE jel.journal_entry_id = ?`
+      ).all(journalEntryId) as any[];
+
+      for (const l of lines) {
+        if (l.allow_direct_posting === 0) {
+          errors.push(`Account ${l.code} ${l.account_name} does not allow direct posting (control account).`);
+        }
+        const amt = Math.abs((l.debit || 0) - (l.credit || 0));
+        if (l.attachment_required && amt >= (l.attachment_threshold || 0)) {
+          let hasDoc = false;
+          try {
+            const doc = db.getDb().prepare(
+              `SELECT id FROM documents WHERE entity_type = 'journal_entry' AND entity_id = ? LIMIT 1`
+            ).get(journalEntryId);
+            hasDoc = !!doc;
+          } catch { /* documents table may not exist */ }
+          if (!hasDoc) errors.push(`Account ${l.code} ${l.account_name} requires an attachment for amounts ≥ $${l.attachment_threshold}.`);
+        }
+      }
+      return { ok: errors.length === 0, errors, warnings };
+    } catch (err: any) { return { ok: true, errors: [], warnings: [err?.message] }; }
+  });
+
+  ipcMain.handle('compliance:1099-report', (_e, { companyId, year }: any) => {
+    try {
+      const start = `${year}-01-01`;
+      const end = `${year}-12-31`;
+      return db.getDb().prepare(
+        `SELECT v.id AS vendor_id, v.name AS vendor_name, v.tax_id,
+                a.id AS account_id, a.code, a.name AS account_name,
+                SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS amount
+         FROM journal_entry_lines jel
+         JOIN journal_entries je ON je.id = jel.journal_entry_id
+         JOIN accounts a ON a.id = jel.account_id
+         LEFT JOIN bills b ON b.id = je.source_id AND je.source_type = 'bill'
+         LEFT JOIN vendors v ON v.id = b.vendor_id
+         WHERE je.company_id = ? AND je.is_posted = 1
+           AND je.date >= ? AND je.date <= ?
+           AND a.is_1099_eligible = 1 AND v.id IS NOT NULL
+         GROUP BY v.id, a.id
+         HAVING amount >= 600
+         ORDER BY v.name, a.code`
+      ).all(companyId, start, end);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('compliance:tax-line-export', (_e, { companyId, periodStart, periodEnd }: any) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT a.tax_line, a.code, a.name, a.type,
+                SUM(COALESCE(jel.debit,0)) AS total_debit,
+                SUM(COALESCE(jel.credit,0)) AS total_credit,
+                SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS net
+         FROM accounts a
+         LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
+         LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
+           AND je.company_id = ? AND je.is_posted = 1 AND je.date >= ? AND je.date <= ?
+         WHERE a.company_id = ? AND a.tax_line != ''
+         GROUP BY a.id ORDER BY a.tax_line, a.code`
+      ).all(companyId, periodStart, periodEnd, companyId);
+    } catch { return []; }
+  });
+
+  ipcMain.handle('compliance:sod-report', (_e, { companyId, periodStart, periodEnd }: any) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT id, entry_number, date, description, approved_by, posted_by
+         FROM journal_entries
+         WHERE company_id = ? AND date >= ? AND date <= ? AND is_posted = 1
+           AND approved_by != '' AND posted_by != '' AND approved_by = posted_by
+         ORDER BY date DESC`
+      ).all(companyId, periodStart, periodEnd);
+    } catch { return []; }
   });
 }
 

@@ -588,6 +588,106 @@ export function initDatabase(): Database.Database {
     note TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
+  // ── Chart of Accounts enhancements (2026-04-23) ────────
+  "ALTER TABLE accounts ADD COLUMN sort_order INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN is_1099_eligible INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN color TEXT DEFAULT ''",
+  "ALTER TABLE accounts ADD COLUMN is_pinned INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN is_locked INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN requires_document INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN rename_log TEXT DEFAULT '[]'",
+  // ── Journal Entry feature pack (2026-04-23) ────────
+  "ALTER TABLE journal_entries ADD COLUMN is_recurring INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN recurring_template_id TEXT",
+  "ALTER TABLE journal_entries ADD COLUMN is_reversing INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN reverse_on_date TEXT",
+  "ALTER TABLE journal_entries ADD COLUMN reversed_from_id TEXT",
+  "ALTER TABLE journal_entries ADD COLUMN approval_status TEXT DEFAULT 'draft'",
+  "ALTER TABLE journal_entries ADD COLUMN class TEXT DEFAULT ''",
+  "ALTER TABLE journal_entries ADD COLUMN source_type TEXT DEFAULT ''",
+  "ALTER TABLE journal_entries ADD COLUMN source_id TEXT DEFAULT ''",
+  "ALTER TABLE journal_entry_lines ADD COLUMN line_memo TEXT DEFAULT ''",
+  "ALTER TABLE journal_entry_lines ADD COLUMN sort_order INTEGER DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS je_comments (
+    id TEXT PRIMARY KEY,
+    journal_entry_id TEXT NOT NULL,
+    user_id TEXT DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_je_comments_entry ON je_comments(journal_entry_id)",
+  // ── Trial Balance / General Ledger feature pack (2026-04-23) ────────
+  "ALTER TABLE journal_entry_lines ADD COLUMN note TEXT DEFAULT ''",
+  "ALTER TABLE journal_entries ADD COLUMN is_closing INTEGER DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS tb_working_adjustments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    debit REAL DEFAULT 0,
+    credit REAL DEFAULT 0,
+    memo TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_tb_adj_company ON tb_working_adjustments(company_id, period_start, period_end)",
+  // ── Period close + Reconciliation + Compliance (2026-04-23) ────────
+  `CREATE TABLE IF NOT EXISTS period_close_checklist (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_label TEXT NOT NULL DEFAULT '',
+    item_label TEXT NOT NULL DEFAULT '',
+    item_key TEXT DEFAULT '',
+    completed_at TEXT DEFAULT '',
+    completed_by TEXT DEFAULT '',
+    skipped INTEGER DEFAULT 0,
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_pcc_period ON period_close_checklist(company_id, period_label)",
+  `CREATE TABLE IF NOT EXISTS period_close_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_start TEXT DEFAULT '',
+    period_end TEXT DEFAULT '',
+    closed_at TEXT DEFAULT '',
+    closed_by TEXT DEFAULT '',
+    closing_je_id TEXT DEFAULT '',
+    net_income REAL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_pcl_company ON period_close_log(company_id)",
+  "ALTER TABLE period_locks ADD COLUMN period_start TEXT DEFAULT ''",
+  "ALTER TABLE period_locks ADD COLUMN period_end TEXT DEFAULT ''",
+  "ALTER TABLE period_locks ADD COLUMN reason TEXT DEFAULT ''",
+  "ALTER TABLE period_locks ADD COLUMN unlocked_at TEXT DEFAULT ''",
+  "ALTER TABLE period_locks ADD COLUMN unlocked_by TEXT DEFAULT ''",
+  "ALTER TABLE period_locks ADD COLUMN unlock_reason TEXT DEFAULT ''",
+  `CREATE TABLE IF NOT EXISTS account_reconciliations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    as_of_date TEXT NOT NULL DEFAULT '',
+    sub_ledger_total REAL DEFAULT 0,
+    gl_total REAL DEFAULT 0,
+    variance REAL DEFAULT 0,
+    reconciled_at TEXT DEFAULT '',
+    reconciled_by TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    matches TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_recon_acct ON account_reconciliations(company_id, account_id)",
+  "ALTER TABLE accounts ADD COLUMN allow_direct_posting INTEGER DEFAULT 1",
+  "ALTER TABLE accounts ADD COLUMN tax_line TEXT DEFAULT ''",
+  "ALTER TABLE accounts ADD COLUMN attachment_required INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN attachment_threshold REAL DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN approved_by TEXT DEFAULT ''",
+  "ALTER TABLE journal_entries ADD COLUMN posted_by TEXT DEFAULT ''",
+  // ── GL analytics: per-account monthly cap (2026-04-23) ────────
+  "ALTER TABLE accounts ADD COLUMN monthly_cap REAL DEFAULT 0",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -749,6 +849,8 @@ const tablesWithoutUpdatedAt = new Set([
   'debt_skip_traces', 'debt_campaigns',
   // Expense workflow — created_at only
   'expense_approval_steps', 'expense_comments', 'reimbursement_batches', 'period_locks',
+  // Period close + reconciliation + compliance
+  'period_close_checklist', 'period_close_log', 'account_reconciliations',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {
