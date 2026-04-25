@@ -49,7 +49,25 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 .t tr.tot td { border-top:1.5px solid #000; border-bottom:none; font-weight:700; padding-top:2px; }
 .t tr.sub td { font-size:7px; padding-left:10px; border-bottom:0.5px dashed #ddd; }
 .void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-size:56px; font-weight:900; color:rgba(200,0,0,0.12); letter-spacing:10px; pointer-events:none; z-index:10; }
-.micr { font-family:'MICR','Courier New',monospace; font-size:11px; letter-spacing:2px; color:#000; position:absolute; bottom:0.2in; left:0.45in; }
+/* MICR E-13B line at bottom of check face */
+.micr {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 2.5px;
+  color: #000;
+  position: absolute;
+  bottom: 0.15in;
+  left: 0.45in;
+  white-space: nowrap;
+}
+.micr .sym {
+  font-family: Calibri, Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0 1px;
+}
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 `;
 
@@ -208,8 +226,8 @@ export function generatePaycheckHTML(
       </div>
     </div>
 
-    <!-- MICR -->
-    <div class="micr">&#9416;${chkNum}&#9416; &#9414;${coRouting || '000000000'}&#9414; ${coAcct || '0000000000'}&#9416;</div>
+    <!-- MICR Line -->
+    <div class="micr"><span class="sym">&#x2756;</span>${chkNum}<span class="sym">&#x2756;</span>&nbsp;&nbsp;<span class="sym">&#x2758;</span>${coRouting || '000000000'}<span class="sym">&#x2758;</span>&nbsp;&nbsp;${coAcct || '0000000000'}<span class="sym">&#x2756;</span></div>
   </div>`;
 
   // ═══════════════════════════════════════
