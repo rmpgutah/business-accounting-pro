@@ -181,7 +181,9 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
   const stats = useMemo(() => ({
     count: assets.length,
     totalCost: assets.reduce((s, a) => s + (a.purchase_price || 0), 0),
-    totalBook: assets.reduce((s, a) => s + ((a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))) ?? 0), 0),
+    // Inner expression already covers the nullish case via (price - accum)
+    // → outer ?? was unreachable. One nullish-fallback chain is enough.
+    totalBook: assets.reduce((s, a) => s + (a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))), 0),
     totalAccDep: assets.reduce((s, a) => s + (a.accumulated_depreciation || 0), 0),
   }), [assets]);
 
