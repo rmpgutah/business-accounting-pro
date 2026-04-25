@@ -31,47 +31,86 @@ function maskSSN(ssn: string | undefined | null): string {
   return d.length >= 4 ? '***-**-' + d.slice(-4) : ssn;
 }
 
-// ─── Shared CSS ───────────────────────────────────────────
 const CSS = `
 @page { size: letter; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-size: 10px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.page { width: 8.5in; height: 11in; position: relative; }
-.sec-check { height: 3.667in; padding: 0.2in 0.4in 0.28in; position: relative; overflow: hidden; }
-.sec-stub { height: 3.667in; padding: 0.1in 0.3in 0.06in; position: relative; overflow: hidden; }
-/* Tables */
-.t { width:100%; border-collapse:collapse; }
-.t th { padding:2px 4px; font-size:6.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; color:#000; border-bottom:1.5px solid #000; background:#e8e8e8; text-align:left; }
-.t th.r { text-align:right; }
-.t td { padding:2px 4px; font-size:8px; border-bottom:0.5px solid #ccc; color:#000; }
-.t td.r { text-align:right; font-variant-numeric:tabular-nums; }
-.t td.b { font-weight:700; }
-.t tr.tot td { border-top:1.5px solid #000; border-bottom:none; font-weight:700; padding-top:2px; }
-.t tr.sub td { font-size:7px; padding-left:10px; border-bottom:0.5px dashed #ddd; }
-.void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-size:56px; font-weight:900; color:rgba(200,0,0,0.12); letter-spacing:10px; pointer-events:none; z-index:10; }
-/* MICR E-13B line at bottom of check face */
-.micr {
+.pg { width: 8.5in; height: 11in; position: relative; }
+
+/* ── Sections ── */
+.chk { height: 3.667in; padding: 0.22in 0.42in 0.32in; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+.stb { height: 3.667in; padding: 0.1in 0.32in 0.06in; position: relative; overflow: hidden; }
+
+/* ── Check face styles ── */
+.chk-co { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+.chk-co-sub { font-size: 7.5px; line-height: 1.4; margin-top: 2px; }
+.chk-num { font-size: 22px; font-weight: 800; letter-spacing: 1.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+.chk-label { font-size: 6.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #000; }
+.chk-date-box { border: 1.5px solid #000; padding: 3px 10px; text-align: center; margin-top: 6px; }
+.chk-payto-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+.chk-payee { font-size: 14px; font-weight: 700; }
+.chk-payee-addr { font-size: 8.5px; margin-top: 1px; }
+.chk-amt-box { border: 2.5px solid #000; padding: 4px 16px; text-align: center; background: #f5f5f5; }
+.chk-amt { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.chk-words { font-size: 10px; border-bottom: 1.5px solid #000; padding-bottom: 3px; }
+.chk-sig { border-top: 1.5px solid #000; width: 200px; padding-top: 3px; text-align: center; }
+.chk-micr {
   font-family: 'Courier New', Courier, monospace;
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 2.5px;
-  color: #000;
-  position: absolute;
-  bottom: 0.15in;
-  left: 0.45in;
-  white-space: nowrap;
+  font-size: 12px; letter-spacing: 3px; color: #000;
+  position: absolute; bottom: 0.18in; left: 0.45in; white-space: nowrap;
 }
-.micr .sym {
-  font-family: Calibri, Arial, sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0;
-  margin: 0 1px;
+.chk-micr .s { font-family: Calibri, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0; margin: 0 2px; }
+
+/* ── Stub styles ── */
+.stb-hdr { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 2px; margin-bottom: 3px; }
+.stb-hdr-label { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
+.stb-hdr-co { font-size: 11px; font-weight: 800; }
+
+/* Info grid */
+.ig { display: grid; border: 1.5px solid #000; margin-bottom: 5px; }
+.ig7 { grid-template-columns: repeat(7, 1fr); }
+.ig-c { padding: 3px 5px; border-right: 0.5px solid #bbb; border-bottom: 0.5px solid #bbb; }
+.ig-c:nth-child(7n) { border-right: none; }
+.ig-c:nth-last-child(-n+7) { border-bottom: none; }
+.ig-c.span2 { grid-column: span 2; }
+.ig-lbl { font-size: 5.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #000; margin-bottom: 1px; }
+.ig-val { font-size: 8px; color: #000; }
+.ig-val.lg { font-size: 10px; font-weight: 700; }
+.ig-val.bold { font-weight: 700; }
+
+/* Tables */
+.st { width: 100%; border-collapse: collapse; border: 1px solid #bbb; }
+.st th {
+  padding: 2.5px 5px; font-size: 7px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.3px; color: #000;
+  background: #d4d4d4; border-bottom: 1.5px solid #000; text-align: left;
 }
+.st th.r { text-align: right; }
+.st td { padding: 2.5px 5px; font-size: 8.5px; border-bottom: 0.5px solid #ddd; color: #000; }
+.st td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.st td.b { font-weight: 700; }
+.st tr.tot td { border-top: 1.5px solid #000; border-bottom: none; font-weight: 700; background: #ebebeb; padding-top: 3px; }
+.st tr.sub td { font-size: 7.5px; padding-left: 12px; border-bottom: 0.5px dashed #ccc; }
+.st tr:nth-child(even) td { background: #f7f7f7; }
+.st tr.tot td, .st tr.tot:nth-child(even) td { background: #ebebeb; }
+
+/* Summary boxes */
+.net-box { border: 2.5px solid #000; text-align: center; padding: 5px 8px; background: #f0f0f0; margin-bottom: 4px; }
+.net-box .lbl { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.net-box .amt { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 1px 0; }
+.net-box .sub { font-size: 6.5px; }
+.sum-box { border: 1.5px solid #000; padding: 4px 5px; font-size: 7.5px; line-height: 1.6; margin-bottom: 3px; }
+.sum-box .title { font-weight: 700; text-transform: uppercase; font-size: 6px; letter-spacing: 0.5px; border-bottom: 1px solid #000; padding-bottom: 1px; margin-bottom: 2px; }
+.sum-row { display: flex; justify-content: space-between; }
+.sum-total { border-top: 1.5px solid #000; padding-top: 2px; margin-top: 2px; font-weight: 700; }
+
+.void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-size:56px; font-weight:900; color:rgba(200,0,0,0.12); letter-spacing:10px; pointer-events:none; z-index:10; }
+.emp-footer { display: flex; gap: 4px; margin-top: 3px; font-size: 7px; }
+.emp-footer-cell { flex: 1; border: 1px solid #bbb; padding: 2px 5px; background: #f7f7f7; }
+
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 `;
 
-// ─── Main Generator ───────────────────────────────────────
 export function generatePaycheckHTML(
   stub: any, employee: any, company: any, run: any,
   options?: { isVoid?: boolean; checkNumber?: string; memo?: string }
@@ -105,7 +144,7 @@ export function generatePaycheckHTML(
   const empStateCode = esc(employee?.state || '');
   const empStateAllow = employee?.state_allowances ?? '';
 
-  // ── Pay info ──
+  // ── Pay ──
   const payDate = fmtLong(run?.pay_date || stub?.pay_date || '');
   const payDateS = fmtShort(run?.pay_date || stub?.pay_date || '');
   const pStart = fmtShort(run?.pay_period_start || stub?.period_start || '');
@@ -130,7 +169,7 @@ export function generatePaycheckHTML(
   const hrsReg = stub?.hours_regular || stub?.hours || 0;
   const hrsOT = stub?.hours_overtime || 0;
   const hrsTot = hrsReg + hrsOT;
-  const chkNum = esc(options?.checkNumber || stub?.check_number || stub?.id?.substring(0, 6).toUpperCase() || '000001');
+  const chk = esc(options?.checkNumber || stub?.check_number || stub?.id?.substring(0, 6).toUpperCase() || '000001');
 
   // ── YTD ──
   const ytdG = stub?.ytd_gross || 0;
@@ -146,165 +185,121 @@ export function generatePaycheckHTML(
   const regPay = hrsTot > 0 ? effRate * hrsReg : gross;
   const otPay = hrsTot > 0 ? effRate * 1.5 * hrsOT : 0;
   const taxableWages = gross - preTax;
-  const fedEffRate = taxableWages > 0 ? ((fedTax / taxableWages) * 100).toFixed(1) : '0.0';
-  const stEffRate = taxableWages > 0 ? ((stTax / taxableWages) * 100).toFixed(1) : '0.0';
-  const totalEffRate = gross > 0 ? ((totalDed / gross) * 100).toFixed(1) : '0.0';
-
+  const fedPct = taxableWages > 0 ? ((fedTax / taxableWages) * 100).toFixed(1) : '0.0';
+  const stPct = taxableWages > 0 ? ((stTax / taxableWages) * 100).toFixed(1) : '0.0';
+  const totPct = gross > 0 ? ((totalDed / gross) * 100).toFixed(1) : '0.0';
   const isVoid = options?.isVoid || false;
   const memo = esc(options?.memo || `Payroll ${pStart} — ${pEnd}`);
-
-  // Deduction detail
   let dedItems: [string, number][] = [];
   if (stub?.deduction_detail && stub.deduction_detail !== '{}') {
     try { dedItems = Object.entries(JSON.parse(stub.deduction_detail)).map(([k, v]) => [k, Number(v)]); } catch {}
   }
-
   const voidWM = isVoid ? '<div class="void-wm">VOID</div>' : '';
-  const ddBanner = isDD ? `<div style="position:absolute;top:0.15in;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;color:#000;letter-spacing:2px;text-transform:uppercase;">*** NON-NEGOTIABLE — DIRECT DEPOSIT ***</div>` : '';
+  const ddBanner = isDD ? `<div style="position:absolute;top:0.14in;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">*** NON-NEGOTIABLE — DIRECT DEPOSIT ***</div>` : '';
 
-  // ═══════════════════════════════════════
-  // CHECK FACE (top third)
-  // ═══════════════════════════════════════
+  // ══════════════════════════════════════════════════
+  // CHECK FACE
+  // ══════════════════════════════════════════════════
   const checkHTML = `
-  <div class="sec-check">
+  <div class="chk">
     ${voidWM}${ddBanner}
 
-    <!-- Row 1: Company + Bank + Check # -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-      <!-- Company Block -->
-      <div style="max-width:55%;">
-        <div style="font-size:15px;font-weight:800;letter-spacing:-0.2px;">${co}</div>
-        ${coLegal && coLegal !== co ? `<div style="font-size:7px;">${coLegal}</div>` : ''}
-        <div style="font-size:8px;line-height:1.35;margin-top:2px;">
-          ${coAddr1 ? coAddr1 + '<br>' : ''}${coAddr2 ? coAddr2 + '<br>' : ''}${coCSZ}
-          ${coPhone ? '<br>' + coPhone : ''}${coEmail ? ' &middot; ' + coEmail : ''}
-          ${coEIN ? '<br>EIN: ' + coEIN : ''}
-        </div>
-      </div>
-      <!-- Check Number + Date + Bank -->
-      <div style="text-align:right;">
-        <div style="font-size:6px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Check No.</div>
-        <div style="font-size:19px;font-weight:800;letter-spacing:1px;line-height:1;">${chkNum}</div>
-        ${coFraction ? `<div style="font-size:7px;margin-top:1px;">${coFraction}</div>` : ''}
-        <div style="font-size:9px;margin-top:4px;"><strong>Date:</strong> ${payDate}</div>
-        ${coBank ? `<div style="font-size:7px;margin-top:2px;">${coBank}</div>` : ''}
-      </div>
-    </div>
-
-    <!-- Row 2: PAY TO THE ORDER OF -->
-    <div style="margin-bottom:4px;">
-      <div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px;">Pay to the Order of</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:2px;">
+    <!-- Top: Company + Check # -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
-          <div style="font-size:13px;font-weight:700;">${empName}</div>
-          <div style="font-size:8px;">
-            ${empAddr1 ? empAddr1 + '<br>' : ''}${empAddr2 ? empAddr2 + '<br>' : ''}${empCSZ}
+          <div class="chk-co">${co}</div>
+          ${coLegal && coLegal !== co ? `<div style="font-size:7.5px;">${coLegal}</div>` : ''}
+          <div class="chk-co-sub">
+            ${coAddr1 ? coAddr1 : ''}${coAddr2 ? '<br>' + coAddr2 : ''}${coCSZ ? '<br>' + coCSZ : ''}
+            ${coPhone ? '<br>' + coPhone : ''}${coEmail ? ' &middot; ' + coEmail : ''}
+            ${coEIN ? '<br>EIN: ' + coEIN : ''}
           </div>
         </div>
-        <div style="border:2px solid #000;padding:2px 12px;min-width:120px;text-align:center;">
-          <div style="font-size:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Amount</div>
-          <div style="font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(net)}</div>
+        <div style="text-align:right;">
+          <div class="chk-label">Check No.</div>
+          <div class="chk-num">${chk}</div>
+          ${coFraction ? `<div style="font-size:7.5px;margin-top:1px;">${coFraction}</div>` : ''}
+          <div class="chk-date-box">
+            <div class="chk-label">Date</div>
+            <div style="font-size:10px;font-weight:700;">${payDate}</div>
+          </div>
+          ${coBank ? `<div style="font-size:7.5px;margin-top:3px;font-weight:600;">${coBank}</div>` : ''}
         </div>
       </div>
     </div>
 
-    <!-- Row 3: Amount in words -->
-    <div style="border-bottom:1px solid #000;padding-bottom:2px;margin-bottom:6px;font-size:9px;">
-      ${amountToWords(net)} <span style="letter-spacing:2px;">********</span>
+    <!-- Middle: Pay To + Amount -->
+    <div>
+      <div class="chk-payto-label">Pay to the Order of</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:5px;">
+        <div>
+          <div class="chk-payee">${empName}</div>
+          <div class="chk-payee-addr">${[empAddr1, empAddr2, empCSZ].filter(Boolean).join(', ')}</div>
+        </div>
+        <div class="chk-amt-box">
+          <div class="chk-label">Amount</div>
+          <div class="chk-amt">${fmt(net)}</div>
+        </div>
+      </div>
+      <div class="chk-words">${amountToWords(net)} <span style="letter-spacing:2px;color:#999;">********</span></div>
     </div>
 
-    <!-- Row 4: Bank + Memo + Signature -->
+    <!-- Bottom: Bank + Memo + Signature -->
     <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-      <div style="font-size:8px;">
-        ${coBank ? `<div style="font-weight:700;">${coBank}</div>` : ''}
-        <div style="margin-top:2px;"><strong>Memo:</strong> ${memo}</div>
+      <div style="font-size:8.5px;">
+        ${coBank ? `<div style="font-weight:700;margin-bottom:2px;">${coBank}</div>` : ''}
+        <div><strong>Memo:</strong> ${memo}</div>
       </div>
-      <div style="text-align:center;">
-        <div style="border-top:1px solid #000;width:180px;padding-top:2px;">
-          <span style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">Authorized Signature</span>
-        </div>
+      <div class="chk-sig">
+        <span class="chk-label">Authorized Signature</span>
       </div>
     </div>
 
-    <!-- MICR Line -->
-    <div class="micr"><span class="sym">&#x2756;</span>${chkNum}<span class="sym">&#x2756;</span>&nbsp;&nbsp;<span class="sym">&#x2758;</span>${coRouting || '000000000'}<span class="sym">&#x2758;</span>&nbsp;&nbsp;${coAcct || '0000000000'}<span class="sym">&#x2756;</span></div>
+    <!-- MICR -->
+    <div class="chk-micr"><span class="s">&#x2756;</span>${chk}<span class="s">&#x2756;</span>&nbsp;&nbsp;<span class="s">&#x2758;</span>${coRouting || '000000000'}<span class="s">&#x2758;</span>&nbsp;&nbsp;${coAcct || '0000000000'}<span class="s">&#x2756;</span></div>
   </div>`;
 
-  // ═══════════════════════════════════════
-  // STUB BUILDER (employee + employer)
-  // ═══════════════════════════════════════
+  // ══════════════════════════════════════════════════
+  // STUB BUILDER
+  // ══════════════════════════════════════════════════
   const buildStub = (label: string, isEmployer: boolean) => `
-  <div class="sec-stub">
+  <div class="stb">
     ${voidWM}
 
-    <!-- Header: Label + Company -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-      <div style="font-size:6px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">${label}</div>
-      <div style="font-size:10px;font-weight:800;">${co}</div>
+    <!-- Header Bar -->
+    <div class="stb-hdr">
+      <div class="stb-hdr-label">${label}</div>
+      <div class="stb-hdr-co">${co}</div>
     </div>
 
     <!-- 14-cell Info Grid -->
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);border:1px solid #999;margin-bottom:4px;font-size:7px;">
-      <div style="padding:2px 4px;border-right:1px solid #ddd;border-bottom:1px solid #ddd;grid-column:span 2;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.2px;">Employee</div>
-        <div style="font-weight:700;font-size:9px;">${empName}</div>
+    <div class="ig ig7">
+      <div class="ig-c span2">
+        <div class="ig-lbl">Employee</div>
+        <div class="ig-val lg">${empName}</div>
       </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;border-bottom:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">SSN</div>
-        <div>${empSSN || '—'}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;border-bottom:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Emp. ID</div>
-        <div>${empId || '—'}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;border-bottom:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Pay Date</div>
-        <div style="font-weight:700;">${payDateS}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;border-bottom:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Period</div>
-        <div>${pStart} — ${pEnd}</div>
-      </div>
-      <div style="padding:2px 4px;border-bottom:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Check #</div>
-        <div style="font-weight:700;">${chkNum}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Department</div>
-        <div>${empDept || '—'}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Hire Date</div>
-        <div>${empHireDate || '—'}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Filing / Allow.</div>
-        <div style="text-transform:capitalize;">${empFiling || '—'} / ${empAllowances !== '' ? empAllowances : '—'}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">State / Allow.</div>
-        <div>${empStateCode || '—'} / ${empStateAllow !== '' ? empStateAllow : '—'}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Pay Type / Rate</div>
-        <div style="text-transform:capitalize;">${payType}${payRate > 0 ? ' @ ' + fmt(payRate) : ''}</div>
-      </div>
-      <div style="padding:2px 4px;border-right:1px solid #ddd;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Schedule</div>
-        <div style="text-transform:capitalize;">${paySchedule || '—'}</div>
-      </div>
-      <div style="padding:2px 4px;">
-        <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;">Method / Type</div>
-        <div style="text-transform:capitalize;">${isDD ? 'Direct Dep.' : 'Check'} / ${runType}</div>
-      </div>
+      <div class="ig-c"><div class="ig-lbl">SSN</div><div class="ig-val">${empSSN || '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Emp. ID</div><div class="ig-val">${empId || '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Pay Date</div><div class="ig-val bold">${payDateS}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Period</div><div class="ig-val">${pStart} — ${pEnd}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Check #</div><div class="ig-val bold">${chk}</div></div>
+
+      <div class="ig-c"><div class="ig-lbl">Department</div><div class="ig-val">${empDept || '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Hire Date</div><div class="ig-val">${empHireDate || '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Filing / Allow.</div><div class="ig-val" style="text-transform:capitalize;">${empFiling || '—'} / ${empAllowances !== '' ? empAllowances : '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">State / Allow.</div><div class="ig-val">${empStateCode || '—'} / ${empStateAllow !== '' ? empStateAllow : '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Pay Type / Rate</div><div class="ig-val" style="text-transform:capitalize;">${payType}${payRate > 0 ? ' @ ' + fmt(payRate) : ''}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Schedule</div><div class="ig-val" style="text-transform:capitalize;">${paySchedule || '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Method / Type</div><div class="ig-val" style="text-transform:capitalize;">${isDD ? 'Direct Dep.' : 'Check'} / ${runType}</div></div>
     </div>
 
-    <!-- 3-Column Layout: Earnings | Taxes+Deductions | Summary -->
+    <!-- 3-Column: Earnings | Taxes | Summary -->
     <div style="display:flex;gap:5px;">
 
       <!-- COL 1: EARNINGS -->
       <div style="flex:1.3;">
-        <table class="t">
+        <table class="st">
           <thead><tr><th>Earnings</th><th class="r">Hours</th><th class="r">Rate</th><th class="r">Current</th><th class="r">YTD</th></tr></thead>
           <tbody>
             ${hrsTot > 0 ? `
@@ -317,36 +312,35 @@ export function generatePaycheckHTML(
           </tbody>
         </table>
         ${preTax > 0 ? `
-        <table class="t" style="margin-top:2px;">
+        <table class="st" style="margin-top:3px;">
           <thead><tr><th colspan="2">Pre-Tax Deductions</th><th class="r">Current</th></tr></thead>
           <tbody>
             ${dedItems.filter(([, a]) => a > 0).map(([n, a]) => `<tr class="sub"><td colspan="2">${esc(n)}</td><td class="r">${fmt(a)}</td></tr>`).join('')}
             ${dedItems.length === 0 ? `<tr><td colspan="2">Pre-Tax</td><td class="r">${fmt(preTax)}</td></tr>` : ''}
             <tr class="tot"><td colspan="2">Taxable Wages</td><td class="r">${fmt(taxableWages)}</td></tr>
           </tbody>
-        </table>
-        ` : ''}
+        </table>` : ''}
       </div>
 
-      <!-- COL 2: TAXES + POST-TAX -->
+      <!-- COL 2: TAXES -->
       <div style="flex:1.1;">
-        <table class="t">
+        <table class="st">
           <thead><tr><th>Taxes</th><th class="r">Rate</th><th class="r">Current</th><th class="r">YTD</th></tr></thead>
           <tbody>
-            <tr><td>Federal Income</td><td class="r">${fedEffRate}%</td><td class="r">${fmt(fedTax)}</td><td class="r">${ytdFed > 0 ? fmt(ytdFed) : '—'}</td></tr>
-            <tr><td>State${empStateCode ? ' (' + empStateCode + ')' : ''}</td><td class="r">${stEffRate}%</td><td class="r">${fmt(stTax)}</td><td class="r">${ytdSt > 0 ? fmt(ytdSt) : '—'}</td></tr>
+            <tr><td>Federal Income</td><td class="r">${fedPct}%</td><td class="r">${fmt(fedTax)}</td><td class="r">${ytdFed > 0 ? fmt(ytdFed) : '—'}</td></tr>
+            <tr><td>State${empStateCode ? ' (' + empStateCode + ')' : ''}</td><td class="r">${stPct}%</td><td class="r">${fmt(stTax)}</td><td class="r">${ytdSt > 0 ? fmt(ytdSt) : '—'}</td></tr>
             <tr><td>Social Security</td><td class="r">6.20%</td><td class="r">${fmt(ss)}</td><td class="r">${ytdSS > 0 ? fmt(ytdSS) : '—'}</td></tr>
             <tr><td>Medicare</td><td class="r">1.45%</td><td class="r">${fmt(med)}</td><td class="r">${ytdMed > 0 ? fmt(ytdMed) : '—'}</td></tr>
-            <tr class="tot"><td>Total Taxes</td><td class="r">${totalEffRate}%</td><td class="r">${fmt(totalTaxes)}</td><td class="r">${ytdT > 0 ? fmt(ytdT) : '—'}</td></tr>
+            <tr class="tot"><td>Total Taxes</td><td class="r">${totPct}%</td><td class="r">${fmt(totalTaxes)}</td><td class="r">${ytdT > 0 ? fmt(ytdT) : '—'}</td></tr>
           </tbody>
         </table>
         ${postTax > 0 ? `
-        <table class="t" style="margin-top:2px;">
+        <table class="st" style="margin-top:3px;">
           <thead><tr><th>Post-Tax Deductions</th><th class="r">Current</th></tr></thead>
           <tbody><tr><td>Post-Tax</td><td class="r">${fmt(postTax)}</td></tr></tbody>
         </table>` : ''}
         ${isEmployer ? `
-        <table class="t" style="margin-top:2px;">
+        <table class="st" style="margin-top:3px;">
           <thead><tr><th>Employer Contributions</th><th class="r">Current</th></tr></thead>
           <tbody>
             <tr><td>FICA Match (SS 6.2%)</td><td class="r">${fmt(ss)}</td></tr>
@@ -357,49 +351,40 @@ export function generatePaycheckHTML(
       </div>
 
       <!-- COL 3: SUMMARY -->
-      <div style="width:120px;">
-        <!-- Net Pay Box -->
-        <div style="border:2px solid #000;text-align:center;padding:3px 5px;margin-bottom:3px;">
-          <div style="font-size:5.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Net Pay</div>
-          <div style="font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(net)}</div>
-          <div style="font-size:6px;">${isDD ? 'Direct Deposit' : 'Check #' + chkNum}</div>
+      <div style="width:125px;">
+        <div class="net-box">
+          <div class="lbl">Net Pay</div>
+          <div class="amt">${fmt(net)}</div>
+          <div class="sub">${isDD ? 'Direct Deposit' : 'Check #' + chk}</div>
         </div>
 
-        <!-- Pay Waterfall -->
-        <div style="border:1px solid #999;padding:3px 4px;font-size:7px;line-height:1.5;margin-bottom:3px;">
-          <div style="font-weight:700;text-transform:uppercase;font-size:5.5px;letter-spacing:0.4px;border-bottom:0.5px solid #ccc;padding-bottom:1px;margin-bottom:2px;">Pay Calculation</div>
-          <div style="display:flex;justify-content:space-between;"><span>Gross</span><span style="font-weight:700;">${fmt(gross)}</span></div>
-          ${preTax > 0 ? `<div style="display:flex;justify-content:space-between;"><span>Pre-Tax</span><span>-${fmt(preTax)}</span></div>` : ''}
-          <div style="display:flex;justify-content:space-between;"><span>Taxes</span><span>-${fmt(totalTaxes)}</span></div>
-          ${postTax > 0 ? `<div style="display:flex;justify-content:space-between;"><span>Post-Tax</span><span>-${fmt(postTax)}</span></div>` : ''}
-          <div style="display:flex;justify-content:space-between;border-top:1px solid #000;padding-top:1px;margin-top:1px;font-weight:700;"><span>Net</span><span>${fmt(net)}</span></div>
+        <div class="sum-box">
+          <div class="title">Pay Calculation</div>
+          <div class="sum-row"><span>Gross</span><span style="font-weight:700;">${fmt(gross)}</span></div>
+          ${preTax > 0 ? `<div class="sum-row"><span>Pre-Tax</span><span>-${fmt(preTax)}</span></div>` : ''}
+          <div class="sum-row"><span>Taxes</span><span>-${fmt(totalTaxes)}</span></div>
+          ${postTax > 0 ? `<div class="sum-row"><span>Post-Tax</span><span>-${fmt(postTax)}</span></div>` : ''}
+          <div class="sum-row sum-total"><span>Net</span><span>${fmt(net)}</span></div>
         </div>
 
-        <!-- YTD (only colored section) -->
-        <div style="border:1px solid #999;padding:3px 4px;font-size:7px;line-height:1.5;">
-          <div style="font-weight:700;text-transform:uppercase;font-size:5.5px;letter-spacing:0.4px;border-bottom:0.5px solid #ccc;padding-bottom:1px;margin-bottom:2px;">Year-to-Date</div>
-          <div style="display:flex;justify-content:space-between;"><span>Gross</span><span style="font-weight:700;">${fmt(ytdG)}</span></div>
-          <div style="display:flex;justify-content:space-between;"><span>Taxes</span><span style="font-weight:700;color:#dc2626;">${fmt(ytdT)}</span></div>
-          <div style="display:flex;justify-content:space-between;border-top:1px solid #000;padding-top:1px;margin-top:1px;font-weight:700;"><span>Net</span><span style="color:#16a34a;">${fmt(ytdN)}</span></div>
+        <div class="sum-box">
+          <div class="title">Year-to-Date</div>
+          <div class="sum-row"><span>Gross</span><span style="font-weight:700;">${fmt(ytdG)}</span></div>
+          <div class="sum-row"><span>Taxes</span><span style="font-weight:700;color:#dc2626;">${fmt(ytdT)}</span></div>
+          <div class="sum-row sum-total"><span>Net</span><span style="color:#16a34a;">${fmt(ytdN)}</span></div>
         </div>
       </div>
     </div>
 
     ${isEmployer ? `
-    <!-- Employer Footer -->
-    <div style="display:flex;gap:4px;margin-top:2px;font-size:6.5px;">
-      <div style="flex:1;border:0.5px solid #ccc;padding:2px 4px;">
-        <strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span> &nbsp;|&nbsp; <strong>Employer Total:</strong> ${fmt(gross + ss + med)}
-      </div>
-      ${empEmail ? `<div style="flex:0.6;border:0.5px solid #ccc;padding:2px 4px;"><strong>Employee Email:</strong> ${empEmail}</div>` : ''}
+    <div class="emp-footer">
+      <div class="emp-footer-cell"><strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span> &nbsp;|&nbsp; <strong>Employer Total:</strong> ${fmt(gross + ss + med)}</div>
+      ${empEmail ? `<div class="emp-footer-cell" style="flex:0.6;"><strong>Employee:</strong> ${empEmail}</div>` : ''}
     </div>` : ''}
   </div>`;
 
-  // ═══════════════════════════════════════
-  // FULL PAGE
-  // ═══════════════════════════════════════
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
-<div class="page">
+<div class="pg">
   ${checkHTML}
   ${buildStub('Employee Copy — Detach and Retain', false)}
   ${buildStub('Employer Copy — For Records', true)}
@@ -407,7 +392,6 @@ export function generatePaycheckHTML(
 </body></html>`;
 }
 
-// ─── Batch helpers ────────────────────────────────────────
 export function extractCheckBody(html: string): string {
   const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
   return match?.[1] || html;
