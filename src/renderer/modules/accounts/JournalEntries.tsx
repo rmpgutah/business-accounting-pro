@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Plus, Search, FileText, Trash2, Copy, RotateCcw, Upload, Download,
-  CheckSquare, Square, ChevronDown,
+  CheckSquare, Square, ChevronDown, Star, Undo2, AlertTriangle,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, formatDate, roundCents } from '../../lib/format';
-import { toCSVString, downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
+import { downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
+import { incrementDate } from '../../lib/je-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 
@@ -28,6 +29,9 @@ interface JournalEntry {
   source_type?: string;
   source_id?: string;
   has_attachment?: number;
+  color?: string;
+  is_starred?: number;
+  version?: number;
   created_at: string;
 }
 
@@ -84,6 +88,15 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importPreview, setImportPreview] = useState<ParsedRow[] | null>(null);
   const [importError, setImportError] = useState<string>('');
+  // F27: Gap detection
+  const [gaps, setGaps] = useState<string[]>([]);
+  // F29: Starred filter
+  const [starredOnly, setStarredOnly] = useState(false);
+  // F3: Batch progress
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  // F21/F22: Bulk class / reference change
+  const [bulkClassValue, setBulkClassValue] = useState('');
+  const [bulkRefValue, setBulkRefValue] = useState('');
 
   const reload = () => {
     if (!activeCompany) return;
@@ -116,6 +129,8 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     api.query('accounts', { company_id: activeCompany.id, is_active: true })
       .then((d: any) => { if (Array.isArray(d)) setAccounts(d); })
       .catch(() => {});
+    // F27: gap detect
+    api.jeGapDetect(activeCompany.id).then((r) => setGaps(r?.gaps || [])).catch(() => {});
   }, [activeCompany]);
 
   // Search by amount/account requires line lookups — pre-load a map of entry → accountIds
@@ -153,6 +168,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     if (postedFilter !== 'all') {
       result = result.filter((e) => postedFilter === 'posted' ? e.is_posted === 1 : e.is_posted === 0);
     }
+    if (starredOnly) result = result.filter((e) => e.is_starred === 1);
     if (hasAttachmentFilter !== 'all') {
       result = result.filter((e) =>
         hasAttachmentFilter === 'yes' ? (e.has_attachment ?? 0) > 0 : (e.has_attachment ?? 0) === 0
@@ -166,7 +182,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
       result = result.filter((e) => (linesByEntry[e.id] ?? []).some((l) => l.account_id === accountFilter));
     }
     return result;
-  }, [entries, searchQuery, dateFrom, dateTo, postedFilter, hasAttachmentFilter, amountMin, amountMax, accountFilter, linesByEntry]);
+  }, [entries, searchQuery, dateFrom, dateTo, postedFilter, hasAttachmentFilter, amountMin, amountMax, accountFilter, linesByEntry, starredOnly]);
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
   const toggleAll = () => {
@@ -188,14 +204,81 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     const drafts = entries.filter((e) => ids.includes(e.id) && e.is_posted === 0);
     if (drafts.length === 0) { alert('No draft entries selected.'); return; }
     if (!window.confirm(`Post ${drafts.length} draft entries?`)) return;
+    setBatchProgress({ done: 0, total: drafts.length, label: 'Posting' });
     try {
-      for (const d of drafts) await api.update('journal_entries', d.id, { is_posted: 1 });
+      for (let i = 0; i < drafts.length; i++) {
+        await api.update('journal_entries', drafts[i].id, { is_posted: 1 });
+        setBatchProgress({ done: i + 1, total: drafts.length, label: 'Posting' });
+      }
       setSelectedIds(new Set());
       reload();
       window.dispatchEvent(new CustomEvent('je:posted'));
     } catch (e: any) {
       alert('Bulk post failed: ' + (e?.message || 'unknown'));
+    } finally {
+      setTimeout(() => setBatchProgress(null), 600);
     }
+  };
+
+  // F21: Bulk class change
+  const bulkChangeClass = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const value = window.prompt('Set class for selected entries:', bulkClassValue);
+    if (value == null) return;
+    setBulkClassValue(value);
+    setBatchProgress({ done: 0, total: ids.length, label: 'Updating class' });
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        await api.update('journal_entries', ids[i], { class: value });
+        setBatchProgress({ done: i + 1, total: ids.length, label: 'Updating class' });
+      }
+      reload();
+    } finally { setTimeout(() => setBatchProgress(null), 400); }
+  };
+
+  // F22: Bulk reference change
+  const bulkChangeReference = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const value = window.prompt('Set reference for selected entries:', bulkRefValue);
+    if (value == null) return;
+    setBulkRefValue(value);
+    setBatchProgress({ done: 0, total: ids.length, label: 'Updating reference' });
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        await api.update('journal_entries', ids[i], { reference: value });
+        setBatchProgress({ done: i + 1, total: ids.length, label: 'Updating reference' });
+      }
+      reload();
+    } finally { setTimeout(() => setBatchProgress(null), 400); }
+  };
+
+  // F7: Undo last N posted
+  const undoRecent = async () => {
+    if (!activeCompany || !user) return;
+    const n = parseInt(window.prompt('Undo last how many of your posted entries?', '1') || '0', 10);
+    if (!n || n < 1) return;
+    if (!window.confirm(`Create ${n} reversing entries?`)) return;
+    const r = await api.jeUndoRecent(activeCompany.id, n, user.id);
+    if (r?.error) alert('Undo failed: ' + r.error);
+    else alert(`Created ${r.count ?? 0} reversing entries.`);
+    reload();
+  };
+
+  // F28: Toggle color tag
+  const cycleColor = async (entry: JournalEntry) => {
+    const palette = ['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+    const cur = entry.color || '';
+    const next = palette[(palette.indexOf(cur) + 1) % palette.length];
+    await api.update('journal_entries', entry.id, { color: next });
+    reload();
+  };
+
+  // F29: Toggle star
+  const toggleStar = async (entry: JournalEntry) => {
+    await api.update('journal_entries', entry.id, { is_starred: entry.is_starred ? 0 : 1 });
+    reload();
   };
 
   const bulkDelete = async () => {
@@ -332,13 +415,26 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
   // ─── Per-row actions ──────────────────────────────
   const duplicateEntry = async (entry: JournalEntry) => {
     if (!activeCompany) return;
+    // F9: optional date increment
+    const incStr = window.prompt('Clone — increment date by how many days? (blank = today, "ME" = next month-end)', '');
+    let newDate = new Date().toISOString().slice(0, 10);
+    if (incStr != null && incStr.trim() !== '') {
+      const trimmed = incStr.trim().toUpperCase();
+      if (trimmed === 'ME') {
+        const d = new Date(entry.date + 'T12:00:00');
+        newDate = new Date(d.getFullYear(), d.getMonth() + 2, 0).toISOString().slice(0, 10);
+      } else {
+        const n = parseInt(trimmed, 10);
+        if (!isNaN(n)) newDate = incrementDate(entry.date, n);
+      }
+    }
     try {
       const lines: any = await api.query('journal_entry_lines', { journal_entry_id: entry.id });
       const newNum = await api.nextJournalNumber();
       const created = await api.create('journal_entries', {
         company_id: activeCompany.id,
         entry_number: newNum,
-        date: new Date().toISOString().slice(0, 10),
+        date: newDate,
         description: entry.description,
         reference: entry.reference ?? '',
         is_posted: 0,
@@ -450,6 +546,33 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     <div className="space-y-4">
       {error && <ErrorBanner message={error} title="Failed to load journal entries" onDismiss={() => setError('')} />}
 
+      {/* F27: Gap detection banner */}
+      {gaps.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-xs"
+             style={{ borderRadius: '6px' }}>
+          <AlertTriangle size={14} className="text-yellow-600" />
+          <span className="text-text-primary">
+            <strong>{gaps.length}</strong> gap{gaps.length !== 1 ? 's' : ''} in entry-number sequence:
+            <span className="ml-2 font-mono text-text-secondary">{gaps.slice(0, 6).join(', ')}{gaps.length > 6 ? '…' : ''}</span>
+          </span>
+          <button onClick={() => setGaps([])} className="ml-auto text-text-muted hover:text-text-primary">×</button>
+        </div>
+      )}
+
+      {/* F3: Batch progress modal */}
+      {batchProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-bg-elevated border border-border-primary px-6 py-4 w-80 shadow-xl" style={{ borderRadius: '6px' }}>
+            <div className="text-sm font-semibold mb-2">{batchProgress.label}</div>
+            <div className="text-xs text-text-secondary mb-2">{batchProgress.done} of {batchProgress.total}</div>
+            <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '4px' }}>
+              <div className="h-full bg-accent-blue transition-all"
+                   style={{ width: `${Math.min(100, (batchProgress.done / Math.max(1, batchProgress.total)) * 100)}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -474,9 +597,19 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
             <ChevronDown size={12} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
             Advanced
           </button>
+          <button onClick={() => setStarredOnly((v) => !v)}
+            className={`flex items-center gap-1 text-xs ${starredOnly ? 'text-yellow-500' : 'text-text-secondary hover:text-text-primary'}`}
+            title="Show starred only">
+            <Star size={12} fill={starredOnly ? 'currentColor' : 'none'} /> Starred
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
+          <button onClick={undoRecent} title="Undo last N posted entries"
+            className="block-btn flex items-center gap-1 px-2 py-1.5 text-xs"
+            style={{ borderRadius: '6px' }}>
+            <Undo2 size={12} /> Undo recent
+          </button>
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportFile} />
           <button onClick={() => fileInputRef.current?.click()}
             className="block-btn flex items-center gap-1 px-2 py-1.5 text-xs"
@@ -549,6 +682,8 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
           <span className="text-text-primary font-semibold">{selectionCount} selected</span>
           <div className="flex items-center gap-2">
             <button onClick={bulkPost} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Post all</button>
+            <button onClick={bulkChangeClass} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Set class</button>
+            <button onClick={bulkChangeReference} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Set reference</button>
             <button onClick={exportSelected} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Export CSV</button>
             <button onClick={bulkDelete} className="block-btn px-3 py-1 text-xs text-accent-expense" style={{ borderRadius: '6px' }}>Delete</button>
             <button onClick={() => setSelectedIds(new Set())} className="text-text-muted hover:text-text-primary">Clear</button>
@@ -622,11 +757,19 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
             {filtered.map((entry) => (
               <tr key={entry.id}
                   className="border-b border-border-primary hover:bg-bg-hover transition-colors cursor-pointer"
+                  style={entry.color ? { borderLeft: `4px solid ${entry.color}` } : undefined}
                   onClick={() => onEditEntry(entry)}>
                 <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => toggleOne(entry.id)} className="text-text-muted hover:text-text-primary">
-                    {selectedIds.has(entry.id) ? <CheckSquare size={14} /> : <Square size={14} />}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => toggleOne(entry.id)} className="text-text-muted hover:text-text-primary">
+                      {selectedIds.has(entry.id) ? <CheckSquare size={14} /> : <Square size={14} />}
+                    </button>
+                    <button onClick={() => toggleStar(entry)} title="Star" className={entry.is_starred ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'}>
+                      <Star size={12} fill={entry.is_starred ? 'currentColor' : 'none'} />
+                    </button>
+                    <button onClick={() => cycleColor(entry)} title="Cycle color tag" className="w-3 h-3 border border-border-primary"
+                            style={{ background: entry.color || 'transparent' }} />
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-xs text-text-secondary font-mono">{formatDate(entry.date)}</td>
                 <td className="px-4 py-2 text-xs text-text-primary font-mono font-medium">

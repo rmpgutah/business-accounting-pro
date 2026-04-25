@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Lock, Unlock, CheckCircle2, SkipForward, Calendar, FileText, AlertTriangle, Mail } from 'lucide-react';
+import { Lock, Unlock, CheckCircle2, SkipForward, Calendar, FileText, AlertTriangle, Mail,
+  FileBarChart, RotateCcw, RefreshCw, Layers, GitBranch, CalendarDays } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import api from '../../lib/api';
+
+const ADJUSTMENT_CATEGORIES = ['deferral', 'accrual', 'depreciation', 'inventory', 'revaluation', 'correction', 'other'] as const;
 
 // ─── Period Close Workflow ──────────────────────────────────
 // Implements features 1–10:
@@ -42,19 +45,30 @@ const PeriodCloseWorkflow: React.FC = () => {
   // Email subscriber list (settings-backed)
   const [notifyList, setNotifyList] = useState('');
 
+  // Round 2 state
+  const [lockLevel, setLockLevel] = useState<'soft' | 'hard'>('hard');
+  const [adjBreakdown, setAdjBreakdown] = useState<any[]>([]);
+  const [cycleData, setCycleData] = useState<{ closes: any[]; locks: any[]; checklists: any[] }>({ closes: [], locks: [], checklists: [] });
+  const [shortStart, setShortStart] = useState('');
+  const [shortEnd, setShortEnd] = useState('');
+
   const reload = useCallback(async () => {
     if (!companyId) return;
-    const [c, l, lg, ns] = await Promise.all([
+    const [c, l, lg, ns, adj, cycle] = await Promise.all([
       window.electronAPI.invoke('close:checklist-list', { companyId, periodLabel }),
       window.electronAPI.invoke('close:list-locks', { companyId }),
       window.electronAPI.invoke('close:log-list', { companyId }),
       api.getSetting('period_close_notify_emails').catch(() => null),
+      window.electronAPI.invoke('close:adjustment-breakdown', { companyId, periodStart, periodEnd }),
+      window.electronAPI.invoke('close:cycle-dashboard', { companyId }),
     ]);
     setChecklist(c || []);
     setLocks(l || []);
     setCloseLog(lg || []);
     setNotifyList((ns as any) || '');
-  }, [companyId, periodLabel]);
+    setAdjBreakdown(adj || []);
+    setCycleData(cycle || { closes: [], locks: [], checklists: [] });
+  }, [companyId, periodLabel, periodStart, periodEnd]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -75,15 +89,89 @@ const PeriodCloseWorkflow: React.FC = () => {
 
   const lockPeriod = async () => {
     if (!companyId) return;
-    const reason = prompt('Reason for locking this period?') || '';
+    const reason = prompt(`Reason for ${lockLevel} lock?`) || '';
     if (!reason) return;
     setBusy(true);
-    const res = await window.electronAPI.invoke('close:lock-period', {
-      companyId, periodStart, periodEnd, lockedBy: 'user', reason,
+    const res = await window.electronAPI.invoke('close:lock-period-v2', {
+      companyId, periodStart, periodEnd, lockedBy: 'user', reason, lockLevel,
     });
     if (res?.error) setError(res.error);
     await reload();
     setBusy(false);
+  };
+
+  // 2. Pre-close report bundle
+  const generatePreCloseBundle = async () => {
+    setBusy(true);
+    const res: any = await window.electronAPI.invoke('close:pre-close-bundle', { companyId, periodStart, periodEnd });
+    if (res?.error) { setError(res.error); setBusy(false); return; }
+    const html = `<!DOCTYPE html><html><head><title>Pre-Close Bundle ${periodEnd}</title>
+      <style>body{font-family:sans-serif;padding:24px;}h1{font-size:18px;}h2{font-size:13px;border-bottom:1px solid #ccc;margin-top:18px;}
+      table{border-collapse:collapse;width:100%;font-size:11px;margin-top:6px;}td,th{border:1px solid #ccc;padding:4px;}</style>
+      </head><body>
+      <h1>Pre-Close Bundle: ${periodStart} → ${periodEnd}</h1>
+      <h2>Trial Balance</h2>
+      <table><tr><th>Code</th><th>Name</th><th>Type</th><th>Debit</th><th>Credit</th></tr>
+      ${(res.tb || []).map((r: any) => `<tr><td>${r.code}</td><td>${r.name}</td><td>${r.type}</td><td align="right">${formatCurrency(r.debit_sum || 0)}</td><td align="right">${formatCurrency(r.credit_sum || 0)}</td></tr>`).join('')}
+      </table>
+      <h2>Reconciliations (${(res.recons || []).length})</h2>
+      <table><tr><th>Date</th><th>Account</th><th>Variance</th></tr>
+      ${(res.recons || []).map((r: any) => `<tr><td>${r.as_of_date}</td><td>${r.code} ${r.name}</td><td>${formatCurrency(r.variance || 0)}</td></tr>`).join('')}
+      </table>
+      <h2>Open Invoices (${(res.openInvoices || []).length})</h2>
+      <table><tr><th>Invoice #</th><th>Date</th><th>Open Amount</th></tr>
+      ${(res.openInvoices || []).map((r: any) => `<tr><td>${r.invoice_number}</td><td>${r.date}</td><td>${formatCurrency(r.open_amount || 0)}</td></tr>`).join('')}
+      </table>
+      <h2>Open Bills (${(res.openBills || []).length})</h2>
+      <table><tr><th>Bill #</th><th>Date</th><th>Open Amount</th></tr>
+      ${(res.openBills || []).map((r: any) => `<tr><td>${r.bill_number}</td><td>${r.date}</td><td>${formatCurrency(r.open_amount || 0)}</td></tr>`).join('')}
+      </table>
+      </body></html>`;
+    await api.saveToPDF(html, `pre-close-bundle-${periodEnd}`, { openAfterSave: true });
+    setBusy(false);
+  };
+
+  // 4. Email digest
+  const generateDigest = async (logId: string) => {
+    const res: any = await window.electronAPI.invoke('close:email-digest', { companyId, logId });
+    if (res?.error) { setError(res.error); return; }
+    const blob = new Blob([`<html><body>${res.html}</body></html>`], { type: 'text/html' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  // 5. Roll-forward
+  const rollForward = async (logId: string) => {
+    const res: any = await window.electronAPI.invoke('close:roll-forward', { companyId, logId });
+    if (res?.error) setError(res.error);
+    else alert(res.alreadyDone ? 'Already rolled forward.' : `Snapshotted ${res.snapshotCount} balances.`);
+    await reload();
+  };
+
+  // 6. Reopen
+  const reopenPeriod = async (logId: string) => {
+    const preview: any = await window.electronAPI.invoke('close:reopen-preview', { logId });
+    if (preview?.error) { setError(preview.error); return; }
+    const msg = `Reopen period ${preview.log.period_start} → ${preview.log.period_end}?\n\nThis will:\n` +
+      `- Post a reversing JE for ${preview.closingJe?.entry_number || 'closing entry'} (${formatCurrency(preview.closingJe?.total || 0)})\n` +
+      `- Unlock matching period locks\n\nProvide a reason in the next prompt.`;
+    if (!confirm(msg)) return;
+    const reason = prompt('Reason for reopening?') || '';
+    if (!reason) return;
+    const res: any = await window.electronAPI.invoke('close:reopen-commit', { logId, reopenedBy: 'user', reason });
+    if (res?.error) setError(res.error);
+    await reload();
+  };
+
+  // 8. Short-period close
+  const commitShortPeriod = async () => {
+    if (!shortStart || !shortEnd) { setError('Pick stub period dates.'); return; }
+    const reason = prompt('Reason for short-period close (e.g. "Fiscal year change")?') || '';
+    if (!reason) return;
+    const res: any = await window.electronAPI.invoke('close:short-period-commit',
+      { companyId, periodStart: shortStart, periodEnd: shortEnd, closedBy: 'user', reason });
+    if (res?.error) setError(res.error);
+    else alert('Short period locked.');
+    await reload();
   };
 
   const unlockPeriod = async (lockId: string, override: boolean) => {
@@ -190,8 +278,12 @@ const PeriodCloseWorkflow: React.FC = () => {
       <div className="grid grid-cols-2 gap-4">
         <div className="p-3 border border-border-primary">
           <div className="text-xs font-bold text-text-primary mb-2 flex items-center gap-1.5"><Lock size={12} /> Period lock</div>
+          <div className="flex gap-1 mb-2 text-[11px]">
+            <label className="flex items-center gap-1"><input type="radio" checked={lockLevel === 'soft'} onChange={() => setLockLevel('soft')} />Soft (warn)</label>
+            <label className="flex items-center gap-1"><input type="radio" checked={lockLevel === 'hard'} onChange={() => setLockLevel('hard')} />Hard (block)</label>
+          </div>
           <button disabled={busy || !companyId} onClick={lockPeriod} className="w-full px-2 py-1.5 text-xs font-semibold bg-accent-blue text-white">
-            Lock {periodStart} → {periodEnd}
+            {lockLevel === 'soft' ? 'Soft' : 'Hard'} lock {periodStart} → {periodEnd}
           </button>
           <div className="mt-3 max-h-48 overflow-y-auto text-xs">
             {locks.length === 0 && <div className="text-text-muted">No locks yet.</div>}
@@ -199,6 +291,7 @@ const PeriodCloseWorkflow: React.FC = () => {
               <div key={l.id} className="flex items-center justify-between py-1 border-b border-border-primary">
                 <span className={l.unlocked_at ? 'line-through text-text-muted' : 'text-text-primary'}>
                   {l.period_start || '—'} → {l.period_end || l.locked_through_date}
+                  <span className={`ml-1 text-[9px] px-1 ${l.lock_level === 'soft' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>{(l.lock_level || 'hard').toUpperCase()}</span>
                   {l.reason && <span className="text-text-muted"> · {l.reason}</span>}
                 </span>
                 {!l.unlocked_at && (
@@ -250,9 +343,19 @@ const PeriodCloseWorkflow: React.FC = () => {
           <div className="max-h-48 overflow-y-auto text-xs">
             {closeLog.length === 0 && <div className="text-text-muted">No closes recorded.</div>}
             {closeLog.map((e: any) => (
-              <div key={e.id} className="flex justify-between items-center py-1 border-b border-border-primary">
-                <span>{e.period_start} → {e.period_end} · {formatCurrency(e.net_income || 0)} · by {e.closed_by}</span>
-                <button onClick={() => printCloseReport(e)} className="px-1.5 py-0.5 text-[10px] border border-border-primary">PDF</button>
+              <div key={e.id} className="flex justify-between items-center py-1 border-b border-border-primary gap-1 flex-wrap">
+                <span>
+                  {e.period_start} → {e.period_end} · {formatCurrency(e.net_income || 0)} · by {e.closed_by}
+                  {e.is_short_period ? <span className="ml-1 text-[9px] px-1 bg-blue-500/20 text-blue-400">SHORT</span> : null}
+                  {e.reopened_at ? <span className="ml-1 text-[9px] px-1 bg-yellow-500/20 text-yellow-400">REOPENED</span> : null}
+                  {e.roll_forward_done ? <span className="ml-1 text-[9px] px-1 bg-green-500/20 text-green-400">RF</span> : null}
+                </span>
+                <div className="flex gap-1">
+                  <button onClick={() => printCloseReport(e)} className="px-1.5 py-0.5 text-[10px] border border-border-primary">PDF</button>
+                  <button onClick={() => generateDigest(e.id)} className="px-1.5 py-0.5 text-[10px] border border-border-primary">Digest</button>
+                  <button onClick={() => rollForward(e.id)} className="px-1.5 py-0.5 text-[10px] border border-border-primary">Roll fwd</button>
+                  {!e.reopened_at && <button onClick={() => reopenPeriod(e.id)} className="px-1.5 py-0.5 text-[10px] border border-yellow-500/50 text-yellow-400">Reopen</button>}
+                </div>
               </div>
             ))}
           </div>
@@ -267,8 +370,98 @@ const PeriodCloseWorkflow: React.FC = () => {
         </div>
       </div>
 
+      {/* 2. Pre-close report bundle button */}
+      <div className="p-3 border border-border-primary flex items-center gap-3">
+        <FileBarChart size={14} />
+        <div className="flex-1">
+          <div className="text-xs font-bold">Pre-close report bundle</div>
+          <div className="text-[11px] text-text-muted">Generates TB + reconciliations + open invoices/bills as a single PDF.</div>
+        </div>
+        <button disabled={busy} onClick={generatePreCloseBundle} className="px-3 py-1.5 text-xs font-semibold bg-accent-blue text-white">Generate</button>
+      </div>
+
+      {/* 3. Adjustment categorization breakdown */}
+      <div className="p-3 border border-border-primary">
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><Layers size={12} /> Adjustment categorization (this period)</div>
+        {adjBreakdown.length === 0 ? <div className="text-xs text-text-muted">No posted JEs in period.</div> : (
+          <table className="w-full text-xs">
+            <tbody>
+              {adjBreakdown.map((c: any) => (
+                <tr key={c.category} className="border-b border-border-primary">
+                  <td className="py-0.5 capitalize">{c.category}</td>
+                  <td className="text-right">{c.count} JE</td>
+                  <td className="text-right">{formatCurrency(c.total_debit || 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="text-[10px] text-text-muted mt-1">Categorize adjusting JEs via journal entry form (deferral/accrual/depreciation/inventory/revaluation/correction/other).</div>
+      </div>
+
+      {/* 8. Mid-period (short-period) close */}
+      <div className="p-3 border border-border-primary">
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><CalendarDays size={12} /> Mid-period (short-period) close</div>
+        <div className="flex items-end gap-2">
+          <div><label className="block text-[10px] text-text-muted">Stub start</label><input type="date" value={shortStart} onChange={(e) => setShortStart(e.target.value)} className="px-2 py-1 text-xs bg-bg-primary border border-border-primary" /></div>
+          <div><label className="block text-[10px] text-text-muted">Stub end</label><input type="date" value={shortEnd} onChange={(e) => setShortEnd(e.target.value)} className="px-2 py-1 text-xs bg-bg-primary border border-border-primary" /></div>
+          <button disabled={busy} onClick={commitShortPeriod} className="px-3 py-1.5 text-xs font-semibold bg-accent-blue text-white">Close stub period</button>
+        </div>
+        <div className="text-[10px] text-text-muted mt-1">For non-standard periods (e.g., 14-day stub when changing fiscal year). Locks period without revenue/expense roll.</div>
+      </div>
+
+      {/* 9. Close cycle dashboard */}
+      <div className="p-3 border border-border-primary">
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><Calendar size={12} /> Close cycle dashboard</div>
+        <div className="grid grid-cols-12 gap-1">
+          {(() => {
+            const tiles: React.ReactNode[] = [];
+            const now = new Date();
+            for (let i = 11; i >= 0; i--) {
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              const ym = d.toISOString().slice(0, 7);
+              const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+              const close = cycleData.closes.find((c: any) => (c.period_end || '').slice(0, 7) === ym);
+              const cl = cycleData.checklists.find((c: any) => (c.period_label || '').includes(ym));
+              const inProgress = cl && cl.done > 0 && cl.done < cl.total;
+              const status = close ? 'closed' : inProgress ? 'progress' : 'open';
+              const bg = status === 'closed' ? 'bg-green-500/30 border-green-500/50' : status === 'progress' ? 'bg-yellow-500/30 border-yellow-500/50' : 'bg-bg-secondary border-border-primary';
+              tiles.push(<div key={ym} className={`p-1 border ${bg} text-[10px]`} title={`${ym} · ${status}${close ? ' · ' + (close.closed_at || '').slice(0,10) : ''}`}>{ym.slice(5)}<br /><span className="text-[9px] text-text-muted">{status === 'closed' ? '✓' : status === 'progress' ? '…' : '·'}</span></div>);
+              void last;
+            }
+            return tiles;
+          })()}
+        </div>
+      </div>
+
+      {/* 10. Close-status heat map (24 months) */}
+      <div className="p-3 border border-border-primary">
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><GitBranch size={12} /> Close timeliness — last 24 months</div>
+        <div className="grid grid-cols-12 gap-0.5">
+          {(() => {
+            const cells: React.ReactNode[] = [];
+            const now = new Date();
+            for (let i = 23; i >= 0; i--) {
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              const ym = d.toISOString().slice(0, 7);
+              const close = cycleData.closes.find((c: any) => (c.period_end || '').slice(0, 7) === ym);
+              let color = 'bg-bg-secondary';
+              if (close && close.closed_at) {
+                const periodEnd = new Date(close.period_end);
+                const closedAt = new Date(close.closed_at);
+                const diff = (closedAt.getTime() - periodEnd.getTime()) / 86400000;
+                color = diff <= 5 ? 'bg-green-500' : diff <= 15 ? 'bg-yellow-500' : diff <= 30 ? 'bg-orange-500' : 'bg-red-500';
+              }
+              cells.push(<div key={ym} title={`${ym}${close ? ' · closed ' + (close.closed_at || '').slice(0,10) : ' · not closed'}`} className={`h-5 ${color}`} />);
+            }
+            return cells;
+          })()}
+        </div>
+        <div className="text-[10px] text-text-muted mt-1">Green ≤5d · Yellow ≤15d · Orange ≤30d · Red &gt;30d · Grey not closed.</div>
+      </div>
+
       <div className="text-[11px] text-text-muted flex items-center gap-1">
-        <AlertTriangle size={11} /> Date inputs throughout the app show a lock icon when the date falls in a closed period (use <code>useDateLock</code> hook).
+        <AlertTriangle size={11} /> Date inputs throughout the app show a lock icon when the date falls in a closed period (use <code>useDateLock</code> hook). Soft locks warn but allow posting; hard locks block.
       </div>
     </div>
   );

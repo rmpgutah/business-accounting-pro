@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Save, Loader2, Sparkles, Lock, Pin, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { Barcode39, AccountCommentsPanel } from './AccountAdvancedDialogs';
 
 type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 
@@ -22,7 +23,21 @@ interface Account {
   requires_document?: number | boolean;
   custom_fields?: string;
   rename_log?: string;
+  monthly_cap?: number;
+  currency?: string;
+  bank_account_id?: string;
+  subledger_type?: string;
+  compliance_tags?: string;
 }
+
+const COMPLIANCE_OPTIONS = ['PCI', 'HIPAA', 'GDPR', 'SOX'];
+const SUBLEDGER_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'ar', label: 'A/R control' },
+  { value: 'ap', label: 'A/P control' },
+  { value: 'inventory', label: 'Inventory control' },
+];
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'CNY', 'MXN', 'INR'];
 
 interface AccountFormProps {
   account: Account | null;
@@ -83,6 +98,20 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
     } catch { return []; }
   });
   const [parentOptions, setParentOptions] = useState<ParentOption[]>([]);
+  const [currency, setCurrency] = useState<string>(account?.currency || 'USD');
+  const [bankAccountId, setBankAccountId] = useState<string>(account?.bank_account_id || '');
+  const [subledgerType, setSubledgerType] = useState<string>(account?.subledger_type || 'none');
+  const [monthlyCap, setMonthlyCap] = useState<string>(String(account?.monthly_cap || 0));
+  const [complianceTags, setComplianceTags] = useState<string[]>(() => {
+    try { return account?.compliance_tags ? JSON.parse(account.compliance_tags) : []; } catch { return []; }
+  });
+  const [bankAccounts, setBankAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    if (!activeCompany) return;
+    api.query('bank_accounts', { company_id: activeCompany.id })
+      .then((r: any) => { if (Array.isArray(r)) setBankAccounts(r.map((b: any) => ({ id: b.id, name: b.name }))); })
+      .catch(() => {});
+  }, [activeCompany]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [codeWarning, setCodeWarning] = useState('');
@@ -181,6 +210,11 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
         requires_document: requiresDoc ? 1 : 0,
         custom_fields: JSON.stringify(cfObj),
         rename_log: JSON.stringify(renameLog),
+        currency: currency || 'USD',
+        bank_account_id: bankAccountId || '',
+        subledger_type: subledgerType || 'none',
+        monthly_cap: parseFloat(monthlyCap) || 0,
+        compliance_tags: JSON.stringify(complianceTags),
       };
 
       if (isEdit && account) {
@@ -331,6 +365,61 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
               </div>
             ))}
           </div>
+
+          {/* Round 2: currency / bank / subledger / cap / compliance */}
+          <div className="border-t border-border-primary pt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Currency</label>
+              <select value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={isLocked}
+                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Sub-ledger Type</label>
+              <select value={subledgerType} onChange={(e) => setSubledgerType(e.target.value)} disabled={isLocked}
+                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+                {SUBLEDGER_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Bank Account Linkage</label>
+              <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} disabled={isLocked}
+                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+                <option value="">— None —</option>
+                {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Monthly Cap (budget)</label>
+              <input type="number" step="0.01" value={monthlyCap} onChange={(e) => setMonthlyCap(e.target.value)} disabled={isLocked}
+                className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Compliance Tags</label>
+            <div className="flex gap-1 flex-wrap">
+              {COMPLIANCE_OPTIONS.map(t => {
+                const on = complianceTags.includes(t);
+                return (
+                  <button key={t} type="button" disabled={isLocked} onClick={() => {
+                    setComplianceTags(on ? complianceTags.filter(x => x !== t) : [...complianceTags, t]);
+                  }} className={`px-2 py-1 text-[10px] font-bold border ${on ? 'border-accent-blue text-accent-blue' : 'border-border-primary text-text-secondary'}`} style={{ borderRadius: '6px' }}>{t}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          {isEdit && account && (
+            <div className="border-t border-border-primary pt-3">
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Code 39 Barcode (printable)</label>
+              <Barcode39 value={account.code} />
+              <p className="text-[9px] text-text-muted mt-1 font-mono">*{account.code.toUpperCase()}*</p>
+            </div>
+          )}
+
+          {isEdit && account && <AccountCommentsPanel accountId={account.id} />}
 
           {renameHistory.length > 0 && (
             <div className="border-t border-border-primary pt-3">

@@ -14,12 +14,16 @@ import {
 } from 'recharts';
 import {
   AlertTriangle, TrendingUp, TrendingDown, Activity, FileText,
-  DollarSign, Calendar, Search, Save,
+  DollarSign, Calendar, Search, Save, BarChart3, Wallet, Users, Sparkles,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import AnomalyDetector from './AnomalyDetector';
+import WorkingCapitalDashboard from './WorkingCapitalDashboard';
+import JEAuthorLeaderboard from './JEAuthorLeaderboard';
+import PowerFeatures from './PowerFeatures';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
 
@@ -88,6 +92,12 @@ const GLAnalytics: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [entries, setEntries] = useState<JE[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [bills, setBills] = useState<any[]>([]);
+
+  // Sub-tab navigation for round-2 features
+  type SubTab = 'core' | 'anomalies' | 'capital' | 'authors' | 'power';
+  const [subTab, setSubTab] = useState<SubTab>('core');
 
   // Filters
   const [periodStart, setPeriodStart] = useState(ymStart(-1));
@@ -139,6 +149,21 @@ const GLAnalytics: React.FC = () => {
         setAccounts(Array.isArray(accs) ? accs : []);
         setEntries(Array.isArray(jes) ? jes : []);
         setLines(Array.isArray(lns) ? lns : []);
+        // Vendors / bills are optional — gracefully handle missing tables.
+        try {
+          const vrows = await api.rawQuery(
+            `SELECT id, name, COALESCE(created_at,'') as created_at FROM vendors WHERE company_id = ?`,
+            [cid]
+          );
+          if (!cancelled) setVendors(Array.isArray(vrows) ? vrows : []);
+        } catch { /* table may not exist */ }
+        try {
+          const brows = await api.rawQuery(
+            `SELECT id, COALESCE(vendor_id,'') as vendor_id, date, COALESCE(amount,total,0) as amount FROM bills WHERE company_id = ?`,
+            [cid]
+          );
+          if (!cancelled) setBills(Array.isArray(brows) ? brows : []);
+        } catch { /* table may not exist */ }
       } catch (err: any) {
         if (!cancelled) setError(err?.message || 'Failed to load analytics');
       } finally {
@@ -445,9 +470,46 @@ const GLAnalytics: React.FC = () => {
     return a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q);
   });
 
+  const subTabs: { id: SubTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'core', label: 'Core', icon: <BarChart3 size={12} /> },
+    { id: 'anomalies', label: 'Anomalies & Forensics', icon: <AlertTriangle size={12} /> },
+    { id: 'capital', label: 'Working Capital', icon: <Wallet size={12} /> },
+    { id: 'authors', label: 'Author Leaderboard', icon: <Users size={12} /> },
+    { id: 'power', label: 'Power Features', icon: <Sparkles size={12} /> },
+  ];
+
   return (
     <div className="space-y-4">
       {error && <ErrorBanner message={error} title="Analytics error" onDismiss={() => setError('')} />}
+
+      {/* Sub-tab nav */}
+      <div className="flex flex-wrap gap-1 border-b border-border-primary">
+        {subTabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold uppercase border-b-2 -mb-px ${
+              subTab === t.id ? 'border-b-accent-blue text-text-primary' : 'border-b-transparent text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'anomalies' && (
+        <AnomalyDetector accounts={accounts} entries={entries as any} lines={lines as any} vendors={vendors} bills={bills} />
+      )}
+      {subTab === 'capital' && (
+        <WorkingCapitalDashboard accounts={accounts} lines={lines as any} />
+      )}
+      {subTab === 'authors' && (
+        <JEAuthorLeaderboard entries={entries as any} />
+      )}
+      {subTab === 'power' && (
+        <PowerFeatures accounts={accounts} />
+      )}
+      {subTab !== 'core' ? null : <>
 
       {/* Period filter */}
       <Card title="Period">
@@ -838,6 +900,7 @@ const GLAnalytics: React.FC = () => {
           })}
         </div>
       </Card>
+      </>}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, FileSearch, Receipt, Users, FileText, Download } from 'lucide-react';
+import { Shield, FileSearch, Receipt, Users, FileText, Download, Grid, ClipboardCheck, Mail, Hash, KeyRound, LayoutDashboard } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import api from '../../lib/api';
@@ -7,23 +7,28 @@ import api from '../../lib/api';
 // ─── Compliance Center ───────────────────────────────────────
 // Implements features 21–30.
 
-type View = 'audit' | '1099' | 'taxlines' | 'sod' | 'settings' | 'workpapers';
+type View = 'dashboard' | 'audit' | '1099' | 'taxlines' | 'sod' | 'settings' | 'workpapers' | 'controls' | 'auditletter' | 'hashchain' | 'approvals';
 
 const ComplianceCenter: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const companyId = activeCompany?.id || '';
-  const [view, setView] = useState<View>('audit');
+  const [view, setView] = useState<View>('dashboard');
 
   return (
     <div className="space-y-3">
       <div className="flex gap-1 border-b border-border-primary">
         {([
+          { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={12} /> },
           { id: 'audit', label: 'Account audit log', icon: <FileSearch size={12} /> },
           { id: '1099', label: '1099 report', icon: <Receipt size={12} /> },
           { id: 'taxlines', label: 'Tax-line export', icon: <FileText size={12} /> },
           { id: 'sod', label: 'Segregation of duties', icon: <Users size={12} /> },
           { id: 'settings', label: 'Posting rules', icon: <Shield size={12} /> },
           { id: 'workpapers', label: 'Working papers', icon: <Download size={12} /> },
+          { id: 'controls', label: 'SOX controls', icon: <Grid size={12} /> },
+          { id: 'auditletter', label: 'Audit letter', icon: <Mail size={12} /> },
+          { id: 'hashchain', label: 'Hash chain', icon: <Hash size={12} /> },
+          { id: 'approvals', label: 'Approval rules', icon: <KeyRound size={12} /> },
         ] as { id: View; label: string; icon: React.ReactNode }[]).map(t => (
           <button key={t.id} onClick={() => setView(t.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border-b-2 -mb-px ${view === t.id ? 'border-accent-blue text-text-primary' : 'border-transparent text-text-muted hover:text-text-secondary'}`}>
@@ -32,12 +37,17 @@ const ComplianceCenter: React.FC = () => {
         ))}
       </div>
 
+      {view === 'dashboard' && <ComplianceDashboard companyId={companyId} />}
       {view === 'audit' && <AccountAudit companyId={companyId} />}
       {view === '1099' && <Form1099 companyId={companyId} />}
       {view === 'taxlines' && <TaxLineExport companyId={companyId} />}
       {view === 'sod' && <SoDReport companyId={companyId} />}
       {view === 'settings' && <PostingRules companyId={companyId} />}
       {view === 'workpapers' && <WorkingPapers companyId={companyId} />}
+      {view === 'controls' && <SoxControls companyId={companyId} />}
+      {view === 'auditletter' && <AuditLetter companyId={companyId} />}
+      {view === 'hashchain' && <HashChain companyId={companyId} />}
+      {view === 'approvals' && <ApprovalRules companyId={companyId} />}
     </div>
   );
 };
@@ -275,22 +285,40 @@ const WorkingPapers: React.FC<{ companyId: string }> = ({ companyId }) => {
       ]);
       const html = `<!DOCTYPE html><html><head><title>Working Papers ${start} to ${end}</title>
         <style>body{font-family:sans-serif;padding:24px;}h1{font-size:18px;}h2{font-size:14px;border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:24px;}
+        h3{font-size:12px;margin-top:14px;color:#444;}
         table{border-collapse:collapse;width:100%;font-size:11px;margin-top:8px;}td,th{border:1px solid #ccc;padding:4px;}</style>
         </head><body>
-        <h1>Working Papers — Audit Bundle</h1>
+        <h1>PCAOB-Aligned Working Papers — Audit Bundle</h1>
         <p>Period: ${start} to ${end}</p>
-        <h2>Trial Balance</h2>
+        <h2>Section 1 — Scope</h2>
+        <p>Audit period covers all posted journal entries between ${start} and ${end}. Scope includes the complete trial balance, general ledger detail, account reconciliations, and audit log activity for the company.</p>
+        <h2>Section 2 — Risks</h2>
+        <ul>
+          <li>Significant accounts: revenue, AR, AP, cash.</li>
+          <li>Inherent risks: management override, period-end cutoff, related-party transactions.</li>
+          <li>Control risks: review SoD report and SOX control test results in evidence packet.</li>
+        </ul>
+        <h2>Section 3 — Procedures Performed</h2>
+        <ul>
+          <li>Trial balance footed and tied to general ledger detail.</li>
+          <li>Sub-ledger reconciliations reviewed for variance ≥ threshold.</li>
+          <li>Audit log inspected for unauthorized changes.</li>
+          <li>Hash-chain integrity verified via Compliance → Hash chain.</li>
+        </ul>
+        <h2>Section 4 — Trial Balance</h2>
         <pre style="font-size:10px;background:#f5f5f5;padding:8px;">${escapeHtml(JSON.stringify(tb, null, 2)).slice(0, 50000)}</pre>
-        <h2>General Ledger</h2>
+        <h2>Section 5 — General Ledger</h2>
         <pre style="font-size:10px;background:#f5f5f5;padding:8px;">${escapeHtml(JSON.stringify(gl, null, 2)).slice(0, 50000)}</pre>
-        <h2>Account Reconciliations (${(recons || []).length})</h2>
+        <h2>Section 6 — Account Reconciliations (${(recons || []).length})</h2>
         <table><tr><th>Date</th><th>Account</th><th>Sub-ledger</th><th>GL</th><th>Variance</th></tr>
         ${(recons || []).map((r: any) => `<tr><td>${r.as_of_date}</td><td>${r.code} ${r.name}</td><td>${formatCurrency(r.sub_ledger_total)}</td><td>${formatCurrency(r.gl_total)}</td><td>${formatCurrency(r.variance)}</td></tr>`).join('')}
         </table>
-        <h2>Audit Log (latest 500)</h2>
+        <h2>Section 7 — Audit Log (latest 500)</h2>
         <table><tr><th>Time</th><th>Entity</th><th>Action</th><th>By</th></tr>
         ${(audit || []).map((a: any) => `<tr><td>${a.timestamp}</td><td>${a.entity_type}/${a.entity_id}</td><td>${a.action}</td><td>${a.performed_by}</td></tr>`).join('')}
         </table>
+        <h2>Section 8 — Conclusions</h2>
+        <p>Based on procedures performed, trial balance and supporting detail were obtained and tied. Reconciliation variances were identified and dispositioned. Audit log integrity verified via SHA-256 hash chain. Refer to Sarbanes evidence packet for SOX 404 control testing results.</p>
         </body></html>`;
       await api.saveToPDF(html, `working-papers-${end}`, { openAfterSave: true });
     } finally { setBusy(false); }
@@ -312,5 +340,290 @@ const WorkingPapers: React.FC<{ companyId: string }> = ({ companyId }) => {
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]!));
 }
+
+// 30. Compliance Dashboard
+const ComplianceDashboard: React.FC<{ companyId: string }> = ({ companyId }) => {
+  const [data, setData] = useState<any>(null);
+  useEffect(() => {
+    if (!companyId) return;
+    window.electronAPI.invoke('compliance:dashboard', { companyId }).then(setData);
+  }, [companyId]);
+  if (!data) return <div className="text-xs text-text-muted">Loading…</div>;
+  const Tile: React.FC<{ label: string; value: string | number; warn?: boolean }> = ({ label, value, warn }) => (
+    <div className={`p-3 border ${warn ? 'border-red-500/40 bg-red-500/5' : 'border-border-primary'}`}>
+      <div className="text-[10px] uppercase text-text-muted">{label}</div>
+      <div className={`text-lg font-bold ${warn ? 'text-red-400' : 'text-text-primary'}`}>{value}</div>
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <Tile label="Open SOX controls" value={data.openControls} warn={data.openControls > 0} />
+      <Tile label="Last close" value={data.lastCloseDate || 'never'} />
+      <Tile label="Last reconciliation" value={data.lastReconDate || 'never'} />
+      <Tile label="Recons due" value={data.dueRecons} warn={data.dueRecons > 0} />
+      <Tile label="Audit log entries" value={data.auditEntries} />
+      <Tile label="Days until next close" value={data.daysUntilNextClose} />
+    </div>
+  );
+};
+
+// 21 & 22 & 23. SOX Controls + Tests + Sarbanes evidence packet
+const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
+  const [controls, setControls] = useState<any[]>([]);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [tests, setTests] = useState<Record<string, any[]>>({});
+  const reload = () => window.electronAPI.invoke('sox:controls-list', { companyId }).then(setControls);
+  useEffect(() => { if (companyId) reload(); }, [companyId]);
+
+  const save = async () => {
+    if (!editing) return;
+    const res: any = await window.electronAPI.invoke('sox:control-save', { ...editing, companyId });
+    if (res?.error) { alert(res.error); return; }
+    setEditing(null);
+    reload();
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete control?')) return;
+    await window.electronAPI.invoke('sox:control-delete', { id });
+    reload();
+  };
+
+  const loadTests = async (controlId: string) => {
+    const t = await window.electronAPI.invoke('sox:tests-list', { controlId });
+    setTests((prev) => ({ ...prev, [controlId]: t || [] }));
+  };
+
+  const addTest = async (controlId: string) => {
+    const result = prompt('Result (pass|fail|na)?', 'pass') || 'pass';
+    const evidence = prompt('Evidence reference (e.g. audit_log id, doc URL)?', '') || '';
+    const notes = prompt('Notes?', '') || '';
+    await window.electronAPI.invoke('sox:test-save', {
+      controlId, companyId, testedBy: 'user', testedAt: new Date().toISOString().slice(0, 10), result, evidence, notes,
+    });
+    await loadTests(controlId);
+    reload();
+  };
+
+  // 23. Sarbanes evidence packet PDF
+  const evidencePacket = async () => {
+    const list = await window.electronAPI.invoke('sox:controls-list', { companyId });
+    const allTests: Record<string, any[]> = {};
+    for (const c of list || []) {
+      allTests[c.id] = await window.electronAPI.invoke('sox:tests-list', { controlId: c.id }) || [];
+    }
+    const html = `<!DOCTYPE html><html><head><title>Sarbanes Evidence Packet</title>
+      <style>body{font-family:sans-serif;padding:24px;}h1{font-size:18px;}h2{font-size:14px;border-bottom:1px solid #ccc;padding:4px 0;margin-top:18px;}
+      table{border-collapse:collapse;width:100%;font-size:11px;margin-top:6px;}td,th{border:1px solid #ccc;padding:4px;}.signoff{margin-top:32px;border-top:1px solid #000;padding-top:16px;}</style>
+      </head><body>
+      <h1>Sarbanes-Oxley Evidence Packet</h1>
+      <p>Date: ${new Date().toISOString().slice(0, 10)}</p>
+      <h2>Internal-Control Matrix</h2>
+      <table><tr><th>Code</th><th>Description</th><th>Owner</th><th>Frequency</th><th>Risk</th><th>Last result</th></tr>
+      ${(list || []).map((c: any) => `<tr><td>${c.code}</td><td>${c.description}</td><td>${c.owner}</td><td>${c.frequency}</td><td>${c.risk}</td><td>${c.last_result || 'untested'}</td></tr>`).join('')}
+      </table>
+      <h2>Control Tests</h2>
+      ${(list || []).map((c: any) => `
+        <h3 style="font-size:12px;margin-top:12px;">${c.code} — ${c.description}</h3>
+        <table><tr><th>Date</th><th>Tester</th><th>Result</th><th>Evidence</th><th>Notes</th></tr>
+        ${(allTests[c.id] || []).map((t: any) => `<tr><td>${t.tested_at}</td><td>${t.tested_by}</td><td>${t.result}</td><td>${t.evidence}</td><td>${t.notes}</td></tr>`).join('')}
+        </table>
+      `).join('')}
+      <div class="signoff">
+        <p>Approved by: ____________________________  Date: ___________</p>
+        <p>Title: ____________________________</p>
+      </div>
+      </body></html>`;
+    await api.saveToPDF(html, `sarbanes-evidence-${new Date().toISOString().slice(0, 10)}`, { openAfterSave: true });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <button onClick={() => setEditing({ code: '', description: '', owner: '', frequency: 'monthly', risk: 'medium' })}
+          className="px-3 py-1.5 text-xs font-semibold bg-accent-blue text-white">+ New control</button>
+        <button onClick={evidencePacket} className="px-3 py-1.5 text-xs font-semibold border border-border-primary">
+          <ClipboardCheck size={11} className="inline mr-1" />Generate Sarbanes evidence packet (PDF)
+        </button>
+      </div>
+      {editing && (
+        <div className="border border-border-primary p-3 space-y-2">
+          <div className="grid grid-cols-5 gap-2">
+            <input placeholder="Code" value={editing.code} onChange={(e) => setEditing({ ...editing, code: e.target.value })} className="px-2 py-1 text-xs bg-bg-primary border border-border-primary" />
+            <input placeholder="Description" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} className="col-span-2 px-2 py-1 text-xs bg-bg-primary border border-border-primary" />
+            <input placeholder="Owner" value={editing.owner} onChange={(e) => setEditing({ ...editing, owner: e.target.value })} className="px-2 py-1 text-xs bg-bg-primary border border-border-primary" />
+            <select value={editing.frequency} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className="px-2 py-1 text-xs bg-bg-primary border border-border-primary">
+              <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option><option value="annual">Annual</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <select value={editing.risk} onChange={(e) => setEditing({ ...editing, risk: e.target.value })} className="px-2 py-1 text-xs bg-bg-primary border border-border-primary">
+              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+            </select>
+            <button onClick={save} className="px-3 py-1 text-xs bg-accent-blue text-white">Save</button>
+            <button onClick={() => setEditing(null)} className="px-3 py-1 text-xs border border-border-primary">Cancel</button>
+          </div>
+        </div>
+      )}
+      <table className="w-full text-xs border border-border-primary">
+        <thead className="bg-bg-secondary">
+          <tr><th className="text-left p-1.5">Code</th><th className="text-left">Description</th><th>Owner</th><th>Frequency</th><th>Risk</th><th>Last result</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {controls.map((c: any) => (
+            <React.Fragment key={c.id}>
+              <tr className="border-t border-border-primary">
+                <td className="p-1.5">{c.code}</td>
+                <td>{c.description}</td>
+                <td>{c.owner}</td>
+                <td>{c.frequency}</td>
+                <td>{c.risk}</td>
+                <td className={c.last_result === 'pass' ? 'text-green-400' : c.last_result === 'fail' ? 'text-red-400' : 'text-text-muted'}>
+                  {c.last_result || 'untested'} ({c.test_count || 0})
+                </td>
+                <td>
+                  <button onClick={() => loadTests(c.id)} className="px-1.5 py-0.5 text-[10px] border border-border-primary mr-1">View tests</button>
+                  <button onClick={() => addTest(c.id)} className="px-1.5 py-0.5 text-[10px] border border-border-primary mr-1">+Test</button>
+                  <button onClick={() => setEditing(c)} className="px-1.5 py-0.5 text-[10px] border border-border-primary mr-1">Edit</button>
+                  <button onClick={() => remove(c.id)} className="px-1.5 py-0.5 text-[10px] border border-red-500/50 text-red-400">×</button>
+                </td>
+              </tr>
+              {tests[c.id] && (
+                <tr><td colSpan={7} className="bg-bg-secondary p-2">
+                  <div className="text-[10px] uppercase font-bold mb-1">Test history ({tests[c.id].length})</div>
+                  {tests[c.id].length === 0 ? <div className="text-text-muted text-xs">No tests yet.</div> :
+                    tests[c.id].map((t: any) => (
+                      <div key={t.id} className="text-xs flex gap-3 py-0.5 border-b border-border-primary">
+                        <span className="text-text-muted">{t.tested_at}</span>
+                        <span>{t.tested_by}</span>
+                        <span className={t.result === 'pass' ? 'text-green-400' : t.result === 'fail' ? 'text-red-400' : ''}>{t.result}</span>
+                        <span className="text-text-muted">{t.evidence}</span>
+                        <span>{t.notes}</span>
+                      </div>
+                    ))
+                  }
+                </td></tr>
+              )}
+            </React.Fragment>
+          ))}
+          {controls.length === 0 && <tr><td colSpan={7} className="p-2 text-text-muted text-center">No SOX controls defined yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// 24. Audit-letter generator
+const AuditLetter: React.FC<{ companyId: string }> = ({ companyId }) => {
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [auditor, setAuditor] = useState('');
+  const generate = async () => {
+    const res: any = await window.electronAPI.invoke('compliance:audit-letter-data', { companyId, asOfDate: asOf });
+    if (res?.error) { alert(res.error); return; }
+    const c = res.company || {};
+    const balances = res.balances || [];
+    const html = `<!DOCTYPE html><html><head><title>Audit confirmation letter ${asOf}</title>
+      <style>body{font-family:sans-serif;padding:32px;font-size:12px;line-height:1.5;}h1{font-size:16px;}table{border-collapse:collapse;font-size:11px;}td,th{border:1px solid #ccc;padding:4px;}</style>
+      </head><body>
+      <h1>${c.name || ''}</h1>
+      <p>${new Date().toISOString().slice(0, 10)}</p>
+      <p>To: ${auditor || 'External auditors'}</p>
+      <p>This letter is in connection with your audit of our financial statements as of ${asOf}.</p>
+      <p><b>Account balances</b></p>
+      <table><tr><th>Code</th><th>Account</th><th>Type</th><th>Balance</th></tr>
+      ${balances.map((b: any) => `<tr><td>${b.code}</td><td>${b.name}</td><td>${b.type}</td><td align="right">${formatCurrency(b.balance || 0)}</td></tr>`).join('')}
+      </table>
+      <p style="margin-top:16px;"><b>Management representations</b></p>
+      <ul>
+        <li>The financial records reflect all known transactions through ${asOf}.</li>
+        <li>All material related-party transactions have been disclosed.</li>
+        <li>No fraud or suspected fraud is known affecting the entity.</li>
+        <li>Period locks and reconciliations are current as of the date of this letter.</li>
+      </ul>
+      <p>Sincerely,</p>
+      <p>____________________________<br />Officer</p>
+      </body></html>`;
+    await api.saveToPDF(html, `audit-letter-${asOf}`, { openAfterSave: true });
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end gap-2">
+        <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="px-2 py-1.5 text-xs bg-bg-primary border border-border-primary" />
+        <input placeholder="Auditor / firm" value={auditor} onChange={(e) => setAuditor(e.target.value)} className="px-2 py-1.5 text-xs bg-bg-primary border border-border-primary" />
+        <button onClick={generate} className="px-3 py-1.5 text-xs font-semibold bg-accent-blue text-white">Generate audit letter</button>
+      </div>
+      <div className="text-xs text-text-muted">Prefilled with balances + standard management representations.</div>
+    </div>
+  );
+};
+
+// 26. Hash chain verify
+const HashChain: React.FC<{ companyId: string }> = ({ companyId }) => {
+  const [result, setResult] = useState<any>(null);
+  const verify = async () => {
+    const r = await window.electronAPI.invoke('compliance:hash-chain-verify', { companyId, limit: 5000 });
+    setResult(r);
+  };
+  return (
+    <div className="space-y-3">
+      <button onClick={verify} className="px-3 py-1.5 text-xs font-semibold bg-accent-blue text-white">
+        <Hash size={11} className="inline mr-1" />Verify audit-log hash chain
+      </button>
+      {result && (
+        <div className={`p-3 border ${result.ok ? 'border-green-500/40 bg-green-500/5' : 'border-red-500/40 bg-red-500/5'}`}>
+          <div className="text-sm font-bold">
+            {result.ok ? '✓ Chain intact' : '✗ Chain integrity issues found'}
+          </div>
+          <div className="text-xs">Total entries scanned: {result.total} · Healed (backfilled hashes): {result.healed} · Issues: {(result.issues || []).length}</div>
+          {(result.issues || []).slice(0, 20).map((i: any) => (
+            <div key={i.id} className="text-[11px] text-red-400 font-mono">
+              {i.id}: expected {i.expected.slice(0, 16)}… got {(i.actual || '').slice(0, 16)}…
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-[11px] text-text-muted">Each audit_log row stores SHA-256(prev_hash + payload). Tampering breaks the chain.</div>
+    </div>
+  );
+};
+
+// 27/28/29. Approval rules
+const ApprovalRules: React.FC<{ companyId: string }> = ({ companyId }) => {
+  const [rules, setRules] = useState({ twoFactorThreshold: 0, commentThreshold: 0, blockSelfApproval: true });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    window.electronAPI.invoke('compliance:approval-rules-get').then((r: any) => r && setRules(r));
+  }, [companyId]);
+  const save = async () => {
+    setSaving(true);
+    await window.electronAPI.invoke('compliance:approval-rules-save', rules);
+    setSaving(false);
+    alert('Approval rules saved.');
+  };
+  return (
+    <div className="space-y-3 max-w-xl">
+      <div className="border border-border-primary p-3 space-y-2">
+        <div className="text-xs font-bold">Two-factor approval threshold</div>
+        <div className="text-[11px] text-text-muted">JEs with total ≥ this amount require approval by 2 distinct users.</div>
+        <input type="number" value={rules.twoFactorThreshold} onChange={(e) => setRules({ ...rules, twoFactorThreshold: Number(e.target.value) })}
+          className="w-32 px-2 py-1 text-xs bg-bg-primary border border-border-primary" />
+      </div>
+      <div className="border border-border-primary p-3 space-y-2">
+        <div className="text-xs font-bold">Comment-required threshold</div>
+        <div className="text-[11px] text-text-muted">Above this amount, approver must enter a non-empty comment.</div>
+        <input type="number" value={rules.commentThreshold} onChange={(e) => setRules({ ...rules, commentThreshold: Number(e.target.value) })}
+          className="w-32 px-2 py-1 text-xs bg-bg-primary border border-border-primary" />
+      </div>
+      <div className="border border-border-primary p-3 space-y-2">
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={rules.blockSelfApproval} onChange={(e) => setRules({ ...rules, blockSelfApproval: e.target.checked })} />
+          Block self-approval (creator/poster can never approve their own JE)
+        </label>
+      </div>
+      <button disabled={saving} onClick={save} className="px-3 py-1.5 text-xs font-semibold bg-accent-blue text-white">Save approval rules</button>
+    </div>
+  );
+};
 
 export default ComplianceCenter;

@@ -190,6 +190,39 @@ const api = {
     window.electronAPI.invoke('accounts:history-pdf', { accountId, companyId }),
   accountsApplyTemplate: (companyId: string, accounts: Array<{ code: string; name: string; type: string; subtype?: string }>): Promise<{ success?: boolean; created?: number; error?: string }> =>
     window.electronAPI.invoke('accounts:apply-template', { companyId, accounts }),
+  // CoA round 2
+  complianceCheckAccountPerm: (companyId: string, accountId: string, role: string, action: 'post' | 'view'): Promise<{ allowed: boolean; reason?: string; error?: string }> =>
+    window.electronAPI.invoke('compliance:check-account-perm', { companyId, accountId, role, action }),
+  fxRevalue: (companyId: string, date: string, rates: Record<string, number>): Promise<{ success?: boolean; entry_id?: string; accounts_revalued?: number; error?: string }> =>
+    window.electronAPI.invoke('fx:revalue', { companyId, date, rates }),
+  accountsDetectDormant: (companyId: string, months?: number): Promise<{ dormant: string[]; details?: any[]; error?: string }> =>
+    window.electronAPI.invoke('accounts:detect-dormant', { companyId, months }),
+  accountsParseIIF: (text: string): Promise<{ accounts: any[]; error?: string }> =>
+    window.electronAPI.invoke('accounts:parse-iif', { text }),
+  accountsBulkCreate: (companyId: string, accounts: any[]): Promise<{ success?: boolean; created?: number; skipped?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:bulk-create', { companyId, accounts }),
+  accountsExportTxf: (companyId: string, year: number): Promise<{ txf?: string; count?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:export-txf', { companyId, year }),
+  accountsMergePreview: (sourceId: string): Promise<{ journal_lines?: number; invoice_lines?: number; bills?: number; expenses?: number; children?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:merge-preview', { sourceId }),
+  accountsSplit: (companyId: string, sourceAccountId: string, targetAccountId: string, dateFrom: string, dateTo: string, descriptionPattern: string): Promise<{ success?: boolean; moved?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:split', { companyId, sourceAccountId, targetAccountId, dateFrom, dateTo, descriptionPattern }),
+  accountsRenumber: (companyId: string, accountId: string, newCode: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('accounts:renumber', { companyId, accountId, newCode }),
+  accountsSoftDelete: (accountId: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('accounts:soft-delete', { accountId }),
+  accountsRestore: (accountId: string): Promise<{ success?: boolean; error?: string }> =>
+    window.electronAPI.invoke('accounts:restore', { accountId }),
+  accountsImportOpeningTb: (companyId: string, date: string, rows: Array<{ code: string; balance: number }>): Promise<{ success?: boolean; entry_id?: string; applied?: number; skipped?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:import-opening-tb', { companyId, date, rows }),
+  accountsSnapshotBalances: (companyId: string, date?: string): Promise<{ success?: boolean; count?: number; date?: string; error?: string }> =>
+    window.electronAPI.invoke('accounts:snapshot-balances', { companyId, date }),
+  accountsNaturalSideCheck: (accountId: string, debit: number, credit: number): Promise<{ warn: boolean; message?: string }> =>
+    window.electronAPI.invoke('accounts:natural-side-check', { accountId, debit, credit }),
+  accountsClassify: (companyId: string, description: string): Promise<{ account_id: string | null; matched?: string }> =>
+    window.electronAPI.invoke('accounts:classify', { companyId, description }),
+  accountsWatchlistCheck: (companyId: string): Promise<{ success?: boolean; triggered?: number; error?: string }> =>
+    window.electronAPI.invoke('accounts:watchlist-check', { companyId }),
 
   // Print / Preview
   printPreview: (html: string, title: string): Promise<{ success?: boolean }> =>
@@ -223,6 +256,18 @@ const api = {
   // Rebuild GL: retro-post missing journal entries for all transactions
   rebuildGL: (): Promise<{ posted?: number; message?: string; error?: string }> =>
     window.electronAPI.invoke('gl:rebuild'),
+
+  // ─── JE round 2 ─────────────────────────────
+  jeUndoRecent: (companyId: string, n: number, userId: string): Promise<{ count?: number; error?: string }> =>
+    window.electronAPI.invoke('je:undo-recent', { companyId, n, userId }),
+  jeGapDetect: (companyId: string): Promise<{ gaps: string[]; error?: string }> =>
+    window.electronAPI.invoke('je:gap-detect', { companyId }),
+  jeSnapshot: (jeId: string, userId: string): Promise<{ ok?: boolean; version?: number; error?: string }> =>
+    window.electronAPI.invoke('je:snapshot', { jeId, userId }),
+  jeHistoryList: (jeId: string): Promise<Array<{ id: string; version: number; changed_at: string; changed_by: string }>> =>
+    window.electronAPI.invoke('je:history-list', { jeId }),
+  jeHistoryRollback: (historyId: string, userId: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('je:history-rollback', { historyId, userId }),
 
   // Invoice Record Payment (with journal entry)
   recordInvoicePayment: (

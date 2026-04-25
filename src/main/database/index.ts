@@ -688,6 +688,209 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE journal_entries ADD COLUMN posted_by TEXT DEFAULT ''",
   // ── GL analytics: per-account monthly cap (2026-04-23) ────────
   "ALTER TABLE accounts ADD COLUMN monthly_cap REAL DEFAULT 0",
+  // ── CoA round 2 (2026-04-23) ─────────────────────────────────
+  // F1: Account groups
+  `CREATE TABLE IF NOT EXISTS account_groups (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    color TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS account_group_members (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES account_groups(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(group_id, account_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_agm_group ON account_group_members(group_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_agm_account ON account_group_members(account_id)`,
+  // F2: Account permissions per role
+  `CREATE TABLE IF NOT EXISTS account_permissions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT '',
+    can_post INTEGER DEFAULT 1,
+    can_view INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, account_id, role)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_acct_perm_acct ON account_permissions(account_id, role)`,
+  // F3: Account watchlist
+  `CREATE TABLE IF NOT EXISTS account_watches (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '',
+    account_id TEXT NOT NULL,
+    threshold_amount REAL DEFAULT 0,
+    notify_email TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_acct_watch_acct ON account_watches(account_id)`,
+  // F4: Account aliases
+  `CREATE TABLE IF NOT EXISTS account_aliases (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    alias TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_acct_alias_acct ON account_aliases(account_id)`,
+  // F5/22: Multi-currency + sub-ledger + bank linkage + soft delete
+  "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE accounts ADD COLUMN bank_account_id TEXT DEFAULT ''",
+  "ALTER TABLE accounts ADD COLUMN subledger_type TEXT DEFAULT 'none'",
+  "ALTER TABLE accounts ADD COLUMN deleted_at TEXT DEFAULT ''",
+  "ALTER TABLE accounts ADD COLUMN compliance_tags TEXT DEFAULT '[]'",
+  // F10: Comments
+  `CREATE TABLE IF NOT EXISTS account_comments (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    user_id TEXT DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_acct_comments_acct ON account_comments(account_id)`,
+  // F24: Auto-categorize rules
+  `CREATE TABLE IF NOT EXISTS account_classify_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    pattern TEXT NOT NULL DEFAULT '',
+    account_id TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_acr_company ON account_classify_rules(company_id)`,
+  // F25: Daily balance history
+  `CREATE TABLE IF NOT EXISTS account_balance_history (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL DEFAULT '',
+    account_id TEXT NOT NULL,
+    balance REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(date, account_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_abh_acct_date ON account_balance_history(account_id, date)`,
+  // ── TB/GL round 2 (2026-04-23) ───────────────────────────────
+  // TB elimination entries (intercompany)
+  `CREATE TABLE IF NOT EXISTS tb_elimination_entries (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL DEFAULT '',
+    period_label TEXT NOT NULL DEFAULT '',
+    account_id TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    memo TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tb_elim_period ON tb_elimination_entries(period_label, account_id)`,
+  // GL line-level review/flag/approval columns
+  "ALTER TABLE journal_entry_lines ADD COLUMN signed_off_by TEXT DEFAULT ''",
+  "ALTER TABLE journal_entry_lines ADD COLUMN signed_off_at TEXT DEFAULT ''",
+  "ALTER TABLE journal_entry_lines ADD COLUMN flagged INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entry_lines ADD COLUMN flag_reason TEXT DEFAULT ''",
+  "ALTER TABLE journal_entry_lines ADD COLUMN question_flag INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entry_lines ADD COLUMN approval_step INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entry_lines ADD COLUMN is_credit_memo INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entry_lines ADD COLUMN is_accountant_adj INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entry_lines ADD COLUMN mention TEXT DEFAULT ''",
+  // ── JE round 2 (2026-04-23) ───────────────────────────────
+  "ALTER TABLE journal_entry_lines ADD COLUMN is_locked INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN color TEXT DEFAULT ''",
+  "ALTER TABLE journal_entries ADD COLUMN is_starred INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN version INTEGER DEFAULT 1",
+  `CREATE TABLE IF NOT EXISTS je_history (
+    id TEXT PRIMARY KEY,
+    je_id TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    snapshot_json TEXT NOT NULL DEFAULT '{}',
+    changed_at TEXT DEFAULT (datetime('now')),
+    changed_by TEXT DEFAULT ''
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_je_history_je ON je_history(je_id, version)",
+  // ── Period Close + Reconciliation + Compliance round 2 (2026-04-23) ────────
+  "ALTER TABLE period_locks ADD COLUMN lock_level TEXT DEFAULT 'hard'", // 'soft' | 'hard'
+  "ALTER TABLE journal_entries ADD COLUMN adjustment_category TEXT DEFAULT ''",
+  "ALTER TABLE journal_entries ADD COLUMN is_inter_period INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN inter_period_pair_id TEXT DEFAULT ''",
+  "ALTER TABLE period_close_log ADD COLUMN digest_html TEXT DEFAULT ''",
+  "ALTER TABLE period_close_log ADD COLUMN roll_forward_done INTEGER DEFAULT 0",
+  "ALTER TABLE period_close_log ADD COLUMN is_short_period INTEGER DEFAULT 0",
+  "ALTER TABLE period_close_log ADD COLUMN reopened_at TEXT DEFAULT ''",
+  "ALTER TABLE period_close_log ADD COLUMN reopened_by TEXT DEFAULT ''",
+  "ALTER TABLE audit_log ADD COLUMN prev_hash TEXT DEFAULT ''",
+  "ALTER TABLE audit_log ADD COLUMN row_hash TEXT DEFAULT ''",
+  `CREATE TABLE IF NOT EXISTS account_reconciliation_items (
+    id TEXT PRIMARY KEY,
+    recon_id TEXT NOT NULL DEFAULT '',
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    as_of_date TEXT NOT NULL DEFAULT '',
+    transaction_id TEXT DEFAULT '',
+    transaction_kind TEXT DEFAULT '',
+    reference TEXT DEFAULT '',
+    amount REAL DEFAULT 0,
+    note TEXT DEFAULT '',
+    status TEXT DEFAULT 'open',
+    confidence INTEGER DEFAULT 0,
+    delta REAL DEFAULT 0,
+    rolled_from_id TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_recon_items_acct ON account_reconciliation_items(company_id, account_id, as_of_date)",
+  `CREATE TABLE IF NOT EXISTS recon_schedule (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    frequency TEXT NOT NULL DEFAULT 'monthly',
+    last_run TEXT DEFAULT '',
+    next_due TEXT DEFAULT '',
+    threshold REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_recon_sched ON recon_schedule(company_id, account_id)",
+  `CREATE TABLE IF NOT EXISTS recon_imports (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    as_of_date TEXT DEFAULT '',
+    statement_balance REAL DEFAULT 0,
+    rows_json TEXT DEFAULT '[]',
+    imported_at TEXT DEFAULT (datetime('now')),
+    imported_by TEXT DEFAULT ''
+  )`,
+  `CREATE TABLE IF NOT EXISTS sox_controls (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    code TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    owner TEXT DEFAULT '',
+    frequency TEXT DEFAULT '',
+    risk TEXT DEFAULT '',
+    last_reviewed_at TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_sox_controls_company ON sox_controls(company_id)",
+  `CREATE TABLE IF NOT EXISTS sox_control_tests (
+    id TEXT PRIMARY KEY,
+    control_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    tested_by TEXT DEFAULT '',
+    tested_at TEXT DEFAULT '',
+    result TEXT DEFAULT 'na',
+    evidence TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_sox_tests_control ON sox_control_tests(control_id)",
+  `CREATE TABLE IF NOT EXISTS je_approvals (
+    id TEXT PRIMARY KEY,
+    journal_entry_id TEXT NOT NULL,
+    approver TEXT DEFAULT '',
+    approved_at TEXT DEFAULT (datetime('now')),
+    comment TEXT DEFAULT ''
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_je_approvals_je ON je_approvals(journal_entry_id)",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -851,6 +1054,12 @@ const tablesWithoutUpdatedAt = new Set([
   'expense_approval_steps', 'expense_comments', 'reimbursement_batches', 'period_locks',
   // Period close + reconciliation + compliance
   'period_close_checklist', 'period_close_log', 'account_reconciliations',
+  'recon_schedule', 'recon_imports',
+  'sox_controls', 'sox_control_tests', 'je_approvals',
+  // CoA round 2 — created_at only
+  'account_group_members', 'account_permissions', 'account_watches',
+  'account_aliases', 'account_comments', 'account_classify_rules',
+  'account_balance_history',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

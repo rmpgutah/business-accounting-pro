@@ -13,6 +13,12 @@ import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 import { COA_TEMPLATES } from '../../lib/coa-templates';
 import { toCSVString, downloadCSVBlob } from '../../lib/csv-export';
+import {
+  GroupsDialog, PermissionsDialog, WatchlistDialog, AliasesDialog,
+  FxRevalueDialog, BudgetRibbon, IIFImportDialog, XeroImportDialog,
+  TxfExportDialog, Barcode39, SplitDialog, RenumberDialog,
+  OpeningTbImportDialog, ClassifyRulesDialog, SnapshotDialog, ComplianceBadges,
+} from './AccountAdvancedDialogs';
 
 type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 
@@ -35,6 +41,12 @@ interface Account {
   net_dr?: number;
   last_txn_date?: string | null;
   activity_90d?: number;
+  monthly_cap?: number;
+  currency?: string;
+  bank_account_id?: string;
+  subledger_type?: string;
+  deleted_at?: string;
+  compliance_tags?: string;
 }
 
 interface AccountsListProps {
@@ -99,6 +111,26 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showQrLabels, setShowQrLabels] = useState(false);
+  // Round 2
+  const [showGroups, setShowGroups] = useState(false);
+  const [showFxRevalue, setShowFxRevalue] = useState(false);
+  const [showIIF, setShowIIF] = useState(false);
+  const [showXero, setShowXero] = useState(false);
+  const [showTxf, setShowTxf] = useState(false);
+  const [showSplit, setShowSplit] = useState(false);
+  const [showOpeningTb, setShowOpeningTb] = useState(false);
+  const [showClassify, setShowClassify] = useState(false);
+  const [showSnapshot, setShowSnapshot] = useState(false);
+  const [permsAccount, setPermsAccount] = useState<Account | null>(null);
+  const [watchAccount, setWatchAccount] = useState<Account | null>(null);
+  const [aliasAccount, setAliasAccount] = useState<Account | null>(null);
+  const [renumberAccount, setRenumberAccount] = useState<Account | null>(null);
+  const [aliasesByAccount, setAliasesByAccount] = useState<Record<string, string[]>>({});
+  const [dormantIds, setDormantIds] = useState<Set<string>>(new Set());
+  const [groupFilter, setGroupFilter] = useState<string>('');
+  const [groups, setGroups] = useState<any[]>([]);
+  const [groupMembers, setGroupMembers] = useState<Record<string, Set<string>>>({});
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const reload = useCallback(async () => {
     if (!activeCompany) return;
@@ -107,6 +139,34 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
         `SELECT a.* FROM accounts a WHERE a.company_id = ? ORDER BY a.is_pinned DESC, a.sort_order, a.code`,
         [activeCompany.id]
       );
+      // Load aliases (for fuzzy search) + groups + dormant detection
+      try {
+        const aliasRows = await api.rawQuery(
+          `SELECT al.account_id, al.alias FROM account_aliases al
+           JOIN accounts a ON a.id = al.account_id WHERE a.company_id = ?`, [activeCompany.id]
+        );
+        const aMap: Record<string, string[]> = {};
+        if (Array.isArray(aliasRows)) for (const r of aliasRows) {
+          if (!aMap[r.account_id]) aMap[r.account_id] = [];
+          aMap[r.account_id].push(r.alias);
+        }
+        setAliasesByAccount(aMap);
+      } catch { /* ignore */ }
+      try {
+        const gs = await api.query('account_groups', { company_id: activeCompany.id });
+        setGroups(Array.isArray(gs) ? gs : []);
+        const mems = await api.rawQuery('SELECT * FROM account_group_members', []);
+        const map: Record<string, Set<string>> = {};
+        if (Array.isArray(mems)) for (const m of mems) {
+          if (!map[m.group_id]) map[m.group_id] = new Set();
+          map[m.group_id].add(m.account_id);
+        }
+        setGroupMembers(map);
+      } catch { /* ignore */ }
+      try {
+        const dor = await api.accountsDetectDormant(activeCompany.id, 12);
+        setDormantIds(new Set(dor?.dormant || []));
+      } catch { /* ignore */ }
       const stats = await api.accountsStats(activeCompany.id);
       const statsMap = new Map<string, any>();
       if (Array.isArray(stats)) for (const s of stats) statsMap.set(s.id, s);
@@ -144,17 +204,28 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
   // Filter
   const filtered = useMemo(() => {
     let f = accounts;
+    // Soft-delete view
+    if (showDeleted) f = f.filter(a => !!a.deleted_at);
+    else f = f.filter(a => !a.deleted_at);
     if (statusFilter === 'active') f = f.filter(a => !!a.is_active);
     else if (statusFilter === 'archived') f = f.filter(a => !a.is_active);
     if (filterType !== 'all') f = f.filter(a => a.type === filterType);
     if (filterHasActivity) f = f.filter(a => (a.activity_90d || 0) > 0);
     if (filterPinnedOnly) f = f.filter(a => !!a.is_pinned);
+    if (groupFilter) {
+      const set = groupMembers[groupFilter] || new Set();
+      f = f.filter(a => set.has(a.id));
+    }
     if (search.trim()) {
       const q = search.trim();
-      f = f.filter(a => fuzzyMatch(q, a.code) || fuzzyMatch(q, a.name));
+      f = f.filter(a => {
+        if (fuzzyMatch(q, a.code) || fuzzyMatch(q, a.name)) return true;
+        const aliases = aliasesByAccount[a.id] || [];
+        return aliases.some(al => fuzzyMatch(q, al));
+      });
     }
     return f;
-  }, [accounts, statusFilter, filterType, filterHasActivity, filterPinnedOnly, search]);
+  }, [accounts, statusFilter, filterType, filterHasActivity, filterPinnedOnly, search, showDeleted, groupFilter, groupMembers, aliasesByAccount]);
 
   // Group by type for flat view
   const grouped = useMemo(() => {
@@ -254,11 +325,19 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
         <AccountRow account={acct} depth={depth} onEdit={onEditAccount}
           selected={selected.has(acct.id)} onToggleSelect={toggleSelected}
           onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop}
-          onSetOpeningBalance={() => setShowOpeningBalDialog(acct)} />
+          onSetOpeningBalance={() => setShowOpeningBalDialog(acct)}
+          isDormant={dormantIds.has(acct.id)}
+          onPerms={() => setPermsAccount(acct)}
+          onWatch={() => setWatchAccount(acct)}
+          onAliases={() => setAliasAccount(acct)}
+          onRenumber={() => setRenumberAccount(acct)}
+          onSoftDelete={async () => { if (confirm(`Soft-delete ${acct.code}?`)) { await api.accountsSoftDelete(acct.id); reload(); } }}
+          onRestore={async () => { await api.accountsRestore(acct.id); reload(); }} />
         {children.map(c => renderTreeNode(c, depth + 1))}
       </React.Fragment>
     );
   };
+  const renderTreeNodeWrapped = renderTreeNode; // alias kept
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><span className="text-text-muted text-sm font-mono">Loading accounts...</span></div>;
@@ -321,6 +400,18 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
             className={`px-2 py-1 text-xs border flex items-center gap-1 ${filterPinnedOnly ? 'border-accent-blue text-accent-blue' : 'border-border-primary text-text-secondary'}`}
             style={{ borderRadius: '6px' }}><Pin size={10} /> Pinned</button>
 
+          {/* Group filter */}
+          <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}
+            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }} title="Filter by group">
+            <option value="">All groups</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+
+          {/* Deleted toggle */}
+          <button onClick={() => setShowDeleted(!showDeleted)}
+            className={`px-2 py-1 text-xs border ${showDeleted ? 'border-accent-expense text-accent-expense' : 'border-border-primary text-text-secondary'}`}
+            style={{ borderRadius: '6px' }}>{showDeleted ? 'View: Deleted' : 'View Deleted'}</button>
+
           {/* View mode */}
           <div className="flex border border-border-primary" style={{ borderRadius: '6px' }}>
             <button onClick={() => setViewMode('flat')}
@@ -362,6 +453,15 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
             title="Year-end close to Retained Earnings">
             <Calendar size={12} /> Close Year
           </button>
+          <button onClick={() => setShowGroups(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }} title="Account groups">Groups</button>
+          <button onClick={() => setShowFxRevalue(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }} title="FX revaluation">FX</button>
+          <button onClick={() => setShowIIF(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>IIF</button>
+          <button onClick={() => setShowXero(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Xero</button>
+          <button onClick={() => setShowTxf(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>TXF</button>
+          <button onClick={() => setShowSplit(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Split</button>
+          <button onClick={() => setShowOpeningTb(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>TB Import</button>
+          <button onClick={() => setShowClassify(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Rules</button>
+          <button onClick={() => setShowSnapshot(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Snapshot</button>
           <button onClick={onNewAccount} className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ borderRadius: '6px' }}>
             <Plus size={14} /> New Account
           </button>
@@ -428,7 +528,14 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
                       <AccountRow key={account.id} account={account} depth={0} onEdit={onEditAccount}
                         selected={selected.has(account.id)} onToggleSelect={toggleSelected}
                         onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop}
-                        onSetOpeningBalance={() => setShowOpeningBalDialog(account)} />
+                        onSetOpeningBalance={() => setShowOpeningBalDialog(account)}
+                        isDormant={dormantIds.has(account.id)}
+                        onPerms={() => setPermsAccount(account)}
+                        onWatch={() => setWatchAccount(account)}
+                        onAliases={() => setAliasAccount(account)}
+                        onRenumber={() => setRenumberAccount(account)}
+                        onSoftDelete={async () => { if (confirm(`Soft-delete ${account.code}? It can be restored.`)) { await api.accountsSoftDelete(account.id); reload(); } }}
+                        onRestore={async () => { await api.accountsRestore(account.id); reload(); }} />
                     ))}
                   </React.Fragment>
                 );
@@ -465,6 +572,21 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       {showQrLabels && (
         <QrLabelsDialog accounts={accounts.filter(a => selected.has(a.id))} onClose={() => setShowQrLabels(false)} />
       )}
+
+      {/* Round 2 dialogs */}
+      {showGroups && activeCompany && <GroupsDialog companyId={activeCompany.id} accounts={accounts as any} onClose={() => { setShowGroups(false); reload(); }} />}
+      {showFxRevalue && activeCompany && <FxRevalueDialog companyId={activeCompany.id} onClose={() => setShowFxRevalue(false)} onDone={() => { setShowFxRevalue(false); reload(); }} />}
+      {showIIF && activeCompany && <IIFImportDialog companyId={activeCompany.id} onClose={() => setShowIIF(false)} onDone={() => { setShowIIF(false); reload(); }} />}
+      {showXero && activeCompany && <XeroImportDialog companyId={activeCompany.id} onClose={() => setShowXero(false)} onDone={() => { setShowXero(false); reload(); }} />}
+      {showTxf && activeCompany && <TxfExportDialog companyId={activeCompany.id} onClose={() => setShowTxf(false)} />}
+      {showSplit && activeCompany && <SplitDialog companyId={activeCompany.id} accounts={accounts as any} onClose={() => setShowSplit(false)} onDone={() => { setShowSplit(false); reload(); }} />}
+      {showOpeningTb && activeCompany && <OpeningTbImportDialog companyId={activeCompany.id} onClose={() => setShowOpeningTb(false)} onDone={() => { setShowOpeningTb(false); reload(); }} />}
+      {showClassify && activeCompany && <ClassifyRulesDialog companyId={activeCompany.id} accounts={accounts as any} onClose={() => setShowClassify(false)} />}
+      {showSnapshot && activeCompany && <SnapshotDialog companyId={activeCompany.id} onClose={() => setShowSnapshot(false)} />}
+      {permsAccount && activeCompany && <PermissionsDialog companyId={activeCompany.id} account={permsAccount as any} onClose={() => setPermsAccount(null)} />}
+      {watchAccount && activeCompany && <WatchlistDialog companyId={activeCompany.id} account={watchAccount as any} onClose={() => setWatchAccount(null)} />}
+      {aliasAccount && <AliasesDialog account={aliasAccount as any} onClose={() => { setAliasAccount(null); reload(); }} />}
+      {renumberAccount && activeCompany && <RenumberDialog companyId={activeCompany.id} account={renumberAccount as any} onClose={() => setRenumberAccount(null)} onDone={() => { setRenumberAccount(null); reload(); }} />}
     </div>
   );
 };
@@ -477,7 +599,14 @@ const AccountRow: React.FC<{
   onDragStart: (id: string) => void; onDragOver: (e: React.DragEvent) => void;
   onDrop: (id: string, asChild: boolean) => void;
   onSetOpeningBalance: () => void;
-}> = ({ account, depth, onEdit, selected, onToggleSelect, onDragStart, onDragOver, onDrop, onSetOpeningBalance }) => {
+  isDormant?: boolean;
+  onPerms?: () => void;
+  onWatch?: () => void;
+  onAliases?: () => void;
+  onRenumber?: () => void;
+  onSoftDelete?: () => void;
+  onRestore?: () => void;
+}> = ({ account, depth, onEdit, selected, onToggleSelect, onDragStart, onDragOver, onDrop, onSetOpeningBalance, isDormant, onPerms, onWatch, onAliases, onRenumber, onSoftDelete, onRestore }) => {
   return (
     <tr className={`border-b border-border-primary hover:bg-bg-hover cursor-pointer ${!account.is_active ? 'opacity-50' : ''}`}
       draggable={!account.is_locked}
@@ -498,13 +627,24 @@ const AccountRow: React.FC<{
         </div>
       </td>
       <td className="px-4 py-2 text-xs text-text-primary font-medium truncate max-w-[260px]">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {account.name}
           {account.is_locked ? <Lock size={10} className="text-accent-expense" /> : null}
           {account.is_1099_eligible ? <span className="text-[9px] bg-accent-blue/20 text-accent-blue px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>1099</span> : null}
           {account.requires_document ? <FileTextIcon size={10} className="text-accent-blue" /> : null}
-          {!account.is_active && <span className="ml-1 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '6px' }}>Archived</span>}
+          {account.currency && account.currency !== 'USD' && (
+            <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1 py-0.5 font-bold font-mono" style={{ borderRadius: '3px' }}>{account.currency}</span>
+          )}
+          {account.subledger_type && account.subledger_type !== 'none' && (
+            <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1 py-0.5 font-bold uppercase" style={{ borderRadius: '3px' }}>{account.subledger_type}</span>
+          )}
+          {account.bank_account_id ? <span className="text-[9px] bg-accent-blue/20 text-accent-blue px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>BANK</span> : null}
+          <ComplianceBadges tagsJson={account.compliance_tags} />
+          {isDormant && <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>DORMANT</span>}
+          {account.deleted_at ? <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>DELETED</span>
+            : !account.is_active && <span className="ml-1 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '6px' }}>Archived</span>}
         </div>
+        {(account.monthly_cap || 0) > 0 && <BudgetRibbon account={account as any} />}
       </td>
       <td className="px-4 py-2 text-xs text-text-secondary capitalize">{account.type}</td>
       <td className="px-4 py-2 text-xs text-text-muted">{account.subtype || '-'}</td>
@@ -522,6 +662,13 @@ const AccountRow: React.FC<{
           }} title="Print history sheet" className="text-text-muted hover:text-accent-blue">
             <Printer size={11} />
           </button>
+          {onPerms && <button onClick={(e) => { e.stopPropagation(); onPerms(); }} title="Permissions" className="text-text-muted hover:text-accent-blue text-[10px] font-bold">P</button>}
+          {onWatch && <button onClick={(e) => { e.stopPropagation(); onWatch(); }} title="Watchlist" className="text-text-muted hover:text-accent-blue text-[10px] font-bold">W</button>}
+          {onAliases && <button onClick={(e) => { e.stopPropagation(); onAliases(); }} title="Aliases" className="text-text-muted hover:text-accent-blue text-[10px] font-bold">A</button>}
+          {onRenumber && <button onClick={(e) => { e.stopPropagation(); onRenumber(); }} title="Renumber" className="text-text-muted hover:text-accent-blue text-[10px] font-bold">#</button>}
+          {account.deleted_at
+            ? onRestore && <button onClick={(e) => { e.stopPropagation(); onRestore(); }} title="Restore" className="text-accent-income hover:text-accent-blue text-[10px] font-bold">↺</button>
+            : onSoftDelete && <button onClick={(e) => { e.stopPropagation(); onSoftDelete(); }} title="Soft-delete" className="text-text-muted hover:text-accent-expense text-[10px] font-bold">×</button>}
         </div>
       </td>
     </tr>

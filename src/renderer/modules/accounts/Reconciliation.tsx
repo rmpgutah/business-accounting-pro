@@ -1,8 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Scale, Save, ArrowRightLeft, RefreshCw } from 'lucide-react';
+import { Scale, Save, ArrowRightLeft, RefreshCw, Star, Upload, Download, Bell, Layers, History, ListChecks } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import api from '../../lib/api';
+
+// Star confidence indicator (1–5)
+const Stars: React.FC<{ n: number }> = ({ n }) => (
+  <span className="inline-flex">{[1,2,3,4,5].map(i => <Star key={i} size={10} className={i <= n ? 'text-yellow-400 fill-current' : 'text-text-muted'} />)}</span>
+);
 
 // ─── Account Reconciliation (sub-ledger ↔ GL) ─────────────────
 // Implements features 11–20.
@@ -23,6 +28,15 @@ const AccountReconciliation: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Round 2 state
+  const [items, setItems] = useState<any[]>([]);
+  const [prior, setPrior] = useState<{ prior: any; uncleared: any[] }>({ prior: null, uncleared: [] });
+  const [multi, setMulti] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [imports, setImports] = useState<any[]>([]);
+  const [autoApprove, setAutoApprove] = useState<{ autoApprove: boolean; threshold: number }>({ autoApprove: false, threshold: 0 });
+  const [statementFile, setStatementFile] = useState<File | null>(null);
+
   useEffect(() => {
     if (!companyId) return;
     api.query('accounts', { company_id: companyId }, { field: 'code', dir: 'asc' }).then((res: any[]) => {
@@ -36,6 +50,7 @@ const AccountReconciliation: React.FC = () => {
     });
     window.electronAPI.invoke('recon:history', { companyId }).then(setHistory);
     window.electronAPI.invoke('recon:intercompany').then(setInterCo);
+    window.electronAPI.invoke('recon:schedule-list', { companyId }).then(setSchedules);
   }, [companyId]);
 
   const compute = useCallback(async () => {
@@ -43,10 +58,100 @@ const AccountReconciliation: React.FC = () => {
     setBusy(true);
     const res = await window.electronAPI.invoke('recon:compute', { companyId, accountId, asOfDate });
     setComputed(res);
-    const m = await window.electronAPI.invoke('recon:auto-match', { companyId, accountId, asOfDate });
+    // Use v2 with confidence/delta
+    const m = await window.electronAPI.invoke('recon:auto-match-v2', { companyId, accountId, asOfDate });
     setMatches(m);
+    const it = await window.electronAPI.invoke('recon:items-list', { companyId, accountId, asOfDate });
+    setItems(it || []);
+    const pp = await window.electronAPI.invoke('recon:prior-period', { companyId, accountId, asOfDate });
+    setPrior(pp || { prior: null, uncleared: [] });
+    const imp = await window.electronAPI.invoke('recon:imports-list', { companyId, accountId });
+    setImports(imp || []);
+    if (res && !res.error) {
+      const aa = await window.electronAPI.invoke('recon:auto-approve-check', { companyId, accountId, variance: res.variance });
+      setAutoApprove(aa || { autoApprove: false, threshold: 0 });
+    }
     setBusy(false);
   }, [accountId, asOfDate, companyId]);
+
+  // 14. Export reconciled items CSV
+  const exportItemsCsv = () => {
+    const rows = [
+      ['Type', 'Reference', 'Date', 'Sub Amount', 'GL Amount', 'Delta', 'Confidence', 'Status', 'Note'],
+      ...matches.matches.map((m: any) => ['matched', m.sub.reference || '', m.sub.date || '', (m.sub.amount || 0).toFixed(2),
+        (((m.gl.debit || 0) - (m.gl.credit || 0)) || 0).toFixed(2), (m.delta || 0).toFixed(2), m.confidence || 0, 'matched', '']),
+      ...matches.suggestions.map((m: any) => ['suggested', m.sub.reference || '', m.sub.date || '', (m.sub.amount || 0).toFixed(2),
+        (((m.gl.debit || 0) - (m.gl.credit || 0)) || 0).toFixed(2), (m.delta || 0).toFixed(2), m.confidence || 0, 'suggested', '']),
+      ...items.map((it: any) => ['unmatched', it.reference || '', '', (it.amount || 0).toFixed(2), '', '', it.confidence || 0, it.status || 'open', it.note || '']),
+    ];
+    const csv = rows.map(r => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = `recon-${asOfDate}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+
+  // 11. Save item note
+  const saveItemNote = async (transactionId: string, reference: string, amount: number, note: string, status: string) => {
+    await window.electronAPI.invoke('recon:item-save', {
+      companyId, accountId, asOfDate, transactionId, reference, amount, note, status,
+    });
+    const it = await window.electronAPI.invoke('recon:items-list', { companyId, accountId, asOfDate });
+    setItems(it || []);
+  };
+
+  // 13. Import bank-style CSV
+  const importStatement = async () => {
+    if (!statementFile) return;
+    const text = await statementFile.text();
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const rows = lines.slice(1).map((l) => {
+      const cols = l.split(',').map((c) => c.replace(/^"|"$/g, ''));
+      return { date: cols[0] || '', reference: cols[1] || '', amount: Number(cols[2] || 0), description: cols[3] || '' };
+    });
+    const statementBalance = rows.reduce((s, r) => s + (r.amount || 0), 0);
+    await window.electronAPI.invoke('recon:import-statement', {
+      companyId, accountId, asOfDate, statementBalance, rows, importedBy: 'user',
+    });
+    const imp = await window.electronAPI.invoke('recon:imports-list', { companyId, accountId });
+    setImports(imp || []);
+    alert(`Imported ${rows.length} statement rows. Statement balance: ${formatCurrency(statementBalance)}`);
+  };
+
+  // 15. Multi-account recon
+  const computeMulti = async () => {
+    const res = await window.electronAPI.invoke('recon:multi-compute', { companyId, asOfDate });
+    setMulti(res || []);
+  };
+
+  // 16. Schedule add
+  const addSchedule = async () => {
+    if (!accountId) { alert('Select an account first.'); return; }
+    const freq = prompt('Frequency (weekly|monthly|quarterly)?', 'monthly') || 'monthly';
+    const threshold = Number(prompt('Variance auto-approve threshold ($)?', '5') || 0);
+    await window.electronAPI.invoke('recon:schedule-save', { companyId, accountId, frequency: freq, threshold });
+    const list = await window.electronAPI.invoke('recon:schedule-list', { companyId });
+    setSchedules(list || []);
+  };
+
+  const deleteSchedule = async (id: string) => {
+    await window.electronAPI.invoke('recon:schedule-delete', { id });
+    const list = await window.electronAPI.invoke('recon:schedule-list', { companyId });
+    setSchedules(list || []);
+  };
+
+  // 19. Carry forward uncleared into current
+  const carryForward = async () => {
+    if (!prior.uncleared.length) return;
+    for (const u of prior.uncleared) {
+      await window.electronAPI.invoke('recon:item-save', {
+        companyId, accountId, asOfDate,
+        transactionId: u.transaction_id, reference: u.reference, amount: u.amount,
+        note: u.note, status: 'open', rolledFromId: u.id,
+      });
+    }
+    const it = await window.electronAPI.invoke('recon:items-list', { companyId, accountId, asOfDate });
+    setItems(it || []);
+    alert(`Carried forward ${prior.uncleared.length} uncleared items.`);
+  };
 
   const save = async () => {
     if (!computed) return;
@@ -142,14 +247,20 @@ const AccountReconciliation: React.FC = () => {
               <ArrowRightLeft size={12} /> Auto-matches ({matches.matches.length}) · Suggestions ({matches.suggestions.length})
             </div>
             <div className="max-h-72 overflow-y-auto text-xs">
-              {matches.matches.map((m, i) => (
-                <div key={`m${i}`} className="py-0.5 border-b border-border-primary">
-                  <span className="text-green-400">✓</span> {m.sub.reference} ↔ {m.gl.entry_number} <span className="text-text-muted">({m.reason})</span>
+              {matches.matches.map((m: any, i: number) => (
+                <div key={`m${i}`} className="py-0.5 border-b border-border-primary flex items-center gap-2 flex-wrap">
+                  <span className="text-green-400">✓</span> {m.sub.reference} ↔ {m.gl.entry_number}
+                  <Stars n={m.confidence || 0} />
+                  {Math.abs(m.delta || 0) > 0.01 && <span className="text-red-400 font-bold">Δ {formatCurrency(m.delta)}</span>}
+                  <span className="text-text-muted text-[10px]">({m.reason})</span>
                 </div>
               ))}
-              {matches.suggestions.map((m, i) => (
-                <div key={`s${i}`} className="py-0.5 border-b border-border-primary">
-                  <span className="text-yellow-400">?</span> {m.sub.reference || formatCurrency(m.sub.amount || 0)} ↔ {m.gl.entry_number} <span className="text-text-muted">({m.reason})</span>
+              {matches.suggestions.map((m: any, i: number) => (
+                <div key={`s${i}`} className="py-0.5 border-b border-border-primary flex items-center gap-2 flex-wrap">
+                  <span className="text-yellow-400">?</span> {m.sub.reference || formatCurrency(m.sub.amount || 0)} ↔ {m.gl.entry_number}
+                  <Stars n={m.confidence || 0} />
+                  {Math.abs(m.delta || 0) > 0.01 && <span className="text-red-400 font-bold">Δ {formatCurrency(m.delta)}</span>}
+                  <span className="text-text-muted text-[10px]">({m.reason})</span>
                 </div>
               ))}
             </div>
@@ -204,6 +315,111 @@ const AccountReconciliation: React.FC = () => {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* 17. Auto-approve banner */}
+      {computed && autoApprove.threshold > 0 && (
+        <div className={`p-2 text-xs border ${autoApprove.autoApprove ? 'bg-green-500/10 border-green-500/40 text-green-400' : 'bg-bg-secondary border-border-primary'}`}>
+          Threshold: {formatCurrency(autoApprove.threshold)} · {autoApprove.autoApprove ? 'Auto-approval eligible (variance within threshold).' : 'Variance exceeds threshold; manual review required.'}
+        </div>
+      )}
+
+      {/* 11. Recon notes per item (unmatched + saved items) */}
+      {computed && (
+        <div className="border border-border-primary p-3">
+          <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><ListChecks size={12} /> Item-level notes</div>
+          {(computed.sub_ledger_items || []).filter((it: any) => !matches.matches.find((m: any) => m.sub.id === it.id)).slice(0, 30).map((it: any) => {
+            const saved = items.find(s => s.transaction_id === it.id);
+            return (
+              <div key={it.id} className="flex items-center gap-2 py-1 border-b border-border-primary text-xs">
+                <span className="w-32 truncate">{it.reference}</span>
+                <span className="w-20 text-right">{formatCurrency(it.amount || 0)}</span>
+                <input defaultValue={saved?.note || ''} placeholder="note"
+                  onBlur={(e) => saveItemNote(it.id, it.reference, it.amount, e.target.value, saved?.status || 'open')}
+                  className="flex-1 px-1.5 py-0.5 text-xs bg-bg-primary border border-border-primary" />
+                <select defaultValue={saved?.status || 'open'}
+                  onChange={(e) => saveItemNote(it.id, it.reference, it.amount, saved?.note || '', e.target.value)}
+                  className="px-1 py-0.5 text-[10px] bg-bg-primary border border-border-primary">
+                  <option value="open">Open</option>
+                  <option value="cleared">Cleared</option>
+                  <option value="disputed">Disputed</option>
+                  <option value="written_off">Written off</option>
+                </select>
+              </div>
+            );
+          })}
+          {!computed.sub_ledger_items?.length && <div className="text-text-muted text-xs">No sub-ledger items.</div>}
+        </div>
+      )}
+
+      {/* 14. Export reconciled items + 13. Import statement */}
+      {computed && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={exportItemsCsv} className="px-3 py-1.5 text-xs font-semibold border border-border-primary"><Download size={11} className="inline mr-1" />Export items CSV</button>
+          <input type="file" accept=".csv" onChange={(e) => setStatementFile(e.target.files?.[0] || null)} className="text-xs" />
+          <button disabled={!statementFile} onClick={importStatement} className="px-3 py-1.5 text-xs font-semibold border border-border-primary"><Upload size={11} className="inline mr-1" />Import statement CSV</button>
+          {imports.length > 0 && <span className="text-[11px] text-text-muted">{imports.length} import{imports.length > 1 ? 's' : ''} on file</span>}
+        </div>
+      )}
+
+      {/* 18 & 19. Prior-period link + rollover items */}
+      {prior.prior && (
+        <div className="border border-border-primary p-3">
+          <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><History size={12} /> Prior reconciliation: {prior.prior.as_of_date}</div>
+          <div className="text-xs">Variance then: <span className={Math.abs(prior.prior.variance) < 0.01 ? 'text-green-400' : 'text-red-400'}>{formatCurrency(prior.prior.variance)}</span></div>
+          {prior.uncleared.length > 0 && (
+            <>
+              <div className="text-xs font-semibold mt-2">Uncleared items rolling forward ({prior.uncleared.length})</div>
+              <div className="max-h-32 overflow-y-auto text-xs">
+                {prior.uncleared.map((u: any) => (
+                  <div key={u.id} className="py-0.5 border-b border-border-primary flex justify-between">
+                    <span>{u.reference} · {formatCurrency(u.amount || 0)}</span>
+                    <span className="text-text-muted">{u.note}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={carryForward} className="mt-2 px-2 py-1 text-xs border border-border-primary">Carry forward into current period</button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 15. Multi-account recon */}
+      <div className="border border-border-primary p-3">
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><Layers size={12} /> Multi-account reconciliation</div>
+        <button onClick={computeMulti} className="px-2 py-1 text-xs border border-border-primary mb-2">Run for all control accounts</button>
+        {multi.length > 0 && (
+          <table className="w-full text-xs">
+            <thead><tr><th className="text-left py-1">Account</th><th className="text-right">Sub-ledger</th><th className="text-right">GL</th><th className="text-right">Variance</th></tr></thead>
+            <tbody>
+              {multi.map((r: any) => (
+                <tr key={r.account_id} className="border-b border-border-primary">
+                  <td>{r.code} {r.name}</td>
+                  <td className="text-right">{formatCurrency(r.sub)}</td>
+                  <td className="text-right">{formatCurrency(r.gl)}</td>
+                  <td className={`text-right ${Math.abs(r.variance) < 0.01 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(r.variance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* 16. Scheduled recon reminders */}
+      <div className="border border-border-primary p-3">
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5"><Bell size={12} /> Recon schedule</div>
+        <button onClick={addSchedule} className="px-2 py-1 text-xs border border-border-primary mb-2">+ Schedule for selected account</button>
+        {schedules.length === 0 && <div className="text-xs text-text-muted">No schedules set.</div>}
+        {schedules.map((s: any) => {
+          const overdue = s.next_due && s.next_due <= new Date().toISOString().slice(0, 10);
+          return (
+            <div key={s.id} className={`flex justify-between py-1 border-b border-border-primary text-xs ${overdue ? 'text-red-400' : ''}`}>
+              <span>{s.code} {s.name} · {s.frequency} · threshold {formatCurrency(s.threshold || 0)}</span>
+              <span>Next: {s.next_due || '—'} {overdue && <span className="ml-1 px-1 bg-red-500/20">DUE</span>}</span>
+              <button onClick={() => deleteSchedule(s.id)} className="text-text-muted hover:text-red-400">×</button>
+            </div>
+          );
+        })}
       </div>
 
       {account && <div className="text-[11px] text-text-muted">Account type: {account.type} / {account.subtype}</div>}
