@@ -632,11 +632,15 @@ export default function SettingsModule() {
                 setCompanyForm({ ...companyForm, fiscal_year_start: parseInt(e.target.value) })
               }
             >
+              {/* Months sorted alphabetically per app-wide directive (semantic order is Jan–Dec). */}
               {[
                 'January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December',
-              ].map((m, i) => (
-                <option key={i + 1} value={i + 1}>{m}</option>
+              ]
+                .map((m, i) => ({ label: m, value: i + 1 }))
+                .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+                .map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
           </Field>

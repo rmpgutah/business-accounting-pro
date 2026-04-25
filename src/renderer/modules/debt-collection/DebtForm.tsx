@@ -632,9 +632,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 onChange={handleDebtorTypeChange}
               >
                 <option value="client">Client</option>
-                <option value="vendor">Vendor</option>
-                <option value="employee">Employee</option>
                 <option value="custom">Custom</option>
+                <option value="employee">Employee</option>
+                <option value="vendor">Vendor</option>
               </select>
             </div>
 
@@ -652,7 +652,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   <option value="">
                     Select {form.debtor_type === 'client' ? 'client' : form.debtor_type === 'employee' ? 'employee' : 'vendor'}...
                   </option>
-                  {(form.debtor_type === 'client' ? clients : form.debtor_type === 'employee' ? employees : vendors).map((item) => (
+                  {[...(form.debtor_type === 'client' ? clients : form.debtor_type === 'employee' ? employees : vendors)]
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
@@ -798,9 +800,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 value={form.source_type}
                 onChange={handleSourceTypeChange}
               >
-                <option value="manual">Manual Entry</option>
-                <option value="invoice">From Invoice</option>
                 <option value="bill">From Bill</option>
+                <option value="invoice">From Invoice</option>
+                <option value="manual">Manual Entry</option>
               </select>
             </div>
 
@@ -818,7 +820,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   <option value="">
                     Select {form.source_type === 'invoice' ? 'invoice' : 'bill'}...
                   </option>
-                  {(form.source_type === 'invoice' ? invoices : bills).map((item) => (
+                  {[...(form.source_type === 'invoice' ? invoices : bills)]
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
@@ -887,10 +891,10 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 value={form.priority}
                 onChange={handleChange}
               >
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
               </select>
             </div>
 
@@ -960,8 +964,8 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 value={form.interest_type}
                 onChange={handleChange}
               >
-                <option value="simple">Simple</option>
                 <option value="compound">Compound</option>
+                <option value="simple">Simple</option>
               </select>
             </div>
 
@@ -977,9 +981,9 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   value={form.compound_frequency}
                   onChange={handleChange}
                 >
+                  <option value="1">Annually</option>
                   <option value="12">Monthly</option>
                   <option value="4">Quarterly</option>
-                  <option value="1">Annually</option>
                 </select>
               </div>
             )}
@@ -1076,11 +1080,11 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Employment Status</label>
               <select className="block-select w-full" value={form.employment_status} onChange={(e) => setForm(p => ({...p, employment_status: e.target.value as DebtFormData['employment_status']}))}>
-                <option value="unknown">Unknown</option>
                 <option value="employed">Employed</option>
+                <option value="retired">Retired</option>
                 <option value="self-employed">Self-Employed</option>
                 <option value="unemployed">Unemployed</option>
-                <option value="retired">Retired</option>
+                <option value="unknown">Unknown</option>
               </select>
             </div>
             <div>
@@ -1095,10 +1099,14 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Preferred Contact Method</label>
               <select className="block-select w-full" value={form.preferred_contact_method} onChange={(e) => setForm(p => ({...p, preferred_contact_method: e.target.value}))}>
                 <option value="">No Preference</option>
-                <option value="phone">Phone</option>
-                <option value="email">Email</option>
-                <option value="letter">Letter</option>
-                <option value="text">Text</option>
+                <optgroup label="Digital">
+                  <option value="email">Email</option>
+                  <option value="text">Text</option>
+                </optgroup>
+                <optgroup label="Physical">
+                  <option value="letter">Letter</option>
+                  <option value="phone">Phone</option>
+                </optgroup>
               </select>
             </div>
             <div className="flex items-center gap-6 col-span-2">
@@ -1175,20 +1183,20 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 <option value="">Select source...</option>
                 <option value="Equifax">Equifax</option>
                 <option value="Experian">Experian</option>
-                <option value="TransUnion">TransUnion</option>
                 <option value="Other">Other</option>
+                <option value="TransUnion">TransUnion</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Currency</label>
               <select className="block-select" value={form.currency} onChange={(e) => setForm(p => ({...p, currency: e.target.value}))}>
-                <option value="USD">USD</option>
+                <option value="AUD">AUD</option>
+                <option value="CAD">CAD</option>
                 <option value="EUR">EUR</option>
                 <option value="GBP">GBP</option>
-                <option value="CAD">CAD</option>
-                <option value="AUD">AUD</option>
-                <option value="MXN">MXN</option>
                 <option value="JPY">JPY</option>
+                <option value="MXN">MXN</option>
+                <option value="USD">USD</option>
               </select>
             </div>
             {form.currency !== 'USD' && (

@@ -29,6 +29,7 @@ interface Account {
   id: string;
   name: string;
   code: string;
+  type?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -313,19 +314,21 @@ const BankRules: React.FC = () => {
 
             <F label="Match Field">
               <select className="block-select w-full" value={form.match_field} onChange={(e) => setF('match_field', e.target.value)}>
-                <option value="description">Description</option>
+                {/* Alphabetical A→Z */}
                 <option value="amount">Amount</option>
+                <option value="description">Description</option>
                 <option value="reference">Reference</option>
               </select>
             </F>
 
             <F label="Match Type">
               <select className="block-select w-full" value={form.match_type} onChange={(e) => setF('match_type', e.target.value)}>
+                {/* Alphabetical A→Z */}
                 <option value="contains">Contains</option>
-                <option value="starts_with">Starts With</option>
                 <option value="ends_with">Ends With</option>
                 <option value="exact">Exact Match</option>
                 <option value="regex">Regex</option>
+                <option value="starts_with">Starts With</option>
               </select>
             </F>
 
@@ -360,9 +363,10 @@ const BankRules: React.FC = () => {
 
             <F label="Transaction Type">
               <select className="block-select w-full" value={form.transaction_type} onChange={(e) => setF('transaction_type', e.target.value)}>
+                {/* Alphabetical A→Z */}
                 <option value="any">Any</option>
-                <option value="debit">Debit</option>
                 <option value="credit">Credit</option>
+                <option value="debit">Debit</option>
               </select>
             </F>
 
@@ -373,9 +377,30 @@ const BankRules: React.FC = () => {
                 onChange={(e) => setF('action_account_id', e.target.value)}
               >
                 <option value="">-- Select Account --</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-                ))}
+                {/* Group by account type — alphabetical headers, alphabetical accounts within */}
+                {(() => {
+                  const TYPE_LABELS: Record<string, string> = {
+                    asset: 'Assets', equity: 'Equity', expense: 'Expenses',
+                    liability: 'Liabilities', revenue: 'Revenue',
+                  };
+                  const sorted = [...accounts].sort((a, b) =>
+                    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+                  );
+                  const groups: Record<string, Account[]> = {};
+                  for (const a of sorted) {
+                    const k = TYPE_LABELS[a.type ?? ''] ?? 'Other';
+                    (groups[k] ||= []).push(a);
+                  }
+                  return Object.keys(groups)
+                    .sort((x, y) => x.localeCompare(y))
+                    .map((label) => (
+                      <optgroup key={label} label={label}>
+                        {groups[label].map((a) => (
+                          <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                        ))}
+                      </optgroup>
+                    ));
+                })()}
               </select>
             </F>
 

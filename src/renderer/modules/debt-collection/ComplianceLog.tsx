@@ -134,7 +134,9 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
               value={form.event_type}
               onChange={e => setForm(p => ({ ...p, event_type: e.target.value }))}
             >
-              {Object.entries(EVENT_LABELS).map(([k, v]) => (
+              {Object.entries(EVENT_LABELS)
+                .sort(([, a], [, b]) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }))
+                .map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>

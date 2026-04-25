@@ -362,11 +362,13 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                 onChange={(e) => setForm((f) => ({ ...f, account_id: e.target.value }))}
               >
                 <option value="">— None —</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.code} — {a.name}
-                  </option>
-                ))}
+                {[...accounts]
+                  .sort((a, b) => `${a.code} — ${a.name}`.localeCompare(`${b.code} — ${b.name}`, undefined, { sensitivity: 'base' }))
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code} — {a.name}
+                    </option>
+                  ))}
               </select>
             </div>
 

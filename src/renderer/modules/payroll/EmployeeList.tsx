@@ -190,9 +190,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
           >
+            {/* Placeholder first; remaining alphabetical A→Z */}
             <option value="all">All Types</option>
-            <option value="employee">Employees</option>
             <option value="contractor">Contractors</option>
+            <option value="employee">Employees</option>
           </select>
         </div>
         <div className="relative inline-flex items-center gap-1.5">

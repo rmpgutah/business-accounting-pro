@@ -83,7 +83,9 @@ const INVOICE_TYPE_CONFIG: Record<InvoiceType, InvoiceTypeConfig> = {
   proforma:    { label: 'Proforma',    description: 'Preliminary estimate (not final)',    qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'PRO' },
 };
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN', 'JPY', 'CHF', 'CNY', 'INR'];
+const CURRENCIES_COMMON = ['AUD', 'CAD', 'EUR', 'GBP', 'USD'];
+const CURRENCIES_OTHER = ['CHF', 'CNY', 'INR', 'JPY', 'MXN'];
+const CURRENCIES = [...CURRENCIES_COMMON, ...CURRENCIES_OTHER];
 
 // ─── GripCell (hoisted to module scope to prevent remount-on-render) ───
 interface GripCellProps {
@@ -971,7 +973,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               value={form.currency}
               onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
             >
-              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              <optgroup label="Common">
+                {CURRENCIES_COMMON.map(c => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
+              <optgroup label="Other">
+                {CURRENCIES_OTHER.map(c => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
             </select>
           </div>
         </div>
@@ -1037,7 +1044,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               }));
             }}>
               <option value="">Select a client...</option>
-              {clients.map((c) => (
+              {[...clients].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -1076,6 +1083,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               <option value="Net 30">Net 30</option>
               <option value="Net 45">Net 45</option>
               <option value="Net 60">Net 60</option>
+              {/* Sorted alphabetically per app-wide UX directive */}
             </select>
           </div>
         </div>
@@ -1504,9 +1512,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       onChange={(e) => updateLine(idx, 'account_id', e.target.value)}
                     >
                       <option value="">Select account</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>{a.code ? `${a.code} - ${a.name}` : a.name}</option>
-                      ))}
+                      {[...accounts]
+                        .sort((a, b) => {
+                          const la = a.code ? `${a.code} - ${a.name}` : a.name;
+                          const lb = b.code ? `${b.code} - ${b.name}` : b.name;
+                          return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+                        })
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>{a.code ? `${a.code} - ${a.name}` : a.name}</option>
+                        ))}
                     </select>
                   </td>
                   <td className="p-1 text-center">

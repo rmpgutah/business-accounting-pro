@@ -160,13 +160,13 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                     value={form.role}
                     onChange={handleChange}
                   >
+                    <option value="attorney">Attorney</option>
+                    <option value="collections_agent">Collections Agent</option>
                     <option value="debtor">Debtor</option>
                     <option value="guarantor">Guarantor</option>
-                    <option value="attorney">Attorney</option>
-                    <option value="witness">Witness</option>
-                    <option value="collections_agent">Collections Agent</option>
                     <option value="judge">Judge</option>
                     <option value="mediator">Mediator</option>
+                    <option value="witness">Witness</option>
                   </select>
                 </div>
                 <div>

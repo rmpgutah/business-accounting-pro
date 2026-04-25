@@ -30,47 +30,47 @@ interface ParentOption {
   name: string;
 }
 
-// ─── Subtypes by Type ───────────────────────────────────
+// ─── Subtypes by Type (alphabetical within each type) ───
 const SUBTYPES: Record<AccountType, string[]> = {
   asset: [
-    'Cash and Cash Equivalents',
     'Accounts Receivable',
-    'Inventory',
-    'Prepaid Expenses',
+    'Cash and Cash Equivalents',
     'Fixed Assets',
+    'Inventory',
     'Other Current Assets',
     'Other Non-Current Assets',
+    'Prepaid Expenses',
   ],
   liability: [
     'Accounts Payable',
-    'Credit Card',
     'Accrued Liabilities',
+    'Credit Card',
     'Current Liabilities',
     'Long-Term Liabilities',
     'Payroll Liabilities',
   ],
   equity: [
+    'Additional Paid-In Capital',
+    'Common Stock',
+    'Distributions',
     "Owner's Equity",
     'Retained Earnings',
-    'Common Stock',
-    'Additional Paid-In Capital',
-    'Distributions',
   ],
   revenue: [
-    'Sales Revenue',
-    'Service Revenue',
     'Interest Income',
     'Other Income',
+    'Sales Revenue',
+    'Service Revenue',
   ],
   expense: [
     'Cost of Goods Sold',
-    'Operating Expenses',
-    'Payroll Expenses',
-    'Rent & Utilities',
     'Depreciation',
     'Interest Expense',
-    'Taxes',
+    'Operating Expenses',
     'Other Expenses',
+    'Payroll Expenses',
+    'Rent & Utilities',
+    'Taxes',
   ],
 };
 
@@ -107,7 +107,8 @@ const AccountForm: React.FC<AccountFormProps> = ({
         if (Array.isArray(data)) {
           const opts = data
             .filter((a: Account) => a.id !== account?.id)
-            .map((a: Account) => ({ id: a.id, code: a.code, name: a.name }));
+            .map((a: Account) => ({ id: a.id, code: a.code, name: a.name }))
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
           setParentOptions(opts);
         }
       } catch (err) {
@@ -250,11 +251,12 @@ const AccountForm: React.FC<AccountFormProps> = ({
               className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
               style={{ borderRadius: '6px' }}
             >
+              {/* Alphabetical A→Z */}
               <option value="asset">Asset</option>
-              <option value="liability">Liability</option>
               <option value="equity">Equity</option>
-              <option value="revenue">Revenue</option>
               <option value="expense">Expense</option>
+              <option value="liability">Liability</option>
+              <option value="revenue">Revenue</option>
             </select>
           </div>
 

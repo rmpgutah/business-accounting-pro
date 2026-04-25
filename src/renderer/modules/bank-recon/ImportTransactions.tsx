@@ -220,12 +220,15 @@ const ImportTransactions: React.FC = () => {
               onChange={(e) => setSelectedBankId(e.target.value)}
             >
               <option value="">-- Select bank account --</option>
-              {bankAccounts.map((ba) => (
-                <option key={ba.id} value={ba.id}>
-                  {ba.name}
-                  {ba.institution ? ` (${ba.institution})` : ''}
-                </option>
-              ))}
+              {/* Alphabetical A→Z by name */}
+              {[...bankAccounts]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((ba) => (
+                  <option key={ba.id} value={ba.id}>
+                    {ba.name}
+                    {ba.institution ? ` (${ba.institution})` : ''}
+                  </option>
+                ))}
             </select>
           </div>
         </div>

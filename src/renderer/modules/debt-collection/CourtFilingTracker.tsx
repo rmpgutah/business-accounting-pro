@@ -92,24 +92,25 @@ function getDefaultChecklist(actionType: string): ChecklistItem[] {
 }
 
 const ACTION_TYPES = [
-  { value: 'demand_letter', label: 'Demand Letter' },
-  { value: 'small_claims', label: 'Small Claims' },
-  { value: 'civil_suit', label: 'Civil Suit' },
   { value: 'arbitration', label: 'Arbitration' },
-  { value: 'mediation', label: 'Mediation' },
+  { value: 'civil_suit', label: 'Civil Suit' },
+  { value: 'demand_letter', label: 'Demand Letter' },
   { value: 'garnishment_order', label: 'Garnishment Order' },
   { value: 'lien', label: 'Lien' },
+  { value: 'mediation', label: 'Mediation' },
+  { value: 'small_claims', label: 'Small Claims' },
 ];
 
+// Status options sorted alphabetically by label per directive (semantic workflow order is preparing → filed → served → hearing_scheduled → in_progress → judgment → appeal → closed).
 const STATUS_OPTIONS = [
-  'preparing',
+  'appeal',
+  'closed',
   'filed',
-  'served',
   'hearing_scheduled',
   'in_progress',
   'judgment',
-  'appeal',
-  'closed',
+  'preparing',
+  'served',
 ];
 
 function todayISO(): string {
@@ -418,7 +419,9 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
               onChange={handleFormChange}
             >
               <option value="">-- None --</option>
-              {attorneys.map((a) => (
+              {[...attorneys]
+                .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                .map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>

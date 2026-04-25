@@ -27,20 +27,20 @@ interface RunLogEntry {
 
 // ─── Constants ───────────────────────────────────────────
 const TRIGGER_TYPES = [
-  { value: 'invoice_overdue',   label: 'Invoice Overdue' },
   { value: 'bill_due_soon',     label: 'Bill Due Soon' },
-  { value: 'payment_received',  label: 'Payment Received' },
   { value: 'expense_created',   label: 'Expense Created' },
+  { value: 'invoice_overdue',   label: 'Invoice Overdue' },
   { value: 'low_cash_balance',  label: 'Low Cash Balance' },
+  { value: 'payment_received',  label: 'Payment Received' },
   { value: 'schedule',          label: 'Scheduled (Daily/Weekly)' },
 ];
 
 const ACTION_TYPES = [
-  { value: 'send_email',         label: 'Send Email' },
+  { value: 'apply_late_fee',     label: 'Apply Late Fee' },
+  { value: 'change_status',      label: 'Change Status' },
   { value: 'create_notification',label: 'Create Notification' },
   { value: 'flag_for_review',    label: 'Flag for Review' },
-  { value: 'change_status',      label: 'Change Status' },
-  { value: 'apply_late_fee',     label: 'Apply Late Fee' },
+  { value: 'send_email',         label: 'Send Email' },
 ];
 
 const TRIGGER_BADGE: Record<string, { border: string; text: string }> = {

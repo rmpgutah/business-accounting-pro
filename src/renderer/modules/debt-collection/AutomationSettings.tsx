@@ -34,9 +34,9 @@ interface AutomationSettingsProps {
 // ─── Constants ──────────────────────────────────────────
 const ACTION_OPTIONS = [
   { value: 'advance_stage', label: 'Advance Stage' },
-  { value: 'send_template', label: 'Send Template' },
   { value: 'create_notification', label: 'Create Notification' },
   { value: 'flag_review', label: 'Flag for Review' },
+  { value: 'send_template', label: 'Send Template' },
 ];
 
 const TYPE_COLORS: Record<string, string> = {

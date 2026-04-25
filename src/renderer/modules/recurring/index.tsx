@@ -360,8 +360,8 @@ const RecurringTransactions: React.FC = () => {
                     setFormData({ ...formData, type: e.target.value as 'invoice' | 'expense' })
                   }
                 >
-                  <option value="invoice">Invoice</option>
                   <option value="expense">Expense</option>
+                  <option value="invoice">Invoice</option>
                 </select>
               </div>
             </div>
@@ -378,11 +378,11 @@ const RecurringTransactions: React.FC = () => {
                     })
                   }
                 >
-                  <option value="weekly">Weekly</option>
+                  <option value="annually">Annually</option>
                   <option value="biweekly">Bi-weekly</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
-                  <option value="annually">Annually</option>
+                  <option value="weekly">Weekly</option>
                 </select>
               </div>
               <div>
@@ -466,8 +466,8 @@ const RecurringTransactions: React.FC = () => {
                   onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
                 >
                   <option value="">All Types</option>
-                  <option value="invoice">Invoice</option>
                   <option value="expense">Expense</option>
+                  <option value="invoice">Invoice</option>
                 </select>
               </div>
               <select

@@ -274,11 +274,14 @@ const ReconcileView: React.FC = () => {
             onChange={(e) => setSelectedBankId(e.target.value)}
           >
             <option value="">-- Select bank account --</option>
-            {bankAccounts.map((ba) => (
-              <option key={ba.id} value={ba.id}>
-                {ba.name}
-              </option>
-            ))}
+            {/* Alphabetical A→Z */}
+            {[...bankAccounts]
+              .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+              .map((ba) => (
+                <option key={ba.id} value={ba.id}>
+                  {ba.name}
+                </option>
+              ))}
           </select>
         </div>
         <div className="flex items-center gap-2 pt-5">

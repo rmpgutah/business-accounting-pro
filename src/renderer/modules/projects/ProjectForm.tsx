@@ -229,9 +229,11 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
               onChange={(e) => set('client_id', e.target.value)}
             >
               <option value="">-- No Client --</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {[...clients]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
             </select>
           </div>
 
@@ -260,10 +262,15 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
               value={form.status}
               onChange={(e) => set('status', e.target.value)}
             >
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-              <option value="on_hold">On Hold</option>
-              <option value="archived">Archived</option>
+              {/* Sorted alphabetically per app-wide UX directive (originally workflow order: Active → Completed) */}
+              <optgroup label="Active">
+                <option value="active">Active</option>
+                <option value="on_hold">On Hold</option>
+              </optgroup>
+              <optgroup label="Closed">
+                <option value="archived">Archived</option>
+                <option value="completed">Completed</option>
+              </optgroup>
             </select>
           </div>
 

@@ -835,7 +835,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 }}
               >
                 <option value="">Unassigned</option>
-                {users.map(u => (
+                {[...users]
+                  .sort((a, b) => (a.display_name || a.email || '').localeCompare(b.display_name || b.email || '', undefined, { sensitivity: 'base' }))
+                  .map(u => (
                   <option key={u.id} value={u.id}>{u.display_name || u.email}</option>
                 ))}
               </select>
@@ -1154,10 +1156,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               <div>
                 <label className="block text-xs text-text-muted mb-1">Type</label>
                 <select className="block-select" value={schedCommForm.type} onChange={(e) => setSchedCommForm(f => ({ ...f, type: e.target.value }))}>
-                  <option value="email">Email</option>
-                  <option value="phone">Phone</option>
-                  <option value="letter">Letter</option>
-                  <option value="text">Text</option>
+                  <optgroup label="Digital">
+                    <option value="email">Email</option>
+                    <option value="text">Text</option>
+                  </optgroup>
+                  <optgroup label="Physical">
+                    <option value="letter">Letter</option>
+                    <option value="phone">Phone</option>
+                  </optgroup>
                 </select>
               </div>
               <div>
@@ -1209,10 +1215,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               <div>
                 <label className="block text-xs text-text-muted mb-1">Fee Type</label>
                 <select className="block-select" value={feeForm.feeType} onChange={(e) => setFeeForm(f => ({ ...f, feeType: e.target.value }))}>
-                  <option value="late_fee">Late Fee</option>
-                  <option value="collection_fee">Collection Fee</option>
                   <option value="admin_fee">Admin Fee</option>
+                  <option value="collection_fee">Collection Fee</option>
                   <option value="court_cost">Court Cost</option>
+                  <option value="late_fee">Late Fee</option>
                   <option value="other">Other</option>
                 </select>
               </div>
@@ -1741,21 +1747,21 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <div>
                     <label className="block text-xs text-text-muted mb-1">Reason</label>
                     <select className="block-select" value={disputeForm.reason} onChange={(e) => setDisputeForm(f => ({ ...f, reason: e.target.value }))}>
-                      <option value="not_my_debt">Not My Debt</option>
-                      <option value="wrong_amount">Wrong Amount</option>
                       <option value="already_paid">Already Paid</option>
-                      <option value="statute_expired">Statute Expired</option>
                       <option value="identity_theft">Identity Theft</option>
+                      <option value="not_my_debt">Not My Debt</option>
                       <option value="other">Other</option>
+                      <option value="statute_expired">Statute Expired</option>
+                      <option value="wrong_amount">Wrong Amount</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs text-text-muted mb-1">Status</label>
                     <select className="block-select" value={disputeForm.status} onChange={(e) => setDisputeForm(f => ({ ...f, status: e.target.value }))}>
-                      <option value="open">Open</option>
                       <option value="investigating">Investigating</option>
-                      <option value="resolved">Resolved</option>
+                      <option value="open">Open</option>
                       <option value="rejected">Rejected</option>
+                      <option value="resolved">Resolved</option>
                     </select>
                   </div>
                 </div>
@@ -1822,10 +1828,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <div>
                     <label className="block text-xs text-text-muted mb-1">Result</label>
                     <select className="block-select" value={skipTraceForm.result} onChange={(e) => setSkipTraceForm(f => ({ ...f, result: e.target.value }))}>
-                      <option value="pending">Pending</option>
-                      <option value="verified">Verified</option>
                       <option value="invalid">Invalid</option>
                       <option value="no_contact">No Contact</option>
+                      <option value="pending">Pending</option>
+                      <option value="verified">Verified</option>
                     </select>
                   </div>
                   <div>

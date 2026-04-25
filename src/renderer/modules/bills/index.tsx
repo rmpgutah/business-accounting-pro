@@ -11,7 +11,11 @@ import {
   Search,
   Edit,
   Copy,
+  Eye,
+  Printer,
+  Download,
 } from 'lucide-react';
+import { generateBillHTML } from '../../lib/print-templates';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -75,6 +79,33 @@ interface Account {
   id: string;
   name: string;
   code?: string;
+  type?: string;
+}
+
+// Group accounts by type for <optgroup> display
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  asset: 'Assets',
+  equity: 'Equity',
+  expense: 'Expenses',
+  liability: 'Liabilities',
+  revenue: 'Revenue',
+};
+function groupAccountsByType(accounts: Account[]) {
+  const groups = new Map<string, Account[]>();
+  for (const a of accounts) {
+    const key = a.type ? (ACCOUNT_TYPE_LABELS[a.type.toLowerCase()] ?? a.type) : 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(a);
+  }
+  const sortedGroupKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return sortedGroupKeys.map((label) => ({
+    label,
+    items: groups.get(label)!.slice().sort((a, b) => {
+      const la = a.code ? `${a.code} - ${a.name}` : a.name;
+      const lb = b.code ? `${b.code} - ${b.name}` : b.name;
+      return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+    }),
+  }));
 }
 
 interface BillStats {
@@ -123,11 +154,11 @@ const STATUS_TABS: { key: StatusTab; label: string }[] = [
 ];
 
 const PAYMENT_METHODS = [
-  { value: 'check', label: 'Check' },
   { value: 'ach', label: 'ACH' },
-  { value: 'wire', label: 'Wire' },
-  { value: 'credit_card', label: 'Credit Card' },
   { value: 'cash', label: 'Cash' },
+  { value: 'check', label: 'Check' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'wire', label: 'Wire' },
 ];
 
 // ─── Label helper ─────────────────────────────────────────
@@ -698,11 +729,13 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               onChange={(e) => updateField('vendor_id', e.target.value)}
             >
               <option value="">Select a vendor...</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
+              {[...vendors]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -736,9 +769,10 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               value={form.status}
               onChange={(e) => updateField('status', e.target.value as BillStatus)}
             >
+              {/* Sorted alphabetically per app-wide UX directive (originally workflow order: Draft → Pending → Approved) */}
+              <option value="approved">Approved</option>
               <option value="draft">Draft</option>
               <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
             </select>
           </div>
 
@@ -804,10 +838,14 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                       onChange={(e) => updateLine(line._key, 'account_id', e.target.value)}
                     >
                       <option value="">Select account</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code ? `${a.code} - ${a.name}` : a.name}
-                        </option>
+                      {groupAccountsByType(accounts).map((g) => (
+                        <optgroup key={g.label} label={g.label}>
+                          {g.items.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.code ? `${a.code} - ${a.name}` : a.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </td>
@@ -1004,6 +1042,26 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
     }
   };
 
+  const buildPrintHTML = () => {
+    if (!bill) return '';
+    return generateBillHTML(bill, activeCompany, vendor, lines, undefined, accounts);
+  };
+  const handlePreview = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.printPreview(html, `Bill ${bill?.bill_number || ''}`);
+  };
+  const handlePrint = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.print(html);
+  };
+  const handleSavePDF = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.saveToPDF(html, `Bill-${bill?.bill_number || 'document'}`);
+  };
+
   const handleDuplicate = async () => {
     if (!bill) return;
     const result = await api.cloneRecord('bills', bill.id);
@@ -1036,6 +1094,27 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           <span className={badge.className}>{badge.label}</span>
         </div>
         <div className="module-actions">
+          <button
+            className="block-btn flex items-center gap-2"
+            style={{ borderRadius: '6px' }}
+            onClick={handlePreview}
+          >
+            <Eye size={14} /> Preview
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            style={{ borderRadius: '6px' }}
+            onClick={handlePrint}
+          >
+            <Printer size={14} /> Print
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            style={{ borderRadius: '6px' }}
+            onClick={handleSavePDF}
+          >
+            <Download size={14} /> Save PDF
+          </button>
           <button
             onClick={handleDuplicate}
             className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
@@ -1325,10 +1404,14 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                 onChange={(e) => setPayAccountId(e.target.value)}
               >
                 <option value="">Select account...</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.code ? `${a.code} - ${a.name}` : a.name}
-                  </option>
+                {groupAccountsByType(accounts).map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.items.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.code ? `${a.code} - ${a.name}` : a.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>

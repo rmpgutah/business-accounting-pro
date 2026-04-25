@@ -178,15 +178,15 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
                     value={form.type}
                     onChange={handleChange}
                   >
-                    <option value="contract">Contract</option>
-                    <option value="invoice">Invoice</option>
                     <option value="communication">Communication</option>
-                    <option value="payment_record">Payment Record</option>
+                    <option value="contract">Contract</option>
                     <option value="delivery_proof">Delivery Proof</option>
+                    <option value="invoice">Invoice</option>
+                    <option value="other">Other</option>
+                    <option value="payment_record">Payment Record</option>
+                    <option value="photo">Photo</option>
                     <option value="signed_agreement">Signed Agreement</option>
                     <option value="witness_statement">Witness Statement</option>
-                    <option value="photo">Photo</option>
-                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div>
@@ -200,8 +200,8 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
                     onChange={handleChange}
                   >
                     <option value="high">High</option>
-                    <option value="medium">Medium</option>
                     <option value="low">Low</option>
+                    <option value="medium">Medium</option>
                   </select>
                 </div>
               </div>

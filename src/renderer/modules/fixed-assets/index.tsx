@@ -71,10 +71,12 @@ interface Account {
 // Route every dollar render through the shared formatter (handles NaN/Infinity).
 const fmt = { format: (v: number | string | null | undefined) => formatCurrency(v) };
 
-const CATEGORIES = ['equipment', 'vehicle', 'building', 'furniture', 'software', 'other'] as const;
+// Alphabetical A→Z by display label (Building, Equipment, Furniture, Other, Software, Vehicle)
+const CATEGORIES = ['building', 'equipment', 'furniture', 'other', 'software', 'vehicle'] as const;
+// Alphabetical A→Z by display label
 const METHODS = [
-  { value: 'straight_line', label: 'Straight Line' },
   { value: 'double_declining', label: 'Double Declining Balance' },
+  { value: 'straight_line', label: 'Straight Line' },
   { value: 'sum_of_years_digits', label: 'Sum of Years Digits' },
 ] as const;
 
@@ -617,9 +619,30 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
                   onChange={(e) => set(key, e.target.value)}
                 >
                   <option value="">-- Select Account --</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-                  ))}
+                  {/* Group by account type — alphabetical headers, alphabetical accounts within */}
+                  {(() => {
+                    const TYPE_LABELS: Record<string, string> = {
+                      asset: 'Assets', equity: 'Equity', expense: 'Expenses',
+                      liability: 'Liabilities', revenue: 'Revenue',
+                    };
+                    const groups: Record<string, Account[]> = {};
+                    const sorted = [...accounts].sort((a, b) =>
+                      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+                    );
+                    for (const a of sorted) {
+                      const k = TYPE_LABELS[a.type] ?? 'Other';
+                      (groups[k] ||= []).push(a);
+                    }
+                    return Object.keys(groups)
+                      .sort((x, y) => x.localeCompare(y))
+                      .map((label) => (
+                        <optgroup key={label} label={label}>
+                          {groups[label].map((a) => (
+                            <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                          ))}
+                        </optgroup>
+                      ));
+                  })()}
                 </select>
               </F>
             ))}

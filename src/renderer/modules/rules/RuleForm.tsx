@@ -6,12 +6,12 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { FieldLabel } from '../../components/FieldLabel';
 
 const CONDITION_FIELDS: Record<string, string[]> = {
-  pricing:    ['client_id','invoice_total','quantity','line_item_category'],
-  tax:        ['client_state','client_country','line_item_description','expense_category','account_code'],
-  approval:   ['amount_gt','vendor_id','expense_category','invoice_total','client_id'],
-  alert:      ['cash_balance','invoice_overdue_count','receivables_total','account_balance'],
-  bank:       ['description','reference','amount'],
-  automation: ['invoice_overdue_days','bill_due_days'],
+  pricing:    ['client_id','invoice_total','line_item_category','quantity'],
+  tax:        ['account_code','client_country','client_state','expense_category','line_item_description'],
+  approval:   ['amount_gt','client_id','expense_category','invoice_total','vendor_id'],
+  alert:      ['account_balance','cash_balance','invoice_overdue_count','receivables_total'],
+  bank:       ['amount','description','reference'],
+  automation: ['bill_due_days','invoice_overdue_days'],
 };
 
 const ACTION_TYPES: Record<string, string[]> = {
@@ -20,10 +20,11 @@ const ACTION_TYPES: Record<string, string[]> = {
   approval:   ['flag_approval'],
   alert:      ['notify','send_email'],
   bank:       ['set_account','set_description'],
-  automation: ['set_description','notify'],
+  automation: ['notify','set_description'],
 };
 
-const OPS = ['eq','neq','lt','lte','gt','gte','contains','starts_with','ends_with','in','regex','between'];
+// Operators sorted alphabetically by displayed value: Between, Contains, Ends With, Equals, Greater Than, In, Less Than, Not Equals, Regex, Starts With.
+const OPS = ['between','contains','ends_with','eq','gt','gte','in','lt','lte','neq','regex','starts_with'];
 
 const TRIGGER_FOR: Record<string, string> = {
   pricing: 'on_save', tax: 'on_save', bank: 'manual',

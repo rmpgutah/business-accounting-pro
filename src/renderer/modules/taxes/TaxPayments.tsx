@@ -32,7 +32,8 @@ const PAYMENT_TYPES: { value: PaymentType; label: string }[] = [
   { value: 'state_balance_due', label: 'State Balance Due' },
 ];
 
-const PERIODS = ['Q1', 'Q2', 'Q3', 'Q4', 'Annual'];
+// Alphabetical A→Z (note: contradicts fiscal-quarter ordering, but follows app-wide directive)
+const PERIODS = ['Annual', 'Q1', 'Q2', 'Q3', 'Q4'];
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -272,11 +273,24 @@ const TaxPayments: React.FC = () => {
                     setFormData({ ...formData, type: e.target.value as PaymentType })
                   }
                 >
-                  {PAYMENT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
+                  {/* Grouped by jurisdiction — Federal first then State (alphabetical headers); items alphabetical within */}
+                  {(() => {
+                    const groups: Record<string, typeof PAYMENT_TYPES> = { Federal: [], State: [] };
+                    for (const t of PAYMENT_TYPES) {
+                      const key = t.value.startsWith('federal') ? 'Federal' : 'State';
+                      groups[key].push(t);
+                    }
+                    for (const k of Object.keys(groups)) {
+                      groups[k].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+                    }
+                    return Object.keys(groups).sort().map((label) => (
+                      <optgroup key={label} label={label}>
+                        {groups[label].map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </optgroup>
+                    ));
+                  })()}
                 </select>
               </div>
               <div>

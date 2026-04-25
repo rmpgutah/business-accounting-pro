@@ -242,9 +242,10 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
                   value={period}
                   onChange={(e) => setPeriod(e.target.value as any)}
                 >
+                  {/* Alphabetical A→Z */}
+                  <option value="annual">Annual</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
-                  <option value="annual">Annual</option>
                 </select>
               </div>
               <div>

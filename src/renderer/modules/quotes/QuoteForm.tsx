@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, FileCheck, Plus, Trash2, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, FileCheck, Plus, Trash2, ArrowRightCircle, Printer, Download, Eye } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { FieldLabel } from '../../components/FieldLabel';
 import { formatCurrency, roundCents } from '../../lib/format';
+import { generateInvoiceHTML } from '../../lib/print-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -341,6 +342,49 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
 
   const isConverted = form.status === 'converted';
 
+  // Build the printable HTML payload — reuses the customer-facing PDF
+  // template (generateInvoiceHTML) and switches its branch via
+  // invoice_type:'quote' so we get the quote-specific signature block,
+  // validity callout, and "QUOTE" doc-type label.
+  const buildQuoteHTML = async (): Promise<string> => {
+    if (!activeCompany) return '';
+    const client = form.client_id ? await api.get('clients', form.client_id) : null;
+    const quotePayload = {
+      ...form,
+      invoice_type: 'quote',
+      document_type: 'quote',
+      // Map quote.expiry_date → due_date so the template's "Valid until"
+      // logic picks it up without requiring schema changes.
+      due_date: (form as any).expiry_date || (form as any).valid_until || form.issue_date,
+    };
+    const lineItems = lines.map((l, i) => ({
+      id: l.id,
+      description: l.description,
+      quantity: Number(l.quantity) || 0,
+      unit_price: Number(l.unit_price) || 0,
+      amount: Number(l.amount) || 0,
+      tax_rate: Number(l.tax_rate) || 0,
+      sort_order: i,
+    }));
+    return generateInvoiceHTML(quotePayload as any, activeCompany, client ?? null, lineItems as any);
+  };
+
+  const handlePreview = async () => {
+    const html = await buildQuoteHTML();
+    if (!html) return;
+    await (api as any).printPreview(html, `Quote ${form.quote_number || ''}`);
+  };
+  const handlePrint = async () => {
+    const html = await buildQuoteHTML();
+    if (!html) return;
+    await (api as any).print(html);
+  };
+  const handleSavePDF = async () => {
+    const html = await buildQuoteHTML();
+    if (!html) return;
+    await (api as any).saveToPDF(html, `Quote-${form.quote_number || 'draft'}`);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -357,6 +401,19 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
             </h2>
           </div>
         </div>
+        {isEditing && (
+          <div className="flex items-center gap-2 mr-2">
+            <button type="button" onClick={handlePreview} className="block-btn flex items-center gap-1.5" title="Preview">
+              <Eye size={14} /> Preview
+            </button>
+            <button type="button" onClick={handlePrint} className="block-btn flex items-center gap-1.5" title="Print">
+              <Printer size={14} /> Print
+            </button>
+            <button type="button" onClick={handleSavePDF} className="block-btn flex items-center gap-1.5" title="Save as PDF">
+              <Download size={14} /> PDF
+            </button>
+          </div>
+        )}
         {isEditing && !isConverted && (form.status === 'accepted' || form.status === 'sent' || form.status === 'draft') && (
           <button
             type="button"
@@ -439,11 +496,13 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               onChange={handleChange}
             >
               <option value="">Select client...</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {[...clients]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -457,12 +516,17 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               onChange={handleChange}
               disabled={isConverted}
             >
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="expired">Expired</option>
-              {isConverted && <option value="converted">Converted</option>}
+              {/* Sorted alphabetically per app-wide UX directive (originally workflow order: Draft → Sent → Accepted → Converted) */}
+              <optgroup label="Active">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+              </optgroup>
+              <optgroup label="Closed">
+                <option value="accepted">Accepted</option>
+                {isConverted && <option value="converted">Converted</option>}
+                <option value="expired">Expired</option>
+                <option value="rejected">Rejected</option>
+              </optgroup>
             </select>
           </div>
 

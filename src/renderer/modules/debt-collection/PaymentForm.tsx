@@ -276,14 +276,14 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
                   value={method}
                   onChange={(e) => setMethod(e.target.value)}
                 >
+                  <option value="ach">ACH</option>
+                  <option value="card">Card</option>
                   <option value="cash">Cash</option>
                   <option value="check">Check</option>
-                  <option value="card">Card</option>
-                  <option value="wire">Wire</option>
-                  <option value="ach">ACH</option>
                   <option value="garnishment">Garnishment</option>
-                  <option value="settlement">Settlement</option>
                   <option value="other">Other</option>
+                  <option value="settlement">Settlement</option>
+                  <option value="wire">Wire</option>
                 </select>
               </div>
 

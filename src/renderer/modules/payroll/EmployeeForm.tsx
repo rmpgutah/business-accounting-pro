@@ -219,10 +219,15 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Type</label>
               <select className="block-select" value={form.type} onChange={(e) => setForm(f => ({...f, type: e.target.value}))}>
-                <option value="deduction">Deduction</option>
-                <option value="benefit">Benefit</option>
-                <option value="garnishment">Garnishment</option>
-                <option value="retirement">Retirement (401k)</option>
+                {/* Group: Pre-tax (Benefit, Retirement) vs Post-tax (Deduction, Garnishment) — alphabetical within */}
+                <optgroup label="Post-Tax">
+                  <option value="deduction">Deduction</option>
+                  <option value="garnishment">Garnishment</option>
+                </optgroup>
+                <optgroup label="Pre-Tax">
+                  <option value="benefit">Benefit</option>
+                  <option value="retirement">Retirement (401k)</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -230,6 +235,7 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Calculation</label>
               <select className="block-select" value={form.calculation} onChange={(e) => setForm(f => ({...f, calculation: e.target.value}))}>
+                {/* Alphabetical A→Z */}
                 <option value="fixed">Fixed Amount</option>
                 <option value="percentage">Percentage of Gross</option>
               </select>
@@ -241,8 +247,9 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Tax Treatment</label>
               <select className="block-select" value={String(form.is_pretax)} onChange={(e) => setForm(f => ({...f, is_pretax: parseInt(e.target.value)}))}>
-                <option value="1">Pre-Tax</option>
+                {/* Alphabetical A→Z */}
                 <option value="0">Post-Tax</option>
+                <option value="1">Pre-Tax</option>
               </select>
             </div>
           </div>
@@ -585,8 +592,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     value={form.type}
                     onChange={(e) => setField('type', e.target.value as 'employee' | 'contractor')}
                   >
-                    <option value="employee">Employee</option>
+                    {/* Alphabetical A→Z */}
                     <option value="contractor">Contractor</option>
+                    <option value="employee">Employee</option>
                   </select>
                 </div>
                 <div>
@@ -703,8 +711,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     value={form.pay_type}
                     onChange={(e) => setField('pay_type', e.target.value as 'salary' | 'hourly')}
                   >
-                    <option value="salary">Salary</option>
+                    {/* Alphabetical A→Z */}
                     <option value="hourly">Hourly</option>
+                    <option value="salary">Salary</option>
                   </select>
                 </div>
                 <div>
@@ -731,10 +740,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     value={form.pay_schedule}
                     onChange={(e) => setField('pay_schedule', e.target.value as EmployeeFormData['pay_schedule'])}
                   >
-                    <option value="weekly">Weekly</option>
+                    {/* Alphabetical A→Z */}
                     <option value="biweekly">Bi-weekly</option>
-                    <option value="semimonthly">Semi-monthly</option>
                     <option value="monthly">Monthly</option>
+                    <option value="semimonthly">Semi-monthly</option>
+                    <option value="weekly">Weekly</option>
                   </select>
                 </div>
               </div>
@@ -752,9 +762,12 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                       value={form.filing_status}
                       onChange={(e) => setField('filing_status', e.target.value as EmployeeFormData['filing_status'])}
                     >
-                      {Object.entries(FILING_STATUS_LABELS).map(([val, label]) => (
-                        <option key={val} value={val}>{label}</option>
-                      ))}
+                      {/* Alphabetical A→Z by label */}
+                      {Object.entries(FILING_STATUS_LABELS)
+                        .sort(([, a], [, b]) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+                        .map(([val, label]) => (
+                          <option key={val} value={val}>{label}</option>
+                        ))}
                     </select>
                   </div>
                   <div>
@@ -798,9 +811,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Employment Type</label>
               <select className="block-select w-full" value={form.employment_type} onChange={(e) => setForm(p => ({ ...p, employment_type: e.target.value as any }))}>
+                {/* Alphabetical A→Z */}
+                <option value="contractor">Contractor</option>
                 <option value="full-time">Full-Time</option>
                 <option value="part-time">Part-Time</option>
-                <option value="contractor">Contractor</option>
               </select>
             </div>
             <div>

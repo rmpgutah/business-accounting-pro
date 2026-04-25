@@ -212,11 +212,14 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
               onChange={(e) => setAccountId(e.target.value)}
             >
               <option value="">-- Select GL Account --</option>
-              {glAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.code} - {a.name}
-                </option>
-              ))}
+              {/* Alphabetical A→Z by name (all asset/bank accounts — single category) */}
+              {[...glAccounts]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} - {a.name}
+                  </option>
+                ))}
             </select>
           </div>
 

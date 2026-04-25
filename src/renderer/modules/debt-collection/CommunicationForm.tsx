@@ -195,13 +195,17 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
                   value={form.type}
                   onChange={handleChange}
                 >
-                  <option value="email">Email</option>
-                  <option value="phone">Phone</option>
-                  <option value="letter">Letter</option>
-                  <option value="in_person">In Person</option>
-                  <option value="legal_filing">Legal Filing</option>
-                  <option value="text">Text</option>
-                  <option value="fax">Fax</option>
+                  <optgroup label="Digital">
+                    <option value="email">Email</option>
+                    <option value="fax">Fax</option>
+                    <option value="text">Text</option>
+                  </optgroup>
+                  <optgroup label="Physical">
+                    <option value="in_person">In Person</option>
+                    <option value="legal_filing">Legal Filing</option>
+                    <option value="letter">Letter</option>
+                    <option value="phone">Phone</option>
+                  </optgroup>
                 </select>
               </div>
               <div>
@@ -241,7 +245,9 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
                   }}
                 >
                   <option value="">-- Select Template --</option>
-                  {templates.map((t: any) => (
+                  {[...templates]
+                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((t: any) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
@@ -292,12 +298,12 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
               >
                 <option value="">— None —</option>
                 <option value="answered">Answered</option>
+                <option value="disputed">Disputed</option>
                 <option value="voicemail">Left Voicemail</option>
                 <option value="no_answer">No Answer</option>
-                <option value="disputed">Disputed</option>
+                <option value="payment_received">Payment Received</option>
                 <option value="promise_to_pay">Promise to Pay</option>
                 <option value="refused">Refused to Pay</option>
-                <option value="payment_received">Payment Received</option>
               </select>
             </div>
             <div>
@@ -339,7 +345,9 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
                   onChange={handleChange}
                 >
                   <option value="">-- Select Contact --</option>
-                  {contacts.map((c) => (
+                  {[...contacts]
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}{c.role ? ` (${c.role.charAt(0).toUpperCase() + c.role.slice(1)})` : ''}
                     </option>

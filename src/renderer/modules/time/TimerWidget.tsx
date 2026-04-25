@@ -353,11 +353,14 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
             disabled={isActive}
           >
             <option value="">No client</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            {/* Alphabetical A→Z */}
+            {[...clients]
+              .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
           </select>
 
           {/* Project Selector */}
@@ -369,11 +372,14 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
             disabled={isActive}
           >
             <option value="">No project</option>
-            {filteredProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            {/* Alphabetical A→Z */}
+            {[...filteredProjects]
+              .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
           </select>
 
           {/* Billable Toggle */}

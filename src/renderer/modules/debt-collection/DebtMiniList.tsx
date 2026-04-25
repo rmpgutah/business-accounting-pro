@@ -90,11 +90,15 @@ const DebtMiniList: React.FC<DebtMiniListProps> = ({ activeDebtId, onSelect }) =
           onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="">All Statuses</option>
-          <option value="in_collection">In Collection</option>
-          <option value="legal">Legal</option>
-          <option value="disputed">Disputed</option>
-          <option value="settled">Settled</option>
-          <option value="written_off">Written Off</option>
+          <optgroup label="Active">
+            <option value="disputed">Disputed</option>
+            <option value="in_collection">In Collection</option>
+            <option value="legal">Legal</option>
+          </optgroup>
+          <optgroup label="Closed">
+            <option value="settled">Settled</option>
+            <option value="written_off">Written Off</option>
+          </optgroup>
         </select>
       </div>
 

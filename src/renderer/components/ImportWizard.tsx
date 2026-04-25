@@ -98,7 +98,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
                     value={mapping[field] ?? ''}
                     onChange={e => { setMapping(prev => ({ ...prev, [field]: e.target.value })); setError(''); }}>
                     <option value="">— select column —</option>
-                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                    {[...headers].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
               ))}

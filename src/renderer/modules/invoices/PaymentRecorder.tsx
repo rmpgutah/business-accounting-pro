@@ -12,9 +12,9 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Payment Methods ────────────────────────────────────
 const PAYMENT_METHODS = [
+  { value: 'transfer', label: 'Bank Transfer' },
   { value: 'cash', label: 'Cash' },
   { value: 'check', label: 'Check' },
-  { value: 'transfer', label: 'Bank Transfer' },
   { value: 'card', label: 'Credit / Debit Card' },
   { value: 'other', label: 'Other' },
 ];

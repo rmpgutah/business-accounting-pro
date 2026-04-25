@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package } from 'lucide-react';
+import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package, Eye, Printer, Download } from 'lucide-react';
+import { generatePurchaseOrderHTML } from '../../lib/print-templates';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
@@ -60,6 +61,31 @@ interface Account {
   name: string;
   code: string;
   type: string;
+}
+
+const PO_ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  asset: 'Assets',
+  equity: 'Equity',
+  expense: 'Expenses',
+  liability: 'Liabilities',
+  revenue: 'Revenue',
+};
+function groupPOAccountsByType(accounts: Account[]) {
+  const groups = new Map<string, Account[]>();
+  for (const a of accounts) {
+    const key = a.type ? (PO_ACCOUNT_TYPE_LABELS[a.type.toLowerCase()] ?? a.type) : 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(a);
+  }
+  const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return sortedKeys.map((label) => ({
+    label,
+    items: groups.get(label)!.slice().sort((a, b) => {
+      const la = a.code ? `${a.code} · ${a.name}` : a.name;
+      const lb = b.code ? `${b.code} · ${b.name}` : b.name;
+      return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+    }),
+  }));
 }
 
 interface POStats {
@@ -553,9 +579,11 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
               onChange={(e) => setVendorId(e.target.value)}
             >
               <option value="">Select vendor...</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
+              {[...vendors]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
             </select>
           </div>
           <div>
@@ -646,10 +674,14 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                         onChange={(e) => updateLine(line.tempId, 'account_id', e.target.value)}
                       >
                         <option value="">— Account —</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.code ? `${a.code} · ` : ''}{a.name}
-                          </option>
+                        {groupPOAccountsByType(accounts).map((g) => (
+                          <optgroup key={g.label} label={g.label}>
+                            {g.items.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.code ? `${a.code} · ` : ''}{a.name}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </td>
@@ -787,6 +819,27 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
 
   useEffect(() => { load(); }, [load]);
 
+  const buildPrintHTML = () => {
+    if (!po) return '';
+    const v = vendors[po.vendor_id] || null;
+    return generatePurchaseOrderHTML(po, activeCompany, v, lines);
+  };
+  const handlePreview = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.printPreview(html, `Purchase Order ${po?.po_number || ''}`);
+  };
+  const handlePrint = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.print(html);
+  };
+  const handleSavePDF = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.saveToPDF(html, `PO-${po?.po_number || 'document'}`);
+  };
+
   const handleApprove = async () => {
     if (!po) return;
     setActionLoading(true);
@@ -859,6 +912,24 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           </div>
         </div>
         <div className="module-actions">
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handlePreview}
+          >
+            <Eye size={13} /> Preview
+          </button>
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handlePrint}
+          >
+            <Printer size={13} /> Print
+          </button>
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handleSavePDF}
+          >
+            <Download size={13} /> Save PDF
+          </button>
           <button
             className="block-btn flex items-center gap-1.5 text-xs"
             onClick={() => onEdit(po.id)}

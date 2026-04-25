@@ -187,11 +187,11 @@ function getDetailFieldsForCategory(categoryName: string): DetailField[] {
 
 const PAYMENT_METHODS = [
   { value: '', label: 'Select method...' },
+  { value: 'transfer', label: 'Bank Transfer' },
   { value: 'cash', label: 'Cash' },
   { value: 'check', label: 'Check' },
   { value: 'credit_card', label: 'Credit Card' },
   { value: 'debit_card', label: 'Debit Card' },
-  { value: 'transfer', label: 'Bank Transfer' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -702,9 +702,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               onChange={handleChange}
             >
               <option value="">Select category...</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {[...categories]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
             </select>
             <CategoryContext categoryId={form.category_id || null} companyId={activeCompany?.id ?? ''} />
           </div>
@@ -719,9 +721,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               onChange={handleChange}
             >
               <option value="">Select account...</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
+              {[...accounts]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
             </select>
           </div>
 
@@ -735,9 +739,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               onChange={handleChange}
             >
               <option value="">Select vendor...</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
+              {[...vendors]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
             </select>
           </div>
 
@@ -770,9 +776,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               onChange={handleChange}
             >
               <option value="">No project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {[...projects]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
             </select>
           </div>
 
@@ -788,9 +796,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               onChange={handleChange}
             >
               <option value="">No client</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {[...clients]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
             </select>
           </div>
 
@@ -902,7 +912,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                         onChange={(e) => handleDetailChange(field.key, e.target.value)}
                       >
                         <option value="">Select...</option>
-                        {field.options?.map((opt) => (
+                        {[...(field.options ?? [])]
+                          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+                          .map((opt) => (
                           <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
                         ))}
                       </select>
@@ -989,10 +1001,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Status</label>
                 <select name="status" className="block-select" value={form.status} onChange={handleChange}>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="paid">Paid</option>
+                  {/* Sorted alphabetically per app-wide UX directive (originally workflow order: Pending → Approved → Paid) */}
+                  <optgroup label="Active">
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                  </optgroup>
+                  <optgroup label="Closed">
+                    <option value="paid">Paid</option>
+                    <option value="rejected">Rejected</option>
+                  </optgroup>
                 </select>
               </div>
               {(form.status === 'approved' || form.status === 'paid') && (

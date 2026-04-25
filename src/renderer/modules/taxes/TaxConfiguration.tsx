@@ -47,11 +47,12 @@ const CURRENT_YEAR = 2026;
 
 const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
 
+// Alphabetical A→Z by label
 const FILING_TABS: { key: FilingStatus; label: string }[] = [
-  { key: 'single', label: 'Single' },
+  { key: 'head_of_household', label: 'Head of Household' },
   { key: 'married_filing_jointly', label: 'Married Filing Jointly' },
   { key: 'married_filing_separately', label: 'Married Filing Separately' },
-  { key: 'head_of_household', label: 'Head of Household' },
+  { key: 'single', label: 'Single' },
 ];
 
 // ─── Toast ───────────────────────────────────────────────

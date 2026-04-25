@@ -501,7 +501,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           <div className="flex items-center gap-2 ml-2">
             <select className="block-select text-xs" style={{ width: 'auto', minWidth: 140 }} value={bulkAssignCollector} onChange={(e) => setBulkAssignCollector(e.target.value)}>
               <option value="">Assign Collector...</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {[...users].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
             {bulkAssignCollector && (
               <button className="block-btn-primary text-xs py-1 px-3" onClick={handleBulkAssign} disabled={bulkProcessing}>Assign</button>
@@ -591,13 +591,17 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="in_collection">In Collection</option>
-              <option value="legal">Legal</option>
-              <option value="settled">Settled</option>
-              <option value="written_off">Written Off</option>
-              <option value="disputed">Disputed</option>
-              <option value="bankruptcy">Bankruptcy</option>
+              <optgroup label="Active">
+                <option value="active">Active</option>
+                <option value="disputed">Disputed</option>
+                <option value="in_collection">In Collection</option>
+                <option value="legal">Legal</option>
+              </optgroup>
+              <optgroup label="Closed">
+                <option value="bankruptcy">Bankruptcy</option>
+                <option value="settled">Settled</option>
+                <option value="written_off">Written Off</option>
+              </optgroup>
             </select>
           </div>
           {isReceivable && (
@@ -607,15 +611,16 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
             >
+              {/* Pipeline stages sorted alphabetically per directive; semantic workflow order is reminder → warning → final_notice → demand_letter → collections_agency → legal_action → judgment → garnishment. */}
               <option value="">All Stages</option>
+              <option value="collections_agency">Collections Agency</option>
+              <option value="demand_letter">Demand Letter</option>
+              <option value="final_notice">Final Notice</option>
+              <option value="garnishment">Garnishment</option>
+              <option value="judgment">Judgment</option>
+              <option value="legal_action">Legal Action</option>
               <option value="reminder">Reminder</option>
               <option value="warning">Warning</option>
-              <option value="final_notice">Final Notice</option>
-              <option value="demand_letter">Demand Letter</option>
-              <option value="collections_agency">Collections Agency</option>
-              <option value="legal_action">Legal Action</option>
-              <option value="judgment">Judgment</option>
-              <option value="garnishment">Garnishment</option>
             </select>
           )}
           <select
@@ -625,10 +630,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             onChange={(e) => setPriorityFilter(e.target.value)}
           >
             <option value="">All Priorities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
             <option value="low">Low</option>
             <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
           </select>
           <input
             type="date"
@@ -653,7 +658,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             onChange={e => setCollectorFilter(e.target.value)}
           >
             <option value="">All Collectors</option>
-            {users.map(u => (
+            {[...users]
+              .sort((a, b) => (a.display_name || a.email || '').localeCompare(b.display_name || b.email || '', undefined, { sensitivity: 'base' }))
+              .map(u => (
               <option key={u.id} value={u.id}>{u.display_name || u.email}</option>
             ))}
           </select>

@@ -182,7 +182,7 @@ const AuditTrail: React.FC = () => {
               onChange={(e) => setEntityTypeFilter(e.target.value)}
             >
               <option value="">All Entity Types</option>
-              {entityTypes.map((t) => (
+              {[...entityTypes].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
@@ -195,8 +195,8 @@ const AuditTrail: React.FC = () => {
           >
             <option value="">All Actions</option>
             <option value="create">Create</option>
-            <option value="update">Update</option>
             <option value="delete">Delete</option>
+            <option value="update">Update</option>
           </select>
           <input
             type="date"

@@ -250,12 +250,17 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="expired">Expired</option>
-              <option value="converted">Converted</option>
+              {/* Sorted alphabetically per app-wide UX directive (originally workflow order: Draft → Sent → Accepted → Converted) */}
+              <optgroup label="Active">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+              </optgroup>
+              <optgroup label="Closed">
+                <option value="accepted">Accepted</option>
+                <option value="converted">Converted</option>
+                <option value="expired">Expired</option>
+                <option value="rejected">Rejected</option>
+              </optgroup>
             </select>
           </div>
         </div>

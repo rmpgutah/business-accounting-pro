@@ -300,8 +300,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                   value={data.type}
                   onChange={(e) => set('type', e.target.value as ClientData['type'])}
                 >
-                  <option value="individual">Individual</option>
                   <option value="company">Company</option>
+                  <option value="individual">Individual</option>
                 </select>
               </Field>
 
@@ -455,11 +455,12 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Company Size</label>
                 <select className="block-select w-full" value={data.company_size} onChange={(e) => setData(p => ({ ...p, company_size: e.target.value }))}>
                   <option value="">— Select —</option>
+                  {/* Sorted alphabetically per app-wide UX directive (originally numeric order: 1-10 → 1000+) */}
+                  <option value="1000+">1,000+ employees</option>
                   <option value="1-10">1–10 employees</option>
                   <option value="11-50">11–50 employees</option>
-                  <option value="51-200">51–200 employees</option>
                   <option value="201-1000">201–1,000 employees</option>
-                  <option value="1000+">1,000+ employees</option>
+                  <option value="51-200">51–200 employees</option>
                 </select>
               </div>
               <div>
@@ -470,11 +471,11 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Preferred Payment</label>
                 <select className="block-select w-full" value={data.preferred_payment_method} onChange={(e) => setData(p => ({ ...p, preferred_payment_method: e.target.value }))}>
                   <option value="">— Select —</option>
-                  <option value="check">Check</option>
                   <option value="ach">ACH / Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
                   <option value="credit_card">Credit Card</option>
                   <option value="wire">Wire Transfer</option>
-                  <option value="cash">Cash</option>
                 </select>
               </div>
               <div>

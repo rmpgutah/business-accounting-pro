@@ -35,17 +35,17 @@ const IMPORTABLE_TABLES: { value: string; label: string; columns: string[] }[] =
 ];
 
 const EXPORTABLE_TABLES = [
-  { value: 'clients', label: 'Clients' },
-  { value: 'invoices', label: 'Invoices' },
-  { value: 'expenses', label: 'Expenses' },
-  { value: 'accounts', label: 'Chart of Accounts' },
-  { value: 'vendors', label: 'Vendors' },
-  { value: 'projects', label: 'Projects' },
-  { value: 'employees', label: 'Employees' },
-  { value: 'time_entries', label: 'Time Entries' },
-  { value: 'journal_entries', label: 'Journal Entries' },
   { value: 'categories', label: 'Categories' },
+  { value: 'accounts', label: 'Chart of Accounts' },
+  { value: 'clients', label: 'Clients' },
+  { value: 'employees', label: 'Employees' },
+  { value: 'expenses', label: 'Expenses' },
+  { value: 'invoices', label: 'Invoices' },
+  { value: 'journal_entries', label: 'Journal Entries' },
   { value: 'payments', label: 'Payments' },
+  { value: 'projects', label: 'Projects' },
+  { value: 'time_entries', label: 'Time Entries' },
+  { value: 'vendors', label: 'Vendors' },
 ];
 
 // ─── Import Section ─────────────────────────────────────
@@ -138,7 +138,9 @@ const ImportSection: React.FC = () => {
                 setColumnMapping({});
               }}
             >
-              {IMPORTABLE_TABLES.map(t => (
+              {[...IMPORTABLE_TABLES]
+                .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+                .map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
@@ -208,7 +210,9 @@ const ImportSection: React.FC = () => {
                       onChange={(e) => handleMappingChange(csvCol, e.target.value)}
                     >
                       <option value="(skip)">(skip)</option>
-                      {tableConfig?.columns.map(col => (
+                      {[...(tableConfig?.columns ?? [])]
+                        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+                        .map(col => (
                         <option key={col} value={col}>{col}</option>
                       ))}
                     </select>

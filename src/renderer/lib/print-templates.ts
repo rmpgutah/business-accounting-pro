@@ -2485,3 +2485,436 @@ body { background: #fff; }
   </div>
 </div></body></html>`;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// SHARED HELPERS (Bill / PO / Expense templates)
+// ═══════════════════════════════════════════════════════════════
+
+function safeImg(src: string | null | undefined, alt: string, style: string): string {
+  if (!src) return '';
+  const s = String(src);
+  if (!/^data:|^https?:/i.test(s)) return '';
+  return `<img src="${esc(s)}" alt="${esc(alt)}" style="${style}">`;
+}
+
+function addrLines(parts: Array<string | null | undefined>): string {
+  return parts
+    .map(p => esc(p || ''))
+    .filter(Boolean)
+    .map(p => `<div>${p}</div>`)
+    .join('');
+}
+
+function fmtDateMaybe(d: string | null | undefined): string {
+  if (!d) return '';
+  // Accept either YYYY-MM-DD or full ISO
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(d);
+  try {
+    const dt = isDateOnly ? new Date(d + 'T12:00:00') : new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch { return d; }
+}
+
+function statusBadgeInline(label: string, color: string): string {
+  return `<span class="fd-status-badge" style="background:${color}1f;color:${color};border:1px solid ${color}66;">${esc(label)}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BILL TEMPLATE
+// ═══════════════════════════════════════════════════════════════
+
+export function generateBillHTML(
+  bill: any,
+  company: any,
+  vendor: any,
+  lineItems: any[],
+  settings?: InvoiceSettings,
+  accounts?: Array<{ id: string; code?: string; name?: string }>
+): string {
+  const accountMap = new Map<string, { code?: string; name?: string }>();
+  (accounts || []).forEach(a => accountMap.set(a.id, a));
+
+  const total = Number(bill.total || 0);
+  const paid = Number(bill.amount_paid || 0);
+  const balance = total - paid;
+  const subtotal = Number(bill.subtotal || 0);
+  const tax = Number(bill.tax_amount || 0);
+
+  const stamp = getStatusStamp(bill.status);
+  const statusColor =
+    bill.status === 'paid' ? '#16a34a' :
+    bill.status === 'overdue' ? '#dc2626' :
+    bill.status === 'partial' ? '#d97706' :
+    bill.status === 'draft' ? '#475569' : '#2563eb';
+
+  const logoHTML = safeImg(settings?.logo_data || null, esc(company?.name || ''),
+    'max-height:42px;max-width:160px;object-fit:contain;margin-bottom:6px;');
+
+  const vendorBlock = `
+    <div class="fd-addr-card">
+      <div class="fd-addr-lbl">Bill From</div>
+      <div class="fd-addr-name">${esc(vendor?.name || 'Vendor')}</div>
+      <div class="fd-addr-detail">
+        ${addrLines([vendor?.address_line1, vendor?.address_line2,
+          [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', ') || null])}
+        ${vendor?.email ? `<div>${esc(vendor.email)}</div>` : ''}
+        ${vendor?.phone ? `<div>${esc(vendor.phone)}</div>` : ''}
+      </div>
+    </div>`;
+
+  const companyBlock = `
+    <div class="fd-addr-card">
+      <div class="fd-addr-lbl">Bill To</div>
+      <div class="fd-addr-name">${esc(company?.name || 'Company')}</div>
+      <div class="fd-addr-detail">
+        ${addrLines([company?.address_line1, company?.address_line2,
+          [company?.city, company?.state, company?.zip].filter(Boolean).join(', ') || null])}
+        ${company?.email ? `<div>${esc(company.email)}</div>` : ''}
+        ${company?.phone ? `<div>${esc(company.phone)}</div>` : ''}
+      </div>
+    </div>`;
+
+  const rows = (lineItems || []).map((l: any) => {
+    const qty = Number(l.quantity || 0);
+    const unit = Number(l.unit_price || 0);
+    const amt = Number(l.amount ?? qty * unit);
+    const acctId = l.expense_account_id || l.account_id || '';
+    const acct = acctId ? accountMap.get(acctId) : null;
+    const acctLabel = acct ? esc(acct.code || acct.name || '') : '';
+    return `<tr>
+      <td>${esc(l.description || '')}</td>
+      <td class="text-right">${qty}</td>
+      <td class="text-right">${fmt(unit)}</td>
+      <td class="text-right" style="font-size:10px;color:#64748b;">${acctLabel}</td>
+      <td class="text-right font-bold" style="color:#0f172a;">${fmt(amt)}</td>
+    </tr>`;
+  }).join('');
+
+  const created = bill.created_at ? fmtDateMaybe(bill.created_at) : '';
+  const generated = new Date().toLocaleString('en-US');
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bill ${esc(bill.bill_number || '')}</title>
+<style>${baseStyles}${stamp ? statusStampCSS(stamp.color) : ''}</style></head>
+<body><div class="rpt-page" style="padding:32px 36px;">
+${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    ${logoHTML}
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+    <div class="fd-co-line">${esc([company?.address_line1, company?.city, company?.state].filter(Boolean).join(' · '))}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:22px;">Vendor Bill</div>
+    <div class="fd-doc-num">${esc(bill.bill_number || '')}${statusBadgeInline((bill.status || '').toUpperCase(), statusColor)}</div>
+    <div class="fd-doc-date">${esc(fmtDateMaybe(bill.bill_date || bill.issue_date))}</div>
+    ${bill.due_date ? `<div class="fd-doc-date">Due ${esc(fmtDateMaybe(bill.due_date))}</div>` : ''}
+  </div>
+</div>
+
+<div class="fd-addr-grid">
+  ${vendorBlock}
+  ${companyBlock}
+</div>
+
+<table style="margin-top:8px;">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th class="text-right">Qty</th>
+      <th class="text-right">Unit Price</th>
+      <th class="text-right">Account</th>
+      <th class="text-right">Amount</th>
+    </tr>
+  </thead>
+  <tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:18px;">No line items</td></tr>`}</tbody>
+</table>
+
+<div style="overflow:hidden;margin-top:18px;">
+  <div class="fd-totals-card">
+    <div class="fd-meta-row"><span class="lbl">Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
+    ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
+    <div class="fd-meta-row" style="border-top:1px solid #cbd5e1;margin-top:4px;padding-top:6px;">
+      <span class="lbl" style="font-size:10px;">Total</span>
+      <span class="val" style="font-size:13px;">${fmt(total)}</span>
+    </div>
+    ${paid > 0 ? `<div class="fd-meta-row"><span class="lbl">Amount Paid</span><span class="val" style="color:#16a34a;">-${fmt(paid)}</span></div>` : ''}
+    <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
+      <span class="lbl" style="font-size:10px;">Balance Due</span>
+      <span class="val" style="font-size:14px;color:${balance > 0 ? '#dc2626' : '#16a34a'};">${fmt(balance)}</span>
+    </div>
+  </div>
+</div>
+
+${bill.notes ? `<div style="clear:both;margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;">
+  <div class="section-label">Notes</div>
+  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(bill.notes)}</div>
+</div>` : '<div style="clear:both;"></div>'}
+
+<div class="rpt-footer" style="margin-top:32px;">
+  <span>${created ? `Created ${esc(created)}` : ''}</span>
+  <span>Generated ${esc(generated)}</span>
+</div>
+</div></body></html>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PURCHASE ORDER TEMPLATE
+// ═══════════════════════════════════════════════════════════════
+
+export function generatePurchaseOrderHTML(
+  po: any,
+  company: any,
+  vendor: any,
+  lineItems: any[],
+  settings?: InvoiceSettings & {
+    ship_to_name?: string;
+    ship_to_address_line1?: string;
+    ship_to_address_line2?: string;
+    ship_to_city?: string;
+    ship_to_state?: string;
+    ship_to_zip?: string;
+    delivery_terms?: string;
+    payment_terms?: string;
+  }
+): string {
+  const subtotal = Number(po.subtotal || 0);
+  const tax = Number(po.tax_amount || 0);
+  const total = Number(po.total || 0);
+
+  const statusColor =
+    po.status === 'received' ? '#16a34a' :
+    po.status === 'cancelled' ? '#dc2626' :
+    po.status === 'approved' ? '#2563eb' :
+    po.status === 'sent' ? '#d97706' : '#475569';
+
+  const stamp =
+    po.status === 'draft' ? { label: 'DRAFT', color: '#475569' } :
+    po.status === 'sent' ? { label: 'SENT', color: '#d97706' } :
+    po.status === 'received' ? { label: 'RECEIVED', color: '#16a34a' } :
+    po.status === 'cancelled' ? { label: 'CLOSED', color: '#dc2626' } :
+    null;
+
+  const logoHTML = safeImg(settings?.logo_data || null, esc(company?.name || ''),
+    'max-height:42px;max-width:160px;object-fit:contain;margin-bottom:6px;');
+
+  const vendorBlock = `
+    <div class="fd-addr-card">
+      <div class="fd-addr-lbl">Vendor</div>
+      <div class="fd-addr-name">${esc(vendor?.name || 'Vendor')}</div>
+      <div class="fd-addr-detail">
+        ${addrLines([vendor?.address_line1, vendor?.address_line2,
+          [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', ') || null])}
+        ${vendor?.email ? `<div>${esc(vendor.email)}</div>` : ''}
+        ${vendor?.phone ? `<div>${esc(vendor.phone)}</div>` : ''}
+      </div>
+    </div>`;
+
+  const shipName = settings?.ship_to_name || company?.name || '';
+  const shipL1 = settings?.ship_to_address_line1 || company?.address_line1 || '';
+  const shipL2 = settings?.ship_to_address_line2 || company?.address_line2 || '';
+  const shipCity = settings?.ship_to_city || company?.city || '';
+  const shipState = settings?.ship_to_state || company?.state || '';
+  const shipZip = settings?.ship_to_zip || company?.zip || '';
+
+  const shipBlock = `
+    <div class="fd-addr-card">
+      <div class="fd-addr-lbl">Ship To</div>
+      <div class="fd-addr-name">${esc(shipName)}</div>
+      <div class="fd-addr-detail">
+        ${addrLines([shipL1, shipL2, [shipCity, shipState, shipZip].filter(Boolean).join(', ') || null])}
+      </div>
+    </div>`;
+
+  const rows = (lineItems || []).map((l: any) => {
+    const qty = Number(l.quantity || 0);
+    const unit = Number(l.unit_price || 0);
+    const amt = Number(l.amount ?? qty * unit);
+    const taxRate = Number(l.tax_rate || 0);
+    return `<tr>
+      <td>${esc(l.description || '')}</td>
+      <td class="text-right">${qty}</td>
+      <td class="text-right" style="font-size:10px;color:#64748b;">${esc(l.unit_label || '')}</td>
+      <td class="text-right">${fmt(unit)}</td>
+      <td class="text-right" style="font-size:10px;color:#64748b;">${taxRate > 0 ? taxRate + '%' : '—'}</td>
+      <td class="text-right font-bold" style="color:#0f172a;">${fmt(amt)}</td>
+    </tr>`;
+  }).join('');
+
+  const generated = new Date().toLocaleString('en-US');
+
+  const terms: string = po.terms || '';
+  const deliveryTerms = settings?.delivery_terms || '';
+  const paymentTerms = settings?.payment_terms || '';
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Purchase Order ${esc(po.po_number || '')}</title>
+<style>${baseStyles}${stamp ? statusStampCSS(stamp.color) : ''}</style></head>
+<body><div class="rpt-page" style="padding:32px 36px;">
+${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    ${logoHTML}
+    <div class="fd-co-name">${esc(company?.name || 'Company')}</div>
+    <div class="fd-co-line">${esc([company?.address_line1, company?.city, company?.state].filter(Boolean).join(' · '))}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type">Purchase Order</div>
+    <div class="fd-doc-num">${esc(po.po_number || '')}${statusBadgeInline((po.status || '').toUpperCase().replace('_',' '), statusColor)}</div>
+    <div class="fd-doc-date">Order ${esc(fmtDateMaybe(po.order_date || po.issue_date))}</div>
+    ${(po.expected_delivery_date || po.expected_date) ? `<div class="fd-doc-date">Expected ${esc(fmtDateMaybe(po.expected_delivery_date || po.expected_date))}</div>` : ''}
+  </div>
+</div>
+
+<div class="fd-addr-grid">
+  ${vendorBlock}
+  ${shipBlock}
+</div>
+
+<table style="margin-top:8px;">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th class="text-right">Qty</th>
+      <th class="text-right">Unit</th>
+      <th class="text-right">Unit Price</th>
+      <th class="text-right">Tax %</th>
+      <th class="text-right">Line Total</th>
+    </tr>
+  </thead>
+  <tbody>${rows || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:18px;">No line items</td></tr>`}</tbody>
+</table>
+
+<div style="overflow:hidden;margin-top:18px;">
+  <div class="fd-totals-card">
+    <div class="fd-meta-row"><span class="lbl">Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
+    ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
+    <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
+      <span class="lbl" style="font-size:10px;">Total</span>
+      <span class="val" style="font-size:14px;">${fmt(total)}</span>
+    </div>
+  </div>
+</div>
+
+<div style="clear:both;"></div>
+
+${(terms || deliveryTerms || paymentTerms) ? `<div style="margin-top:24px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
+  <div class="section-label">Terms &amp; Conditions</div>
+  ${deliveryTerms ? `<div style="font-size:10.5px;margin-bottom:4px;"><strong>Delivery:</strong> ${esc(deliveryTerms)}</div>` : ''}
+  ${paymentTerms ? `<div style="font-size:10.5px;margin-bottom:4px;"><strong>Payment:</strong> ${esc(paymentTerms)}</div>` : ''}
+  ${terms ? `<div style="font-size:10.5px;color:#475569;white-space:pre-line;">${esc(terms)}</div>` : ''}
+</div>` : ''}
+
+${po.notes ? `<div style="margin-top:18px;">
+  <div class="section-label">Notes</div>
+  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(po.notes)}</div>
+</div>` : ''}
+
+<div class="signature-block" style="margin-top:42px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+  <div>
+    <div class="fd-sig-line"></div>
+    <div class="fd-sig-lbl">Approved by</div>
+  </div>
+  <div>
+    <div class="fd-sig-line"></div>
+    <div class="fd-sig-lbl">Date</div>
+  </div>
+</div>
+
+<div class="rpt-footer" style="margin-top:32px;">
+  <span>Purchase Order ${esc(po.po_number || '')}</span>
+  <span>Generated ${esc(generated)}</span>
+</div>
+</div></body></html>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPENSE RECEIPT TEMPLATE
+// ═══════════════════════════════════════════════════════════════
+
+export function generateExpenseReceiptHTML(
+  expense: any,
+  company: any,
+  vendor?: any,
+  lineItems?: any[]
+): string {
+  const total = Number(expense.amount || expense.total || 0);
+  const tax = Number(expense.tax_amount || 0);
+  const subtotal = Number(expense.subtotal || (total - tax));
+
+  const reimbStatus = expense.reimbursement_status || expense.status || 'pending';
+  const reimbColor =
+    reimbStatus === 'reimbursed' || reimbStatus === 'paid' ? '#16a34a' :
+    reimbStatus === 'approved' ? '#2563eb' :
+    reimbStatus === 'rejected' ? '#dc2626' : '#d97706';
+
+  const receiptHTML = safeImg(expense.receipt_path || expense.receipt_data || null, 'Receipt',
+    'max-width:100%;max-height:380px;object-fit:contain;border:1px solid #e2e8f0;padding:6px;background:#fff;');
+
+  const linesHTML = (lineItems && lineItems.length > 0) ? `
+    <table style="margin-top:12px;">
+      <thead><tr><th>Description</th><th class="text-right">Amount</th></tr></thead>
+      <tbody>
+        ${lineItems.map((l: any) => `<tr>
+          <td>${esc(l.description || '')}</td>
+          <td class="text-right font-bold">${fmt(Number(l.amount || 0))}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : '';
+
+  const generated = new Date().toLocaleString('en-US');
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Expense ${esc(expense.reference || expense.id || '')}</title>
+<style>${baseStyles}</style></head>
+<body><div class="rpt-page" style="padding:32px 36px;">
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:22px;">Expense Record</div>
+    <div class="fd-doc-num">${esc(expense.reference || expense.expense_number || expense.id || '')}${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
+    <div class="fd-doc-date">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</div>
+  </div>
+</div>
+
+<div class="fd-meta-strip">
+  <div class="fd-meta-row"><span class="lbl">Vendor</span><span class="val">${esc(vendor?.name || expense.vendor_name || '—')}</span></div>
+  <div class="fd-meta-row"><span class="lbl">Category</span><span class="val">${esc(expense.category || expense.category_name || '—')}</span></div>
+  <div class="fd-meta-row"><span class="lbl">Date</span><span class="val">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</span></div>
+  <div class="fd-meta-row"><span class="lbl">Reference</span><span class="val">${esc(expense.reference || '—')}</span></div>
+</div>
+
+${expense.description ? `<div style="margin-bottom:14px;">
+  <div class="section-label">Description</div>
+  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(expense.description)}</div>
+</div>` : ''}
+
+${linesHTML}
+
+<div style="overflow:hidden;margin-top:14px;">
+  <div class="fd-totals-card">
+    <div class="fd-meta-row"><span class="lbl">Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
+    ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
+    <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
+      <span class="lbl" style="font-size:10px;">Total</span>
+      <span class="val" style="font-size:14px;">${fmt(total)}</span>
+    </div>
+  </div>
+</div>
+
+<div style="clear:both;margin-top:18px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
+  <div class="section-label">Reimbursement</div>
+  <div style="font-size:11px;color:#475569;">Status: ${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
+</div>
+
+${receiptHTML ? `<div style="margin-top:22px;page-break-inside:avoid;">
+  <div class="section-label">Receipt</div>
+  <div style="text-align:center;">${receiptHTML}</div>
+</div>` : ''}
+
+<div class="rpt-footer" style="margin-top:32px;">
+  <span>${esc(company?.name || '')}</span>
+  <span>Generated ${esc(generated)}</span>
+</div>
+</div></body></html>`;
+}

@@ -8,6 +8,7 @@ interface AccountOption {
   id: string;
   code: string;
   name: string;
+  type: string;
 }
 
 interface LineItem {
@@ -96,7 +97,11 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         });
         if (Array.isArray(data)) {
           setAccounts(
-            data.map((a: any) => ({ id: a.id, code: a.code, name: a.name }))
+            data
+              .map((a: any) => ({ id: a.id, code: a.code, name: a.name, type: a.type }))
+              .sort((a: AccountOption, b: AccountOption) =>
+                a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+              )
           );
         }
       } catch (err) {
@@ -442,11 +447,32 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           style={{ borderRadius: '6px' }}
                         >
                           <option value="">Select account...</option>
-                          {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.code} — {a.name}
-                            </option>
-                          ))}
+                          {/* Group by account type — alphabetical headers, alphabetical accounts within each */}
+                          {(() => {
+                            const TYPE_LABELS: Record<string, string> = {
+                              asset: 'Assets',
+                              equity: 'Equity',
+                              expense: 'Expenses',
+                              liability: 'Liabilities',
+                              revenue: 'Revenue',
+                            };
+                            const groups: Record<string, AccountOption[]> = {};
+                            for (const a of accounts) {
+                              const k = TYPE_LABELS[a.type] ?? 'Other';
+                              (groups[k] ||= []).push(a);
+                            }
+                            return Object.keys(groups)
+                              .sort((a, b) => a.localeCompare(b))
+                              .map((label) => (
+                                <optgroup key={label} label={label}>
+                                  {groups[label].map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                      {a.code} — {a.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ));
+                          })()}
                         </select>
                       </td>
                       <td className="px-2 py-1.5">

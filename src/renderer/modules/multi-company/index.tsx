@@ -240,23 +240,24 @@ const MultiCompany: React.FC = () => {
               <label className="text-xs text-text-muted font-semibold uppercase tracking-wider block mb-1">
                 Fiscal Year End
               </label>
+              {/* Months sorted alphabetically per app-wide directive (semantic order is Jan–Dec). */}
               <select
                 className="block-select"
                 value={formData.fiscal_year_end}
                 onChange={(e) => setFormData({ ...formData, fiscal_year_end: e.target.value })}
               >
-                <option value="1">January</option>
-                <option value="2">February</option>
-                <option value="3">March</option>
                 <option value="4">April</option>
-                <option value="5">May</option>
-                <option value="6">June</option>
-                <option value="7">July</option>
                 <option value="8">August</option>
-                <option value="9">September</option>
-                <option value="10">October</option>
-                <option value="11">November</option>
                 <option value="12">December</option>
+                <option value="2">February</option>
+                <option value="1">January</option>
+                <option value="7">July</option>
+                <option value="6">June</option>
+                <option value="3">March</option>
+                <option value="5">May</option>
+                <option value="11">November</option>
+                <option value="10">October</option>
+                <option value="9">September</option>
               </select>
             </div>
             <div>
@@ -268,11 +269,11 @@ const MultiCompany: React.FC = () => {
                 value={formData.base_currency}
                 onChange={(e) => setFormData({ ...formData, base_currency: e.target.value })}
               >
-                <option value="USD">USD - US Dollar</option>
+                <option value="AUD">AUD - Australian Dollar</option>
+                <option value="CAD">CAD - Canadian Dollar</option>
                 <option value="EUR">EUR - Euro</option>
                 <option value="GBP">GBP - British Pound</option>
-                <option value="CAD">CAD - Canadian Dollar</option>
-                <option value="AUD">AUD - Australian Dollar</option>
+                <option value="USD">USD - US Dollar</option>
               </select>
             </div>
           </div>
