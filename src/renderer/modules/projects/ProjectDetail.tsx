@@ -17,6 +17,7 @@ import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import ProjectProfitability from './ProjectProfitability';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -289,7 +290,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
             </span>
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
-            {client && <span>{client.name}</span>}
+            {client && <EntityChip type="client" id={client.id} label={client.name} variant="inline" />}
             <span>{formatDate(project.start_date)}{project.end_date ? ` - ${formatDate(project.end_date)}` : ''}</span>
           </div>
           {project.description && (
@@ -572,8 +573,8 @@ const InvoicesTab: React.FC<{ invoices: Invoice[]; onNavigate?: (id: string) => 
               className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
               onClick={() => onNavigate?.(inv.id)}
             >
-              <td className="text-text-primary text-xs font-mono font-medium">
-                {inv.invoice_number || '--'}
+              <td className="text-text-primary text-xs font-mono font-medium" onClick={(e) => e.stopPropagation()}>
+                <EntityChip type="invoice" id={inv.id} label={inv.invoice_number || '--'} variant="inline" />
               </td>
               <td className="text-text-secondary font-mono text-xs">
                 {formatDate(inv.date)}

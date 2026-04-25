@@ -6,12 +6,14 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import EntityChip from '../../components/EntityChip';
 
 
 // ─── Types ──────────────────────────────────────────────
 interface BillRow {
   id: string;
   bill_number: string;
+  vendor_id: string | null;
   vendor_name: string;
   total: number;
   amount_paid: number;
@@ -22,6 +24,7 @@ interface BillRow {
 interface AgingEntry {
   id: string;
   billNumber: string;
+  vendorId: string | null;
   vendorName: string;
   amountDue: number;
   daysOutstanding: number;
@@ -69,7 +72,7 @@ const APAgingReport: React.FC = () => {
 
       try {
         const rows: BillRow[] = await api.rawQuery(
-          `SELECT b.id, b.bill_number, b.total, b.amount_paid, b.due_date, b.status,
+          `SELECT b.id, b.bill_number, b.vendor_id, b.total, b.amount_paid, b.due_date, b.status,
                   v.name AS vendor_name
            FROM bills b
            LEFT JOIN vendors v ON b.vendor_id = v.id
@@ -87,6 +90,7 @@ const APAgingReport: React.FC = () => {
           return {
             id: row.id,
             billNumber: row.bill_number || row.id,
+            vendorId: row.vendor_id || null,
             vendorName: row.vendor_name || 'Unknown Vendor',
             amountDue,
             daysOutstanding,
@@ -227,9 +231,11 @@ const APAgingReport: React.FC = () => {
                   {filtered.map((entry) => (
                     <tr key={entry.id}>
                       <td className="text-text-primary font-medium font-mono">
-                        {entry.billNumber}
+                        <EntityChip type="bill" id={entry.id} label={entry.billNumber} variant="inline" />
                       </td>
-                      <td className="text-text-secondary">{entry.vendorName}</td>
+                      <td className="text-text-secondary">
+                        {entry.vendorId ? <EntityChip type="vendor" id={entry.vendorId} label={entry.vendorName} variant="inline" /> : entry.vendorName}
+                      </td>
                       <td className="text-right font-mono text-accent-expense">
                         {formatCurrency(entry.amountDue)}
                       </td>

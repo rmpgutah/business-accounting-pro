@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Users, DollarSign, FileText, Calculator, Plus, Trash2, Printer } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import EmployeeList from './EmployeeList';
 import EmployeeForm from './EmployeeForm';
 import PayrollRunner from './PayrollRunner';
@@ -99,6 +100,22 @@ const PayrollModule: React.FC = () => {
       loadHistory();
     }
   }, [activeTab, loadHistory]);
+
+  // Cross-module deep links: employee → form, pay_stub → view
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const empFocus = consumeFocusEntity('employee');
+    if (empFocus) {
+      setActiveTab('employees');
+      setSelectedEmployeeId(empFocus.id);
+      setShowEmployeeForm(true);
+      return;
+    }
+    const stubFocus = consumeFocusEntity('pay_stub');
+    if (stubFocus) {
+      setViewStubId(stubFocus.id);
+    }
+  }, [consumeFocusEntity]);
 
   // ─── Expand a run to see pay stubs ────────────────────
   const toggleExpandRun = async (runId: string) => {

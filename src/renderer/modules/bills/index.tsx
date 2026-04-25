@@ -15,8 +15,12 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import EntityChip from '../../components/EntityChip';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 import { useNavigation } from '../../lib/navigation';
 
 // ─── Types ───────────────────────────────────────────────
@@ -368,15 +372,12 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     className="cursor-pointer"
                     onClick={() => onView(bill.id)}
                   >
-                    <td className="font-mono text-accent-blue text-xs">{bill.bill_number}</td>
+                    <td className="font-mono text-accent-blue text-xs" onClick={(e) => e.stopPropagation()}>
+                      <EntityChip type="bill" id={bill.id} label={bill.bill_number} variant="inline" />
+                    </td>
                     <td className="text-text-primary cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       {bill.vendor_id && vendorName !== '—' ? (
-                        <button
-                          className="text-accent-blue hover:underline text-left"
-                          onClick={() => nav.goToVendor(bill.vendor_id)}
-                        >
-                          <span className="block truncate max-w-[180px]">{vendorName}</span>
-                        </button>
+                        <EntityChip type="vendor" id={bill.vendor_id} label={vendorName} variant="inline" />
                       ) : (
                         <span className="block truncate max-w-[180px]">{vendorName}</span>
                       )}
@@ -1238,6 +1239,12 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
       </div>
 
       {/* Record Payment — only shown if balance > 0 */}
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="bill" entityId={billId} hide={['lines', 'payments']} />
+        <EntityTimeline entityType="bills" entityId={billId} />
+      </div>
+
       {balance > 0.001 && (
         <div className="block-card">
           <div className="text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border-primary pb-3 mb-4 flex items-center gap-2">
@@ -1364,6 +1371,16 @@ const BillsModule: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [listKey, setListKey] = useState(0);
+
+  // Cross-module deep link
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('bill');
+    if (focus) {
+      setSelectedId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   const goToList = useCallback(() => {
     setView('list');

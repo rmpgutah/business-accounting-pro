@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import TimerWidget from './TimerWidget';
 import TimeEntryList from './TimeEntryList';
@@ -112,6 +113,20 @@ const TimeTracking: React.FC = () => {
   useEffect(() => {
     loadEntries();
   }, [loadEntries]);
+
+  // Cross-module deep link: time_entry → open edit form
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('time_entry');
+    if (focus) {
+      api.get('time_entries', focus.id).then((entry) => {
+        if (entry) {
+          setEditingEntry(entry);
+          setShowForm(true);
+        }
+      }).catch(() => {});
+    }
+  }, [consumeFocusEntity]);
 
   const handlePrevWeek = () => {
     setWeekStart((prev) => {

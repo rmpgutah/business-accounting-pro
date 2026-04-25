@@ -21,6 +21,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import ClientInsights from './ClientInsights';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -342,7 +343,9 @@ const InvoicesTable: React.FC<{ data: any[]; onNavigate?: (id: string) => void }
           className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
           onClick={() => onNavigate?.(inv.id)}
         >
-          <td className="font-mono text-text-primary">{inv.invoice_number ?? inv.id}</td>
+          <td className="font-mono text-text-primary" onClick={(e) => e.stopPropagation()}>
+            <EntityChip type="invoice" id={inv.id} label={inv.invoice_number ?? inv.id} variant="inline" />
+          </td>
           <td className="text-text-secondary text-xs">{inv.issue_date ?? inv.date ?? inv.created_at ?? '--'}</td>
           <td>
             <span
@@ -381,7 +384,9 @@ const ProjectsTable: React.FC<{ data: any[]; onNavigate?: (id: string) => void }
           className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
           onClick={() => onNavigate?.(p.id)}
         >
-          <td className="text-text-primary font-medium">{p.name}</td>
+          <td className="text-text-primary font-medium" onClick={(e) => e.stopPropagation()}>
+            <EntityChip type="project" id={p.id} label={p.name} variant="inline" />
+          </td>
           <td>
             <span className="block-badge block-badge-blue">{p.status ?? 'active'}</span>
           </td>

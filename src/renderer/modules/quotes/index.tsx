@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FileCheck } from 'lucide-react';
 import QuoteList from './QuoteList';
 import QuoteForm from './QuoteForm';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── Types ──────────────────────────────────────────────
 type QuoteView = 'list' | 'form';
@@ -32,6 +33,15 @@ const QuotesModule: React.FC = () => {
   const [quoteView, setQuoteView] = useState<QuoteView>('list');
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [quoteKey, setQuoteKey] = useState(0);
+
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('quote');
+    if (focus) {
+      setEditingQuoteId(focus.id);
+      setQuoteView('form');
+    }
+  }, [consumeFocusEntity]);
 
   const handleNewQuote = useCallback(() => {
     setEditingQuoteId(null);

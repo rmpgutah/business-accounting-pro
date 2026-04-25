@@ -4,7 +4,11 @@ import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -282,8 +286,12 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
             <tbody>
               {filtered.map((po) => (
                 <tr key={po.id} className="hover:bg-bg-secondary transition-colors cursor-pointer" onClick={() => onView(po.id)}>
-                  <td className="font-mono text-xs text-accent-blue">{po.po_number}</td>
-                  <td className="text-xs text-text-primary truncate max-w-[180px]">{vendors[po.vendor_id]?.name ?? '—'}</td>
+                  <td className="font-mono text-xs text-accent-blue" onClick={(e) => e.stopPropagation()}>
+                    <EntityChip type="purchase_order" id={po.id} label={po.po_number} variant="inline" />
+                  </td>
+                  <td className="text-xs text-text-primary truncate max-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                    {po.vendor_id ? <EntityChip type="vendor" id={po.vendor_id} label={vendors[po.vendor_id]?.name ?? ''} variant="inline" /> : '—'}
+                  </td>
                   <td className="font-mono text-xs text-text-secondary">{formatDate(po.issue_date)}</td>
                   <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>
                   <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>
@@ -1052,6 +1060,12 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
         </div>
       )}
 
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="purchase_order" entityId={poId} hide={['lines']} />
+        <EntityTimeline entityType="purchase_orders" entityId={poId} />
+      </div>
+
       {isFinal && (
         <div className="block-card">
           <div className="flex items-center gap-2 text-xs text-text-muted">
@@ -1074,6 +1088,15 @@ const PurchaseOrdersModule: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [listKey, setListKey] = useState(0);
+
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('purchase_order');
+    if (focus) {
+      setSelectedId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   const goList = useCallback(() => {
     setView('list');

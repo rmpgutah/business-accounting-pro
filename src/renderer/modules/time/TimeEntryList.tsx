@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import { formatDate } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface TimeEntry {
@@ -224,16 +225,15 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                 </div>
 
                 {/* Client / Project */}
-                <div className="min-w-[140px]">
+                <div className="min-w-[140px] flex items-center gap-1">
                   {entry.client_id && (
-                    <span className="text-xs text-text-secondary">
-                      {clientMap.get(entry.client_id) ?? 'Unknown'}
-                    </span>
+                    <EntityChip type="client" id={entry.client_id} label={clientMap.get(entry.client_id) ?? 'Unknown'} variant="inline" />
                   )}
                   {entry.project_id && (
-                    <span className="text-xs text-text-muted ml-1">
-                      / {projectMap.get(entry.project_id) ?? 'Unknown'}
-                    </span>
+                    <>
+                      <span className="text-xs text-text-muted">/</span>
+                      <EntityChip type="project" id={entry.project_id} label={projectMap.get(entry.project_id) ?? 'Unknown'} variant="inline" />
+                    </>
                   )}
                   {!entry.client_id && !entry.project_id && (
                     <span className="text-xs text-text-muted">No client</span>

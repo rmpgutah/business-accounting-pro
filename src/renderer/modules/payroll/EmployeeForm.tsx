@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Users, Plus, Pencil, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 interface EmployeeFormData {
@@ -892,6 +894,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       {/* Pay History */}
       {isEditing && (
         <PayHistory employeeId={employeeId!} />
+      )}
+
+      {/* Cross-integration panels */}
+      {isEditing && employeeId && (
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          <RelatedPanel entityType="employee" entityId={employeeId} hide={['pay_stubs']} />
+          <EntityTimeline entityType="employees" entityId={employeeId} />
+        </div>
       )}
 
       {/* Actions */}

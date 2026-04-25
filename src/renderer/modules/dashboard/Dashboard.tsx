@@ -47,6 +47,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, formatDate } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -85,6 +86,7 @@ interface AuditEntry {
 interface UpcomingInvoice {
   id: string;
   invoice_number: string;
+  client_id?: string;
   client_name: string;
   total: number;
   amount_paid: number;
@@ -93,6 +95,7 @@ interface UpcomingInvoice {
 }
 
 interface TopClient {
+  id?: string;
   name: string;
   total_paid: number;
 }
@@ -482,7 +485,7 @@ const Dashboard: React.FC = () => {
       }).catch(() => {});
 
       api.rawQuery(
-        `SELECT c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
+        `SELECT c.id, c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
          FROM clients c
          LEFT JOIN invoices i ON i.client_id = c.id AND i.issue_date >= date('now', '-90 days')
          WHERE c.company_id = ?
@@ -1385,7 +1388,7 @@ const Dashboard: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-text-primary font-semibold truncate">
-                            {inv.invoice_number}
+                            <EntityChip type="invoice" id={inv.id} label={inv.invoice_number} variant="inline" />
                           </span>
                           <span className="text-sm font-mono font-semibold text-text-primary ml-2">
                             {formatCurrency(amountDue)}
@@ -1393,7 +1396,7 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-[11px] text-text-muted truncate">
-                            {inv.client_name || 'Unknown'}
+                            {(inv as any).client_id ? <EntityChip type="client" id={(inv as any).client_id} label={inv.client_name || 'Unknown'} variant="inline" /> : (inv.client_name || 'Unknown')}
                           </span>
                           <span className="text-[11px] text-text-muted font-mono ml-2">
                             {formatDate(inv.due_date)}
@@ -1428,7 +1431,7 @@ const Dashboard: React.FC = () => {
                     <div key={idx}>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-sm text-text-primary truncate">
-                          {client.name}
+                          {client.id ? <EntityChip type="client" id={client.id} label={client.name} variant="inline" /> : client.name}
                         </span>
                         <span className="text-sm font-mono font-semibold text-text-secondary ml-2">
                           {formatCurrency(client.total_paid)}

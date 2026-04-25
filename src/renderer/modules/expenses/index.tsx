@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Receipt, Building2 } from 'lucide-react';
 import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
 import VendorList from './VendorList';
 import VendorForm from './VendorForm';
 import VendorDetail from './VendorDetail';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'expenses' | 'vendors';
@@ -48,6 +49,24 @@ const ExpensesModule: React.FC = () => {
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [vendorKey, setVendorKey] = useState(0);
+
+  // Cross-module deep links: expense → form, vendor → detail
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const expFocus = consumeFocusEntity('expense');
+    if (expFocus) {
+      setTab('expenses');
+      setEditingExpenseId(expFocus.id);
+      setExpenseView('form');
+      return;
+    }
+    const venFocus = consumeFocusEntity('vendor');
+    if (venFocus) {
+      setTab('vendors');
+      setViewingVendorId(venFocus.id);
+      setVendorView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   // ── Expense handlers ──
   const handleNewExpense = useCallback(() => {

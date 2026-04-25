@@ -14,6 +14,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 import ErrorBanner from '../../components/ErrorBanner';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Account {
@@ -387,8 +388,8 @@ const AccountsList: React.FC<AccountsListProps> = ({
                         onClick={() => onEditAccount(account)}
                       >
                         <td className="px-4 py-2" />
-                        <td className="px-4 py-2 font-mono text-xs text-text-secondary">
-                          {account.code}
+                        <td className="px-4 py-2 font-mono text-xs text-text-secondary" onClick={(e) => e.stopPropagation()}>
+                          <EntityChip type="account" id={account.id} label={account.code} variant="mono" />
                         </td>
                         <td className="px-4 py-2 text-xs text-text-primary font-medium truncate max-w-[200px]">
                           {account.name}

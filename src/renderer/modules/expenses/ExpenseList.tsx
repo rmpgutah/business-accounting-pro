@@ -9,6 +9,7 @@ import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 import { useNavigation } from '../../lib/navigation';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -372,13 +373,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                       {exp.category_name || '-'}
                     </td>
                     <td className="text-text-secondary cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                      {exp.vendor_id && exp.vendor_name ? (
-                        <button
-                          className="text-accent-blue hover:underline text-left"
-                          onClick={() => nav.goToVendor(exp.vendor_id!)}
-                        >
-                          <span className="block truncate max-w-[150px]">{exp.vendor_name}</span>
-                        </button>
+                      {exp.vendor_id ? (
+                        <EntityChip type="vendor" id={exp.vendor_id} label={exp.vendor_name || ''} variant="inline" />
                       ) : (
                         <span className="block truncate max-w-[150px]">{exp.vendor_name || '-'}</span>
                       )}

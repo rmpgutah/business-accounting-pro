@@ -9,6 +9,7 @@ import PaymentRecorder from './PaymentRecorder';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -439,12 +440,8 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </span>
             {client ? (
               <div className="space-y-1 text-sm">
-                <p
-                  className="text-text-primary font-semibold text-base cursor-pointer hover:text-accent-blue transition-colors"
-                  onClick={() => nav.goToClient(client.id)}
-                  title="View client details"
-                >
-                  {client.name}
+                <p className="text-text-primary font-semibold text-base">
+                  <EntityChip type="client" id={client.id} label={client.name} variant="inline" />
                 </p>
                 {client.email && <p className="text-text-secondary">{client.email}</p>}
                 {(() => {

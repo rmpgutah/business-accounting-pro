@@ -3,6 +3,8 @@ import { ArrowLeft, Package, Edit } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 interface VendorDetailProps {
   vendorId: string;
@@ -149,6 +151,12 @@ const VendorDetail: React.FC<VendorDetailProps> = ({ vendorId, onBack, onEdit })
           </table>
         </div>
       )}
+
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="vendor" entityId={vendorId} hide={['expenses', 'bills']} />
+        <EntityTimeline entityType="vendors" entityId={vendorId} />
+      </div>
     </div>
   );
 };

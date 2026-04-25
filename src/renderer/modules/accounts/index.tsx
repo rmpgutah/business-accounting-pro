@@ -1,9 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { BookOpen, FileSpreadsheet } from 'lucide-react';
 import AccountsList from './AccountsList';
 import AccountForm from './AccountForm';
 import JournalEntries from './JournalEntries';
 import JournalEntryForm from './JournalEntryForm';
+import { useAppStore } from '../../stores/appStore';
+import api from '../../lib/api';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'chart-of-accounts' | 'journal-entries';
@@ -23,6 +25,32 @@ const AccountsModule: React.FC = () => {
   // Force re-render of lists after save
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = () => setRefreshKey((k) => k + 1);
+
+  // Cross-module deep links: account / journal_entry → open edit modal on correct tab
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const acctFocus = consumeFocusEntity('account');
+    if (acctFocus) {
+      setActiveTab('chart-of-accounts');
+      api.get('accounts', acctFocus.id).then((a) => {
+        if (a) {
+          setEditingAccount(a);
+          setShowAccountForm(true);
+        }
+      }).catch(() => {});
+      return;
+    }
+    const jeFocus = consumeFocusEntity('journal_entry');
+    if (jeFocus) {
+      setActiveTab('journal-entries');
+      api.get('journal_entries', jeFocus.id).then((e) => {
+        if (e) {
+          setEditingEntry(e);
+          setShowEntryForm(true);
+        }
+      }).catch(() => {});
+    }
+  }, [consumeFocusEntity]);
 
   // ─── Account Handlers ─────────────────────────────
   const handleNewAccount = useCallback(() => {

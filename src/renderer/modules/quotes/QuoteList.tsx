@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Quote {
@@ -314,7 +315,9 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
                     <td className="font-mono text-text-primary text-xs font-semibold">
                       {q.quote_number}
                     </td>
-                    <td className="text-text-secondary truncate max-w-[180px]">{q.client_name || '-'}</td>
+                    <td className="text-text-secondary truncate max-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                      {q.client_id ? <EntityChip type="client" id={q.client_id} label={q.client_name || ''} variant="inline" /> : '-'}
+                    </td>
                     <td className="font-mono text-text-secondary text-xs">
                       {formatDate(q.issue_date)}
                     </td>

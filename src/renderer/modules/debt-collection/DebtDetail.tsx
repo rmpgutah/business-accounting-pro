@@ -22,6 +22,7 @@ import {
   Plus,
 } from 'lucide-react';
 import api from '../../lib/api';
+import EntityChip from '../../components/EntityChip';
 import PaymentPlanCard from './PaymentPlanCard';
 import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
@@ -1280,13 +1281,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               </InfoRow>
               <InfoRow label="Source">
                 {debt.source_type === 'invoice' && debt.source_id ? (
-                  <span
-                    className="text-accent-blue cursor-pointer hover:underline"
-                    onClick={() => nav.goToInvoice(debt.source_id)}
-                    title="View original invoice"
-                  >
-                    {sourceLabel}
-                  </span>
+                  <EntityChip type="invoice" id={debt.source_id} label={sourceLabel} variant="inline" />
+                ) : debt.source_type === 'bill' && debt.source_id ? (
+                  <EntityChip type="bill" id={debt.source_id} label={sourceLabel} variant="inline" />
                 ) : debt.source_type !== 'manual' ? (
                   <span className="text-accent-blue">{sourceLabel}</span>
                 ) : (

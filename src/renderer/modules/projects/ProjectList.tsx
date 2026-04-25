@@ -5,6 +5,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -343,8 +344,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                         <h3 className="text-sm font-semibold text-text-primary truncate">
                           {project.name}
                         </h3>
-                        <p className="text-xs text-text-muted truncate mt-0.5">
-                          {clientName}
+                        <p className="text-xs text-text-muted truncate mt-0.5" onClick={(e) => e.stopPropagation()}>
+                          {project.client_id ? <EntityChip type="client" id={project.client_id} label={clientName} variant="inline" /> : clientName}
                         </p>
                       </div>
                     </div>

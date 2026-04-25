@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface JournalEntry {
@@ -197,7 +198,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
                   {formatDate(entry.date)}
                 </td>
                 <td className="px-4 py-2 text-xs text-text-primary font-mono font-medium">
-                  {entry.entry_number}
+                  <EntityChip type="journal_entry" id={entry.id} label={entry.entry_number} variant="mono" />
                 </td>
                 <td className="px-4 py-2 text-xs text-text-primary truncate max-w-[200px]">
                   {entry.description || '—'}

@@ -5,6 +5,8 @@ import { generatePayStubHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 interface PayStub {
@@ -451,6 +453,12 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="pay_stub" entityId={payStubId} />
+        <EntityTimeline entityType="pay_stubs" entityId={payStubId} />
       </div>
     </div>
   );

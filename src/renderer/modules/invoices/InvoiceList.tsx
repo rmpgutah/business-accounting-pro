@@ -9,6 +9,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ─────��────────────���───────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -412,8 +413,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               <tbody>
                 {candidates.map(inv => (
                   <tr key={inv.id}>
-                    <td className="font-mono">{inv.invoice_number}</td>
-                    <td>{inv.client_name || '—'}</td>
+                    <td className="font-mono"><EntityChip type="invoice" id={inv.id} label={inv.invoice_number} variant="inline" /></td>
+                    <td><EntityChip type="client" id={inv.client_id} label={inv.client_name || '—'} variant="inline" /></td>
                     <td className="text-right font-mono text-accent-expense">
                       {formatCurrency((inv.total || 0) - (inv.amount_paid || 0))}
                     </td>
@@ -565,16 +566,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         )}
                       </div>
                     </td>
-                    <td>
-                      <button
-                        className="text-accent-blue hover:underline text-left"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          nav.goToClient(inv.client_id);
-                        }}
-                      >
-                        <span className="block truncate max-w-[180px]">{clientMap.get(inv.client_id) ?? 'Unknown'}</span>
-                      </button>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <EntityChip type="client" id={inv.client_id} label={clientMap.get(inv.client_id) ?? 'Unknown'} variant="inline" />
                     </td>
                     <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>
                     <td className="text-text-secondary">{formatDate(inv.due_date)}</td>

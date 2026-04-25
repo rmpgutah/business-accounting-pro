@@ -14,7 +14,58 @@
 // trust client-supplied IDs to reach across companies.
 
 import type { IpcMain } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { getDb } from '../database';
+
+/**
+ * Insert (or update metadata for) a relation row in `entity_relations`.
+ * Use directly inside main-process code to record ad-hoc connections
+ * without going through IPC. Always non-throwing — caller can wrap in
+ * try/catch for safety, and we additionally swallow errors here.
+ */
+export function recordRelation(
+  companyId: string,
+  fromType: string,
+  fromId: string,
+  toType: string,
+  toId: string,
+  relation: string,
+  metadata?: Record<string, unknown>,
+): void {
+  if (!companyId || !fromType || !fromId || !toType || !toId || !relation) return;
+  try {
+    getDb().prepare(`
+      INSERT INTO entity_relations (id, company_id, from_type, from_id, to_type, to_id, relation, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(company_id, from_type, from_id, to_type, to_id, relation) DO UPDATE SET
+        metadata = excluded.metadata
+    `).run(
+      randomUUID(), companyId, fromType, fromId, toType, toId, relation,
+      JSON.stringify(metadata ?? {}),
+    );
+  } catch (err) {
+    // Swallow — relation rows are advisory; never break the parent op.
+    // eslint-disable-next-line no-console
+    console.warn('[entity-graph] recordRelation failed:', (err as Error)?.message);
+  }
+}
+
+/**
+ * Convenience for bidirectional relation recording — many callers want both
+ * directions so the Related panel finds the link from either side.
+ */
+export function recordRelationBidirectional(
+  companyId: string,
+  typeA: string,
+  idA: string,
+  typeB: string,
+  idB: string,
+  relation: string,
+  metadata?: Record<string, unknown>,
+): void {
+  recordRelation(companyId, typeA, idA, typeB, idB, relation, metadata);
+  recordRelation(companyId, typeB, idB, typeA, idA, relation, metadata);
+}
 
 export type EntityType =
   | 'invoice' | 'client' | 'project' | 'expense' | 'bill' | 'vendor'

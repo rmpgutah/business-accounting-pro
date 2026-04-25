@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Landmark, Building, Upload, GitMerge, Shield } from 'lucide-react';
 import BankAccountList, { type BankAccount } from './BankAccountList';
 import BankAccountForm from './BankAccountForm';
 import ImportTransactions from './ImportTransactions';
 import ReconcileView from './ReconcileView';
 import BankRules from './BankRules';
+import { useAppStore } from '../../stores/appStore';
+import api from '../../lib/api';
 
 // ─── Tab Types ──────────────────────────────────────────
 type TabId = 'accounts' | 'import' | 'reconcile' | 'rules';
@@ -29,6 +31,21 @@ const BankReconModule: React.FC = () => {
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(
     null
   );
+
+  // Cross-module deep link: bank_account → open edit form
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('bank_account');
+    if (focus) {
+      setActiveTab('accounts');
+      api.get('bank_accounts', focus.id).then((acc) => {
+        if (acc) {
+          setEditingAccount(acc);
+          setShowForm(true);
+        }
+      }).catch(() => {});
+    }
+  }, [consumeFocusEntity]);
 
   const handleAdd = () => {
     setEditingAccount(null);

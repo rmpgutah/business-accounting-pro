@@ -9,7 +9,7 @@ import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
-import { registerEntityGraphIpc } from '../integrations/entity-graph';
+import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
 import {
@@ -772,6 +772,32 @@ export function registerIpcHandlers(): void {
       const savedId = saveFn();
       if (companyId) db.logAudit(companyId, 'invoices', savedId, isEdit ? 'update' : 'create');
 
+      // Record ad-hoc entity relations (advisory — never blocks the save).
+      try {
+        if (companyId) {
+          // (invoice ↔ client) — bidirectional, relation: 'billed_to'
+          if (invoiceData?.client_id) {
+            recordRelationBidirectional(
+              companyId, 'invoice', savedId, 'client', String(invoiceData.client_id),
+              'billed_to',
+              { created_via: invoiceData.created_via_recurring ? 'recurring' : 'manual' },
+            );
+          }
+          // (invoice ↔ time_entry) for each id in any line item's time_entry_ids CSV.
+          for (const li of lineItems || []) {
+            const csv: string = (li?.time_entry_ids ?? '') as string;
+            if (!csv) continue;
+            for (const teId of String(csv).split(',').map((s: string) => s.trim()).filter(Boolean)) {
+              recordRelationBidirectional(
+                companyId, 'invoice', savedId, 'time_entry', teId, 'billed',
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('invoice:save recordRelation failed:', (err as Error)?.message);
+      }
+
       scheduleAutoBackup();
       return { id: savedId };
     } catch (err) {
@@ -1467,6 +1493,16 @@ export function registerIpcHandlers(): void {
       db.create('debt_pipeline_stages', { debt_id: debt.id, stage: 'reminder' });
       db.create('invoice_debt_links', { invoice_id: invoiceId, debt_id: debt.id });
       db.update('invoices', invoiceId, { status: 'overdue' });
+
+      // (debt ↔ invoice) bidirectional, relation: 'collected_for'
+      try {
+        recordRelationBidirectional(
+          companyId, 'debt', debt.id, 'invoice', invoiceId, 'collected_for',
+          { converted_at: new Date().toISOString(), balance },
+        );
+      } catch (err) {
+        console.warn('invoice:convert-to-debt recordRelation failed:', (err as Error)?.message);
+      }
 
       scheduleAutoBackup();
       return { debt_id: debt.id };
@@ -3000,7 +3036,17 @@ export function registerIpcHandlers(): void {
       return { paymentId, newStatus, newAmountPaid };
     });
 
-    return payTx();
+    const result = payTx();
+    // (bill_payment ↔ bill) bidirectional with payment metadata for the timeline.
+    try {
+      recordRelationBidirectional(
+        companyId, 'bill_payment', result.paymentId, 'bill', billId, 'paid',
+        { amount, date, payment_method: paymentMethod || 'check', reference: reference || '' },
+      );
+    } catch (err) {
+      console.warn('bills:pay recordRelation failed:', (err as Error)?.message);
+    }
+    return result;
   });
 
   ipcMain.handle('bills:stats', () => {
@@ -3089,7 +3135,17 @@ export function registerIpcHandlers(): void {
       return { billId, billNumber };
     });
 
-    return convertTx();
+    const result = convertTx();
+    // (bill ↔ purchase_order) bidirectional, relation: 'fulfills'
+    try {
+      recordRelationBidirectional(
+        companyId, 'bill', result.billId, 'purchase_order', poId, 'fulfills',
+        { converted_at: new Date().toISOString(), bill_number: result.billNumber },
+      );
+    } catch (err) {
+      console.warn('po:convert-bill recordRelation failed:', (err as Error)?.message);
+    }
+    return result;
   });
 
   // ─── Fixed Assets ─────────────────────────────────────────

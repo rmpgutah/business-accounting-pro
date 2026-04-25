@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -18,6 +19,7 @@ const fmt = new Intl.NumberFormat('en-US', {
 interface InvoiceRow {
   id: string;
   invoice_number: string;
+  client_id: string | null;
   client_name: string;
   total: number;
   amount_paid: number;
@@ -28,6 +30,7 @@ interface InvoiceRow {
 interface AgingEntry {
   id: string;
   invoiceNumber: string;
+  clientId: string | null;
   clientName: string;
   amountDue: number;
   daysOutstanding: number;
@@ -74,7 +77,7 @@ const ARAgingReport: React.FC = () => {
 
       try {
         const rows: InvoiceRow[] = await api.rawQuery(
-          `SELECT i.id, i.invoice_number, i.total, i.amount_paid, i.due_date, i.status,
+          `SELECT i.id, i.invoice_number, i.client_id, i.total, i.amount_paid, i.due_date, i.status,
                   c.name as client_name
            FROM invoices i
            LEFT JOIN clients c ON i.client_id = c.id
@@ -92,6 +95,7 @@ const ARAgingReport: React.FC = () => {
           return {
             id: row.id,
             invoiceNumber: row.invoice_number || row.id,
+            clientId: row.client_id || null,
             clientName: row.client_name || 'Unknown',
             amountDue,
             daysOutstanding,
@@ -250,9 +254,11 @@ const ARAgingReport: React.FC = () => {
                   {entries.map((entry) => (
                     <tr key={entry.id}>
                       <td className="text-text-primary font-medium font-mono">
-                        #{entry.invoiceNumber}
+                        <EntityChip type="invoice" id={entry.id} label={`#${entry.invoiceNumber}`} variant="inline" />
                       </td>
-                      <td className="text-text-secondary">{entry.clientName}</td>
+                      <td className="text-text-secondary">
+                        {entry.clientId ? <EntityChip type="client" id={entry.clientId} label={entry.clientName} variant="inline" /> : entry.clientName}
+                      </td>
                       <td className="text-right font-mono text-text-primary">
                         {fmt.format(entry.amountDue)}
                       </td>

@@ -10,7 +10,10 @@ import {
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ───────────────────────────────────────────────
 interface FixedAsset {
@@ -1023,6 +1026,12 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
         </div>
       )}
 
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-2">
+        <RelatedPanel entityType="fixed_asset" entityId={assetId} />
+        <EntityTimeline entityType="fixed_assets" entityId={assetId} />
+      </div>
+
       {/* Chart Tab */}
       {tab === 'chart' && (
         <div className="block-card p-4">
@@ -1070,6 +1079,12 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
 // ═══════════════════════════════════════════════════════════
 const FixedAssetsModule: React.FC = () => {
   const [view, setView] = useState<View>({ type: 'list' });
+
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('fixed_asset');
+    if (focus) setView({ type: 'detail', assetId: focus.id });
+  }, [consumeFocusEntity]);
 
   const goList = useCallback(() => setView({ type: 'list' }), []);
   const goNew = useCallback(() => setView({ type: 'new' }), []);
