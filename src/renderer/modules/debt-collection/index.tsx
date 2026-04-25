@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -23,6 +23,7 @@ import AutomationSettings from './AutomationSettings';
 import CollectorDashboard from './CollectorDashboard';
 import DebtMiniList from './DebtMiniList';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics' | 'dashboard';
@@ -67,6 +68,16 @@ const DebtCollectionModule: React.FC = () => {
   const [activeDebtId, setActiveDebtId] = useState<string | null>(null);
   const [debtFormType, setDebtFormType] = useState<DebtFormType>('receivable');
   const [listKey, setListKey] = useState(0);
+
+  // Cross-module deep link from RelatedPanel/EntityChip → open debt detail.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('debt');
+    if (focus) {
+      setActiveDebtId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   // Settings modal
   const [showSettings, setShowSettings] = useState(false);

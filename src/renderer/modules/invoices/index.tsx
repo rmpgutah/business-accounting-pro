@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import InvoiceList from './InvoiceList';
 import InvoiceForm from './InvoiceForm';
 import InvoiceDetail from './InvoiceDetail';
 import InvoiceSettings from './InvoiceSettings';
 import CatalogManager from './CatalogManager';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── View State ─────────────────────────────────────────
 type View =
@@ -25,6 +26,14 @@ const InvoicingModule: React.FC = () => {
     }
     return { type: 'list' };
   });
+
+  // Cross-module deep link: if RelatedPanel/EntityChip set focusEntity to an
+  // invoice, jump straight to its detail view and clear the hint.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('invoice');
+    if (focus) setView({ type: 'detail', invoiceId: focus.id });
+  }, [consumeFocusEntity]);
 
   const goToList = useCallback(() => setView({ type: 'list' }), []);
   const goToNew = useCallback(() => setView({ type: 'new' }), []);

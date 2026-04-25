@@ -360,6 +360,121 @@ function explicitGraph(companyId: string, type: EntityType, id: string): Related
   }));
 }
 
+// ─── More builders: account, journal entry, payment, time entry,
+//      pay stub, purchase order, fixed asset, bank account, expense ──
+
+function purchaseOrderGraph(companyId: string, poId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const lines = safeAll(`SELECT id, description, quantity, unit_price, amount FROM po_line_items WHERE purchase_order_id = ?`, [poId]);
+  if (lines.length) groups.push({ key: 'lines', label: `Line Items (${lines.length})`, entityType: 'purchase_order', rows: lines, total: sumField(lines, 'amount') });
+  const bills = safeAll(`SELECT id, bill_number, total, status FROM bills WHERE company_id = ? AND purchase_order_id = ?`, [companyId, poId]);
+  if (bills.length) groups.push({ key: 'bills', label: `Bills from this PO (${bills.length})`, entityType: 'bill', rows: bills, total: sumField(bills, 'total') });
+  return groups;
+}
+
+function accountGraph(companyId: string, accountId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const lines = safeAll(`
+    SELECT je.id AS journal_entry_id, je.entry_number, je.date, je.description,
+           jel.debit, jel.credit
+    FROM journal_entry_lines jel
+    JOIN journal_entries je ON je.id = jel.journal_entry_id
+    WHERE je.company_id = ? AND jel.account_id = ?
+    ORDER BY je.date DESC LIMIT 100
+  `, [companyId, accountId]);
+  if (lines.length) groups.push({ key: 'jel', label: `GL Activity (${lines.length})`, entityType: 'journal_entry', rows: lines });
+
+  const inv = safeAll(`
+    SELECT DISTINCT i.id, i.invoice_number, i.issue_date, i.total
+    FROM invoices i
+    JOIN invoice_line_items l ON l.invoice_id = i.id
+    WHERE i.company_id = ? AND l.account_id = ?
+    ORDER BY i.issue_date DESC LIMIT 50
+  `, [companyId, accountId]);
+  if (inv.length) groups.push({ key: 'invoices', label: `Invoice line items posted here (${inv.length})`, entityType: 'invoice', rows: inv, total: sumField(inv, 'total') });
+
+  const exp = safeAll(`
+    SELECT id, date, amount, description FROM expenses
+    WHERE company_id = ? AND account_id = ? ORDER BY date DESC LIMIT 50
+  `, [companyId, accountId]);
+  if (exp.length) groups.push({ key: 'expenses', label: `Expenses posted here (${exp.length})`, entityType: 'expense', rows: exp, total: sumField(exp, 'amount') });
+
+  return groups;
+}
+
+function journalEntryGraph(_companyId: string, jeId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const lines = safeAll(`
+    SELECT jel.id, a.code AS account_code, a.name AS account_name, jel.debit, jel.credit, jel.description
+    FROM journal_entry_lines jel
+    JOIN accounts a ON a.id = jel.account_id
+    WHERE jel.journal_entry_id = ?
+  `, [jeId]);
+  if (lines.length) groups.push({ key: 'lines', label: `Lines (${lines.length})`, entityType: 'account', rows: lines });
+  return groups;
+}
+
+function timeEntryGraph(_companyId: string, _id: string): RelatedGroup[] {
+  // Time entries are mostly leaves — but expose the parent project/employee.
+  const t = safeOne<{ project_id: string; employee_id: string }>(
+    `SELECT project_id, employee_id FROM time_entries WHERE id = ?`, [_id]);
+  if (!t) return [];
+  const groups: RelatedGroup[] = [];
+  if (t.project_id) {
+    const p = safeOne(`SELECT id, name, status FROM projects WHERE id = ?`, [t.project_id]);
+    if (p) groups.push({ key: 'project', label: 'Project', entityType: 'project', rows: [p as any] });
+  }
+  if (t.employee_id) {
+    const e = safeOne(`SELECT id, name FROM employees WHERE id = ?`, [t.employee_id]);
+    if (e) groups.push({ key: 'employee', label: 'Employee', entityType: 'employee', rows: [e as any] });
+  }
+  return groups;
+}
+
+function payStubGraph(_companyId: string, stubId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const stub = safeOne<{ payroll_run_id: string; employee_id: string }>(
+    `SELECT payroll_run_id, employee_id FROM pay_stubs WHERE id = ?`, [stubId]);
+  if (!stub) return groups;
+
+  const run = safeOne(`SELECT id, pay_date, total_gross, total_net FROM payroll_runs WHERE id = ?`, [stub.payroll_run_id]);
+  if (run) groups.push({ key: 'run', label: 'Payroll Run', entityType: 'payroll_run', rows: [run as any] });
+
+  const emp = safeOne(`SELECT id, name FROM employees WHERE id = ?`, [stub.employee_id]);
+  if (emp) groups.push({ key: 'employee', label: 'Employee', entityType: 'employee', rows: [emp as any] });
+
+  return groups;
+}
+
+function fixedAssetGraph(companyId: string, assetId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const dep = safeAll(`SELECT id, period_end_date, depreciation_amount, accumulated_depreciation
+    FROM asset_depreciation_entries WHERE fixed_asset_id = ? ORDER BY period_end_date DESC LIMIT 50`, [assetId]);
+  if (dep.length) groups.push({ key: 'dep', label: `Depreciation Entries (${dep.length})`, entityType: 'fixed_asset', rows: dep });
+  // Source bill (if asset was capitalized from one)
+  const bill = safeOne(`SELECT b.id, b.bill_number, b.total FROM bills b
+    JOIN fixed_assets fa ON fa.source_bill_id = b.id WHERE fa.id = ? AND b.company_id = ?`, [assetId, companyId]);
+  if (bill) groups.push({ key: 'bill', label: 'Source Bill', entityType: 'bill', rows: [bill as any] });
+  return groups;
+}
+
+function bankAccountGraph(companyId: string, bankId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const txns = safeAll(`SELECT id, date, amount, description, status FROM bank_transactions
+    WHERE bank_account_id = ? ORDER BY date DESC LIMIT 100`, [bankId]);
+  if (txns.length) groups.push({ key: 'txns', label: `Transactions (${txns.length})`, entityType: 'bank_transaction', rows: txns, total: sumField(txns, 'amount') });
+  // Suppress unused-arg warning in strict TS:
+  void companyId;
+  return groups;
+}
+
+function expenseGraph(_companyId: string, expenseId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  const lines = safeAll(`SELECT id, description, amount, account_id FROM expense_line_items WHERE expense_id = ?`, [expenseId]);
+  if (lines.length) groups.push({ key: 'lines', label: `Line Items (${lines.length})`, entityType: 'expense', rows: lines, total: sumField(lines, 'amount') });
+  return groups;
+}
+
 /** Dispatcher — pick the right graph builder for the entity type. */
 export function graph(companyId: string, type: EntityType, id: string): RelatedGroup[] {
   let groups: RelatedGroup[] = [];
@@ -371,6 +486,14 @@ export function graph(companyId: string, type: EntityType, id: string): RelatedG
     case 'debt':            groups = debtGraph(companyId, id); break;
     case 'vendor':          groups = vendorGraph(companyId, id); break;
     case 'employee':        groups = employeeGraph(companyId, id); break;
+    case 'purchase_order':  groups = purchaseOrderGraph(companyId, id); break;
+    case 'account':         groups = accountGraph(companyId, id); break;
+    case 'journal_entry':   groups = journalEntryGraph(companyId, id); break;
+    case 'time_entry':      groups = timeEntryGraph(companyId, id); break;
+    case 'pay_stub':        groups = payStubGraph(companyId, id); break;
+    case 'fixed_asset':     groups = fixedAssetGraph(companyId, id); break;
+    case 'bank_account':    groups = bankAccountGraph(companyId, id); break;
+    case 'expense':         groups = expenseGraph(companyId, id); break;
     case 'stripe_object':   groups = stripeGraph(companyId, id); break;
     default:                groups = [];
   }

@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ProjectList from './ProjectList';
 import ProjectForm from './ProjectForm';
 import ProjectDetail from './ProjectDetail';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── View State ─────────────────────────────────────────
 type View =
@@ -13,6 +14,13 @@ type View =
 const ProjectsModule: React.FC = () => {
   const [view, setView] = useState<View>({ type: 'list' });
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Cross-module deep link consumption.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('project');
+    if (focus) setView({ type: 'detail', projectId: focus.id });
+  }, [consumeFocusEntity]);
 
   const goToList = useCallback(() => {
     setView({ type: 'list' });

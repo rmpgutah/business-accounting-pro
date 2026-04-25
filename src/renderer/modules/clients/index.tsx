@@ -1,11 +1,19 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ClientList from './ClientList';
 import ClientDetail from './ClientDetail';
 import ClientForm from './ClientForm';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── Module Root ────────────────────────────────────────
 const ClientsModule: React.FC = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // Consume cross-module deep link from RelatedPanel/EntityChip.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('client');
+    if (focus) setSelectedClientId(focus.id);
+  }, [consumeFocusEntity]);
   const [formOpen, setFormOpen] = useState(false);
   const [editClientId, setEditClientId] = useState<string | null>(null);
   const [listKey, setListKey] = useState(0);

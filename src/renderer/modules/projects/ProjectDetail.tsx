@@ -15,6 +15,8 @@ import { Plus } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import ProjectProfitability from './ProjectProfitability';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -414,6 +416,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         {activeTab === 'invoices' && (
           <InvoicesTab invoices={invoices} onNavigate={(id) => nav.goToInvoice(id)} />
         )}
+      </div>
+
+      {/* Cross-entity integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="project" entityId={projectId} hide={['time', 'expenses', 'invoices']} />
+        <EntityTimeline entityType="projects" entityId={projectId} />
       </div>
     </div>
   );
