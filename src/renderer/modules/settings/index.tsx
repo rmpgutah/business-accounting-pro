@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
-  Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download,
+  Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download, PenTool,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import ImportExport from './ImportExport';
+import SignaturePad from '../../components/SignaturePad';
 
 // ─── Types ──────────────────────────────────────────────
 interface SettingsMap {
@@ -675,6 +676,34 @@ export default function SettingsModule() {
               />
             </Field>
           </div>
+        </div>
+
+        {/* Authorized Signature for Check Printing */}
+        <div className="mt-4 pt-4 border-t border-border-primary">
+          <div className="flex items-center gap-2 mb-3">
+            <PenTool size={14} className="text-text-muted" />
+            <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">Authorized Signature (Check Printing)</h4>
+          </div>
+          <p className="text-xs text-text-muted mb-3">
+            Draw or upload the authorized signature that will appear on printed payroll checks.
+            This signature is stored securely and applied automatically when checks are generated.
+          </p>
+          {companyForm.signature_image && (
+            <div className="mb-3">
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Current Saved Signature</div>
+              <div style={{ border: '1px solid #333', borderRadius: '6px', background: '#fff', padding: '8px', display: 'inline-block' }}>
+                <img
+                  src={companyForm.signature_image}
+                  alt="Saved signature"
+                  style={{ height: '50px', objectFit: 'contain' }}
+                />
+              </div>
+            </div>
+          )}
+          <SignaturePad
+            value={companyForm.signature_image || ''}
+            onChange={(dataUrl) => setCompanyForm({ ...companyForm, signature_image: dataUrl })}
+          />
         </div>
 
         <div className="flex justify-end mt-4">

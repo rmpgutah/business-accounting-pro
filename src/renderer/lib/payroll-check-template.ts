@@ -136,6 +136,7 @@ export function generatePaycheckHTML(
   const coRouting = esc(company?.bank_routing_number || '');
   const coAcct = esc(company?.bank_account_number || '');
   const coFraction = esc(company?.bank_fraction_code || '');
+  const coSignature = company?.signature_image || '';
 
   const empName = esc(employee?.name || stub?.employee_name || 'Employee');
   const empAddr1 = esc(employee?.address_line1 || '');
@@ -334,8 +335,14 @@ export function generatePaycheckHTML(
         ${coBank ? `<div style="font-weight:700;margin-bottom:2px;">${coBank}</div>` : ''}
         <div><strong>Memo:</strong> ${memo}</div>
       </div>
-      <div style="border-top:1.5px solid #000;width:200px;padding-top:3px;text-align:center;">
-        <span style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">Authorized Signature</span>
+      <div style="text-align:center;width:220px;">
+        ${coSignature
+          ? `<img src="${coSignature}" style="height:36px;max-width:200px;object-fit:contain;display:block;margin:0 auto 2px;" />`
+          : `<div style="height:36px;"></div>`
+        }
+        <div style="border-top:1.5px solid #000;padding-top:3px;">
+          <span style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">Authorized Signature</span>
+        </div>
       </div>
     </div>
     <!-- MICR — labeled segments, clean monospace -->
