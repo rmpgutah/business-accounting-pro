@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { FolderKanban, Plus, Clock, Search, FolderOpen, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -86,6 +87,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -94,6 +96,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
       if (!activeCompany) return;
       try {
         setLoading(true);
+        setLoadError('');
         const [projectRows, clientRows, expenseRows, timeRows] = await Promise.all([
           api.query('projects', { company_id: activeCompany.id }),
           api.query('clients', { company_id: activeCompany.id }),
@@ -126,9 +129,12 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
           }
         }
         setTimeEntries(timeMap);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load projects:', err);
-        if (!cancelled) setProjects([]);
+        if (!cancelled) {
+          setProjects([]);
+          setLoadError(err?.message || 'Failed to load projects');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -207,6 +213,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
   // ─── Render ───────────────────────────────────────────
   return (
     <div className="p-6 space-y-5 overflow-y-auto h-full">
+      {loadError && <ErrorBanner message={loadError} title="Failed to load projects" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Projects & Job Costing</h1>
@@ -285,14 +292,24 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3">
-          <EmptyState icon={FolderOpen} message="No projects found" />
-          {projects.length === 0 && (
+          <EmptyState
+            icon={FolderOpen}
+            message={projects.length === 0 ? 'No projects yet' : 'No projects match your search or filter'}
+          />
+          {projects.length === 0 ? (
             <button
               className="block-btn-primary inline-flex items-center gap-1.5"
               onClick={onNewProject}
             >
               <Plus size={14} />
               Create Project
+            </button>
+          ) : (
+            <button
+              className="block-btn text-xs"
+              onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+            >
+              Clear filters
             </button>
           )}
         </div>

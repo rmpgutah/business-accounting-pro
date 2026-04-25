@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Building2, Plus, Search } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -26,14 +27,17 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const loadVendors = async () => {
     if (!activeCompany) return;
     try {
+      setLoadError('');
       const data = await api.query('vendors', { company_id: activeCompany.id });
       setVendors(Array.isArray(data) ? data : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load vendors:', err);
+      setLoadError(err?.message || 'Failed to load vendors');
     } finally {
       setLoading(false);
     }
@@ -76,6 +80,7 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
 
   return (
     <div className="space-y-4">
+      {loadError && <ErrorBanner message={loadError} title="Failed to load vendors" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -118,9 +123,13 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
           <div className="empty-state-icon">
             <Building2 size={24} className="text-text-muted" />
           </div>
-          <p className="text-sm text-text-secondary font-medium">No vendors found</p>
+          <p className="text-sm text-text-secondary font-medium">
+            {vendors.length === 0 ? 'No vendors yet' : 'No vendors match your search'}
+          </p>
           <p className="text-xs text-text-muted mt-1">
-            Add your first vendor to get started.
+            {vendors.length === 0
+              ? 'Add your first vendor to get started.'
+              : 'Try a different search term.'}
           </p>
         </div>
       ) : (

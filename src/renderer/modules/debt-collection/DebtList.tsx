@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency } from '../../lib/format';
 import { formatStatus } from '../../lib/format';
@@ -75,6 +76,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   const [collectorFilter, setCollectorFilter] = useState('');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [stats, setStats] = useState<{
     total_outstanding: number;
     in_collection: number;
@@ -132,6 +134,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     const load = async () => {
       if (!activeCompany) return;
       try {
+        setLoadError('');
         // Critical: debt data
         const debtData = await api.rawQuery(DEBT_LIST_SQL, [activeCompany.id, type]);
         if (cancelled) return;
@@ -141,8 +144,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         api.debtStats(activeCompany.id)
           .then(r => { if (!cancelled) setStats(r ?? null); })
           .catch(() => {});
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load debts:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load debts');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -326,6 +330,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
 
   return (
     <div className="space-y-4">
+      {loadError && <ErrorBanner message={loadError} title="Failed to load debts" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -662,14 +667,18 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <Scale size={24} className="text-text-muted" />
           </div>
           <p className="text-sm text-text-secondary font-medium">
-            No {label} debts found
+            {debts.length === 0 ? `No ${label} debts yet` : `No ${label} debts match your filter`}
           </p>
           <p className="text-xs text-text-muted mt-1">
-            Create one or import from overdue invoices.
+            {debts.length === 0
+              ? 'Create one or import from overdue invoices.'
+              : 'Try clearing search or filters.'}
           </p>
-          <button className="block-btn-primary flex items-center gap-2 mx-auto mt-3" onClick={onNew}>
-            <Plus size={14} /> Create New Debt
-          </button>
+          {debts.length === 0 && (
+            <button className="block-btn-primary flex items-center gap-2 mx-auto mt-3" onClick={onNew}>
+              <Plus size={14} /> Create New Debt
+            </button>
+          )}
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">

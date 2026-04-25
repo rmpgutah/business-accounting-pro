@@ -133,7 +133,23 @@ function enqueueMutation(args: {
   return key;
 }
 
+// Per-company drain locks — prevents stripe:sync and stripe:drainQueue (and
+// repeated user clicks) from racing each other. Without this, two concurrent
+// drains can pick up the same pending row and fire the Stripe call twice.
+// The Idempotency-Key prevents Stripe from charging twice, but it still wastes
+// a network round-trip and risks the second caller marking the row 'failed'
+// after the first succeeded.
+const drainLocks = new Map<string, Promise<{ drained: number; failed: number }>>();
+
 async function drainQueue(companyId: string): Promise<{ drained: number; failed: number }> {
+  const existing = drainLocks.get(companyId);
+  if (existing) return existing;
+  const p = drainQueueInner(companyId).finally(() => drainLocks.delete(companyId));
+  drainLocks.set(companyId, p);
+  return p;
+}
+
+async function drainQueueInner(companyId: string): Promise<{ drained: number; failed: number }> {
   const db = getDb();
   const apiKey = getApiKey(companyId);
   if (!apiKey) return { drained: 0, failed: 0 };

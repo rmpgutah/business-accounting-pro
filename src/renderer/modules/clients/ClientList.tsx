@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { UserCircle, Plus, Search, Filter, ArrowUpDown, Download, Trash2, CheckCircle, XCircle, Users } from 'lucide-react';
+import { UserCircle, Plus, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2, CheckCircle, XCircle, Users } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -34,21 +35,24 @@ const SortableHeader: React.FC<{
   field: SortField;
   label: string;
   activeSortField: SortField;
+  activeSortDir: SortDir;
   onSort: (field: SortField) => void;
-}> = ({ field, label, activeSortField, onSort }) => (
-  <th
-    className="cursor-pointer select-none hover:text-text-primary transition-colors"
-    onClick={() => onSort(field)}
-  >
-    <span className="inline-flex items-center gap-1">
-      {label}
-      <ArrowUpDown
-        size={12}
-        className={activeSortField === field ? 'text-accent-blue' : 'text-text-muted'}
-      />
-    </span>
-  </th>
-);
+}> = ({ field, label, activeSortField, activeSortDir, onSort }) => {
+  const isActive = activeSortField === field;
+  const Icon = !isActive ? ArrowUpDown : activeSortDir === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th
+      className="cursor-pointer select-none hover:text-text-primary transition-colors"
+      onClick={() => onSort(field)}
+      aria-sort={isActive ? (activeSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Icon size={12} className={isActive ? 'text-accent-blue' : 'text-text-muted'} />
+      </span>
+    </th>
+  );
+};
 
 // ─── Component ──────────────────────────────────────────
 const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) => {
@@ -64,6 +68,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [clientSummary, setClientSummary] = useState<any>(null);
   const [showImport, setShowImport] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -72,6 +77,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       if (!activeCompany) return;
       try {
         setLoading(true);
+        setLoadError('');
         const [rows, clientSummaryResult] = await Promise.all([
           api.query('clients', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' }),
           api.rawQuery(
@@ -87,9 +93,12 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           const clientRow = Array.isArray(clientSummaryResult) ? clientSummaryResult[0] : clientSummaryResult;
           setClientSummary(clientRow ?? null);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load clients:', err);
-        if (!cancelled) setClients([]);
+        if (!cancelled) {
+          setClients([]);
+          setLoadError(err?.message || 'Failed to load clients');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -217,6 +226,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load clients" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
@@ -273,11 +283,18 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3">
-          <EmptyState icon={Users} message="No clients found" />
-          {clients.length === 0 && (
+          <EmptyState
+            icon={Users}
+            message={clients.length === 0 ? 'No clients yet' : 'No clients match your search or filter'}
+          />
+          {clients.length === 0 ? (
             <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>
               <Plus size={14} />
               Add Client
+            </button>
+          ) : (
+            <button className="block-btn text-xs" onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>
+              Clear filters
             </button>
           )}
         </div>
@@ -296,11 +313,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     style={{ accentColor: '#3b82f6' }}
                   />
                 </th>
-                <SortableHeader field="name" label="Name" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="email" label="Email" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="phone" label="Phone" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="status" label="Status" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="name" label="Name" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="phone" label="Phone" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <th>Tags</th>
               </tr>
             </thead>

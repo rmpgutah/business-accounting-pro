@@ -750,25 +750,29 @@ export function registerIpcHandlers(): void {
           db.create('invoice_line_items', { ...lineItems[i], invoice_id: savedId, sort_order: i });
         }
 
+        // Post the auto-JE inside the same transaction so a JE failure rolls
+        // back the invoice — otherwise a partial-failure leaves an invoice with
+        // no matching ledger entry and you can't re-run because the invoice
+        // already exists.
+        if (!isEdit && companyId) {
+          const total = Number(invoiceData.total || invoiceData.subtotal) || 0;
+          if (total > 0) {
+            const invoiceNum = invoiceData.invoice_number || savedId.substring(0, 8);
+            postJournalEntry(rawDb, companyId, invoiceData.issue_date || new Date().toISOString().slice(0, 10),
+              `Invoice created - #${invoiceNum}`, [
+                { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${invoiceNum}` },
+                { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${invoiceNum}` },
+              ]);
+          }
+        }
+
         return savedId;
       });
 
       const savedId = saveFn();
       if (companyId) db.logAudit(companyId, 'invoices', savedId, isEdit ? 'update' : 'create');
 
-      // Auto-post JE for new invoices: DR Receivable / CR Revenue
-      if (!isEdit && companyId) {
-        const total = Number(invoiceData.total || invoiceData.subtotal) || 0;
-        if (total > 0) {
-          const invoiceNum = invoiceData.invoice_number || savedId.substring(0, 8);
-          postJournalEntry(rawDb, companyId, invoiceData.issue_date || new Date().toISOString().slice(0, 10),
-            `Invoice created - #${invoiceNum}`, [
-              { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${invoiceNum}` },
-              { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${invoiceNum}` },
-            ]);
-        }
-      }
-
+      scheduleAutoBackup();
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
@@ -829,6 +833,29 @@ export function registerIpcHandlers(): void {
           });
         }
 
+        // Auto-post JE for new expenses inside the same transaction so a
+        // JE failure rolls back the expense — otherwise a partial-failure
+        // leaves an expense with no matching ledger entry.
+        if (!isEdit && companyId) {
+          const amount = Number(expenseData.amount) || 0;
+          if (amount > 0) {
+            const desc = expenseData.description || 'Expense';
+            const isPaid = expenseData.status === 'paid';
+            let expenseHint = 'Expense';
+            if (expenseData.category_id) {
+              try {
+                const cat = rawDb.prepare('SELECT name FROM categories WHERE id = ?').get(expenseData.category_id) as any;
+                if (cat?.name) expenseHint = cat.name;
+              } catch { /* ignore */ }
+            }
+            postJournalEntry(rawDb, companyId, expenseData.date || new Date().toISOString().slice(0, 10),
+              `Expense recorded - ${desc}`, [
+                { nameHint: expenseHint, debit: amount, credit: 0, note: desc },
+                { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
+              ]);
+          }
+        }
+
         // Auto-create document record for receipt attachment
         if (expenseData.receipt_path) {
           const fileName = expenseData.receipt_path.split(/[\\/]/).pop() || 'receipt';
@@ -855,28 +882,6 @@ export function registerIpcHandlers(): void {
 
       const savedId = saveFn();
       if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
-
-      // Auto-post JE for new expenses: DR [category account] / CR Cash (or Payable)
-      if (!isEdit && companyId) {
-        const amount = Number(expenseData.amount) || 0;
-        if (amount > 0) {
-          const desc = expenseData.description || 'Expense';
-          const isPaid = expenseData.status === 'paid';
-          // Try to find the expense account by category name for accurate GL posting
-          let expenseHint = 'Expense';
-          if (expenseData.category_id) {
-            try {
-              const cat = rawDb.prepare('SELECT name FROM categories WHERE id = ?').get(expenseData.category_id) as any;
-              if (cat?.name) expenseHint = cat.name;
-            } catch { /* ignore */ }
-          }
-          postJournalEntry(rawDb, companyId, expenseData.date || new Date().toISOString().slice(0, 10),
-            `Expense recorded - ${desc}`, [
-              { nameHint: expenseHint, debit: amount, credit: 0, note: desc },
-              { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
-            ]);
-        }
-      }
 
       scheduleAutoBackup();
       return { id: savedId };
@@ -4384,34 +4389,40 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('debt:run-escalation', (_event, { companyId }: { companyId: string }) => {
-    const rules = db.getDb().prepare('SELECT * FROM debt_automation_rules WHERE company_id = ? AND enabled = 1 AND debt_id IS NULL').all(companyId) as any[];
+    const dbInstance = db.getDb();
+    const rules = dbInstance.prepare('SELECT * FROM debt_automation_rules WHERE company_id = ? AND enabled = 1 AND debt_id IS NULL').all(companyId) as any[];
     let advanced = 0, flagged = 0;
-    for (const rule of rules) {
-      const debts = db.getDb().prepare(`
-        SELECT d.id FROM debts d
-        JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL
-        WHERE d.company_id = ? AND d.current_stage = ? AND d.hold = 0
-        AND d.status NOT IN ('settled','written_off','bankruptcy')
-        AND julianday('now') - julianday(dps.entered_at) >= ?
-      `).all(companyId, rule.from_stage, rule.days_after_entry) as any[];
-      for (const debt of debts) {
-        if (rule.require_review) {
-          flagged++;
-        } else {
-          // Auto-advance
-          const currentDebt = db.getDb().prepare('SELECT current_stage FROM debts WHERE id = ?').get(debt.id) as any;
-          const currentIdx = DEBT_STAGE_ORDER.indexOf(currentDebt.current_stage);
-          if (currentIdx >= 0 && currentIdx < DEBT_STAGE_ORDER.length - 1) {
-            const nextStage = DEBT_STAGE_ORDER[currentIdx + 1];
-            db.getDb().prepare('UPDATE debt_pipeline_stages SET exited_at = datetime(\'now\') WHERE debt_id = ? AND stage = ? AND exited_at IS NULL').run(debt.id, currentDebt.current_stage);
-            db.getDb().prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage, auto_advanced) VALUES (?, ?, ?, 1)').run(uuid(), debt.id, nextStage);
-            const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
-            db.getDb().prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debt.id);
-            advanced++;
+    // Wrap the whole escalation pass in one transaction so a partial failure
+    // can't leave a debt with `current_stage` advanced but no matching pipeline-
+    // stage row (or vice versa).
+    const escalateTx = dbInstance.transaction(() => {
+      for (const rule of rules) {
+        const debts = dbInstance.prepare(`
+          SELECT d.id FROM debts d
+          JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL
+          WHERE d.company_id = ? AND d.current_stage = ? AND d.hold = 0
+          AND d.status NOT IN ('settled','written_off','bankruptcy')
+          AND julianday('now') - julianday(dps.entered_at) >= ?
+        `).all(companyId, rule.from_stage, rule.days_after_entry) as any[];
+        for (const debt of debts) {
+          if (rule.require_review) {
+            flagged++;
+          } else {
+            const currentDebt = dbInstance.prepare('SELECT current_stage FROM debts WHERE id = ?').get(debt.id) as any;
+            const currentIdx = DEBT_STAGE_ORDER.indexOf(currentDebt.current_stage);
+            if (currentIdx >= 0 && currentIdx < DEBT_STAGE_ORDER.length - 1) {
+              const nextStage = DEBT_STAGE_ORDER[currentIdx + 1];
+              dbInstance.prepare('UPDATE debt_pipeline_stages SET exited_at = datetime(\'now\') WHERE debt_id = ? AND stage = ? AND exited_at IS NULL').run(debt.id, currentDebt.current_stage);
+              dbInstance.prepare('INSERT INTO debt_pipeline_stages (id, debt_id, stage, auto_advanced) VALUES (?, ?, ?, 1)').run(uuid(), debt.id, nextStage);
+              const newStatus = ['legal_action','judgment','garnishment'].includes(nextStage) ? 'legal' : 'in_collection';
+              dbInstance.prepare('UPDATE debts SET current_stage = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(nextStage, newStatus, debt.id);
+              advanced++;
+            }
           }
         }
       }
-    }
+    });
+    escalateTx();
     return { advanced, flagged };
   });
 
@@ -4479,34 +4490,40 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:payment-plan-save', (_event, data) => {
     try {
       const { debt_id, installment_amount, frequency, start_date, total_installments, notes } = data;
-      // Delete existing plan+installments for this debt
-      const existing = db.queryAll('debt_payment_plans', { debt_id })[0];
-      if (existing) {
-        db.getDb().prepare('DELETE FROM debt_plan_installments WHERE plan_id = ?').run(existing.id);
-        db.remove('debt_payment_plans', existing.id);
-      }
-      // Create new plan
-      const plan = db.create('debt_payment_plans', {
-        debt_id, installment_amount, frequency,
-        start_date, total_installments: total_installments || 1,
-        notes: notes || '', status: 'active'
-      });
-      // Generate installments
-      const freqDays: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
-      const days = freqDays[frequency] || 30;
-      let d = new Date(start_date + 'T12:00:00');
-      for (let i = 0; i < (total_installments || 1); i++) {
-        db.create('debt_plan_installments', {
-          plan_id: plan.id,
-          due_date: d.toISOString().slice(0, 10),
-          amount: installment_amount,
-          paid: 0,
+      const dbInstance = db.getDb();
+      // Run the delete+create+installment-inserts in a single transaction so
+      // a mid-loop failure can't leave the debt with an old plan deleted but
+      // no replacement, or a new plan with only some installments inserted.
+      let planId = '';
+      const planTx = dbInstance.transaction(() => {
+        const existing = db.queryAll('debt_payment_plans', { debt_id })[0];
+        if (existing) {
+          dbInstance.prepare('DELETE FROM debt_plan_installments WHERE plan_id = ?').run(existing.id);
+          db.remove('debt_payment_plans', existing.id);
+        }
+        const plan = db.create('debt_payment_plans', {
+          debt_id, installment_amount, frequency,
+          start_date, total_installments: total_installments || 1,
+          notes: notes || '', status: 'active'
         });
-        d.setDate(d.getDate() + days);
-      }
+        planId = plan.id;
+        const freqDays: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
+        const days = freqDays[frequency] || 30;
+        let d = new Date(start_date + 'T12:00:00');
+        for (let i = 0; i < (total_installments || 1); i++) {
+          db.create('debt_plan_installments', {
+            plan_id: plan.id,
+            due_date: d.toISOString().slice(0, 10),
+            amount: installment_amount,
+            paid: 0,
+          });
+          d.setDate(d.getDate() + days);
+        }
+      });
+      planTx();
       logDebtAudit(debt_id, 'plan_created', 'payment_plan', '', installment_amount ? '$' + installment_amount + ' plan' : 'Plan saved');
       scheduleAutoBackup();
-      return db.queryAll('debt_plan_installments', { plan_id: plan.id }, { field: 'due_date', dir: 'asc' });
+      return db.queryAll('debt_plan_installments', { plan_id: planId }, { field: 'due_date', dir: 'asc' });
     } catch (err: any) {
       return { error: err.message };
     }

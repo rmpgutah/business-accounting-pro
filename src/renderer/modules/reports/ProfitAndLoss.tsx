@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Printer, Download, GitCompare } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { generateReportHTML } from '../../lib/print-templates';
@@ -340,7 +340,7 @@ const ProfitAndLoss: React.FC = () => {
   // ─── Build P&L report HTML for printing ────────────────
   const buildPnLHTML = useCallback(() => {
     const companyName = activeCompany?.name || 'Company';
-    const dateRange = `${format(new Date(startDate), 'MMM d, yyyy')} \u2013 ${format(new Date(endDate), 'MMM d, yyyy')}`;
+    const dateRange = `${format(parseISO(startDate), 'MMM d, yyyy')} \u2013 ${format(parseISO(endDate), 'MMM d, yyyy')}`;
 
     const columns: ReportColumn[] = [
       { key: 'name', label: 'Account', align: 'left', format: 'text' },
@@ -522,8 +522,8 @@ const ProfitAndLoss: React.FC = () => {
               Profit & Loss Statement
             </h3>
             <p className="text-[10px] text-text-muted mt-0.5">
-              {format(new Date(startDate), 'MMM d, yyyy')} &ndash;{' '}
-              {format(new Date(endDate), 'MMM d, yyyy')}
+              {format(parseISO(startDate), 'MMM d, yyyy')} &ndash;{' '}
+              {format(parseISO(endDate), 'MMM d, yyyy')}
             </p>
           </div>
 

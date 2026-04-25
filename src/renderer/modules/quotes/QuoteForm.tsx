@@ -214,6 +214,28 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
     // Ensure at least one line has a description
     const hasLine = lines.some((l) => l.description.trim().length > 0);
     if (!hasLine) checks.push('At least one line item with a description is required');
+    // Tax rate sanity
+    for (const l of lines) {
+      const t = parseFloat(l.tax_rate) || 0;
+      if (t < 0 || t > 100) {
+        checks.push('Tax rate must be between 0 and 100');
+        break;
+      }
+      if ((parseFloat(l.quantity) || 0) < 0) {
+        checks.push('Quantity cannot be negative');
+        break;
+      }
+      if ((parseFloat(l.unit_price) || 0) < 0) {
+        checks.push('Unit price cannot be negative');
+        break;
+      }
+    }
+    // Discount cannot exceed subtotal+tax
+    const discountVal = parseFloat(form.discount_amount) || 0;
+    if (discountVal < 0) checks.push('Discount cannot be negative');
+    if (discountVal > subtotal + taxAmount) {
+      checks.push('Discount cannot exceed subtotal plus tax');
+    }
 
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {

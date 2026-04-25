@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -100,10 +101,12 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | POStatus>('all');
   const [search, setSearch] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     if (!activeCompany) return;
     setLoading(true);
+    setLoadError('');
     try {
       const [pos, vens] = await Promise.all([
         api.query('purchase_orders', { company_id: activeCompany.id }),
@@ -136,6 +139,10 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
         awaiting_approval: awaitingPos.length,
         received_this_month: receivedThisMonth.length,
       });
+    } catch (err: any) {
+      console.error('Failed to load purchase orders:', err);
+      setLoadError(err?.message || 'Failed to load purchase orders');
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -177,6 +184,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
 
   return (
     <div>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load purchase orders" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div>
@@ -250,7 +258,14 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
         {loading ? (
           <div className="text-text-muted text-xs font-mono p-6 text-center">Loading...</div>
         ) : filtered.length === 0 ? (
-          <EmptyState icon={ShoppingCart} message="No purchase orders found" />
+          <EmptyState
+            icon={ShoppingCart}
+            message={
+              orders.length === 0
+                ? 'No purchase orders yet'
+                : 'No purchase orders match your search or filter'
+            }
+          />
         ) : (
           <table className="block-table w-full">
             <thead>

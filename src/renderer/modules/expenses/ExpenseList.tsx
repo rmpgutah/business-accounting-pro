@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -56,12 +57,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [expenseSummary, setExpenseSummary] = useState<any>(null);
   const [showImport, setShowImport] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!activeCompany) return;
       try {
+        setLoadError('');
         const [expData, catData, expSummaryResult] = await Promise.all([
           api.rawQuery(
             `SELECT e.*, c.name as category_name, v.name as vendor_name
@@ -87,8 +90,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
         setCategories(Array.isArray(catData) ? catData : []);
         const expRow = Array.isArray(expSummaryResult) ? expSummaryResult[0] : expSummaryResult;
         setExpenseSummary(expRow ?? null);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load expenses:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load expenses');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -206,6 +210,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
 
   return (
     <div className="space-y-4" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load expenses" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -292,7 +297,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <EmptyState icon={Receipt} message="No expenses found" />
+        <EmptyState
+          icon={Receipt}
+          message={
+            expenses.length === 0
+              ? 'No expenses yet'
+              : 'No expenses match your search or filter'
+          }
+        />
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <div className="overflow-x-auto">
@@ -406,7 +418,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                   colSpan={4}
                   className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider"
                 >
-                  Total
+                  Filtered Total
                 </td>
                 <td className="text-right font-mono font-bold text-text-primary">
                   {formatCurrency(total)}

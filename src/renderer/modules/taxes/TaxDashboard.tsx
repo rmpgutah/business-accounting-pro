@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Clock,
 } from 'lucide-react';
+import { format as fmtDate } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -104,7 +105,10 @@ const TaxDashboard: React.FC = () => {
   const currentYear = new Date().getFullYear();
   const yearStart = `${currentYear}-01-01`;
   const yearEnd = `${currentYear}-12-31`;
-  const today = new Date().toISOString().slice(0, 10);
+  // toISOString() returns the UTC date, which is wrong for users west of
+  // UTC late in the day (would mark the next quarterly deadline as already
+  // past). Use local-date format() so "today" matches what the user sees.
+  const today = fmtDate(new Date(), 'yyyy-MM-dd');
 
   useEffect(() => {
     let cancelled = false;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Printer } from 'lucide-react';
-import { format, startOfYear, endOfYear } from 'date-fns';
+import { format, startOfYear, endOfYear, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -286,8 +286,8 @@ const TaxSummary: React.FC = () => {
               Tax Summary
             </h3>
             <p className="text-[10px] text-text-muted mt-0.5">
-              {format(new Date(startDate), 'MMM d, yyyy')} &ndash;{' '}
-              {format(new Date(endDate), 'MMM d, yyyy')}
+              {format(parseISO(startDate), 'MMM d, yyyy')} &ndash;{' '}
+              {format(parseISO(endDate), 'MMM d, yyyy')}
             </p>
           </div>
 
@@ -354,7 +354,7 @@ const TaxSummary: React.FC = () => {
                 data.taxPayments.map((p) => (
                   <LineRow
                     key={p.id}
-                    name={`${p.tax_type} - ${p.description || format(new Date(p.payment_date), 'MMM d, yyyy')}`}
+                    name={`${p.tax_type} - ${p.description || format(parseISO(p.payment_date), 'MMM d, yyyy')}`}
                     amount={p.amount}
                     indent={1}
                   />

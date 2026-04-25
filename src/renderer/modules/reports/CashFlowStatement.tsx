@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Printer, Download } from 'lucide-react';
-import { format, startOfYear, endOfMonth } from 'date-fns';
+import { format, startOfYear, endOfMonth, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -320,8 +320,8 @@ const CashFlowStatement: React.FC = () => {
               Cash Flow Statement
             </h3>
             <p className="text-[10px] text-text-muted mt-0.5">
-              {format(new Date(startDate), 'MMM d, yyyy')} &ndash;{' '}
-              {format(new Date(endDate), 'MMM d, yyyy')}
+              {format(parseISO(startDate), 'MMM d, yyyy')} &ndash;{' '}
+              {format(parseISO(endDate), 'MMM d, yyyy')}
             </p>
           </div>
 

@@ -408,7 +408,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     // Validate tax doesn't exceed amount
     const amt = parseFloat(form.amount) || 0;
     const tax = parseFloat(form.tax_amount) || 0;
+    if (tax < 0) checks.push('Tax amount cannot be negative');
     if (tax > amt) checks.push('Tax amount cannot exceed the expense amount');
+    // Reimbursed date must come after expense date when reimbursed
+    if (form.reimbursed && form.reimbursed_date && form.reimbursed_date < form.date) {
+      checks.push('Reimbursed date cannot be before the expense date');
+    }
+    // Approval date must come after expense date
+    if (form.approved_date && form.approved_date < form.date) {
+      checks.push('Approval date cannot be before the expense date');
+    }
+    // Itemized expenses must have at least one line with description
+    if (useLineItems) {
+      const hasLine = lineItems.some((l) => l.description.trim().length > 0);
+      if (!hasLine) checks.push('At least one line item with a description is required');
+      const badLine = lineItems.some((l) => l.quantity < 0 || l.unit_price < 0);
+      if (badLine) checks.push('Line item quantity and unit price cannot be negative');
+    }
+    // Rejection requires a reason
+    if (form.status === 'rejected' && !form.rejection_reason.trim()) {
+      checks.push('Rejection reason is required when status is Rejected');
+    }
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);

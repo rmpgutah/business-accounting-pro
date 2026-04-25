@@ -23,6 +23,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { addMonths } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -102,9 +103,10 @@ function projectNext(
 }
 
 // ─── Month Name Helper ──────────────────────────────────
+// addMonths clamps end-of-month dates (Jan 31 + 1 → Feb 28/29) so that
+// labelling a month doesn't accidentally roll forward an extra month.
 function futureMonthLabel(offsetFromNow: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + offsetFromNow);
+  const d = addMonths(new Date(), offsetFromNow);
   return formatDate(d.toISOString());
 }
 

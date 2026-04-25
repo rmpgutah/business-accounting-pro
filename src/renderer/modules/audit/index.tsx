@@ -5,6 +5,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface AuditEntry {
@@ -69,6 +70,7 @@ const AuditTrail: React.FC = () => {
   const [entityTypeFilter, setEntityTypeFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   useEffect(() => {
@@ -76,10 +78,12 @@ const AuditTrail: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       try {
+        setLoadError('');
         const rows = await api.query('audit_log', { company_id: activeCompany.id }, { field: 'timestamp', dir: 'desc' });
         if (!cancelled) setEntries(Array.isArray(rows) ? rows : []);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load audit log:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load audit log');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -137,6 +141,7 @@ const AuditTrail: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {loadError && <ErrorBanner message={loadError} title="Failed to load audit log" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -218,9 +223,13 @@ const AuditTrail: React.FC = () => {
           <div className="empty-state-icon">
             <Shield size={24} className="text-text-muted" />
           </div>
-          <p className="text-sm text-text-secondary font-medium">No audit entries found</p>
+          <p className="text-sm text-text-secondary font-medium">
+            {entries.length === 0 ? 'No audit entries yet' : 'No audit entries match your filter'}
+          </p>
           <p className="text-xs text-text-muted mt-1">
-            Audit entries are created automatically when data changes.
+            {entries.length === 0
+              ? 'Audit entries are created automatically when data changes.'
+              : 'Try clearing search or filters.'}
           </p>
         </div>
       ) : (

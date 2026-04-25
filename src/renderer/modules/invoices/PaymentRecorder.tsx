@@ -99,6 +99,15 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       setError('Please select a payment date.');
       return;
     }
+    const today = new Date().toISOString().slice(0, 10);
+    if (date > today) {
+      setError('Payment date cannot be in the future.');
+      return;
+    }
+    if (!method) {
+      setError('Please select a payment method.');
+      return;
+    }
 
     setSaving(true);
     try {

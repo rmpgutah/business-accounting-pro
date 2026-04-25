@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { FileCheck, Plus, Search, Filter, Trash2, Copy, ArrowRightCircle } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
@@ -38,12 +39,14 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!activeCompany) return;
       try {
+        setLoadError('');
         const raw = await api.rawQuery(
           `SELECT q.*, c.name as client_name
            FROM quotes q
@@ -54,8 +57,9 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
         );
         if (cancelled) return;
         setQuotes(Array.isArray(raw) ? raw : []);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load quotes:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load quotes');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -181,6 +185,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
 
   return (
     <div className="space-y-4" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load quotes" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -257,7 +262,14 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit }) => {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <EmptyState icon={FileCheck} message="No quotes found" />
+        <EmptyState
+          icon={FileCheck}
+          message={
+            quotes.length === 0
+              ? 'No quotes yet'
+              : 'No quotes match your search or filter'
+          }
+        />
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <table className="block-table">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle, Package } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
@@ -98,6 +99,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
   const [feedback, setFeedback] = useState<{ type: string; message: string } | null>(null);
+  const [loadError, setLoadError] = useState('');
 
   // Overdue → debt conversion
   const [candidates, setCandidates] = useState<any[]>([]);
@@ -112,6 +114,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       try {
+        setLoadError('');
         // Load invoices and clients first (critical), summary and candidates are non-blocking
         const [invoiceData, clientData] = await Promise.all([
           api.query('invoices', { company_id: activeCompany.id }),
@@ -138,8 +141,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           if (cancelled) return;
           setCandidates(Array.isArray(r) ? r : []);
         }).catch(() => {});
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load invoices:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load invoices');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -284,6 +288,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
   return (
     <div className="p-6 space-y-5 overflow-y-auto h-full" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load invoices" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Invoices</h1>
@@ -475,14 +480,30 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3">
-          <EmptyState icon={FileText} message="No invoices found" />
-          <button
-            className="block-btn-primary mt-4 flex items-center gap-2"
-            onClick={onNewInvoice}
-          >
-            <Plus size={16} />
-            Create your first invoice
-          </button>
+          <EmptyState
+            icon={FileText}
+            message={
+              invoices.length === 0
+                ? 'No invoices yet'
+                : 'No invoices match your search or filter'
+            }
+          />
+          {invoices.length === 0 ? (
+            <button
+              className="block-btn-primary mt-4 flex items-center gap-2"
+              onClick={onNewInvoice}
+            >
+              <Plus size={16} />
+              Create your first invoice
+            </button>
+          ) : (
+            <button
+              className="block-btn mt-2 text-xs"
+              onClick={() => { setSearch(''); setActiveTab('all'); }}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">

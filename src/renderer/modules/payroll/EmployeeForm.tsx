@@ -409,8 +409,24 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       setError('Pay rate must be greater than zero.');
       return;
     }
-    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       setError('Email is not a valid format.');
+      return;
+    }
+    if (form.routing_number && !/^\d{9}$/.test(form.routing_number)) {
+      setError('Routing number must be exactly 9 digits.');
+      return;
+    }
+    if (form.ssn && form.ssn.length !== 9) {
+      setError('SSN must be 9 digits.');
+      return;
+    }
+    if (form.zip && !/^\d{5}(-\d{4})?$/.test(form.zip)) {
+      setError('ZIP code must be 5 digits or 5+4 format (e.g. 12345 or 12345-6789).');
+      return;
+    }
+    if (Number(form.federal_allowances) < 0 || Number(form.state_allowances) < 0) {
+      setError('Allowances cannot be negative.');
       return;
     }
 

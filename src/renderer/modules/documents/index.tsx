@@ -255,13 +255,19 @@ const Documents: React.FC = () => {
           <div className="empty-state-icon">
             <FileText size={24} className="text-text-muted" />
           </div>
-          <p className="text-sm text-text-secondary font-medium">No documents found</p>
-          <p className="text-xs text-text-muted mt-1">
-            Upload your first document or adjust the filters above.
+          <p className="text-sm text-text-secondary font-medium">
+            {documents.length === 0 ? 'No documents yet' : 'No documents match your filter'}
           </p>
-          <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={handleUpload}>
-            <Upload size={14} /> Upload Document
-          </button>
+          <p className="text-xs text-text-muted mt-1">
+            {documents.length === 0
+              ? 'Upload your first document to get started.'
+              : 'Try clearing the search or filters above.'}
+          </p>
+          {documents.length === 0 && (
+            <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={handleUpload}>
+              <Upload size={14} /> Upload Document
+            </button>
+          )}
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Receipt, Printer, Download, ChevronRight, ChevronDown } from 'lucide-react';
+import { format as fmtDate } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -46,8 +47,11 @@ function getYearStart(): string {
   return `${now.getFullYear()}-01-01`;
 }
 
+// Use local-date format() not toISOString() — the latter returns the UTC
+// date, so late-evening users west of UTC (e.g. America/Denver) saw the
+// next day's date pre-filled into the report range.
 function getToday(): string {
-  return new Date().toISOString().slice(0, 10);
+  return fmtDate(new Date(), 'yyyy-MM-dd');
 }
 
 function groupExpenses(expenses: Expense[], groupBy: GroupBy): GroupSection[] {

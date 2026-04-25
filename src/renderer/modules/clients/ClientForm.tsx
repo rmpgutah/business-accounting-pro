@@ -184,8 +184,23 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       return;
     }
 
-    if (data.email && !/^\S+@\S+\.\S+$/.test(data.email)) {
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
       setError('Email is not a valid format.');
+      return;
+    }
+
+    if (data.phone && data.phone.length > 32) {
+      setError('Phone number is too long (max 32 characters).');
+      return;
+    }
+
+    if (data.default_late_fee_pct < 0 || data.default_late_fee_pct > 100) {
+      setError('Default late fee % must be between 0 and 100.');
+      return;
+    }
+
+    if (data.credit_limit < 0) {
+      setError('Credit limit cannot be negative.');
       return;
     }
 
@@ -200,6 +215,9 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
 
       const payload: Record<string, any> = {
         ...data,
+        name: data.name.trim(),
+        email: data.email.trim(),
+        phone: data.phone.trim(),
         payment_terms: parsedTerms,
         tags: tagsJson,
         default_payment_terms: data.default_payment_terms.trim() || null,

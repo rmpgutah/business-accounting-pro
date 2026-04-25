@@ -19,6 +19,12 @@ export const useCompanyStore = create<CompanyState>()(
       setCompanies: (companies) => set({ companies }),
       setActiveCompany: (company) => set({ activeCompany: company }),
     }),
-    { name: 'bap-company' }
+    {
+      name: 'bap-company',
+      // Persist only the active company id reference. The companies list is
+      // re-fetched from the DB on every boot in App.tsx, so persisting it
+      // bloats localStorage and writes on every render-driven setCompanies.
+      partialize: (state) => ({ activeCompany: state.activeCompany }),
+    }
   )
 );

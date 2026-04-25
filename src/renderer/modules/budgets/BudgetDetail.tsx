@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, BarChart3, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { addMonths, format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -51,16 +52,23 @@ function progressColor(pct: number): string {
 }
 
 // ─── Months Between Two Dates ────────────────────────────
+// `start`/`end` are 'YYYY-MM' strings. parseISO + addMonths keeps the
+// arithmetic in local time (avoiding the UTC midnight drift of `new Date(s)`)
+// and toISOString().slice(0,7) was returning the UTC month, so a date in
+// the last hours of a month would jump to the next month for users west
+// of UTC. Use format() in local time instead.
 function monthsBetween(start: string, end: string): { month: string; label: string }[] {
   const result: { month: string; label: string }[] = [];
-  const s = new Date(start + '-01');
-  const e = new Date(end + '-01');
-  const cur = new Date(s);
-  while (cur <= e) {
-    const month = cur.toISOString().slice(0, 7);
-    const label = cur.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const s = parseISO(start + '-01');
+  const e = parseISO(end + '-01');
+  let cur = s;
+  // Guard against runaway loops if end < start.
+  let safety = 600;
+  while (cur <= e && safety-- > 0) {
+    const month = format(cur, 'yyyy-MM');
+    const label = format(cur, 'MMM yyyy');
     result.push({ month, label });
-    cur.setMonth(cur.getMonth() + 1);
+    cur = addMonths(cur, 1);
   }
   return result;
 }

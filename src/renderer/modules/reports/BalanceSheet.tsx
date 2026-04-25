@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Printer, Download, AlertTriangle } from 'lucide-react';
-import { format, endOfMonth } from 'date-fns';
+import { format, endOfMonth, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -357,7 +357,7 @@ const BalanceSheet: React.FC = () => {
               Balance Sheet
             </h3>
             <p className="text-[10px] text-text-muted mt-0.5">
-              As of {format(new Date(asOfDate), 'MMMM d, yyyy')}
+              As of {format(parseISO(asOfDate), 'MMMM d, yyyy')}
             </p>
           </div>
 

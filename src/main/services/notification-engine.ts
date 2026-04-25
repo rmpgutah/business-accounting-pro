@@ -174,12 +174,23 @@ export interface NotificationCheckResult {
   reconciliationAlerts: number;
 }
 
-export function runNotificationChecks(companyId?: string): NotificationCheckResult {
-  const overdueNotifications = checkOverdueInvoices(companyId);
-  const budgetAlerts = checkBudgetThresholds(companyId);
-  const reconciliationAlerts = checkUnmatchedTransactions(companyId);
+// Reentrancy guard — the 30-minute cron and ad-hoc IPC invocations can otherwise
+// overlap on a slow DB and double-fire notifications for the same overdue invoice.
+let notificationsRunning = false;
 
-  return { overdueNotifications, budgetAlerts, reconciliationAlerts };
+export function runNotificationChecks(companyId?: string): NotificationCheckResult {
+  if (notificationsRunning) {
+    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0 };
+  }
+  notificationsRunning = true;
+  try {
+    const overdueNotifications = checkOverdueInvoices(companyId);
+    const budgetAlerts = checkBudgetThresholds(companyId);
+    const reconciliationAlerts = checkUnmatchedTransactions(companyId);
+    return { overdueNotifications, budgetAlerts, reconciliationAlerts };
+  } finally {
+    notificationsRunning = false;
+  }
 }
 
 // ─── Get Notification Preferences ────────────────────────

@@ -489,13 +489,19 @@ const RecurringTransactions: React.FC = () => {
               <div className="empty-state-icon">
                 <RefreshCw size={24} className="text-text-muted" />
               </div>
-              <p className="text-sm text-text-secondary font-medium">No recurring templates found</p>
-              <p className="text-xs text-text-muted mt-1">
-                Create a template to automate recurring invoices or expenses.
+              <p className="text-sm text-text-secondary font-medium">
+                {templates.length === 0 ? 'No recurring templates yet' : 'No templates match your filter'}
               </p>
-              <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={() => setShowForm(true)}>
-                <Plus size={14} /> Create Template
-              </button>
+              <p className="text-xs text-text-muted mt-1">
+                {templates.length === 0
+                  ? 'Create a template to automate recurring invoices or expenses.'
+                  : 'Try clearing the search or status filter.'}
+              </p>
+              {templates.length === 0 && (
+                <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={() => setShowForm(true)}>
+                  <Plus size={14} /> Create Template
+                </button>
+              )}
             </div>
           ) : (
             <div className="block-card p-0 overflow-hidden">

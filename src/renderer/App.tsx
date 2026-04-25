@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useAppStore } from './stores/appStore';
 import { useCompanyStore } from './stores/companyStore';
 import { useAuthStore } from './stores/authStore';
@@ -170,6 +170,13 @@ const App: React.FC = () => {
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
+  // Stable handlers so QuickCreate doesn't re-render on every parent render.
+  const handleQuickCreateNavigate = useCallback(
+    (view: string) => setModule(view as any),
+    [setModule]
+  );
+  const handleQuickCreateClose = useCallback(() => setQuickCreateOpen(false), []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
@@ -197,9 +204,10 @@ const App: React.FC = () => {
         if (validList.length > 0) {
           setActiveCompany(validList[0]);
           api.switchCompany(validList[0].id).catch(() => {});
-          for (const company of validList) {
-            api.categoriesSeedDefaults(company.id).catch(() => {});
-          }
+          // Seed defaults only for active company on boot. Other companies
+          // get seeded lazily when they become active. This avoids an N-call
+          // burst on launch for users with many companies.
+          api.categoriesSeedDefaults(validList[0].id).catch(() => {});
         }
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -271,8 +279,8 @@ const App: React.FC = () => {
       <ModuleView />
       {quickCreateOpen && (
         <QuickCreate
-          onNavigate={view => setModule(view as any)}
-          onClose={() => setQuickCreateOpen(false)}
+          onNavigate={handleQuickCreateNavigate}
+          onClose={handleQuickCreateClose}
         />
       )}
     </AppShell>

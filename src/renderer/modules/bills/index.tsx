@@ -322,14 +322,23 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3">
-          <EmptyState icon={FileText} message="No bills found" />
-          <button
-            className="block-btn-primary mt-4 flex items-center gap-2"
-            onClick={onNew}
-          >
-            <Plus size={16} />
-            Create your first bill
-          </button>
+          <EmptyState
+            icon={FileText}
+            message={
+              bills.length === 0
+                ? 'No bills yet'
+                : 'No bills match your search or filter'
+            }
+          />
+          {bills.length === 0 && (
+            <button
+              className="block-btn-primary mt-4 flex items-center gap-2"
+              onClick={onNew}
+            >
+              <Plus size={16} />
+              Create your first bill
+            </button>
+          )}
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">

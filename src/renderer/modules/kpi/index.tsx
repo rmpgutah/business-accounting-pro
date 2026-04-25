@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   DollarSign,
   Clock,
@@ -298,10 +298,13 @@ const KPIDashboard: React.FC = () => {
         ? 'var(--color-accent-warning)'
         : 'var(--color-accent-expense)';
 
-  const maxClientRevenue =
-    topClients.length > 0
-      ? Math.max(...topClients.map((c) => c.total_revenue))
-      : 1;
+  const maxClientRevenue = useMemo(
+    () =>
+      topClients.length > 0
+        ? Math.max(...topClients.map((c) => c.total_revenue))
+        : 1,
+    [topClients]
+  );
 
   const burnRateColor =
     monthlyBurnRate <= 0
@@ -322,11 +325,25 @@ const KPIDashboard: React.FC = () => {
         ? 'var(--color-accent-warning)'
         : 'var(--color-accent-expense)';
 
-  const monthlyChartData = dashData?.months?.map((m: string) => {
-    const rev = dashData.revenueByMonth?.find((r: any) => r.month === m);
-    const exp = dashData.expenseByMonth?.find((e: any) => e.month === m);
-    return { month: m.slice(5), revenue: Number(rev?.total || 0), expenses: Number(exp?.total || 0) };
-  }) || [];
+  // Pre-index revenue/expense by month so we don't run two .find() per row
+  // on every render. O(n) build, O(1) lookup.
+  const monthlyChartData = useMemo(() => {
+    const months: string[] | undefined = dashData?.months;
+    if (!months) return [];
+    const revMap = new Map<string, number>();
+    const expMap = new Map<string, number>();
+    (dashData.revenueByMonth ?? []).forEach((r: any) =>
+      revMap.set(r.month, Number(r.total || 0))
+    );
+    (dashData.expenseByMonth ?? []).forEach((e: any) =>
+      expMap.set(e.month, Number(e.total || 0))
+    );
+    return months.map((m) => ({
+      month: m.slice(5),
+      revenue: revMap.get(m) ?? 0,
+      expenses: expMap.get(m) ?? 0,
+    }));
+  }, [dashData]);
 
   if (loading) {
     return (

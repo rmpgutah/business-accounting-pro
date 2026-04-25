@@ -208,6 +208,22 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
       errs.balance = 'Entry must have non-zero amounts';
     }
 
+    // No single line should have both debit and credit
+    const dualLine = lines.find(
+      (l) => parseAmount(l.debit) > 0 && parseAmount(l.credit) > 0
+    );
+    if (dualLine) {
+      errs.balance = 'A line cannot have both a debit and a credit — split into two lines';
+    }
+
+    // Negative amounts not allowed
+    const negLine = lines.find(
+      (l) => parseAmount(l.debit) < 0 || parseAmount(l.credit) < 0
+    );
+    if (negLine) {
+      errs.balance = 'Debit and credit amounts cannot be negative';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Users, Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
+import { Users, Plus, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -39,21 +39,24 @@ const SortableHeader: React.FC<{
   field: SortField;
   label: string;
   activeSortField: SortField;
+  activeSortDir: SortDir;
   onSort: (field: SortField) => void;
-}> = ({ field, label, activeSortField, onSort }) => (
-  <th
-    className="cursor-pointer select-none hover:text-text-primary transition-colors"
-    onClick={() => onSort(field)}
-  >
-    <span className="inline-flex items-center gap-1">
-      {label}
-      <ArrowUpDown
-        size={12}
-        className={activeSortField === field ? 'text-accent-blue' : 'text-text-muted'}
-      />
-    </span>
-  </th>
-);
+}> = ({ field, label, activeSortField, activeSortDir, onSort }) => {
+  const isActive = activeSortField === field;
+  const Icon = !isActive ? ArrowUpDown : activeSortDir === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th
+      className="cursor-pointer select-none hover:text-text-primary transition-colors"
+      onClick={() => onSort(field)}
+      aria-sort={isActive ? (activeSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Icon size={12} className={isActive ? 'text-accent-blue' : 'text-text-muted'} />
+      </span>
+    </th>
+  );
+};
 
 // ─── Component ──────────────────────────────────────────
 const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmployee }) => {
@@ -80,16 +83,16 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }
-        // Enrich with payroll data
+        // Enrich with payroll data (scoped to the active company to avoid cross-company leaks)
         api.rawQuery(
           `SELECT ps.employee_id,
             MAX(pr.pay_date) as last_pay_date,
             COALESCE(SUM(ps.gross_pay), 0) as ytd_gross
            FROM pay_stubs ps
            JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
-           WHERE pr.pay_date >= ?
+           WHERE pr.pay_date >= ? AND pr.company_id = ?
            GROUP BY ps.employee_id`,
-          [new Date().getFullYear() + '-01-01']
+          [new Date().getFullYear() + '-01-01', activeCompany.id]
         ).then(payRows => {
           if (!cancelled && Array.isArray(payRows)) {
             const map: Record<string, any> = {};
@@ -235,13 +238,13 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
           <table className="block-table">
             <thead>
               <tr>
-                <SortableHeader field="name" label="Name" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="email" label="Email" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="type" label="Type" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="pay_type" label="Pay Type" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="pay_rate" label="Pay Rate" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="pay_schedule" label="Schedule" activeSortField={sortField} onSort={handleSort} />
-                <SortableHeader field="status" label="Status" activeSortField={sortField} onSort={handleSort} />
+                <SortableHeader field="name" label="Name" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="type" label="Type" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="pay_type" label="Pay Type" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="pay_rate" label="Pay Rate" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="pay_schedule" label="Schedule" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <th>Last Paid</th>
                 <th className="text-right">YTD Gross</th>
               </tr>

@@ -102,6 +102,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
   // ─── Submit ───────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
 
     if (!form.name.trim()) {
       setError('Project name is required.');

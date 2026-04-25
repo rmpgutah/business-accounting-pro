@@ -436,6 +436,27 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
     if (form.interest_start_date && form.delinquent_date && form.interest_start_date < form.delinquent_date) {
       validationErrors.push('Interest start date must be on or after delinquent date');
     }
+    if (form.credit_score && (form.credit_score < 300 || form.credit_score > 850)) {
+      validationErrors.push('Credit score must be between 300 and 850');
+    }
+    if (form.currency !== 'USD' && (!form.exchange_rate || form.exchange_rate <= 0)) {
+      validationErrors.push('Exchange rate must be greater than zero for non-USD currencies');
+    }
+    if (form.agency_commission_rate < 0 || form.agency_commission_rate > 100) {
+      validationErrors.push('Agency commission % must be between 0 and 100');
+    }
+    if (form.collection_costs < 0 || form.agency_commission_paid < 0) {
+      validationErrors.push('Collection costs and commission paid cannot be negative');
+    }
+    if (form.interest_rate && (parseFloat(form.interest_rate) < 0 || parseFloat(form.interest_rate) > 100)) {
+      validationErrors.push('Interest rate must be between 0 and 100');
+    }
+    if (form.statute_years && parseInt(form.statute_years, 10) < 0) {
+      validationErrors.push('Statute years cannot be negative');
+    }
+    if (form.debtor_ssn_last4 && form.debtor_ssn_last4.length !== 4) {
+      validationErrors.push('SSN last 4 must be exactly 4 digits');
+    }
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;

@@ -37,6 +37,10 @@ import {
   startOfYear,
   endOfMonth,
   formatDistanceToNow,
+  parseISO,
+  differenceInCalendarDays,
+  startOfDay,
+  addMonths,
 } from 'date-fns';
 import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
@@ -163,12 +167,14 @@ function actionBadgeStyle(action: string): { bg: string; text: string } {
 }
 
 // ─── Urgency Color ──────────────────────────────────────
+// Use parseISO + calendar-day diff so a 'YYYY-MM-DD' due date isn't
+// shifted by the local timezone (new Date('2026-04-23') parses as UTC
+// midnight, which becomes the previous day in the Americas).
 function urgencyColor(dueDate: string): string {
-  const now = new Date();
-  const due = new Date(dueDate);
-  const daysLeft = Math.ceil(
-    (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  if (!dueDate) return '#22c55e';
+  const today = startOfDay(new Date());
+  const due = startOfDay(parseISO(dueDate));
+  const daysLeft = differenceInCalendarDays(due, today);
   if (daysLeft <= 1) return '#ef4444';
   if (daysLeft <= 3) return '#f59e0b';
   return '#22c55e';
@@ -602,8 +608,9 @@ const Dashboard: React.FC = () => {
             let runningCash = currentCash;
 
             for (let i = 1; i <= 3; i++) {
-              const d = new Date();
-              d.setMonth(d.getMonth() + i);
+              // addMonths handles end-of-month clamping (Jan 31 + 1mo → Feb 28),
+              // unlike setMonth which can roll into the wrong month.
+              const d = addMonths(new Date(), i);
               const label = formatDate(d.toISOString());
               const projected = slope * (n + i - 1) + intercept;
               runningCash += projected;
@@ -667,8 +674,11 @@ const Dashboard: React.FC = () => {
         const lastRev = Array.isArray(lastMonthRevData) ? lastMonthRevData[0]?.rev : (lastMonthRevData as any)?.rev;
         const topClient = Array.isArray(topClientMonthData) ? topClientMonthData[0] : topClientMonthData;
 
-        const growthPct =
-          lastRev && lastRev > 0 ? ((thisRev - lastRev) / lastRev) * 100 : 0;
+        // Use percentChange helper so zero-prior returns null → UI renders "—"
+        // instead of misleading 0% (which would mask a "from nothing" gain).
+        const thisN = Number(thisRev) || 0;
+        const lastN = Number(lastRev) || 0;
+        const growthPct = lastN > 0 ? ((thisN - lastN) / lastN) * 100 : 0;
 
         setQuickMetrics({
           invoicesSentThisMonth: invoicesSent || 0,
@@ -754,24 +764,29 @@ const Dashboard: React.FC = () => {
   // ─── Reload activity when filter changes ──────────────
   useEffect(() => {
     if (activityFilter === 'all') return; // already loaded in main effect
+    let cancelled = false;
     const loadFiltered = async () => {
       try {
         const data = await api.dashboardActivity(activityFilter, 15);
-        if (Array.isArray(data)) setRecentActivity(data);
-      } catch (err) {
-        console.error('Failed to load filtered activity:', err);
+        if (!cancelled && Array.isArray(data)) setRecentActivity(data);
+      } catch {
+        // Silent — dashboard widgets are best-effort.
       }
     };
     loadFiltered();
+    return () => {
+      cancelled = true;
+    };
   }, [activityFilter]);
 
   const periodButtons: Period[] = ['MTD', 'QTD', 'YTD'];
 
-  // Top client max for bar scaling
-  const maxClientRevenue =
-    topClients.length > 0
-      ? Math.max(...topClients.map((c) => c.total_paid))
-      : 1;
+  // Top client max for bar scaling — memoized so we don't rescan + rebuild
+  // a Math.max array on every parent render.
+  const maxClientRevenue = useMemo(
+    () => (topClients.length > 0 ? Math.max(...topClients.map((c) => c.total_paid)) : 1),
+    [topClients]
+  );
 
   return (
     <div className="p-8 space-y-8 overflow-y-auto h-full">

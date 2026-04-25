@@ -10,8 +10,32 @@ const _currencyFmt = new Intl.NumberFormat('en-US', {
 
 export function formatCurrency(value: number | string | null | undefined): string {
   const n = Number(value ?? 0);
-  if (isNaN(n)) return '$0.00';
+  // Guard NaN AND Infinity — division-by-zero in callers (e.g. percent-of-balance,
+  // forecasting denominators) would otherwise render "$∞" or "$NaN".
+  if (!Number.isFinite(n)) return '$0.00';
   return _currencyFmt.format(n);
+}
+
+/**
+ * Round a money amount to whole cents. Use at every persistence/display
+ * boundary so 0.1 + 0.2 doesn't end up stored as 0.30000000000000004.
+ * Pure function — does not affect Intl formatting; that already uses 2 dp.
+ */
+export function roundCents(value: number | string | null | undefined): number {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Percent change with safe handling of a zero prior period: returns `null`
+ * (so the UI can render "—") instead of NaN/Infinity. Caller can decide
+ * whether to display 0%, "n/a", or "new".
+ */
+export function percentChange(current: number, prior: number): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(prior)) return null;
+  if (prior === 0) return null;
+  return ((current - prior) / prior) * 100;
 }
 
 // ─── Date ────────────────────────────────────────────────
@@ -26,7 +50,14 @@ export function formatDate(
   opts?: { style?: 'short' | 'medium' | 'relative' }
 ): string {
   if (!isoString) return '—';
-  const d = new Date(isoString);
+  // A bare 'YYYY-MM-DD' is parsed as UTC midnight by `new Date(...)`, which
+  // formats as the previous day in America/Denver (UTC-0600/0700). For
+  // date-only inputs anchor at local noon so the calendar date round-trips.
+  const isDateOnly =
+    typeof isoString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(isoString);
+  const d = isDateOnly
+    ? new Date(`${isoString}T12:00:00`)
+    : new Date(isoString);
   if (isNaN(d.getTime())) return '—';
   const style = opts?.style ?? 'medium';
   if (style === 'short')  return _shortFmt.format(d);

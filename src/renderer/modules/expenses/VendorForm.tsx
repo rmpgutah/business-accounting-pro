@@ -107,6 +107,22 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
       setNameError('Vendor name is required.');
       return;
     }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setNameError('Email is not a valid format.');
+      return;
+    }
+    if (form.payment_terms && (parseInt(form.payment_terms, 10) < 0 || isNaN(parseInt(form.payment_terms, 10)))) {
+      setNameError('Payment terms must be a non-negative whole number.');
+      return;
+    }
+    if (form.ach_routing && !/^\d{9}$/.test(form.ach_routing)) {
+      setNameError('Routing number must be exactly 9 digits.');
+      return;
+    }
+    if (form.contract_start && form.contract_end && form.contract_end < form.contract_start) {
+      setNameError('Contract end date must be on or after start date.');
+      return;
+    }
     setNameError('');
     setSaving(true);
 

@@ -176,8 +176,14 @@ export default function EmailModule() {
               <div className="empty-state-icon">
                 <Mail size={24} className="text-text-muted" />
               </div>
-              <p className="text-text-secondary text-sm">No emails sent yet</p>
-              <p className="text-text-muted text-xs mt-1">Emails will appear here when you send invoices or reminders</p>
+              <p className="text-text-secondary text-sm">
+                {emailLog.length === 0 ? 'No emails sent yet' : 'No emails match your search'}
+              </p>
+              <p className="text-text-muted text-xs mt-1">
+                {emailLog.length === 0
+                  ? 'Emails will appear here when you send invoices or reminders'
+                  : 'Try a different search term.'}
+              </p>
             </div>
           ) : (
             <table className="block-table">
