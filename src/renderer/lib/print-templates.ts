@@ -16,8 +16,28 @@ function esc(s: string | null | undefined): string {
 }
 
 // ─── Currency Formatter ──────────────────────────────────────
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n || 0);
+// formatCurrency guards against Infinity/NaN/non-finite values that would
+// otherwise render as "$NaN" or "$∞" in customer-facing PDFs.
+export function formatCurrency(n: number | string | null | undefined): string {
+  const num = typeof n === 'number' ? n : Number(n ?? 0);
+  const safe = Number.isFinite(num) ? num : 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: 'USD', minimumFractionDigits: 2,
+  }).format(safe);
+}
+// Accounting-style negatives: -1234.56 → "(1,234.56)"
+export function formatAccountingAmount(n: number | string | null | undefined): string {
+  const num = typeof n === 'number' ? n : Number(n ?? 0);
+  const safe = Number.isFinite(num) ? num : 0;
+  if (safe < 0) {
+    const positive = new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: 'USD', minimumFractionDigits: 2,
+    }).format(Math.abs(safe));
+    return `(${positive})`;
+  }
+  return formatCurrency(safe);
+}
+const fmt = formatCurrency;
 
 const fmtDate = (d: string) => {
   if (!d) return '';
@@ -29,15 +49,13 @@ const fmtDate = (d: string) => {
 const baseStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    font-family: -apple-system, 'Helvetica Neue', Arial, system-ui, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     color: #1e293b;
     font-size: 12px;
     line-height: 1.55;
     background: #fff;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
-  @page { size: letter; margin: 0.5in 0.6in; }
+  @page { size: letter; margin: 0.5in; }
   table { width: 100%; border-collapse: collapse; table-layout: auto; }
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
@@ -98,7 +116,7 @@ const baseStyles = `
   .legal-letterhead .lh-rule { width: 60px; height: 2px; background: #000; margin: 8px auto; }
   .legal-letterhead .lh-meta { font-size: 10pt; color: #333; line-height: 1.5; font-family: Georgia, serif; font-style: italic; }
   .legal-date { text-align: right; font-size: 11pt; margin-bottom: 24px; font-family: Georgia, serif; }
-  .legal-recipient { margin-left: 0; margin-bottom: 24px; font-size: 11pt; line-height: 1.5; font-family: Georgia, serif; }
+  .legal-recipient { margin-left: 1in; margin-bottom: 24px; font-size: 11pt; line-height: 1.5; font-family: Georgia, serif; }
   .legal-subject { font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0; font-family: Georgia, serif; font-size: 11pt; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 8px 0; }
   .legal-body { text-align: justify; }
   .legal-body p { margin-bottom: 14px; text-indent: 0.4in; }
@@ -128,16 +146,22 @@ const baseStyles = `
   .legal-exhibit-cover { text-align: center; padding-top: 2.5in; font-family: Georgia, 'Times New Roman', serif; page-break-after: always; page-break-before: always; }
   .legal-exhibit-cover .ex-tab { display: inline-block; border: 3px solid #000; padding: 24px 48px; font-size: 60pt; font-weight: 700; letter-spacing: 8px; }
   .legal-exhibit-cover .ex-label { font-size: 16pt; text-transform: uppercase; letter-spacing: 4px; margin-top: 24px; }
-  .legal-remit { border: 2px dashed #000; margin-top: 36px; padding: 18px 22px; font-family: Georgia, serif; font-size: 10.5pt; }
+  .legal-remit { border: 2px dashed #000; margin-top: 36px; padding: 18px 22px; font-family: Georgia, serif; font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; page-break-inside: avoid; }
   .legal-remit .remit-tear { text-align: center; font-size: 10pt; color: #555; letter-spacing: 4px; margin-bottom: 14px; }
+  .legal-page p { orphans: 3; widows: 3; }
+  .legal-page .legal-subject { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .legal-page .legal-amount-table tr.total td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .legal-jurat .seal-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .legal-bates-page { counter-reset: bates; }
+  .legal-bates-mark::after { counter-increment: bates; content: "BAP-" counter(bates, decimal-leading-zero); }
 
   /* ── Customer-facing financial document utilities ── */
   .fd-font { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
   .fd-tnum { font-variant-numeric: tabular-nums; }
   .fd-mono { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
-  .fd-letterhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 22px; }
-  .fd-letterhead-left { flex: 1; min-width: 0; }
-  .fd-letterhead-right { text-align: right; min-width: 200px; }
+  .fd-letterhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 22px; min-height: 72px; }
+  .fd-letterhead-left { flex: 1 1 auto; min-width: 0; }
+  .fd-letterhead-right { text-align: right; min-width: 200px; flex-shrink: 0; }
   .fd-co-name { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.2px; }
   .fd-co-line { font-size: 10.5px; color: #475569; line-height: 1.55; margin-top: 2px; }
   .fd-doc-type { font-size: 28px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase; line-height: 1; }
@@ -162,6 +186,17 @@ const baseStyles = `
   @media print {
     .fd-totals-card { background: #f8fafc !important; }
   }
+  /* Print color-adjust applied per-element (avoids forcing whole-page bg) */
+  .fd-accent-keep, .fd-totals-card, .status-stamp, .fd-status-badge {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Totals-card row label/value alignment */
+  .fd-totals-card .fd-meta-row { display: flex; justify-content: space-between; gap: 12px; }
+  .fd-totals-card .fd-meta-row .val { font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  .fd-empty-row td { text-align: center; color: #94a3b8; padding: 18px; font-style: italic; }
+  /* Multiline address support */
+  .fd-addr-detail .addr-line { display: block; }
 `;
 
 // ─── Shared report header builder ──────────────────────────
@@ -184,12 +219,14 @@ function reportFooter(companyName: string): string {
 function statusStampCSS(color: string): string {
   return `
   .status-stamp {
-    position: fixed; top: 60px; right: 40px;
-    font-size: 36px; font-weight: 900; text-transform: uppercase;
-    letter-spacing: 4px; color: ${color};
-    border: 4px solid ${color}; border-radius: 4px;
-    padding: 6px 16px; opacity: 0.18; transform: rotate(-18deg);
-    pointer-events: none;
+    position: fixed; top: 110px; right: 36px;
+    font-size: 28px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 3px; color: ${color};
+    border: 2px solid ${color}; border-radius: 3px;
+    padding: 4px 12px; opacity: 0.32; transform: rotate(-12deg);
+    pointer-events: none; background: rgba(255,255,255,0.5);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    z-index: 5;
   }
   @media print { .status-stamp { position: fixed; } }
   `;
@@ -1735,7 +1772,7 @@ body { background: #fff; }
 
     <div class="legal-notice">
       <div class="ln-heading">Notice of Your Rights — Validation of Debt (15 U.S.C. &sect; 1692g)</div>
-      <p style="text-indent:0;margin-bottom:8px;">Unless you notify this office within 30 days after receiving this notice that you dispute the validity of this debt or any portion thereof, this office will assume this debt is valid. If you notify this office in writing within 30 days from receiving this notice that you dispute the validity of this debt or any portion thereof, this office will obtain verification of the debt or obtain a copy of a judgment and mail you a copy of such judgment or verification. If you request of this office in writing within 30 days after receiving this notice, this office will provide you with the name and address of the original creditor, if different from the current creditor.</p>
+      <p style="text-indent:0;margin-bottom:8px;">Unless you notify this office within 30 days after receiving this notice that you dispute the validity of this debt or any portion thereof, this office will assume this debt is valid. If you notify this office in writing within 30 days from receiving this notice that you dispute the validity of this debt or any portion thereof, this office will: obtain verification of the debt or obtain a copy of a judgment and mail you a copy of such judgment or verification. If you request this office in writing within 30 days after receiving this notice, this office will provide you with the name and address of the original creditor, if different from the current creditor.</p>
     </div>
 
     <div class="legal-mini-miranda">
@@ -2325,13 +2362,22 @@ export function generateCourtPacketHTML(data: {
 ${baseStyles}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @page { size: letter; margin: 1in 1in 1.1in 1in; }
+  html { counter-reset: bates; }
+  @page {
+    size: letter;
+    margin: 1in 1in 1.1in 1in;
+    @bottom-right { content: "BAP-" counter(bates, decimal-leading-zero); font-family: 'SF Mono', Menlo, monospace; font-size: 9pt; color: #333; }
+    @bottom-left { content: "Confidential — Prepared for Legal Proceedings"; font-family: Georgia, serif; font-size: 8.5pt; color: #555; font-style: italic; }
+  }
+  body { counter-increment: bates; }
   @media print {
-    .section { page-break-before: always; }
-    .cover { page-break-after: always; }
-    tr { page-break-inside: avoid; break-inside: avoid; }
+    .section { page-break-before: always; counter-increment: bates; }
+    .cover { page-break-after: always; counter-increment: bates; }
+    .ex-cover-page { counter-increment: bates; }
+    tr { page-break-inside: avoid; break-inside: avoid; orphans: 3; widows: 3; }
     thead { display: table-header-group; }
-    h1, h2 { page-break-after: avoid; break-after: avoid; }
+    h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
+    p { orphans: 3; widows: 3; }
   }
   table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
   thead { display: table-header-group; }
@@ -2434,7 +2480,7 @@ body { background: #fff; }
 
     <p class="lp">I am authorized to make this Affidavit on behalf of ${companyName}, and the statements set forth herein are made upon my personal knowledge derived from the business records of ${companyName} maintained in the regular and ordinary course of its business.</p>
 
-    <p class="lp">The records of ${companyName} are made at or near the time of the events recorded by, or from information transmitted by, persons with knowledge of those events; such records are kept in the course of regularly conducted business activity, and the making of such records is a regular practice of that business activity.</p>
+    <p class="lp">The records of ${companyName} are made at or near the time of the events recorded by, or from information transmitted by, persons with knowledge of those events; such records are kept in the course of regularly conducted business activity, and the making of such records is a regular practice of that business activity, satisfying the business records exception to the rule against hearsay under <em>Fed. R. Evid. 803(6)</em>.</p>
 
     <p class="lp">The records of ${companyName} reflect that <strong>${debtorName}</strong> ("Debtor") is indebted to ${companyName} in connection with Account No. ${acctNum}, and as of ${todayLong} the indebtedness is itemized as follows:</p>
   </div>
@@ -2498,11 +2544,16 @@ function safeImg(src: string | null | undefined, alt: string, style: string): st
 }
 
 function addrLines(parts: Array<string | null | undefined>): string {
-  return parts
-    .map(p => esc(p || ''))
-    .filter(Boolean)
-    .map(p => `<div>${p}</div>`)
-    .join('');
+  // Split each part on newlines so multiline addresses don't run into one string
+  const out: string[] = [];
+  for (const p of parts) {
+    if (!p) continue;
+    String(p).split(/\r?\n/).forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed) out.push(`<div class="addr-line">${esc(trimmed)}</div>`);
+    });
+  }
+  return out.join('');
 }
 
 function fmtDateMaybe(d: string | null | undefined): string {
@@ -2627,7 +2678,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
       <th class="text-right">Amount</th>
     </tr>
   </thead>
-  <tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:18px;">No line items</td></tr>`}</tbody>
+  <tbody>${rows || `<tr class="fd-empty-row"><td colspan="5">(no line items)</td></tr>`}</tbody>
 </table>
 
 <div style="overflow:hidden;margin-top:18px;">
@@ -2636,7 +2687,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
     <div class="fd-meta-row" style="border-top:1px solid #cbd5e1;margin-top:4px;padding-top:6px;">
       <span class="lbl" style="font-size:10px;">Total</span>
-      <span class="val" style="font-size:13px;">${fmt(total)}</span>
+      <span class="val" style="font-size:13px;font-weight:700;">${fmt(total)}</span>
     </div>
     ${paid > 0 ? `<div class="fd-meta-row"><span class="lbl">Amount Paid</span><span class="val" style="color:#16a34a;">-${fmt(paid)}</span></div>` : ''}
     <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
@@ -2781,7 +2832,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
       <th class="text-right">Line Total</th>
     </tr>
   </thead>
-  <tbody>${rows || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:18px;">No line items</td></tr>`}</tbody>
+  <tbody>${rows || `<tr class="fd-empty-row"><td colspan="6">(no line items)</td></tr>`}</tbody>
 </table>
 
 <div style="overflow:hidden;margin-top:18px;">

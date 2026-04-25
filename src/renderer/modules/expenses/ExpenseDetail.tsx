@@ -3,10 +3,11 @@
 // Mirrors InvoiceDetail's structure: header → body → RelatedPanel + EntityTimeline.
 
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon } from 'lucide-react';
+import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import EntityChip from '../../components/EntityChip';
@@ -67,6 +68,28 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     if (r?.id) onEdit(r.id);
   };
 
+  const buildReceiptHTML = () => {
+    const vendor = expense.vendor_id ? { id: expense.vendor_id, name: expense.vendor_name } : undefined;
+    return generateExpenseReceiptHTML(expense, activeCompany, vendor);
+  };
+
+  const handlePreview = async () => {
+    try {
+      await api.printPreview(buildReceiptHTML(), `Expense ${expense.reference || expense.description || ''}`);
+    } catch (e: any) { setErr(e?.message || 'Preview failed'); }
+  };
+  const handlePrint = async () => {
+    try { await api.print(buildReceiptHTML()); }
+    catch (e: any) { setErr(e?.message || 'Print failed'); }
+  };
+  const handleSavePdf = async () => {
+    try {
+      const safe = String(expense.reference || expense.id || 'receipt').replace(/[^a-zA-Z0-9-_]/g, '-');
+      const r = await api.saveToPDF(buildReceiptHTML(), `Expense-${safe}`);
+      if (r?.error) setErr(r.error);
+    } catch (e: any) { setErr(e?.message || 'PDF save failed'); }
+  };
+
   if (loading) return <div className="text-text-muted text-sm py-12 text-center">Loading expense...</div>;
   if (err) return <ErrorBanner message={err} onDismiss={() => setErr('')} />;
   if (!expense) return <div className="text-text-muted text-sm py-12 text-center">Expense not found.</div>;
@@ -85,6 +108,15 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
           </button>
           <button onClick={duplicate} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             <Copy size={13} /> Duplicate
+          </button>
+          <button onClick={handlePreview} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Eye size={13} /> Preview
+          </button>
+          <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Printer size={13} /> Print
+          </button>
+          <button onClick={handleSavePdf} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <FileDown size={13} /> PDF
           </button>
           {expense.status !== 'approved' && (
             <button onClick={() => setStatus('approved')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-income text-accent-income">

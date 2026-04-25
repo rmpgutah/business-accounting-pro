@@ -480,6 +480,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media print {
+  /* Force only-light color scheme so OS dark mode doesn't invert paper */
+  :root { color-scheme: only light; }
+
   /* Kill dark theme — force white paper, dark text */
   html, body {
     background: #ffffff !important;
@@ -487,7 +490,7 @@ h1, h2, h3, h4, h5, h6 {
     overflow: visible !important;
     height: auto !important;
     width: auto !important;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -505,6 +508,54 @@ h1, h2, h3, h4, h5, h6 {
     display: none !important;
   }
 
+  /* Hide overlays/popups/toasts that would otherwise leak onto the page */
+  [role="dialog"],
+  [role="alertdialog"],
+  [role="tooltip"],
+  [role="menu"],
+  .modal,
+  .modal-overlay,
+  .popover,
+  .tooltip,
+  .toast,
+  [data-sonner-toaster],
+  [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+
+  /* Sticky elements fall back to static so content reflows on paper */
+  .sticky,
+  .pp-toolbar {
+    position: static !important;
+  }
+
+  /* Kill glass / backdrop-filter — Chromium can't print blur cleanly */
+  *, *::before, *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Custom scrollbar containers must reveal full content, not just viewport */
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-auto,
+  .overflow-y-scroll,
+  .overflow-x-scroll,
+  .overflow-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  /* Force solid dark text on dark-theme color tokens */
+  .text-text-secondary { color: #444 !important; }
+  .text-text-muted { color: #555 !important; }
+  .text-text-primary { color: #000 !important; }
+
   /* Let main content expand to full page */
   main,
   .app-shell,
@@ -519,12 +570,16 @@ h1, h2, h3, h4, h5, h6 {
     -webkit-backdrop-filter: none !important;
   }
 
-  /* Inputs/controls should not print */
-  button,
+  /* Inputs/controls should not print (allow .print-keep opt-in) */
+  button:not(.print-keep),
+  [role="button"]:not(.print-keep),
   input[type="date"],
   input[type="search"],
+  input[type="text"][placeholder*="earch" i],
+  input[type="text"][placeholder*="ilter" i],
   select,
-  .block-input {
+  .block-input,
+  .block-select {
     display: none !important;
   }
 
@@ -756,5 +811,168 @@ h1, h2, h3, h4, h5, h6 {
 
   /* ── Reserve room for fixed footer ─────────────────── */
   main, .app-shell, .module-container { padding-bottom: 0.5in !important; }
+
+  /* ── Sticky → static fallback for print ────────────── */
+  .sticky,
+  [class*="sticky"] {
+    position: static !important;
+    top: auto !important;
+  }
+
+  /* ── Hide modals, toasts, popovers, tooltips ──────── */
+  [role="dialog"],
+  [role="tooltip"],
+  .modal,
+  .toast,
+  .tooltip,
+  .popover,
+  [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+
+  /* ── Recharts SVG: keep colors when printing ──────── */
+  svg,
+  .recharts-wrapper,
+  .recharts-surface {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .recharts-wrapper { page-break-inside: avoid; break-inside: avoid; }
+
+  /* ── Long table overflow: tighter font in print ───── */
+  table.block-table,
+  .report-wide-table table,
+  table.report-wide {
+    font-size: 9pt;
+  }
+  table.report-extra-wide,
+  table.report-extra-wide th,
+  table.report-extra-wide td {
+    font-size: 8pt;
+  }
+
+  /* ── Cards: white/no-glass in print ───────────────── */
+  .block-card,
+  .stat-card,
+  .glass-card,
+  .summary-card {
+    background: #ffffff !important;
+    color: #0b1220 !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* ── Summary tile -> inline summary text ──────────── */
+  .report-summary-tiles {
+    display: flex !important;
+    gap: 18pt;
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 0 6pt 0 !important;
+  }
+  .report-summary-tiles > * {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    color: #0b1220 !important;
+    font-size: 9.5pt;
+  }
+
+  /* ── Dark-theme variable fallbacks for print ──────── */
+  :root, html, body {
+    --color-text-primary: #0b1220 !important;
+    --color-text-secondary: #1e293b !important;
+    --color-text-muted: #475569 !important;
+    --color-bg-primary: #ffffff !important;
+    --color-bg-secondary: #ffffff !important;
+    --color-bg-tertiary: #ffffff !important;
+    --color-bg-hover: transparent !important;
+    --color-border-primary: #cbd5e1 !important;
+    --color-border-secondary: #e2e8f0 !important;
+    --color-accent: #1d4ed8 !important;
+  }
+
+  /* ── Suppress module toolbars & filter bars ───────── */
+  .module-toolbar,
+  .module-filter-bar,
+  .module-search-bar,
+  .quick-stats-strip,
+  .filter-bar,
+  .search-bar,
+  .toolbar,
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  /* ── Single-page convention: hide "of 1" footer ───── */
+  /* Always show "Page X of Y" — keep convention consistent. */
+
+  /* ── Budget vs Actual variance indicators ──────────── */
+  .variance-over {
+    color: #b91c1c !important;
+    font-weight: 600;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .variance-under {
+    color: #15803d !important;
+    font-weight: 600;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .variance-over::after { content: " \2191"; }
+  .variance-under::after { content: " \2193"; }
+
+  /* ── Cash Flow Statement section blocks ───────────── */
+  .cashflow-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 10pt;
+  }
+  .cashflow-section + .cashflow-section { margin-top: 10pt; }
+  .cashflow-net-change td {
+    border-top: 1px solid #000 !important;
+    border-bottom: 3px double #000 !important;
+    font-weight: 700;
+  }
+
+  /* ── Tax Summary schedule layout ──────────────────── */
+  .tax-schedule-source {
+    font-size: 8pt;
+    font-style: italic;
+    color: #475569 !important;
+  }
+
+  /* ── Common-size % column ─────────────────────────── */
+  .common-size-pct {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #334155 !important;
+  }
+
+  /* ── Working-papers / SOX / audit-letter PDF generators ── */
+  .pdf-section { page-break-before: always; break-before: page; }
+  .pdf-section:first-child { page-break-before: auto; break-before: auto; }
+  .pdf-cover {
+    text-align: center;
+    padding-top: 1.5in;
+  }
+  .pdf-toc { page-break-after: always; break-after: page; }
+  .pdf-letterhead {
+    text-align: center;
+    border-bottom: 2px solid #1d4ed8;
+    padding-bottom: 8pt;
+    margin-bottom: 16pt;
+  }
 }
+
+/* Negative-amount accounting via data attribute (works on screen + print) */
+td[data-neg="true"]::before,
+.acc-neg-auto[data-neg="true"]::before { content: "("; }
+td[data-neg="true"]::after,
+.acc-neg-auto[data-neg="true"]::after { content: ")"; }
+
 
