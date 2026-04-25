@@ -455,11 +455,15 @@ export default function SettingsModule() {
   };
 
   // ─── Save Company ─────────────────────────────────────
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const saveCompany = async () => {
     if (!activeCompany?.id) return;
     setSavingSection('company');
     try {
       await api.updateCompany(activeCompany.id, companyForm);
+      // Refresh the store so other modules see the updated company data
+      const updated = await api.getCompany(activeCompany.id);
+      if (updated) setActiveCompany(updated);
     } catch (err: any) {
       console.error('Failed to save company:', err);
       alert('Failed to save company: ' + (err?.message || 'Unknown error'));
