@@ -46,7 +46,7 @@ import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, percentChange } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 
 function getGreeting(): string {
@@ -121,7 +121,9 @@ interface CashForecastPoint {
 interface QuickMetrics {
   invoicesSentThisMonth: number;
   avgDaysToPayment: number;
-  revenueGrowthPct: number;
+  // null when prior month had zero revenue — UI renders "—" instead of a
+  // misleading 0% (which masks a "from nothing" gain) or NaN/Infinity.
+  revenueGrowthPct: number | null;
   topClientName: string;
   topClientRevenue: number;
 }
@@ -427,7 +429,7 @@ const Dashboard: React.FC = () => {
   const [quickMetrics, setQuickMetrics] = useState<QuickMetrics>({
     invoicesSentThisMonth: 0,
     avgDaysToPayment: 0,
-    revenueGrowthPct: 0,
+    revenueGrowthPct: null,
     topClientName: '--',
     topClientRevenue: 0,
   });
@@ -681,7 +683,7 @@ const Dashboard: React.FC = () => {
         // instead of misleading 0% (which would mask a "from nothing" gain).
         const thisN = Number(thisRev) || 0;
         const lastN = Number(lastRev) || 0;
-        const growthPct = lastN > 0 ? ((thisN - lastN) / lastN) * 100 : 0;
+        const growthPct = percentChange(thisN, lastN);
 
         setQuickMetrics({
           invoicesSentThisMonth: invoicesSent || 0,
@@ -907,7 +909,9 @@ const Dashboard: React.FC = () => {
 
         <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
           <div className="flex items-center gap-2 mb-3">
-            {quickMetrics.revenueGrowthPct >= 0 ? (
+            {quickMetrics.revenueGrowthPct == null ? (
+              <TrendingUp size={16} className="text-text-muted" />
+            ) : quickMetrics.revenueGrowthPct >= 0 ? (
               <TrendingUp size={16} className="text-accent-income" />
             ) : (
               <TrendingDown size={16} className="text-accent-expense" />
@@ -916,19 +920,25 @@ const Dashboard: React.FC = () => {
               Revenue Growth
             </span>
           </div>
-          <p
-            className={`text-3xl font-mono ${
-              quickMetrics.revenueGrowthPct >= 0
-                ? 'text-accent-income'
-                : 'text-accent-expense'
-            }`}
-          >
-            <AnimatedCounter
-              value={quickMetrics.revenueGrowthPct}
-              format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
-            />
-          </p>
-          <span className="text-[11px] text-text-muted mt-1 block">vs. last month</span>
+          {quickMetrics.revenueGrowthPct == null ? (
+            <p className="text-3xl font-mono text-text-muted">—</p>
+          ) : (
+            <p
+              className={`text-3xl font-mono ${
+                quickMetrics.revenueGrowthPct >= 0
+                  ? 'text-accent-income'
+                  : 'text-accent-expense'
+              }`}
+            >
+              <AnimatedCounter
+                value={quickMetrics.revenueGrowthPct}
+                format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
+              />
+            </p>
+          )}
+          <span className="text-[11px] text-text-muted mt-1 block">
+            {quickMetrics.revenueGrowthPct == null ? 'no prior-month revenue' : 'vs. last month'}
+          </span>
         </div>
 
         <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>

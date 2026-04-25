@@ -135,7 +135,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
             `SELECT c.name as category, COALESCE(SUM(e.amount), 0) as total
              FROM expenses e
              LEFT JOIN categories c ON e.category_id = c.id
-             WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+             WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
              GROUP BY c.name`,
             [activeCompany.id, b.start_date, b.end_date]
           );
@@ -151,7 +151,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
           const monthlyData = await api.rawQuery(
             `SELECT strftime('%Y-%m', e.date) as month, COALESCE(SUM(e.amount), 0) as total
              FROM expenses e
-             WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+             WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
              GROUP BY month ORDER BY month`,
             [activeCompany.id, b.start_date, b.end_date]
           );

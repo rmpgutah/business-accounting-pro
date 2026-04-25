@@ -19,7 +19,7 @@ const FLAT_RATE_STATES: Record<string, number> = {
   MI: 0.0425,
   NC: 0.045,
   PA: 0.0307,
-  UT: 0.0465,
+  UT: 0.0455, // 2025 single flat rate per Utah HB 106 (reduced from 4.65%)
   AZ: 0.025,
   ID: 0.058,
   MA: 0.05,

@@ -126,7 +126,7 @@ const TaxSummary: React.FC = () => {
         const revenueRows: any[] = await api.rawQuery(
           `SELECT COALESCE(SUM(total), 0) as total
            FROM invoices
-           WHERE company_id = ? AND issue_date BETWEEN ? AND ?
+           WHERE company_id = ? AND date(issue_date) BETWEEN date(?) AND date(?)
              AND status != 'draft'`,
           [activeCompany.id, startDate, endDate]
         );
@@ -139,7 +139,7 @@ const TaxSummary: React.FC = () => {
              SUM(e.amount) as total
            FROM expenses e
            LEFT JOIN tax_categories tc ON e.category_id = tc.id
-           WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+           WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
            GROUP BY COALESCE(tc.name, 'Uncategorized')
            ORDER BY total DESC`,
           [activeCompany.id, startDate, endDate]
@@ -153,7 +153,7 @@ const TaxSummary: React.FC = () => {
         const paymentRows: any[] = await api.rawQuery(
           `SELECT id, date AS payment_date, amount, notes AS description, type AS tax_type
            FROM tax_payments
-           WHERE company_id = ? AND date BETWEEN ? AND ?
+           WHERE company_id = ? AND date(date) BETWEEN date(?) AND date(?)
            ORDER BY date DESC`,
           [activeCompany.id, startDate, endDate]
         );

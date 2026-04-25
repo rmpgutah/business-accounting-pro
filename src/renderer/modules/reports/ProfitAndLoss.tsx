@@ -158,7 +158,7 @@ const ProfitAndLoss: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.date BETWEEN ? AND ?
+           WHERE date(je.date) BETWEEN date(?) AND date(?)
              AND je.company_id = ?
              AND a.type IN ('revenue', 'expense')
            GROUP BY a.id, a.name, a.code, a.type, a.subtype
@@ -200,7 +200,11 @@ const ProfitAndLoss: React.FC = () => {
               sub.includes('cogs') ||
               sub.includes('direct')
             ) {
-              result.costOfServices.push(item);
+              // Convention: GL stores expenses as net credit-debit (negative).
+              // Display all expense categories as positive magnitudes so totals
+              // and per-line values use the same sign — abs at insertion, then
+              // sum directly with no further sign massaging.
+              result.costOfServices.push({ ...item, total: Math.abs(item.total) });
             } else if (
               sub.includes('other') ||
               sub.includes('interest expense')
@@ -246,7 +250,7 @@ const ProfitAndLoss: React.FC = () => {
       FROM journal_entry_lines jel
       JOIN accounts a ON a.id = jel.account_id
       JOIN journal_entries je ON je.id = jel.journal_entry_id
-      WHERE je.date BETWEEN ? AND ? AND je.company_id = ? AND a.type IN ('revenue','expense')
+      WHERE date(je.date) BETWEEN date(?) AND date(?) AND je.company_id = ? AND a.type IN ('revenue','expense')
       GROUP BY a.id, a.name, a.code, a.type, a.subtype ORDER BY a.type, a.subtype, a.code`,
       [priorStart, priorEnd, activeCompany.id]
     ).then((rows: any[]) => {
@@ -258,7 +262,7 @@ const ProfitAndLoss: React.FC = () => {
           if (sub.includes('other')) result.otherIncome.push(item);
           else result.revenue.push(item);
         } else {
-          if (sub.includes('cost of') || sub.includes('cogs')) result.costOfServices.push(item);
+          if (sub.includes('cost of') || sub.includes('cogs')) result.costOfServices.push({ ...item, total: Math.abs(item.total) });
           else if (sub.includes('other') || sub.includes('interest expense')) result.otherExpenses.push({ ...item, total: Math.abs(item.total) });
           else {
             const group = item.subtype || 'General';
@@ -277,7 +281,9 @@ const ProfitAndLoss: React.FC = () => {
     [data.revenue]
   );
   const totalCOS = useMemo(
-    () => data.costOfServices.reduce((s, r) => s + Math.abs(r.total), 0),
+    // costOfServices items are already stored positive (abs'd on insertion);
+    // sum directly so per-line + total share one sign convention.
+    () => data.costOfServices.reduce((s, r) => s + r.total, 0),
     [data.costOfServices]
   );
   const grossProfit = totalRevenue - totalCOS;
@@ -303,7 +309,7 @@ const ProfitAndLoss: React.FC = () => {
 
   // ─── Prior year totals (for YoY) ──────────────────────
   const priorTotalRevenue = priorData?.revenue.reduce((s, r) => s + r.total, 0) ?? 0;
-  const priorTotalCOS = priorData?.costOfServices.reduce((s, r) => s + Math.abs(r.total), 0) ?? 0;
+  const priorTotalCOS = priorData?.costOfServices.reduce((s, r) => s + r.total, 0) ?? 0;
   const priorTotalOpex = Object.values(priorData?.operatingExpenses ?? {}).flat().reduce((s, r) => s + r.total, 0);
   const priorTotalOtherIncome = priorData?.otherIncome.reduce((s, r) => s + r.total, 0) ?? 0;
   const priorTotalOtherExpenses = priorData?.otherExpenses.reduce((s, r) => s + r.total, 0) ?? 0;
@@ -361,7 +367,8 @@ const ProfitAndLoss: React.FC = () => {
     if (data.costOfServices.length > 0) {
       rows.push({ name: 'COST OF GOODS / SERVICES', amount: '', _bold: true, _highlight: true });
       for (const r of data.costOfServices) {
-        rows.push({ name: `    ${r.account_name}`, amount: Math.abs(r.total) });
+        // r.total is already positive (abs'd at insertion).
+        rows.push({ name: `    ${r.account_name}`, amount: r.total });
       }
       rows.push({ name: 'Total Cost of Services', amount: totalCOS, _bold: true, _separator: true });
       rows.push({ name: '', amount: '' });
@@ -570,7 +577,7 @@ const ProfitAndLoss: React.FC = () => {
                     <PnLLineRow
                       key={r.account_code}
                       name={r.account_name}
-                      amount={Math.abs(r.total)}
+                      amount={r.total}
                       indent={1}
                     />
                   ))}

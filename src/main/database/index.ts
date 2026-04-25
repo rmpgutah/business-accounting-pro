@@ -507,6 +507,20 @@ export function initDatabase(): Database.Database {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
   }
 
+  // Seed Utah state tax bracket (flat 4.55% per HB 106, 2025).
+  try {
+    const existing = db.prepare(
+      `SELECT COUNT(*) as c FROM state_tax_brackets WHERE state = 'UT' AND year = 2025`
+    ).get() as { c: number };
+    if (!existing || existing.c === 0) {
+      const id = `utbrk-2025-${Date.now()}`;
+      db.prepare(
+        `INSERT INTO state_tax_brackets (id, state, year, min_income, max_income, rate)
+         VALUES (?, 'UT', 2025, 0, NULL, 0.0455)`
+      ).run(id);
+    }
+  } catch (_) { /* ignore */ }
+
   return db;
 }
 

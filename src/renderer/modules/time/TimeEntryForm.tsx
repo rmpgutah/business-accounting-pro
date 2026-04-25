@@ -57,7 +57,12 @@ function toDateStr(iso: string): string {
 
 function calcDurationFromRange(date: string, start: string, end: string): number {
   const s = new Date(`${date}T${start}:00`);
-  const e = new Date(`${date}T${end}:00`);
+  let e = new Date(`${date}T${end}:00`);
+  // Overnight shift: a 22:00→02:00 entry should record 4 hours, not 0.
+  // If end is at-or-before start, roll end to the following day.
+  if (e.getTime() <= s.getTime()) {
+    e = new Date(e.getTime() + 24 * 60 * 60 * 1000);
+  }
   const diff = (e.getTime() - s.getTime()) / 60000;
   return diff > 0 ? Math.round(diff) : 0;
 }
@@ -130,8 +135,15 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     let finalDuration: number;
 
     if (inputMode === 'range') {
-      finalStartTime = new Date(`${date}T${startTime}:00`).toISOString();
-      finalEndTime = new Date(`${date}T${endTime}:00`).toISOString();
+      const sDate = new Date(`${date}T${startTime}:00`);
+      let eDate = new Date(`${date}T${endTime}:00`);
+      // Match the overnight-rollover applied in calcDurationFromRange so
+      // the persisted end_time matches the duration that was displayed.
+      if (eDate.getTime() <= sDate.getTime()) {
+        eDate = new Date(eDate.getTime() + 24 * 60 * 60 * 1000);
+      }
+      finalStartTime = sDate.toISOString();
+      finalEndTime = eDate.toISOString();
       finalDuration = calcDurationFromRange(date, startTime, endTime);
     } else {
       // Duration mode: set start to 9am, calc end

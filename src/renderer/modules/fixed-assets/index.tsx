@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
+import { formatCurrency, roundCents } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -67,7 +68,8 @@ interface Account {
 }
 
 // ─── Helpers ─────────────────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+// Route every dollar render through the shared formatter (handles NaN/Infinity).
+const fmt = { format: (v: number | string | null | undefined) => formatCurrency(v) };
 
 const CATEGORIES = ['equipment', 'vehicle', 'building', 'furniture', 'software', 'other'] as const;
 const METHODS = [
@@ -98,18 +100,20 @@ function calcAnnualDepreciation(
   method: string
 ): number {
   if (!purchasePrice || !usefulLifeYears || usefulLifeYears <= 0) return 0;
-  const depreciable = purchasePrice - salvageValue;
-  if (method === 'straight_line') return depreciable / usefulLifeYears;
+  const depreciable = Math.max(0, purchasePrice - salvageValue);
+  if (method === 'straight_line') return roundCents(depreciable / usefulLifeYears);
   if (method === 'double_declining') {
-    // Year 1 depreciation (subsequent years apply rate to declining book value)
+    // Year 1 only — full schedule (with SL crossover and salvage floor) lives
+    // in the main-process `assets:schedule` handler. Cap at depreciable so we
+    // never preview a year-1 figure that breaches salvage value.
     const rate = 2 / usefulLifeYears;
-    return Math.min(purchasePrice * rate, purchasePrice - salvageValue);
+    return roundCents(Math.min(purchasePrice * rate, depreciable));
   }
   if (method === 'sum_of_years_digits') {
     const syd = (usefulLifeYears * (usefulLifeYears + 1)) / 2;
-    return (depreciable * usefulLifeYears) / syd;
+    return roundCents((depreciable * usefulLifeYears) / syd);
   }
-  return depreciable / usefulLifeYears;
+  return roundCents(depreciable / usefulLifeYears);
 }
 
 // ─── View type ───────────────────────────────────────────
@@ -177,7 +181,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
   const stats = useMemo(() => ({
     count: assets.length,
     totalCost: assets.reduce((s, a) => s + (a.purchase_price || 0), 0),
-    totalBook: assets.reduce((s, a) => s + (a.current_book_value ?? a.purchase_price ?? 0), 0),
+    totalBook: assets.reduce((s, a) => s + ((a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))) ?? 0), 0),
     totalAccDep: assets.reduce((s, a) => s + (a.accumulated_depreciation || 0), 0),
   }), [assets]);
 
@@ -347,7 +351,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                   </td>
                   <td className="text-right text-text-primary">{fmt.format(a.purchase_price)}</td>
                   <td className="text-right text-accent-expense">{fmt.format(a.accumulated_depreciation || 0)}</td>
-                  <td className="text-right text-accent-income font-semibold">{fmt.format(a.current_book_value ?? a.purchase_price)}</td>
+                  <td className="text-right text-accent-income font-semibold">{fmt.format((a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))))}</td>
                   <td>
                     <span className={`block-badge ${STATUS_COLORS[a.status] || 'block-badge'}`}>
                       {a.status === 'fully_depreciated' ? 'Fully Dep.' : a.status.charAt(0).toUpperCase() + a.status.slice(1)}
@@ -910,7 +914,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
         {[
           { label: 'Purchase Price', value: fmt.format(asset.purchase_price) },
           { label: 'Salvage Value', value: fmt.format(asset.salvage_value) },
-          { label: 'Book Value', value: fmt.format(asset.current_book_value ?? asset.purchase_price) },
+          { label: 'Book Value', value: fmt.format(asset.current_book_value ?? ((asset.purchase_price || 0) - (asset.accumulated_depreciation || 0))) },
           { label: 'Accumulated Dep.', value: fmt.format(asset.accumulated_depreciation || 0) },
         ].map((s) => (
           <div key={s.label} className="stat-card">

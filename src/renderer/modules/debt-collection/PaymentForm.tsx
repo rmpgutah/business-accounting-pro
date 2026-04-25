@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { DollarSign, X } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, roundCents } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtData {
@@ -94,9 +94,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
   // ── Auto-allocation: fees -> interest -> principal ──
   const allocation = useMemo(() => {
     if (!debt) return { fees: 0, interest: 0, principal: 0 };
-    const fees = Math.min(parsedAmount, debt.fees_accrued);
-    const interest = Math.min(parsedAmount - fees, debt.interest_accrued);
-    const principal = Math.max(parsedAmount - fees - interest, 0);
+    // Round each step so the three buckets sum exactly to the entered amount.
+    // Floor each accrued column at 0 — a negative fees/interest column would
+    // otherwise feed a NEGATIVE allocation amount into the DB.
+    const fees = roundCents(Math.min(parsedAmount, Math.max(0, debt.fees_accrued)));
+    const interest = roundCents(Math.min(parsedAmount - fees, Math.max(0, debt.interest_accrued)));
+    const principal = roundCents(Math.max(parsedAmount - fees - interest, 0));
     return { fees, interest, principal };
   }, [parsedAmount, debt]);
 
@@ -118,7 +121,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
   // ── Pay Full Balance ──
   const handlePayFull = () => {
     if (!debt) return;
-    setAmount(debt.balance_due.toFixed(2));
+    // Floor at 0 so an over-paid debt (negative balance_due) doesn't
+    // pre-fill the amount field with a negative number.
+    setAmount(Math.max(0, roundCents(debt.balance_due)).toFixed(2));
   };
 
   // ── Submit ──
@@ -135,9 +140,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
     }
 
     setSaving(true);
+    const roundedAmount = roundCents(parsedAmount);
     const paymentPayload = {
       debt_id: debtId,
-      amount: parsedAmount,
+      amount: roundedAmount,
       method,
       reference_number: referenceNumber || null,
       received_date: receivedDate,
@@ -155,15 +161,21 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
         // 1. Create payment record
         await api.create('debt_payments', paymentPayload);
 
-        // 2. Update debt running totals & auto-settle if fully paid
+        // 2. Update debt running totals & auto-settle if fully paid.
+        // Compute new balance in JS to remove the dependency on column-update
+        // ordering inside the same UPDATE statement (the previous form mixed
+        // `payments_made = payments_made + ?` with another expression that also
+        // referenced `payments_made` — order-of-eval was implementation-defined).
+        const newBalanceDue = roundCents((debt?.balance_due ?? 0) - roundedAmount);
+        const newStatus = newBalanceDue <= 0 ? 'settled' : null;
         await api.rawQuery(
           `UPDATE debts SET
             payments_made = payments_made + ?,
-            balance_due = original_amount + interest_accrued + fees_accrued - payments_made - ?,
-            status = CASE WHEN original_amount + interest_accrued + fees_accrued - payments_made - ? <= 0 THEN 'settled' ELSE status END,
+            balance_due = ?,
+            status = CASE WHEN ? IS NOT NULL THEN ? ELSE status END,
             updated_at = datetime('now')
           WHERE id = ?`,
-          [parsedAmount, parsedAmount, parsedAmount, debtId]
+          [roundedAmount, newBalanceDue, newStatus, newStatus, debtId]
         );
       }
 

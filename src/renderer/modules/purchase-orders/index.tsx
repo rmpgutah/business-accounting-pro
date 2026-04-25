@@ -7,7 +7,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 
 // ─── Types ───────────────────────────────────────────────
@@ -412,7 +412,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
         const updated = { ...l, [field]: value };
         const qty = parseFloat(updated.quantity) || 0;
         const price = parseFloat(updated.unit_price) || 0;
-        updated.amount = parseFloat((qty * price).toFixed(2));
+        updated.amount = roundCents(qty * price);
         return updated;
       })
     );
@@ -429,9 +429,9 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
     setLines((prev) => prev.filter((l) => l.tempId !== tempId));
   };
 
-  const subtotal = useMemo(() => lines.reduce((s, l) => s + l.amount, 0), [lines]);
-  const taxAmount = useMemo(() => parseFloat(((subtotal * parseFloat(taxPct || '0')) / 100).toFixed(2)), [subtotal, taxPct]);
-  const total = useMemo(() => parseFloat((subtotal + taxAmount).toFixed(2)), [subtotal, taxAmount]);
+  const subtotal = useMemo(() => roundCents(lines.reduce((s, l) => s + roundCents(l.amount), 0)), [lines]);
+  const taxAmount = useMemo(() => roundCents((subtotal * parseFloat(taxPct || '0')) / 100), [subtotal, taxPct]);
+  const total = useMemo(() => roundCents(subtotal + taxAmount), [subtotal, taxAmount]);
 
   const handleSave = async () => {
     setError('');
@@ -476,7 +476,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
             description: l.description,
             quantity: parseFloat(l.quantity) || 0,
             unit_price: parseFloat(l.unit_price) || 0,
-            amount: l.amount,
+            amount: roundCents(l.amount),
             account_id: l.account_id || null,
             quantity_received: 0,
           })

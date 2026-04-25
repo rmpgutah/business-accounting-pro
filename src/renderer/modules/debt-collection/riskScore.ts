@@ -6,7 +6,11 @@ export function calcRiskScore(debt: any, brokenPromisesCount = 0): number {
   const days = delinquentDate
     ? Math.max(0, Math.floor((Date.now() - new Date(delinquentDate).getTime()) / 86400000))
     : 0;
+  // Aligned with the 0-30 / 31-60 / 61-90 / 90+ AR aging buckets the user
+  // sees elsewhere. Previously jumped 30→90 which scored a 60-day-late and a
+  // 31-day-late identically.
   if (days <= 30) score += 10;
+  else if (days <= 60) score += 15;
   else if (days <= 90) score += 20;
   else if (days <= 180) score += 30;
   else score += 40;
@@ -64,6 +68,7 @@ export function collectionScore(debt: any, opts: {
     ? Math.max(0, Math.floor((Date.now() - new Date(delinquentDate).getTime()) / 86400000))
     : 0;
   if (days <= 30) score += 15;
+  else if (days <= 60) score += 10;
   else if (days <= 90) score += 5;
   else if (days <= 180) score -= 5;
   else score -= 15;

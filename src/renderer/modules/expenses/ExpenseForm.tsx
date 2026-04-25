@@ -5,7 +5,7 @@ import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, roundCents } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -260,8 +260,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const isEditing = !!expenseId;
 
   // Auto-calculate total from line items
+  // Round each line before summing so parent.amount == sum(line.amount) exactly.
   const lineItemTotal = useMemo(() =>
-    lineItems.reduce((sum, li) => sum + (li.quantity * li.unit_price), 0),
+    lineItems.reduce((sum, li) => sum + roundCents(li.quantity * li.unit_price), 0),
     [lineItems]
   );
 
@@ -276,7 +277,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     setLineItems(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-      updated[index].amount = updated[index].quantity * updated[index].unit_price;
+      updated[index].amount = roundCents(updated[index].quantity * updated[index].unit_price);
       return updated;
     });
   };
@@ -441,8 +442,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     try {
       const payload: Record<string, any> = {
         date: form.date,
-        amount: parseFloat(form.amount) || 0,
-        tax_amount: parseFloat(form.tax_amount) || 0,
+        // When itemized, force parent.amount == sum(rounded line amounts) for reconciliation.
+        amount: useLineItems
+          ? lineItemTotal
+          : roundCents(parseFloat(form.amount) || 0),
+        tax_amount: roundCents(parseFloat(form.tax_amount) || 0),
         description: form.description.trim(),
         category_id: form.category_id || null,
         account_id: form.account_id || null,
@@ -471,7 +475,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             description: li.description,
             quantity: li.quantity,
             unit_price: li.unit_price,
-            amount: li.quantity * li.unit_price,
+            amount: roundCents(li.quantity * li.unit_price),
             account_id: li.account_id || null,
           }))
         : [];

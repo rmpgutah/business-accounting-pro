@@ -120,7 +120,7 @@ const CashFlowStatement: React.FC = () => {
         const revenueRows: any[] = await api.rawQuery(
           `SELECT COALESCE(SUM(p.amount), 0) as total
            FROM payments p
-           WHERE p.company_id = ? AND p.date BETWEEN ? AND ?`,
+           WHERE p.company_id = ? AND date(p.date) BETWEEN date(?) AND date(?)`,
           [activeCompany.id, startDate, endDate]
         );
         const operatingInflows = Number(revenueRows?.[0]?.total) || 0;
@@ -129,7 +129,7 @@ const CashFlowStatement: React.FC = () => {
         const expenseRows: any[] = await api.rawQuery(
           `SELECT COALESCE(SUM(amount), 0) as total
            FROM expenses
-           WHERE company_id = ? AND date BETWEEN ? AND ?`,
+           WHERE company_id = ? AND date(date) BETWEEN date(?) AND date(?)`,
           [activeCompany.id, startDate, endDate]
         );
         const operatingOutflows = Number(expenseRows?.[0]?.total) || 0;
@@ -149,7 +149,7 @@ const CashFlowStatement: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.company_id = ? AND je.date BETWEEN ? AND ?
+           WHERE je.company_id = ? AND date(je.date) BETWEEN date(?) AND date(?)
              AND a.type = 'equity' AND a.subtype LIKE '%contributed%'`,
           [activeCompany.id, startDate, endDate]
         );
@@ -161,7 +161,7 @@ const CashFlowStatement: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.company_id = ? AND je.date BETWEEN ? AND ?
+           WHERE je.company_id = ? AND date(je.date) BETWEEN date(?) AND date(?)
              AND a.type = 'equity' AND a.subtype LIKE '%draw%'`,
           [activeCompany.id, startDate, endDate]
         );
@@ -173,7 +173,7 @@ const CashFlowStatement: React.FC = () => {
            FROM journal_entry_lines jel
            JOIN accounts a ON a.id = jel.account_id
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE je.company_id = ? AND je.date < ?
+           WHERE je.company_id = ? AND date(je.date) < date(?)
              AND a.type = 'asset' AND (a.subtype LIKE '%cash%' OR a.subtype LIKE '%bank%')`,
           [activeCompany.id, startDate]
         );

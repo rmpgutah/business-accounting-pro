@@ -5,7 +5,7 @@ import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { FieldLabel } from '../../components/FieldLabel';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, roundCents } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -173,21 +173,24 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
   }, []);
 
   // ─── Totals ───────────────────────────────────────────
+  // Per-line rounded then summed so the totals match the printed line amounts
+  // exactly. Same convention as InvoiceForm — quote→invoice conversion will
+  // round-trip without 1¢ drift.
   const subtotal = lines.reduce((sum, l) => {
     const q = parseFloat(l.quantity) || 0;
     const p = parseFloat(l.unit_price) || 0;
-    return sum + q * p;
+    return sum + roundCents(q * p);
   }, 0);
 
   const taxAmount = lines.reduce((sum, l) => {
     const q = parseFloat(l.quantity) || 0;
     const p = parseFloat(l.unit_price) || 0;
     const t = parseFloat(l.tax_rate) || 0;
-    return sum + q * p * (t / 100);
+    return sum + roundCents(q * p * (t / 100));
   }, 0);
 
-  const discountAmt = parseFloat(form.discount_amount) || 0;
-  const grandTotal = subtotal + taxAmount - discountAmt;
+  const discountAmt = roundCents(parseFloat(form.discount_amount) || 0);
+  const grandTotal = roundCents(subtotal + taxAmount - discountAmt);
 
   // ─── Form change ──────────────────────────────────────
   const handleChange = (
@@ -287,7 +290,8 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
         const q = parseFloat(l.quantity) || 0;
         const p = parseFloat(l.unit_price) || 0;
         const t = parseFloat(l.tax_rate) || 0;
-        const amt = q * p + q * p * (t / 100);
+        // Persist subtotal+tax for the line, rounded once
+        const amt = roundCents(q * p + q * p * (t / 100));
         await api.create('quote_line_items', {
           quote_id: savedQuoteId,
           description: l.description.trim(),

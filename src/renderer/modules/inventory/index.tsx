@@ -3,6 +3,7 @@ import {
   Package, Plus, Search, Filter, AlertTriangle, X, ArrowDown, ArrowUp, RefreshCw, History, Pencil, Trash2, ArrowUpDown,
 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 
@@ -34,12 +35,9 @@ interface Movement {
 }
 
 // ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+// Route through the shared helper so NaN/Infinity render as $0.00 rather
+// than $NaN (e.g. when a unit_cost is null and qty * cost = NaN).
+const fmt = { format: (v: number | string | null | undefined) => formatCurrency(v) };
 
 // ─── Empty Form ─────────────────────────────────────────
 const emptyForm = {

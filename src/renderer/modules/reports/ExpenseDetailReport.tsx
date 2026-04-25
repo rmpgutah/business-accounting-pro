@@ -108,7 +108,7 @@ const ExpenseDetailReport: React.FC = () => {
            LEFT JOIN vendors v ON e.vendor_id = v.id
            LEFT JOIN categories c ON e.category_id = c.id
            LEFT JOIN projects p ON e.project_id = p.id
-           WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+           WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
            ORDER BY e.date DESC`,
           [activeCompany.id, startDate, endDate]
         );

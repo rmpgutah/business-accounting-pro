@@ -10,6 +10,7 @@ import RowTypeToolbar from './RowTypeToolbar';
 import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
 import type { LineRowType } from '../../../shared/types';
 import ErrorBanner from '../../components/ErrorBanner';
+import { roundCents } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -519,10 +520,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   }, [invoiceId, activeCompany]);
 
   // ─── Line item calculations (item rows only) ─────────
+  // Convention (issue #2): line discount reduces taxable base — tax is computed
+  // on the discounted line amount, matching standard US sales-tax expectation.
+  // Convention (issue #1): each line's discounted amount and tax are rounded to
+  // whole cents BEFORE summing, so the printed line totals reconcile exactly to
+  // subtotal/tax shown at the bottom of the invoice.
   const subtotal = useMemo(
     () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
       const baseAmount = l.quantity * l.unit_price;
-      const discountedAmount = baseAmount * (1 - (l.discount_pct || 0) / 100);
+      const discountedAmount = roundCents(baseAmount * (1 - (l.discount_pct || 0) / 100));
       return s + discountedAmount;
     }, 0),
     [lines]
@@ -531,9 +537,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   const taxTotal = useMemo(
     () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
       const baseAmount = l.quantity * l.unit_price;
-      const discountedAmount = baseAmount * (1 - (l.discount_pct || 0) / 100);
+      const discountedAmount = roundCents(baseAmount * (1 - (l.discount_pct || 0) / 100));
       const effectiveTaxRate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
-      return s + discountedAmount * (effectiveTaxRate / 100);
+      return s + roundCents(discountedAmount * (effectiveTaxRate / 100));
     }, 0),
     [lines]
   );
@@ -544,11 +550,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       if ((l.row_type || 'item') !== 'item') continue;
       const rate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
       if (rate <= 0) continue;
-      const base = l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100);
+      const base = roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100));
       const key = rate.toFixed(2);
       if (!map[key]) map[key] = { taxable: 0, tax: 0 };
-      map[key].taxable += base;
-      map[key].tax += base * (rate / 100);
+      map[key].taxable = roundCents(map[key].taxable + base);
+      map[key].tax = roundCents(map[key].tax + roundCents(base * (rate / 100)));
     }
     return map;
   }, [lines]);
@@ -560,7 +566,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   const shippingTax = useMemo(() => 0, []); // reserved for future shipping tax
   const total = useMemo(() => {
-    const raw = subtotal + taxTotal - form.discount + (form.shipping_amount || 0) + shippingTax;
+    // Header discount (issue #3) is applied AFTER tax. This matches the existing
+    // user-visible behavior. Document choice: header discount does not reduce
+    // taxable base; only per-line discount_pct does. Shipping is included.
+    const raw = roundCents(subtotal + taxTotal - (form.discount || 0) + (form.shipping_amount || 0) + shippingTax);
     return form.invoice_type === 'credit_note' ? -Math.abs(raw) : raw;
   }, [subtotal, taxTotal, form.discount, form.shipping_amount, form.invoice_type, shippingTax]);
 
@@ -599,7 +608,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       quantity: l.quantity,
       unit_price: l.unit_price,
       tax_rate: l.tax_rate,
-      amount: l.quantity * l.unit_price,
+      amount: roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100)),
       row_type: l.row_type || 'item',
       unit_label: l.unit_label,
       item_code: l.item_code,
@@ -866,10 +875,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         issue_date: form.issue_date,
         due_date: form.due_date,
         terms: form.terms,
-        subtotal,
-        tax_amount: taxTotal,
-        discount_amount: form.discount,
-        total,
+        subtotal: roundCents(subtotal),
+        tax_amount: roundCents(taxTotal),
+        discount_amount: roundCents(form.discount),
+        total: roundCents(total),
         notes: form.notes,
         terms_text: form.terms_text,
         status: sendAfterSave ? 'sent' : 'draft',
@@ -881,7 +890,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         discount_pct: form.discount_pct || 0,
         invoice_type: form.invoice_type || 'standard',
         currency: form.currency || 'USD',
-        shipping_amount: form.shipping_amount || 0,
+        shipping_amount: roundCents(form.shipping_amount || 0),
         custom_field_1: form.custom_field_1.trim() || null,
         custom_field_2: form.custom_field_2.trim() || null,
         custom_field_3: form.custom_field_3.trim() || null,
@@ -895,7 +904,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         unit_price: l.unit_price,
         tax_rate: l.tax_rate,
         account_id: l.account_id || null,
-        amount: (l.row_type || 'item') === 'item' ? l.quantity * l.unit_price : 0,
+        // Persist the discounted, rounded line amount so subtotal == sum(line amounts)
+        amount: (l.row_type || 'item') === 'item'
+          ? roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100))
+          : 0,
         sort_order: idx,
         row_type: l.row_type || 'item',
         unit_label: l.unit_label || '',

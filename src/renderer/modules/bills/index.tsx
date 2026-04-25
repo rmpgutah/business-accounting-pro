@@ -16,7 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -524,15 +524,16 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
   }, [billId, activeCompany]);
 
   // ─── Calculations ────────────────────────────────────────
+  // Round each line to whole cents before summing — same convention as invoices.
   const subtotal = useMemo(
-    () => lines.reduce((s, l) => s + l.quantity * l.unit_price, 0),
+    () => lines.reduce((s, l) => s + roundCents(l.quantity * l.unit_price), 0),
     [lines]
   );
   const taxAmount = useMemo(
-    () => subtotal * (form.tax_pct / 100),
+    () => roundCents(subtotal * (form.tax_pct / 100)),
     [subtotal, form.tax_pct]
   );
-  const total = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
+  const total = useMemo(() => roundCents(subtotal + taxAmount), [subtotal, taxAmount]);
 
   // ─── Handlers ────────────────────────────────────────────
   const updateField = useCallback(
@@ -621,7 +622,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
           description: line.description,
           quantity: line.quantity,
           unit_price: line.unit_price,
-          amount: line.quantity * line.unit_price,
+          amount: roundCents(line.quantity * line.unit_price),
           account_id: line.account_id || null,
         });
       }

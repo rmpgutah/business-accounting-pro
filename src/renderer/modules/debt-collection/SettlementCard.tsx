@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Handshake, Plus, Pencil, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/format';
 
-const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+// Route through shared formatter — guards NaN/Infinity ($0.00 instead of $NaN).
+const fmt = { format: (v: number | string | null | undefined) => formatCurrency(v) };
 
 const RESPONSE_BADGE: Record<string, { label: string; color: string }> = {
   pending: { label: 'Pending', color: '#d97706' },
@@ -144,11 +146,15 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
               value={form.offer_amount}
               onChange={e => setForm(p => ({ ...p, offer_amount: e.target.value }))}
             />
-            {form.offer_amount && balanceDue > 0 && (
+            {form.offer_amount && balanceDue > 0 ? (
               <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 3 }}>
                 {((parseFloat(form.offer_amount) / balanceDue) * 100).toFixed(1)}% of balance
               </div>
-            )}
+            ) : form.offer_amount && balanceDue <= 0 ? (
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 3 }}>
+                — (no balance to compare)
+              </div>
+            ) : null}
           </div>
           <div>
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -211,7 +217,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                       {fmt.format(s.offer_amount)}
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>
-                      ({s.offer_pct?.toFixed(1)}% of balance) · {s.offered_date}
+                      ({Number.isFinite(s.offer_pct) ? `${s.offer_pct.toFixed(1)}%` : '—'} of balance) · {s.offered_date}
                     </span>
                   </div>
                   <span

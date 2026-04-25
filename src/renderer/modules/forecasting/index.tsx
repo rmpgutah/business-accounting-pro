@@ -302,13 +302,18 @@ const Forecasting: React.FC = () => {
   const whatIfChartData = useMemo(() => {
     if (whatIfRevenue <= 0) return chartData;
 
+    // The base projections (point.conservative/moderate/aggressive) already
+    // had the scenario multiplier applied inside projectNext(). The what-if
+    // boost is incremental NEW revenue from added clients/invoices — adding
+    // it raw avoids a double-multiplier (e.g. conservative was previously
+    // 0.81× of new business when it should be 0.9× of historical only).
     return chartData.map((point) => {
       if (point.actual !== undefined) return point;
       return {
         ...point,
-        conservative: (point.conservative || 0) + whatIfRevenue * SCENARIO_CONFIG.conservative.multiplier,
-        moderate: (point.moderate || 0) + whatIfRevenue * SCENARIO_CONFIG.moderate.multiplier,
-        aggressive: (point.aggressive || 0) + whatIfRevenue * SCENARIO_CONFIG.aggressive.multiplier,
+        conservative: (point.conservative || 0) + whatIfRevenue,
+        moderate: (point.moderate || 0) + whatIfRevenue,
+        aggressive: (point.aggressive || 0) + whatIfRevenue,
       };
     });
   }, [chartData, whatIfRevenue]);
@@ -322,13 +327,16 @@ const Forecasting: React.FC = () => {
       aggressive: [],
     };
 
+    // Same fix as whatIfChartData: scenario multiplier was already applied
+    // to the base projection inside projectNext(). Apply the what-if boost
+    // raw — once — so we don't double-discount conservative or double-boost
+    // aggressive on the incremental new-business portion.
     for (const scenario of ['conservative', 'moderate', 'aggressive'] as Scenario[]) {
       adjusted[scenario] = projections[scenario].map((p) => {
-        const boost = whatIfRevenue * SCENARIO_CONFIG[scenario].multiplier;
         return {
           ...p,
-          revenue: p.revenue + boost,
-          net: p.revenue + boost - p.expenses,
+          revenue: p.revenue + whatIfRevenue,
+          net: p.revenue + whatIfRevenue - p.expenses,
         };
       });
     }

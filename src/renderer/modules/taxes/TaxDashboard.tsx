@@ -11,7 +11,13 @@ import {
 import { format as fmtDate } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, roundCents } from '../../lib/format';
+import {
+  FEDERAL_BRACKETS_2025,
+  STANDARD_DEDUCTION_2025,
+  calcFederalTaxAnnual,
+  type FilingStatus,
+} from '../../lib/tax-brackets';
 
 // ─── Types ──────────────────────────────────────────────
 interface QuarterPayment {
@@ -23,27 +29,8 @@ interface QuarterPayment {
 }
 
 
-// ─── Federal Tax Brackets (Simplified 2024) ─────────────
-const FEDERAL_BRACKETS = [
-  { min: 0, max: 11600, rate: 0.10 },
-  { min: 11600, max: 47150, rate: 0.12 },
-  { min: 47150, max: 100525, rate: 0.22 },
-  { min: 100525, max: 191950, rate: 0.24 },
-  { min: 191950, max: Infinity, rate: 0.32 },
-];
-
 const SE_TAX_RATE = 0.153;
 const SE_INCOME_FACTOR = 0.9235;
-
-function calcFederalTax(taxableIncome: number): number {
-  let tax = 0;
-  for (const bracket of FEDERAL_BRACKETS) {
-    if (taxableIncome <= bracket.min) break;
-    const taxable = Math.min(taxableIncome, bracket.max) - bracket.min;
-    tax += taxable * bracket.rate;
-  }
-  return tax;
-}
 
 function calcSelfEmploymentTax(netIncome: number): number {
   const seIncome = netIncome * SE_INCOME_FACTOR;
@@ -101,6 +88,11 @@ const TaxDashboard: React.FC = () => {
   const [ytdExpenses, setYtdExpenses] = useState(0);
   const [taxPayments, setTaxPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Filing status drives the bracket table and standard deduction.
+  // Default to single; can be wired to a settings field later.
+  const [filingStatus] = useState<FilingStatus>('single');
+  const FEDERAL_BRACKETS = FEDERAL_BRACKETS_2025[filingStatus];
+  const STD_DEDUCTION = STANDARD_DEDUCTION_2025[filingStatus];
 
   const currentYear = new Date().getFullYear();
   const yearStart = `${currentYear}-01-01`;
@@ -142,26 +134,37 @@ const TaxDashboard: React.FC = () => {
   }, [activeCompany, currentYear, yearStart, yearEnd]);
 
   const netIncome = useMemo(() => Math.max(0, ytdIncome - ytdExpenses), [ytdIncome, ytdExpenses]);
-  const federalTax = useMemo(() => calcFederalTax(netIncome), [netIncome]);
+  // Apply filing-status-aware standard deduction before bracket calc.
+  const taxableIncome = useMemo(() => Math.max(0, netIncome - STD_DEDUCTION), [netIncome, STD_DEDUCTION]);
+  const federalTax = useMemo(() => calcFederalTaxAnnual(taxableIncome, filingStatus), [taxableIncome, filingStatus]);
+  // SE tax is computed on net SE earnings, NOT on taxable income after std deduction.
   const seTax = useMemo(() => calcSelfEmploymentTax(netIncome), [netIncome]);
-  const totalEstimatedTax = federalTax + seTax;
-  const quarterlyAmount = totalEstimatedTax / 4;
+  const totalEstimatedTax = roundCents(federalTax + seTax);
+
+  // Quarterly amounts: round Q1-Q3 to cents, stuff remainder into Q4 so the
+  // four rows sum to exactly totalEstimatedTax (no penny drift).
+  const quarterlyAmounts = useMemo(() => {
+    const q = roundCents(totalEstimatedTax / 4);
+    const q4 = roundCents(totalEstimatedTax - q * 3);
+    return [q, q, q, q4];
+  }, [totalEstimatedTax]);
 
   const quarters = useMemo(() => {
     const dueDates = getQuarterlyDueDates(currentYear);
-    return dueDates.map((q) => {
+    return dueDates.map((q, i) => {
       const paymentsForQ = taxPayments.filter(
         (p) => p.period === q.quarter || p.period === q.quarter.split(' ')[0]
       );
       const paidAmount = paymentsForQ.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+      const amount = quarterlyAmounts[i];
       return {
         ...q,
-        amount: quarterlyAmount,
-        paid: quarterlyAmount > 0 && paidAmount >= quarterlyAmount,
+        amount,
+        paid: amount > 0 && paidAmount >= amount,
         paidAmount,
       } as QuarterPayment;
     });
-  }, [currentYear, taxPayments, quarterlyAmount]);
+  }, [currentYear, taxPayments, quarterlyAmounts]);
 
   const nextDue = quarters.find((q) => !q.paid && q.dueDate >= today);
 
@@ -306,6 +309,8 @@ const TaxDashboard: React.FC = () => {
             {quarters.map((q) => {
               const remaining = Math.max(0, q.amount - q.paidAmount);
               const overdue = !q.paid && q.dueDate < today;
+              // Flag quarters where the user paid MORE than the estimated amount.
+              const overpaid = q.amount > 0 && q.paidAmount > q.amount + 0.005;
               return (
                 <tr key={q.quarter}>
                   <td className="text-text-primary font-medium text-sm">{q.quarter}</td>
@@ -322,7 +327,11 @@ const TaxDashboard: React.FC = () => {
                     {formatCurrency(remaining)}
                   </td>
                   <td className="text-center">
-                    {q.paid ? (
+                    {overpaid ? (
+                      <span className="block-badge block-badge-purple inline-flex items-center gap-1" title={`Paid ${formatCurrency(q.paidAmount - q.amount)} above estimated`}>
+                        <CheckCircle size={12} /> Overpaid
+                      </span>
+                    ) : q.paid ? (
                       <span className="block-badge block-badge-income inline-flex items-center gap-1">
                         <CheckCircle size={12} /> Paid
                       </span>

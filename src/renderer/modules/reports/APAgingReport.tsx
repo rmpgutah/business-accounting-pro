@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, differenceInCalendarDays, parseISO, startOfDay } from 'date-fns';
 import { Printer, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -82,11 +82,13 @@ const APAgingReport: React.FC = () => {
 
         if (cancelled) return;
 
-        const today = new Date();
+        // startOfDay + differenceInCalendarDays so DST and time-of-day don't
+        // shift bills across bucket boundaries.
+        const today = startOfDay(new Date());
         const mapped: AgingEntry[] = (rows ?? []).map((row) => {
           const amountDue = (Number(row.total) || 0) - (Number(row.amount_paid) || 0);
-          const dueDate = row.due_date ? parseISO(row.due_date) : today;
-          const daysOutstanding = Math.max(0, differenceInDays(today, dueDate));
+          const dueDate = row.due_date ? startOfDay(parseISO(row.due_date)) : today;
+          const daysOutstanding = Math.max(0, differenceInCalendarDays(today, dueDate));
           return {
             id: row.id,
             billNumber: row.bill_number || row.id,

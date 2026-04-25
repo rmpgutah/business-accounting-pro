@@ -3167,34 +3167,61 @@ export function registerIpcHandlers(): void {
     const asset = dbInstance.prepare('SELECT * FROM fixed_assets WHERE id = ?').get(assetId) as any;
     if (!asset) return [];
 
+    const cents = (n: number) => Math.round(n * 100) / 100;
+
     const schedule: any[] = [];
     const cost = asset.purchase_price || 0;
     const salvage = asset.salvage_value || 0;
     const life = asset.useful_life_years || 5;
     const startDate = new Date(asset.purchase_date);
     let bookValue = cost;
-    const depreciable = cost - salvage;
+    const depreciable = Math.max(0, cost - salvage);
+    const method = asset.depreciation_method;
 
     for (let year = 1; year <= life; year++) {
       let annualDep = 0;
-      if (asset.depreciation_method === 'straight_line') {
+      if (method === 'straight_line') {
         annualDep = depreciable / life;
-      } else if (asset.depreciation_method === 'double_declining') {
-        annualDep = Math.min(bookValue * (2 / life), bookValue - salvage);
-      } else if (asset.depreciation_method === 'sum_of_years_digits') {
+      } else if (method === 'double_declining') {
+        // Iterate on declining book value. Switch to straight-line over the
+        // remaining life when SL would yield a larger deduction (standard
+        // DDB-with-crossover convention used by IRS Pub 946 examples).
+        const rate = 2 / life;
+        const ddbDep = (bookValue - salvage) * rate;
+        const remainingYears = life - year + 1;
+        const slDep = (bookValue - salvage) / remainingYears;
+        annualDep = Math.max(ddbDep, slDep);
+      } else if (method === 'sum_of_years_digits') {
         const remaining = life - year + 1;
         const sumYears = (life * (life + 1)) / 2;
         annualDep = (remaining / sumYears) * depreciable;
       }
-      annualDep = Math.max(0, annualDep);
-      bookValue = Math.max(salvage, bookValue - annualDep);
+
+      // Salvage floor — never deduct more than the gap to salvage.
+      annualDep = Math.max(0, Math.min(annualDep, bookValue - salvage));
+      annualDep = cents(annualDep);
+
+      // Last period absorbs rounding drift so the schedule closes exactly
+      // on (cost - salvage). Without this 0.01-cent crumbs accumulate and
+      // the final book value drifts off salvage by a few cents.
+      if (year === life) {
+        const accumSoFar = schedule.reduce((s, e) => s + e.depreciation_amount, 0);
+        annualDep = cents(depreciable - accumSoFar);
+        if (annualDep < 0) annualDep = 0;
+      }
+
+      bookValue = cents(bookValue - annualDep);
+      if (bookValue < salvage) bookValue = salvage;
+
       const d = new Date(startDate);
       d.setFullYear(d.getFullYear() + year);
       schedule.push({
         year,
         period: d.toISOString().slice(0, 10),
+        period_label: `Year ${year}`,
         depreciation_amount: annualDep,
-        accumulated: cost - bookValue,
+        accumulated: cents(cost - bookValue),
+        accumulated_depreciation: cents(cost - bookValue),
         book_value: bookValue,
       });
     }

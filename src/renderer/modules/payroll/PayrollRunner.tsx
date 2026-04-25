@@ -3,6 +3,17 @@ import { Calculator, DollarSign, ArrowLeft, FileText, Printer, AlertTriangle } f
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import { roundCents } from '../../lib/format';
+import {
+  calcFederalTaxAnnual,
+  SS_RATE,
+  SS_WAGE_BASE_2025,
+  MEDICARE_RATE,
+  ADDL_MEDICARE_RATE,
+  ADDL_MEDICARE_THRESHOLD,
+  FUTA_RATE,
+  FUTA_WAGE_BASE,
+} from '../../lib/tax-brackets';
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -65,41 +76,16 @@ const PAY_PERIODS_MAP: Record<string, number> = {
   monthly: 12,
 };
 
+// DEFAULT_HOURS_MAP is a fallback only — employers should enter actual hours
+// per period. Semimonthly = 2080/24 ≈ 86.6667; monthly = 2080/12 ≈ 173.3333.
 const DEFAULT_HOURS_MAP: Record<string, number> = {
   weekly: 40,
   biweekly: 80,
-  semimonthly: 86.67,
-  monthly: 173.33,
+  semimonthly: 2080 / 24,
+  monthly: 2080 / 12,
 };
 
-const SS_RATE = 0.062;
-const SS_WAGE_BASE = 168600;
-const MEDICARE_RATE = 0.0145;
 const FALLBACK_STATE_TAX_RATE = 0.05;
-
-// ─── Federal Tax Brackets (2024 Single) ─────────────────
-const FEDERAL_BRACKETS = [
-  { limit: 11600, rate: 0.10 },
-  { limit: 47150, rate: 0.12 },
-  { limit: 100525, rate: 0.22 },
-  { limit: 191950, rate: 0.24 },
-  { limit: 243725, rate: 0.32 },
-  { limit: 609350, rate: 0.35 },
-  { limit: Infinity, rate: 0.37 },
-];
-
-// ─── Tax Calculation Helpers ────────────────────────────
-function calcFederalTaxAnnual(annualIncome: number): number {
-  let tax = 0;
-  let prev = 0;
-  for (const bracket of FEDERAL_BRACKETS) {
-    if (annualIncome <= prev) break;
-    const taxable = Math.min(annualIncome, bracket.limit) - prev;
-    tax += taxable * bracket.rate;
-    prev = bracket.limit;
-  }
-  return tax;
-}
 
 // Feature 14: Federal minimum wage constant
 const FEDERAL_MINIMUM_WAGE = 7.25;
@@ -107,9 +93,16 @@ const FEDERAL_MINIMUM_WAGE = 7.25;
 // Feature 24: Default workers' comp rate (configurable)
 const DEFAULT_WORKERS_COMP_RATE = 0.01; // 1% of gross
 
-// Feature 10: Employer tax rates
-const FUTA_RATE = 0.006; // 0.6% (after SUTA credit)
-const FUTA_WAGE_BASE = 7000;
+interface YtdInfo {
+  /** YTD gross wages prior to this run. */
+  ytdGross: number;
+  /** YTD Social Security taxable wages (≈ post-pretax gross) prior to this run. */
+  ytdSsWages: number;
+  /** YTD Medicare-taxable wages prior to this run. */
+  ytdMedicareWages: number;
+  /** YTD FUTA-taxable wages prior to this run. */
+  ytdFutaWages: number;
+}
 
 function calcPayStub(
   emp: Employee,
@@ -118,7 +111,9 @@ function calcPayStub(
   empDeductions?: EmployeeDeduction[],
   runType?: string,
   periodStart?: string,
-  periodEnd?: string
+  periodEnd?: string,
+  bonusAmount?: number,
+  ytd?: YtdInfo,
 ): PayCalc {
   const periods = PAY_PERIODS_MAP[emp.pay_schedule] ?? 26;
   const defaultHours = DEFAULT_HOURS_MAP[emp.pay_schedule] ?? 80;
@@ -145,18 +140,26 @@ function calcPayStub(
     }
   }
 
-  // Gross pay
-  let gross_pay: number;
+  // Gross pay — split into "regular" (subject to bracket withholding) and
+  // "supplemental" (flat 22% per IRS Pub. 15-T 2025) so a bonus run only
+  // applies the flat rate to the bonus portion, not the entire paycheck.
+  let regular_gross: number;
   if (emp.pay_type === 'salary') {
-    gross_pay = (emp.pay_rate / periods) * prorationFactor;
+    regular_gross = (emp.pay_rate / periods) * prorationFactor;
     hours_regular = 0;
   } else {
     hours_regular = Math.min(hours, overtimeThreshold);
     hours_overtime = Math.max(0, hours - overtimeThreshold);
     regular_pay = hours_regular * emp.pay_rate;
     overtime_pay = hours_overtime * emp.pay_rate * 1.5;
-    gross_pay = regular_pay + overtime_pay;
+    regular_gross = regular_pay + overtime_pay;
   }
+  // Bonus / supplemental wages: applied only to the bonus portion. A "bonus"
+  // run with no entered amount falls back to treating the regular pay as the
+  // supplemental amount (legacy behavior).
+  const bonus = runType === 'bonus' ? Math.max(0, Number(bonusAmount ?? regular_gross)) : 0;
+  const regular_portion = runType === 'bonus' && bonusAmount !== undefined ? regular_gross : (runType === 'bonus' ? 0 : regular_gross);
+  const gross_pay = regular_portion + bonus;
 
   const deductions = empDeductions ?? [];
 
@@ -170,39 +173,54 @@ function calcPayStub(
       return sum + amt;
     }, 0);
 
-  // Taxable gross (after pre-tax deductions)
+  // Taxable gross (after pre-tax deductions). Pre-tax deductions reduce
+  // the regular portion first (they're typically benefit elections that
+  // don't apply to a one-off bonus run, but for simplicity we apply them
+  // proportionally to the combined gross).
   const taxableGross = Math.max(0, gross_pay - pre_tax_deductions);
+  const taxableRegular = Math.max(0, regular_portion - Math.min(pre_tax_deductions, regular_portion));
+  const taxableBonus = Math.max(0, taxableGross - taxableRegular);
 
-  // Annualized taxable gross for tax bracket + SS wage base
-  const annualTaxableGross = taxableGross * periods;
+  // Annualized regular taxable gross for bracket calc.
+  const annualTaxableRegular = taxableRegular * periods;
 
-  // Federal tax
-  let federal_tax: number;
-  if (runType === 'bonus') {
-    // IRS supplemental wage rate: flat 22% for most employees
-    federal_tax = taxableGross * 0.22;
-  } else {
-    // Standard bracket-based calculation
-    const federalAnnual = calcFederalTaxAnnual(annualTaxableGross);
-    federal_tax = federalAnnual / periods;
-  }
+  // Federal tax: brackets on regular portion + flat 22% on supplemental.
+  const federalAnnualRegular = calcFederalTaxAnnual(annualTaxableRegular, 'single');
+  const federal_tax = (federalAnnualRegular / periods) + (taxableBonus * 0.22);
 
   // State tax: use engine result if provided, else flat fallback on taxable gross
   const state_tax = stateTaxOverride !== undefined
     ? stateTaxOverride
     : taxableGross * FALLBACK_STATE_TAX_RATE;
 
-  // Social Security (6.2% up to wage base, on taxable gross)
-  const ssAnnualTaxable = Math.min(annualTaxableGross, SS_WAGE_BASE);
-  const social_security = (ssAnnualTaxable * SS_RATE) / periods;
+  // ─── Social Security (6.2% up to wage base, per-employee per-year) ──
+  // Track YTD wages and only apply 6.2% to the portion of THIS paycheck
+  // that fits under the cap. Source: IRC §3121(a)(1), 2025 OASDI max $176,100.
+  const ytdSs = ytd?.ytdSsWages ?? 0;
+  const ssRemainingCap = Math.max(0, SS_WAGE_BASE_2025 - ytdSs);
+  const ssTaxableThisRun = Math.min(taxableGross, ssRemainingCap);
+  const social_security = ssTaxableThisRun * SS_RATE;
 
-  // Medicare (1.45%, on taxable gross)
-  const medicare = taxableGross * MEDICARE_RATE;
+  // ─── Medicare (1.45%) + Additional 0.9% surtax ─────────────────────
+  // Employer must withhold the additional 0.9% on wages exceeding $200,000
+  // YTD regardless of filing status (IRS Pub. 15, "Additional Medicare Tax").
+  const medicare_base = taxableGross * MEDICARE_RATE;
+  const ytdMed = ytd?.ytdMedicareWages ?? 0;
+  const overThreshold = Math.max(0, (ytdMed + taxableGross) - ADDL_MEDICARE_THRESHOLD);
+  const surtaxBase = Math.min(taxableGross, overThreshold);
+  const medicare = medicare_base + (surtaxBase * ADDL_MEDICARE_RATE);
 
-  // Feature 10: Employer's matching taxes
-  const employer_ss = social_security; // Employer matches 6.2%
-  const employer_medicare = medicare; // Employer matches 1.45%
-  const employer_futa = Math.min(annualTaxableGross, FUTA_WAGE_BASE) * FUTA_RATE / periods;
+  // ─── Employer match + FUTA ─────────────────────────────────────────
+  // Employer matches 6.2% SS / 1.45% Medicare. Employer does NOT match
+  // the additional 0.9% Medicare surtax (IRC §3101(b)(2)).
+  const employer_ss = ssTaxableThisRun * SS_RATE;
+  const employer_medicare = medicare_base;
+
+  // FUTA: per-employee per-year on first $7,000. Track YTD and stop at cap.
+  const ytdFuta = ytd?.ytdFutaWages ?? 0;
+  const futaRemaining = Math.max(0, FUTA_WAGE_BASE - ytdFuta);
+  const futaTaxableThisRun = Math.min(gross_pay, futaRemaining);
+  const employer_futa = futaTaxableThisRun * FUTA_RATE;
 
   // Post-tax deductions (garnishments + non-pretax deductions)
   const post_tax_deductions = deductions
@@ -217,24 +235,26 @@ function calcPayStub(
   // Net pay
   const net_pay = gross_pay - federal_tax - state_tax - social_security - medicare - pre_tax_deductions - post_tax_deductions;
 
+  // Round all money fields to whole cents at the boundary so 9 stub fields
+  // sum cleanly in totals/journals (avoids 0.30000000000000004 artifacts).
   return {
     employee: emp,
     hours,
     hours_regular,
     hours_overtime,
-    regular_pay,
-    overtime_pay,
-    gross_pay,
-    federal_tax,
-    state_tax,
-    social_security,
-    medicare,
-    pre_tax_deductions,
-    post_tax_deductions,
-    net_pay,
-    employer_ss,
-    employer_medicare,
-    employer_futa,
+    regular_pay: roundCents(regular_pay),
+    overtime_pay: roundCents(overtime_pay),
+    gross_pay: roundCents(gross_pay),
+    federal_tax: roundCents(federal_tax),
+    state_tax: roundCents(state_tax),
+    social_security: roundCents(social_security),
+    medicare: roundCents(medicare),
+    pre_tax_deductions: roundCents(pre_tax_deductions),
+    post_tax_deductions: roundCents(post_tax_deductions),
+    net_pay: roundCents(net_pay),
+    employer_ss: roundCents(employer_ss),
+    employer_medicare: roundCents(employer_medicare),
+    employer_futa: roundCents(employer_futa),
   };
 }
 
@@ -288,6 +308,8 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   // Async-computed tax/deduction data
   const [stateTaxMap, setStateTaxMap] = useState<Record<string, number>>({});
   const [deductionsByEmployee, setDeductionsByEmployee] = useState<Record<string, EmployeeDeduction[]>>({});
+  // YTD wages per employee for FICA/FUTA caps + Medicare surtax (per-employee per-year).
+  const [ytdMap, setYtdMap] = useState<Record<string, YtdInfo>>({});
 
   // Step 1: pay period dates
   const [periodStart, setPeriodStart] = useState('');
@@ -403,12 +425,22 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
   // ─── Calculations ─────────────────────────────────────
   const calculations = useMemo(() => {
     return employees.map((emp) =>
-      calcPayStub(emp, hoursMap[emp.id], adjustedStateTaxMap[emp.id], deductionsByEmployee[emp.id], runType, periodStart, periodEnd)
+      calcPayStub(
+        emp,
+        hoursMap[emp.id],
+        adjustedStateTaxMap[emp.id],
+        deductionsByEmployee[emp.id],
+        runType,
+        periodStart,
+        periodEnd,
+        bonusMap[emp.id],
+        ytdMap[emp.id],
+      )
     );
-  }, [employees, hoursMap, adjustedStateTaxMap, deductionsByEmployee, runType, periodStart, periodEnd]);
+  }, [employees, hoursMap, adjustedStateTaxMap, deductionsByEmployee, runType, periodStart, periodEnd, bonusMap, ytdMap]);
 
   const totals = useMemo(() => {
-    return calculations.reduce(
+    const raw = calculations.reduce(
       (acc, c) => ({
         gross_pay: acc.gross_pay + c.gross_pay,
         federal_tax: acc.federal_tax + c.federal_tax,
@@ -418,13 +450,26 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         pre_tax_deductions: acc.pre_tax_deductions + c.pre_tax_deductions,
         post_tax_deductions: acc.post_tax_deductions + c.post_tax_deductions,
         net_pay: acc.net_pay + c.net_pay,
-        // Feature 10/16: Employer cost totals
         employer_ss: acc.employer_ss + c.employer_ss,
         employer_medicare: acc.employer_medicare + c.employer_medicare,
         employer_futa: acc.employer_futa + c.employer_futa,
       }),
       { gross_pay: 0, federal_tax: 0, state_tax: 0, social_security: 0, medicare: 0, pre_tax_deductions: 0, post_tax_deductions: 0, net_pay: 0, employer_ss: 0, employer_medicare: 0, employer_futa: 0 }
     );
+    // Round totals to cents — float sums of rounded stubs can still drift.
+    return {
+      gross_pay: roundCents(raw.gross_pay),
+      federal_tax: roundCents(raw.federal_tax),
+      state_tax: roundCents(raw.state_tax),
+      social_security: roundCents(raw.social_security),
+      medicare: roundCents(raw.medicare),
+      pre_tax_deductions: roundCents(raw.pre_tax_deductions),
+      post_tax_deductions: roundCents(raw.post_tax_deductions),
+      net_pay: roundCents(raw.net_pay),
+      employer_ss: roundCents(raw.employer_ss),
+      employer_medicare: roundCents(raw.employer_medicare),
+      employer_futa: roundCents(raw.employer_futa),
+    };
   }, [calculations]);
 
   // ─── Step Navigation ──────────────────────────────────
@@ -467,6 +512,36 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
       }
     });
     setHoursMap(defaults);
+
+    // Fetch YTD wages per employee for the pay-date's calendar year.
+    // Used to enforce per-employee SS wage cap, FUTA cap, and Medicare
+    // 0.9% additional-tax threshold. SS-taxable wages ≈ taxable gross
+    // (gross - pretax deductions); ytd_taxes does not give us a wage
+    // breakdown, so we approximate using ytd_gross as the wage proxy.
+    try {
+      const year = new Date(payDate + 'T12:00:00').getFullYear();
+      const ytdMapNew: Record<string, YtdInfo> = {};
+      await Promise.all(
+        employees.map(async (emp) => {
+          try {
+            const ytd = await api.payrollYtd(emp.id, year);
+            const g = Number(ytd.ytd_gross || 0);
+            ytdMapNew[emp.id] = {
+              ytdGross: g,
+              ytdSsWages: g,
+              ytdMedicareWages: g,
+              ytdFutaWages: g,
+            };
+          } catch {
+            ytdMapNew[emp.id] = { ytdGross: 0, ytdSsWages: 0, ytdMedicareWages: 0, ytdFutaWages: 0 };
+          }
+        })
+      );
+      setYtdMap(ytdMapNew);
+    } catch {
+      setYtdMap({});
+    }
+
     setStep(2);
   };
 
@@ -925,7 +1000,20 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                     className="ml-1 text-accent-blue text-[10px] underline"
                     onClick={() => {
                       const rate = prompt('Enter workers\' comp rate (e.g., 1.0 for 1%):', String(workersCompRate * 100));
-                      if (rate !== null && !isNaN(parseFloat(rate))) setWorkersCompRate(parseFloat(rate) / 100);
+                      if (rate === null) return;
+                      const parsed = parseFloat(rate);
+                      if (!Number.isFinite(parsed)) {
+                        alert('Invalid input — enter a number like "1.0".');
+                        return;
+                      }
+                      const decimal = parsed / 100;
+                      // Validate range: 0% to 100%. WC rates are typically <10%
+                      // but accept up to 100% for unusual jurisdictions.
+                      if (decimal < 0 || decimal > 1) {
+                        alert('Workers\' comp rate must be between 0% and 100%.');
+                        return;
+                      }
+                      setWorkersCompRate(decimal);
                     }}
                   >
                     edit

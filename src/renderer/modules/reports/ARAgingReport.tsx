@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Printer, Download } from 'lucide-react';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, differenceInCalendarDays, parseISO, startOfDay } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -87,11 +87,16 @@ const ARAgingReport: React.FC = () => {
 
         if (cancelled) return;
 
-        const today = new Date();
+        // Use startOfDay so DST shifts and time-of-day don't push invoices
+        // across bucket boundaries. differenceInCalendarDays counts whole
+        // calendar days, the right unit for an aging report.
+        const today = startOfDay(new Date());
         const mapped: AgingEntry[] = (rows ?? []).map((row) => {
           const amountDue = (Number(row.total) || 0) - (Number(row.amount_paid) || 0);
-          const dueDate = row.due_date ? parseISO(row.due_date) : today;
-          const daysOutstanding = Math.max(0, differenceInDays(today, dueDate));
+          const dueDate = row.due_date ? startOfDay(parseISO(row.due_date)) : today;
+          // Negative diffs (due date in the future) clamp to 0 → "current"
+          // bucket, which already covers 0–30 days outstanding.
+          const daysOutstanding = Math.max(0, differenceInCalendarDays(today, dueDate));
           return {
             id: row.id,
             invoiceNumber: row.invoice_number || row.id,
