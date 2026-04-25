@@ -502,6 +502,92 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE pay_stubs ADD COLUMN ytd_state_tax REAL DEFAULT 0",
   "ALTER TABLE pay_stubs ADD COLUMN ytd_social_security REAL DEFAULT 0",
   "ALTER TABLE pay_stubs ADD COLUMN ytd_medicare REAL DEFAULT 0",
+  // Expense capture features (2026-04-23) — multi-currency, mileage, per-diem, additional receipts, foreign tax, notes
+  "ALTER TABLE expenses ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE expenses ADD COLUMN exchange_rate REAL DEFAULT 1",
+  "ALTER TABLE expenses ADD COLUMN tax_inclusive INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN tax_rate REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN entry_mode TEXT DEFAULT 'standard'",
+  "ALTER TABLE expenses ADD COLUMN odometer_start REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN odometer_end REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN miles REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN mileage_rate REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN per_diem_location TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN per_diem_days REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN per_diem_rate REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN receipts_json TEXT DEFAULT '[]'",
+  "ALTER TABLE expenses ADD COLUMN notes TEXT DEFAULT ''",
+  // ── Expense categorization, tax & compliance metadata (2026-04-23) ──
+  // Categorization
+  "ALTER TABLE categories ADD COLUMN monthly_cap REAL DEFAULT 0",
+  "ALTER TABLE categories ADD COLUMN default_account_id TEXT DEFAULT ''",
+  "ALTER TABLE categories ADD COLUMN required_fields TEXT DEFAULT '[]'",
+  "ALTER TABLE expenses ADD COLUMN expense_class TEXT DEFAULT ''",
+  // Tax
+  "ALTER TABLE expense_line_items ADD COLUMN tax_rate REAL DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN tax_jurisdictions TEXT DEFAULT '[]'",
+  "ALTER TABLE expenses ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
+  "ALTER TABLE expenses ADD COLUMN schedule_c_line TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN foreign_tax_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN tax_year_override INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN vendor_is_1099 INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN vendor_w9_status TEXT DEFAULT ''",
+  // Compliance
+  "ALTER TABLE expenses ADD COLUMN lost_receipt_affidavit TEXT DEFAULT ''",
+  // ── Expense Approval & Reimbursement Workflow (2026-04-23) ─────────
+  "ALTER TABLE expenses ADD COLUMN approval_status TEXT DEFAULT 'draft'",
+  "ALTER TABLE expenses ADD COLUMN approver_id TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN approval_token TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN reimbursement_batch_id TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN payroll_run_id TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN is_locked INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN policy_override_comment TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN submitted_at TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN employee_id TEXT DEFAULT ''",
+  `CREATE TABLE IF NOT EXISTS expense_approval_steps (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    step_order INTEGER NOT NULL DEFAULT 0,
+    approver_id TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    decided_at TEXT DEFAULT '',
+    comment TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_eas_expense ON expense_approval_steps(expense_id)",
+  "CREATE INDEX IF NOT EXISTS idx_eas_approver ON expense_approval_steps(approver_id, status)",
+  `CREATE TABLE IF NOT EXISTS expense_comments (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    user_id TEXT DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_ecmt_expense ON expense_comments(expense_id)",
+  `CREATE TABLE IF NOT EXISTS reimbursement_batches (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL DEFAULT '',
+    period_start TEXT DEFAULT '',
+    period_end TEXT DEFAULT '',
+    total_amount REAL DEFAULT 0,
+    expense_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'open',
+    paid_date TEXT DEFAULT '',
+    payroll_run_id TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_reim_batch_company ON reimbursement_batches(company_id, employee_id)",
+  `CREATE TABLE IF NOT EXISTS period_locks (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    locked_through_date TEXT NOT NULL DEFAULT '',
+    locked_by TEXT DEFAULT '',
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -661,6 +747,8 @@ const tablesWithoutUpdatedAt = new Set([
   'debt_audit_log', 'debt_payment_matches',
   // Advanced debt collection — created_at only
   'debt_skip_traces', 'debt_campaigns',
+  // Expense workflow — created_at only
+  'expense_approval_steps', 'expense_comments', 'reimbursement_batches', 'period_locks',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

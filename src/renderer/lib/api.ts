@@ -598,6 +598,54 @@ const api = {
       window.electronAPI.invoke('stripe:testConnection', { companyId }),
   },
 
+  // ─── Expense Approval & Reimbursement ──────────────
+  expenseCheckPolicy: (expense: any, lineItems?: any[]) =>
+    window.electronAPI.invoke('expense:check-policy', { expense, lineItems }),
+  expenseCheckDuplicate: (companyId: string, vendorId: string | undefined, amount: number, date: string, excludeId?: string) =>
+    window.electronAPI.invoke('expense:check-duplicate', { companyId, vendorId, amount, date, excludeId }),
+  expenseCheckPeriodLock: (companyId: string, date: string) =>
+    window.electronAPI.invoke('expense:check-period-lock', { companyId, date }),
+  expenseSubmit: (expenseId: string, submittedBy: string, approverId?: string) =>
+    window.electronAPI.invoke('expense:submit', { expenseId, submittedBy, approverId }),
+  expenseDecide: (expenseId: string, userId: string, decision: 'approve' | 'reject' | 'needs_info', comment?: string, stepId?: string) =>
+    window.electronAPI.invoke('expense:decide', { expenseId, userId, decision, comment, stepId }),
+  expenseApprovalQueue: (companyId: string, userId: string) =>
+    window.electronAPI.invoke('expense:approval-queue', { companyId, userId }),
+  expenseSetApprovalChain: (expenseId: string, approverIds: string[]) =>
+    window.electronAPI.invoke('expense:set-approval-chain', { expenseId, approverIds }),
+  expenseListApprovalSteps: (expenseId: string) =>
+    window.electronAPI.invoke('expense:list-approval-steps', { expenseId }),
+  expenseListComments: (expenseId: string) =>
+    window.electronAPI.invoke('expense:list-comments', { expenseId }),
+  expenseAddComment: (expenseId: string, userId: string, body: string) =>
+    window.electronAPI.invoke('expense:add-comment', { expenseId, userId, body }),
+  expenseGenerateToken: (expenseId: string) =>
+    window.electronAPI.invoke('expense:generate-token', { expenseId }),
+  expenseValidateToken: (expenseId: string, token: string) =>
+    window.electronAPI.invoke('expense:validate-token', { expenseId, token }),
+  expenseLock: (expenseId: string, locked: boolean) =>
+    window.electronAPI.invoke('expense:lock', { expenseId, locked }),
+  expenseApprovalSla: (companyId: string) =>
+    window.electronAPI.invoke('expense:approval-sla', { companyId }),
+  reimbursableForEmployee: (companyId: string, employeeId: string, periodStart?: string, periodEnd?: string) =>
+    window.electronAPI.invoke('expense:reimbursable-for-employee', { companyId, employeeId, periodStart, periodEnd }),
+  reimbursementBalances: (companyId: string) =>
+    window.electronAPI.invoke('expense:reimbursement-balances', { companyId }),
+  reimbursementCreateBatch: (companyId: string, employeeId: string, expenseIds: string[], periodStart?: string, periodEnd?: string, notes?: string) =>
+    window.electronAPI.invoke('reimbursement:create-batch', { companyId, employeeId, expenseIds, periodStart, periodEnd, notes }),
+  reimbursementMarkPaidPayroll: (batchId: string, payrollRunId: string) =>
+    window.electronAPI.invoke('reimbursement:mark-paid-payroll', { batchId, payrollRunId }),
+  reimbursementAging: (companyId: string, days?: number) =>
+    window.electronAPI.invoke('reimbursement:aging', { companyId, days }),
+  reimbursementCheckThreshold: (companyId: string, employeeId: string) =>
+    window.electronAPI.invoke('reimbursement:check-threshold', { companyId, employeeId }),
+  reimbursementListBatches: (companyId: string) =>
+    window.electronAPI.invoke('reimbursement:list-batches', { companyId }),
+  reimbursementBatchDetail: (batchId: string) =>
+    window.electronAPI.invoke('reimbursement:batch-detail', { batchId }),
+  reimbursementAchExport: (batchId: string) =>
+    window.electronAPI.invoke('reimbursement:ach-export', { batchId }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

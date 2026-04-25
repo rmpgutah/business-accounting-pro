@@ -1,15 +1,21 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Receipt, Building2 } from 'lucide-react';
+import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3 } from 'lucide-react';
 import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
+import ExpenseDetail from './ExpenseDetail';
+import ExpenseAnalytics from './ExpenseAnalytics';
 import VendorList from './VendorList';
 import VendorForm from './VendorForm';
 import VendorDetail from './VendorDetail';
+import ExpenseAuditReport from './ExpenseAuditReport';
+import ExpenseCategorySettings from './ExpenseCategorySettings';
+import ExpenseApprovalQueue from './ExpenseApprovalQueue';
+import ReimbursementRun from './ReimbursementRun';
 import { useAppStore } from '../../stores/appStore';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'expenses' | 'vendors';
-type ExpenseView = 'list' | 'form';
+type Tab = 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics';
+type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
 const TabBtn: React.FC<{
@@ -77,6 +83,11 @@ const ExpensesModule: React.FC = () => {
   const handleEditExpense = useCallback((id: string) => {
     setEditingExpenseId(id);
     setExpenseView('form');
+  }, []);
+
+  const handleViewExpense = useCallback((id: string) => {
+    setEditingExpenseId(id);
+    setExpenseView('detail');
   }, []);
 
   const handleExpenseBack = useCallback(() => {
@@ -152,6 +163,36 @@ const ExpensesModule: React.FC = () => {
           label="Vendors"
           onClick={() => switchTab('vendors')}
         />
+        <TabBtn
+          active={tab === 'approvals'}
+          icon={<CheckSquare size={16} />}
+          label="Approval Queue"
+          onClick={() => switchTab('approvals')}
+        />
+        <TabBtn
+          active={tab === 'reimbursement'}
+          icon={<Wallet size={16} />}
+          label="Reimbursement"
+          onClick={() => switchTab('reimbursement')}
+        />
+        <TabBtn
+          active={tab === 'audit'}
+          icon={<ShieldCheck size={16} />}
+          label="Audit Log"
+          onClick={() => switchTab('audit')}
+        />
+        <TabBtn
+          active={tab === 'analytics'}
+          icon={<BarChart3 size={16} />}
+          label="Analytics"
+          onClick={() => switchTab('analytics')}
+        />
+        <TabBtn
+          active={tab === 'settings'}
+          icon={<Settings size={16} />}
+          label="Settings"
+          onClick={() => switchTab('settings')}
+        />
       </div>
 
       {/* Content */}
@@ -160,6 +201,7 @@ const ExpensesModule: React.FC = () => {
           key={expenseKey}
           onNew={handleNewExpense}
           onEdit={handleEditExpense}
+          onView={handleViewExpense}
         />
       )}
 
@@ -170,6 +212,16 @@ const ExpensesModule: React.FC = () => {
           onSaved={handleExpenseSaved}
         />
       )}
+
+      {tab === 'expenses' && expenseView === 'detail' && editingExpenseId && (
+        <ExpenseDetail
+          expenseId={editingExpenseId}
+          onBack={handleExpenseBack}
+          onEdit={handleEditExpense}
+        />
+      )}
+
+      {tab === 'analytics' && <ExpenseAnalytics />}
 
       {tab === 'vendors' && vendorView === 'list' && (
         <VendorList
@@ -186,6 +238,18 @@ const ExpensesModule: React.FC = () => {
           onBack={handleVendorDetailBack}
           onEdit={handleEditVendor}
         />
+      )}
+
+      {tab === 'approvals' && <ExpenseApprovalQueue />}
+
+      {tab === 'reimbursement' && <ReimbursementRun />}
+
+      {tab === 'audit' && (
+        <ExpenseAuditReport onBack={() => setTab('expenses')} />
+      )}
+
+      {tab === 'settings' && (
+        <ExpenseCategorySettings onBack={() => setTab('expenses')} />
       )}
 
       {/* Vendor Modal */}
