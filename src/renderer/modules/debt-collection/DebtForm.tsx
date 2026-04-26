@@ -4,6 +4,10 @@ import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import {
+  DEBT_RISK, DEBT_SEGMENT, DEBT_ORIGINATION, DEBT_COLLECTABILITY,
+  ClassificationSelect, riskCategoryFromScore,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtFormData {
@@ -57,6 +61,11 @@ interface DebtFormData {
   collection_costs: number;
   agency_commission_rate: number;
   agency_commission_paid: number;
+  // Classifications
+  risk_category: string;
+  segment: string;
+  origination_type: string;
+  collectability: string;
 }
 
 interface DropdownOption {
@@ -148,6 +157,10 @@ const emptyForm: DebtFormData = {
   collection_costs: 0,
   agency_commission_rate: 0,
   agency_commission_paid: 0,
+  risk_category: '',
+  segment: '',
+  origination_type: '',
+  collectability: '',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -304,6 +317,10 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               collection_costs: Number(existing.collection_costs || 0),
               agency_commission_rate: Number(existing.agency_commission_rate || 0),
               agency_commission_paid: Number(existing.agency_commission_paid || 0),
+              risk_category: existing.risk_category ?? '',
+              segment: existing.segment ?? '',
+              origination_type: existing.origination_type ?? '',
+              collectability: existing.collectability ?? '',
             });
           }
         }
@@ -524,7 +541,21 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         collection_costs: form.collection_costs || null,
         agency_commission_rate: form.agency_commission_rate || null,
         agency_commission_paid: form.agency_commission_paid || null,
+        // Classifications (auto-categorize risk_category from existing risk_score on save)
+        risk_category: form.risk_category || '',
+        segment: form.segment || '',
+        origination_type: form.origination_type || '',
+        collectability: form.collectability || '',
       };
+      // Auto-categorize risk_category from risk_score if available and user hasn't picked one
+      try {
+        if (!payload.risk_category && isEditing && debtId) {
+          const cur = await api.get('debts', debtId);
+          if (cur && Number.isFinite(cur.risk_score)) {
+            payload.risk_category = riskCategoryFromScore(cur.risk_score);
+          }
+        }
+      } catch (_) { /* ignore */ }
 
       if (isEditing && debtId) {
         await api.update('debts', debtId, payload);
@@ -896,6 +927,33 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
               </select>
+            </div>
+
+            {/* Risk Category */}
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Risk Category</label>
+              <ClassificationSelect def={DEBT_RISK} value={form.risk_category} onChange={(v) => setForm(p => ({ ...p, risk_category: v }))} />
+            </div>
+
+            {/* Segment */}
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Segment</label>
+              <ClassificationSelect def={DEBT_SEGMENT} value={form.segment} onChange={(v) => setForm(p => ({ ...p, segment: v }))} />
+            </div>
+
+            {/* Origination Type */}
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Origination Type</label>
+              <ClassificationSelect def={DEBT_ORIGINATION} value={form.origination_type} onChange={(v) => setForm(p => ({ ...p, origination_type: v }))} />
+            </div>
+
+            {/* Collectability */}
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Collectability</label>
+              <ClassificationSelect def={DEBT_COLLECTABILITY} value={form.collectability} onChange={(v) => setForm(p => ({ ...p, collectability: v }))} />
+              {form.collectability === 'uncollectable' && (
+                <p className="mt-1 text-xs text-accent-warning">Uncollectable: consider triggering a write-off in journal entries.</p>
+              )}
             </div>
 
             {/* Assigned To */}

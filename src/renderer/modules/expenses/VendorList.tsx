@@ -4,6 +4,10 @@ import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import {
+  VENDOR_TYPE, VENDOR_APPROVAL, VENDOR_LOCATION, VENDOR_DIVERSITY,
+  ClassificationBadge, ClassificationBadges,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Vendor {
@@ -13,6 +17,10 @@ interface Vendor {
   phone?: string;
   status?: string;
   payment_terms?: number;
+  vendor_type?: string;
+  approval_status?: string;
+  location_type?: string;
+  diversity?: string;
 }
 
 interface VendorListProps {
@@ -141,6 +149,10 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Status</th>
+                <th>Type</th>
+                <th>Approval</th>
+                <th>Location</th>
+                <th>Diversity</th>
                 <th>Payment Terms</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -165,6 +177,10 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
                       {formatStatus(v.status).label}
                     </span>
                   </td>
+                  <td><ClassificationBadge def={VENDOR_TYPE} value={v.vendor_type} /></td>
+                  <td><ClassificationBadge def={VENDOR_APPROVAL} value={v.approval_status} /></td>
+                  <td><ClassificationBadge def={VENDOR_LOCATION} value={v.location_type} /></td>
+                  <td><ClassificationBadges def={VENDOR_DIVERSITY} values={v.diversity} /></td>
                   <td className="text-text-secondary">{v.payment_terms ? `Net ${v.payment_terms}` : '-'}</td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-2">

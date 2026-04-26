@@ -743,6 +743,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     if (requiresAffidavit && (!affidavit.statement.trim() || !affidavit.signed_name.trim())) {
       checks.push(`Receipt is missing and amount exceeds $${IRS_RECEIPT_THRESHOLD} — please complete the lost-receipt affidavit`);
     }
+    // Vendor classification: block expense from blocked vendor unless override comment in notes
+    if (selectedVendor && (selectedVendor as any).approval_status === 'blocked'
+        && !/^\s*override:/i.test(form.notes || '')) {
+      checks.push('Vendor is BLOCKED — start the Notes field with "Override: <reason>" to proceed.');
+    }
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);

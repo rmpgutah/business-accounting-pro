@@ -891,6 +891,234 @@ export function initDatabase(): Database.Database {
     comment TEXT DEFAULT ''
   )`,
   "CREATE INDEX IF NOT EXISTS idx_je_approvals_je ON je_approvals(journal_entry_id)",
+  // ── Universal Tags + Custom Fields (2026-04-23) ──
+  `CREATE TABLE IF NOT EXISTS tag_groups (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#6b7280',
+    allow_multiple INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS tags (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#6b7280',
+    group_id TEXT DEFAULT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    deleted_at TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_tags_company ON tags(company_id)",
+  "CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)",
+  `CREATE TABLE IF NOT EXISTS entity_tags (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS uq_entity_tags ON entity_tags(company_id, entity_type, entity_id, tag_id)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_tags_tag ON entity_tags(tag_id)",
+  `CREATE TABLE IF NOT EXISTS tag_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    entity_type TEXT NOT NULL,
+    when_condition_json TEXT NOT NULL DEFAULT '{}',
+    then_apply_tag_id TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS custom_field_definitions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    field_type TEXT NOT NULL DEFAULT 'text',
+    options_json TEXT NOT NULL DEFAULT '{}',
+    required INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    group_label TEXT NOT NULL DEFAULT '',
+    validation_json TEXT NOT NULL DEFAULT '{}',
+    show_on_print INTEGER NOT NULL DEFAULT 0,
+    deleted_at TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfd_key ON custom_field_definitions(company_id, entity_type, key)",
+  `CREATE TABLE IF NOT EXISTS custom_field_values (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    field_key TEXT NOT NULL,
+    value_text TEXT DEFAULT NULL,
+    value_number REAL DEFAULT NULL,
+    value_date TEXT DEFAULT NULL,
+    value_json TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfv_entity_key ON custom_field_values(company_id, entity_type, entity_id, field_key)",
+  "CREATE INDEX IF NOT EXISTS idx_cfv_lookup ON custom_field_values(company_id, entity_type, entity_id)",
+
+  // ─── Workflow + Numbering + Email Templates (2026-04-23) ───
+  // Custom statuses (feature 1)
+  `CREATE TABLE IF NOT EXISTS custom_statuses (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#6b7280',
+    icon TEXT NOT NULL DEFAULT 'Circle',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_terminal INTEGER NOT NULL DEFAULT 0,
+    allows_edit INTEGER NOT NULL DEFAULT 1,
+    requires_approval INTEGER NOT NULL DEFAULT 0,
+    sla_max_days INTEGER DEFAULT NULL,
+    notify_users TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_status ON custom_statuses(company_id, entity_type, key)",
+
+  // Status transitions (feature 3)
+  `CREATE TABLE IF NOT EXISTS status_transitions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    from_status TEXT NOT NULL,
+    to_status TEXT NOT NULL,
+    requires_role TEXT DEFAULT '',
+    requires_comment INTEGER NOT NULL DEFAULT 0,
+    requires_approval INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_status_trans ON status_transitions(company_id, entity_type)",
+
+  // Status history (feature 8)
+  `CREATE TABLE IF NOT EXISTS entity_status_history (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    from_status TEXT DEFAULT '',
+    to_status TEXT NOT NULL,
+    changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    changed_by TEXT DEFAULT '',
+    comment TEXT DEFAULT ''
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_status_hist ON entity_status_history(company_id, entity_type, entity_id)",
+
+  // Number sequences (features 11–15)
+  `CREATE TABLE IF NOT EXISTS number_sequences (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    prefix TEXT NOT NULL DEFAULT '',
+    suffix TEXT NOT NULL DEFAULT '',
+    padding INTEGER NOT NULL DEFAULT 5,
+    current_value INTEGER NOT NULL DEFAULT 0,
+    reset_frequency TEXT NOT NULL DEFAULT 'never',
+    last_reset_at TEXT DEFAULT NULL,
+    reserved_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS uq_number_seq ON number_sequences(company_id, entity_type)",
+
+  // Email templates (feature 21)
+  `CREATE TABLE IF NOT EXISTS email_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    subject TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    body_format TEXT NOT NULL DEFAULT 'markdown',
+    available_tokens_json TEXT NOT NULL DEFAULT '[]',
+    default_to TEXT DEFAULT '',
+    default_cc TEXT DEFAULT '',
+    default_bcc TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS uq_email_tmpl ON email_templates(company_id, key)",
+
+  // Email template version history (feature 30)
+  `CREATE TABLE IF NOT EXISTS email_template_history (
+    id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    snapshot_json TEXT NOT NULL DEFAULT '{}',
+    changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    changed_by TEXT DEFAULT ''
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_email_tmpl_hist ON email_template_history(template_id)",
+
+  // Email schedules (feature 26)
+  `CREATE TABLE IF NOT EXISTS email_schedules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    template_key TEXT NOT NULL,
+    trigger_event TEXT NOT NULL DEFAULT '',
+    delay_days INTEGER NOT NULL DEFAULT 0,
+    condition_json TEXT NOT NULL DEFAULT '{}',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_email_sched ON email_schedules(company_id)",
+  // ── Per-entity classification systems (2026-04-23) ─────────────
+  // Client classification (5)
+  "ALTER TABLE clients ADD COLUMN tier TEXT DEFAULT ''",
+  "ALTER TABLE clients ADD COLUMN segment TEXT DEFAULT ''",
+  "ALTER TABLE clients ADD COLUMN lifecycle_stage TEXT DEFAULT ''",
+  "ALTER TABLE clients ADD COLUMN risk_rating TEXT DEFAULT ''",
+  // Vendor classification (5)
+  "ALTER TABLE vendors ADD COLUMN vendor_type TEXT DEFAULT ''",
+  "ALTER TABLE vendors ADD COLUMN approval_status TEXT DEFAULT 'approved'",
+  "ALTER TABLE vendors ADD COLUMN form_1099_box TEXT DEFAULT ''",
+  "ALTER TABLE vendors ADD COLUMN diversity TEXT DEFAULT '[]'",
+  "ALTER TABLE vendors ADD COLUMN location_type TEXT DEFAULT ''",
+  // Project classification (5)
+  "ALTER TABLE projects ADD COLUMN phase TEXT DEFAULT ''",
+  "ALTER TABLE projects ADD COLUMN methodology TEXT DEFAULT ''",
+  "ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT ''",
+  "ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT ''",
+  "ALTER TABLE projects ADD COLUMN health TEXT DEFAULT ''",
+  // Debt classification (5) — debts.priority already exists; add the others
+  "ALTER TABLE debts ADD COLUMN risk_category TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN segment TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN origination_type TEXT DEFAULT ''",
+  "ALTER TABLE debts ADD COLUMN collectability TEXT DEFAULT ''",
+  // Employee classification (5) — employees.department already exists
+  "ALTER TABLE employees ADD COLUMN role TEXT DEFAULT ''",
+  "ALTER TABLE employees ADD COLUMN work_location TEXT DEFAULT ''",
+  "ALTER TABLE employees ADD COLUMN cost_class TEXT DEFAULT ''",
+  // Asset / Inventory / Account classification
+  "ALTER TABLE fixed_assets ADD COLUMN condition TEXT DEFAULT ''",
+  "ALTER TABLE inventory_items ADD COLUMN category TEXT DEFAULT ''",
+  "ALTER TABLE accounts ADD COLUMN business_purpose TEXT DEFAULT ''",
+  "ALTER TABLE accounts ADD COLUMN criticality TEXT DEFAULT ''",
+  // Classification settings (admin-tunable colors/thresholds)
+  `CREATE TABLE IF NOT EXISTS classification_settings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    dimension TEXT NOT NULL,
+    value TEXT NOT NULL,
+    color_override TEXT DEFAULT '',
+    label_override TEXT DEFAULT '',
+    threshold REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, dimension, value)
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_class_settings_co ON classification_settings(company_id, dimension)",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
@@ -1060,6 +1288,9 @@ const tablesWithoutUpdatedAt = new Set([
   'account_group_members', 'account_permissions', 'account_watches',
   'account_aliases', 'account_comments', 'account_classify_rules',
   'account_balance_history',
+  // Workflow + email templates child tables — created_at only
+  'custom_statuses', 'status_transitions', 'entity_status_history',
+  'email_template_history', 'email_schedules',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

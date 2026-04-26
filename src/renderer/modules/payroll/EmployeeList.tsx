@@ -4,6 +4,10 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import {
+  EMPLOYEE_ROLE, EMPLOYEE_DEPARTMENT, EMPLOYEE_WORK_LOCATION, EMPLOYMENT_STATUS, EMPLOYEE_COST_CLASS,
+  ClassificationBadge,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -14,7 +18,11 @@ interface Employee {
   pay_type: 'salary' | 'hourly';
   pay_rate: number;
   pay_schedule: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
-  status: 'active' | 'inactive';
+  status: string;
+  role?: string;
+  department?: string;
+  work_location?: string;
+  cost_class?: string;
 }
 
 type SortField = 'name' | 'email' | 'type' | 'pay_type' | 'pay_rate' | 'pay_schedule' | 'status';
@@ -246,6 +254,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                 <SortableHeader field="pay_rate" label="Pay Rate" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="pay_schedule" label="Schedule" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <th>Role</th>
+                <th>Dept.</th>
+                <th>Location</th>
+                <th>Cost Class</th>
                 <th>Last Paid</th>
                 <th className="text-right">YTD Gross</th>
               </tr>
@@ -284,16 +296,12 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                     {scheduleLabels[emp.pay_schedule] ?? emp.pay_schedule}
                   </td>
                   <td>
-                    <span
-                      className={
-                        emp.status === 'active'
-                          ? 'block-badge block-badge-income'
-                          : 'block-badge block-badge-expense'
-                      }
-                    >
-                      {emp.status === 'active' ? 'Active' : 'Inactive'}
-                    </span>
+                    <ClassificationBadge def={EMPLOYMENT_STATUS} value={emp.status} />
                   </td>
+                  <td><ClassificationBadge def={EMPLOYEE_ROLE} value={emp.role} /></td>
+                  <td><ClassificationBadge def={EMPLOYEE_DEPARTMENT} value={emp.department} /></td>
+                  <td><ClassificationBadge def={EMPLOYEE_WORK_LOCATION} value={emp.work_location} /></td>
+                  <td><ClassificationBadge def={EMPLOYEE_COST_CLASS} value={emp.cost_class} /></td>
                   <td className="text-xs text-text-muted font-mono">
                     {payrollData[emp.id]?.last_pay_date ? formatDate(payrollData[emp.id].last_pay_date) : '\u2014'}
                   </td>

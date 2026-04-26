@@ -6,6 +6,10 @@ import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import {
+  INVENTORY_CATEGORY,
+  ClassificationBadge, ClassificationSelect,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface InventoryItem {
@@ -334,7 +338,7 @@ const Inventory: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Category</label>
-                <input className="block-input w-full" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Office Supplies" />
+                <ClassificationSelect def={INVENTORY_CATEGORY} value={formData.category} onChange={(v) => setFormData({ ...formData, category: v })} />
               </div>
             </div>
             <div>
@@ -560,7 +564,7 @@ const Inventory: React.FC = () => {
                       </div>
                     </td>
                     <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>
-                    <td className="text-text-secondary text-sm truncate max-w-[140px]">{item.category || '—'}</td>
+                    <td className="text-text-secondary text-sm truncate max-w-[140px]"><ClassificationBadge def={INVENTORY_CATEGORY} value={item.category} /></td>
                     <td className={`text-right font-mono font-semibold ${isLow ? 'text-accent-expense' : 'text-text-primary'}`}>
                       {item.quantity}
                       {isLow && item.reorder_qty > 0 && (

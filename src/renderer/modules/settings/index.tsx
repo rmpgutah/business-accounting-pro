@@ -9,6 +9,12 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import ImportExport from './ImportExport';
 import SignaturePad from '../../components/SignaturePad';
+import PersonalizationSettings from './PersonalizationSettings';
+import IndustryPresetSettings from './IndustryPresetSettings';
+import WorkflowSettings from './WorkflowSettings';
+import NumberingSettings from './NumberingSettings';
+import EmailTemplatesSettings from './EmailTemplatesSettings';
+import StatusBuilderSettings from './StatusBuilderSettings';
 
 // ─── Types ──────────────────────────────────────────────
 interface SettingsMap {
@@ -984,6 +990,24 @@ export default function SettingsModule() {
           </div>
         </div>
       </SectionCard>
+
+      {/* ── Personalization ─────────────────────────────── */}
+      <PersonalizationSettings />
+
+      {/* ── Industry Presets ────────────────────────────── */}
+      <IndustryPresetSettings />
+
+      {/* ── Status Builder (custom statuses + transitions) ── */}
+      <StatusBuilderSettings />
+
+      {/* ── Workflow Automation ─────────────────────────── */}
+      <WorkflowSettings />
+
+      {/* ── Numbering ────────────────────────────────────── */}
+      <NumberingSettings />
+
+      {/* ── Email Templates ─────────────────────────────── */}
+      <EmailTemplatesSettings />
 
       {/* ── Cloud Backup (VPS) ──────────────────────────── */}
       <VpsBackup />

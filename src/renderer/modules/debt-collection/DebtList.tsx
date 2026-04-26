@@ -10,6 +10,10 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { calcRiskScore, getRiskBadge } from './riskScore';
 import PaymentMatchReview from './PaymentMatchReview';
+import {
+  DEBT_PRIORITY, DEBT_RISK, DEBT_SEGMENT, DEBT_ORIGINATION, DEBT_COLLECTABILITY,
+  ClassificationBadge,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Debt {
@@ -36,6 +40,10 @@ interface Debt {
   statute_of_limitations_date?: string;
   interest_frozen?: number;
   currency?: string;
+  risk_category?: string;
+  segment?: string;
+  origination_type?: string;
+  collectability?: string;
 }
 
 interface DebtListProps {
@@ -806,9 +814,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <span className={stageBadge.className}>{stageBadge.label}</span>
                     </td>
                     <td>
-                      <span className={`text-xs font-semibold uppercase ${priorityColor[debt.priority] || 'text-text-muted'}`}>
-                        {debt.priority}
-                      </span>
+                      <ClassificationBadge def={DEBT_PRIORITY} value={debt.priority} />
                     </td>
                     <td>
                       {(() => {

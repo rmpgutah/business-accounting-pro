@@ -51,6 +51,7 @@ import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
+import { usePersonalizationStore } from '../../stores/personalizationStore';
 import { formatCurrency, formatDate, percentChange } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 
@@ -412,6 +413,18 @@ const Dashboard: React.FC = () => {
   const setModule = useAppStore((s) => s.setModule);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const authUser = useAuthStore((s) => s.user);
+  // Personalization: dashboard tabs / widget visibility / order
+  const dashboardTabs = usePersonalizationStore((s) => s.dashboardTabs);
+  const activeTabId = usePersonalizationStore((s) => s.activeTabId);
+  const setActiveTab = usePersonalizationStore((s) => s.setActiveTab);
+  const resetDashboard = usePersonalizationStore((s) => s.resetDashboard);
+  const activeTab = dashboardTabs.find((t) => t.id === activeTabId) ?? dashboardTabs[0];
+  const widgetMap = new Map(activeTab.widgets.map((w) => [w.id, w]));
+  const isOn = (id: string) => {
+    const w = widgetMap.get(id);
+    return !w || w.visible;
+  };
+  const isMini = (id: string) => widgetMap.get(id)?.mini === true;
   const [period, setPeriod] = useState<Period>('MTD');
   const [stats, setStats] = useState<Stats>({
     revenue: 0,
@@ -817,6 +830,31 @@ const Dashboard: React.FC = () => {
       <PrintReportHeader title="Dashboard" periodEnd={new Date()} />
       <div className="max-w-[1400px] mx-auto space-y-8">
 
+      {/* Dashboard Tab Strip (custom tabs feature #16) */}
+      {dashboardTabs.length > 1 && (
+        <div className="flex items-center gap-2 no-print">
+          {dashboardTabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                activeTabId === t.id ? 'bg-accent-blue text-white' : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+              }`}
+              style={{ borderRadius: 'var(--app-radius, 6px)' }}
+            >
+              {t.name}
+            </button>
+          ))}
+          <button
+            onClick={resetDashboard}
+            className="ml-auto text-[11px] text-text-muted hover:text-text-primary"
+            title="Reset to default layout"
+          >
+            Reset Layout
+          </button>
+        </div>
+      )}
+
       {/* Header & Period Selector */}
       <div className="flex items-end justify-between py-4">
         <div>
@@ -873,8 +911,10 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Stat Cards — refactored to <KpiTile> (feature 13 demo) so they
-          collapse to inline summary text in print via .report-summary-tiles. */}
-      <div className="grid grid-cols-4 gap-5 report-summary-tiles">
+          collapse to inline summary text in print via .report-summary-tiles.
+          Visibility controlled by user dashboard prefs. */}
+      {isOn('kpis') && (
+      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} gap-5 report-summary-tiles`}>
         <KpiTile
           label="Revenue"
           value={stats.revenue}
@@ -911,8 +951,10 @@ const Dashboard: React.FC = () => {
           }}
         />
       </div>
+      )}
 
       {/* ─── Quick Metrics Row ─── */}
+      {isOn('quick-metrics') && (
       <div className="grid grid-cols-4 gap-5">
         <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
           <div className="flex items-center gap-2 mb-3">
@@ -991,8 +1033,10 @@ const Dashboard: React.FC = () => {
           <span className="text-[11px] text-text-muted mt-1 block">This month</span>
         </div>
       </div>
+      )}
 
       {/* ─── Cross-Module Summary Cards ─── */}
+      {isOn('cross-module') && (
       <div className="grid grid-cols-3 gap-5">
         {/* Debt Collection */}
         <div
@@ -1051,8 +1095,10 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* ─── Revenue vs Expenses AreaChart (12 months) ─── */}
+      {isOn('revenue-trend') && (
       <div className="block-card p-6" style={{ borderRadius: '6px' }}>
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Revenue vs Expenses
@@ -1127,10 +1173,13 @@ const Dashboard: React.FC = () => {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* ─── Income Sources Pie + Cash Flow Forecast ─── */}
+      {(isOn('income-pie') || isOn('cash-forecast')) && (
       <div className="grid grid-cols-2 gap-6">
         {/* Income Sources PieChart */}
+        {isOn('income-pie') && (
         <div className="block-card p-6" style={{ borderRadius: '6px' }}>
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
             Income Sources
@@ -1178,8 +1227,10 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
         {/* Cash Flow Forecast */}
+        {isOn('cash-forecast') && (
         <div className="block-card p-6" style={{ borderRadius: '6px' }}>
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
             Cash Flow Forecast
@@ -1262,9 +1313,12 @@ const Dashboard: React.FC = () => {
             </>
           )}
         </div>
+        )}
       </div>
+      )}
 
       {/* ─── Expense Category Treemap ─── */}
+      {isOn('expense-treemap') && (
       <div className="block-card p-6" style={{ borderRadius: '6px' }}>
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Expense Breakdown
@@ -1308,8 +1362,10 @@ const Dashboard: React.FC = () => {
           </>
         )}
       </div>
+      )}
 
       {/* Quick Actions — interactive only */}
+      {isOn('quick-actions') && (
       <div className="no-print">
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Quick Actions
@@ -1346,10 +1402,13 @@ const Dashboard: React.FC = () => {
           />
         </div>
       </div>
+      )}
 
       {/* ─── Bottom 2-Column Grid: Activity + Due/Clients ─── */}
+      {(isOn('activity') || isOn('upcoming-due') || isOn('top-clients')) && (
       <div className="grid grid-cols-2 gap-6">
         {/* Left Column: Recent Activity (Enhanced) */}
+        {isOn('activity') && (
         <div className="block-card p-6" style={{ borderRadius: '6px' }}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
@@ -1458,10 +1517,13 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
         {/* Right Column: Upcoming Due + Top Clients stacked */}
+        {(isOn('upcoming-due') || isOn('top-clients')) && (
         <div className="space-y-6">
           {/* Upcoming Due */}
+          {isOn('upcoming-due') && (
           <div className="block-card p-6" style={{ borderRadius: '6px' }}>
             <div className="flex items-center gap-2 mb-5">
               <AlertTriangle size={16} className="text-text-muted" />
@@ -1517,8 +1579,10 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
           {/* Top Clients */}
+          {isOn('top-clients') && (
           <div className="block-card p-6" style={{ borderRadius: '6px' }}>
             <div className="flex items-center gap-2 mb-5">
               <BarChart3 size={16} className="text-text-muted" />
@@ -1556,8 +1620,11 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
+          )}
         </div>
+        )}
       </div>
+      )}
 
       {/* ─── Intelligence Alerts ─── */}
       {anomalies.length > 0 && (

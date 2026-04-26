@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import logoUrl from '../../assets/RMPG_WHITE_NEGATIVE_TRANSPARENT_FIXED.png';
 import {
   LayoutDashboard,
@@ -39,6 +39,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
+import { usePersonalizationStore } from '../../stores/personalizationStore';
+import { Star, Pin, MoreHorizontal } from 'lucide-react';
 
 interface NavItem {
   id: string;
@@ -118,11 +120,66 @@ const sections: NavSection[] = [
   },
 ];
 
+// Build a flat lookup from sections so we can render in user's custom order.
+const ALL_ITEMS: Record<string, NavItem> = sections.reduce((acc, sec) => {
+  for (const item of sec.items) acc[item.id] = item;
+  return acc;
+}, {} as Record<string, NavItem>);
+
 const Sidebar: React.FC = () => {
   const currentModule = useAppStore((s) => s.currentModule);
   const setModule = useAppStore((s) => s.setModule);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const sidebarOrder = usePersonalizationStore((s) => s.sidebarOrder);
+  const hiddenModules = usePersonalizationStore((s) => s.hiddenModules);
+  const pinnedModules = usePersonalizationStore((s) => s.pinnedModules);
+  const favoriteModules = usePersonalizationStore((s) => s.favoriteModules);
+  const [showHidden, setShowHidden] = useState(false);
+
+  // Resolve order: pinned first, then user-ordered visible, then hidden under "More"
+  const visibleOrder = sidebarOrder.filter(
+    (id) => ALL_ITEMS[id] && !hiddenModules.includes(id) && !pinnedModules.includes(id)
+  );
+  const pinned = pinnedModules.filter((id) => ALL_ITEMS[id]);
+  const hidden = hiddenModules.filter((id) => ALL_ITEMS[id]);
+
+  const renderItem = (id: string) => {
+    const item = ALL_ITEMS[id];
+    if (!item) return null;
+    const Icon = item.icon;
+    const isActive = currentModule === id;
+    const isFav = favoriteModules.includes(id);
+    return (
+      <button
+        key={id}
+        onClick={() => setModule(id)}
+        className={`flex items-center gap-2.5 w-full text-left transition-all duration-200 ${
+          sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-2'
+        } ${
+          isActive
+            ? 'text-accent-blue border-r-2 border-accent-blue'
+            : 'text-text-secondary hover:text-text-primary border-r-2 border-transparent'
+        }`}
+        style={isActive ? {
+          background: 'linear-gradient(90deg, transparent, rgba(96,165,250,0.08))',
+          boxShadow: 'inset -2px 0 8px rgba(96,165,250,0.06)',
+          borderRadius: '0px',
+        } : { borderRadius: '0px' }}
+        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
+        title={sidebarCollapsed ? item.label : undefined}
+      >
+        <Icon size={16} className="shrink-0" />
+        {!sidebarCollapsed && (
+          <>
+            <span className="text-[13px] truncate flex-1">{item.label}</span>
+            {isFav && <Star size={10} className="text-accent-warning shrink-0" />}
+          </>
+        )}
+      </button>
+    );
+  };
 
   return (
     <aside
@@ -156,56 +213,38 @@ const Sidebar: React.FC = () => {
         )}
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — user-customized order with Pinned + More overflow */}
       <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin">
-        {sections.map((section, sectionIdx) => (
-          <div key={section.title}>
-            {/* Section divider (except first) */}
-            {sectionIdx > 0 && !sidebarCollapsed && (
-              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
-            )}
-            {sectionIdx > 0 && sidebarCollapsed && <div className="my-1" style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 8px' }} />}
+        {pinned.length > 0 && (
+          <div>
             {!sidebarCollapsed && (
-              <div className="px-4 pt-2.5 pb-1">
+              <div className="px-4 pt-2.5 pb-1 flex items-center gap-1">
+                <Pin size={9} className="text-accent-blue" />
                 <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
-                  {section.title}
+                  PINNED
                 </span>
               </div>
             )}
-            {sidebarCollapsed && <div className="pt-1" />}
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentModule === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setModule(item.id)}
-                  className={`flex items-center gap-2.5 w-full text-left transition-all duration-200 ${
-                    sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-2'
-                  } ${
-                    isActive
-                      ? 'text-accent-blue border-r-2 border-accent-blue'
-                      : 'text-text-secondary hover:text-text-primary border-r-2 border-transparent'
-                  }`}
-                  style={isActive ? {
-                    background: 'linear-gradient(90deg, transparent, rgba(96,165,250,0.08))',
-                    boxShadow: 'inset -2px 0 8px rgba(96,165,250,0.06)',
-                    borderRadius: '0px',
-                  } : { borderRadius: '0px' }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
-                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
-                  title={sidebarCollapsed ? item.label : undefined}
-                >
-                  <Icon size={16} className="shrink-0" />
-                  {!sidebarCollapsed && (
-                    <span className="text-[13px] truncate">{item.label}</span>
-                  )}
-                </button>
-              );
-            })}
+            {pinned.map(renderItem)}
+            {!sidebarCollapsed && (
+              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
+            )}
           </div>
-        ))}
+        )}
+        {visibleOrder.map(renderItem)}
+        {hidden.length > 0 && !sidebarCollapsed && (
+          <div className="mt-2 border-t border-border-primary pt-2">
+            <button
+              onClick={() => setShowHidden((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 w-full text-text-muted hover:text-text-primary text-left"
+              style={{ borderRadius: '0px' }}
+            >
+              <MoreHorizontal size={14} />
+              <span className="text-[12px]">More ({hidden.length})</span>
+            </button>
+            {showHidden && hidden.map(renderItem)}
+          </div>
+        )}
       </nav>
 
       {/* Collapse Toggle */}

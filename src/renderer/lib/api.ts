@@ -387,6 +387,22 @@ const api = {
   categoriesSeedDefaults: (company_id: string) =>
     window.electronAPI.invoke('categories:seed-defaults', { company_id }),
 
+  // Industry Presets
+  industryApplyPreset: (payload: {
+    companyId: string;
+    presetKey: string;
+    preset: any;
+    accountSeeds?: Array<{ code: string; name: string; type: string; subtype?: string }>;
+  }): Promise<{ success?: boolean; summary?: any; error?: string }> =>
+    window.electronAPI.invoke('industry:apply-preset', payload),
+  industryGetExisting: (companyId: string): Promise<{
+    categoryNames: string[];
+    vendorNames: string[];
+    fields: string[];
+    accountCodes: string[];
+  } | null> =>
+    window.electronAPI.invoke('industry:get-existing', { companyId }),
+
   // Automations
   listAutomations: (): Promise<any[]> =>
     window.electronAPI.invoke('automations:list'),
@@ -708,6 +724,56 @@ const api = {
     window.electronAPI.invoke('reimbursement:batch-detail', { batchId }),
   reimbursementAchExport: (batchId: string) =>
     window.electronAPI.invoke('reimbursement:ach-export', { batchId }),
+
+  // ── Universal Tags ──
+  tagsList: (companyId: string, includeDeleted = false) =>
+    window.electronAPI.invoke('tags:list', { companyId, includeDeleted }),
+  tagsGroupsList: (companyId: string) => window.electronAPI.invoke('tags:groups-list', { companyId }),
+  tagsGroupCreate: (data: any) => window.electronAPI.invoke('tags:group-create', data),
+  tagsGroupUpdate: (id: string, data: any) => window.electronAPI.invoke('tags:group-update', { id, data }),
+  tagsGroupDelete: (id: string) => window.electronAPI.invoke('tags:group-delete', { id }),
+  tagsCreate: (data: any) => window.electronAPI.invoke('tags:create', data),
+  tagsUpdate: (id: string, data: any) => window.electronAPI.invoke('tags:update', { id, data }),
+  tagsRename: (id: string, name: string) => window.electronAPI.invoke('tags:rename', { id, name }),
+  tagsSoftDelete: (id: string) => window.electronAPI.invoke('tags:soft-delete', { id }),
+  tagsRestore: (id: string) => window.electronAPI.invoke('tags:restore', { id }),
+  tagsMerge: (sourceId: string, targetId: string) => window.electronAPI.invoke('tags:merge', { sourceId, targetId }),
+  tagsGetForEntity: (companyId: string, entityType: string, entityId: string) =>
+    window.electronAPI.invoke('tags:get-for-entity', { companyId, entityType, entityId }),
+  tagsSetForEntity: (companyId: string, entityType: string, entityId: string, tagIds: string[]) =>
+    window.electronAPI.invoke('tags:set-for-entity', { companyId, entityType, entityId, tagIds }),
+  tagsBulkApply: (companyId: string, entityType: string, entityIds: string[], tagIds: string[]) =>
+    window.electronAPI.invoke('tags:bulk-apply', { companyId, entityType, entityIds, tagIds }),
+  tagsBulkRemove: (companyId: string, entityType: string, entityIds: string[], tagIds: string[]) =>
+    window.electronAPI.invoke('tags:bulk-remove', { companyId, entityType, entityIds, tagIds }),
+  tagsSearchEntities: (companyId: string, entityType: string, tagIds: string[], mode: 'all' | 'any' = 'all') =>
+    window.electronAPI.invoke('tags:search-entities', { companyId, entityType, tagIds, mode }),
+  tagsUsageStats: (companyId: string) => window.electronAPI.invoke('tags:usage-stats', { companyId }),
+  tagsRulesList: (companyId: string) => window.electronAPI.invoke('tags:rules-list', { companyId }),
+  tagsRuleCreate: (data: any) => window.electronAPI.invoke('tags:rule-create', data),
+  tagsRuleUpdate: (id: string, data: any) => window.electronAPI.invoke('tags:rule-update', { id, data }),
+  tagsRuleDelete: (id: string) => window.electronAPI.invoke('tags:rule-delete', { id }),
+  tagsRunRules: (companyId: string, entityType: string, entity: any) =>
+    window.electronAPI.invoke('tags:run-rules', { companyId, entityType, entity }),
+  tagsExportCsv: (companyId: string) => window.electronAPI.invoke('tags:export-csv', { companyId }),
+  tagsImportCsv: (companyId: string, csv: string) => window.electronAPI.invoke('tags:import-csv', { companyId, csv }),
+
+  // ── Custom Fields ──
+  customFieldsList: (companyId: string, entityType?: string) =>
+    window.electronAPI.invoke('customFields:list', { companyId, entityType }),
+  customFieldsCreate: (data: any) => window.electronAPI.invoke('customFields:create', data),
+  customFieldsUpdate: (id: string, data: any) => window.electronAPI.invoke('customFields:update', { id, data }),
+  customFieldsDelete: (id: string) => window.electronAPI.invoke('customFields:delete', { id }),
+  customFieldsGetValues: (companyId: string, entityType: string, entityId: string) =>
+    window.electronAPI.invoke('customFields:get-values', { companyId, entityType, entityId }),
+  customFieldsSetValues: (companyId: string, entityType: string, entityId: string, values: Record<string, any>) =>
+    window.electronAPI.invoke('customFields:set-values', { companyId, entityType, entityId, values }),
+  customFieldsUsageStats: (companyId: string, entityType: string) =>
+    window.electronAPI.invoke('customFields:usage-stats', { companyId, entityType }),
+  customFieldsBulkFill: (companyId: string, entityType: string, fieldKey: string, value: any) =>
+    window.electronAPI.invoke('customFields:bulk-fill', { companyId, entityType, fieldKey, value }),
+  customFieldsSearch: (companyId: string, entityType: string, fieldKey: string, op: string, value: any) =>
+    window.electronAPI.invoke('customFields:search', { companyId, entityType, fieldKey, op, value }),
 
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),

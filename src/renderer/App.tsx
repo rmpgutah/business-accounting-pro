@@ -9,6 +9,10 @@ import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import { registerKeyboardShortcuts, MODULE_ORDER } from './lib/keyboard-shortcuts';
 import { QuickCreate } from './components/QuickCreate';
+import { usePersonalizationStore, applyPersonalization, applyModuleAccent } from './stores/personalizationStore';
+import PersonalizationWizard from './components/onboarding/PersonalizationWizard';
+import OnboardingWizard from './components/OnboardingWizard';
+import { useOnboarding } from './modules/companies/useOnboarding';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
@@ -170,6 +174,42 @@ const App: React.FC = () => {
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
+  // ─── Onboarding wizard (industry preset + setup) ─────────
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const onboarding = useOnboarding(activeCompany?.id || null);
+
+  // ─── Personalization: apply CSS vars whenever prefs change ──
+  const personalization = usePersonalizationStore();
+  useEffect(() => {
+    applyPersonalization(personalization);
+  }, [
+    personalization.themeMode,
+    personalization.accents,
+    personalization.density,
+    personalization.fontScale,
+    personalization.fontFamily,
+    personalization.radius,
+    personalization.glassIntensity,
+  ]);
+  // Auto-mode: react to OS color-scheme changes
+  useEffect(() => {
+    if (personalization.themeMode !== 'auto') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => applyPersonalization(usePersonalizationStore.getState());
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [personalization.themeMode]);
+  // Per-module accent override on module switch
+  useEffect(() => {
+    applyModuleAccent(currentModule);
+  }, [currentModule, personalization.moduleAccents, personalization.accents]);
+  // Load cloud settings on login
+  useEffect(() => {
+    if (authUser?.id) {
+      usePersonalizationStore.getState().loadFromCloud(authUser.id);
+    }
+  }, [authUser?.id]);
+
   // Stable handlers so QuickCreate doesn't re-render on every parent render.
   const handleQuickCreateNavigate = useCallback(
     (view: string) => setModule(view as any),
@@ -281,6 +321,18 @@ const App: React.FC = () => {
         <QuickCreate
           onNavigate={handleQuickCreateNavigate}
           onClose={handleQuickCreateClose}
+        />
+      )}
+      {!personalization.onboardingComplete && (
+        <PersonalizationWizard
+          onClose={() => usePersonalizationStore.getState().set({ onboardingComplete: true })}
+        />
+      )}
+      {activeCompany && onboarding.open && personalization.onboardingComplete && (
+        <OnboardingWizard
+          companyId={activeCompany.id}
+          onClose={onboarding.dismiss}
+          onComplete={onboarding.dismiss}
         />
       )}
     </AppShell>

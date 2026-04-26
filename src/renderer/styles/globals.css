@@ -42,6 +42,19 @@
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
 }
 
+/* ─── Personalization tokens ──────────────────────────── */
+/* Defaults; overwritten at runtime by applyPersonalization() based on
+   user's prefs (theme, density, font scale, radius, glass intensity).
+   Components that opt-in read from these vars instead of hard-coding. */
+:root {
+  --accent-primary: #60a5fa;
+  --row-padding-y: 0.5625rem;
+  --row-padding-x: 0.875rem;
+  --app-radius: 2px;
+  --glass-blur: 16px;
+  --glass-opacity: 0.80;
+}
+
 /* ─── Base ────────────────────────────────────────────── */
 
 body {

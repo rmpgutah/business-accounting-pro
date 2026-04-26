@@ -15,6 +15,10 @@ import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import {
+  ASSET_CATEGORY, ASSET_CONDITION,
+  ClassificationBadge, ClassificationSelect,
+} from '../../lib/classifications';
 
 // ─── Types ───────────────────────────────────────────────
 interface FixedAsset {
@@ -336,6 +340,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                 <th>Asset Code</th>
                 <th>Name</th>
                 <th>Category</th>
+                <th>Condition</th>
                 <th>Purchase Date</th>
                 <th className="text-right">Original Cost</th>
                 <th className="text-right">Acc. Dep.</th>
@@ -349,7 +354,8 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                 <tr key={a.id} className="hover:bg-bg-hover cursor-pointer transition-colors" onClick={() => onView(a.id)}>
                   <td className="font-mono text-xs text-accent-blue">{a.asset_code}</td>
                   <td className="font-semibold text-text-primary truncate max-w-[200px]">{a.name}</td>
-                  <td><span className="block-badge block-badge-blue">{CATEGORY_LABELS[a.category]}</span></td>
+                  <td><ClassificationBadge def={ASSET_CATEGORY} value={a.category} /></td>
+                  <td><ClassificationBadge def={ASSET_CONDITION} value={(a as any).condition} /></td>
                   <td className="text-text-secondary text-xs">
                     {a.purchase_date ? format(parseISO(a.purchase_date), 'MMM d, yyyy') : '—'}
                   </td>
@@ -409,6 +415,7 @@ const emptyForm = {
   asset_account_id: '',
   depreciation_account_id: '',
   accumulated_depreciation_account_id: '',
+  condition: '',
 };
 
 const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
@@ -446,6 +453,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
           asset_account_id: asset.asset_account_id ?? '',
           depreciation_account_id: asset.depreciation_account_id ?? '',
           accumulated_depreciation_account_id: asset.accumulated_depreciation_account_id ?? '',
+          condition: asset.condition ?? '',
         });
       } else {
         // Auto-generate asset code
@@ -568,6 +576,9 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
               >
                 {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
               </select>
+            </F>
+            <F label="Condition">
+              <ClassificationSelect def={ASSET_CONDITION} value={form.condition} onChange={(v) => set('condition', v)} />
             </F>
             <F label="Description">
               <textarea

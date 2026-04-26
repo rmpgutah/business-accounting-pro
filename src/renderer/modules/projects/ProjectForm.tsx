@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import {
+  PROJECT_PHASE, PROJECT_METHODOLOGY, PROJECT_TYPE, PROJECT_PRIORITY, PROJECT_HEALTH,
+  ClassificationSelect, projectHealthAuto,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -20,6 +24,11 @@ interface ProjectFormData {
   start_date: string;
   end_date: string;
   tags: string;
+  phase: string;
+  methodology: string;
+  project_type: string;
+  priority: string;
+  health: string;
 }
 
 interface ProjectFormProps {
@@ -39,6 +48,11 @@ const INITIAL_FORM: ProjectFormData = {
   start_date: '',
   end_date: '',
   tags: '',
+  phase: '',
+  methodology: '',
+  project_type: '',
+  priority: '',
+  health: '',
 };
 
 function parseOptionalFloat(value: string): number | null {
@@ -82,6 +96,11 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
               start_date: project.start_date ?? '',
               end_date: project.end_date ?? '',
               tags: project.tags ?? '',
+              phase: project.phase ?? '',
+              methodology: project.methodology ?? '',
+              project_type: project.project_type ?? '',
+              priority: project.priority ?? '',
+              health: project.health ?? '',
             });
           }
         }
@@ -151,7 +170,36 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         tags: form.tags.trim(),
+        phase: form.phase || '',
+        methodology: form.methodology || '',
+        project_type: form.project_type || '',
+        priority: form.priority || '',
+        health: form.health || '',
       };
+
+      // Auto-compute project health when not explicitly set
+      if (!payload.health && isEdit && projectId) {
+        try {
+          const r = await api.rawQuery(
+            `SELECT COALESCE(SUM(amount), 0) AS spent FROM expenses WHERE project_id = ?`,
+            [projectId]
+          );
+          const row = Array.isArray(r) ? r[0] : r;
+          const spent = Number(row?.spent || 0);
+          const budget = budgetVal !== null ? budgetVal : 0;
+          const budgetSpentPct = budget > 0 ? spent / budget : 0;
+          let daysRemainingPct = 1;
+          if (form.start_date && form.end_date) {
+            const start = new Date(form.start_date).getTime();
+            const end = new Date(form.end_date).getTime();
+            const now = Date.now();
+            const total = end - start;
+            const remain = end - now;
+            if (total > 0) daysRemainingPct = Math.max(0, remain / total);
+          }
+          payload.health = projectHealthAuto(budgetSpentPct, daysRemainingPct);
+        } catch (_) { /* ignore */ }
+      }
 
       if (isEdit && projectId) {
         await api.update('projects', projectId, payload);
@@ -345,6 +393,30 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
                 value={form.end_date}
                 onChange={(e) => set('end_date', e.target.value)}
               />
+            </div>
+          </div>
+
+          {/* Classification */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Phase</label>
+              <ClassificationSelect def={PROJECT_PHASE} value={form.phase} onChange={(v) => set('phase', v)} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Methodology</label>
+              <ClassificationSelect def={PROJECT_METHODOLOGY} value={form.methodology} onChange={(v) => set('methodology', v)} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Project Type</label>
+              <ClassificationSelect def={PROJECT_TYPE} value={form.project_type} onChange={(v) => set('project_type', v)} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Priority</label>
+              <ClassificationSelect def={PROJECT_PRIORITY} value={form.priority} onChange={(v) => set('priority', v)} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Health</label>
+              <ClassificationSelect def={PROJECT_HEALTH} value={form.health} onChange={(v) => set('health', v)} />
             </div>
           </div>
 

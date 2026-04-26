@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
 import ClientContacts, { ClientContact } from './ClientContacts';
+import {
+  CLIENT_TIER, CLIENT_INDUSTRY, CLIENT_SEGMENT, CLIENT_LIFECYCLE, CLIENT_RISK,
+  ClassificationSelect, riskRatingFromAvgDaysLate,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface ClientData {
@@ -33,6 +37,11 @@ interface ClientData {
   // Default Invoice Settings
   default_payment_terms: string;
   default_late_fee_pct: number;
+  // Classifications
+  tier: string;
+  segment: string;
+  lifecycle_stage: string;
+  risk_rating: string;
 }
 
 const EMPTY_CLIENT: ClientData = {
@@ -63,6 +72,11 @@ const EMPTY_CLIENT: ClientData = {
   // Default Invoice Settings
   default_payment_terms: '',
   default_late_fee_pct: 0,
+  // Classifications
+  tier: '',
+  segment: '',
+  lifecycle_stage: '',
+  risk_rating: '',
 };
 
 interface ClientFormProps {
@@ -152,6 +166,11 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             // Default Invoice Settings
             default_payment_terms: client.default_payment_terms || '',
             default_late_fee_pct: client.default_late_fee_pct || 0,
+            // Classifications
+            tier: client.tier || '',
+            segment: client.segment || '',
+            lifecycle_stage: client.lifecycle_stage || '',
+            risk_rating: client.risk_rating || '',
           });
           setPaymentTermsRaw(String(pt));
         }
@@ -225,6 +244,36 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       };
       delete payload.id;
       delete payload.tags_input;
+
+      // Auto-classify on save (only when user hasn't picked one)
+      if (isEditing && clientId) {
+        try {
+          // Risk rating from avg days late on invoices
+          if (!payload.risk_rating) {
+            const r = await api.rawQuery(
+              `SELECT AVG(CASE WHEN paid_date IS NOT NULL AND due_date IS NOT NULL
+                 THEN julianday(paid_date) - julianday(due_date) ELSE 0 END) AS avg_late
+               FROM invoices WHERE client_id = ?`,
+              [clientId]
+            );
+            const row = Array.isArray(r) ? r[0] : r;
+            if (row && Number.isFinite(row.avg_late)) {
+              payload.risk_rating = riskRatingFromAvgDaysLate(Number(row.avg_late));
+            }
+          }
+          // VIP auto-set when total paid > VIP threshold (default $50k)
+          if (!payload.lifecycle_stage || payload.lifecycle_stage === 'active') {
+            const r2 = await api.rawQuery(
+              `SELECT COALESCE(SUM(amount_paid), 0) AS paid FROM invoices WHERE client_id = ?`,
+              [clientId]
+            );
+            const row2 = Array.isArray(r2) ? r2[0] : r2;
+            const paid = Number(row2?.paid || 0);
+            const VIP_THRESHOLD = 50000;
+            if (paid >= VIP_THRESHOLD) payload.lifecycle_stage = 'vip';
+          }
+        } catch (_) { /* ignore — auto classification is best-effort */ }
+      }
 
       let savedId: string;
       if (isEditing && clientId) {
@@ -445,7 +494,23 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Industry</label>
-                <input className="block-input" value={data.industry} onChange={(e) => setData(p => ({ ...p, industry: e.target.value }))} placeholder="e.g. Technology" />
+                <ClassificationSelect def={CLIENT_INDUSTRY} value={data.industry} onChange={(v) => setData(p => ({ ...p, industry: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Tier</label>
+                <ClassificationSelect def={CLIENT_TIER} value={data.tier} onChange={(v) => setData(p => ({ ...p, tier: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Segment</label>
+                <ClassificationSelect def={CLIENT_SEGMENT} value={data.segment} onChange={(v) => setData(p => ({ ...p, segment: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Lifecycle Stage</label>
+                <ClassificationSelect def={CLIENT_LIFECYCLE} value={data.lifecycle_stage} onChange={(v) => setData(p => ({ ...p, lifecycle_stage: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Risk Rating</label>
+                <ClassificationSelect def={CLIENT_RISK} value={data.risk_rating} onChange={(v) => setData(p => ({ ...p, risk_rating: v }))} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Website</label>

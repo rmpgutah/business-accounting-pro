@@ -1,9 +1,34 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Building2, ChevronDown, Search, Bell, X, LogOut } from 'lucide-react';
+import {
+  Building2, ChevronDown, Search, Bell, X, LogOut, FileText, Receipt,
+  UserCircle, FileCheck, Clock, BarChart3,
+} from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
+import { usePersonalizationStore } from '../../stores/personalizationStore';
 import api from '../../lib/api';
+
+// Map quick-action ID -> icon + handler. The TopBar consumes the user's
+// configured list (max 5) from personalization store.
+const QUICK_ICONS: Record<string, React.FC<{ size?: number }>> = {
+  'new-invoice': FileText,
+  'new-expense': Receipt,
+  'new-client': UserCircle,
+  'new-quote': FileCheck,
+  'start-timer': Clock,
+  search: Search,
+  reports: BarChart3,
+};
+const QUICK_LABELS: Record<string, string> = {
+  'new-invoice': 'New Invoice',
+  'new-expense': 'New Expense',
+  'new-client': 'New Client',
+  'new-quote': 'New Quote',
+  'start-timer': 'Start Timer',
+  search: 'Search',
+  reports: 'Reports',
+};
 
 const TopBar: React.FC = () => {
   const searchOpen = useAppStore((s) => s.searchOpen);
@@ -11,7 +36,9 @@ const TopBar: React.FC = () => {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
   const searchResults = useAppStore((s) => s.searchResults);
   const setSearchResults = useAppStore((s) => s.setSearchResults);
+  const setModule = useAppStore((s) => s.setModule);
   const notificationCount = useAppStore((s) => s.notificationCount);
+  const quickActions = usePersonalizationStore((s) => s.quickActions);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const authUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -134,6 +161,38 @@ const TopBar: React.FC = () => {
             ⌘K
           </kbd>
         </button>
+
+        {/* Quick Action buttons (user-configurable, max 5) */}
+        {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+          {quickActions.slice(0, 5).map((qa) => {
+            const Icon = QUICK_ICONS[qa] ?? FileText;
+            const label = QUICK_LABELS[qa] ?? qa;
+            return (
+              <button
+                key={qa}
+                title={label}
+                onClick={() => {
+                  if (qa === 'search') setSearchOpen(true);
+                  else if (qa === 'new-invoice') setModule('invoicing');
+                  else if (qa === 'new-expense') setModule('expenses');
+                  else if (qa === 'new-client') setModule('clients');
+                  else if (qa === 'new-quote') setModule('quotes');
+                  else if (qa === 'start-timer') setModule('time-tracking');
+                  else if (qa === 'reports') setModule('reports');
+                  // Modules listen for 'app:new-item' to open create form.
+                  if (qa.startsWith('new-')) {
+                    window.dispatchEvent(new CustomEvent('app:new-item', { detail: { source: 'topbar' } }));
+                  }
+                }}
+                className="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+                style={{ borderRadius: 'var(--app-radius, 6px)' }}
+              >
+                <Icon size={16} />
+              </button>
+            );
+          })}
+        </div>
 
         {/* Right — User + Notifications + Logout */}
         {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}

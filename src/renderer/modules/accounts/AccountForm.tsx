@@ -3,6 +3,10 @@ import { X, Save, Loader2, Sparkles, Lock, Pin, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { Barcode39, AccountCommentsPanel } from './AccountAdvancedDialogs';
+import {
+  ACCOUNT_PURPOSE, ACCOUNT_CRITICALITY,
+  ClassificationSelect,
+} from '../../lib/classifications';
 
 type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 
@@ -28,6 +32,8 @@ interface Account {
   bank_account_id?: string;
   subledger_type?: string;
   compliance_tags?: string;
+  business_purpose?: string;
+  criticality?: string;
 }
 
 const COMPLIANCE_OPTIONS = ['PCI', 'HIPAA', 'GDPR', 'SOX'];
@@ -105,6 +111,8 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
   const [complianceTags, setComplianceTags] = useState<string[]>(() => {
     try { return account?.compliance_tags ? JSON.parse(account.compliance_tags) : []; } catch { return []; }
   });
+  const [businessPurpose, setBusinessPurpose] = useState<string>(account?.business_purpose || '');
+  const [criticality, setCriticality] = useState<string>(account?.criticality || '');
   const [bankAccounts, setBankAccounts] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     if (!activeCompany) return;
@@ -215,6 +223,8 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
         subledger_type: subledgerType || 'none',
         monthly_cap: parseFloat(monthlyCap) || 0,
         compliance_tags: JSON.stringify(complianceTags),
+        business_purpose: businessPurpose || '',
+        criticality: criticality || '',
       };
 
       if (isEdit && account) {
@@ -394,6 +404,14 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Monthly Cap (budget)</label>
               <input type="number" step="0.01" value={monthlyCap} onChange={(e) => setMonthlyCap(e.target.value)} disabled={isLocked}
                 className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Business Purpose</label>
+              <ClassificationSelect def={ACCOUNT_PURPOSE} value={businessPurpose} onChange={setBusinessPurpose} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Criticality</label>
+              <ClassificationSelect def={ACCOUNT_CRITICALITY} value={criticality} onChange={setCriticality} />
             </div>
           </div>
 

@@ -6,6 +6,10 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
+import {
+  PROJECT_PHASE, PROJECT_PHASE_ORDER, PROJECT_PRIORITY, PROJECT_HEALTH, PROJECT_TYPE, PROJECT_METHODOLOGY,
+  ClassificationBadge,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -20,6 +24,11 @@ interface Project {
   start_date: string;
   end_date: string;
   tags: string;
+  phase?: string;
+  methodology?: string;
+  project_type?: string;
+  priority?: string;
+  health?: string;
 }
 
 interface Client {
@@ -358,6 +367,37 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                   <div className="mt-3">
                     <BudgetBar spent={spent} budget={project.budget ?? 0} />
                   </div>
+
+                  {/* Classification badges */}
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {project.priority && <ClassificationBadge def={PROJECT_PRIORITY} value={project.priority} />}
+                    {project.health && <ClassificationBadge def={PROJECT_HEALTH} value={project.health} />}
+                    {project.project_type && <ClassificationBadge def={PROJECT_TYPE} value={project.project_type} />}
+                    {project.methodology && <ClassificationBadge def={PROJECT_METHODOLOGY} value={project.methodology} />}
+                    {project.phase && <ClassificationBadge def={PROJECT_PHASE} value={project.phase} />}
+                  </div>
+
+                  {/* Phase progress (5 steps) */}
+                  {project.phase && (
+                    <div className="mt-2 flex gap-0.5">
+                      {PROJECT_PHASE_ORDER.map((p, idx) => {
+                        const currentIdx = PROJECT_PHASE_ORDER.indexOf(project.phase!);
+                        const filled = idx <= currentIdx;
+                        return (
+                          <div
+                            key={p}
+                            style={{
+                              flex: 1,
+                              height: 4,
+                              borderRadius: 2,
+                              background: filled ? 'var(--color-accent-blue)' : 'rgba(255,255,255,0.08)',
+                            }}
+                            title={p}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Card Footer */}

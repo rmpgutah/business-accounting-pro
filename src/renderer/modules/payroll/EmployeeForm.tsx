@@ -4,6 +4,10 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import {
+  EMPLOYEE_ROLE, EMPLOYEE_DEPARTMENT, EMPLOYEE_WORK_LOCATION, EMPLOYMENT_STATUS, EMPLOYEE_COST_CLASS,
+  ClassificationSelect,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface EmployeeFormData {
@@ -21,10 +25,13 @@ interface EmployeeFormData {
   start_date: string;
   ssn: string;           // full 9-digit SSN, displayed masked
   ssn_last4: string;     // legacy field kept for payroll runner compatibility
-  status: 'active' | 'inactive';
+  status: string; // active | inactive | terminated | on_leave | probation
   employment_type: 'full-time' | 'part-time' | 'contractor';
   department: string;
   job_title: string;
+  role: string;
+  work_location: string;
+  cost_class: string;
   address_line1: string;
   address_line2: string;
   city: string;
@@ -62,6 +69,9 @@ const EMPTY_FORM: EmployeeFormData = {
   employment_type: 'full-time',
   department: '',
   job_title: '',
+  role: '',
+  work_location: '',
+  cost_class: '',
   address_line1: '',
   address_line2: '',
   city: '',
@@ -346,6 +356,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             employment_type: emp.employment_type ?? 'full-time',
             department: emp.department ?? '',
             job_title: emp.job_title ?? '',
+            role: emp.role ?? '',
+            work_location: emp.work_location ?? '',
+            cost_class: emp.cost_class ?? '',
             address_line1: emp.address_line1 ?? '',
             address_line2: emp.address_line2 ?? '',
             city: emp.city ?? '',
@@ -460,6 +473,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         employment_type: form.employment_type,
         department: form.department.trim(),
         job_title: form.job_title.trim(),
+        role: form.role || '',
+        work_location: form.work_location || '',
+        cost_class: form.cost_class || '',
         address_line1: form.address_line1.trim(),
         address_line2: form.address_line2.trim(),
         city: form.city.trim(),
@@ -599,14 +615,12 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Status</label>
-                  <select
-                    className="block-select w-full"
+                  <ClassificationSelect
+                    def={EMPLOYMENT_STATUS}
                     value={form.status}
-                    onChange={(e) => setField('status', e.target.value as 'active' | 'inactive')}
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+                    onChange={(v) => setField('status', v)}
+                    allowEmpty={false}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Start Date</label>
@@ -819,7 +833,22 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Department</label>
-              <input className="block-input w-full" value={form.department} onChange={(e) => setForm(p => ({ ...p, department: e.target.value }))} placeholder="e.g. Engineering" />
+              <ClassificationSelect def={EMPLOYEE_DEPARTMENT} value={form.department} onChange={(v) => setForm(p => ({ ...p, department: v }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Role</label>
+              <ClassificationSelect def={EMPLOYEE_ROLE} value={form.role} onChange={(v) => setForm(p => ({ ...p, role: v }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Work Location</label>
+              <ClassificationSelect def={EMPLOYEE_WORK_LOCATION} value={form.work_location} onChange={(v) => setForm(p => ({ ...p, work_location: v }))} />
+              {form.work_location === 'remote' && (
+                <p className="mt-1 text-[10px] text-text-muted">Hint: Remote workers may be ineligible for travel per-diem.</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Cost Class</label>
+              <ClassificationSelect def={EMPLOYEE_COST_CLASS} value={form.cost_class} onChange={(v) => setForm(p => ({ ...p, cost_class: v }))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Job Title</label>

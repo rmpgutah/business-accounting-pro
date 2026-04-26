@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
 import api from '../../lib/api';
+import {
+  VENDOR_TYPE, VENDOR_APPROVAL, VENDOR_1099_BOX, VENDOR_DIVERSITY, VENDOR_LOCATION,
+  ClassificationSelect, ClassificationMultiSelect,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface VendorFormData {
@@ -20,6 +24,11 @@ interface VendorFormData {
   contract_start: string;
   contract_end: string;
   contract_notes: string;
+  vendor_type: string;
+  approval_status: string;
+  form_1099_box: string;
+  diversity: string[];
+  location_type: string;
 }
 
 interface VendorFormProps {
@@ -45,6 +54,11 @@ const emptyForm: VendorFormData = {
   contract_start: '',
   contract_end: '',
   contract_notes: '',
+  vendor_type: '',
+  approval_status: 'approved',
+  form_1099_box: '',
+  diversity: [],
+  location_type: '',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -80,6 +94,14 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             contract_start: data.contract_start ?? '',
             contract_end: data.contract_end ?? '',
             contract_notes: data.contract_notes ?? '',
+            vendor_type: data.vendor_type ?? '',
+            approval_status: data.approval_status ?? 'approved',
+            form_1099_box: data.form_1099_box ?? '',
+            diversity: (() => {
+              try { const v = JSON.parse(data.diversity || '[]'); return Array.isArray(v) ? v : []; }
+              catch { return []; }
+            })(),
+            location_type: data.location_type ?? '',
           });
         }
       } catch (err) {
@@ -123,6 +145,10 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
       setNameError('Contract end date must be on or after start date.');
       return;
     }
+    if (form.is_1099_eligible && !form.form_1099_box) {
+      setNameError('1099 box is required when vendor is 1099-eligible.');
+      return;
+    }
     setNameError('');
     setSaving(true);
 
@@ -144,6 +170,11 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         contract_start: form.contract_start || null,
         contract_end: form.contract_end || null,
         contract_notes: form.contract_notes || null,
+        vendor_type: form.vendor_type || '',
+        approval_status: form.approval_status || 'approved',
+        form_1099_box: form.is_1099_eligible ? form.form_1099_box : '',
+        diversity: JSON.stringify(form.diversity || []),
+        location_type: form.location_type || '',
       };
 
       if (isEditing && vendorId) {
@@ -392,6 +423,35 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Contract Notes</label>
                   <textarea className="block-input" rows={3} value={form.contract_notes} onChange={(e) => setForm(p => ({ ...p, contract_notes: e.target.value }))} placeholder="Contract terms, renewal dates, etc." style={{ resize: 'vertical' }} />
+                </div>
+              </div>
+
+              {/* Classification */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 mt-4">
+                  <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Classification</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Vendor Type</label>
+                  <ClassificationSelect def={VENDOR_TYPE} value={form.vendor_type} onChange={(v) => setForm(p => ({ ...p, vendor_type: v }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Approval Status</label>
+                  <ClassificationSelect def={VENDOR_APPROVAL} value={form.approval_status} onChange={(v) => setForm(p => ({ ...p, approval_status: v }))} allowEmpty={false} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Location Type</label>
+                  <ClassificationSelect def={VENDOR_LOCATION} value={form.location_type} onChange={(v) => setForm(p => ({ ...p, location_type: v }))} />
+                </div>
+                {form.is_1099_eligible && (
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">1099 Box <span className="text-accent-expense">*</span></label>
+                    <ClassificationSelect def={VENDOR_1099_BOX} value={form.form_1099_box} onChange={(v) => setForm(p => ({ ...p, form_1099_box: v }))} />
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Diversity (multi-select)</label>
+                  <ClassificationMultiSelect def={VENDOR_DIVERSITY} values={form.diversity} onChange={(v) => setForm(p => ({ ...p, diversity: v }))} />
                 </div>
               </div>
 

@@ -8,6 +8,10 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
+import {
+  CLIENT_TIER, CLIENT_LIFECYCLE, CLIENT_RISK, CLIENT_INDUSTRY, CLIENT_SEGMENT,
+  ClassificationBadge,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -19,6 +23,11 @@ interface Client {
   payment_terms: number;
   tags: string;
   type: string;
+  tier?: string;
+  industry?: string;
+  segment?: string;
+  lifecycle_stage?: string;
+  risk_rating?: string;
 }
 
 type SortField = 'name' | 'email' | 'phone' | 'status' | 'payment_terms';
@@ -317,6 +326,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="phone" label="Phone" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <th>Tier</th>
+                <th>Industry</th>
+                <th>Segment</th>
+                <th>Lifecycle</th>
+                <th>Risk</th>
                 <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <th>Tags</th>
               </tr>
@@ -352,6 +366,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                         {formatStatus(client.status).label}
                       </span>
                     </td>
+                    <td><ClassificationBadge def={CLIENT_TIER} value={client.tier} /></td>
+                    <td><ClassificationBadge def={CLIENT_INDUSTRY} value={client.industry} /></td>
+                    <td><ClassificationBadge def={CLIENT_SEGMENT} value={client.segment} /></td>
+                    <td><ClassificationBadge def={CLIENT_LIFECYCLE} value={client.lifecycle_stage} /></td>
+                    <td><ClassificationBadge def={CLIENT_RISK} value={client.risk_rating} /></td>
                     <td className="text-text-secondary font-mono">
                       {client.payment_terms ? `Net ${client.payment_terms}` : '--'}
                     </td>

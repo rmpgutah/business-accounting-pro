@@ -560,6 +560,10 @@ export function registerIpcHandlers(): void {
     'pto_policies', 'pto_balances', 'pto_transactions',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
+    // Workflow + numbering + email templates (2026-04-23)
+    'custom_statuses', 'status_transitions', 'entity_status_history',
+    'number_sequences', 'email_templates', 'email_template_history',
+    'email_schedules',
   ]);
 
   function validateTable(table: string): boolean {
@@ -3522,6 +3526,137 @@ export function registerIpcHandlers(): void {
   // ─── Categories: Seed Defaults ───────────────────────────
   ipcMain.handle('categories:seed-defaults', (_event, { company_id }: { company_id: string }) => {
     return seedDefaultCategories(company_id);
+  });
+
+  // ─── Industry Presets: Apply ─────────────────────────────
+  // Applies a full industry preset to a company in a single transaction.
+  // Idempotent — re-applying never duplicates existing rows (matches by name/key).
+  // The preset payload itself comes from the renderer (so we don't have to bundle
+  // duplicate data in main); accountSeeds is the COA template's accounts list.
+  ipcMain.handle('industry:apply-preset', (_event, payload: {
+    companyId: string;
+    presetKey: string;
+    preset: any;
+    accountSeeds?: Array<{ code: string; name: string; type: string; subtype?: string }>;
+  }) => {
+    const { companyId, presetKey, preset, accountSeeds = [] } = payload || {} as any;
+    if (!companyId || !preset) return { error: 'companyId and preset are required' };
+
+    const dbInstance = db.getDb();
+    const summary = {
+      categoriesAdded: 0, categoriesSkipped: 0,
+      vendorsAdded: 0, vendorsSkipped: 0,
+      fieldsAdded: 0, fieldsSkipped: 0,
+      accountsAdded: 0, accountsSkipped: 0,
+      hintsAdded: 0,
+    };
+
+    try {
+      const apply = dbInstance.transaction(() => {
+        // 1) Accounts (from CoA template)
+        const acctExisting = dbInstance.prepare('SELECT code FROM accounts WHERE company_id = ?').all(companyId) as Array<{ code: string }>;
+        const acctSet = new Set(acctExisting.map((a) => a.code));
+        const insertAcct = dbInstance.prepare(
+          `INSERT OR IGNORE INTO accounts (id, company_id, code, name, type, subtype, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)`
+        );
+        for (const a of accountSeeds) {
+          if (acctSet.has(a.code)) { summary.accountsSkipped++; continue; }
+          insertAcct.run(uuid(), companyId, a.code, a.name, a.type, a.subtype || '');
+          summary.accountsAdded++;
+        }
+
+        // 2) Categories — schema CHECK only allows income/expense, so 'cogs' maps to expense
+        const catExisting = dbInstance.prepare('SELECT name FROM categories WHERE company_id = ?').all(companyId) as Array<{ name: string }>;
+        const catSet = new Set(catExisting.map((c) => c.name.toLowerCase()));
+        const insertCat = dbInstance.prepare(
+          `INSERT OR IGNORE INTO categories (id, company_id, name, type, color, description, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)`
+        );
+        for (const c of (preset.defaultCategories || [])) {
+          if (catSet.has(String(c.name).toLowerCase())) { summary.categoriesSkipped++; continue; }
+          const dbType = c.type === 'income' ? 'income' : 'expense';
+          insertCat.run(uuid(), companyId, c.name, dbType, c.color || '#6b7280', c.description || '');
+          summary.categoriesAdded++;
+        }
+
+        // 3) Vendors
+        const venExisting = dbInstance.prepare('SELECT name FROM vendors WHERE company_id = ?').all(companyId) as Array<{ name: string }>;
+        const venSet = new Set(venExisting.map((v) => v.name.toLowerCase()));
+        const insertVen = dbInstance.prepare(
+          `INSERT OR IGNORE INTO vendors (id, company_id, name, notes, status) VALUES (?, ?, ?, ?, 'active')`
+        );
+        for (const v of (preset.defaultVendors || [])) {
+          if (venSet.has(String(v.name).toLowerCase())) { summary.vendorsSkipped++; continue; }
+          insertVen.run(uuid(), companyId, v.name, v.notes || `Type: ${v.type || 'general'}`);
+          summary.vendorsAdded++;
+        }
+
+        // 4) Custom field defs (idempotent via UNIQUE(company_id, entity_type, field_name))
+        const insertField = dbInstance.prepare(
+          `INSERT OR IGNORE INTO custom_field_defs (id, company_id, entity_type, field_name, field_label, field_type, options, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        let fieldOrder = 0;
+        for (const f of (preset.industrySpecificFields || [])) {
+          const before = (dbInstance.prepare('SELECT COUNT(*) as cnt FROM custom_field_defs WHERE company_id = ? AND entity_type = ? AND field_name = ?').get(companyId, f.entity_type, f.key) as any).cnt;
+          if (before > 0) { summary.fieldsSkipped++; continue; }
+          insertField.run(uuid(), companyId, f.entity_type, f.key, f.label, f.field_type, JSON.stringify(f.options || []), fieldOrder++);
+          summary.fieldsAdded++;
+        }
+
+        // 5) Persist the active preset key + invoice settings + setup hints (as settings rows)
+        const upsertSetting = dbInstance.prepare(
+          `INSERT INTO settings (id, company_id, key, value, updated_at) VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`
+        );
+        upsertSetting.run(uuid(), companyId, 'industry_preset_key', presetKey);
+        upsertSetting.run(uuid(), companyId, 'industry_preset_applied_at', new Date().toISOString());
+
+        if (preset.setupHints && Array.isArray(preset.setupHints)) {
+          upsertSetting.run(uuid(), companyId, 'industry_setup_hints', JSON.stringify(preset.setupHints));
+          summary.hintsAdded = preset.setupHints.length;
+        }
+        if (preset.dashboardWidgets && Array.isArray(preset.dashboardWidgets)) {
+          upsertSetting.run(uuid(), companyId, 'industry_dashboard_widgets', JSON.stringify(preset.dashboardWidgets));
+        }
+
+        // 6) Invoice settings (merge into existing row or create one)
+        const inv = preset.invoiceSettings || {};
+        const invKeys = Object.keys(inv).filter((k) => inv[k] !== undefined && inv[k] !== null && inv[k] !== '');
+        if (invKeys.length > 0) {
+          const existing = dbInstance.prepare('SELECT id FROM invoice_settings WHERE company_id = ?').get(companyId) as any;
+          if (existing) {
+            const sets = invKeys.map((k) => `${k} = ?`).join(', ');
+            dbInstance.prepare(`UPDATE invoice_settings SET ${sets}, updated_at = datetime('now') WHERE id = ?`)
+              .run(...invKeys.map((k) => inv[k]), existing.id);
+          } else {
+            const cols = ['id', 'company_id', ...invKeys];
+            const vals = [uuid(), companyId, ...invKeys.map((k) => inv[k])];
+            dbInstance.prepare(`INSERT INTO invoice_settings (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...vals);
+          }
+        }
+
+        // 7) Stamp company.industry
+        dbInstance.prepare(`UPDATE companies SET industry = ?, updated_at = datetime('now') WHERE id = ?`).run(presetKey, companyId);
+      });
+      apply();
+
+      try { db.logAudit(companyId, 'companies', companyId, 'industry-preset-applied'); } catch { /* audit best-effort */ }
+      return { success: true, summary };
+    } catch (err) {
+      console.error('industry:apply-preset failed:', err);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // Returns a snapshot of existing rows so the renderer can compute a diff
+  // before applying a preset (additive, never destructive).
+  ipcMain.handle('industry:get-existing', (_event, { companyId }: { companyId: string }) => {
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+    const categoryNames = (dbInstance.prepare('SELECT name FROM categories WHERE company_id = ?').all(companyId) as Array<{ name: string }>).map((r) => r.name);
+    const vendorNames = (dbInstance.prepare('SELECT name FROM vendors WHERE company_id = ?').all(companyId) as Array<{ name: string }>).map((r) => r.name);
+    const fields = (dbInstance.prepare('SELECT entity_type, field_name FROM custom_field_defs WHERE company_id = ?').all(companyId) as Array<{ entity_type: string; field_name: string }>).map((r) => `${r.entity_type}:${r.field_name}`);
+    const accountCodes = (dbInstance.prepare('SELECT code FROM accounts WHERE company_id = ?').all(companyId) as Array<{ code: string }>).map((r) => r.code);
+    return { categoryNames, vendorNames, fields, accountCodes };
   });
 
   // ─── Automation Rules ──────────────────────────────
@@ -7883,6 +8018,649 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Workflow + Numbering + Email Templates (2026-04-23)
+  // Features 1–30 — see CLAUDE.md domain spec
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const ENTITY_TYPES = ['invoice','quote','expense','bill','debt','project','purchase_order','journal_entry'];
+
+  const DEFAULT_STATUSES: Record<string, Array<{ key: string; label: string; color: string; icon: string; sort_order: number; is_terminal?: number }>> = {
+    invoice: [
+      { key: 'draft', label: 'Draft', color: '#9ca3af', icon: 'FileEdit', sort_order: 0 },
+      { key: 'sent', label: 'Sent', color: '#3b82f6', icon: 'Send', sort_order: 1 },
+      { key: 'partial', label: 'Partial', color: '#f59e0b', icon: 'PieChart', sort_order: 2 },
+      { key: 'paid', label: 'Paid', color: '#10b981', icon: 'CheckCircle2', sort_order: 3, is_terminal: 1 },
+      { key: 'overdue', label: 'Overdue', color: '#ef4444', icon: 'AlertCircle', sort_order: 4 },
+      { key: 'void', label: 'Void', color: '#6b7280', icon: 'Ban', sort_order: 5, is_terminal: 1 },
+    ],
+    quote: [
+      { key: 'draft', label: 'Draft', color: '#9ca3af', icon: 'FileEdit', sort_order: 0 },
+      { key: 'sent', label: 'Sent', color: '#3b82f6', icon: 'Send', sort_order: 1 },
+      { key: 'accepted', label: 'Accepted', color: '#10b981', icon: 'CheckCircle2', sort_order: 2, is_terminal: 1 },
+      { key: 'declined', label: 'Declined', color: '#ef4444', icon: 'XCircle', sort_order: 3, is_terminal: 1 },
+      { key: 'expired', label: 'Expired', color: '#6b7280', icon: 'Clock', sort_order: 4, is_terminal: 1 },
+    ],
+    expense: [
+      { key: 'draft', label: 'Draft', color: '#9ca3af', icon: 'FileEdit', sort_order: 0 },
+      { key: 'submitted', label: 'Submitted', color: '#3b82f6', icon: 'Send', sort_order: 1 },
+      { key: 'approved', label: 'Approved', color: '#10b981', icon: 'CheckCircle2', sort_order: 2 },
+      { key: 'reimbursed', label: 'Reimbursed', color: '#8b5cf6', icon: 'DollarSign', sort_order: 3, is_terminal: 1 },
+      { key: 'rejected', label: 'Rejected', color: '#ef4444', icon: 'XCircle', sort_order: 4, is_terminal: 1 },
+    ],
+    bill: [
+      { key: 'draft', label: 'Draft', color: '#9ca3af', icon: 'FileEdit', sort_order: 0 },
+      { key: 'received', label: 'Received', color: '#3b82f6', icon: 'Inbox', sort_order: 1 },
+      { key: 'approved', label: 'Approved', color: '#06b6d4', icon: 'CheckCircle2', sort_order: 2 },
+      { key: 'paid', label: 'Paid', color: '#10b981', icon: 'DollarSign', sort_order: 3, is_terminal: 1 },
+      { key: 'void', label: 'Void', color: '#6b7280', icon: 'Ban', sort_order: 4, is_terminal: 1 },
+    ],
+    debt: [
+      { key: 'new', label: 'New', color: '#9ca3af', icon: 'AlertCircle', sort_order: 0 },
+      { key: 'in_collection', label: 'In Collection', color: '#f59e0b', icon: 'Phone', sort_order: 1 },
+      { key: 'promise', label: 'Promise', color: '#3b82f6', icon: 'HandCoins', sort_order: 2 },
+      { key: 'paid', label: 'Paid', color: '#10b981', icon: 'CheckCircle2', sort_order: 3, is_terminal: 1 },
+      { key: 'written_off', label: 'Written Off', color: '#6b7280', icon: 'Ban', sort_order: 4, is_terminal: 1 },
+    ],
+    project: [
+      { key: 'planning', label: 'Planning', color: '#9ca3af', icon: 'ClipboardList', sort_order: 0 },
+      { key: 'active', label: 'Active', color: '#3b82f6', icon: 'Activity', sort_order: 1 },
+      { key: 'on_hold', label: 'On Hold', color: '#f59e0b', icon: 'Pause', sort_order: 2 },
+      { key: 'completed', label: 'Completed', color: '#10b981', icon: 'CheckCircle2', sort_order: 3, is_terminal: 1 },
+      { key: 'cancelled', label: 'Cancelled', color: '#6b7280', icon: 'Ban', sort_order: 4, is_terminal: 1 },
+    ],
+    purchase_order: [
+      { key: 'draft', label: 'Draft', color: '#9ca3af', icon: 'FileEdit', sort_order: 0 },
+      { key: 'sent', label: 'Sent', color: '#3b82f6', icon: 'Send', sort_order: 1 },
+      { key: 'received', label: 'Received', color: '#10b981', icon: 'Package', sort_order: 2, is_terminal: 1 },
+      { key: 'cancelled', label: 'Cancelled', color: '#6b7280', icon: 'Ban', sort_order: 3, is_terminal: 1 },
+    ],
+    journal_entry: [
+      { key: 'draft', label: 'Draft', color: '#9ca3af', icon: 'FileEdit', sort_order: 0 },
+      { key: 'posted', label: 'Posted', color: '#10b981', icon: 'CheckCircle2', sort_order: 1, is_terminal: 1 },
+      { key: 'reversed', label: 'Reversed', color: '#ef4444', icon: 'Undo2', sort_order: 2, is_terminal: 1 },
+    ],
+  };
+
+  const DEFAULT_EMAIL_TEMPLATES: Record<string, { label: string; subject: string; body: string; tokens: string[] }> = {
+    invoice_send: {
+      label: 'Invoice — Send',
+      subject: 'Invoice {{invoice_number}} from {{company_name}}',
+      body: 'Hi {{client_name}},\n\nPlease find attached invoice **{{invoice_number}}** for **{{total_due}}** due on **{{due_date}}**.\n\nPay online: {{payment_link}}\n\nThanks,\n{{company_name}}',
+      tokens: ['client_name','invoice_number','total_due','due_date','company_name','payment_link'],
+    },
+    payment_reminder_1: {
+      label: 'Payment Reminder — First',
+      subject: 'Friendly reminder: Invoice {{invoice_number}}',
+      body: 'Hi {{client_name}},\n\nThis is a friendly reminder that invoice **{{invoice_number}}** for **{{total_due}}** was due on **{{due_date}}**.\n\nPay online: {{payment_link}}\n\nThanks,\n{{company_name}}',
+      tokens: ['client_name','invoice_number','total_due','due_date','company_name','payment_link'],
+    },
+    payment_reminder_2: {
+      label: 'Payment Reminder — Second',
+      subject: 'Past due: Invoice {{invoice_number}} — {{days_overdue}} days',
+      body: 'Hi {{client_name}},\n\nInvoice **{{invoice_number}}** for **{{total_due}}** is now **{{days_overdue}} days** past due.\n\nPlease remit payment as soon as possible: {{payment_link}}\n\nThanks,\n{{company_name}}',
+      tokens: ['client_name','invoice_number','total_due','due_date','days_overdue','company_name','payment_link'],
+    },
+    overdue_notice: {
+      label: 'Overdue Notice',
+      subject: 'OVERDUE: Invoice {{invoice_number}} — {{days_overdue}} days past due',
+      body: 'Dear {{client_name}},\n\nDespite previous reminders, invoice **{{invoice_number}}** for **{{total_due}}** remains unpaid and is now **{{days_overdue}} days** overdue.\n\nThis matter requires your immediate attention.\n\n{{company_name}}',
+      tokens: ['client_name','invoice_number','total_due','days_overdue','company_name'],
+    },
+    quote_send: {
+      label: 'Quote — Send',
+      subject: 'Quote {{invoice_number}} from {{company_name}}',
+      body: 'Hi {{client_name}},\n\nPlease find attached quote **{{invoice_number}}** for **{{total_due}}**.\n\nThis quote is valid until **{{due_date}}**.\n\nThanks,\n{{company_name}}',
+      tokens: ['client_name','invoice_number','total_due','due_date','company_name'],
+    },
+    statement: {
+      label: 'Account Statement',
+      subject: 'Statement of Account — {{client_name}}',
+      body: 'Hi {{client_name}},\n\nPlease find attached your statement showing a balance of **{{total_due}}**.\n\nThanks,\n{{company_name}}',
+      tokens: ['client_name','total_due','company_name'],
+    },
+    welcome: {
+      label: 'Welcome',
+      subject: 'Welcome to {{company_name}}',
+      body: 'Hi {{client_name}},\n\nThanks for choosing **{{company_name}}**. We look forward to working with you.\n\nBest,\n{{company_name}}',
+      tokens: ['client_name','company_name'],
+    },
+    demand_letter: {
+      label: 'Demand Letter',
+      subject: 'Final Demand — Invoice {{invoice_number}}',
+      body: 'Dear {{client_name}},\n\nThis is a **final demand** for payment of invoice **{{invoice_number}}** in the amount of **{{total_due}}**, currently **{{days_overdue}} days** overdue.\n\nFailure to pay within 10 days may result in legal action.\n\n{{company_name}}',
+      tokens: ['client_name','invoice_number','total_due','days_overdue','company_name'],
+    },
+  };
+
+  function ensureDefaultStatuses(companyId: string) {
+    for (const entityType of ENTITY_TYPES) {
+      const existing = db.getDb().prepare(
+        `SELECT COUNT(*) AS c FROM custom_statuses WHERE company_id = ? AND entity_type = ?`
+      ).get(companyId, entityType) as any;
+      if (existing?.c) continue;
+      for (const s of DEFAULT_STATUSES[entityType] || []) {
+        db.getDb().prepare(
+          `INSERT INTO custom_statuses (id, company_id, entity_type, key, label, color, icon, sort_order, is_terminal)
+           VALUES (?,?,?,?,?,?,?,?,?)`
+        ).run(uuid(), companyId, entityType, s.key, s.label, s.color, s.icon, s.sort_order, s.is_terminal || 0);
+      }
+    }
+  }
+
+  function ensureDefaultEmailTemplates(companyId: string) {
+    for (const [key, t] of Object.entries(DEFAULT_EMAIL_TEMPLATES)) {
+      const existing = db.getDb().prepare(
+        `SELECT id FROM email_templates WHERE company_id = ? AND key = ?`
+      ).get(companyId, key) as any;
+      if (existing) continue;
+      const defaultTo = 'client.email';
+      db.getDb().prepare(
+        `INSERT INTO email_templates (id, company_id, key, label, subject, body, body_format, available_tokens_json, default_to)
+         VALUES (?,?,?,?,?,?,?,?,?)`
+      ).run(uuid(), companyId, key, t.label, t.subject, t.body, 'markdown', JSON.stringify(t.tokens), defaultTo);
+    }
+  }
+
+  function ensureDefaultNumberSequences(companyId: string) {
+    const defaults: Record<string, { prefix: string; padding: number }> = {
+      invoice: { prefix: 'INV-{YYYY}-', padding: 5 },
+      bill: { prefix: 'BILL-{YYYY}-', padding: 5 },
+      journal_entry: { prefix: 'JE-{YYYY}-{MM}-', padding: 5 },
+      debt: { prefix: 'DEBT-', padding: 5 },
+      purchase_order: { prefix: 'PO-{YYYY}-', padding: 5 },
+      quote: { prefix: 'QT-{YYYY}-', padding: 5 },
+      expense: { prefix: 'EXP-', padding: 5 },
+      project: { prefix: 'PRJ-{YYYY}-', padding: 4 },
+    };
+    for (const [entityType, cfg] of Object.entries(defaults)) {
+      const existing = db.getDb().prepare(
+        `SELECT id FROM number_sequences WHERE company_id = ? AND entity_type = ?`
+      ).get(companyId, entityType) as any;
+      if (existing) continue;
+      db.getDb().prepare(
+        `INSERT INTO number_sequences (id, company_id, entity_type, prefix, suffix, padding, current_value, reset_frequency)
+         VALUES (?,?,?,?,?,?,?,?)`
+      ).run(uuid(), companyId, entityType, cfg.prefix, '', cfg.padding, 0, 'never');
+    }
+  }
+
+  ipcMain.handle('workflow:statuses-list', (_e, { companyId, entityType }: any) => {
+    try {
+      ensureDefaultStatuses(companyId);
+      const rows = db.getDb().prepare(
+        `SELECT * FROM custom_statuses WHERE company_id = ? ${entityType ? 'AND entity_type = ?' : ''} ORDER BY entity_type, sort_order`
+      ).all(...(entityType ? [companyId, entityType] : [companyId]));
+      return rows;
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('workflow:transitions-list', (_e, { companyId, entityType }: any) => {
+    try {
+      const rows = db.getDb().prepare(
+        `SELECT * FROM status_transitions WHERE company_id = ? ${entityType ? 'AND entity_type = ?' : ''}`
+      ).all(...(entityType ? [companyId, entityType] : [companyId]));
+      return rows;
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('workflow:transition-validate', (_e, { companyId, entityType, fromStatus, toStatus }: any) => {
+    try {
+      const transitions = db.getDb().prepare(
+        `SELECT * FROM status_transitions WHERE company_id = ? AND entity_type = ?`
+      ).all(companyId, entityType) as any[];
+      if (transitions.length === 0) return { allowed: true };
+      const match = transitions.find((t: any) => t.from_status === fromStatus && t.to_status === toStatus);
+      if (!match) return { allowed: false, reason: `Transition ${fromStatus} → ${toStatus} not allowed` };
+      return { allowed: true, requiresComment: !!match.requires_comment, requiresApproval: !!match.requires_approval, requiresRole: match.requires_role || '' };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('workflow:status-history', (_e, { companyId, entityType, entityId }: any) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT * FROM entity_status_history WHERE company_id = ? AND entity_type = ? AND entity_id = ? ORDER BY changed_at DESC`
+      ).all(companyId, entityType, entityId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('workflow:status-change', (_e, { companyId, entityType, entityId, fromStatus, toStatus, comment, changedBy }: any) => {
+    try {
+      const trans = db.getDb().prepare(
+        `SELECT * FROM status_transitions WHERE company_id = ? AND entity_type = ?`
+      ).all(companyId, entityType) as any[];
+      if (trans.length > 0) {
+        const match = trans.find((t: any) => t.from_status === fromStatus && t.to_status === toStatus);
+        if (!match) return { error: `Transition ${fromStatus} → ${toStatus} not allowed` };
+        if (match.requires_comment && !(comment || '').trim()) return { error: 'Comment required for this transition' };
+      }
+      db.getDb().prepare(
+        `INSERT INTO entity_status_history (id, company_id, entity_type, entity_id, from_status, to_status, changed_by, comment)
+         VALUES (?,?,?,?,?,?,?,?)`
+      ).run(uuid(), companyId, entityType, entityId, fromStatus || '', toStatus, changedBy || '', comment || '');
+      const status = db.getDb().prepare(
+        `SELECT notify_users FROM custom_statuses WHERE company_id = ? AND entity_type = ? AND key = ?`
+      ).get(companyId, entityType, toStatus) as any;
+      if (status?.notify_users) {
+        const users = String(status.notify_users).split(',').map((s: string) => s.trim()).filter(Boolean);
+        for (const u of users) {
+          try {
+            db.create('notifications', {
+              company_id: companyId,
+              user_id: u,
+              type: 'status_change',
+              title: `${entityType} status → ${toStatus}`,
+              message: `${entityType} ${entityId} moved to ${toStatus}${comment ? ': ' + comment : ''}`,
+              link: `/${entityType}s/${entityId}`,
+            });
+          } catch {}
+        }
+      }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('workflow:bulk-status-change', (_e, { companyId, entityType, entityIds, toStatus, comment, changedBy }: any) => {
+    try {
+      let success = 0; const errors: any[] = [];
+      for (const id of entityIds) {
+        try {
+          let from = '';
+          try {
+            const tableName = entityType === 'journal_entry' ? 'journal_entries' : entityType + 's';
+            const row = db.getDb().prepare(`SELECT status FROM ${tableName} WHERE id = ?`).get(id) as any;
+            from = row?.status || '';
+          } catch {}
+          db.getDb().prepare(
+            `INSERT INTO entity_status_history (id, company_id, entity_type, entity_id, from_status, to_status, changed_by, comment)
+             VALUES (?,?,?,?,?,?,?,?)`
+          ).run(uuid(), companyId, entityType, id, from, toStatus, changedBy || '', comment || '');
+          success++;
+        } catch (e: any) { errors.push({ id, error: e?.message }); }
+      }
+      return { ok: true, success, errors };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  function resolveTokens(prefix: string, companyId: string): string {
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const yy = yyyy.slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const q = String(Math.floor(now.getMonth() / 3) + 1);
+    let companyAbbr = '';
+    try {
+      const c = db.getById('companies', companyId) as any;
+      companyAbbr = (c?.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
+    } catch {}
+    return prefix
+      .replace(/\{YYYY\}/g, yyyy)
+      .replace(/\{YY\}/g, yy)
+      .replace(/\{MM\}/g, mm)
+      .replace(/\{Q\}/g, q)
+      .replace(/\{COMPANY\}/g, companyAbbr);
+  }
+
+  function shouldReset(seq: any): boolean {
+    if (!seq.last_reset_at || seq.reset_frequency === 'never') return false;
+    const last = new Date(seq.last_reset_at);
+    const now = new Date();
+    if (seq.reset_frequency === 'yearly') return last.getFullYear() !== now.getFullYear();
+    if (seq.reset_frequency === 'monthly') return last.getFullYear() !== now.getFullYear() || last.getMonth() !== now.getMonth();
+    if (seq.reset_frequency === 'quarterly') {
+      const lq = Math.floor(last.getMonth() / 3);
+      const nq = Math.floor(now.getMonth() / 3);
+      return last.getFullYear() !== now.getFullYear() || lq !== nq;
+    }
+    return false;
+  }
+
+  ipcMain.handle('numbering:list', (_e, { companyId }: any) => {
+    try {
+      ensureDefaultNumberSequences(companyId);
+      return db.getDb().prepare(
+        `SELECT * FROM number_sequences WHERE company_id = ? ORDER BY entity_type`
+      ).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('numbering:save', (_e, { id, data }: any) => {
+    try {
+      if (id) db.update('number_sequences', id, data);
+      else db.create('number_sequences', data);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('numbering:preview', (_e, { companyId, entityType }: any) => {
+    try {
+      ensureDefaultNumberSequences(companyId);
+      const seq = db.getDb().prepare(
+        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
+      ).get(companyId, entityType) as any;
+      if (!seq) return { number: '' };
+      let next = (seq.current_value || 0) + 1;
+      if (shouldReset(seq)) next = 1;
+      const padded = String(next).padStart(seq.padding || 5, '0');
+      return { number: `${resolveTokens(seq.prefix || '', companyId)}${padded}${seq.suffix || ''}` };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('numbering:generate', (_e, { companyId, entityType, reserve }: any) => {
+    try {
+      ensureDefaultNumberSequences(companyId);
+      const seq = db.getDb().prepare(
+        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
+      ).get(companyId, entityType) as any;
+      if (!seq) return { error: 'sequence not found' };
+      let current = seq.current_value || 0;
+      if (shouldReset(seq)) {
+        current = 0;
+        db.getDb().prepare(`UPDATE number_sequences SET last_reset_at = datetime('now') WHERE id = ?`).run(seq.id);
+      }
+      const next = current + 1;
+      db.getDb().prepare(`UPDATE number_sequences SET current_value = ?, updated_at = datetime('now') WHERE id = ?`).run(next, seq.id);
+      const padded = String(next).padStart(seq.padding || 5, '0');
+      const number = `${resolveTokens(seq.prefix || '', companyId)}${padded}${seq.suffix || ''}`;
+      if (reserve) {
+        const reserved = JSON.parse(seq.reserved_json || '[]');
+        reserved.push({ value: next, number, reserved_at: new Date().toISOString() });
+        db.getDb().prepare(`UPDATE number_sequences SET reserved_json = ? WHERE id = ?`).run(JSON.stringify(reserved), seq.id);
+      }
+      return { number, value: next };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('numbering:release', (_e, { companyId, entityType, value }: any) => {
+    try {
+      const seq = db.getDb().prepare(
+        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
+      ).get(companyId, entityType) as any;
+      if (!seq) return { error: 'sequence not found' };
+      const reserved = JSON.parse(seq.reserved_json || '[]').filter((r: any) => r.value !== value);
+      let cv = seq.current_value || 0;
+      if (cv === value) cv -= 1;
+      db.getDb().prepare(`UPDATE number_sequences SET reserved_json = ?, current_value = ? WHERE id = ?`).run(JSON.stringify(reserved), cv, seq.id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  const NUMBER_TABLE_MAP: Record<string, { table: string; col: string }> = {
+    invoice: { table: 'invoices', col: 'invoice_number' },
+    bill: { table: 'bills', col: 'bill_number' },
+    quote: { table: 'quotes', col: 'quote_number' },
+    purchase_order: { table: 'purchase_orders', col: 'po_number' },
+    expense: { table: 'expenses', col: 'expense_number' },
+    debt: { table: 'debts', col: 'debt_number' },
+    journal_entry: { table: 'journal_entries', col: 'entry_number' },
+  };
+
+  ipcMain.handle('numbering:gaps', (_e, { companyId, entityType }: any) => {
+    try {
+      const t = NUMBER_TABLE_MAP[entityType];
+      if (!t) return { gaps: [], note: 'No table mapping' };
+      let rows: any[] = [];
+      try {
+        rows = db.getDb().prepare(
+          `SELECT ${t.col} AS num FROM ${t.table} WHERE company_id = ? AND ${t.col} IS NOT NULL AND ${t.col} != '' ORDER BY ${t.col}`
+        ).all(companyId);
+      } catch { return { gaps: [], note: 'Number column not present' }; }
+      const nums = rows.map((r: any) => {
+        const m = String(r.num).match(/(\d+)(?!.*\d)/);
+        return m ? parseInt(m[1], 10) : null;
+      }).filter((n): n is number => n !== null).sort((a, b) => a - b);
+      const gaps: number[] = [];
+      for (let i = 1; i < nums.length; i++) {
+        for (let g = nums[i - 1] + 1; g < nums[i]; g++) gaps.push(g);
+      }
+      return { gaps, total: nums.length, min: nums[0] || 0, max: nums[nums.length - 1] || 0 };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('numbering:renumber', (_e, { companyId, entityType, dryRun }: any) => {
+    try {
+      const t = NUMBER_TABLE_MAP[entityType];
+      if (!t) return { error: 'No table mapping' };
+      const seq = db.getDb().prepare(
+        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
+      ).get(companyId, entityType) as any;
+      if (!seq) return { error: 'sequence not found' };
+      let rows: any[] = [];
+      try {
+        rows = db.getDb().prepare(
+          `SELECT id, ${t.col} AS num FROM ${t.table} WHERE company_id = ? ORDER BY created_at`
+        ).all(companyId);
+      } catch { return { error: 'Renumber not supported for this entity' }; }
+      const changes: Array<{ id: string; from: string; to: string }> = [];
+      let n = 1;
+      for (const r of rows) {
+        const padded = String(n).padStart(seq.padding || 5, '0');
+        const newNum = `${resolveTokens(seq.prefix || '', companyId)}${padded}${seq.suffix || ''}`;
+        if (r.num !== newNum) changes.push({ id: r.id, from: r.num || '', to: newNum });
+        n++;
+      }
+      if (!dryRun) {
+        for (const c of changes) {
+          try {
+            db.getDb().prepare(`UPDATE ${t.table} SET ${t.col} = ? WHERE id = ?`).run(c.to, c.id);
+            db.logAudit(companyId, entityType, c.id, 'renumber', { from: c.from, to: c.to });
+          } catch {}
+        }
+        db.getDb().prepare(`UPDATE number_sequences SET current_value = ?, updated_at = datetime('now') WHERE id = ?`).run(n - 1, seq.id);
+      }
+      return { ok: true, changes, count: changes.length };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  function resolveTemplateTokens(body: string, ctx: Record<string, any>): string {
+    return body.replace(/\{\{\s*([\w_]+)\s*\}\}/g, (_m, key) => {
+      const v = ctx[key];
+      if (v === undefined || v === null) return `{{${key}}}`;
+      return String(v);
+    });
+  }
+
+  function buildTemplateContext(companyId: string, entityType: string, entityId: string): Record<string, any> {
+    const ctx: Record<string, any> = {};
+    try {
+      const co = db.getById('companies', companyId) as any;
+      ctx.company_name = co?.name || '';
+    } catch {}
+    try {
+      if (entityType === 'invoice') {
+        const inv = db.getById('invoices', entityId) as any;
+        if (inv) {
+          ctx.invoice_number = inv.invoice_number || '';
+          ctx.total_due = `$${Number(inv.total_amount || 0).toFixed(2)}`;
+          ctx.due_date = inv.due_date || '';
+          if (inv.due_date) {
+            const days = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000);
+            ctx.days_overdue = String(Math.max(0, days));
+          }
+          if (inv.client_id) {
+            const client = db.getById('clients', inv.client_id) as any;
+            ctx.client_name = client?.name || '';
+            ctx.client_email = client?.email || '';
+          }
+          ctx.payment_link = inv.id ? `https://accounting.rmpgutah.us/pay/${inv.id}` : '';
+        }
+      } else if (entityType === 'quote') {
+        const q = db.getById('quotes', entityId) as any;
+        if (q) {
+          ctx.invoice_number = q.quote_number || '';
+          ctx.total_due = `$${Number(q.total_amount || 0).toFixed(2)}`;
+          ctx.due_date = q.expires_at || '';
+          if (q.client_id) {
+            const client = db.getById('clients', q.client_id) as any;
+            ctx.client_name = client?.name || '';
+            ctx.client_email = client?.email || '';
+          }
+        }
+      } else if (entityType === 'debt') {
+        const d = db.getById('debts', entityId) as any;
+        if (d) {
+          ctx.invoice_number = d.debt_number || d.invoice_number || '';
+          ctx.total_due = `$${Number(d.balance || d.original_amount || 0).toFixed(2)}`;
+          ctx.due_date = d.original_due_date || '';
+          if (d.original_due_date) {
+            const days = Math.floor((Date.now() - new Date(d.original_due_date).getTime()) / 86400000);
+            ctx.days_overdue = String(Math.max(0, days));
+          }
+          if (d.client_id) {
+            const client = db.getById('clients', d.client_id) as any;
+            ctx.client_name = client?.name || '';
+            ctx.client_email = client?.email || '';
+          }
+        }
+      }
+    } catch {}
+    return ctx;
+  }
+
+  ipcMain.handle('email-tmpl:list', (_e, { companyId }: any) => {
+    try {
+      ensureDefaultEmailTemplates(companyId);
+      return db.getDb().prepare(
+        `SELECT * FROM email_templates WHERE company_id = ? ORDER BY label`
+      ).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email-tmpl:save', (_e, { id, data, changedBy }: any) => {
+    try {
+      if (id) {
+        const prev = db.getById('email_templates', id) as any;
+        if (prev) {
+          const lastVer = db.getDb().prepare(
+            `SELECT MAX(version) AS v FROM email_template_history WHERE template_id = ?`
+          ).get(id) as any;
+          const nextVersion = (lastVer?.v || 0) + 1;
+          db.getDb().prepare(
+            `INSERT INTO email_template_history (id, template_id, version, snapshot_json, changed_by) VALUES (?,?,?,?,?)`
+          ).run(uuid(), id, nextVersion, JSON.stringify(prev), changedBy || '');
+        }
+        db.update('email_templates', id, data);
+      } else {
+        db.create('email_templates', data);
+      }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email-tmpl:history', (_e, { templateId }: any) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT * FROM email_template_history WHERE template_id = ? ORDER BY version DESC`
+      ).all(templateId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email-tmpl:rollback', (_e, { templateId, version, changedBy }: any) => {
+    try {
+      const snap = db.getDb().prepare(
+        `SELECT * FROM email_template_history WHERE template_id = ? AND version = ?`
+      ).get(templateId, version) as any;
+      if (!snap) return { error: 'Version not found' };
+      const data = JSON.parse(snap.snapshot_json);
+      const current = db.getById('email_templates', templateId) as any;
+      const lastVer = db.getDb().prepare(
+        `SELECT MAX(version) AS v FROM email_template_history WHERE template_id = ?`
+      ).get(templateId) as any;
+      db.getDb().prepare(
+        `INSERT INTO email_template_history (id, template_id, version, snapshot_json, changed_by) VALUES (?,?,?,?,?)`
+      ).run(uuid(), templateId, (lastVer?.v || 0) + 1, JSON.stringify(current), changedBy || 'rollback');
+      db.update('email_templates', templateId, {
+        subject: data.subject, body: data.body, body_format: data.body_format,
+        available_tokens_json: data.available_tokens_json, default_to: data.default_to,
+        default_cc: data.default_cc, default_bcc: data.default_bcc, label: data.label,
+      });
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email-tmpl:resolve', (_e, { companyId, templateKey, entityType, entityId, sampleCtx }: any) => {
+    try {
+      ensureDefaultEmailTemplates(companyId);
+      const tmpl = db.getDb().prepare(
+        `SELECT * FROM email_templates WHERE company_id = ? AND key = ?`
+      ).get(companyId, templateKey) as any;
+      if (!tmpl) return { error: 'Template not found' };
+      const ctx = sampleCtx || buildTemplateContext(companyId, entityType, entityId);
+      return {
+        subject: resolveTemplateTokens(tmpl.subject || '', ctx),
+        body: resolveTemplateTokens(tmpl.body || '', ctx),
+        bodyFormat: tmpl.body_format,
+        defaultTo: tmpl.default_to,
+        defaultCc: tmpl.default_cc,
+        defaultBcc: tmpl.default_bcc,
+        ctx,
+      };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email-tmpl:validate', (_e, { body, subject, availableTokens }: any) => {
+    try {
+      const allTokens: string[] = JSON.parse(availableTokens || '[]');
+      const re = /\{\{\s*([\w_]+)\s*\}\}/g;
+      const used = new Set<string>();
+      const text = `${subject || ''}\n${body || ''}`;
+      let m;
+      while ((m = re.exec(text)) !== null) used.add(m[1]);
+      const unknown = Array.from(used).filter(t => !allTokens.includes(t));
+      return { ok: unknown.length === 0, unknown, used: Array.from(used) };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email:send-templated', async (_e, { companyId, templateKey, entityType, entityId, overrideTo }: any) => {
+    try {
+      ensureDefaultEmailTemplates(companyId);
+      const tmpl = db.getDb().prepare(
+        `SELECT * FROM email_templates WHERE company_id = ? AND key = ?`
+      ).get(companyId, templateKey) as any;
+      if (!tmpl) return { error: 'Template not found' };
+      const ctx = buildTemplateContext(companyId, entityType, entityId);
+      const subject = resolveTemplateTokens(tmpl.subject || '', ctx);
+      const body = resolveTemplateTokens(tmpl.body || '', ctx);
+      let to = overrideTo;
+      if (!to) {
+        if ((tmpl.default_to || '').includes('client.email')) to = ctx.client_email || '';
+        else to = tmpl.default_to || '';
+      }
+      const mailto = `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      try { shell.openExternal(mailto); } catch {}
+      try {
+        db.create('email_log', {
+          company_id: companyId,
+          entity_type: entityType,
+          entity_id: entityId,
+          recipient: to || '',
+          subject,
+          status: 'opened_in_client',
+          template_key: templateKey,
+        });
+      } catch {}
+      return { ok: true, to, subject, body };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('email:bulk-send-templated', async (_e, { companyId, templateKey, items }: any) => {
+    try {
+      const results: any[] = [];
+      const tmpl = db.getDb().prepare(
+        `SELECT * FROM email_templates WHERE company_id = ? AND key = ?`
+      ).get(companyId, templateKey) as any;
+      for (const it of items) {
+        if (!tmpl) { results.push({ ...it, error: 'no template' }); continue; }
+        const ctx = buildTemplateContext(companyId, it.entityType, it.entityId);
+        const subject = resolveTemplateTokens(tmpl.subject || '', ctx);
+        const body = resolveTemplateTokens(tmpl.body || '', ctx);
+        const to = it.overrideTo || ((tmpl.default_to || '').includes('client.email') ? ctx.client_email : tmpl.default_to);
+        results.push({ ...it, to, subject, body });
+      }
+      return { ok: true, results };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
   // 30. Compliance dashboard
   ipcMain.handle('compliance:dashboard', (_e, { companyId }: any) => {
     try {
@@ -7915,5 +8693,523 @@ export function registerIpcHandlers(): void {
       };
     } catch (err: any) { return { error: err?.message }; }
   });
+
+  // ───────────────────────────────────────────────────────
+  // Universal Tags + Custom Fields (2026-04-23)
+  // ───────────────────────────────────────────────────────
+
+  // Tags CRUD
+  ipcMain.handle('tags:list', (_e, { companyId, includeDeleted }: { companyId: string; includeDeleted?: boolean }) => {
+    try {
+      const sql = includeDeleted
+        ? `SELECT * FROM tags WHERE company_id = ? ORDER BY sort_order, name`
+        : `SELECT * FROM tags WHERE company_id = ? AND deleted_at IS NULL ORDER BY sort_order, name`;
+      return db.getDb().prepare(sql).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:groups-list', (_e, { companyId }: { companyId: string }) => {
+    try {
+      return db.getDb().prepare(`SELECT * FROM tag_groups WHERE company_id = ? ORDER BY sort_order, name`).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:group-create', (_e, data: any) => {
+    try { return db.create('tag_groups', data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:group-update', (_e, { id, data }: any) => {
+    try { return db.update('tag_groups', id, data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:group-delete', (_e, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare(`UPDATE tags SET group_id = NULL WHERE group_id = ?`).run(id);
+      db.remove('tag_groups', id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:create', (_e, data: any) => {
+    try { return db.create('tags', data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:update', (_e, { id, data }: { id: string; data: any }) => {
+    try { return db.update('tags', id, data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:rename', (_e, { id, name }: { id: string; name: string }) => {
+    try {
+      db.getDb().prepare(`UPDATE tags SET name = ? WHERE id = ?`).run(name, id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:soft-delete', (_e, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare(`UPDATE tags SET deleted_at = datetime('now') WHERE id = ?`).run(id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:restore', (_e, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare(`UPDATE tags SET deleted_at = NULL WHERE id = ?`).run(id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:merge', (_e, { sourceId, targetId }: { sourceId: string; targetId: string }) => {
+    try {
+      const d = db.getDb();
+      const tx = d.transaction(() => {
+        const rows = d.prepare(`SELECT * FROM entity_tags WHERE tag_id = ?`).all(sourceId) as any[];
+        const upsert = d.prepare(
+          `INSERT OR IGNORE INTO entity_tags (id, company_id, entity_type, entity_id, tag_id, created_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'))`
+        );
+        for (const r of rows) {
+          upsert.run(uuid(), r.company_id, r.entity_type, r.entity_id, targetId);
+        }
+        d.prepare(`DELETE FROM entity_tags WHERE tag_id = ?`).run(sourceId);
+        d.prepare(`DELETE FROM tags WHERE id = ?`).run(sourceId);
+      });
+      tx();
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // Entity tag assignments
+  ipcMain.handle('tags:get-for-entity', (_e, { companyId, entityType, entityId }: { companyId: string; entityType: string; entityId: string }) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT t.* FROM tags t JOIN entity_tags et ON et.tag_id = t.id
+         WHERE et.company_id = ? AND et.entity_type = ? AND et.entity_id = ? AND t.deleted_at IS NULL
+         ORDER BY t.sort_order, t.name`
+      ).all(companyId, entityType, entityId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:set-for-entity', (_e, { companyId, entityType, entityId, tagIds }: { companyId: string; entityType: string; entityId: string; tagIds: string[] }) => {
+    try {
+      const d = db.getDb();
+      const tx = d.transaction(() => {
+        d.prepare(`DELETE FROM entity_tags WHERE company_id = ? AND entity_type = ? AND entity_id = ?`)
+          .run(companyId, entityType, entityId);
+        const ins = d.prepare(
+          `INSERT OR IGNORE INTO entity_tags (id, company_id, entity_type, entity_id, tag_id, created_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'))`
+        );
+        for (const tagId of tagIds || []) {
+          ins.run(uuid(), companyId, entityType, entityId, tagId);
+        }
+      });
+      tx();
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:bulk-apply', (_e, { companyId, entityType, entityIds, tagIds }: any) => {
+    try {
+      const d = db.getDb();
+      const ins = d.prepare(
+        `INSERT OR IGNORE INTO entity_tags (id, company_id, entity_type, entity_id, tag_id, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      );
+      const tx = d.transaction(() => {
+        for (const eid of entityIds || []) for (const tid of tagIds || []) {
+          ins.run(uuid(), companyId, entityType, eid, tid);
+        }
+      });
+      tx();
+      return { ok: true, count: (entityIds?.length || 0) * (tagIds?.length || 0) };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:bulk-remove', (_e, { companyId, entityType, entityIds, tagIds }: any) => {
+    try {
+      const d = db.getDb();
+      const del = d.prepare(`DELETE FROM entity_tags WHERE company_id = ? AND entity_type = ? AND entity_id = ? AND tag_id = ?`);
+      const tx = d.transaction(() => {
+        for (const eid of entityIds || []) for (const tid of tagIds || []) {
+          del.run(companyId, entityType, eid, tid);
+        }
+      });
+      tx();
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:search-entities', (_e, { companyId, entityType, tagIds, mode = 'all' }: { companyId: string; entityType: string; tagIds: string[]; mode?: 'all' | 'any' }) => {
+    try {
+      if (!tagIds?.length) return [];
+      const d = db.getDb();
+      const placeholders = tagIds.map(() => '?').join(',');
+      if (mode === 'any') {
+        return d.prepare(
+          `SELECT DISTINCT entity_id FROM entity_tags
+           WHERE company_id = ? AND entity_type = ? AND tag_id IN (${placeholders})`
+        ).all(companyId, entityType, ...tagIds).map((r: any) => r.entity_id);
+      }
+      return d.prepare(
+        `SELECT entity_id FROM entity_tags
+         WHERE company_id = ? AND entity_type = ? AND tag_id IN (${placeholders})
+         GROUP BY entity_id HAVING COUNT(DISTINCT tag_id) = ?`
+      ).all(companyId, entityType, ...tagIds, tagIds.length).map((r: any) => r.entity_id);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:usage-stats', (_e, { companyId }: { companyId: string }) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT t.id, t.name, t.color, t.group_id,
+                COUNT(et.id) AS usage_count,
+                COUNT(DISTINCT et.entity_type) AS entity_type_count
+         FROM tags t
+         LEFT JOIN entity_tags et ON et.tag_id = t.id
+         WHERE t.company_id = ? AND t.deleted_at IS NULL
+         GROUP BY t.id ORDER BY usage_count DESC, t.name`
+      ).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // Tag rules engine
+  ipcMain.handle('tags:rules-list', (_e, { companyId }: { companyId: string }) => {
+    try {
+      return db.getDb().prepare(`SELECT * FROM tag_rules WHERE company_id = ? ORDER BY created_at DESC`).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:rule-create', (_e, data: any) => {
+    try { return db.create('tag_rules', data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:rule-update', (_e, { id, data }: any) => {
+    try { return db.update('tag_rules', id, data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:rule-delete', (_e, { id }: any) => {
+    try { db.remove('tag_rules', id); return { ok: true }; } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:run-rules', (_e, { companyId, entityType, entity }: { companyId: string; entityType: string; entity: any }) => {
+    try {
+      const rules = db.getDb().prepare(
+        `SELECT * FROM tag_rules WHERE company_id = ? AND entity_type = ? AND is_active = 1`
+      ).all(companyId, entityType) as any[];
+      const applied: string[] = [];
+      const ins = db.getDb().prepare(
+        `INSERT OR IGNORE INTO entity_tags (id, company_id, entity_type, entity_id, tag_id, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      );
+      for (const r of rules) {
+        let cond: any = {};
+        try { cond = JSON.parse(r.when_condition_json || '{}'); } catch { /* skip */ }
+        if (matchTagCondition(entity, cond)) {
+          ins.run(uuid(), companyId, entityType, entity.id, r.then_apply_tag_id);
+          applied.push(r.then_apply_tag_id);
+        }
+      }
+      return { applied };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // CSV export/import for tags
+  ipcMain.handle('tags:export-csv', (_e, { companyId }: { companyId: string }) => {
+    try {
+      const tags = db.getDb().prepare(
+        `SELECT t.name, t.color, COALESCE(g.name, '') AS group_name, t.sort_order
+         FROM tags t LEFT JOIN tag_groups g ON g.id = t.group_id
+         WHERE t.company_id = ? AND t.deleted_at IS NULL ORDER BY g.name, t.sort_order, t.name`
+      ).all(companyId) as any[];
+      const header = 'name,color,group,sort_order\n';
+      const body = tags.map(t =>
+        [t.name, t.color, t.group_name, t.sort_order].map(v => {
+          const s = String(v ?? '');
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(',')
+      ).join('\n');
+      return { csv: header + body };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('tags:import-csv', (_e, { companyId, csv }: { companyId: string; csv: string }) => {
+    try {
+      const lines = csv.split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return { imported: 0 };
+      const header = lines[0].split(',').map(s => s.trim().toLowerCase());
+      const idx = (k: string) => header.indexOf(k);
+      const d = db.getDb();
+      const groupCache = new Map<string, string>();
+      const findGroup = (name: string) => {
+        if (!name) return null;
+        if (groupCache.has(name)) return groupCache.get(name)!;
+        const existing = d.prepare(`SELECT id FROM tag_groups WHERE company_id = ? AND name = ?`).get(companyId, name) as any;
+        if (existing) { groupCache.set(name, existing.id); return existing.id; }
+        const id = uuid();
+        d.prepare(`INSERT INTO tag_groups (id, company_id, name, color, allow_multiple) VALUES (?, ?, ?, '#6b7280', 1)`).run(id, companyId, name);
+        groupCache.set(name, id);
+        return id;
+      };
+      let imported = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cells = parseCsvLine(lines[i]);
+        const name = cells[idx('name')] || '';
+        if (!name) continue;
+        const color = cells[idx('color')] || '#6b7280';
+        const groupName = idx('group') >= 0 ? cells[idx('group')] : '';
+        const sortOrder = idx('sort_order') >= 0 ? Number(cells[idx('sort_order')]) || 0 : 0;
+        const existing = d.prepare(`SELECT id FROM tags WHERE company_id = ? AND name = ?`).get(companyId, name) as any;
+        if (existing) continue;
+        d.prepare(`INSERT INTO tags (id, company_id, name, color, group_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)`)
+          .run(uuid(), companyId, name, color, findGroup(groupName), sortOrder);
+        imported++;
+      }
+      return { imported };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // ── Custom Fields ──
+  ipcMain.handle('customFields:list', (_e, { companyId, entityType }: { companyId: string; entityType?: string }) => {
+    try {
+      const sql = entityType
+        ? `SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND deleted_at IS NULL ORDER BY sort_order, label`
+        : `SELECT * FROM custom_field_definitions WHERE company_id = ? AND deleted_at IS NULL ORDER BY entity_type, sort_order, label`;
+      return entityType
+        ? db.getDb().prepare(sql).all(companyId, entityType)
+        : db.getDb().prepare(sql).all(companyId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:create', (_e, data: any) => {
+    try { return db.create('custom_field_definitions', data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:update', (_e, { id, data }: any) => {
+    try { return db.update('custom_field_definitions', id, data); } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:delete', (_e, { id }: any) => {
+    try {
+      db.getDb().prepare(`UPDATE custom_field_definitions SET deleted_at = datetime('now') WHERE id = ?`).run(id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:get-values', (_e, { companyId, entityType, entityId }: { companyId: string; entityType: string; entityId: string }) => {
+    try {
+      return db.getDb().prepare(
+        `SELECT * FROM custom_field_values WHERE company_id = ? AND entity_type = ? AND entity_id = ?`
+      ).all(companyId, entityType, entityId);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:set-values', (_e, { companyId, entityType, entityId, values }: { companyId: string; entityType: string; entityId: string; values: Record<string, any> }) => {
+    try {
+      const d = db.getDb();
+      const defs = d.prepare(
+        `SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND deleted_at IS NULL`
+      ).all(companyId, entityType) as any[];
+      const errors: string[] = [];
+      for (const def of defs) {
+        if (def.required) {
+          const v = values?.[def.key];
+          if (v === undefined || v === null || v === '') errors.push(`${def.label} is required`);
+        }
+        let validation: any = {};
+        try { validation = JSON.parse(def.validation_json || '{}'); } catch { /* */ }
+        const v = values?.[def.key];
+        if (v !== undefined && v !== null && v !== '') {
+          if (validation.regex) {
+            try { if (!new RegExp(validation.regex).test(String(v))) errors.push(`${def.label} format invalid`); } catch { /* */ }
+          }
+          if (typeof validation.min === 'number' && Number(v) < validation.min) errors.push(`${def.label} below min ${validation.min}`);
+          if (typeof validation.max === 'number' && Number(v) > validation.max) errors.push(`${def.label} above max ${validation.max}`);
+        }
+      }
+      if (errors.length) return { error: errors.join('; ') };
+
+      const tx = d.transaction(() => {
+        for (const def of defs) {
+          if (!(def.key in (values || {}))) continue;
+          const v = values[def.key];
+          const existing = d.prepare(
+            `SELECT id FROM custom_field_values WHERE company_id = ? AND entity_type = ? AND entity_id = ? AND field_key = ?`
+          ).get(companyId, entityType, entityId, def.key) as any;
+          const cols = bucketCustomFieldValue(def.field_type, v);
+          if (existing) {
+            d.prepare(
+              `UPDATE custom_field_values SET value_text = ?, value_number = ?, value_date = ?, value_json = ?, updated_at = datetime('now') WHERE id = ?`
+            ).run(cols.value_text, cols.value_number, cols.value_date, cols.value_json, existing.id);
+          } else {
+            d.prepare(
+              `INSERT INTO custom_field_values (id, company_id, entity_type, entity_id, field_key, value_text, value_number, value_date, value_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(uuid(), companyId, entityType, entityId, def.key, cols.value_text, cols.value_number, cols.value_date, cols.value_json);
+          }
+        }
+      });
+      tx();
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:usage-stats', (_e, { companyId, entityType }: { companyId: string; entityType: string }) => {
+    try {
+      const d = db.getDb();
+      const defs = d.prepare(
+        `SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND deleted_at IS NULL`
+      ).all(companyId, entityType) as any[];
+      const tableMap: Record<string, string> = {
+        invoice: 'invoices', expense: 'expenses', client: 'clients', vendor: 'vendors',
+        project: 'projects', debt: 'debts', bill: 'bills', purchase_order: 'purchase_orders',
+        employee: 'employees', account: 'accounts', journal_entry: 'journal_entries',
+        asset: 'fixed_assets', inventory_item: 'inventory_items',
+      };
+      const table = tableMap[entityType];
+      let total = 0;
+      try {
+        if (table) {
+          total = (d.prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE company_id = ?`).get(companyId) as any)?.c || 0;
+        }
+      } catch { /* table may not exist */ }
+      return defs.map((def: any) => {
+        const filled = (d.prepare(
+          `SELECT COUNT(DISTINCT entity_id) AS c FROM custom_field_values WHERE company_id = ? AND entity_type = ? AND field_key = ?
+           AND (value_text IS NOT NULL OR value_number IS NOT NULL OR value_date IS NOT NULL OR value_json IS NOT NULL)`
+        ).get(companyId, entityType, def.key) as any)?.c || 0;
+        return {
+          field_key: def.key,
+          label: def.label,
+          field_type: def.field_type,
+          filled,
+          total,
+          fill_rate: total > 0 ? filled / total : 0,
+        };
+      });
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:bulk-fill', (_e, { companyId, entityType, fieldKey, value }: { companyId: string; entityType: string; fieldKey: string; value: any }) => {
+    try {
+      const d = db.getDb();
+      const def = d.prepare(
+        `SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND key = ?`
+      ).get(companyId, entityType, fieldKey) as any;
+      if (!def) return { error: 'field not found' };
+      const tableMap: Record<string, string> = {
+        invoice: 'invoices', expense: 'expenses', client: 'clients', vendor: 'vendors',
+        project: 'projects', debt: 'debts', bill: 'bills', purchase_order: 'purchase_orders',
+        employee: 'employees', account: 'accounts', journal_entry: 'journal_entries',
+        asset: 'fixed_assets', inventory_item: 'inventory_items',
+      };
+      const table = tableMap[entityType];
+      if (!table) return { error: 'unsupported entity type' };
+      const ids: any[] = d.prepare(
+        `SELECT id FROM ${table} WHERE company_id = ? AND id NOT IN
+         (SELECT entity_id FROM custom_field_values WHERE company_id = ? AND entity_type = ? AND field_key = ?
+          AND (value_text IS NOT NULL OR value_number IS NOT NULL OR value_date IS NOT NULL OR value_json IS NOT NULL))`
+      ).all(companyId, companyId, entityType, fieldKey);
+      const cols = bucketCustomFieldValue(def.field_type, value);
+      const tx = d.transaction(() => {
+        for (const row of ids) {
+          d.prepare(
+            `INSERT INTO custom_field_values (id, company_id, entity_type, entity_id, field_key, value_text, value_number, value_date, value_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(uuid(), companyId, entityType, row.id, fieldKey, cols.value_text, cols.value_number, cols.value_date, cols.value_json);
+        }
+      });
+      tx();
+      return { ok: true, updated: ids.length };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('customFields:search', (_e, { companyId, entityType, fieldKey, op, value }: { companyId: string; entityType: string; fieldKey: string; op: string; value: any }) => {
+    try {
+      const d = db.getDb();
+      const def = d.prepare(`SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND key = ?`)
+        .get(companyId, entityType, fieldKey) as any;
+      if (!def) return [];
+      const col = ['number', 'currency'].includes(def.field_type) ? 'value_number'
+        : ['date', 'datetime'].includes(def.field_type) ? 'value_date'
+        : ['multi-select'].includes(def.field_type) ? 'value_json'
+        : 'value_text';
+      const operator = op === 'contains' ? 'LIKE' : op || '=';
+      const param = op === 'contains' ? `%${value}%` : value;
+      const rows = d.prepare(
+        `SELECT entity_id FROM custom_field_values
+         WHERE company_id = ? AND entity_type = ? AND field_key = ? AND ${col} ${operator} ?`
+      ).all(companyId, entityType, fieldKey, param) as any[];
+      return rows.map(r => r.entity_id);
+    } catch (err: any) { return { error: err?.message }; }
+  });
 }
 
+// ── Helpers for tag rules + custom fields ──
+
+function matchTagCondition(entity: any, cond: any): boolean {
+  if (!cond || typeof cond !== 'object') return false;
+  const evalOne = (c: any) => {
+    const v = entity?.[c.field];
+    switch (c.op) {
+      case '=': case 'eq': return v == c.value;
+      case '!=': case 'ne': return v != c.value;
+      case '>': return Number(v) > Number(c.value);
+      case '<': return Number(v) < Number(c.value);
+      case '>=': return Number(v) >= Number(c.value);
+      case '<=': return Number(v) <= Number(c.value);
+      case 'contains': return String(v ?? '').toLowerCase().includes(String(c.value ?? '').toLowerCase());
+      case 'in': return Array.isArray(c.value) && c.value.includes(v);
+      case 'empty': return v === null || v === undefined || v === '';
+      case 'not_empty': return !(v === null || v === undefined || v === '');
+      default: return false;
+    }
+  };
+  if (Array.isArray(cond.all)) return cond.all.every(evalOne);
+  if (Array.isArray(cond.any)) return cond.any.some(evalOne);
+  if (cond.field) return evalOne(cond);
+  return false;
+}
+
+function bucketCustomFieldValue(fieldType: string, value: any): { value_text: string | null; value_number: number | null; value_date: string | null; value_json: string | null } {
+  const out = { value_text: null as string | null, value_number: null as number | null, value_date: null as string | null, value_json: null as string | null };
+  if (value === undefined || value === null || value === '') return out;
+  switch (fieldType) {
+    case 'number':
+    case 'currency':
+      out.value_number = Number(value);
+      break;
+    case 'date':
+    case 'datetime':
+      out.value_date = String(value);
+      break;
+    case 'boolean':
+      out.value_number = value ? 1 : 0;
+      break;
+    case 'multi-select':
+    case 'lookup':
+      out.value_json = typeof value === 'string' ? value : JSON.stringify(value);
+      break;
+    default:
+      out.value_text = String(value);
+  }
+  return out;
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else cur += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ',') { cells.push(cur); cur = ''; }
+      else cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
