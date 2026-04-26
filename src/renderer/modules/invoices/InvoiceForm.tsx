@@ -604,12 +604,28 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       invoice_type: form.invoice_type,
       currency: form.currency,
       shipping_amount: form.shipping_amount || 0,
+      // Header/meta fields the template reads — without these the live preview
+      // doesn't match the saved/printed invoice.
+      po_number: form.po_number,
+      job_reference: form.job_reference,
+      discount_pct: form.discount_pct,
+      late_fee_pct: form.late_fee_pct,
+      late_fee_grace_days: form.late_fee_grace_days,
+      custom_field_1: form.custom_field_1,
+      custom_field_2: form.custom_field_2,
+      custom_field_3: form.custom_field_3,
+      custom_field_4: form.custom_field_4,
     };
     const lineData = lines.map((l) => ({
       description: l.description,
       quantity: l.quantity,
       unit_price: l.unit_price,
       tax_rate: l.tax_rate,
+      // Per-line discount / tax overrides drive the totals card breakdown
+      // and the discount-strikethrough rendering. Pass them through.
+      discount_pct: l.discount_pct,
+      tax_rate_override: l.tax_rate_override,
+      account_id: l.account_id,
       amount: roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100)),
       row_type: l.row_type || 'item',
       unit_label: l.unit_label,

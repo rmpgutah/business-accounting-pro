@@ -740,9 +740,9 @@ const TrialBalance: React.FC = () => {
           </table>
         </div>
       ) : view === 'monthly' || view === 'rolling12' ? (
-        // Wide month-column views
-        <div id="tb-print-area" className="block-card p-0 overflow-auto" style={{ borderRadius: '6px' }}>
-          <table className="block-table">
+        // Wide month-column views — print landscape with extra-tight font
+        <div id="tb-print-area" className="block-card p-0 overflow-auto report-landscape" style={{ borderRadius: '6px' }}>
+          <table className="block-table report-extra-wide">
             <thead>
               <tr>
                 <th>Code</th><th>Account</th>

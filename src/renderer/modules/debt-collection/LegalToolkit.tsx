@@ -314,7 +314,9 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
                 const debt = await api.get('debts', selectedDebtId);
                 if (!debt) return;
                 const { generateVerificationAffidavitHTML } = await import('../../lib/print-templates');
-                const html = generateVerificationAffidavitHTML(debt, activeCompany, activeCompany?.name || '');
+                // Leave signatory blank for hand-fill; passing the company name here
+                // would print the entity as the affiant, which is incorrect.
+                const html = generateVerificationAffidavitHTML(debt, activeCompany, '');
                 await api.printPreview(html, 'Verification Affidavit');
               }}
             >

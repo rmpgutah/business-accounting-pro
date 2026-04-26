@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package, Eye, Printer, Download } from 'lucide-react';
-import { generatePurchaseOrderHTML } from '../../lib/print-templates';
+import { generatePurchaseOrderHTML, InvoiceSettings } from '../../lib/print-templates';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
@@ -793,6 +793,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
 
   const load = useCallback(async () => {
     if (!activeCompany) return;
@@ -817,12 +818,20 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
     }
   }, [activeCompany, poId]);
 
+  // Invoice settings drive the PO logo (logo_data) and accent color so the
+  // printed PO matches the rest of the company's customer-facing output.
+  useEffect(() => {
+    (api as any).getInvoiceSettings?.()
+      .then((r: any) => { if (r && !r.error) setInvoiceSettings(r); })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => { load(); }, [load]);
 
   const buildPrintHTML = () => {
     if (!po) return '';
     const v = vendors[po.vendor_id] || null;
-    return generatePurchaseOrderHTML(po, activeCompany, v, lines);
+    return generatePurchaseOrderHTML(po, activeCompany, v, lines, invoiceSettings || undefined);
   };
   const handlePreview = async () => {
     const html = buildPrintHTML();

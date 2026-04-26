@@ -1044,7 +1044,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             className="block-btn flex items-center gap-2 text-xs"
             onClick={async () => {
               const { generateVerificationAffidavitHTML } = await import('../../lib/print-templates');
-              const html = generateVerificationAffidavitHTML(debt, activeCompany, activeCompany?.name || '');
+              // Signatory is the human custodian who will sign + notarize. Leave blank
+              // so the affidavit prints "[Signatory Name]" placeholder for hand-fill,
+              // rather than mis-attributing the company name as the affiant.
+              const html = generateVerificationAffidavitHTML(debt, activeCompany, '');
               await api.printPreview(html, `Verification Affidavit — ${debt?.debtor_name}`);
             }}
           >

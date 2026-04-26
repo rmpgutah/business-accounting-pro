@@ -68,24 +68,36 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     if (r?.id) onEdit(r.id);
   };
 
-  const buildReceiptHTML = () => {
-    const vendor = expense.vendor_id ? { id: expense.vendor_id, name: expense.vendor_name } : undefined;
-    return generateExpenseReceiptHTML(expense, activeCompany, vendor);
+  // Build the receipt HTML asynchronously so we fetch the FULL vendor record
+  // (with address/email/phone for the meta strip) and any expense line items
+  // (so multi-line expenses render their detail). Without these fetches the
+  // receipt PDF showed only the vendor name and skipped line breakdowns.
+  const buildReceiptHTML = async (): Promise<string> => {
+    const [vendor, lineItems] = await Promise.all([
+      expense.vendor_id ? api.get('vendors', expense.vendor_id).catch(() => null) : Promise.resolve(null),
+      api.query('expense_line_items', { expense_id: expenseId }).catch(() => []),
+    ]);
+    return generateExpenseReceiptHTML(
+      expense,
+      activeCompany,
+      vendor || (expense.vendor_name ? { name: expense.vendor_name } : undefined),
+      Array.isArray(lineItems) ? lineItems : [],
+    );
   };
 
   const handlePreview = async () => {
     try {
-      await api.printPreview(buildReceiptHTML(), `Expense ${expense.reference || expense.description || ''}`);
+      await api.printPreview(await buildReceiptHTML(), `Expense ${expense.reference || expense.description || ''}`);
     } catch (e: any) { setErr(e?.message || 'Preview failed'); }
   };
   const handlePrint = async () => {
-    try { await api.print(buildReceiptHTML()); }
+    try { await api.print(await buildReceiptHTML()); }
     catch (e: any) { setErr(e?.message || 'Print failed'); }
   };
   const handleSavePdf = async () => {
     try {
       const safe = String(expense.reference || expense.id || 'receipt').replace(/[^a-zA-Z0-9-_]/g, '-');
-      const r = await api.saveToPDF(buildReceiptHTML(), `Expense-${safe}`);
+      const r = await api.saveToPDF(await buildReceiptHTML(), `Expense-${safe}`);
       if (r?.error) setErr(r.error);
     } catch (e: any) { setErr(e?.message || 'PDF save failed'); }
   };

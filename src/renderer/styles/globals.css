@@ -1153,4 +1153,13 @@ td[data-neg="true"]::after,
   page: dashboard-landscape;
 }
 
+/* Wide reports (TB monthly/rolling12, GL month×account pivot) print landscape. */
+@page report-landscape {
+  size: letter landscape;
+  margin: 0.5in 0.5in 0.7in 0.5in;
+}
+.report-landscape {
+  page: report-landscape;
+}
+
 

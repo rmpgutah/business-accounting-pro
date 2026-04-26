@@ -996,8 +996,9 @@ const GeneralLedger: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">Generating report...</div>
       ) : pivotMode && pivot ? (
-        <div id="gl-print-area" className="block-card p-0 overflow-auto" style={{ borderRadius: '6px' }}>
-          <table className="block-table">
+        // Month × account pivot — print landscape with extra-tight font
+        <div id="gl-print-area" className="block-card p-0 overflow-auto report-landscape" style={{ borderRadius: '6px' }}>
+          <table className="block-table report-extra-wide">
             <thead>
               <tr>
                 <th>Account</th>

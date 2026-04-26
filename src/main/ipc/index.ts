@@ -4194,10 +4194,17 @@ export function registerIpcHandlers(): void {
     };
 
     const total = (debt.original_amount || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0) - (debt.payments_made || 0);
-    const daysOverdue = debt.delinquent_date ? Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86400000) : 0;
+    // TZ-safe daysOverdue: anchor YYYY-MM-DD at noon local time so UTC parsing
+    // can't shift the calendar day on negative-offset machines.
+    const dlqRaw = debt.delinquent_date ? String(debt.delinquent_date) : '';
+    const dlqStr = /^\d{4}-\d{2}-\d{2}$/.test(dlqRaw) ? dlqRaw + 'T12:00:00' : dlqRaw;
+    const daysOverdue = dlqStr ? Math.max(0, Math.floor((Date.now() - new Date(dlqStr).getTime()) / 86400000)) : 0;
     const demandDeadlineDate = new Date(Date.now() + 10 * 86400000);
 
-    const companyAddr = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', ');
+    const cityStateZip = [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '');
+    const companyAddr = [company?.address_line1, company?.address_line2, cityStateZip.trim()]
+      .filter((s: any) => s && String(s).trim())
+      .join(', ');
 
     const fields: Record<string, string> = {
       '{{debtor_name}}': escVal(debt.debtor_name),
@@ -4213,6 +4220,10 @@ export function registerIpcHandlers(): void {
       '{{company_address}}': escVal(companyAddr),
       '{{company_phone}}': escVal(company?.phone),
       '{{company_email}}': escVal(company?.email),
+      // Spec-required jurisdiction tokens (resolved from debt then company; falls back to "________________"
+      // so authors using the token in a custom template never see a literal "{{state}}" leak through).
+      '{{state}}': escVal(debt.jurisdiction || company?.state || '________________'),
+      '{{jurisdiction}}': escVal(debt.jurisdiction || company?.state || '________________'),
     };
 
     let body = template.body || '';

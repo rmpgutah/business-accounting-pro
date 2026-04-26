@@ -1161,7 +1161,16 @@ export function generatePayStubHTML(
 
   // ── Feature #7: YTD vs annualized projection bars ──
   // Use period_end fraction of year as projection denominator.
-  const periodEndDate = (() => { try { return new Date(stub.period_end + 'T12:00:00'); } catch { return new Date(); } })();
+  // period_end may arrive as ISO ("2026-04-15") OR pre-formatted ("Apr 15, 2026")
+  // because callers sometimes hand display-ready dates. Try both safely so the
+  // year-fraction projection doesn't go to NaN.
+  const periodEndDate = (() => {
+    const raw = stub.period_end || '';
+    if (!raw) return new Date();
+    const isoMatch = /^\d{4}-\d{2}-\d{2}/.test(raw);
+    const parsed = isoMatch ? new Date(raw + 'T12:00:00') : new Date(raw);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  })();
   const yStart = new Date(periodEndDate.getFullYear(), 0, 1).getTime();
   const yEnd = new Date(periodEndDate.getFullYear() + 1, 0, 1).getTime();
   const yearFrac = Math.max(0.01, Math.min(1, (periodEndDate.getTime() - yStart) / (yEnd - yStart)));
@@ -1336,6 +1345,8 @@ export function generatePayStubHTML(
     padding: 20px 24px;
     background: #f0fdf4;
     border: 2px solid #86efac;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .net-current { }
   .net-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #16a34a; }
@@ -1759,8 +1770,20 @@ export function generateDebtPortfolioReportHTML(
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const now = Date.now();
+  // TZ-safe parse for YYYY-MM-DD: anchor at noon local so UTC->local conversion doesn't shift the calendar day.
+  const parseDateSafe = (raw: any): number => {
+    if (!raw) return NaN;
+    const s = String(raw);
+    const dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+    return dt.getTime();
+  };
+  const daysSince = (d: any): number => {
+    const t = parseDateSafe(d.delinquent_date || d.created_at);
+    if (!isFinite(t)) return 0;
+    return Math.max(0, Math.floor((now - t) / 86_400_000));
+  };
   const bucket = (d: any) => {
-    const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
+    const days = daysSince(d);
     if (days <= 30) return '0-30';
     if (days <= 90) return '31-90';
     if (days <= 180) return '91-180';
@@ -1793,7 +1816,7 @@ export function generateDebtPortfolioReportHTML(
     <tr><td style="text-transform:capitalize;">${esc(stage.replace(/_/g, ' '))}</td><td class="text-right">${count}</td></tr>`).join('');
 
   const top10Rows = top10.map(d => {
-    const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
+    const days = daysSince(d);
     return `<tr>
       <td>${esc(d.debtor_name || '—')}</td>
       <td class="text-right font-mono">${fmt(Number(d.balance_due || 0))}</td>
@@ -1871,7 +1894,7 @@ ${baseStyles}
   <div class="rpt-section">Top 10 Accounts by Balance</div>
   <table><thead><tr><th style="width:5%">#</th><th>Debtor</th><th class="text-right">Balance</th><th class="text-right">Age</th><th>Stage</th></tr></thead>
   <tbody>${top10.map((d, i) => {
-    const days = Math.floor((now - new Date(d.delinquent_date || d.created_at).getTime()) / 86_400_000);
+    const days = daysSince(d);
     const ageColor = days > 180 ? '#dc2626' : days > 90 ? '#f97316' : days > 30 ? '#eab308' : '#22c55e';
     return `<tr>
       <td style="color:#94a3b8;font-size:10px;">${i + 1}</td>
@@ -1962,7 +1985,8 @@ export function generateDemandLetterHTML(
   } = {}
 ): string {
   const companyName = esc(company?.name || 'Your Company');
-  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const cityStateZip = [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '');
+  const companyAddr = esc([company?.address_line1, company?.address_line2, cityStateZip.trim()].filter(s => s && String(s).trim()).join(', '));
   const deadlineDays = options.deadline_days ?? 10;
   const deadlineDate = new Date(Date.now() + deadlineDays * 86_400_000)
     .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -1987,7 +2011,7 @@ export function generateDemandLetterHTML(
 
   // ── Feature #10: days overdue indicator with weekly strip ──
   const delinqRaw = debt.delinquent_date || debt.due_date || debt.created_at;
-  const daysOverdue = delinqRaw ? Math.max(0, Math.floor((Date.now() - new Date(delinqRaw + (typeof delinqRaw === 'string' && delinqRaw.length === 10 ? 'T00:00:00' : '')).getTime()) / 86_400_000)) : 0;
+  const daysOverdue = delinqRaw ? Math.max(0, Math.floor((Date.now() - new Date(delinqRaw + (typeof delinqRaw === 'string' && delinqRaw.length === 10 ? 'T12:00:00' : '')).getTime()) / 86_400_000)) : 0;
   const daysOverdueHTML = daysOverdue > 0 ? (() => {
     const totalCells = 18 * 7; // 126 days
     const filled = Math.min(totalCells, daysOverdue);
@@ -2149,7 +2173,8 @@ export function generateCollectionLetterHTML(
   letterType: string,
 ): string {
   const companyName = esc(company?.name || 'Your Company');
-  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const _cityStateZip2 = [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '');
+  const companyAddr = esc([company?.address_line1, company?.address_line2, _cityStateZip2.trim()].filter(s => s && String(s).trim()).join(', '));
   const companyPhone = esc(company?.phone || '');
   const companyEmail = esc(company?.email || '');
   const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -2180,7 +2205,7 @@ export function generateCollectionLetterHTML(
   const delinquentDate = debt?.delinquent_date ? new Date(debt.delinquent_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
   const jurisdiction = esc(debt?.jurisdiction || 'the applicable jurisdiction');
   const interestRate = debt?.interest_rate ? `${(debt.interest_rate * 100).toFixed(2)}% per annum (${debt.interest_type === 'compound' ? 'compound' : 'simple'})` : 'N/A';
-  const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86_400_000)) : 0;
+  const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(String(debt.delinquent_date).length === 10 ? debt.delinquent_date + 'T12:00:00' : debt.delinquent_date).getTime()) / 86_400_000)) : 0;
   const settlementAmt = Math.round(balanceDue * 0.7 * 100) / 100;
 
   const accountRefBlock = `<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:11px;background:#f9f9f9;">
@@ -2572,7 +2597,13 @@ export function generateCourtPacketHTML(data: {
 
   const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const cfmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
-  const dfmt = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '\u2014';
+  const dfmt = (d: string) => {
+    if (!d) return '\u2014';
+    const s = String(d);
+    const dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+    if (isNaN(dt.getTime())) return '\u2014';
+    return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
   const caseRef = debt.id ? String(debt.id).substring(0, 8).toUpperCase() : 'N/A';
   const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const companyName = esc(company?.name || 'Company');
@@ -2606,9 +2637,9 @@ export function generateCourtPacketHTML(data: {
     <table><tbody>
       <tr><td style="font-weight:700;width:40%;">Debtor Name</td>${td(debt.debtor_name)}</tr>
       <tr><td style="font-weight:700;">Original Amount</td><td>${cfmt(debt.original_amount)}</td></tr>
-      <tr><td style="font-weight:700;">Accrued Interest</td><td>${cfmt(debt.accrued_interest)}</td></tr>
-      <tr><td style="font-weight:700;">Fees &amp; Costs</td><td>${cfmt(debt.fees)}</td></tr>
-      <tr><td style="font-weight:700;">Payments Applied</td><td>${cfmt(debt.total_paid)}</td></tr>
+      <tr><td style="font-weight:700;">Accrued Interest</td><td>${cfmt(debt.interest_accrued)}</td></tr>
+      <tr><td style="font-weight:700;">Fees &amp; Costs</td><td>${cfmt(debt.fees_accrued)}</td></tr>
+      <tr><td style="font-weight:700;">Payments Applied</td><td>${cfmt(debt.payments_made)}</td></tr>
       <tr><td style="font-weight:700;">Balance Due</td><td style="font-weight:700;color:#b91c1c;">${cfmt(debt.balance_due)}</td></tr>
       <tr><td style="font-weight:700;">Due Date</td>${td(dfmt(debt.due_date))}</tr>
       <tr><td style="font-weight:700;">Delinquent Date</td>${td(dfmt(debt.delinquent_date))}</tr>
@@ -2797,7 +2828,8 @@ export function generateVerificationAffidavitHTML(
   signatoryName: string,
 ): string {
   const companyName = esc(company?.name || 'Company');
-  const companyAddr = esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
+  const _cityStateZipA = [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '');
+  const companyAddr = esc([company?.address_line1, company?.address_line2, _cityStateZipA.trim()].filter(s => s && String(s).trim()).join(', '));
   const debtorName = esc(debt?.debtor_name || 'Debtor');
   const sigName = esc(signatoryName || '[Signatory Name]');
   const fmtAmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);

@@ -65,6 +65,9 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
 
   // Feature 7: Direct deposit detection (must be before early returns)
   const [employee, setEmployee] = useState<any>(null);
+  // Employer contributions (informational only, not deducted from pay)
+  // Pulled from employee_deductions where employer_match > 0.
+  const [employerContribs, setEmployerContribs] = useState<{ match: number; health: number }>({ match: 0, health: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -143,8 +146,30 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   useEffect(() => {
     if (stub?.employee_id) {
       api.get('employees', stub.employee_id).then(e => setEmployee(e)).catch(() => {});
+      // Load employer-side contributions linked to this employee's deductions.
+      // Sum employer_match across all active deduction lines; categorize health
+      // contributions by name match so the stub can show them separately.
+      api.rawQuery(
+        `SELECT name, amount, employer_match, employer_match_type
+         FROM employee_deductions
+         WHERE employee_id = ?`,
+        [stub.employee_id]
+      ).then((rows: any[]) => {
+        const gross = stub.gross_pay || 0;
+        let match = 0;
+        let health = 0;
+        for (const r of rows ?? []) {
+          const em = Number(r.employer_match) || 0;
+          if (em <= 0) continue;
+          // Percent-of-gross vs flat amount per period
+          const value = (r.employer_match_type === 'percent') ? gross * (em / 100) : em;
+          if (/health|medical|hsa|dental|vision/i.test(r.name || '')) health += value;
+          else match += value;
+        }
+        setEmployerContribs({ match, health });
+      }).catch(() => {});
     }
-  }, [stub?.employee_id]);
+  }, [stub?.employee_id, stub?.gross_pay]);
 
   const buildStubHTML = () => {
     if (!stub) return '';
@@ -162,6 +187,8 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     ].filter(Boolean);
 
     // Format ISO dates to human-readable strings before handing off to PDF template
+    // (the template auto-detects ISO vs display-formatted for any internal
+    // date math, so this is safe).
     const stubForPrint = {
       ...stub,
       period_start: formatDate(stub.period_start),
@@ -171,8 +198,20 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
       employee_id_short: employee?.employee_id || employee?.id_short || undefined,
       employee_address: addressParts.length ? addressParts.join(', ') : undefined,
       ssn_last4: ssnLast4 || undefined,
-      bank_name: employee?.bank_name || undefined,
+      // No `bank_name` column exists on employees — fall back to a generic
+      // bank label only when the employee actually has direct deposit set up
+      // (i.e. an account number is present); template guards on either field.
+      bank_name: acctLast4 ? (employee?.bank_name || 'Bank Account') : undefined,
       bank_account_last4: acctLast4 || undefined,
+      // ── Employer contributions (informational, NOT deducted from pay) ──
+      // SS/Medicare employer share equals the employee withholding amount at
+      // the same statutory rates (6.2% / 1.45%). Other employer obligations
+      // (FUTA/SUTA/match) are not stored per-stub, so pass 0 unless surfaced
+      // explicitly by upstream payroll processing.
+      employer_social_security: stub.social_security || 0,
+      employer_medicare:        stub.medicare || 0,
+      employer_retirement_match: (employerContribs?.match || 0),
+      employer_health_contribution: (employerContribs?.health || 0),
     };
     return generatePayStubHTML(stubForPrint, ytd, activeCompany);
   };

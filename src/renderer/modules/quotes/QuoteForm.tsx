@@ -6,7 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { FieldLabel } from '../../components/FieldLabel';
 import { formatCurrency, roundCents } from '../../lib/format';
-import { generateInvoiceHTML } from '../../lib/print-templates';
+import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -89,6 +89,15 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [convertSuccess, setConvertSuccess] = useState('');
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
+
+  // Load invoice settings (logo, accent color, column config) so the quote
+  // PDF picks up the same branding as invoices.
+  useEffect(() => {
+    api.getInvoiceSettings()
+      .then((r: any) => { if (r && !r.error) setInvoiceSettings(r); })
+      .catch(() => {});
+  }, []);
 
   const isEditing = !!quoteId;
 
@@ -349,10 +358,33 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
   const buildQuoteHTML = async (): Promise<string> => {
     if (!activeCompany) return '';
     const client = form.client_id ? await api.get('clients', form.client_id) : null;
+    // Compute totals from lines so the totals card / multi-rate tax breakdown
+    // are accurate (the form stores raw strings; the template needs numbers).
+    const subtotal = lines.reduce((s, l) => {
+      const q = Number(l.quantity) || 0;
+      const p = Number(l.unit_price) || 0;
+      return s + q * p;
+    }, 0);
+    const taxAmount = lines.reduce((s, l) => {
+      const q = Number(l.quantity) || 0;
+      const p = Number(l.unit_price) || 0;
+      const t = Number(l.tax_rate) || 0;
+      return s + (q * p) * (t / 100);
+    }, 0);
+    const discountAmount = Number(form.discount_amount) || 0;
+    const total = roundCents(subtotal + taxAmount - discountAmount);
     const quotePayload = {
       ...form,
       invoice_type: 'quote',
       document_type: 'quote',
+      invoice_number: form.quote_number, // template falls back to invoice_number
+      subtotal,
+      tax_amount: taxAmount,
+      discount_amount: discountAmount,
+      total,
+      amount_paid: 0,
+      currency: 'USD',
+      // Template reads invoice.valid_until directly — already on form
       // Map quote.expiry_date → due_date so the template's "Valid until"
       // logic picks it up without requiring schema changes.
       due_date: (form as any).expiry_date || (form as any).valid_until || form.issue_date,
@@ -364,9 +396,16 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
       unit_price: Number(l.unit_price) || 0,
       amount: Number(l.amount) || 0,
       tax_rate: Number(l.tax_rate) || 0,
+      row_type: 'item',
       sort_order: i,
     }));
-    return generateInvoiceHTML(quotePayload as any, activeCompany, client ?? null, lineItems as any);
+    return generateInvoiceHTML(
+      quotePayload as any,
+      activeCompany,
+      client ?? null,
+      lineItems as any,
+      invoiceSettings || undefined,
+    );
   };
 
   const handlePreview = async () => {
