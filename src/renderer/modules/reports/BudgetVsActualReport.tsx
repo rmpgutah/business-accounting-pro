@@ -218,7 +218,7 @@ const BudgetVsActualReport: React.FC = () => {
 
       {/* Summary Cards */}
       {budget && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-3 report-summary-tiles">
           {[
             { label: 'Total Budget', value: fmt.format(totalBudgeted), color: 'text-text-primary' },
             { label: 'Actual Spend', value: fmt.format(totalActual), color: 'text-accent-blue' },
@@ -254,13 +254,18 @@ const BudgetVsActualReport: React.FC = () => {
             <tbody>
               {comparison.map((c) => {
                 const usagePct = c.budgeted > 0 ? Math.min(Math.round((c.actual / c.budgeted) * 100), 150) : 0;
+                const overBudget = c.variance < 0;
                 return (
-                  <tr key={c.category} className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
+                  <tr key={c.category} className={`border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors ${overBudget ? 'bg-accent-expense/5' : ''}`}>
                     <td className="px-4 py-2 text-text-primary font-medium">{c.category}</td>
                     <td className="px-4 py-2 text-right font-mono text-text-secondary">{fmt.format(c.budgeted)}</td>
                     <td className="px-4 py-2 text-right font-mono text-text-primary">{fmt.format(c.actual)}</td>
-                    <td className={`px-4 py-2 text-right font-mono font-bold ${varColor(c.variance)}`}>{fmt.format(c.variance)}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${varColor(c.variance)}`}>{c.variance_pct}%</td>
+                    <td className={`px-4 py-2 text-right font-mono font-bold ${varColor(c.variance)}`}>
+                      <span data-neg={c.variance < 0 ? 'true' : undefined} className={`${c.variance < 0 ? 'acc-neg variance-over' : 'variance-under'}`}>{fmt.format(Math.abs(c.variance))}</span>
+                    </td>
+                    <td className={`px-4 py-2 text-right font-mono ${varColor(c.variance)}`}>
+                      <span className="common-size-pct">{c.variance_pct}%</span>
+                    </td>
                     <td className="px-4 py-2">
                       <div className="w-full h-2 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
                         <div
@@ -279,12 +284,16 @@ const BudgetVsActualReport: React.FC = () => {
                 );
               })}
               {/* Total row */}
-              <tr className="border-t-2 border-border-primary bg-bg-tertiary/30">
+              <tr className="border-t-2 border-border-primary bg-bg-tertiary/30 report-grand-total-row">
                 <td className="px-4 py-2 font-bold text-text-primary">Total</td>
                 <td className="px-4 py-2 text-right font-mono font-bold text-text-secondary">{fmt.format(totalBudgeted)}</td>
                 <td className="px-4 py-2 text-right font-mono font-bold text-text-primary">{fmt.format(totalActual)}</td>
-                <td className={`px-4 py-2 text-right font-mono font-bold ${varColor(totalVariance)}`}>{fmt.format(totalVariance)}</td>
-                <td className={`px-4 py-2 text-right font-mono font-bold ${varColor(totalVariance)}`}>{totalVariancePct}%</td>
+                <td className={`px-4 py-2 text-right font-mono font-bold ${varColor(totalVariance)}`}>
+                  <span data-neg={totalVariance < 0 ? 'true' : undefined} className={`${totalVariance < 0 ? 'acc-neg variance-over' : 'variance-under'}`}>{fmt.format(Math.abs(totalVariance))}</span>
+                </td>
+                <td className={`px-4 py-2 text-right font-mono font-bold ${varColor(totalVariance)}`}>
+                  <span className="common-size-pct">{totalVariancePct}%</span>
+                </td>
                 <td />
               </tr>
             </tbody>

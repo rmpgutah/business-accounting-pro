@@ -232,6 +232,57 @@ function statusStampCSS(color: string): string {
   `;
 }
 
+// ─── SVG donut chart helper (pure inline SVG, print-safe) ───
+function svgDonut(
+  segments: Array<{ value: number; color: string; label?: string }>,
+  size = 80,
+  centerLabel?: string,
+  centerSub?: string,
+): string {
+  const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
+  if (total <= 0) return '';
+  const r = size / 2;
+  const inner = r * 0.62;
+  const cx = r, cy = r;
+  let cumulative = 0;
+  const paths = segments.map(seg => {
+    const v = Math.max(0, seg.value);
+    if (v <= 0) return '';
+    const startA = (cumulative / total) * Math.PI * 2 - Math.PI / 2;
+    cumulative += v;
+    const endA = (cumulative / total) * Math.PI * 2 - Math.PI / 2;
+    const large = (endA - startA) > Math.PI ? 1 : 0;
+    const x1 = cx + r * Math.cos(startA), y1 = cy + r * Math.sin(startA);
+    const x2 = cx + r * Math.cos(endA), y2 = cy + r * Math.sin(endA);
+    const x3 = cx + inner * Math.cos(endA), y3 = cy + inner * Math.sin(endA);
+    const x4 = cx + inner * Math.cos(startA), y4 = cy + inner * Math.sin(startA);
+    return `<path d="M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} A ${inner} ${inner} 0 ${large} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z" fill="${seg.color}" style="-webkit-print-color-adjust:exact;print-color-adjust:exact;" />`;
+  }).join('');
+  const center = centerLabel
+    ? `<text x="${cx}" y="${cy - 1}" text-anchor="middle" dominant-baseline="central" font-size="${(size * 0.16).toFixed(1)}" font-weight="700" fill="#0f172a" font-family="Inter,sans-serif">${esc(centerLabel)}</text>${centerSub ? `<text x="${cx}" y="${cy + size * 0.16}" text-anchor="middle" font-size="${(size * 0.10).toFixed(1)}" fill="#64748b" font-family="Inter,sans-serif">${esc(centerSub)}</text>` : ''}`
+    : '';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="-webkit-print-color-adjust:exact;print-color-adjust:exact;">${paths}${center}</svg>`;
+}
+
+// ─── Stacked horizontal allocation bar helper ───
+function stackedBar(
+  segments: Array<{ value: number; color: string; label: string }>,
+  height = 12,
+): string {
+  const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
+  if (total <= 0) return '';
+  const segs = segments.filter(s => s.value > 0).map(s => {
+    const pct = (s.value / total) * 100;
+    return `<div title="${esc(s.label)}: ${pct.toFixed(1)}%" style="width:${pct.toFixed(2)}%;background:${s.color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+  }).join('');
+  const legend = segments.filter(s => s.value > 0).map(s => {
+    const pct = (s.value / total) * 100;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;"><span style="display:inline-block;width:8px;height:8px;background:${s.color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)} ${pct.toFixed(0)}%</span>`;
+  }).join('');
+  return `<div style="display:flex;height:${height}px;width:100%;border:1px solid #e2e8f0;border-radius:2px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${segs}</div>
+    <div style="font-size:9px;color:#475569;margin-top:4px;">${legend}</div>`;
+}
+
 function getStatusStamp(status: string): { label: string; color: string } | null {
   switch (status) {
     case 'paid': return { label: 'PAID', color: '#16a34a' };
@@ -389,8 +440,25 @@ export function generateInvoiceHTML(
   }
   const sortedRates = Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b));
   const hasMultipleRates = sortedRates.length > 1;
+  const totalTaxSum = sortedRates.reduce((s, r) => s + taxByRate[r].tax, 0);
+  // Composition bar segments (CSS-grid widths) for visual tax-rate composition
+  const taxRateColors = ['#0f766e', '#0891b2', '#7c3aed', '#db2777', '#ea580c'];
+  const taxBreakdownBar = hasMultipleRates && totalTaxSum > 0
+    ? `<div class="fd-tax-breakdown" style="display:flex;height:8px;width:100%;margin:6px 0 8px;border-radius:2px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;border:1px solid #e2e8f0;">
+        ${sortedRates.map((r, i) => {
+          const pct = (taxByRate[r].tax / totalTaxSum) * 100;
+          return `<div title="${r}% = ${fmt(taxByRate[r].tax)}" style="width:${pct.toFixed(2)}%;background:${taxRateColors[i % taxRateColors.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:9px;color:#64748b;margin-bottom:6px;">
+        ${sortedRates.map((r, i) => {
+          const pct = (taxByRate[r].tax / totalTaxSum) * 100;
+          return `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:8px;height:8px;background:${taxRateColors[i % taxRateColors.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${r}% &middot; ${fmt(taxByRate[r].tax)} (${pct.toFixed(0)}%)</span>`;
+        }).join('')}
+      </div>`
+    : '';
   const taxBreakdownHTML = hasMultipleRates
-    ? sortedRates.map(rate =>
+    ? taxBreakdownBar + sortedRates.map(rate =>
         `<div class="totals-row"><span>Tax @ ${rate}% on ${fmt(taxByRate[rate].taxable)}</span><span>${fmt(taxByRate[rate].tax)}</span></div>`
       ).join('')
     : (taxAmount > 0
@@ -482,11 +550,12 @@ export function generateInvoiceHTML(
       (l.italic || 0) ? 'font-style:italic' : '',
       (l.highlight_color || '') ? `background-color:${l.highlight_color}` : '',
     ].filter(Boolean).join(';');
+    const baseAmtRaw = Number(l.amount || (l.quantity || 1) * (l.unit_price || 0));
+    const hasLineDiscount = !!(l.line_discount && Number(l.line_discount) > 0);
     const discountedPrice = (() => {
-      const baseAmt = Number(l.amount || (l.quantity || 1) * (l.unit_price || 0));
-      if (!l.line_discount || l.line_discount === 0) return baseAmt;
-      if (l.line_discount_type === 'flat') return baseAmt - Number(l.line_discount);
-      return baseAmt * (1 - Number(l.line_discount) / 100);
+      if (!hasLineDiscount) return baseAmtRaw;
+      if (l.line_discount_type === 'flat') return baseAmtRaw - Number(l.line_discount);
+      return baseAmtRaw * (1 - Number(l.line_discount) / 100);
     })();
 
     const cells = cols.map(c => {
@@ -506,12 +575,23 @@ export function generateInvoiceHTML(
         case 'unit_label':   val = esc(l.unit_label || ''); break;
         case 'unit_price':   val = fmt(l.unit_price || 0); break;
         case 'tax_rate':     val = l.tax_rate > 0 ? l.tax_rate + '%' : '—'; break;
-        case 'amount':       val = fmt(discountedPrice); break;
+        case 'amount': {
+          if (hasLineDiscount && discountedPrice < baseAmtRaw) {
+            const dlbl = l.line_discount_type === 'flat' ? `−${fmt(Number(l.line_discount))}` : `−${Number(l.line_discount)}%`;
+            val = `<span style="text-decoration:line-through;color:#94a3b8;font-weight:400;font-size:10px;display:block;line-height:1.1;">${fmt(baseAmtRaw)}</span><span style="color:#16a34a;display:block;line-height:1.2;">${fmt(discountedPrice)}</span><span style="font-size:8px;color:#16a34a;font-weight:600;">${dlbl}</span>`;
+          } else {
+            val = fmt(discountedPrice);
+          }
+          break;
+        }
       }
       return `<td class="${cls}" style="${rowPad}">${val}</td>`;
     }).join('');
 
-    const mergedRowStyle = [rowBg, lineStyleAttr].filter(Boolean).join(';');
+    const discountAccent = hasLineDiscount && discountedPrice < baseAmtRaw
+      ? 'box-shadow: inset 3px 0 0 #16a34a; -webkit-print-color-adjust:exact; print-color-adjust:exact;'
+      : '';
+    const mergedRowStyle = [rowBg, lineStyleAttr, discountAccent].filter(Boolean).join(';');
     return `<tr style="${mergedRowStyle}">${cells}</tr>`;
   }).join('');
 
@@ -701,6 +781,57 @@ export function generateInvoiceHTML(
        </div>`
     : '';
 
+  // ── Feature #2: payment status progress bar (only for partial payments) ──
+  const paymentPct = total > 0 ? Math.min(100, Math.max(0, (amountPaid / total) * 100)) : 0;
+  const paymentBarHTML = (amountPaid > 0 && balance > 0.005 && total > 0 && !isQuote && !isCreditNote)
+    ? `<div class="fd-payment-progress" style="margin:0 0 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:3px;">
+          <span>Payment Progress</span>
+          <span style="color:#0f172a;">${paymentPct.toFixed(0)}% paid &middot; ${fmt(amountPaid)} of ${fmt(total)}</span>
+        </div>
+        <div style="display:flex;height:10px;width:100%;border:1px solid #e2e8f0;border-radius:2px;overflow:hidden;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="width:${paymentPct.toFixed(2)}%;background:${accent};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+          <div style="flex:1;background:#e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        </div>
+        <div style="font-size:9px;color:#dc2626;font-weight:600;margin-top:3px;text-align:right;">Balance Due: ${fmt(balance)}</div>
+      </div>`
+    : '';
+
+  // ── Feature #4: totals composition donut ──
+  const subtotalNum = Number(invoice.subtotal || 0);
+  const discTotal = discountAmount + (invoice.discount_pct ? subtotalNum * Number(invoice.discount_pct) / 100 : 0);
+  const totalsDonutHTML = (() => {
+    const segs = [
+      { value: subtotalNum, color: accent, label: 'Subtotal' },
+      { value: taxAmount, color: '#0891b2', label: 'Tax' },
+      { value: shippingAmount, color: '#7c3aed', label: 'Ship' },
+      { value: discTotal, color: '#16a34a', label: 'Disc' },
+    ];
+    if (segs.reduce((s, x) => s + x.value, 0) <= 0) return '';
+    return `<div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0;">
+      ${svgDonut(segs, 72, '', '')}
+      <div style="font-size:9px;color:#475569;line-height:1.5;">
+        ${segs.filter(s => s.value > 0).map(s => `<div style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:8px;height:8px;background:${s.color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)}: ${fmt(s.value)}</div>`).join('')}
+      </div>
+    </div>`;
+  })();
+
+  // ── Feature #16: client tenure indicator ──
+  const tenureBadgeHTML = (() => {
+    const since = (client?.created_at || client?.client_since || '').toString().slice(0, 4);
+    const sinceYear = parseInt(since, 10);
+    if (!sinceYear || sinceYear < 1990 || sinceYear > new Date().getFullYear()) return '';
+    const years = Math.max(0, new Date().getFullYear() - sinceYear);
+    const dotPct = Math.min(100, (years / 10) * 100);
+    return `<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;color:#64748b;margin-top:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <span style="text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Client since ${sinceYear}</span>
+      <span style="display:inline-block;width:48px;height:4px;background:#e2e8f0;position:relative;">
+        <span style="position:absolute;left:${dotPct.toFixed(0)}%;top:-2px;width:8px;height:8px;border-radius:50%;background:${accent};margin-left:-4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>
+      </span>
+      <span>${years}y</span>
+    </div>`;
+  })();
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Invoice ${esc(invoice.invoice_number || '')}</title><style>
 ${styledBase}
@@ -772,6 +903,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
           ${clientAddr ? clientAddr + '<br>' : ''}
           ${clientEmail ? clientEmail + (clientPhone ? ' &middot; ' + clientPhone : '') : (clientPhone || '')}
         </div>
+        ${tenureBadgeHTML}
       </div>`;
     const shipCard = hasShip ? `
       <div class="fd-addr-card">
@@ -781,6 +913,8 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
       </div>` : '';
     return `<div class="fd-addr-grid${hasShip ? '' : ' single'}">${billCard}${shipCard}</div>`;
   })()}
+
+  ${paymentBarHTML}
 
   <div class="fd-meta-strip">
     <div class="fd-meta-row"><span class="lbl">${isQuote ? 'Quote Date' : isCreditNote ? 'Credit Date' : 'Issue Date'}</span><span class="val">${fmtDate(invoice.issue_date)}</span></div>
@@ -813,6 +947,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
         <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
         <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt(Math.max(0, balance))}</span></div>
       ` : ''}
+      ${totalsDonutHTML}
     </div>
   </div>
 
@@ -970,6 +1105,82 @@ export function generatePayStubHTML(
   const empHealth = stub.employer_health_contribution ?? 0;
   const employerTotal = empSS + empMed + empFuta + empSuta + empMatch + empHealth;
   const hasEmployerContribs = employerTotal > 0;
+
+  // ── Feature #6: deductions donut (gross → taxes / pre-tax / post-tax / net) ──
+  const psAccent = '#16a34a';
+  const deductionsDonutHTML = stub.gross_pay > 0 ? (() => {
+    const segs = [
+      { value: taxDed, color: '#dc2626', label: 'Taxes' },
+      { value: preTax, color: '#7c3aed', label: 'Pre-Tax' },
+      { value: postTax, color: '#0891b2', label: 'Post-Tax' },
+      { value: stub.net_pay, color: psAccent, label: 'Net' },
+    ];
+    if (segs.reduce((s, x) => s + x.value, 0) <= 0) return '';
+    const netPctOfGross = stub.gross_pay > 0 ? (stub.net_pay / stub.gross_pay) * 100 : 0;
+    return `<div style="display:flex;align-items:center;gap:14px;margin:14px 0;padding:10px 14px;border:1px solid #e2e8f0;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+      ${svgDonut(segs, 96, `${netPctOfGross.toFixed(0)}%`, 'Net')}
+      <div style="flex:1;font-size:10px;color:#475569;line-height:1.6;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:4px;">Gross → Net Breakdown</div>
+        ${segs.filter(s => s.value > 0).map(s => `<div style="display:flex;justify-content:space-between;gap:12px;"><span><span style="display:inline-block;width:8px;height:8px;background:${s.color};margin-right:5px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)}</span><span style="font-variant-numeric:tabular-nums;">${fmt(s.value)} (${(s.value / stub.gross_pay * 100).toFixed(1)}%)</span></div>`).join('')}
+      </div>
+    </div>`;
+  })() : '';
+
+  // ── Feature #15: rate-of-pay visual (regular vs OT) ──
+  const ratePayHTML = (!isSalaried && hoursOvertime > 0 && (regularPay + overtimePay) > 0) ? (() => {
+    const total = regularPay + overtimePay;
+    const regPct = (regularPay / total) * 100;
+    const otPct = (overtimePay / total) * 100;
+    return `<div style="margin:8px 0 14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="display:flex;justify-content:space-between;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:4px;">
+        <span>Earnings Composition</span>
+        <span style="color:#0f172a;">${fmt(total)}</span>
+      </div>
+      <div style="display:flex;height:10px;border:1px solid #cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div title="Regular" style="width:${regPct.toFixed(2)}%;background:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        <div title="Overtime" style="width:${otPct.toFixed(2)}%;background:#d97706;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:#475569;margin-top:4px;font-variant-numeric:tabular-nums;">
+        <span><span style="display:inline-block;width:8px;height:8px;background:#0f172a;margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>Regular ${hoursRegular.toFixed(2)}h × ${fmt(effectiveRate)} = ${fmt(regularPay)}</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#d97706;margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>OT ${hoursOvertime.toFixed(2)}h × ${fmt(effectiveRate * 1.5)} = ${fmt(overtimePay)}</span>
+      </div>
+    </div>`;
+  })() : '';
+
+  // ── Feature #18: net-of-gross horizontal indicator ──
+  const netOfGrossPct = stub.gross_pay > 0 ? (stub.net_pay / stub.gross_pay) * 100 : 0;
+  const netOfGrossHTML = stub.gross_pay > 0 ? `
+    <div style="margin-top:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="display:flex;justify-content:space-between;font-size:8px;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;font-weight:700;margin-bottom:3px;">
+        <span>Net of Gross</span><span>${netOfGrossPct.toFixed(0)}%</span>
+      </div>
+      <div style="height:6px;background:rgba(255,255,255,0.3);border-radius:3px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="width:${netOfGrossPct.toFixed(2)}%;height:100%;background:${psAccent};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+      </div>
+    </div>` : '';
+
+  // ── Feature #7: YTD vs annualized projection bars ──
+  // Use period_end fraction of year as projection denominator.
+  const periodEndDate = (() => { try { return new Date(stub.period_end + 'T12:00:00'); } catch { return new Date(); } })();
+  const yStart = new Date(periodEndDate.getFullYear(), 0, 1).getTime();
+  const yEnd = new Date(periodEndDate.getFullYear() + 1, 0, 1).getTime();
+  const yearFrac = Math.max(0.01, Math.min(1, (periodEndDate.getTime() - yStart) / (yEnd - yStart)));
+  const ytdBar = (ytdVal: number, annualized: number, color: string) => {
+    if (annualized <= 0) return '';
+    const pct = Math.min(100, (ytdVal / annualized) * 100);
+    return `<div style="height:4px;background:#e2e8f0;width:60px;display:inline-block;vertical-align:middle;margin-left:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><div style="height:100%;width:${pct.toFixed(1)}%;background:${color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div></div>`;
+  };
+  const ytdProgressHTML = ytd.gross_pay > 0 ? (() => {
+    const annualGross = ytd.gross_pay / yearFrac;
+    const annualNet = ytd.net_pay / yearFrac;
+    const annualTax = ytdTotalDed / yearFrac;
+    return `<div style="margin:6px 0 14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-size:9px;color:#475569;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:6px;">YTD Progress · Annualized Projection (${(yearFrac * 100).toFixed(0)}% of year elapsed)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;"><span>Gross</span><span style="font-variant-numeric:tabular-nums;">${fmt(ytd.gross_pay)} of ~${fmt(annualGross)}${ytdBar(ytd.gross_pay, annualGross, '#0f172a')}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;"><span>Taxes</span><span style="font-variant-numeric:tabular-nums;">${fmt(ytdTotalDed)} of ~${fmt(annualTax)}${ytdBar(ytdTotalDed, annualTax, '#dc2626')}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;"><span>Net</span><span style="font-variant-numeric:tabular-nums;">${fmt(ytd.net_pay)} of ~${fmt(annualNet)}${ytdBar(ytd.net_pay, annualNet, psAccent)}</span></div>
+    </div>`;
+  })() : '';
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -1239,6 +1450,8 @@ export function generatePayStubHTML(
     </div>
   </div>
 
+  ${ratePayHTML}
+
   <!-- Earnings Section -->
   <div class="section section-earn">Earnings</div>
   <table>
@@ -1345,6 +1558,9 @@ export function generatePayStubHTML(
     </tbody>
   </table>
 
+  ${deductionsDonutHTML}
+  ${ytdProgressHTML}
+
   <!-- Waterfall Summary -->
   <div class="waterfall no-break">
     <div class="section section-summary">Pay Summary</div>
@@ -1379,6 +1595,7 @@ export function generatePayStubHTML(
     <div class="net-current">
       <div class="net-label">Net Pay This Period</div>
       <div class="net-amount">${fmt(stub.net_pay)}</div>
+      ${netOfGrossHTML}
     </div>
     <div>
       <div class="net-ytd-label">Year-to-Date Net</div>
@@ -1665,6 +1882,63 @@ ${baseStyles}
     </tr>`;
   }).join('')}</tbody></table>
 
+  ${(() => {
+    // ── Feature #13: risk score histogram ──
+    const bands = [
+      { label: 'Low', min: 0, max: 25, color: '#16a34a' },
+      { label: 'Medium', min: 25, max: 50, color: '#eab308' },
+      { label: 'High', min: 50, max: 75, color: '#f97316' },
+      { label: 'Critical', min: 75, max: 101, color: '#dc2626' },
+    ];
+    const counts = bands.map(b => debts.filter(d => {
+      const r = Number(d.risk_score ?? d.risk ?? -1);
+      return r >= b.min && r < b.max;
+    }).length);
+    if (counts.reduce((s, x) => s + x, 0) === 0) return '';
+    const maxC = Math.max(...counts, 1);
+    return `<div class="rpt-section rpt-section-alt">Risk Score Distribution</div>
+      <div style="padding:12px 0;">
+        ${bands.map((b, i) => {
+          const w = (counts[i] / maxC) * 100;
+          return `<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+            <span style="width:80px;font-size:11px;font-weight:600;color:#334155;">${b.label}</span>
+            <span style="width:60px;font-size:10px;color:#64748b;">${b.min}-${b.max === 101 ? '100' : b.max}</span>
+            <div style="flex:1;height:14px;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+              <div style="height:100%;width:${w.toFixed(1)}%;background:${b.color};min-width:${counts[i] > 0 ? '2px' : '0'};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+            </div>
+            <span style="width:50px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;">${counts[i]}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  })()}
+
+  ${(() => {
+    // ── Feature #14: top collectors dashboard ──
+    const byCollector: Record<string, number> = {};
+    debts.forEach(d => {
+      const name = d.collector_name || d.assigned_to_name || d.collector || d.assigned_collector || '';
+      const collected = Number(d.amount_collected || d.collected || (Number(d.original_amount || 0) - Number(d.balance_due || 0)));
+      if (!name || !isFinite(collected) || collected <= 0) return;
+      byCollector[name] = (byCollector[name] || 0) + collected;
+    });
+    const top = Object.entries(byCollector).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (top.length === 0) return '';
+    const max = top[0][1];
+    return `<div class="rpt-section">Top Collectors</div>
+      <div style="padding:12px 0;">
+        ${top.map(([name, amt]) => {
+          const w = (amt / max) * 100;
+          return `<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+            <span style="width:160px;font-size:11px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
+            <div style="flex:1;height:14px;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+              <div style="height:100%;width:${w.toFixed(1)}%;background:#16a34a;min-width:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+            </div>
+            <span style="width:100px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;">${fmt(amt)}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  })()}
+
   ${reportFooter(companyName)}
   <div style="margin-top:12px;border-top:1px solid #000;padding-top:8px;font-family:Georgia,'Times New Roman',serif;font-size:9pt;color:#444;text-align:center;font-style:italic;">
     This communication may contain privileged or confidential information. Unauthorized disclosure is prohibited.
@@ -1711,6 +1985,68 @@ export function generateDemandLetterHTML(
       </tr>`).join('')
     : `<tr><td colspan="4" style="text-align:center;color:#64748b;font-style:italic;">No payments received</td></tr>`;
 
+  // ── Feature #10: days overdue indicator with weekly strip ──
+  const delinqRaw = debt.delinquent_date || debt.due_date || debt.created_at;
+  const daysOverdue = delinqRaw ? Math.max(0, Math.floor((Date.now() - new Date(delinqRaw + (typeof delinqRaw === 'string' && delinqRaw.length === 10 ? 'T00:00:00' : '')).getTime()) / 86_400_000)) : 0;
+  const daysOverdueHTML = daysOverdue > 0 ? (() => {
+    const totalCells = 18 * 7; // 126 days
+    const filled = Math.min(totalCells, daysOverdue);
+    let cells = '';
+    for (let i = 0; i < totalCells; i++) {
+      const isFilled = i < filled;
+      const isWeekStart = i % 7 === 0;
+      cells += `<span style="display:inline-block;width:7px;height:7px;margin:1px;background:${isFilled ? '#dc2626' : '#e2e8f0'};${isWeekStart ? 'margin-left:3px;' : ''}-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>`;
+    }
+    return `<div style="margin:14px 0;padding:10px 14px;background:#fef2f2;border:1.5px solid #dc2626;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="display:flex;align-items:baseline;gap:14px;">
+        <span style="font-size:32pt;font-weight:800;color:#dc2626;font-family:Georgia,serif;font-variant-numeric:tabular-nums;line-height:1;">${daysOverdue}</span>
+        <span style="font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#991b1b;">days overdue${daysOverdue >= totalCells ? ' (chart truncated at 126 days)' : ''}</span>
+      </div>
+      <div style="margin-top:8px;line-height:0;">${cells}</div>
+    </div>`;
+  })() : '';
+
+  // ── Feature #9: aging bucket bar ──
+  const ageBuckets = [
+    { label: 'Current', max: 30, color: '#16a34a' },
+    { label: '31-60', max: 60, color: '#eab308' },
+    { label: '61-90', max: 90, color: '#f97316' },
+    { label: '90+', max: Infinity, color: '#dc2626' },
+  ];
+  const bucketIdx = ageBuckets.findIndex(b => daysOverdue <= b.max);
+  const activeBucket = bucketIdx >= 0 ? bucketIdx : ageBuckets.length - 1;
+  const agingBarHTML = balanceDue > 0 ? (() => {
+    // Distribution: weight bucket the debt falls into; show full bar with all buckets
+    const widths = ageBuckets.map((_, i) => i === activeBucket ? 40 : 20); // emphasize active
+    const sum = widths.reduce((a, b) => a + b, 0);
+    return `<div style="margin:10px 0 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#444;margin-bottom:5px;font-family:Georgia,serif;">Aging Status</div>
+      <div style="display:flex;height:14px;border:1px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        ${ageBuckets.map((b, i) => `<div style="width:${(widths[i] / sum * 100).toFixed(2)}%;background:${b.color};opacity:${i === activeBucket ? '1' : '0.35'};-webkit-print-color-adjust:exact;print-color-adjust:exact;border-right:${i < ageBuckets.length - 1 ? '1px solid #000' : 'none'};"></div>`).join('')}
+      </div>
+      <div style="display:flex;font-size:8.5pt;color:#333;margin-top:3px;font-family:Georgia,serif;">
+        ${ageBuckets.map((b, i) => `<div style="width:${(widths[i] / sum * 100).toFixed(2)}%;text-align:center;font-weight:${i === activeBucket ? '700' : '400'};">${b.label}${i === activeBucket ? ' \u25C0' : ''}</div>`).join('')}
+      </div>
+    </div>`;
+  })() : '';
+
+  // ── Feature #19: total-due donut ──
+  const totalDueDonutHTML = (() => {
+    const segs = [
+      { value: originalAmount, color: '#0f766e', label: 'Principal' },
+      { value: interest, color: '#0891b2', label: 'Interest' },
+      { value: fees, color: '#ea580c', label: 'Fees' },
+    ];
+    if (segs.reduce((s, x) => s + x.value, 0) <= 0) return '';
+    return `<div style="float:right;margin:0 0 12px 14px;text-align:center;font-family:Georgia,serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      ${svgDonut(segs, 90)}
+      <div style="font-size:8.5pt;color:#333;margin-top:4px;line-height:1.5;">
+        ${segs.filter(s => s.value > 0).map(s => `<div><span style="display:inline-block;width:8px;height:8px;background:${s.color};margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)}: ${fmt(s.value)}</div>`).join('')}
+        ${totalPaid > 0 ? `<div style="font-style:italic;color:#16a34a;">Less paid: (${fmt(totalPaid)})</div>` : ''}
+      </div>
+    </div>`;
+  })();
+
   const acctNum = (debt.debt_number || debt.id || '').toString().slice(0, 12).toUpperCase() || 'N/A';
   const phone = esc(company?.phone || '');
   const email = esc(company?.email || '');
@@ -1748,6 +2084,10 @@ body { background: #fff; }
     <p class="no-indent">Dear ${esc(debt.debtor_name || 'Sir or Madam')}:</p>
 
     <p>This letter constitutes formal demand for payment of an outstanding obligation owed by you to <strong>${companyName}</strong>. Our records establish that you are indebted to ${companyName} in the sum identified below, and that despite the passage of the applicable due date this balance remains unsatisfied.</p>
+
+    ${daysOverdueHTML}
+    ${agingBarHTML}
+    ${totalDueDonutHTML}
 
     <table class="legal-amount-table">
       <tbody>
@@ -2426,6 +2766,16 @@ ${baseStyles}
     ${exhibits.map(ex => `<div class="ex-row"><span class="ex-letter">Exhibit ${ex.letter}</span><span>${esc(ex.title)}</span></div>`).join('')}
   </div>
 
+  <!-- Feature #11: exhibit thumbnail contact-sheet strip -->
+  <div style="margin:24px auto 0;max-width:6.5in;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    ${exhibits.map(ex => `
+      <div style="border:1.5px solid #000;padding:10px 6px 8px;text-align:center;background:#fafaf6;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:22pt;font-weight:700;letter-spacing:3px;border:2px solid #000;padding:6px 0;margin-bottom:6px;background:#fff;">${ex.letter}</div>
+        <div style="font-family:Georgia,serif;font-size:7.5pt;line-height:1.25;color:#222;min-height:2.4em;">${esc(ex.title)}</div>
+      </div>
+    `).join('')}
+  </div>
+
   <div class="confidential">Confidential &mdash; For Legal Proceedings Only</div>
 </div>
 
@@ -2494,6 +2844,42 @@ body { background: #fff; }
       <tr class="total"><td>TOTAL AMOUNT DUE AND OWING</td><td class="amt">${fmtAmt(debt?.balance_due)}</td></tr>
     </tbody>
   </table>
+
+  ${(() => {
+    // ── Feature #20: chronological event ribbon ──
+    const events: Array<{ label: string; date: string }> = [];
+    if (debt?.origination_date) events.push({ label: 'Origination', date: debt.origination_date });
+    else if (debt?.created_at) events.push({ label: 'Record Created', date: String(debt.created_at).slice(0, 10) });
+    if (debt?.delinquent_date) events.push({ label: 'Delinquent', date: debt.delinquent_date });
+    if (debt?.first_contact_date || debt?.first_contact_at) events.push({ label: 'First Contact', date: String(debt.first_contact_date || debt.first_contact_at).slice(0, 10) });
+    if (debt?.last_demand_date) events.push({ label: 'Demand Letter', date: String(debt.last_demand_date).slice(0, 10) });
+    events.push({ label: 'Today', date: new Date().toISOString().slice(0, 10) });
+    const valid = events.filter(e => {
+      const t = new Date(e.date + 'T12:00:00').getTime();
+      return isFinite(t);
+    });
+    if (valid.length < 2) return '';
+    const times = valid.map(e => new Date(e.date + 'T12:00:00').getTime());
+    const min = Math.min(...times), max = Math.max(...times);
+    const span = Math.max(1, max - min);
+    return `<div style="margin:14px 0 18px;padding:14px 18px;border:1px solid #000;background:#fafaf6;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+      <div style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#222;margin-bottom:10px;font-family:Georgia,serif;">Chronology</div>
+      <div style="position:relative;height:36px;margin:0 12px;">
+        <div style="position:absolute;left:0;right:0;top:14px;height:2px;background:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        ${valid.map((e, i) => {
+          const t = new Date(e.date + 'T12:00:00').getTime();
+          const pct = ((t - min) / span) * 100;
+          const isLast = i === valid.length - 1;
+          return `<div style="position:absolute;left:${pct.toFixed(1)}%;top:8px;transform:translateX(-50%);text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+            <div style="width:14px;height:14px;border-radius:50%;background:${isLast ? '#dc2626' : '#000'};border:2px solid #fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0 auto;"></div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:8.5pt;color:#333;margin-top:4px;font-family:Georgia,serif;">
+        ${valid.map(e => `<div style="text-align:center;flex:1;"><div style="font-weight:700;">${esc(e.label)}</div><div style="font-style:italic;">${esc(new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }))}</div></div>`).join('')}
+      </div>
+    </div>`;
+  })()}
 
   <div class="legal-numbered" style="counter-reset: legalpara 4;">
     <p class="lp">Demand has been duly made upon the Debtor for the payment of said indebtedness; however, no portion of said indebtedness has been paid except as credited above, and the entire balance set forth above remains due, owing, and unpaid.</p>
@@ -2602,6 +2988,12 @@ export function generateBillHTML(
   const logoHTML = safeImg(settings?.logo_data || null, esc(company?.name || ''),
     'max-height:42px;max-width:160px;object-fit:contain;margin-bottom:6px;');
 
+  // ── Feature #17: 1099 eligible badge ──
+  const is1099 = !!(vendor?.is_1099_eligible || vendor?.vendor_1099 || vendor?.requires_1099);
+  const badge1099 = is1099
+    ? `<div style="display:inline-block;margin-top:6px;padding:3px 8px;background:#fef3c7;color:#92400e;border:1.5px solid #b45309;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact;">1099 Eligible</div>`
+    : '';
+
   const vendorBlock = `
     <div class="fd-addr-card">
       <div class="fd-addr-lbl">Bill From</div>
@@ -2612,6 +3004,7 @@ export function generateBillHTML(
         ${vendor?.email ? `<div>${esc(vendor.email)}</div>` : ''}
         ${vendor?.phone ? `<div>${esc(vendor.phone)}</div>` : ''}
       </div>
+      ${badge1099}
     </div>`;
 
   const companyBlock = `
@@ -2644,6 +3037,26 @@ export function generateBillHTML(
 
   const created = bill.created_at ? fmtDateMaybe(bill.created_at) : '';
   const generated = new Date().toLocaleString('en-US');
+
+  // ── Feature #5: bill account allocation visual ──
+  const allocByAcct: Record<string, { label: string; total: number }> = {};
+  (lineItems || []).forEach((l: any) => {
+    const acctId = l.expense_account_id || l.account_id || '';
+    const amt = Number(l.amount ?? Number(l.quantity || 0) * Number(l.unit_price || 0));
+    if (amt <= 0) return;
+    const acct = acctId ? accountMap.get(acctId) : null;
+    const label = acct ? (acct.name || acct.code || 'Unassigned') : 'Unassigned';
+    if (!allocByAcct[label]) allocByAcct[label] = { label, total: 0 };
+    allocByAcct[label].total += amt;
+  });
+  const allocEntries = Object.values(allocByAcct).sort((a, b) => b.total - a.total);
+  const allocPalette = ['#0f766e', '#0891b2', '#7c3aed', '#db2777', '#ea580c', '#65a30d'];
+  const allocationHTML = allocEntries.length > 1
+    ? `<div style="margin-top:12px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div class="section-label" style="margin-bottom:6px;">Account Allocation</div>
+        ${stackedBar(allocEntries.map((e, i) => ({ value: e.total, color: allocPalette[i % allocPalette.length], label: e.label })), 14)}
+      </div>`
+    : '';
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Bill ${esc(bill.bill_number || '')}</title>
 <style>${baseStyles}${stamp ? statusStampCSS(stamp.color) : ''}</style></head>
@@ -2680,6 +3093,8 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
   </thead>
   <tbody>${rows || `<tr class="fd-empty-row"><td colspan="5">(no line items)</td></tr>`}</tbody>
 </table>
+
+${allocationHTML}
 
 <div style="overflow:hidden;margin-top:18px;">
   <div class="fd-totals-card">
@@ -2794,6 +3209,38 @@ export function generatePurchaseOrderHTML(
 
   const generated = new Date().toLocaleString('en-US');
 
+  // ── Feature #8: PO delivery timeline ──
+  const deliveryTimelineHTML = (() => {
+    const orderRaw = po.order_date || po.issue_date;
+    const expectedRaw = po.expected_delivery_date || po.expected_date;
+    if (!orderRaw || !expectedRaw) return '';
+    const order = new Date(orderRaw + 'T12:00:00').getTime();
+    const expected = new Date(expectedRaw + 'T12:00:00').getTime();
+    const today = Date.now();
+    if (!isFinite(order) || !isFinite(expected) || expected <= order) return '';
+    const span = expected - order;
+    const todayPct = Math.max(0, Math.min(100, ((today - order) / span) * 100));
+    const overdue = today > expected;
+    const approaching = !overdue && expected - today < span * 0.2;
+    const color = overdue ? '#dc2626' : approaching ? '#d97706' : '#2563eb';
+    const status = overdue ? `${Math.floor((today - expected) / 86_400_000)}d overdue` : approaching ? 'Approaching' : 'On track';
+    return `<div style="margin-top:14px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:6px;">
+        <span>Delivery Timeline</span>
+        <span style="color:${color};">${status}</span>
+      </div>
+      <div style="position:relative;height:14px;background:#e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100, todayPct).toFixed(1)}%;background:${color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        <div style="position:absolute;right:0;top:-3px;bottom:-3px;width:2px;background:#0f172a;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:#475569;margin-top:4px;font-variant-numeric:tabular-nums;">
+        <span>Ordered ${esc(fmtDateMaybe(orderRaw))}</span>
+        <span>Today</span>
+        <span>Expected ${esc(fmtDateMaybe(expectedRaw))}</span>
+      </div>
+    </div>`;
+  })();
+
   const terms: string = po.terms || '';
   const deliveryTerms = settings?.delivery_terms || '';
   const paymentTerms = settings?.payment_terms || '';
@@ -2820,6 +3267,8 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
   ${vendorBlock}
   ${shipBlock}
 </div>
+
+${deliveryTimelineHTML}
 
 <table style="margin-top:8px;">
   <thead>

@@ -16,9 +16,18 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+// ─── Accounting parens helper ───────────────────────────
+function fmtNeg(value: number): React.ReactElement {
+  const n = Number(value) || 0;
+  const formatted = fmt.format(Math.abs(n));
+  return n < 0
+    ? <span data-neg="true" className="acc-neg">{formatted}</span>
+    : <span>{formatted}</span>;
+}
+
 // ─── Render helpers ─────────────────────────────────────
 const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
-  <tr className="bg-bg-tertiary/30">
+  <tr className="bg-bg-tertiary/30 report-section-heading">
     <td
       colSpan={2}
       className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
@@ -47,7 +56,7 @@ const LineRow: React.FC<{
         bold ? 'font-bold' : ''
       } ${accent || 'text-text-primary'}`}
     >
-      {fmt.format(amount)}
+      {fmtNeg(amount)}
     </td>
   </tr>
 );
@@ -60,7 +69,7 @@ const SubtotalRow: React.FC<{
   doubleBorder?: boolean;
 }> = ({ label, amount, accent, topBorder, doubleBorder }) => (
   <tr
-    className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
+    className={`${topBorder ? 'border-t border-border-primary report-subtotal-row' : ''} ${doubleBorder ? 'border-t-2 border-border-primary report-grand-total-row' : ''}`}
   >
     <td className="px-6 py-2 text-xs font-bold text-text-primary">
       {label}
@@ -68,7 +77,7 @@ const SubtotalRow: React.FC<{
     <td
       className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
     >
-      {fmt.format(amount)}
+      {fmtNeg(amount)}
     </td>
   </tr>
 );
@@ -329,8 +338,8 @@ const CashFlowStatement: React.FC = () => {
           </div>
 
           <table className="w-full text-sm">
-            <tbody>
-              {/* Operating Activities */}
+            {/* Operating Activities */}
+            <tbody className="cashflow-section">
               <SectionHeader label="Cash Flows from Operating Activities" />
               <LineRow name="Cash received from customers" amount={data.operatingInflows} indent={1} />
               <LineRow name="Cash paid for expenses" amount={-data.operatingOutflows} indent={1} />
@@ -340,10 +349,11 @@ const CashFlowStatement: React.FC = () => {
                 accent={netOperating >= 0 ? 'text-accent-income' : 'text-accent-expense'}
                 topBorder
               />
-
               <Spacer />
+            </tbody>
 
-              {/* Investing Activities */}
+            {/* Investing Activities */}
+            <tbody className="cashflow-section">
               <SectionHeader label="Cash Flows from Investing Activities" />
               <LineRow name="Purchase of assets" amount={-data.investingOutflows} indent={1} />
               <SubtotalRow
@@ -352,10 +362,11 @@ const CashFlowStatement: React.FC = () => {
                 accent={netInvesting >= 0 ? 'text-accent-income' : 'text-accent-expense'}
                 topBorder
               />
-
               <Spacer />
+            </tbody>
 
-              {/* Financing Activities */}
+            {/* Financing Activities */}
+            <tbody className="cashflow-section">
               <SectionHeader label="Cash Flows from Financing Activities" />
               <LineRow name="Owner equity contributions" amount={data.financingEquityIn} indent={1} />
               <LineRow name="Owner draws" amount={-data.financingDraws} indent={1} />
@@ -365,24 +376,24 @@ const CashFlowStatement: React.FC = () => {
                 accent={netFinancing >= 0 ? 'text-accent-income' : 'text-accent-expense'}
                 topBorder
               />
-
               <Spacer />
+            </tbody>
 
-              {/* Net Change */}
+            {/* Net Change */}
+            <tbody className="cashflow-net-change">
               <SubtotalRow
                 label="Net Change in Cash"
                 amount={netChange}
                 accent={netChange >= 0 ? 'text-accent-income' : 'text-accent-expense'}
                 doubleBorder
               />
-
               <Spacer />
 
               {/* Beginning / Ending Cash */}
               <LineRow name="Beginning Cash Balance" amount={data.beginningCash} bold />
 
               {/* Final row */}
-              <tr className="border-t-2 border-text-primary bg-bg-tertiary/50">
+              <tr className="border-t-2 border-text-primary bg-bg-tertiary/50 report-grand-total-row">
                 <td className="px-6 py-3 text-sm font-bold text-text-primary">
                   Ending Cash Balance
                 </td>
@@ -393,7 +404,7 @@ const CashFlowStatement: React.FC = () => {
                       : 'text-accent-expense'
                   }`}
                 >
-                  {fmt.format(endingCash)}
+                  {fmtNeg(endingCash)}
                 </td>
               </tr>
             </tbody>

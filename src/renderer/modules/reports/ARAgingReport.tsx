@@ -199,11 +199,11 @@ const ARAgingReport: React.FC = () => {
       ) : (
         <>
           {/* Summary buckets */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-3 aging-bucket-strip report-summary-tiles">
             {(Object.keys(BUCKET_LABELS) as BucketKey[]).map((key) => (
               <div
                 key={key}
-                className="block-card p-4 text-center"
+                className={`block-card p-4 text-center ${key === '90+' ? 'aging-row-90plus' : ''}`}
                 style={{ borderRadius: '6px' }}
               >
                 <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -222,7 +222,7 @@ const ARAgingReport: React.FC = () => {
 
           {/* Grand total */}
           <div
-            className="block-card p-4 flex items-center justify-between"
+            className="block-card p-4 flex items-center justify-between report-grand-total-row"
             style={{ borderRadius: '6px' }}
           >
             <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
@@ -260,7 +260,7 @@ const ARAgingReport: React.FC = () => {
                 </thead>
                 <tbody>
                   {entries.map((entry) => (
-                    <tr key={entry.id}>
+                    <tr key={entry.id} className={entry.daysOutstanding > 90 ? 'aging-row-90plus' : ''}>
                       <td className="text-text-primary font-medium font-mono">
                         <EntityChip type="invoice" id={entry.id} label={`#${entry.invoiceNumber}`} variant="inline" />
                       </td>
@@ -270,7 +270,7 @@ const ARAgingReport: React.FC = () => {
                       <td className="text-right font-mono text-text-primary">
                         {fmt.format(entry.amountDue)}
                       </td>
-                      <td className="text-right font-mono text-text-secondary">
+                      <td className={`text-right font-mono ${entry.daysOutstanding > 90 ? 'aging-row-90plus text-accent-expense font-bold' : 'text-text-secondary'}`}>
                         {entry.daysOutstanding}
                       </td>
                       <td>

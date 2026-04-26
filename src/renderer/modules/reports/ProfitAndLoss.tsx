@@ -33,9 +33,18 @@ const fmt = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+// ─── Accounting parens helper ───────────────────────────
+function fmtNeg(value: number): React.ReactElement {
+  const n = Number(value) || 0;
+  const formatted = fmt.format(Math.abs(n));
+  return n < 0
+    ? <span data-neg="true" className="acc-neg">{formatted}</span>
+    : <span>{formatted}</span>;
+}
+
 // ─── Render helpers ─────────────────────────────────────
 const SectionHeader: React.FC<{ label: string; cols?: number }> = ({ label, cols = 2 }) => (
-  <tr className="bg-bg-tertiary/30">
+  <tr className="bg-bg-tertiary/30 report-section-heading">
     <td
       colSpan={cols}
       className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
@@ -66,11 +75,11 @@ const PnLLineRow: React.FC<{
         bold ? 'font-bold' : ''
       } ${accent || 'text-text-primary'}`}
     >
-      {fmt.format(amount)}
+      {fmtNeg(amount)}
     </td>
     {priorAmount !== undefined && priorAmount !== null && (
       <td className="py-1.5 text-right pr-4 font-mono text-xs text-text-muted">
-        {fmt.format(priorAmount)}
+        {fmtNeg(priorAmount)}
       </td>
     )}
     {change !== undefined && (
@@ -91,7 +100,7 @@ const PnLSubtotalRow: React.FC<{
   change?: React.ReactNode;
 }> = ({ label, amount, accent, topBorder, doubleBorder, priorAmount, change }) => (
   <tr
-    className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
+    className={`${topBorder ? 'border-t border-border-primary report-subtotal-row' : ''} ${doubleBorder ? 'border-t-2 border-border-primary report-grand-total-row' : ''}`}
   >
     <td className="px-6 py-2 text-xs font-bold text-text-primary">
       {label}
@@ -99,11 +108,11 @@ const PnLSubtotalRow: React.FC<{
     <td
       className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
     >
-      {fmt.format(amount)}
+      {fmtNeg(amount)}
     </td>
     {priorAmount !== undefined && priorAmount !== null && (
       <td className="py-2 text-right pr-4 font-mono text-xs font-bold text-text-muted">
-        {fmt.format(priorAmount)}
+        {fmtNeg(priorAmount)}
       </td>
     )}
     {change !== undefined && (
@@ -339,7 +348,7 @@ const ProfitAndLoss: React.FC = () => {
     const pct = prior !== 0 ? Math.round((diff / Math.abs(prior)) * 100) : 0;
     const isGood = isExpense ? diff < 0 : diff > 0;
     return (
-      <span className={`text-[10px] font-mono ml-2 ${isGood ? 'text-accent-income' : 'text-accent-expense'}`}>
+      <span className={`text-[10px] font-mono ml-2 ${isGood ? 'text-accent-income variance-under' : 'text-accent-expense variance-over'}`}>
         {diff > 0 ? '+' : ''}{fmt.format(diff)} ({pct > 0 ? '+' : ''}{pct}%)
       </span>
     );
@@ -687,7 +696,7 @@ const ProfitAndLoss: React.FC = () => {
               )}
 
               {/* Net Income */}
-              <tr className="border-t-2 border-text-primary bg-bg-tertiary/50">
+              <tr className="border-t-2 border-text-primary bg-bg-tertiary/50 report-grand-total-row">
                 <td className="px-6 py-3 text-sm font-bold text-text-primary">
                   Net Income
                 </td>
@@ -696,11 +705,11 @@ const ProfitAndLoss: React.FC = () => {
                     netIncome >= 0 ? 'text-accent-income' : 'text-accent-expense'
                   }`}
                 >
-                  {fmt.format(netIncome)}
+                  {fmtNeg(netIncome)}
                 </td>
                 {compareYoY && priorData && (
                   <td className="py-3 text-right pr-4 font-mono text-sm font-bold text-text-muted">
-                    {fmt.format(priorNetIncome)}
+                    {fmtNeg(priorNetIncome)}
                   </td>
                 )}
                 {compareYoY && priorData && (

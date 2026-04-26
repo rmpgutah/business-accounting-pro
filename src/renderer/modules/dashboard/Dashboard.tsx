@@ -14,7 +14,12 @@ import {
   CalendarCheck,
   Timer,
   Crown,
+  Printer,
 } from 'lucide-react';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
+import KpiTile from '../../components/KpiTile';
+import DataBar from '../../components/DataBar';
 import {
   AreaChart,
   Area,
@@ -793,8 +798,23 @@ const Dashboard: React.FC = () => {
     [topClients]
   );
 
+  // ─── Print handler — toggles landscape page class so wide charts fit ─
+  const handlePrint = () => {
+    document.body.classList.add('dashboard-print');
+    const cleanup = () => {
+      document.body.classList.remove('dashboard-print');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    // Fallback in case afterprint doesn't fire (some platforms)
+    setTimeout(cleanup, 60000);
+    window.print();
+  };
+
   return (
     <div className="p-8 space-y-8 overflow-y-auto h-full">
+      {/* Print-only corporate header */}
+      <PrintReportHeader title="Dashboard" periodEnd={new Date()} />
       <div className="max-w-[1400px] mx-auto space-y-8">
 
       {/* Header & Period Selector */}
@@ -810,7 +830,16 @@ const Dashboard: React.FC = () => {
             {format(new Date(), 'EEEE, MMMM d, yyyy')}
           </p>
         </div>
-        <div className="flex gap-1" style={{ borderRadius: '6px' }}>
+        <div className="flex gap-2 items-center" style={{ borderRadius: '6px' }}>
+          <button
+            onClick={handlePrint}
+            className="no-print flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-bg-secondary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+            style={{ borderRadius: '6px' }}
+            title="Print this dashboard"
+          >
+            <Printer size={13} />
+            Print
+          </button>
           {periodButtons.map((p) => (
             <button
               key={p}
@@ -843,34 +872,39 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-5">
-        <StatCard
+      {/* Stat Cards — refactored to <KpiTile> (feature 13 demo) so they
+          collapse to inline summary text in print via .report-summary-tiles. */}
+      <div className="grid grid-cols-4 gap-5 report-summary-tiles">
+        <KpiTile
           label="Revenue"
           value={stats.revenue}
-          change={stats.revenueChange}
+          trendPct={stats.revenueChange}
           accentClass="border-l-accent-income"
+          subtext="vs prior period"
           onClick={() => setModule('invoicing')}
         />
-        <StatCard
+        <KpiTile
           label="Expenses"
           value={stats.expenses}
-          change={stats.expensesChange}
+          trendPct={stats.expensesChange}
           accentClass="border-l-accent-expense"
+          subtext="vs prior period"
           onClick={() => setModule('expenses')}
         />
-        <StatCard
+        <KpiTile
           label="Net Income"
           value={stats.netIncome}
-          change={stats.netIncomeChange}
+          trendPct={stats.netIncomeChange}
           accentClass="border-l-accent-blue"
+          subtext="vs prior period"
           onClick={() => setModule('reports')}
         />
-        <StatCard
+        <KpiTile
           label="Outstanding Invoices"
           value={stats.outstanding}
-          change={stats.outstandingChange}
+          trendPct={stats.outstandingChange}
           accentClass="border-l-accent-warning"
+          subtext="vs prior period"
           onClick={() => {
             sessionStorage.setItem('nav:invoiceFilter', 'overdue');
             setModule('invoicing');
@@ -1024,7 +1058,30 @@ const Dashboard: React.FC = () => {
           Revenue vs Expenses
         </h2>
         <p className="text-[11px] text-text-muted mb-5">Trailing 12-month overview</p>
-        <div style={{ width: '100%', minHeight: 360 }}>
+        {/* Print-fallback table — hidden on screen, shown in PDF */}
+        {cashflow.length > 0 && (
+          <table className="chart-print-fallback" style={{ width: '100%', fontSize: '9pt', marginBottom: 10 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Month</th>
+                <th style={{ textAlign: 'right' }}>Revenue</th>
+                <th style={{ textAlign: 'right' }}>Expenses</th>
+                <th style={{ textAlign: 'right' }}>Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cashflow.map((p) => (
+                <tr key={p.month}>
+                  <td>{p.month}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(p.income)}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(p.expenses)}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(p.income - p.expenses)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="chart-screen-only" style={{ width: '100%', minHeight: 360 }}>
           <ResponsiveContainer width="100%" height={360}>
             <AreaChart data={cashflow}>
               <defs>
@@ -1135,7 +1192,27 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
           ) : (
-            <div style={{ width: '100%', minHeight: 340 }}>
+            <>
+              {/* Print-fallback inline summary (feature 20) */}
+              {cashflow.length > 0 && (() => {
+                const last12 = cashflow.slice(-12);
+                const avgRev = last12.reduce((s, p) => s + p.income, 0) / Math.max(last12.length, 1);
+                const first = last12[0];
+                const last = last12[last12.length - 1];
+                const trendPct =
+                  first && first.income > 0
+                    ? ((last.income - first.income) / first.income) * 100
+                    : 0;
+                const proj = cashForecast[0]?.projected ?? 0;
+                return (
+                  <div className="chart-print-fallback" style={{ fontSize: '10pt', lineHeight: 1.5 }}>
+                    <div><strong>Last 12 months avg:</strong> {formatCurrency(avgRev)}</div>
+                    <div><strong>Trend:</strong> {trendPct >= 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
+                    <div><strong>Projected next month:</strong> {formatCurrency(proj)}</div>
+                  </div>
+                );
+              })()}
+              <div className="chart-screen-only" style={{ width: '100%', minHeight: 340 }}>
               <ResponsiveContainer width="100%" height={340}>
                 <AreaChart data={cashForecast}>
                   <defs>
@@ -1181,7 +1258,8 @@ const Dashboard: React.FC = () => {
                   />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -1197,22 +1275,42 @@ const Dashboard: React.FC = () => {
             <span className="text-xs text-text-muted">No expense data available</span>
           </div>
         ) : (
-          <div style={{ width: '100%', minHeight: 340 }}>
-            <ResponsiveContainer width="100%" height={340}>
-              <Treemap
-                data={expenseCategories as any[]}
-                dataKey="size"
-                nameKey="name"
-                stroke="#0a0a0a"
-                content={<TreemapContent />}
-              />
-            </ResponsiveContainer>
-          </div>
+          <>
+            {/* Print fallback: ranked list with DataBars (feature 19/23) */}
+            <div className="chart-print-fallback" style={{ fontSize: '10pt' }}>
+              {(() => {
+                const totalExp = expenseCategories.reduce((s, c) => s + c.size, 0);
+                return expenseCategories.map((c, i) => (
+                  <div key={c.name} style={{ marginBottom: 6 }}>
+                    <DataBar
+                      value={c.size}
+                      total={totalExp || 1}
+                      color={c.fill}
+                      thickness={5}
+                      label={`${i + 1}. ${c.name}`}
+                      rightText={formatCurrency(c.size)}
+                    />
+                  </div>
+                ));
+              })()}
+            </div>
+            <div className="chart-screen-only" style={{ width: '100%', minHeight: 340 }}>
+              <ResponsiveContainer width="100%" height={340}>
+                <Treemap
+                  data={expenseCategories as any[]}
+                  dataKey="size"
+                  nameKey="name"
+                  stroke="#0a0a0a"
+                  content={<TreemapContent />}
+                />
+              </ResponsiveContainer>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Quick Actions */}
-      <div>
+      {/* Quick Actions — interactive only */}
+      <div className="no-print">
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Quick Actions
         </h2>
@@ -1260,7 +1358,7 @@ const Dashboard: React.FC = () => {
                 Recent Activity
               </h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 no-print">
               <select
                 className="block-select text-[10px] py-0.5 px-2"
                 style={{ width: 'auto', minWidth: '100px', borderRadius: '6px', height: '24px' }}
@@ -1333,7 +1431,7 @@ const Dashboard: React.FC = () => {
                 return (
                   <div
                     key={entry.id}
-                    className="flex items-center gap-3 py-3"
+                    className="activity-feed-row flex items-center gap-3 py-3"
                     style={{ borderBottom: '1px solid #2e2e2e' }}
                   >
                     <span
@@ -1432,42 +1530,29 @@ const Dashboard: React.FC = () => {
               <p className="text-xs text-text-muted">No client revenue data</p>
             ) : (
               <div className="space-y-4">
-                {topClients.map((client, idx) => {
-                  const pct =
-                    maxClientRevenue > 0
-                      ? (client.total_paid / maxClientRevenue) * 100
-                      : 0;
-                  return (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm text-text-primary truncate">
-                          {client.id ? <EntityChip type="client" id={client.id} label={client.name} variant="inline" /> : client.name}
-                        </span>
-                        <span className="text-sm font-mono font-semibold text-text-secondary ml-2">
-                          {formatCurrency(client.total_paid)}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: 6,
-                          backgroundColor: '#2e2e2e',
-                          borderRadius: '1px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${pct}%`,
-                            height: '100%',
-                            backgroundColor: '#3b82f6',
-                            borderRadius: '1px',
-                            transition: 'width 0.3s ease',
-                          }}
-                        />
-                      </div>
+                {topClients.map((client, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-text-primary truncate">
+                        <span className="text-text-muted font-mono mr-2">{idx + 1}.</span>
+                        {client.id ? (
+                          <EntityChip type="client" id={client.id} label={client.name} variant="inline" />
+                        ) : (
+                          client.name
+                        )}
+                      </span>
+                      <span className="text-sm font-mono font-semibold text-text-secondary ml-2">
+                        {formatCurrency(client.total_paid)}
+                      </span>
                     </div>
-                  );
-                })}
+                    <DataBar
+                      value={client.total_paid}
+                      total={maxClientRevenue}
+                      color="#3b82f6"
+                      thickness={6}
+                    />
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1503,6 +1588,7 @@ const Dashboard: React.FC = () => {
       )}
 
       </div>{/* end max-w-[1400px] wrapper */}
+      <PrintReportFooter />
     </div>
   );
 };

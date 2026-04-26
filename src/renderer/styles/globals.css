@@ -975,4 +975,182 @@ td[data-neg="true"]::before,
 td[data-neg="true"]::after,
 .acc-neg-auto[data-neg="true"]::after { content: ")"; }
 
+/* ─── Recharts Print System ───────────────────────────── */
+/* Recharts uses ResponsiveContainer which JS-measures dimensions; in
+   Electron's headless print BrowserWindow that often resolves to 0×0 and
+   the chart collapses. Tooltips render via <foreignObject> which Chromium
+   does not paint to PDF, and CSS-variable colors don't always survive
+   print color conversion. The rules below force fixed canvases, exact
+   color preservation, and hide print-incompatible chrome. */
+
+/* Screen/print toggle helpers used by chart wrappers */
+@media screen {
+  .print-only { display: none !important; }
+}
+
+/* Chart-print frame: when wrapped, gives Recharts a deterministic
+   in × in canvas during printToPDF so the SVG isn't 0×0. */
+.chart-print-frame { width: 100%; }
+
+@media print {
+  .screen-only { display: none !important; }
+
+  /* Default locked print canvas — modules can override per-chart */
+  .chart-print-frame {
+    width: 7.4in !important;
+    height: 4in !important;
+    max-width: 7.4in !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+  .chart-print-frame--tall { height: 4.6in !important; }
+  .chart-print-frame--short { height: 3in !important; }
+  .chart-print-frame--square { height: 4in !important; width: 4in !important; }
+
+  /* Force the Recharts wrapper/SVG to fill the frame and preserve color */
+  .recharts-wrapper,
+  .recharts-surface,
+  svg.recharts-surface {
+    width: 100% !important;
+    height: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Tooltips use foreignObject — they cannot render in print */
+  .recharts-tooltip-wrapper,
+  .recharts-default-tooltip,
+  .recharts-tooltip-cursor {
+    display: none !important;
+  }
+
+  /* Force dark axis/legend text on white paper */
+  .recharts-cartesian-axis text,
+  .recharts-text,
+  .recharts-label,
+  .recharts-pie-label-text,
+  .recharts-treemap-depth-1 text,
+  .recharts-legend-item-text {
+    fill: #1f2937 !important;
+    color: #1f2937 !important;
+  }
+  .recharts-legend-wrapper { color: #1f2937 !important; }
+
+  /* Subtle grid that survives print color conversion */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #cbd5e1 !important;
+  }
+  .recharts-cartesian-axis-line,
+  .recharts-cartesian-axis-tick-line {
+    stroke: #94a3b8 !important;
+  }
+  .recharts-reference-line line { stroke: #64748b !important; }
+
+  /* Bar / pie / area / line — ensure inline fills & strokes are honored */
+  .recharts-bar-rectangle path,
+  .recharts-rectangle,
+  .recharts-pie-sector path,
+  .recharts-sector,
+  .recharts-area-area,
+  .recharts-area-curve,
+  .recharts-line-curve,
+  .recharts-treemap-depth-1 rect,
+  .recharts-treemap-depth-2 rect {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide chart action buttons (zoom/download/refresh) within chart cards */
+  .chart-action-btn,
+  .chart-toolbar,
+  .chart-controls,
+  [data-chart-action] {
+    display: none !important;
+  }
+
+  /* Heatmap-style colored cells (TB heat-map, posting frequency, etc.) */
+  .heatmap-cell,
+  [data-heatmap-cell] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Sparkline tiles inside stat cards */
+  .stat-card .recharts-wrapper,
+  .stat-sparkline {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Lock axis label sizing — prevents reflow when print frame ≠ screen */
+  .recharts-cartesian-axis-tick text {
+    font-size: 9pt !important;
+  }
+  .recharts-legend-item-text { font-size: 9pt !important; }
+
+  /* Solidify gradient-backed cards that contain charts */
+  .block-card,
+  .stat-card,
+  .glass-card,
+  .glass,
+  .glass-elevated,
+  .glass-subtle {
+    background: #ffffff !important;
+    background-image: none !important;
+  }
+
+  /* Treemap cell text: dark on light fill */
+  .recharts-treemap-depth-1 text,
+  .recharts-treemap-depth-2 text {
+    fill: #0b1220 !important;
+  }
+
+  /* SVG default aspect-ratio behavior for chart surfaces */
+  svg.recharts-surface {
+    preserveAspectRatio: xMidYMid meet;
+  }
+
+  /* ─── Dashboard / KPI print extensions ───────────────── */
+
+  /* Hide animated loading skeletons — they print as ugly blocks */
+  .skeleton,
+  [class*="skeleton"],
+  [class*="animate-pulse"],
+  [class*="loading-shimmer"] {
+    display: none !important;
+  }
+
+  /* Activity feed: cap at 10 most recent items in print */
+  .activity-feed-row:nth-child(n+11) {
+    display: none !important;
+  }
+
+  /* Chart-print-fallback pattern: render hidden table on screen, swap on print */
+  .chart-print-fallback { display: block !important; }
+  .chart-screen-only { display: none !important; }
+}
+
+/* Screen-mode counterparts for the chart fallback pattern */
+@media screen {
+  .chart-print-fallback { display: none; }
+  .chart-screen-only { display: block; }
+}
+
+/* Dashboard-specific landscape page when the .dashboard-print toggle is set */
+@media print {
+  body.dashboard-print {
+    /* Landscape orientation for wide charts. */
+  }
+}
+@page dashboard-landscape {
+  size: letter landscape;
+  margin: 0.5in;
+}
+.dashboard-print {
+  page: dashboard-landscape;
+}
+
 

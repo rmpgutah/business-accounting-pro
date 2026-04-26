@@ -10,7 +10,10 @@ import {
   Shield,
   RefreshCw,
   Scale,
+  Printer,
 } from 'lucide-react';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
 import {
   LineChart,
   Line,
@@ -353,18 +356,39 @@ const KPIDashboard: React.FC = () => {
     );
   }
 
+  const handlePrint = () => {
+    document.body.classList.add('dashboard-print');
+    const cleanup = () => {
+      document.body.classList.remove('dashboard-print');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 60000);
+    window.print();
+  };
+
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
+      <PrintReportHeader title="KPI Dashboard" periodEnd={new Date()} />
       {/* Header */}
-      <div className="module-header">
+      <div className="module-header flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BarChart3 size={20} className="text-accent-blue" />
           <h1 className="module-title">KPI Dashboard</h1>
         </div>
+        <button
+          onClick={handlePrint}
+          className="no-print flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-bg-secondary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+          style={{ borderRadius: '6px' }}
+          title="Print KPI dashboard"
+        >
+          <Printer size={13} />
+          Print
+        </button>
       </div>
 
       {/* ─── Row 1: Core Financial KPIs (3 cols) ─── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 report-summary-tiles">
         {/* Revenue per Billable Hour */}
         <div className="stat-card border-l-2 border-l-accent-income">
           <div className="flex items-center gap-2 mb-1">
@@ -569,7 +593,7 @@ const KPIDashboard: React.FC = () => {
       </div>
 
       {/* ─── Row 2: Advanced KPIs (3 cols) ─── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 report-summary-tiles">
         {/* Revenue per Employee */}
         <div className="stat-card border-l-2 border-l-accent-purple">
           <div className="flex items-center gap-2 mb-1">
@@ -637,7 +661,7 @@ const KPIDashboard: React.FC = () => {
       </div>
 
       {/* ─── Row 3: Burn Rate & Runway (2 cols) ─── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 report-summary-tiles">
         {/* Monthly Burn Rate */}
         <div className="stat-card border-l-2" style={{ borderLeftColor: burnRateColor }}>
           <div className="flex items-center gap-2 mb-1">
@@ -740,6 +764,7 @@ const KPIDashboard: React.FC = () => {
           </div>
         )}
       </div>
+      <PrintReportFooter />
     </div>
   );
 };

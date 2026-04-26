@@ -35,9 +35,18 @@ interface TaxData {
   taxPayments: TaxPayment[];
 }
 
+// ─── Accounting parens helper ───────────────────────────
+function fmtNeg(value: number): React.ReactElement {
+  const n = Number(value) || 0;
+  const formatted = fmt.format(Math.abs(n));
+  return n < 0
+    ? <span data-neg="true" className="acc-neg">{formatted}</span>
+    : <span>{formatted}</span>;
+}
+
 // ─── Render helpers ─────────────────────────────────────
 const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
-  <tr className="bg-bg-tertiary/30">
+  <tr className="bg-bg-tertiary/30 report-section-heading">
     <td
       colSpan={2}
       className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider"
@@ -66,7 +75,7 @@ const LineRow: React.FC<{
         bold ? 'font-bold' : ''
       } ${accent || 'text-text-primary'}`}
     >
-      {fmt.format(amount)}
+      {fmtNeg(amount)}
     </td>
   </tr>
 );
@@ -79,7 +88,7 @@ const SubtotalRow: React.FC<{
   doubleBorder?: boolean;
 }> = ({ label, amount, accent, topBorder, doubleBorder }) => (
   <tr
-    className={`${topBorder ? 'border-t border-border-primary' : ''} ${doubleBorder ? 'border-t-2 border-border-primary' : ''}`}
+    className={`${topBorder ? 'border-t border-border-primary report-subtotal-row' : ''} ${doubleBorder ? 'border-t-2 border-border-primary report-grand-total-row' : ''}`}
   >
     <td className="px-6 py-2 text-xs font-bold text-text-primary">
       {label}
@@ -87,7 +96,7 @@ const SubtotalRow: React.FC<{
     <td
       className={`py-2 text-right pr-6 font-mono text-xs font-bold ${accent || 'text-text-primary'}`}
     >
-      {fmt.format(amount)}
+      {fmtNeg(amount)}
     </td>
   </tr>
 );

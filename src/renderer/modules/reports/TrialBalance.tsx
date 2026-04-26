@@ -762,11 +762,11 @@ const TrialBalance: React.FC = () => {
                     <td className="text-accent-blue text-xs">{l.account_name}</td>
                     {arr.map((v, i) => (
                       <td key={i} className={`text-right font-mono text-xs ${v < 0 ? 'text-accent-expense' : 'text-text-secondary'}`}>
-                        <span className={v < 0 ? 'acc-neg' : ''}>{Math.abs(v) < 0.01 ? '—' : formatCurrency(Math.abs(v))}</span>
+                        <span data-neg={v < 0 ? 'true' : undefined} className={v < 0 ? 'acc-neg' : ''}>{Math.abs(v) < 0.01 ? '—' : formatCurrency(Math.abs(v))}</span>
                       </td>
                     ))}
                     <td className={`text-right font-mono font-semibold text-xs ${total < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                      <span className={total < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(total))}</span>
+                      <span data-neg={total < 0 ? 'true' : undefined} className={total < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(total))}</span>
                     </td>
                   </tr>
                 );
@@ -803,7 +803,7 @@ const TrialBalance: React.FC = () => {
         </div>
       ) : (
         <div id="tb-print-area">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 report-summary-tiles">
             <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Debits</p>
               <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalDebits)}</p>
@@ -884,12 +884,12 @@ const TrialBalance: React.FC = () => {
                               <td className="text-right font-mono text-text-muted">{(line.adj_credit || 0) > 0 ? formatCurrency(line.adj_credit!) : '—'}</td>
                             </>}
                             <td className={`text-right font-mono font-semibold ${line.balance < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                              <span className={line.balance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(line.balance))}</span>
+                              <span data-neg={line.balance < 0 ? 'true' : undefined} className={line.balance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(line.balance))}</span>
                               {line.balance < 0 ? ' Cr' : line.balance > 0 ? ' Dr' : ''}
                             </td>
                             {workingMode && showAdjusted && (
                               <td className={`text-right font-mono font-semibold ${adjBal < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                                <span className={adjBal < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(adjBal))}</span>
+                                <span data-neg={adjBal < 0 ? 'true' : undefined} className={adjBal < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(adjBal))}</span>
                               </td>
                             )}
                             {view === 'consolidation' && <>
@@ -905,14 +905,14 @@ const TrialBalance: React.FC = () => {
                             {comparePrior && <>
                               <td className="text-right font-mono text-text-muted">{formatCurrency(Math.abs(line.prior_balance ?? 0))}</td>
                               <td className={`text-right font-mono ${variance >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
-                                <span className={variance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(variance))}</span>
+                                <span data-neg={variance < 0 ? 'true' : undefined} className={`${variance < 0 ? 'acc-neg' : ''} ${variance >= 0 ? 'variance-under' : 'variance-over'}`}>{formatCurrency(Math.abs(variance))}</span>
                               </td>
                               <td className={`text-right font-mono text-xs ${variance >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{line.prior_balance ? `${variancePct.toFixed(1)}%` : '—'}</td>
                             </>}
                           </tr>
                         );
                       })}
-                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.1)' }}>
+                      <tr className="report-subtotal-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.1)' }}>
                         <td colSpan={2} className="py-1.5 px-4 text-right">
                           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Subtotal</span>
                         </td>
@@ -931,7 +931,7 @@ const TrialBalance: React.FC = () => {
                       </tr>
                     </React.Fragment>
                   ))}
-                  <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)' }}>
+                  <tr className="report-grand-total-row" style={{ borderTop: '2px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)' }}>
                     <td colSpan={2} className="py-3 px-4 text-right">
                       <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Grand Total</span>
                     </td>

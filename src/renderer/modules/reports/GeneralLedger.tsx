@@ -1015,11 +1015,11 @@ const GeneralLedger: React.FC = () => {
                     {pivot.months.map((m) => {
                       const v = inner?.get(m) || 0;
                       return <td key={m} className={`text-right font-mono text-xs ${v < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                        <span className={v < 0 ? 'acc-neg' : ''}>{v === 0 ? '—' : formatCurrency(Math.abs(v))}</span>
+                        <span data-neg={v < 0 ? 'true' : undefined} className={v < 0 ? 'acc-neg' : ''}>{v === 0 ? '—' : formatCurrency(Math.abs(v))}</span>
                       </td>;
                     })}
                     <td className={`text-right font-mono font-semibold ${total < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                      <span className={total < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(total))}</span>
+                      <span data-neg={total < 0 ? 'true' : undefined} className={total < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(total))}</span>
                     </td>
                   </tr>
                 );
@@ -1049,7 +1049,7 @@ const GeneralLedger: React.FC = () => {
                   <div className="text-right min-w-[120px]">
                     <span className="text-[10px] text-text-muted block">Closing</span>
                     <span className={`font-mono font-bold text-sm ${acct.closing_balance < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                      <span className={acct.closing_balance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(acct.closing_balance))}</span>
+                      <span data-neg={acct.closing_balance < 0 ? 'true' : undefined} className={acct.closing_balance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(acct.closing_balance))}</span>
                       <span className="text-[10px] text-text-muted ml-1">
                         {normalSide === 'debit' ? (acct.closing_balance >= 0 ? 'Dr' : 'Cr') : (acct.closing_balance >= 0 ? 'Cr' : 'Dr')}
                       </span>
@@ -1060,7 +1060,7 @@ const GeneralLedger: React.FC = () => {
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                     {/* Beginning balance row */}
-                    <div className="px-4 py-1.5 text-[10px] text-text-muted font-semibold flex justify-between" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                    <div className="report-subtotal-row px-4 py-1.5 text-[10px] text-text-muted font-semibold flex justify-between" style={{ background: 'rgba(0,0,0,0.15)' }}>
                       <span>Balance brought forward</span>
                       <span className="font-mono">{formatCurrency(Math.abs(acct.opening_balance))}{acct.opening_balance < 0 ? ' Cr' : ' Dr'}</span>
                     </div>
@@ -1143,7 +1143,7 @@ const GeneralLedger: React.FC = () => {
                                 {txn.credit > 0 ? <span className={txn.is_credit_memo ? 'text-accent-expense' : 'text-text-primary'}>{formatCurrency(txn.credit)}</span> : <span className="text-text-muted">—</span>}
                               </td>
                               <td className={`text-right font-mono font-semibold text-xs ${(txn.running_balance ?? 0) < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                                <span className={(txn.running_balance ?? 0) < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(txn.running_balance ?? 0))}</span>
+                                <span data-neg={(txn.running_balance ?? 0) < 0 ? 'true' : undefined} className={(txn.running_balance ?? 0) < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(txn.running_balance ?? 0))}</span>
                               </td>
                               <td className="text-right whitespace-nowrap">
                                 <button title="Detail drawer" className="p-1 text-text-muted hover:text-accent-blue" onClick={(e) => { e.stopPropagation(); openDrawer(txn); }}><FileText size={11} /></button>
@@ -1186,7 +1186,7 @@ const GeneralLedger: React.FC = () => {
                         })}
                       </tbody>
                       <tfoot>
-                        <tr style={{ borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                        <tr className="report-grand-total-row" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
                           <td colSpan={6} className="py-2 px-4 text-right text-xs font-bold text-text-muted uppercase tracking-wider">Period Total</td>
                           <td className="text-right font-mono font-bold text-xs text-text-primary">
                             {formatCurrency(acct.transactions.reduce((s, t) => s + t.debit, 0))}
@@ -1195,13 +1195,13 @@ const GeneralLedger: React.FC = () => {
                             {formatCurrency(acct.transactions.reduce((s, t) => s + t.credit, 0))}
                           </td>
                           <td className={`text-right font-mono font-bold text-xs ${acct.closing_balance < 0 ? 'text-accent-expense' : 'text-text-primary'}`}>
-                            <span className={acct.closing_balance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(acct.closing_balance))}</span>
+                            <span data-neg={acct.closing_balance < 0 ? 'true' : undefined} className={acct.closing_balance < 0 ? 'acc-neg' : ''}>{formatCurrency(Math.abs(acct.closing_balance))}</span>
                           </td>
                           <td />
                         </tr>
                       </tfoot>
                     </table>
-                    <div className="px-4 py-1.5 text-[10px] text-text-muted font-semibold flex justify-between" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                    <div className="report-subtotal-row px-4 py-1.5 text-[10px] text-text-muted font-semibold flex justify-between" style={{ background: 'rgba(0,0,0,0.15)' }}>
                       <span>Balance carried forward</span>
                       <span className="font-mono">{formatCurrency(Math.abs(acct.closing_balance))}{acct.closing_balance < 0 ? ' Cr' : ' Dr'}</span>
                     </div>

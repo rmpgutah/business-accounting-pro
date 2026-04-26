@@ -179,12 +179,12 @@ const APAgingReport: React.FC = () => {
       ) : (
         <>
           {/* Summary bucket cards — clickable to filter */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-3 aging-bucket-strip report-summary-tiles">
             {(Object.keys(BUCKET_LABELS) as BucketKey[]).map((key) => (
               <button
                 key={key}
                 onClick={() => setBucketFilter(bucketFilter === key ? 'all' : key)}
-                className={`block-card p-4 text-center transition-colors ${bucketFilter === key ? 'border-accent-blue' : ''}`}
+                className={`block-card p-4 text-center transition-colors ${bucketFilter === key ? 'border-accent-blue' : ''} ${key === '90+' ? 'aging-row-90plus' : ''}`}
                 style={{ borderRadius: '6px' }}
               >
                 <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -203,7 +203,7 @@ const APAgingReport: React.FC = () => {
 
           {/* Grand total */}
           <div
-            className="block-card p-4 flex items-center justify-between"
+            className="block-card p-4 flex items-center justify-between report-grand-total-row"
             style={{ borderRadius: '6px' }}
           >
             <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
@@ -234,7 +234,7 @@ const APAgingReport: React.FC = () => {
                 </thead>
                 <tbody>
                   {filtered.map((entry) => (
-                    <tr key={entry.id}>
+                    <tr key={entry.id} className={entry.daysOutstanding > 90 ? 'aging-row-90plus' : ''}>
                       <td className="text-text-primary font-medium font-mono">
                         <EntityChip type="bill" id={entry.id} label={entry.billNumber} variant="inline" />
                       </td>
@@ -244,7 +244,7 @@ const APAgingReport: React.FC = () => {
                       <td className="text-right font-mono text-accent-expense">
                         {formatCurrency(entry.amountDue)}
                       </td>
-                      <td className="text-right font-mono text-text-secondary">
+                      <td className={`text-right font-mono ${entry.daysOutstanding > 90 ? 'aging-row-90plus text-accent-expense font-bold' : 'text-text-secondary'}`}>
                         {entry.daysOutstanding}
                       </td>
                       <td>

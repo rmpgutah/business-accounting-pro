@@ -468,6 +468,7 @@ const ExpenseDetailReport: React.FC = () => {
       </div>
 
       {/* Summary */}
+      <div className="report-summary-tiles">
       <SummaryBar
         items={[
           { label: 'Total Expenses', value: formatCurrency(total) },
@@ -487,6 +488,7 @@ const ExpenseDetailReport: React.FC = () => {
           },
         ]}
       />
+      </div>
 
       {/* Table */}
       {loading ? (
@@ -504,7 +506,7 @@ const ExpenseDetailReport: React.FC = () => {
             {tableHead}
             <tbody>{filtered.map(renderExpenseRow)}</tbody>
             <tfoot>
-              <tr className="border-t-2 border-border-primary bg-bg-tertiary/50">
+              <tr className="border-t-2 border-border-primary bg-bg-tertiary/50 report-grand-total-row">
                 <td colSpan={4} className="px-4 py-2 text-xs font-bold text-text-primary">
                   Total ({filtered.length} expenses)
                 </td>
@@ -543,7 +545,7 @@ const ExpenseDetailReport: React.FC = () => {
 
           {/* Grand total */}
           <div
-            className="block-card p-3 flex items-center justify-between"
+            className="block-card p-3 flex items-center justify-between report-grand-total-row"
             style={{ borderRadius: '6px' }}
           >
             <span className="text-xs font-bold text-text-primary">

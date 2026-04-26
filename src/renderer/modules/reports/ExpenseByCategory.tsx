@@ -284,14 +284,14 @@ const ExpenseByCategory: React.FC = () => {
                         {fmt.format(cat.amount)}
                       </td>
                       <td className="px-6 py-2 text-right font-mono text-xs text-text-muted">
-                        {pct.toFixed(1)}%
+                        <span className="common-size-pct">{pct.toFixed(1)}%</span>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-border-primary bg-bg-tertiary/50">
+                <tr className="border-t-2 border-border-primary bg-bg-tertiary/50 report-grand-total-row">
                   <td className="px-6 py-2 text-xs font-bold text-text-primary">
                     Total
                   </td>
@@ -299,7 +299,7 @@ const ExpenseByCategory: React.FC = () => {
                     {fmt.format(totalExpenses)}
                   </td>
                   <td className="px-6 py-2 text-right font-mono text-xs font-bold text-text-muted">
-                    100.0%
+                    <span className="common-size-pct">100.0%</span>
                   </td>
                 </tr>
               </tfoot>

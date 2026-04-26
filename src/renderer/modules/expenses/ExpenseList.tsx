@@ -658,7 +658,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       )}
 
       {/* Quick stats strip (feature 18) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 report-summary-tiles">
         <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">This Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.thisMonth)}</div></div>
         <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Last Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.lastMonth)}</div></div>
         <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Pending</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{quickStats.pending}</div></div>

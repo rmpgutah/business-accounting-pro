@@ -263,7 +263,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 report-summary-tiles">
         {/* Total Unpaid */}
         <div className="stat-card" style={{ borderRadius: '6px' }}>
           <div className="flex items-start justify-between">
