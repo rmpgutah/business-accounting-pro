@@ -172,11 +172,122 @@ export const PerDiemPanel: React.FC<{ value: PerDiemState; onChange: (v: PerDiem
   );
 };
 
-export type EntryMode = 'standard' | 'mileage' | 'per_diem';
+// ─── Fuel entry mode ─────────────────────────────────────
+// Fuel pricing is conventionally posted to 3 decimal places ($3.459/gal),
+// and pumps measure dispensed volume to 0.001 gal. Both gallons and price
+// inputs use step="0.001" so the user can capture the receipt exactly.
+// `amount` is computed as gallons × price, rounded to cents at the end.
+//
+// Fuel grade choices are alphabetized (per app-wide A→Z dropdown rule).
+const FUEL_GRADES = [
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'e85', label: 'E85 (Flex Fuel)' },
+  { value: 'electric', label: 'Electric (kWh)' },
+  { value: 'midgrade', label: 'Midgrade (89)' },
+  { value: 'premium', label: 'Premium (91/93)' },
+  { value: 'regular', label: 'Regular (87)' },
+] as const;
+
+export interface FuelState {
+  fuel_gallons: number;
+  fuel_price_per_gallon: number;
+  fuel_grade: string;
+  fuel_vehicle: string;     // free-text for now: vehicle plate, employee number, etc.
+  fuel_odometer: number;    // current odometer (informational, not used in calc)
+  fuel_station: string;     // gas-station name for receipt cross-reference
+}
+
+export const FuelPanel: React.FC<{ value: FuelState; onChange: (v: FuelState) => void }> = ({ value, onChange }) => {
+  // Use raw multiplication then roundCents only at boundary — preserves
+  // the 3rd-decimal pricing precision through the computation.
+  const computedAmount = roundCents((value.fuel_gallons || 0) * (value.fuel_price_per_gallon || 0));
+  const isElectric = value.fuel_grade === 'electric';
+  return (
+    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <FieldLabel label="Fuel Grade" />
+          <select className="block-select" value={value.fuel_grade || 'regular'}
+            onChange={e => onChange({ ...value, fuel_grade: e.target.value })}>
+            {FUEL_GRADES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+          </select>
+        </div>
+        <div>
+          {/* Step 0.001 lets the pump's exact reading enter as-is (e.g. 12.347 gal). */}
+          <FieldLabel label={isElectric ? 'kWh' : 'Gallons'} />
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.001"
+            min="0"
+            className="block-input font-mono"
+            value={value.fuel_gallons || ''}
+            placeholder="0.000"
+            onChange={e => onChange({ ...value, fuel_gallons: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          {/* Posted fuel prices use 3 decimals — accept #.### exactly. */}
+          <FieldLabel label={isElectric ? 'Price ($/kWh)' : 'Price ($/gal)'} />
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.001"
+            min="0"
+            className="block-input font-mono"
+            value={value.fuel_price_per_gallon || ''}
+            placeholder="0.000"
+            onChange={e => onChange({ ...value, fuel_price_per_gallon: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <FieldLabel label="Vehicle / Asset" />
+          <input
+            className="block-input"
+            value={value.fuel_vehicle || ''}
+            placeholder="Plate, asset tag, or driver"
+            onChange={e => onChange({ ...value, fuel_vehicle: e.target.value })}
+          />
+        </div>
+        <div>
+          <FieldLabel label="Odometer (miles)" />
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            className="block-input font-mono"
+            value={value.fuel_odometer || ''}
+            placeholder="0"
+            onChange={e => onChange({ ...value, fuel_odometer: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <FieldLabel label="Station" />
+          <input
+            className="block-input"
+            value={value.fuel_station || ''}
+            placeholder="Shell, Chevron, …"
+            onChange={e => onChange({ ...value, fuel_station: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="text-xs text-text-muted mt-2 font-mono">
+        {(value.fuel_gallons || 0).toFixed(3)} {isElectric ? 'kWh' : 'gal'}
+        &nbsp;×&nbsp;
+        ${(value.fuel_price_per_gallon || 0).toFixed(3)}{isElectric ? '/kWh' : '/gal'}
+        &nbsp;=&nbsp;
+        <span className="text-text-primary font-bold">{formatCurrency(computedAmount)}</span>
+      </div>
+    </div>
+  );
+};
+
+export type EntryMode = 'standard' | 'mileage' | 'per_diem' | 'fuel';
 export const EntryModeBar: React.FC<{ value: EntryMode; onChange: (m: EntryMode) => void }> = ({ value, onChange }) => (
   <div className="flex items-center gap-2">
     <span className="text-xs font-semibold uppercase text-text-muted">Mode:</span>
-    {(['standard', 'mileage', 'per_diem'] as const).map(m => (
+    {(['standard', 'mileage', 'per_diem', 'fuel'] as const).map(m => (
       <button key={m} type="button" onClick={() => onChange(m)}
         className={`px-3 py-1 border text-xs font-bold uppercase ${value === m ? 'border-accent-blue text-accent-blue bg-accent-blue/10' : 'border-border-primary text-text-secondary'}`}>
         {m === 'per_diem' ? 'Per-Diem' : m.charAt(0).toUpperCase() + m.slice(1)}

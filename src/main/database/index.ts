@@ -515,6 +515,14 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expenses ADD COLUMN per_diem_location TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN per_diem_days REAL DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN per_diem_rate REAL DEFAULT 0",
+  // Fuel-mode columns (#.### precision — SQLite REAL preserves the exact
+  // 3-decimal pump readings; cents-rounded total still lives in `amount`).
+  "ALTER TABLE expenses ADD COLUMN fuel_gallons REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN fuel_price_per_gallon REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN fuel_grade TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN fuel_vehicle TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN fuel_odometer REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN fuel_station TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN receipts_json TEXT DEFAULT '[]'",
   "ALTER TABLE expenses ADD COLUMN notes TEXT DEFAULT ''",
   // ── Expense categorization, tax & compliance metadata (2026-04-23) ──

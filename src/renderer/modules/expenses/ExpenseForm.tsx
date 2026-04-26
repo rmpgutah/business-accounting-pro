@@ -9,7 +9,7 @@ import { formatCurrency, roundCents } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import {
-  ReceiptZone, MileagePanel, PerDiemPanel, EntryModeBar, TaxBasisBar,
+  ReceiptZone, MileagePanel, PerDiemPanel, FuelPanel, EntryModeBar, TaxBasisBar,
   CurrencySelector, NotesMemoField, TagsAutocomplete, fuzzyVendorMatches,
   QuickVendorModal, IRS_MILEAGE_RATE_2026, PER_DIEM_RATES,
 } from './CaptureFeatures';
@@ -55,7 +55,7 @@ interface ExpenseFormData {
   exchange_rate: string;
   tax_inclusive: boolean;
   tax_rate: string;
-  entry_mode: 'standard' | 'mileage' | 'per_diem';
+  entry_mode: 'standard' | 'mileage' | 'per_diem' | 'fuel';
   odometer_start: string;
   odometer_end: string;
   miles: string;
@@ -63,6 +63,14 @@ interface ExpenseFormData {
   per_diem_location: string;
   per_diem_days: string;
   per_diem_rate: string;
+  // Fuel mode (#.### precision on gallons + price). Stored as string so the
+  // user's typed value round-trips without floating-point reformat.
+  fuel_gallons: string;
+  fuel_price_per_gallon: string;
+  fuel_grade: string;
+  fuel_vehicle: string;
+  fuel_odometer: string;
+  fuel_station: string;
   notes: string;
   vat_gst: string;
 }
@@ -275,6 +283,12 @@ const emptyForm: ExpenseFormData = {
   per_diem_location: 'Default (CONUS)',
   per_diem_days: '',
   per_diem_rate: String(PER_DIEM_RATES['Default (CONUS)']),
+  fuel_gallons: '',
+  fuel_price_per_gallon: '',
+  fuel_grade: 'regular',
+  fuel_vehicle: '',
+  fuel_odometer: '',
+  fuel_station: '',
   notes: '',
   vat_gst: '',
 };
@@ -446,9 +460,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       const rate = parseFloat(form.per_diem_rate) || 0;
       const amt = roundCents(days * rate);
       if (amt > 0) setForm(p => ({ ...p, amount: amt.toFixed(2) }));
+    } else if (form.entry_mode === 'fuel') {
+      // Fuel: gallons × price-per-gallon, both at 3-decimal precision.
+      // Round only at the final cents boundary so 12.347 × 3.459 = 42.69
+      // (not 42.690273 then rounded — same result here, but matters near
+      // half-cent boundaries on bigger fills).
+      const gallons = parseFloat(form.fuel_gallons) || 0;
+      const price = parseFloat(form.fuel_price_per_gallon) || 0;
+      const amt = roundCents(gallons * price);
+      if (amt > 0) setForm(p => ({ ...p, amount: amt.toFixed(2) }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.entry_mode, form.odometer_start, form.odometer_end, form.mileage_rate, form.per_diem_days, form.per_diem_rate]);
+  }, [form.entry_mode, form.odometer_start, form.odometer_end, form.mileage_rate, form.per_diem_days, form.per_diem_rate, form.fuel_gallons, form.fuel_price_per_gallon]);
 
   // Feature 8 — usage stats for selected category in current month
   useEffect(() => {
@@ -587,6 +610,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               per_diem_location: existing.per_diem_location || 'Default (CONUS)',
               per_diem_days: existing.per_diem_days?.toString() || '',
               per_diem_rate: (existing.per_diem_rate || PER_DIEM_RATES['Default (CONUS)']).toString(),
+              fuel_gallons: existing.fuel_gallons?.toString() || '',
+              fuel_price_per_gallon: existing.fuel_price_per_gallon?.toString() || '',
+              fuel_grade: existing.fuel_grade || 'regular',
+              fuel_vehicle: existing.fuel_vehicle || '',
+              fuel_odometer: existing.fuel_odometer?.toString() || '',
+              fuel_station: existing.fuel_station || '',
               notes: existing.notes || '',
               vat_gst: (() => { try { const cf = typeof existing.custom_fields === 'string' ? JSON.parse(existing.custom_fields) : existing.custom_fields; return cf?.vat_gst || ''; } catch { return ''; } })(),
             });
@@ -672,6 +701,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           per_diem_location: form.per_diem_location || '',
           per_diem_days: parseFloat(form.per_diem_days) || 0,
           per_diem_rate: parseFloat(form.per_diem_rate) || 0,
+          // Fuel fields preserve full 3-decimal precision in the DB.
+          // Only the persisted `amount` is rounded to cents (via the
+          // payload above which already runs through roundCents).
+          fuel_gallons: parseFloat(form.fuel_gallons) || 0,
+          fuel_price_per_gallon: parseFloat(form.fuel_price_per_gallon) || 0,
+          fuel_grade: form.fuel_grade || '',
+          fuel_vehicle: form.fuel_vehicle || '',
+          fuel_odometer: parseFloat(form.fuel_odometer) || 0,
+          fuel_station: form.fuel_station || '',
           tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
           custom_fields: { ...(details || {}), vat_gst: form.vat_gst || '' },
         };
@@ -791,6 +829,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         per_diem_location: form.per_diem_location || '',
         per_diem_days: parseFloat(form.per_diem_days) || 0,
         per_diem_rate: parseFloat(form.per_diem_rate) || 0,
+        // Fuel fields persist full 3-decimal precision; the rounded
+        // amount column already covers the displayed total.
+        fuel_gallons: parseFloat(form.fuel_gallons) || 0,
+        fuel_price_per_gallon: parseFloat(form.fuel_price_per_gallon) || 0,
+        fuel_grade: form.fuel_grade || '',
+        fuel_vehicle: form.fuel_vehicle || '',
+        fuel_odometer: parseFloat(form.fuel_odometer) || 0,
+        fuel_station: form.fuel_station || '',
         notes: form.notes || '',
         status: form.status || 'pending',
         approved_by: form.approved_by || '',
@@ -956,6 +1002,30 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               per_diem_location: v.per_diem_location,
               per_diem_days: String(v.per_diem_days),
               per_diem_rate: String(v.per_diem_rate),
+            }))}
+          />
+        )}
+        {form.entry_mode === 'fuel' && (
+          <FuelPanel
+            value={{
+              fuel_gallons: parseFloat(form.fuel_gallons) || 0,
+              fuel_price_per_gallon: parseFloat(form.fuel_price_per_gallon) || 0,
+              fuel_grade: form.fuel_grade,
+              fuel_vehicle: form.fuel_vehicle,
+              fuel_odometer: parseFloat(form.fuel_odometer) || 0,
+              fuel_station: form.fuel_station,
+            }}
+            onChange={v => setForm(p => ({
+              ...p,
+              // Preserve trailing-zero precision: write the typed values
+              // back as their numeric form. The recompute effect rounds
+              // the final amount to cents.
+              fuel_gallons: String(v.fuel_gallons),
+              fuel_price_per_gallon: String(v.fuel_price_per_gallon),
+              fuel_grade: v.fuel_grade,
+              fuel_vehicle: v.fuel_vehicle,
+              fuel_odometer: String(v.fuel_odometer),
+              fuel_station: v.fuel_station,
             }))}
           />
         )}
