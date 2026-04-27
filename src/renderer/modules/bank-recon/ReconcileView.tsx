@@ -90,10 +90,11 @@ const ReconcileView: React.FC = () => {
 
     try {
       // Load unmatched bank transactions
+      // Perf: cap unmatched txn list at 2000; reconciliation typically deals with recent txns
       const bankData = await api.query('bank_transactions', {
         bank_account_id: selectedBankId,
         status: 'pending',
-      });
+      }, undefined, 2000);
       setBankTxns(Array.isArray(bankData) ? bankData : []);
 
       // Load unmatched book entries (journal entry lines for the linked GL account)
@@ -116,7 +117,7 @@ const ReconcileView: React.FC = () => {
                SELECT journal_entry_line_id FROM bank_reconciliation_matches
                WHERE journal_entry_line_id IS NOT NULL
              )
-           ORDER BY je.date DESC`,
+           ORDER BY je.date DESC LIMIT 2000`,
           [accountId, activeCompany.id]
         );
         setBookEntries(bookData ?? []);
@@ -219,6 +220,7 @@ const ReconcileView: React.FC = () => {
 
   // ─── Save reconciliation ──────────────────────────────
   const handleSave = async () => {
+    if (saving) return;
     if (matchedPairs.length === 0) return;
     setSaving(true);
     setSaveResult(null);

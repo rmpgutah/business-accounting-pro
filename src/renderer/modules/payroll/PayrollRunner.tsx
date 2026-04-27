@@ -1132,8 +1132,19 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
                     const run = await api.get('payroll_runs', completedRunId);
                     const payYear = (run?.pay_date || '').substring(0, 4) || new Date().getFullYear();
                     const bodies: string[] = [];
+                    // Perf: bulk-load employees once instead of one api.get per stub
+                    // (was N+1 IPC calls when printing checks for all employees).
+                    const empIds = Array.from(new Set((stubs || []).map((s: any) => s.employee_id).filter(Boolean)));
+                    const empMap = new Map<string, any>();
+                    if (empIds.length > 0) {
+                      const placeholders = empIds.map(() => '?').join(',');
+                      const empRows: any[] = await api.rawQuery(
+                        `SELECT * FROM employees WHERE id IN (${placeholders})`, empIds
+                      ).catch(() => []);
+                      for (const e of empRows) empMap.set(e.id, e);
+                    }
                     for (const s of (stubs || [])) {
-                      const emp = await api.get('employees', s.employee_id);
+                      const emp = empMap.get(s.employee_id) || await api.get('employees', s.employee_id);
                       // Ensure per-tax YTD is available
                       let stubData = s;
                       if (!s.ytd_federal_tax && s.employee_id) {

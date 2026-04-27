@@ -41,7 +41,9 @@ function scheduleAutoBackup() {
       if (!fs.existsSync(dbPath)) return;
       try { db.getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
 
-      const fileData = fs.readFileSync(dbPath);
+      // Perf: async read so other IPC handlers aren't blocked while the DB
+      // file is loaded into memory for HMAC + upload (runs every 30s).
+      const fileData = await fs.promises.readFile(dbPath);
       const email = getLastLoginEmail();
       if (!email) return;
 
@@ -613,10 +615,25 @@ export function registerIpcHandlers(): void {
     'debt_skip_traces',
   ]);
 
+  // SECURITY: Tables that hold credentials/secrets must not be writable via the
+  // generic CRUD IPC — those mutations have to go through dedicated handlers
+  // (auth:register/auth:login etc.) that enforce password hashing, email
+  // uniqueness, and audit logging. Without this guard the renderer could
+  // INSERT a user with an attacker-controlled password_hash, or UPDATE another
+  // user's hash to log in as them.
+  const PROTECTED_TABLES = new Set(['users']);
   ipcMain.handle('db:create', (_event, { table, data }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
+    if (PROTECTED_TABLES.has(table)) return { error: `Direct writes to ${table} are not allowed — use dedicated handler` };
     try {
       const companyId = db.getCurrentCompanyId();
+      // INTEGRITY: ignore any caller-supplied `id`. The renderer should never
+      // pick primary keys — at best it hands us a stale uuid, at worst a
+      // collision with an existing row. db.create() generates a uuid when id
+      // is absent.
+      if (data && typeof data === 'object' && 'id' in data) {
+        delete (data as any).id;
+      }
       const payload = tablesWithoutCompanyId.has(table)
         ? { ...data }
         : { ...data, company_id: companyId };
@@ -660,7 +677,20 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('db:update', (_event, { table, id, data }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
+    if (PROTECTED_TABLES.has(table)) return { error: `Direct writes to ${table} are not allowed — use dedicated handler` };
+    // INTEGRITY: audit_log / debt_audit_log / debt_compliance_log are append-only.
+    // Mutating audit rows defeats the purpose of having an audit trail.
+    if (table === 'audit_log' || table === 'debt_audit_log' || table === 'debt_compliance_log') {
+      return { error: `${table} is append-only` };
+    }
     try {
+      // INTEGRITY: never let the renderer rewrite `id` or `created_at` on update.
+      // Both are sometimes hydrated into form state and would silently mutate
+      // primary keys / row provenance if echoed back through the patch payload.
+      if (data && typeof data === 'object') {
+        delete (data as any).id;
+        delete (data as any).created_at;
+      }
       const old = db.getById(table, id);
       const record = db.update(table, id, data);
       const companyId = db.getCurrentCompanyId();
@@ -699,6 +729,12 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('db:delete', (_event, { table, id }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
+    if (PROTECTED_TABLES.has(table)) return { error: `Direct deletes from ${table} are not allowed — use dedicated handler` };
+    // SECURITY: audit_log must be append-only. Without this guard the renderer
+    // can wipe its own breadcrumb trail (delete-me-then-delete-evidence).
+    if (table === 'audit_log' || table === 'debt_audit_log' || table === 'debt_compliance_log') {
+      return { error: `${table} is append-only` };
+    }
     try {
       // Debt child table audit — read debt_id before deletion
       const DEBT_AUDIT_TABLES = ['debt_payments', 'debt_communications', 'debt_evidence', 'debt_legal_actions',
@@ -720,8 +756,116 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Orphan Detection ─────────────────────────────
+  // INTEGRITY: scans for rows whose parent has been deleted out from under
+  // them. SQLite's FK enforcement only catches new violations going forward;
+  // historical data (pre-PRAGMA, manual deletes via raw SQL, etc.) can still
+  // leave orphans. Reports counts only — does not auto-clean.
+  ipcMain.handle('data:check-orphans', () => {
+    try {
+      const dbi = db.getDb();
+      const checks: Array<{ kind: string; sql: string }> = [
+        { kind: 'invoice_line_items_no_invoice',
+          sql: `SELECT COUNT(*) AS c FROM invoice_line_items li
+                 LEFT JOIN invoices i ON i.id = li.invoice_id
+                 WHERE i.id IS NULL` },
+        { kind: 'journal_entry_lines_no_account',
+          sql: `SELECT COUNT(*) AS c FROM journal_entry_lines jel
+                 LEFT JOIN accounts a ON a.id = jel.account_id
+                 WHERE a.id IS NULL` },
+        { kind: 'journal_entry_lines_no_entry',
+          sql: `SELECT COUNT(*) AS c FROM journal_entry_lines jel
+                 LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
+                 WHERE je.id IS NULL` },
+        { kind: 'payments_no_invoice',
+          sql: `SELECT COUNT(*) AS c FROM payments p
+                 LEFT JOIN invoices i ON i.id = p.invoice_id
+                 WHERE i.id IS NULL` },
+        { kind: 'expense_line_items_no_expense',
+          sql: `SELECT COUNT(*) AS c FROM expense_line_items eli
+                 LEFT JOIN expenses e ON e.id = eli.expense_id
+                 WHERE e.id IS NULL` },
+        { kind: 'debt_payments_no_debt',
+          sql: `SELECT COUNT(*) AS c FROM debt_payments dp
+                 LEFT JOIN debts d ON d.id = dp.debt_id
+                 WHERE d.id IS NULL` },
+        { kind: 'debt_communications_no_debt',
+          sql: `SELECT COUNT(*) AS c FROM debt_communications dc
+                 LEFT JOIN debts d ON d.id = dc.debt_id
+                 WHERE d.id IS NULL` },
+        { kind: 'bill_line_items_no_bill',
+          sql: `SELECT COUNT(*) AS c FROM bill_line_items bli
+                 LEFT JOIN bills b ON b.id = bli.bill_id
+                 WHERE b.id IS NULL` },
+        { kind: 'bill_payments_no_bill',
+          sql: `SELECT COUNT(*) AS c FROM bill_payments bp
+                 LEFT JOIN bills b ON b.id = bp.bill_id
+                 WHERE b.id IS NULL` },
+      ];
+      const results: Record<string, number> = {};
+      let total = 0;
+      for (const chk of checks) {
+        try {
+          const row = dbi.prepare(chk.sql).get() as any;
+          const n = Number(row?.c || 0);
+          results[chk.kind] = n;
+          total += n;
+        } catch (_err) {
+          // Table may not exist on older DBs — record -1 so caller can distinguish from 0.
+          results[chk.kind] = -1;
+        }
+      }
+      return { total, counts: results };
+    } catch (err: any) {
+      return { error: err?.message, total: 0, counts: {} };
+    }
+  });
+
   // ─── Raw Query (for reports/aggregations) ────────────
+  // SECURITY: The renderer can supply arbitrary SQL via this handler — historically a
+  // privilege-escalation vector (renderer could DROP TABLE, ATTACH another DB, exfiltrate
+  // password_hash via SELECT *, etc.). We don't have a small enough set of named queries to
+  // switch to a strict allowlist without rewriting most reports/dashboards, so we apply a
+  // SQL-shape filter:
+  //   • Reject multi-statement SQL (any `;` outside string literals) — blocks stacked queries.
+  //   • Reject DDL & sensitive verbs (DROP, ALTER, CREATE, ATTACH, DETACH, PRAGMA, VACUUM, REINDEX).
+  //   • Allow only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE as the leading verb.
+  // Any further tightening (e.g. table allowlist for writes) lives in the per-table CRUD handlers.
+  function isRawQueryAllowed(sql: string): { ok: boolean; reason?: string } {
+    if (typeof sql !== 'string' || !sql.trim()) return { ok: false, reason: 'Empty SQL' };
+    // Strip string/identifier literals and comments before scanning for ';' — inline literals
+    // can legitimately contain semicolons; we only want to block stacked statements.
+    let stripped = sql
+      .replace(/--[^\n]*/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/'(?:''|[^'])*'/g, "''")
+      .replace(/"(?:""|[^"])*"/g, '""');
+    // Allow a single trailing semicolon
+    stripped = stripped.replace(/;\s*$/, '');
+    if (stripped.includes(';')) return { ok: false, reason: 'Multi-statement SQL not allowed' };
+    const head = stripped.trim().toUpperCase();
+    const FORBIDDEN = /\b(DROP|ALTER|CREATE|ATTACH|DETACH|PRAGMA|VACUUM|REINDEX|TRUNCATE)\b/;
+    if (FORBIDDEN.test(head)) return { ok: false, reason: 'Forbidden SQL verb' };
+    const ALLOWED_LEAD = /^(SELECT|WITH|INSERT|UPDATE|DELETE|REPLACE)\b/;
+    if (!ALLOWED_LEAD.test(head)) return { ok: false, reason: 'Only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE allowed' };
+    // SECURITY: Block writes to credential tables and *modifications* to
+    // audit tables via raw SQL. INSERT/DELETE on audit_log remain permitted
+    // so legitimate flows (logging new events, full company wipe) work, but
+    // UPDATE/REPLACE would let the renderer alter audit history in place.
+    if (/^(UPDATE|REPLACE)\b/.test(head) && /\b(users|audit_log|debt_audit_log|debt_compliance_log)\b/.test(head)) {
+      return { ok: false, reason: 'UPDATE/REPLACE on credential/audit tables not allowed via raw SQL' };
+    }
+    if (/^(INSERT|DELETE)\b/.test(head) && /\busers\b/.test(head)) {
+      return { ok: false, reason: 'INSERT/DELETE on users not allowed via raw SQL — use auth handlers' };
+    }
+    return { ok: true };
+  }
   ipcMain.handle('db:raw-query', (_event, { sql, params }) => {
+    const check = isRawQueryAllowed(sql);
+    if (!check.ok) {
+      console.warn('db:raw-query rejected:', check.reason, sql?.slice(0, 200));
+      return { error: `SQL rejected: ${check.reason}` };
+    }
     return db.runQuery(sql, params);
   });
 
@@ -733,6 +877,7 @@ export function registerIpcHandlers(): void {
     lineItems: Array<Record<string, any>>;
     isEdit: boolean;
   }) => {
+    const _invoiceNumberForError = invoiceData?.invoice_number;
     try {
       const companyId = db.getCurrentCompanyId();
       const rawDb = db.getDb();
@@ -807,7 +952,15 @@ export function registerIpcHandlers(): void {
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
-      return { error: err instanceof Error ? err.message : String(err) };
+      // INTEGRITY: translate the raw SQLite UNIQUE-constraint message into a
+      // human-readable error citing the offending invoice number, so the user
+      // sees "Invoice number INV-0042 already exists" instead of
+      // "UNIQUE constraint failed: invoices.company_id, invoices.invoice_number".
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/UNIQUE constraint failed:.*invoices\.invoice_number/i.test(msg)) {
+        return { error: `Invoice number${_invoiceNumberForError ? ` ${_invoiceNumberForError}` : ''} already exists in this company. Pick a different number.` };
+      }
+      return { error: msg };
     }
   });
 
@@ -1006,6 +1159,17 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('notification:mark-read', (_event, id) => {
     db.update('notifications', id, { is_read: 1 });
+  });
+
+  // Perf: bulk mark-all-read replaces an N+1 loop in renderer (notifications/index.tsx)
+  ipcMain.handle('notification:mark-all-read', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return 0;
+    const dbInstance = db.getDb();
+    const result = dbInstance.prepare(
+      'UPDATE notifications SET is_read = 1 WHERE company_id = ? AND is_read = 0'
+    ).run(companyId);
+    return result.changes;
   });
 
   // ─── Dashboard Aggregation ───────────────────────────
@@ -1810,6 +1974,21 @@ export function registerIpcHandlers(): void {
     return true;
   });
 
+  // SECURITY: Replaces a renderer-driven `DELETE FROM users` via rawQuery.
+  // Routing account deletion through a named handler keeps the protected-table
+  // guard intact and lets us scope the delete to the caller's own user id.
+  ipcMain.handle('auth:delete-account', (_event, { userId }: { userId: string }) => {
+    if (!userId || typeof userId !== 'string') return { error: 'Invalid userId' };
+    try {
+      db.execQuery('DELETE FROM user_companies WHERE user_id = ?', [userId]);
+      db.execQuery('DELETE FROM users WHERE id = ?', [userId]);
+      return { ok: true };
+    } catch (err) {
+      console.error('auth:delete-account failed:', err);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
   ipcMain.handle('auth:validate-session', (_event, { userId }: { userId: string }) => {
     try {
       const rows = db.runQuery('SELECT id, email, display_name, role, avatar_color FROM users WHERE id = ?', [userId]);
@@ -2269,8 +2448,10 @@ export function registerIpcHandlers(): void {
       const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
       if (!invoice) throw new Error('Invoice not found');
 
-      const newAmountPaid = (invoice.amount_paid || 0) + amount;
-      const newStatus = newAmountPaid >= invoice.total ? 'paid' : 'partial';
+      // INTEGRITY: roundCents prevents float-drift in amount_paid across
+      // repeated partial payments (e.g. 100 + 0.1 + 0.2 = 100.30000000000001).
+      const newAmountPaid = db.roundCents((invoice.amount_paid || 0) + Number(amount));
+      const newStatus = newAmountPaid >= db.roundCents(invoice.total) ? 'paid' : 'partial';
 
       (dbInstance as any).prepare(`UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(newAmountPaid, newStatus, invoiceId);
@@ -3022,9 +3203,10 @@ export function registerIpcHandlers(): void {
       const bill = dbInstance.prepare('SELECT * FROM bills WHERE id = ?').get(billId) as any;
       if (!bill) throw new Error('Bill not found');
 
-      const newAmountPaid = (bill.amount_paid || 0) + amount;
+      // INTEGRITY: roundCents prevents float drift across multiple partial pays.
+      const newAmountPaid = db.roundCents((bill.amount_paid || 0) + Number(amount));
       let newStatus = bill.status;
-      if (newAmountPaid >= bill.total) {
+      if (newAmountPaid >= db.roundCents(bill.total)) {
         newStatus = 'paid';
       } else if (newAmountPaid > 0) {
         newStatus = 'partial';
@@ -6018,10 +6200,15 @@ export function registerIpcHandlers(): void {
       const placeholders = expenseIds.map(() => '?').join(',');
       const totalRow = dbi.prepare(`SELECT COALESCE(SUM(amount),0) AS t FROM expenses WHERE id IN (${placeholders})`).get(...expenseIds) as any;
       const total = Number(totalRow?.t || 0);
-      dbi.prepare(`INSERT INTO reimbursement_batches (id, company_id, employee_id, period_start, period_end, total_amount, expense_count, status, notes) VALUES (?,?,?,?,?,?,?,?,?)`)
-        .run(id, companyId, employeeId, periodStart || '', periodEnd || '', total, expenseIds.length, 'open', notes || '');
+      // INTEGRITY: insert batch row + update each expense in one transaction.
+      // Otherwise a UPDATE failure leaves an empty batch with no expenses tied
+      // to it, or partial expenses pointing to a batch whose status is wrong.
       const upd = dbi.prepare(`UPDATE expenses SET reimbursement_batch_id=?, reimbursed=1, reimbursed_date=?, status='paid' WHERE id=?`);
-      const tx = dbi.transaction((ids: string[]) => { for (const xid of ids) upd.run(id, now.slice(0, 10), xid); });
+      const tx = dbi.transaction((ids: string[]) => {
+        dbi.prepare(`INSERT INTO reimbursement_batches (id, company_id, employee_id, period_start, period_end, total_amount, expense_count, status, notes) VALUES (?,?,?,?,?,?,?,?,?)`)
+          .run(id, companyId, employeeId, periodStart || '', periodEnd || '', total, ids.length, 'open', notes || '');
+        for (const xid of ids) upd.run(id, now.slice(0, 10), xid);
+      });
       tx(expenseIds);
       db.logAudit(companyId, 'reimbursement_batch', id, 'create', { employee_id: employeeId, total, count: expenseIds.length });
       return { id, total, count: expenseIds.length };
@@ -6656,38 +6843,46 @@ export function registerIpcHandlers(): void {
       if (!preview.retainedEarnings) return { error: 'No Retained Earnings account found.' };
       if (!preview.lines.length) return { error: 'No revenue/expense balances to close.' };
 
+      const dbInstance = db.getDb();
       const jeId = uuid();
+      const logId = uuid();
+      const lockId = uuid();
       const entryNumber = `CLOSE-${periodEnd}`;
-      db.getDb().prepare(
-        `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by)
-         VALUES (?,?,?,?,?,1,1,?)`
-      ).run(jeId, companyId, entryNumber, periodEnd, `Year-end closing entries (${periodStart} to ${periodEnd})`, closedBy || '');
 
-      let lineNo = 0;
-      for (const l of preview.lines) {
-        db.getDb().prepare(
+      // INTEGRITY: period close writes JE header + JE lines + close_log + period_lock.
+      // If any one fails the period would otherwise be left half-closed (orphan
+      // JE, missing lock, etc.). Wrap the whole sequence atomically.
+      const closeTx = dbInstance.transaction(() => {
+        dbInstance.prepare(
+          `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by)
+           VALUES (?,?,?,?,?,1,1,?)`
+        ).run(jeId, companyId, entryNumber, periodEnd, `Year-end closing entries (${periodStart} to ${periodEnd})`, closedBy || '');
+
+        let lineNo = 0;
+        for (const l of preview.lines) {
+          dbInstance.prepare(
+            `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
+             VALUES (?,?,?,?,?,?,?)`
+          ).run(uuid(), jeId, l.account_id, l.debit, l.credit, `Close ${l.code} ${l.name}`, lineNo++);
+        }
+        const reDebit = preview.netIncome < 0 ? Math.abs(preview.netIncome) : 0;
+        const reCredit = preview.netIncome > 0 ? preview.netIncome : 0;
+        dbInstance.prepare(
           `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
            VALUES (?,?,?,?,?,?,?)`
-        ).run(uuid(), jeId, l.account_id, l.debit, l.credit, `Close ${l.code} ${l.name}`, lineNo++);
-      }
-      const reDebit = preview.netIncome < 0 ? Math.abs(preview.netIncome) : 0;
-      const reCredit = preview.netIncome > 0 ? preview.netIncome : 0;
-      db.getDb().prepare(
-        `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
-         VALUES (?,?,?,?,?,?,?)`
-      ).run(uuid(), jeId, preview.retainedEarnings.id, reDebit, reCredit, 'To Retained Earnings', lineNo++);
+        ).run(uuid(), jeId, preview.retainedEarnings.id, reDebit, reCredit, 'To Retained Earnings', lineNo++);
 
-      const logId = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_close_log (id, company_id, period_start, period_end, closed_at, closed_by, closing_je_id, net_income)
-         VALUES (?,?,?,?,datetime('now'),?,?,?)`
-      ).run(logId, companyId, periodStart, periodEnd, closedBy || '', jeId, preview.netIncome);
+        dbInstance.prepare(
+          `INSERT INTO period_close_log (id, company_id, period_start, period_end, closed_at, closed_by, closing_je_id, net_income)
+           VALUES (?,?,?,?,datetime('now'),?,?,?)`
+        ).run(logId, companyId, periodStart, periodEnd, closedBy || '', jeId, preview.netIncome);
 
-      const lockId = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason)
-         VALUES (?,?,?,?,?,?,?)`
-      ).run(lockId, companyId, periodStart, periodEnd, periodEnd, closedBy || '', 'Year-end close');
+        dbInstance.prepare(
+          `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason)
+           VALUES (?,?,?,?,?,?,?)`
+        ).run(lockId, companyId, periodStart, periodEnd, periodEnd, closedBy || '', 'Year-end close');
+      });
+      closeTx();
 
       db.logAudit(companyId, 'period_close', logId, 'create', { periodStart, periodEnd, netIncome: preview.netIncome, jeId });
       return { ok: true, journalEntryId: jeId, netIncome: preview.netIncome, logId };

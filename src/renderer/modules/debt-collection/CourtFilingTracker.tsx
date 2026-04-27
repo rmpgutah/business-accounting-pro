@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Gavel, Plus, Check, AlertTriangle, Clock } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
@@ -157,6 +158,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
   const [saving, setSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [newItemInputs, setNewItemInputs] = useState<Record<string, string>>({});
+  const [opError, setOpError] = useState('');
 
   // ── Load data ──
   useEffect(() => {
@@ -215,8 +217,10 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
       setShowForm(false);
       setForm({ ...emptyForm });
       setRefreshKey((k) => k + 1);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface create-filing errors instead of swallowing
       console.error('Failed to create filing:', err);
+      setOpError(`Failed to create filing: ${err?.message ?? String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -234,8 +238,10 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
           checklist_json: JSON.stringify(items),
         });
         setRefreshKey((k) => k + 1);
-      } catch (err) {
+      } catch (err: any) {
+        // VISIBILITY: surface update-checklist errors instead of swallowing
         console.error('Failed to update checklist:', err);
+        setOpError(`Failed to update checklist: ${err?.message ?? String(err)}`);
       }
     },
     []
@@ -254,8 +260,10 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
         });
         setNewItemInputs((prev) => ({ ...prev, [action.id]: '' }));
         setRefreshKey((k) => k + 1);
-      } catch (err) {
+      } catch (err: any) {
+        // VISIBILITY: surface add-checklist-item errors instead of swallowing
         console.error('Failed to add checklist item:', err);
+        setOpError(`Failed to add checklist item: ${err?.message ?? String(err)}`);
       }
     },
     [newItemInputs]
@@ -267,8 +275,10 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
       try {
         await api.update('debt_legal_actions', actionId, { status: newStatus });
         setRefreshKey((k) => k + 1);
-      } catch (err) {
+      } catch (err: any) {
+        // VISIBILITY: surface update-status errors instead of swallowing
         console.error('Failed to update filing status:', err);
+        setOpError(`Failed to update filing status: ${err?.message ?? String(err)}`);
       }
     },
     []
@@ -284,6 +294,13 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
 
   return (
     <div className="space-y-4">
+      {opError && (
+        <ErrorBanner
+          message={opError}
+          title="Court filings error"
+          onDismiss={() => setOpError('')}
+        />
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-bold text-text-primary uppercase tracking-wider">

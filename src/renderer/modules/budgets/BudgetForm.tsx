@@ -125,8 +125,9 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
       setBudgetId(id);
       setStep('lines');
     } catch (err: any) {
+      // VISIBILITY: surface create-budget errors instead of swallowing
       console.error('Failed to create budget:', err);
-      alert('Failed to create budget: ' + (err?.message || 'Unknown error'));
+      setBudgetError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -182,8 +183,9 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
       }
       onCreated(budgetId);
     } catch (err: any) {
+      // VISIBILITY: surface save-budget-lines errors instead of swallowing
       console.error('Failed to save budget lines:', err);
-      alert('Failed to save budget lines: ' + (err?.message || 'Unknown error'));
+      setLinesError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }

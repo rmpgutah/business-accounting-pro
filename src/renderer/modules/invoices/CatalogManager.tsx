@@ -133,6 +133,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.name.trim()) return;
     setSaving(true);
     setSaveError('');

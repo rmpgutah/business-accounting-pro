@@ -200,10 +200,9 @@ const DangerZone: React.FC = () => {
     if (!authUser || confirmText !== authUser.email) return;
     setDeleting(true);
     try {
-      // Remove all user-company links
-      await api.rawQuery('DELETE FROM user_companies WHERE user_id = ?', [authUser.id]);
-      // Delete the user
-      await api.rawQuery('DELETE FROM users WHERE id = ?', [authUser.id]);
+      // SECURITY: routed through dedicated IPC handler — direct DELETE FROM users
+      // via raw-query is no longer permitted (credential-table guard in main process).
+      await api.deleteAccount(authUser.id);
       // Logout
       logout();
       setCompanies([]);
@@ -969,7 +968,12 @@ export default function SettingsModule() {
             </div>
             {backupConfig.last_backup_date ? (
               <p className="text-xs text-text-muted">
-                Last backup: {format(new Date(backupConfig.last_backup_date), 'MMM d, yyyy h:mm a')}
+                Last backup: {(() => {
+                  // Defensive: a malformed date string makes format() throw on
+                  // Invalid Date, which would crash the Settings panel.
+                  const d = new Date(backupConfig.last_backup_date);
+                  return isNaN(d.getTime()) ? '—' : format(d, 'MMM d, yyyy h:mm a');
+                })()}
               </p>
             ) : (
               <p className="text-xs text-text-muted">No backups yet</p>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ChevronRight, Pause, Play } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { formatCurrency } from '../../lib/format';
 import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -61,6 +62,7 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [opError, setOpError] = useState('');
 
   // ── Load users ──
   useEffect(() => {
@@ -125,8 +127,10 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
       try {
         await api.debtAdvanceStage(debtId);
         setRefreshKey((k) => k + 1);
-      } catch (err) {
+      } catch (err: any) {
+        // VISIBILITY: surface advance-stage errors instead of swallowing
         console.error('Failed to advance stage:', err);
+        setOpError(`Failed to advance stage: ${err?.message ?? String(err)}`);
       }
     },
     []
@@ -138,8 +142,10 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
       try {
         await api.debtHoldToggle(debt.id, debt.hold !== 1);
         setRefreshKey((k) => k + 1);
-      } catch (err) {
+      } catch (err: any) {
+        // VISIBILITY: surface toggle-hold errors instead of swallowing
         console.error('Failed to toggle hold:', err);
+        setOpError(`Failed to toggle hold: ${err?.message ?? String(err)}`);
       }
     },
     []
@@ -154,7 +160,15 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
+    <div className="space-y-3">
+      {opError && (
+        <ErrorBanner
+          message={opError}
+          title="Pipeline action failed"
+          onDismiss={() => setOpError('')}
+        />
+      )}
+      <div className="flex gap-3 overflow-x-auto pb-4">
       {STAGES.map((stage) => {
         const stageDebts = grouped[stage];
         const stageLabel = formatStatus(stage);
@@ -283,6 +297,7 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
           </div>
         );
       })}
+      </div>
     </div>
   );
 };

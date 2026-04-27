@@ -47,6 +47,8 @@ const api = {
   listNotifications: (unreadOnly?: boolean) =>
     window.electronAPI.invoke('notification:list', { unread_only: unreadOnly }),
   markNotificationRead: (id: string) => window.electronAPI.invoke('notification:mark-read', id),
+  // Perf: bulk operation — single SQL UPDATE instead of N round-trips
+  markAllNotificationsRead: (): Promise<number> => window.electronAPI.invoke('notification:mark-all-read'),
 
   // Invoice Settings & Catalog
   getInvoiceSettings: (): Promise<any> =>
@@ -140,6 +142,9 @@ const api = {
     window.electronAPI.invoke('auth:link-user-company', { userId, companyId, role }),
   validateSession: (userId: string) =>
     window.electronAPI.invoke('auth:validate-session', { userId }),
+  // SECURITY: replaces direct `DELETE FROM users` rawQuery — see auth:delete-account handler.
+  deleteAccount: (userId: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('auth:delete-account', { userId }),
 
   // Recurring Processing
   processRecurringNow: () => window.electronAPI.invoke('recurring:process-now'),

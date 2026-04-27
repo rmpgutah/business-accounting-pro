@@ -92,6 +92,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!activeCompany) return;
 
     if (!name.trim()) {

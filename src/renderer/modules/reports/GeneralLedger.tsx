@@ -641,9 +641,17 @@ const GeneralLedger: React.FC = () => {
   const periodIsLocked = (date: string) => !!lockDate && date <= lockDate;
 
   // ── Round-2 line actions ───────────────────────────────────────
+  // SECURITY: Only allow whitelisted column names to be interpolated into the
+  // UPDATE SET clause — `${sets}` is template-literal concatenation, so an
+  // arbitrary key from a future call site would be a SQL-injection vector.
+  const ALLOWED_LINE_FIELDS = new Set(['note', 'debit', 'credit', 'signed_off_by', 'signed_off_at', 'memo', 'reference']);
   const updateLineField = async (lineId: string, fields: Record<string, any>) => {
-    const sets = Object.keys(fields).map((k) => `${k}=?`).join(', ');
-    const params = [...Object.values(fields), lineId];
+    const safeKeys = Object.keys(fields).filter((k) => ALLOWED_LINE_FIELDS.has(k));
+    if (safeKeys.length !== Object.keys(fields).length) {
+      alert('Update rejected: unknown column'); return;
+    }
+    const sets = safeKeys.map((k) => `${k}=?`).join(', ');
+    const params = [...safeKeys.map((k) => fields[k]), lineId];
     try {
       await api.rawQuery(`UPDATE journal_entry_lines SET ${sets} WHERE id=?`, params);
       setAccounts((prev) => prev.map((a) => ({

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface ContactFormData {
@@ -37,6 +38,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
   const [form, setForm] = useState<ContactFormData>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!contactId);
+  const [saveError, setSaveError] = useState('');
 
   // ── Load existing record for edit ──
   useEffect(() => {
@@ -78,6 +80,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
     e.preventDefault();
     if (saving || !form.name.trim()) return;
     setSaving(true);
+    setSaveError('');
 
     const payload: Record<string, any> = {
       debt_id: debtId,
@@ -104,8 +107,10 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
         await api.create('debt_contacts', payload);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-contact errors instead of swallowing
       console.error('Failed to save contact:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -148,6 +153,13 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {saveError && (
+                <ErrorBanner
+                  message={saveError}
+                  title="Failed to save contact"
+                  onDismiss={() => setSaveError('')}
+                />
+              )}
               {/* Role & Company — 2-column */}
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -101,6 +101,7 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
     e.preventDefault();
     if (saving || !form.title.trim()) return;
     setSaving(true);
+    setError('');
 
     const payload = {
       debt_id: debtId,
@@ -122,8 +123,9 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
       }
       onSaved();
     } catch (err: any) {
+      // VISIBILITY: surface save-evidence errors instead of swallowing
       console.error('Failed to save evidence:', err);
-      alert('Failed to save evidence: ' + (err?.message || 'Unknown error'));
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -159,7 +161,7 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
             </button>
           </div>
 
-          {error && <ErrorBanner message={error} title="Failed to load evidence" onDismiss={() => setError('')} />}
+          {error && <ErrorBanner message={error} title="Evidence error" onDismiss={() => setError('')} />}
           {loading ? (
             <div className="flex items-center justify-center py-12 text-text-muted text-sm">
               Loading...

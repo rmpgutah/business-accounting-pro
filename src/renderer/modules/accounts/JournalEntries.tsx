@@ -312,27 +312,35 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     if (ids.length === 0) return;
     const rows = entries.filter((e) => ids.includes(e.id));
     // Expand rows with their lines for full CSV
+    // Perf: single rawQuery with IN(...) replaces an N+1 loop that was painful
+    // when exporting hundreds of entries.
     const linesData: any[] = [];
-    for (const e of rows) {
-      const lns: any = await api.query('journal_entry_lines', { journal_entry_id: e.id });
-      const acctMap = new Map(accounts.map((a) => [a.id, a]));
-      if (Array.isArray(lns)) {
-        for (const l of lns) {
-          const acct = acctMap.get(l.account_id);
-          linesData.push({
-            entry_number: e.entry_number,
-            date: e.date,
-            description: e.description,
-            account_code: acct?.code ?? '',
-            account_name: acct?.name ?? '',
-            debit: l.debit ?? 0,
-            credit: l.credit ?? 0,
-            line_memo: l.description ?? '',
-            posted: e.is_posted ? 'yes' : 'no',
-            class: e.class ?? '',
-          });
-        }
-      }
+    const acctMap = new Map(accounts.map((a) => [a.id, a]));
+    const entryMap = new Map(rows.map((e) => [e.id, e]));
+    let allLines: any[] = [];
+    if (rows.length > 0) {
+      const placeholders = rows.map(() => '?').join(',');
+      allLines = await api.rawQuery(
+        `SELECT * FROM journal_entry_lines WHERE journal_entry_id IN (${placeholders})`,
+        rows.map((r) => r.id)
+      ).catch(() => []);
+    }
+    for (const l of allLines) {
+      const e = entryMap.get(l.journal_entry_id);
+      if (!e) continue;
+      const acct = acctMap.get(l.account_id);
+      linesData.push({
+        entry_number: e.entry_number,
+        date: e.date,
+        description: e.description,
+        account_code: acct?.code ?? '',
+        account_name: acct?.name ?? '',
+        debit: l.debit ?? 0,
+        credit: l.credit ?? 0,
+        line_memo: l.description ?? '',
+        posted: e.is_posted ? 'yes' : 'no',
+        class: e.class ?? '',
+      });
     }
     // downloadCSVBlob accepts (data, filename, columns?) — ColumnSpec[]
     // permits bare string keys, so no cast needed.

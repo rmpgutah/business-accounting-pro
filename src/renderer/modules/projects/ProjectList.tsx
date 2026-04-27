@@ -107,36 +107,40 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
       try {
         setLoading(true);
         setLoadError('');
-        const [projectRows, clientRows, expenseRows, timeRows] = await Promise.all([
+        // Perf: aggregate in SQL instead of pulling every expense/time_entry
+        // row into the renderer (was OOM-territory on long-running companies).
+        const [projectRows, clientRows, expAggRows, timeAggRows] = await Promise.all([
           api.query('projects', { company_id: activeCompany.id }),
           api.query('clients', { company_id: activeCompany.id }),
-          api.query('expenses', { company_id: activeCompany.id }),
-          api.query('time_entries', { company_id: activeCompany.id }),
+          api.rawQuery(
+            `SELECT project_id, COALESCE(SUM(amount), 0) AS total
+               FROM expenses
+              WHERE company_id = ? AND project_id IS NOT NULL
+              GROUP BY project_id`,
+            [activeCompany.id]
+          ).catch(() => []),
+          api.rawQuery(
+            `SELECT project_id, COALESCE(SUM(duration_minutes), 0) AS total_minutes
+               FROM time_entries
+              WHERE company_id = ? AND project_id IS NOT NULL
+              GROUP BY project_id`,
+            [activeCompany.id]
+          ).catch(() => []),
         ]);
         if (cancelled) return;
 
         setProjects(Array.isArray(projectRows) ? projectRows : []);
         setClients(Array.isArray(clientRows) ? clientRows : []);
 
-        // Aggregate expenses by project
         const expMap: Record<string, number> = {};
-        if (Array.isArray(expenseRows)) {
-          for (const exp of expenseRows) {
-            if (exp.project_id) {
-              expMap[exp.project_id] = (expMap[exp.project_id] ?? 0) + (exp.amount ?? 0);
-            }
-          }
+        if (Array.isArray(expAggRows)) {
+          for (const r of expAggRows) expMap[r.project_id] = r.total ?? 0;
         }
         setExpenses(expMap);
 
-        // Aggregate hours by project (time_entries has duration_minutes, not hours)
         const timeMap: Record<string, number> = {};
-        if (Array.isArray(timeRows)) {
-          for (const te of timeRows) {
-            if (te.project_id) {
-              timeMap[te.project_id] = (timeMap[te.project_id] ?? 0) + ((te.duration_minutes ?? 0) / 60);
-            }
-          }
+        if (Array.isArray(timeAggRows)) {
+          for (const r of timeAggRows) timeMap[r.project_id] = (r.total_minutes ?? 0) / 60;
         }
         setTimeEntries(timeMap);
       } catch (err: any) {

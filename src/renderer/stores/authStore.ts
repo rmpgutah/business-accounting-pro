@@ -26,8 +26,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'bap-auth',
+      version: 1,
       // Persist both user and isAuthenticated so Cmd+R reloads don't log out the user.
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      // Drop persisted state on schema mismatch rather than crashing on hydrate.
+      migrate: (persisted: any, _version: number) => {
+        if (!persisted || typeof persisted !== 'object') return { user: null, isAuthenticated: false } as any;
+        return persisted;
+      },
     }
   )
 );

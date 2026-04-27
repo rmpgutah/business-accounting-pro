@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { app, BrowserWindow, dialog, Menu } from 'electron';
+import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import path from 'path';
 import { initDatabase, getDb } from './database';
 import { registerIpcHandlers } from './ipc';
@@ -25,7 +25,33 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // SECURITY: sandbox the main renderer too — preload runs with the
+      // limited Electron API surface, and the renderer cannot require Node
+      // modules even if a preload bug leaks something. webSecurity stays on
+      // (default) so file:// fetches and CORS are enforced.
+      sandbox: true,
     },
+  });
+
+  // SECURITY: Block any in-app navigation to a non-app origin. Without this
+  // an injected link or stale redirect could pull the renderer to an
+  // attacker-controlled origin while keeping it inside the Electron window
+  // (which has IPC access via the preload bridge).
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowed = url.startsWith('http://localhost:5173')
+      || url.startsWith('file://')
+      || url.startsWith('devtools://');
+    if (!allowed) {
+      event.preventDefault();
+      shell.openExternal(url).catch(() => {});
+    }
+  });
+  // SECURITY: Force window.open / target=_blank to open in the OS browser
+  // rather than a child Electron window (which would inherit nodeIntegration
+  // settings unless explicitly overridden).
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
   });
 
   mainWindow.once('ready-to-show', () => {

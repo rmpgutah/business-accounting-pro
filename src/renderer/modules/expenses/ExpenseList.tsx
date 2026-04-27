@@ -156,13 +156,16 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         const [v, p, b, sr] = await Promise.all([
           api.query('vendors', { company_id: cid }),
           api.rawQuery(`SELECT id, name, COALESCE(budget,0) as budget FROM projects WHERE company_id = ?`, [cid]),
+          // Perf: cap unmatched bank txns at 1000 (suggestion list, not authoritative)
           api.rawQuery(
             `SELECT bt.id, bt.date, bt.amount FROM bank_transactions bt
              JOIN bank_accounts ba ON ba.id = bt.bank_account_id
-             WHERE ba.company_id = ? AND bt.is_matched = 0 AND bt.type = 'debit'`,
+             WHERE ba.company_id = ? AND bt.is_matched = 0 AND bt.type = 'debit'
+             ORDER BY bt.date DESC LIMIT 1000`,
             [cid]
           ).catch(() => []),
-          api.rawQuery(`SELECT id, stripe_id, data FROM stripe_cache WHERE company_id = ? AND resource = 'refunds'`, [cid]).catch(() => []),
+          // Perf: cap stripe refund cache reads at 500 most recent
+          api.rawQuery(`SELECT id, stripe_id, data FROM stripe_cache WHERE company_id = ? AND resource = 'refunds' ORDER BY rowid DESC LIMIT 500`, [cid]).catch(() => []),
         ]);
         setVendors(Array.isArray(v) ? v : []);
         setProjects(Array.isArray(p) ? p : []);
@@ -191,7 +194,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
              LEFT JOIN vendors v ON e.vendor_id = v.id
              LEFT JOIN projects p ON e.project_id = p.id
              WHERE e.company_id = ?
-             ORDER BY e.date DESC`,
+             ORDER BY e.date DESC LIMIT 2000`,
             [activeCompany.id]
           ),
           api.query('categories', { company_id: activeCompany.id }),
@@ -275,7 +278,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    const expData = await api.query('expenses', { company_id: activeCompany.id });
+    // Perf: keep cap consistent with initial load (2000 most recent).
+    const expData = await api.query('expenses', { company_id: activeCompany.id }, { field: 'date', dir: 'desc' }, 2000);
     setExpenses(Array.isArray(expData) ? expData : []);
     setSelectedIds(new Set());
   }, [activeCompany]);

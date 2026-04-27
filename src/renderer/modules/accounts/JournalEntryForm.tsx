@@ -1145,6 +1145,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           <img src={`file://${d.file_path}`} alt={d.filename}
                             className="w-8 h-8 object-cover border border-border-primary"
                             style={{ borderRadius: '4px' }}
+                            loading="lazy" decoding="async"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <span className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary text-[9px]"

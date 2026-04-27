@@ -84,6 +84,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   }, [editPaymentId]);
 
   const handleSave = async () => {
+    if (saving) return;
     setError('');
 
     const parsedAmount = parseFloat(amount);
@@ -122,9 +123,10 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
         await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface record-payment errors instead of swallowing
       console.error('Failed to record payment:', err);
-      setError('Failed to record payment. Please try again.');
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }

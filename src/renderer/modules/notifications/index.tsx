@@ -166,8 +166,9 @@ const Notifications: React.FC = () => {
 
   const markAllRead = async () => {
     try {
-      const unread = notifications.filter((n) => !n.is_read);
-      await Promise.all(unread.map((n) => api.markNotificationRead(n.id)));
+      // Perf: single bulk IPC + SQL UPDATE replaces an N-call loop that locked
+      // the renderer when there were many unread notifications.
+      await api.markAllNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     } catch (err: any) {
       console.error('Failed to mark all read:', err);

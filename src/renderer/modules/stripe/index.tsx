@@ -120,10 +120,12 @@ const StripeSyncModule: React.FC = () => {
       setIsConnected(!!storedKey);
 
       // Load transactions scoped to the active company
+      // Perf: cap stripe transactions list at 1000 most recent. Stripe accounts
+      // can accumulate tens of thousands; older are still queryable in detail UI.
       const txns: StripeTransaction[] = await api.query('stripe_transactions', { company_id: activeCompany.id }, {
         field: 'synced_at',
         dir: 'desc',
-      });
+      }, 1000);
       setTransactions(txns ?? []);
 
       // Calculate summary stats

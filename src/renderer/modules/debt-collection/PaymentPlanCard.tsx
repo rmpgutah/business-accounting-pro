@@ -41,6 +41,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
   useEffect(() => { load(); }, [debtId]);
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.start_date || !form.installment_amount) return;
     setSaving(true);
     try {

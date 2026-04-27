@@ -157,8 +157,10 @@ export default function CustomReportsModule() {
 
       const data = await api.rawQuery(sql, params);
       setResults(data);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface report-query errors instead of swallowing
       console.error('Report query failed:', err);
+      setError(err?.message ?? String(err));
       setResults([]);
     } finally {
       setLoading(false);

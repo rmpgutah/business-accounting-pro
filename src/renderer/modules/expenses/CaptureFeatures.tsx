@@ -38,6 +38,7 @@ export const ReceiptThumb: React.FC<{ path: string; onClick?: () => void; sizePx
       title={path.split(/[/\\]/).pop()}>
       {isImage ? (
         <img src={`file://${path}`} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'cover' }} alt="receipt"
+          loading="lazy" decoding="async"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : isPdf ? <FileText size={sizePx * 0.45} className="text-accent-blue" /> : <Paperclip size={sizePx * 0.4} className="text-text-muted" />}
     </div>

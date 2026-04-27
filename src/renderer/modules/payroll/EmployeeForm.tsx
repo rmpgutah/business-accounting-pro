@@ -495,9 +495,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       }
       onSaved();
     } catch (err: any) {
+      // VISIBILITY: surface save-employee errors instead of swallowing
       console.error('Failed to save employee:', err);
-      setError(err?.message ?? 'Failed to save employee.');
-      alert('Failed to save employee: ' + (err?.message || 'Unknown error'));
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }

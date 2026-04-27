@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import {
   VENDOR_TYPE, VENDOR_APPROVAL, VENDOR_1099_BOX, VENDOR_DIVERSITY, VENDOR_LOCATION,
   ClassificationSelect, ClassificationMultiSelect,
@@ -67,6 +68,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!vendorId);
   const [nameError, setNameError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const isEditing = !!vendorId;
 
@@ -150,6 +152,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
       return;
     }
     setNameError('');
+    setSaveError('');
     setSaving(true);
 
     try {
@@ -183,8 +186,10 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         await api.create('vendors', payload);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-vendor errors instead of swallowing
       console.error('Failed to save vendor:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -223,6 +228,13 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {saveError && (
+                <ErrorBanner
+                  message={saveError}
+                  title="Failed to save vendor"
+                  onDismiss={() => setSaveError('')}
+                />
+              )}
               {/* Name */}
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">

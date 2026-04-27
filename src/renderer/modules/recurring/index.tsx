@@ -193,8 +193,9 @@ const RecurringTransactions: React.FC = () => {
       setLoading(true);
       await loadTemplates();
     } catch (err: any) {
+      // VISIBILITY: surface save-template errors instead of swallowing
       console.error('Failed to save template:', err);
-      alert('Failed to save template: ' + (err?.message || 'Unknown error'));
+      setError(`Failed to save template: ${err?.message ?? String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -212,8 +213,9 @@ const RecurringTransactions: React.FC = () => {
         ),
       );
     } catch (err: any) {
+      // VISIBILITY: surface toggle-template errors instead of swallowing
       console.error('Failed to toggle template:', err);
-      alert('Failed to toggle template: ' + (err?.message || 'Unknown error'));
+      setError(`Failed to toggle template: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -232,8 +234,9 @@ const RecurringTransactions: React.FC = () => {
       }
       setTimeout(() => setProcessFeedback(''), 5000);
     } catch (err: any) {
+      // VISIBILITY: surface process-recurring errors instead of swallowing
       console.error('Failed to process recurring:', err);
-      alert('Failed to process recurring: ' + (err?.message || 'Unknown error'));
+      setError(`Failed to process recurring: ${err?.message ?? String(err)}`);
     } finally {
       setProcessing(false);
     }
@@ -249,7 +252,7 @@ const RecurringTransactions: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
-      {error && <ErrorBanner message={error} title="Failed to load recurring templates" onDismiss={() => setError('')} />}
+      {error && <ErrorBanner message={error} title="Recurring templates error" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">

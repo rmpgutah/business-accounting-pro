@@ -2199,9 +2199,11 @@ export function generateCollectionLetterHTML(
 </table>`;
 
   // Shared blocks
+  // SECURITY: source_id is a renderer-supplied UUID, but defensive escape keeps
+  // it from breaking out of HTML if a malformed/legacy id ever sneaks in.
   const accountRef = debt?.source_type === 'invoice'
-    ? `Invoice #${(debt?.source_id || '').substring(0, 8).toUpperCase()}`
-    : debt?.source_type === 'bill' ? `Bill #${(debt?.source_id || '').substring(0, 8).toUpperCase()}` : 'Manual Entry';
+    ? `Invoice #${esc((debt?.source_id || '').substring(0, 8).toUpperCase())}`
+    : debt?.source_type === 'bill' ? `Bill #${esc((debt?.source_id || '').substring(0, 8).toUpperCase())}` : 'Manual Entry';
   const delinquentDate = debt?.delinquent_date ? new Date(debt.delinquent_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
   const jurisdiction = esc(debt?.jurisdiction || 'the applicable jurisdiction');
   const interestRate = debt?.interest_rate ? `${(debt.interest_rate * 100).toFixed(2)}% per annum (${debt.interest_type === 'compound' ? 'compound' : 'simple'})` : 'N/A';

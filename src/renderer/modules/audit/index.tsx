@@ -79,7 +79,8 @@ const AuditTrail: React.FC = () => {
       if (!activeCompany) return;
       try {
         setLoadError('');
-        const rows = await api.query('audit_log', { company_id: activeCompany.id }, { field: 'timestamp', dir: 'desc' });
+        // Perf: cap at 1000 most-recent entries; long-running companies can have 100k+ rows
+        const rows = await api.query('audit_log', { company_id: activeCompany.id }, { field: 'timestamp', dir: 'desc' }, 1000);
         if (!cancelled) setEntries(Array.isArray(rows) ? rows : []);
       } catch (err: any) {
         console.error('Failed to load audit log:', err);

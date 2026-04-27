@@ -38,6 +38,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
   useEffect(() => { load(); }, [debtId]);
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.offer_amount || !form.offered_date) return;
     setSaving(true);
     try {

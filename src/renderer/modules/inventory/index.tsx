@@ -195,9 +195,9 @@ const Inventory: React.FC = () => {
       setLoading(true);
       await loadItems();
     } catch (err: any) {
+      // VISIBILITY: surface create-inventory errors instead of swallowing
       console.error('Failed to create inventory item:', err);
       setOpError('Failed to save: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
-      alert('Failed to save: ' + (err?.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -263,8 +263,10 @@ const Inventory: React.FC = () => {
       await api.remove('inventory_items', id);
       await loadItems();
     } catch (err: any) {
+      // VISIBILITY: surface delete-inventory errors instead of swallowing
       console.error('Failed to delete inventory item:', err);
-      alert('Failed to delete: ' + (err?.message || 'Unknown error'));
+      setOpError('Failed to delete: ' + (err?.message || String(err)));
+      setTimeout(() => setOpError(''), 5000);
     }
   };
 

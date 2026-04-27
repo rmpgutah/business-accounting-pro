@@ -68,8 +68,9 @@ export const RuleForm: React.FC<Props> = ({ category, rule, onSave, onCancel }) 
       else { await api.createRule(data); }
       onSave();
     } catch (err: any) {
+      // VISIBILITY: surface save-rule errors instead of swallowing
       console.error('Failed to save rule:', err);
-      alert('Failed to save rule: ' + (err?.message || 'Unknown error'));
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }

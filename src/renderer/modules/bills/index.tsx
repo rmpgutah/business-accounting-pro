@@ -196,8 +196,9 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
     const load = async () => {
       if (!activeCompany) return;
       try {
+        // Perf: cap bill list at 2000 most-recent; aggregate stats come from billsStats().
         const [billData, vendorData] = await Promise.all([
-          api.query('bills', { company_id: activeCompany.id }),
+          api.query('bills', { company_id: activeCompany.id }, { field: 'bill_date', dir: 'desc' }, 2000),
           api.query('vendors', { company_id: activeCompany.id }),
         ]);
         if (cancelled) return;
@@ -659,9 +660,10 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
       }
 
       onSaved(savedId);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-bill errors instead of swallowing
       console.error('Failed to save bill:', err);
-      alert('Failed to save bill. Please try again.');
+      setErrors([err?.message ?? String(err)]);
     } finally {
       setSaving(false);
     }
@@ -1066,7 +1068,9 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
     if (!bill) return;
     const result = await api.cloneRecord('bills', bill.id);
     if (result?.error) {
+      // VISIBILITY: surface duplicate-bill errors instead of swallowing
       console.error('Duplicate bill failed:', result.error);
+      setPayErrors([`Failed to duplicate bill: ${result.error}`]);
       return;
     }
     onBack();

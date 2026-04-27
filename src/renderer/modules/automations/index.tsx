@@ -293,8 +293,9 @@ const AutomationsModule: React.FC = () => {
       setShowBuilder(false);
       setEditingRule(null);
     } catch (err: any) {
+      // VISIBILITY: surface save-automation errors instead of swallowing
       console.error('Failed to save automation:', err);
-      alert('Failed to save automation: ' + (err?.message || 'Unknown error'));
+      setError(`Failed to save automation: ${err?.message ?? String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -308,7 +309,11 @@ const AutomationsModule: React.FC = () => {
       await api.deleteAutomation(rule.id);
       if (selected?.id === rule.id) setSelected(null);
       await loadRules();
-    } catch { /* ignore */ } finally {
+    } catch (err: any) {
+      // VISIBILITY: surface delete-automation errors instead of swallowing
+      console.error('Failed to delete automation:', err);
+      setError(`Failed to delete "${rule.name}": ${err?.message ?? String(err)}`);
+    } finally {
       setDeleting(null);
     }
   };
@@ -337,7 +342,7 @@ const AutomationsModule: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {error && <div className="px-4 pt-4"><ErrorBanner message={error} title="Failed to load automations" onDismiss={() => setError('')} /></div>}
+      {error && <div className="px-4 pt-4"><ErrorBanner message={error} title="Automations error" onDismiss={() => setError('')} /></div>}
     <div className="flex flex-1 overflow-hidden">
       {/* ── Left Panel ── */}
       <div className="w-72 border-r-2 border-border-primary flex flex-col bg-bg-secondary shrink-0">

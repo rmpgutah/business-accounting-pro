@@ -17,7 +17,26 @@ function sign(body: string): string {
   return crypto.createHmac('sha256', SYNC_SECRET).update(body).digest('hex');
 }
 
+// SECURITY: Refuse to send any sync payload (which contains the entire database
+// row — clients, debts, invoices, etc.) without a configured HMAC secret AND
+// over plain HTTP. Without these guards, an attacker on the local network can
+// MITM the upload and either read or alter sync payloads. Falling back to
+// queueing keeps the data safe locally until the secret/URL is configured.
+function syncTransportSafe(): { ok: boolean; reason?: string } {
+  if (!SYNC_SECRET) return { ok: false, reason: 'SYNC_SECRET not configured' };
+  if (!/^https:\/\//i.test(SERVER_URL) && !/^http:\/\/(localhost|127\.0\.0\.1)/i.test(SERVER_URL)) {
+    return { ok: false, reason: 'SYNC_SERVER_URL must be HTTPS (HTTP only allowed for localhost)' };
+  }
+  return { ok: true };
+}
+
 export async function syncPush(item: QueueItem): Promise<void> {
+  const safe = syncTransportSafe();
+  if (!safe.ok) {
+    // Don't transmit unsigned/cleartext to a public host — keep queued locally.
+    enqueue(item);
+    return;
+  }
   try {
     const body = JSON.stringify(item);
     const res = await fetch(`${SERVER_URL}/api/sync`, {
@@ -33,6 +52,9 @@ export async function syncPush(item: QueueItem): Promise<void> {
 
 async function drainQueue() {
   if (drainInFlight) return;
+  // SECURITY: Same guard as syncPush — refuse to drain over HTTP without a secret.
+  const safe = syncTransportSafe();
+  if (!safe.ok) return;
   drainInFlight = true;
   try {
     const items = dequeueAll();

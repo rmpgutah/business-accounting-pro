@@ -486,9 +486,8 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
       if (isEdit && editId) {
         await api.update('purchase_orders', editId, poData);
         poId = editId;
-        // Remove old line items and re-create
-        const existing = await api.query('po_line_items', { po_id: editId });
-        await Promise.all((existing || []).map((item: POLineItem) => api.remove('po_line_items', item.id)));
+        // Perf: single DELETE replaces an N-call Promise.all loop that hammered IPC.
+        await api.rawQuery('DELETE FROM po_line_items WHERE po_id = ?', [editId]);
       } else {
         const created = await api.create('purchase_orders', poData);
         poId = created.id;
@@ -951,10 +950,8 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
             onClick={async () => {
               if (!window.confirm('Delete this purchase order and all its line items? This cannot be undone.')) return;
               try {
-                const items = await api.query('po_line_items', { po_id: po.id });
-                if (Array.isArray(items)) {
-                  for (const item of items) await api.remove('po_line_items', item.id);
-                }
+                // Perf: single DELETE replaces an N+1 line-item delete loop.
+                await api.rawQuery('DELETE FROM po_line_items WHERE po_id = ?', [po.id]);
                 await api.remove('purchase_orders', po.id);
                 onBack();
               } catch (err: any) {

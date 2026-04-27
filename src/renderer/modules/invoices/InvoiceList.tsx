@@ -117,8 +117,10 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       try {
         setLoadError('');
         // Load invoices and clients first (critical), summary and candidates are non-blocking
+        // Perf: cap invoice list at 2000 most-recent; older are searchable.
+        // Aggregate stats below still scan the full table.
         const [invoiceData, clientData] = await Promise.all([
-          api.query('invoices', { company_id: activeCompany.id }),
+          api.query('invoices', { company_id: activeCompany.id }, { field: 'issue_date', dir: 'desc' }, 2000),
           api.query('clients', { company_id: activeCompany.id }),
         ]);
         if (cancelled) return;
@@ -208,7 +210,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    const invoiceData = await api.query('invoices', { company_id: activeCompany.id });
+    // Perf: keep cap consistent with initial load
+    const invoiceData = await api.query('invoices', { company_id: activeCompany.id }, { field: 'issue_date', dir: 'desc' }, 2000);
     setInvoices(invoiceData ?? []);
     setSelectedIds(new Set());
   }, [activeCompany]);

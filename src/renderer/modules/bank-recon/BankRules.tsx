@@ -167,6 +167,7 @@ const BankRules: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!validate() || !activeCompany) return;
     setSaving(true);
     try {

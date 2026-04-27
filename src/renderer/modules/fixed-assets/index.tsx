@@ -488,6 +488,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!validate() || !activeCompany) return;
     setSaving(true);
     try {
@@ -515,8 +516,9 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
         onSaved(created.id ?? assetId ?? '');
       }
     } catch (err: any) {
+      // VISIBILITY: surface save-asset errors instead of swallowing
       console.error('Failed to save asset:', err);
-      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+      setErrors((prev) => ({ ...prev, _form: err?.message ?? String(err) }));
     } finally {
       setSaving(false);
     }
@@ -546,6 +548,14 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
           <p className="text-xs text-text-muted mt-0.5">Fill in asset details and depreciation settings.</p>
         </div>
       </div>
+
+      {errors._form && (
+        <ErrorBanner
+          message={errors._form}
+          title="Failed to save asset"
+          onDismiss={() => setErrors((prev) => { const n = { ...prev }; delete n._form; return n; })}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-6">
         {/* Left column */}

@@ -45,8 +45,10 @@ const MultiCompany: React.FC = () => {
       const list: Company[] = result ?? [];
       setLocalCompanies(list);
       setCompanies(list as any);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface load-companies errors instead of swallowing
       console.error('Failed to load companies:', err);
+      setOpError('Failed to load companies: ' + (err?.message ?? String(err)));
     } finally {
       setLoading(false);
     }

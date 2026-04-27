@@ -71,7 +71,8 @@ const Documents: React.FC = () => {
     if (!activeCompany) return;
     setError('');
     try {
-      const rows = await api.query('documents', { company_id: activeCompany.id }, { field: 'uploaded_at', dir: 'desc' });
+      // Perf: cap at 1000 most-recent documents; older docs surfaced via search/filter UI
+      const rows = await api.query('documents', { company_id: activeCompany.id }, { field: 'uploaded_at', dir: 'desc' }, 1000);
       setDocuments(Array.isArray(rows) ? rows : []);
     } catch (err: any) {
       console.error('Failed to load documents:', err);
@@ -111,9 +112,9 @@ const Documents: React.FC = () => {
       setDocuments((prev) => [doc, ...prev]);
       setOpSuccess('Document uploaded'); setTimeout(() => setOpSuccess(''), 3000);
     } catch (err: any) {
+      // VISIBILITY: surface upload errors via banner instead of duplicate alert
       console.error('Failed to upload document:', err);
-      setOpError('Failed to upload: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
-      alert('Failed to upload: ' + (err?.message || 'Unknown error'));
+      setOpError('Failed to upload: ' + (err?.message || String(err))); setTimeout(() => setOpError(''), 5000);
     }
   };
 
@@ -134,9 +135,9 @@ const Documents: React.FC = () => {
       await loadDocuments();
       setOpSuccess('Document updated'); setTimeout(() => setOpSuccess(''), 3000);
     } catch (err: any) {
+      // VISIBILITY: surface update errors via banner instead of duplicate alert
       console.error('Failed to update document:', err);
-      setOpError('Failed to update: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
-      alert('Failed to update: ' + (err?.message || 'Unknown error'));
+      setOpError('Failed to update: ' + (err?.message || String(err))); setTimeout(() => setOpError(''), 5000);
     } finally {
       setEditSaving(false);
     }
@@ -149,9 +150,9 @@ const Documents: React.FC = () => {
       await loadDocuments();
       setOpSuccess('Document deleted'); setTimeout(() => setOpSuccess(''), 3000);
     } catch (err: any) {
+      // VISIBILITY: surface delete errors via banner instead of duplicate alert
       console.error('Failed to delete document:', err);
-      setOpError('Failed to delete: ' + (err?.message || 'Unknown error')); setTimeout(() => setOpError(''), 5000);
-      alert('Failed to delete: ' + (err?.message || 'Unknown error'));
+      setOpError('Failed to delete: ' + (err?.message || String(err))); setTimeout(() => setOpError(''), 5000);
     }
   };
 

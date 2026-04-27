@@ -20,6 +20,10 @@ import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
+// Perf: module-scoped formatters keep stable identity across renders so recharts
+// doesn't invalidate axis layout each time the parent re-renders.
+const fmtThousands = (v: number) => `$${(v / 1000).toFixed(0)}k`;
+
 // ─── Types ──────────────────────────────────────────────
 interface AnalyticsViewProps {
   companyId: string;
@@ -271,7 +275,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     tick={{ fill: CHART_TICK_FILL, fontSize: 11 }}
                     axisLine={{ stroke: CHART_GRID_STROKE }}
                     tickLine={false}
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={fmtThousands}
                   />
                   <Tooltip content={<CurrencyTooltip />} />
                   <Area
@@ -306,7 +310,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     tick={{ fill: CHART_TICK_FILL, fontSize: 11 }}
                     axisLine={{ stroke: CHART_GRID_STROKE }}
                     tickLine={false}
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={fmtThousands}
                   />
                   <Tooltip content={<CurrencyTooltip />} />
                   <Bar dataKey="total" maxBarSize={40}>
@@ -374,7 +378,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     tick={{ fill: CHART_TICK_FILL, fontSize: 11 }}
                     axisLine={{ stroke: CHART_GRID_STROKE }}
                     tickLine={false}
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={fmtThousands}
                   />
                   <YAxis
                     type="category"
@@ -600,7 +604,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <BarChart data={forecast}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
                     <XAxis dataKey="period" tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} />
-                    <YAxis tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} tickFormatter={fmtThousands} />
                     <Tooltip content={<CurrencyTooltip />} />
                     <Bar dataKey="projected" fill="#22c55e" maxBarSize={50} />
                   </BarChart>

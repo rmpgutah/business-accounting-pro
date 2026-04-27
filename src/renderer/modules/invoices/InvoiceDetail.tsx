@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
@@ -106,6 +107,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [copied, setCopied] = useState(false);
   const [reminders, setReminders] = useState<any[]>([]);
   const [schedulingReminders, setSchedulingReminders] = useState(false);
@@ -204,13 +206,15 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const handleSendInvoice = async () => {
     if (!invoice || invoice.status === 'paid') return;
     setSending(true);
+    setActionError('');
     try {
       // Build the SAME HTML the user saw in preview so the attached PDF matches.
       const html = buildHTML();
       const result = await api.sendInvoiceEmail(invoiceId, html || undefined);
       if (result?.error) {
+        // VISIBILITY: surface send-invoice errors instead of swallowing
         console.error('Send invoice failed:', result.error);
-        alert('Failed to open email: ' + result.error);
+        setActionError(`Failed to open email: ${result.error}`);
       } else if (result?.success) {
         if (result.newStatus) {
           setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
@@ -220,8 +224,10 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           console.info('Invoice PDF saved to:', result.pdfPath);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface send-invoice exceptions instead of swallowing
       console.error('Failed to send invoice:', err);
+      setActionError(err?.message ?? String(err));
     } finally {
       setSending(false);
     }
@@ -261,8 +267,10 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       await api.invoiceScheduleReminders(invoiceId);
       const updated = await api.invoiceListReminders(invoiceId);
       setReminders(updated ?? []);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface schedule-reminders errors instead of swallowing
       console.error('Failed to schedule reminders:', err);
+      setActionError(`Failed to schedule reminders: ${err?.message ?? String(err)}`);
     } finally {
       setSchedulingReminders(false);
     }
@@ -287,6 +295,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
+      {actionError && (
+        <ErrorBanner
+          message={actionError}
+          title="Action failed"
+          onDismiss={() => setActionError('')}
+        />
+      )}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">

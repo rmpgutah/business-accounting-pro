@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Scale, Save, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
@@ -175,6 +176,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState('');
   const [selectedAccountInfo, setSelectedAccountInfo] = useState<DropdownOption | null>(null);
 
   const isEditing = !!debtId;
@@ -480,6 +482,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
     }
     setErrors([]);
     setSaving(true);
+    setSaveError('');
 
     try {
       const interestRate = form.interest_rate
@@ -574,8 +577,10 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         }
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-debt errors instead of swallowing
       console.error('Failed to save debt:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -645,6 +650,13 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
       )}
 
       <form onSubmit={handleSubmit}>
+        {saveError && (
+          <ErrorBanner
+            message={saveError}
+            title="Failed to save debt"
+            onDismiss={() => setSaveError('')}
+          />
+        )}
         {/* Section 1 — Debtor Information */}
         <div className="block-card p-6 mb-4">
           <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">

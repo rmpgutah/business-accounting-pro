@@ -37,6 +37,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
   useEffect(() => { load(); }, [debtId]);
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.event_date) return;
     setSaving(true);
     try {

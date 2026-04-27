@@ -842,6 +842,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   // ─── Save ────────────────────────────────────────────
   const handleSave = async (sendAfterSave: boolean) => {
+    if (saving) return;
     const activeLines = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description.trim() || l.unit_price > 0));
 
     const lineItemErrors: string[] = [];

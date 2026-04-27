@@ -24,6 +24,16 @@ export function getDb(): Database.Database {
   return db;
 }
 
+// INTEGRITY: round a money value to 2 decimal places to avoid float drift.
+// Use at the DB write boundary anywhere we accumulate (e.g. amount_paid +=
+// payment.amount). Without this, repeated additions silently produce values
+// like 100.00000000000001 which break equality checks downstream.
+export function roundCents(value: any): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
 export function initDatabase(): Database.Database {
   const dbPath = getDbPath();
   db = new Database(dbPath);
@@ -1306,6 +1316,13 @@ const tablesWithoutUpdatedAt = new Set([
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {
+  // INTEGRITY: drop `id` and `created_at` defensively — these must never be
+  // mutated. The IPC layer also strips them but a few internal callers go
+  // through this path directly (e.g. when copying form state).
+  if (data && typeof data === 'object') {
+    if ('id' in data) delete (data as any).id;
+    if ('created_at' in data) delete (data as any).created_at;
+  }
   const serialized: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {

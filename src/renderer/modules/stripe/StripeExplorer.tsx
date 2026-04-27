@@ -140,9 +140,12 @@ const StripeExplorer: React.FC = () => {
   useEffect(() => {
     if (!activeCompany) return;
     api.stripe.testConnection(activeCompany.id).then((r) => {
-      if (r.ok) setConnectionStatus('ok');
-      else if (/No API key/i.test(r.error ?? '')) setConnectionStatus('no-key');
+      if (r?.ok) setConnectionStatus('ok');
+      else if (/No API key/i.test(r?.error ?? '')) setConnectionStatus('no-key');
       else setConnectionStatus('bad-key');
+    }).catch((err) => {
+      console.error('Stripe testConnection failed:', err);
+      setConnectionStatus('bad-key');
     });
   }, [activeCompany]);
 

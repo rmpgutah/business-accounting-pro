@@ -314,9 +314,10 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
       }
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-quote errors instead of swallowing
       console.error('Failed to save quote:', err);
-      alert('Failed to save quote. Please try again.');
+      setErrors([err?.message ?? String(err)]);
     } finally {
       setSaving(false);
     }
@@ -335,9 +336,10 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
           setModule('invoicing');
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface convert-quote errors instead of swallowing
       console.error('Convert failed:', err);
-      alert('Failed to convert quote to invoice.');
+      setErrors([`Failed to convert quote to invoice: ${err?.message ?? String(err)}`]);
     }
   };
 

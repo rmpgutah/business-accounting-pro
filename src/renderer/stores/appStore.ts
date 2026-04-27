@@ -58,10 +58,16 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'bap-app',
+      version: 1,
       partialize: (state) => ({
         currentModule: state.currentModule,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
+      // Tolerate corrupt or older-shaped persisted data.
+      migrate: (persisted: any, _version: number) => {
+        if (!persisted || typeof persisted !== 'object') return {} as any;
+        return persisted;
+      },
     }
   )
 );

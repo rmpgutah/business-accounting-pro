@@ -192,6 +192,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
 
   // ─── Save ──────────────────────────────────────────
   const handleSave = async () => {
+    if (saving) return;
     if (!data.name.trim()) {
       setError('Client name is required.');
       return;
@@ -287,9 +288,10 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       await api.saveClientContacts(savedId, contacts.map(c => ({ ...c, client_id: savedId })));
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-client errors instead of swallowing
       console.error('Failed to save client:', err);
-      setError('Failed to save client. Please try again.');
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }

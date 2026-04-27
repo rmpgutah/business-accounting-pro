@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { FileText, Check, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
@@ -93,6 +94,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   const [savingPdf, setSavingPdf] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   // ── Load templates + debt ──
   useEffect(() => {
@@ -186,8 +188,10 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
       });
 
       setSuccessMsg('Demand letter generated and logged successfully.');
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface generate-demand-letter errors instead of swallowing
       console.error('Failed to generate demand letter:', err);
+      setErrorMsg(`Failed to generate demand letter: ${err?.message ?? String(err)}`);
     } finally {
       setGenerating(false);
     }
@@ -199,8 +203,10 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
     setSavingPdf(true);
     try {
       await api.saveToPDF(generatedHtml, 'Demand Letter');
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-PDF errors instead of swallowing
       console.error('Failed to save PDF:', err);
+      setErrorMsg(`Failed to save PDF: ${err?.message ?? String(err)}`);
     } finally {
       setSavingPdf(false);
     }
@@ -228,6 +234,13 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
 
   return (
     <div className="space-y-4">
+      {errorMsg && (
+        <ErrorBanner
+          message={errorMsg}
+          title="Demand letter error"
+          onDismiss={() => setErrorMsg('')}
+        />
+      )}
       {/* Template Cards */}
       <div>
         <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">

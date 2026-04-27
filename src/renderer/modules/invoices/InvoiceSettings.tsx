@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Upload, X, Eye, GripVertical } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 import { generateInvoiceHTML, InvoiceSettings as ISettings, InvoiceColumnConfig, DEFAULT_COLUMNS } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -121,6 +122,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [settings, setSettings] = useState<FullSettings>(DEFAULT_SETTINGS);
 
@@ -173,7 +175,9 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
   }, []);
 
   const handleSave = async () => {
+    if (saving) return;
     setSaving(true);
+    setSaveError('');
     try {
       const payload = {
         ...settings,
@@ -182,9 +186,10 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
       await api.saveInvoiceSettings(payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-invoice-settings errors instead of swallowing
       console.error('Failed to save invoice settings:', err);
-      alert('Failed to save settings. Please try again.');
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -259,6 +264,13 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
         <div style={{ width: showPreview ? '520px' : '100%', flexShrink: 0, overflowY: 'auto', borderRight: showPreview ? '1px solid var(--color-border-primary)' : 'none', padding: '24px' }}>
           <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 24 }}>
 
+            {saveError && (
+              <ErrorBanner
+                message={saveError}
+                title="Failed to save invoice settings"
+                onDismiss={() => setSaveError('')}
+              />
+            )}
             {/* Template */}
             <div className="block-card">
               <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Template Style</div>

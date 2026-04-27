@@ -415,7 +415,37 @@ export const usePersonalizationStore = create<PersonalizationState>()(
         }
       },
     }),
-    { name: 'bap-personalization' }
+    {
+      name: 'bap-personalization',
+      // Perf: only persist data fields. Without partialize, every set() rewrites
+      // localStorage with all setter closures AND derived state, causing
+      // measurable lag on each preference change.
+      partialize: (s) => ({
+        themeMode: s.themeMode,
+        accents: s.accents,
+        density: s.density,
+        fontScale: s.fontScale,
+        fontFamily: s.fontFamily,
+        radius: s.radius,
+        glassIntensity: s.glassIntensity,
+        moduleAccents: s.moduleAccents,
+        dashboardTabs: s.dashboardTabs,
+        activeTabId: s.activeTabId,
+        roleDefaults: s.roleDefaults,
+        sidebarOrder: s.sidebarOrder,
+        hiddenModules: s.hiddenModules,
+        pinnedModules: s.pinnedModules,
+        favoriteModules: s.favoriteModules,
+        quickActions: s.quickActions,
+        shortcutOverrides: s.shortcutOverrides,
+        notificationPrefs: s.notificationPrefs,
+        dateFormat: s.dateFormat,
+        thousandsSep: s.thousandsSep,
+        decimalSep: s.decimalSep,
+        currencyPos: s.currencyPos,
+        onboardingComplete: s.onboardingComplete,
+      }),
+    }
   )
 );
 

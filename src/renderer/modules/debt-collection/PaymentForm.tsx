@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { DollarSign, X } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, roundCents } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtData {
@@ -39,6 +40,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
   const [saving, setSaving] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [amountWarning, setAmountWarning] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // ── Load debt data ──
   useEffect(() => {
@@ -140,6 +142,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
     }
 
     setSaving(true);
+    setSaveError('');
     const roundedAmount = roundCents(parsedAmount);
     const paymentPayload = {
       debt_id: debtId,
@@ -180,8 +183,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
       }
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface record-payment errors instead of swallowing
       console.error('Failed to record payment:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -234,6 +239,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {saveError && (
+                <ErrorBanner
+                  message={saveError}
+                  title="Failed to record payment"
+                  onDismiss={() => setSaveError('')}
+                />
+              )}
               {/* Amount + Pay Full */}
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">

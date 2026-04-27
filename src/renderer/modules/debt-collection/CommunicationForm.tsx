@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface CommunicationFormData {
@@ -53,6 +54,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
   const [templates, setTemplates] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +122,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
     e.preventDefault();
     if (saving) return;
     setSaving(true);
+    setSaveError('');
 
     const payload = {
       debt_id: debtId,
@@ -145,8 +148,9 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
       }
       onSaved();
     } catch (err: any) {
+      // VISIBILITY: surface save-communication errors instead of swallowing
       console.error('Failed to save communication:', err);
-      alert('Failed to save communication: ' + (err?.message || 'Unknown error'));
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -183,6 +187,13 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {saveError && (
+              <ErrorBanner
+                message={saveError}
+                title="Failed to save communication"
+                onDismiss={() => setSaveError('')}
+              />
+            )}
             {/* Type & Direction — 2-column */}
             <div className="grid grid-cols-2 gap-4">
               <div>
