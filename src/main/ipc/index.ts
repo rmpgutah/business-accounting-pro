@@ -24,6 +24,7 @@ import {
 } from '../services/print-preview';
 import { promises as fsp } from 'fs';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
+import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import http from 'http';
 import https from 'https';
 
@@ -3845,7 +3846,7 @@ export function registerIpcHandlers(): void {
       ).get(companyId, year, q) as any;
 
       const filingTC941 = dbInstance.prepare(
-        "SELECT * FROM tax_filing_periods WHERE company_id = ? AND tax_year = ? AND quarter = ? AND form_type = 'tc-941'"
+        "SELECT * FROM tax_filing_periods WHERE company_id = ? AND tax_year = ? AND quarter = ? AND form_type IN ('tc-941', 'TC-941')"
       ).get(companyId, year, q) as any;
 
       const ss_ee = db.roundCents(agg.total_ss);
@@ -3855,21 +3856,36 @@ export function registerIpcHandlers(): void {
       const fed_wh = db.roundCents(agg.total_federal);
       const liability_941 = db.roundCents(fed_wh + ss_ee + ss_er + med_ee + med_er);
 
+      // Compute due dates
+      const dueDates: Record<number, string> = {
+        1: `${year}-04-30`, 2: `${year}-07-31`, 3: `${year}-10-31`, 4: `${year + 1}-01-31`,
+      };
+
+      // Deposits from filing records
+      const deposits941 = filing941?.amount_paid ?? 0;
+      const depositsTC941 = filingTC941?.amount_paid ?? 0;
+
       results.push({
         quarter: q,
-        startDate,
-        endDate,
+        period_start: startDate,
+        period_end: endDate,
+        due_date: dueDates[q] || '',
+        wages: db.roundCents(agg.total_gross),
+        federal_wh: fed_wh,
+        ss_ee,
+        ss_er,
+        medicare_ee: med_ee,
+        medicare_er: med_er,
+        total_liability: liability_941,
+        deposits_made: db.roundCents(deposits941),
+        balance_due: db.roundCents(liability_941 - deposits941),
+        status_941: filing941?.status ?? 'not_filed',
+        status_tc941: filingTC941?.status ?? 'not_filed',
+        state_wages: db.roundCents(agg.total_gross),
+        state_wh: db.roundCents(agg.total_state),
+        state_deposits: db.roundCents(depositsTC941),
+        state_balance_due: db.roundCents(agg.total_state - depositsTC941),
         employee_count: agg.employee_count,
-        total_gross: db.roundCents(agg.total_gross),
-        total_federal: fed_wh,
-        total_state: db.roundCents(agg.total_state),
-        total_ss: ss_ee,
-        total_medicare: med_ee,
-        ss_employer: ss_er,
-        medicare_employer: med_er,
-        liability_941,
-        filing_941: filing941 ?? null,
-        filing_tc941: filingTC941 ?? null,
       });
     }
     return results;
@@ -3950,15 +3966,23 @@ export function registerIpcHandlers(): void {
 
     const rows = dbInstance.prepare(sql).all(...params) as any[];
     return rows.map((r: any) => ({
-      ...r,
-      box1: db.roundCents(r.box1),
-      box2: db.roundCents(r.box2),
-      box3: db.roundCents(r.box3),
-      box4: db.roundCents(r.box4),
-      box5: db.roundCents(r.box5),
-      box6: db.roundCents(r.box6),
-      box16: db.roundCents(r.box16),
-      box17: db.roundCents(r.box17),
+      employee_id: r.employee_id,
+      employee_name: r.name || 'Unknown',
+      ssn: r.ssn || '',
+      ssn_last4: r.ssn_last4 || '',
+      address_line1: r.address_line1 || '',
+      address_line2: r.address_line2 || '',
+      city: r.city || '',
+      state: r.state || '',
+      zip: r.zip || '',
+      gross_wages: db.roundCents(r.box1),
+      federal_wh: db.roundCents(r.box2),
+      ss_wages: db.roundCents(r.box3),
+      ss_tax: db.roundCents(r.box4),
+      medicare_wages: db.roundCents(r.box5),
+      medicare_tax: db.roundCents(r.box6),
+      state_wages: db.roundCents(r.box16),
+      state_wh: db.roundCents(r.box17),
     }));
   });
 
@@ -3988,15 +4012,15 @@ export function registerIpcHandlers(): void {
 
     if (!row) return null;
     return {
-      employee_count: row.employee_count,
-      box1: db.roundCents(row.box1),
-      box2: db.roundCents(row.box2),
-      box3: db.roundCents(row.box3),
-      box4: db.roundCents(row.box4),
-      box5: db.roundCents(row.box5),
-      box6: db.roundCents(row.box6),
-      box16: db.roundCents(row.box16),
-      box17: db.roundCents(row.box17),
+      total_employees: row.employee_count,
+      total_wages: db.roundCents(row.box1),
+      total_federal_wh: db.roundCents(row.box2),
+      total_ss_wages: db.roundCents(row.box3),
+      total_ss_tax: db.roundCents(row.box4),
+      total_medicare_wages: db.roundCents(row.box5),
+      total_medicare_tax: db.roundCents(row.box6),
+      total_state_wages: db.roundCents(row.box16),
+      total_state_wh: db.roundCents(row.box17),
     };
   });
 
@@ -4159,20 +4183,23 @@ export function registerIpcHandlers(): void {
 
     const rows = dbInstance.prepare(sql).all(...params) as any[];
     return rows.map((r: any) => ({
-      ...r,
-      gross: db.roundCents(r.gross),
-      federal: db.roundCents(r.federal),
-      ss: db.roundCents(r.ss),
-      medicare: db.roundCents(r.medicare),
-      state: db.roundCents(r.state),
-      net: db.roundCents(r.net),
+      employee_id: r.employee_id,
+      employee_name: r.name || 'Unknown',
+      gross_wages: db.roundCents(r.gross),
+      federal_wh: db.roundCents(r.federal),
+      ss_tax: db.roundCents(r.ss),
+      medicare_tax: db.roundCents(r.medicare),
+      state_wh: db.roundCents(r.state),
+      total_tax: db.roundCents((r.federal ?? 0) + (r.ss ?? 0) + (r.medicare ?? 0) + (r.state ?? 0)),
+      w4_filing_status: r.w4_filing_status || null,
+      w4_step2_checkbox: r.w4_step2_checkbox || 0,
+      w4_step3_dependent_credit: r.w4_step3_dependent_credit || 0,
     }));
   });
 
   ipcMain.handle('tax:calc-payroll', (_event, { grossPay, payFrequency, w4, utah, ytdGross }: any) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return null;
-    const { calculateFullPayroll } = require('../services/TaxCalculationEngine');
     return calculateFullPayroll(grossPay, payFrequency, w4, utah, ytdGross, companyId, 2026);
   });
 

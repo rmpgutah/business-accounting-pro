@@ -90,7 +90,7 @@ const TaxReports: React.FC = () => {
     if (!activeCompany) return;
     api
       .rawQuery(
-        'SELECT id, first_name || \' \' || last_name AS name FROM employees WHERE company_id = ? AND status = \'active\' ORDER BY last_name',
+        'SELECT id, name FROM employees WHERE company_id = ? AND status = \'active\' ORDER BY name',
         [activeCompany.id]
       )
       .then((rows: any[]) => setEmployees(Array.isArray(rows) ? rows : []))
