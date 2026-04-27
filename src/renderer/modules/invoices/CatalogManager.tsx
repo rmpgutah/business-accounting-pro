@@ -3,19 +3,34 @@ import { ArrowLeft, Plus, Search, Trash2, Package, CheckCircle } from 'lucide-re
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
+//
+// IMPORTANT: form-state property names must match the actual SQLite columns
+// on `invoice_catalog_items`. The generic `db.create`/`db.update` IPC builds
+// the SQL by spreading whatever keys are in the payload, so a key with no
+// matching column raises `SqliteError: no such column ...` and the row never
+// persists. Use the schema names directly:
+//   item_code   (not "sku")
+//   unit_price  (not "default_price")
+//   unit_label  (not "default_unit")
+//   tax_rate    (not "default_tax_rate")
+//   default_quantity (added via migration so we can default fill on invoices)
+//
+// User-facing labels remain friendly ("Default Price", etc.) — only the
+// state property names are aligned with the DB.
 interface CatalogItem {
   id: string;
   company_id: string;
   name: string;
   description: string;
-  default_price: number;
+  unit_price: number;
   default_quantity: number;
-  default_unit: string;
-  default_tax_rate: number;
+  unit_label: string;
+  tax_rate: number;
   account_id: string;
-  sku: string;
+  item_code: string;
   created_at: string;
 }
 
@@ -28,22 +43,22 @@ interface Account {
 interface FormState {
   name: string;
   description: string;
-  sku: string;
-  default_price: number;
+  item_code: string;
+  unit_price: number;
   default_quantity: number;
-  default_unit: string;
-  default_tax_rate: number;
+  unit_label: string;
+  tax_rate: number;
   account_id: string;
 }
 
 const EMPTY_FORM: FormState = {
   name: '',
   description: '',
-  sku: '',
-  default_price: 0,
+  item_code: '',
+  unit_price: 0,
   default_quantity: 1,
-  default_unit: '',
-  default_tax_rate: 0,
+  unit_label: '',
+  tax_rate: 0,
   account_id: '',
 };
 
@@ -61,6 +76,8 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Surface save failures so future schema drift can't hide silently.
+  const [saveError, setSaveError] = useState('');
 
   const reload = useCallback(async () => {
     if (!activeCompany) return;
@@ -89,25 +106,28 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
       (i) =>
         i.name.toLowerCase().includes(q) ||
         i.description.toLowerCase().includes(q) ||
-        (i.sku || '').toLowerCase().includes(q)
+        (i.item_code || '').toLowerCase().includes(q)
     );
   }, [items, search]);
 
   const handleNew = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setSaveError('');
   };
 
   const handleEdit = (item: CatalogItem) => {
     setEditingId(item.id);
+    setSaveError('');
     setForm({
       name: item.name,
       description: item.description || '',
-      sku: item.sku || '',
-      default_price: item.default_price || 0,
-      default_quantity: item.default_quantity || 1,
-      default_unit: item.default_unit || '',
-      default_tax_rate: item.default_tax_rate || 0,
+      // Read schema column names so prior values round-trip on edit.
+      item_code: item.item_code || '',
+      unit_price: Number(item.unit_price) || 0,
+      default_quantity: Number(item.default_quantity) || 1,
+      unit_label: item.unit_label || '',
+      tax_rate: Number(item.tax_rate) || 0,
       account_id: item.account_id || '',
     });
   };
@@ -115,21 +135,26 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
   const handleSave = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
+    setSaveError('');
     try {
       if (editingId) {
-        await api.update('invoice_catalog_items', editingId, form);
+        const res: any = await api.update('invoice_catalog_items', editingId, form);
+        // db.update returns the row OR { error } on IPC failure paths
+        if (res && typeof res === 'object' && 'error' in res) throw new Error(String(res.error));
       } else {
         const result: any = await api.create('invoice_catalog_items', {
           ...form,
           company_id: activeCompany?.id,
         });
+        if (result && typeof result === 'object' && 'error' in result) throw new Error(String(result.error));
         if (result?.id) setEditingId(result.id);
       }
       await reload();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save catalog item:', err);
+      setSaveError(err?.message || 'Save failed. Open DevTools console for details.');
     } finally {
       setSaving(false);
     }
@@ -217,13 +242,13 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                       )}
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-xs font-mono text-accent-income">
-                          {formatCurrency(item.default_price)}
+                          {formatCurrency(item.unit_price)}
                         </span>
-                        {item.default_unit && (
-                          <span className="text-[10px] text-text-muted">/ {item.default_unit}</span>
+                        {item.unit_label && (
+                          <span className="text-[10px] text-text-muted">/ {item.unit_label}</span>
                         )}
-                        {item.sku && (
-                          <span className="text-[10px] font-mono text-text-muted">SKU: {item.sku}</span>
+                        {item.item_code && (
+                          <span className="text-[10px] font-mono text-text-muted">SKU: {item.item_code}</span>
                         )}
                       </div>
                     </div>
@@ -247,6 +272,15 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
         {/* Right: form */}
         <div className="col-span-3 flex flex-col overflow-y-auto">
           <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
+            {/* Save errors surface here — replaces the silent console.error
+                that hid the schema/form mismatch for so long. */}
+            {saveError && (
+              <ErrorBanner
+                title="Failed to save catalog item"
+                message={saveError}
+                onDismiss={() => setSaveError('')}
+              />
+            )}
             <div className="flex items-center justify-between pb-2 border-b border-border-primary">
               <h3 className="text-sm font-bold text-text-primary">
                 {editingId ? 'Edit Item' : 'New Item'}
@@ -293,8 +327,8 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                 <input
                   className="block-input"
                   placeholder="e.g. WEB-DESIGN-001"
-                  value={form.sku}
-                  onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+                  value={form.item_code}
+                  onChange={(e) => setForm((f) => ({ ...f, item_code: e.target.value }))}
                 />
               </div>
               <div>
@@ -304,8 +338,8 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                 <input
                   className="block-input"
                   placeholder="hrs, ea, kg, etc."
-                  value={form.default_unit}
-                  onChange={(e) => setForm((f) => ({ ...f, default_unit: e.target.value }))}
+                  value={form.unit_label}
+                  onChange={(e) => setForm((f) => ({ ...f, unit_label: e.target.value }))}
                 />
               </div>
             </div>
@@ -320,8 +354,8 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                   step="0.01"
                   min="0"
                   className="block-input font-mono"
-                  value={form.default_price}
-                  onChange={(e) => setForm((f) => ({ ...f, default_price: parseFloat(e.target.value) || 0 }))}
+                  value={form.unit_price}
+                  onChange={(e) => setForm((f) => ({ ...f, unit_price: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
               <div>
@@ -346,8 +380,8 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                   step="0.01"
                   min="0"
                   className="block-input font-mono"
-                  value={form.default_tax_rate}
-                  onChange={(e) => setForm((f) => ({ ...f, default_tax_rate: parseFloat(e.target.value) || 0 }))}
+                  value={form.tax_rate}
+                  onChange={(e) => setForm((f) => ({ ...f, tax_rate: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
             </div>

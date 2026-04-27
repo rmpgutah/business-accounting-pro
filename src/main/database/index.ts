@@ -90,6 +90,10 @@ export function initDatabase(): Database.Database {
     "ALTER TABLE invoice_settings ADD COLUMN show_payment_qr INTEGER DEFAULT 0",
     "ALTER TABLE invoice_catalog_items ADD COLUMN item_code TEXT DEFAULT ''",
     "ALTER TABLE invoice_catalog_items ADD COLUMN unit_label TEXT DEFAULT ''",
+    // Catalog form needs a default quantity that auto-fills onto invoice
+    // line items (e.g. "License Pack — 5 seats" defaults qty=5). Idempotent
+    // ALTER (existing rows get DEFAULT 1).
+    "ALTER TABLE invoice_catalog_items ADD COLUMN default_quantity REAL DEFAULT 1",
     `CREATE TABLE IF NOT EXISTS invoice_payment_schedule (
       id TEXT PRIMARY KEY,
       invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
