@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
   Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download, PenTool,
+  Calculator, Landmark,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import ImportExport from './ImportExport';
@@ -348,6 +350,11 @@ export default function SettingsModule() {
   });
   const [backupMsg, setBackupMsg] = useState('');
 
+  // ── Federal / Utah Tax Config ──
+  const [taxYear, setTaxYear] = useState(2026);
+  const [fedConstants, setFedConstants] = useState<any>(null);
+  const [utahConfig, setUtahConfig] = useState({ flat_rate: '4.55', personal_exemption_credit: '393', sui_rate: '1.20', sui_wage_base: '44800', wc_rate: '0.80', wc_class_code: '8810' });
+
   // ─── Load ─────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
@@ -397,6 +404,42 @@ export default function SettingsModule() {
   useEffect(() => {
     if (activeCompany) setCompanyForm({ ...activeCompany });
   }, [activeCompany]);
+
+  // ─── Load federal constants & Utah config when year changes ──
+  useEffect(() => {
+    window.electronAPI.invoke('tax:get-brackets', { year: taxYear }).then((data: any) => {
+      if (data?.constants) setFedConstants(data.constants);
+    }).catch(() => {});
+    api.taxGetUtahConfig(taxYear).then((data: any) => {
+      if (data) {
+        setUtahConfig({
+          flat_rate: String((data.flat_rate * 100).toFixed(2)),
+          personal_exemption_credit: String(data.personal_exemption_credit),
+          sui_rate: String((data.sui_rate * 100).toFixed(2)),
+          sui_wage_base: String(data.sui_wage_base),
+          wc_rate: String((data.wc_rate * 100).toFixed(2)),
+          wc_class_code: data.wc_class_code || '8810',
+        });
+      }
+    }).catch(() => {});
+  }, [taxYear]);
+
+  const handleSeedYear = async () => {
+    await window.electronAPI.invoke('tax:seed-year', { year: taxYear });
+    const data = await window.electronAPI.invoke('tax:get-brackets', { year: taxYear });
+    if (data?.constants) setFedConstants(data.constants);
+  };
+
+  const handleSaveUtahConfig = async () => {
+    await api.taxSaveUtahConfig(taxYear, {
+      flat_rate: parseFloat(utahConfig.flat_rate) / 100,
+      personal_exemption_credit: parseFloat(utahConfig.personal_exemption_credit),
+      sui_rate: parseFloat(utahConfig.sui_rate) / 100,
+      sui_wage_base: parseFloat(utahConfig.sui_wage_base),
+      wc_rate: parseFloat(utahConfig.wc_rate) / 100,
+      wc_class_code: utahConfig.wc_class_code,
+    });
+  };
 
   // ─── Save helpers ─────────────────────────────────────
   const saveSetting = useCallback(async (key: string, value: string) => {
@@ -1018,6 +1061,80 @@ export default function SettingsModule() {
 
       {/* ── Data Import / Export ────────────────────────── */}
       <ImportExport />
+
+      {/* ── Federal Tax Configuration ──────────────────── */}
+      <SectionCard icon={Calculator} title="Federal Tax Configuration" description="IRS rates, brackets, and FICA settings">
+        {/* Year Selector */}
+        <Field label="Tax Year">
+          <select value={taxYear} onChange={e => setTaxYear(Number(e.target.value))} className="block-select">
+            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </Field>
+
+        {/* Standard Deductions (read-only) */}
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <Field label="Single Std Deduction">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.standard_deduction_single ?? 0)}</div>
+          </Field>
+          <Field label="MFJ Std Deduction">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.standard_deduction_married ?? 0)}</div>
+          </Field>
+          <Field label="HoH Std Deduction">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.standard_deduction_hoh ?? 0)}</div>
+          </Field>
+        </div>
+
+        {/* FICA Rates (read-only) */}
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <Field label="SS Rate">
+            <div className="text-sm font-mono text-text-primary">{((fedConstants?.ss_rate ?? 0.062) * 100).toFixed(2)}%</div>
+          </Field>
+          <Field label="SS Wage Base">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.ss_wage_base ?? 0)}</div>
+          </Field>
+          <Field label="Medicare Rate">
+            <div className="text-sm font-mono text-text-primary">{((fedConstants?.medicare_rate ?? 0.0145) * 100).toFixed(2)}%</div>
+          </Field>
+        </div>
+
+        {/* Seed/Reset Button */}
+        <button onClick={handleSeedYear} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: '6px' }}>
+          Reset {taxYear} to Defaults
+        </button>
+      </SectionCard>
+
+      {/* ── Utah State Tax ─────────────────────────────── */}
+      <SectionCard icon={Landmark} title="Utah State Tax" description="TC-40W withholding, SUI, and workers' comp">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Flat Withholding Rate (%)" hint="Utah TC-40W rate (default 4.55%)">
+            <input type="number" value={utahConfig.flat_rate} onChange={e => setUtahConfig(c => ({ ...c, flat_rate: e.target.value }))}
+              className="block-input" step="0.01" min="0" max="100" />
+          </Field>
+          <Field label="Personal Exemption Credit ($)">
+            <input type="number" value={utahConfig.personal_exemption_credit} onChange={e => setUtahConfig(c => ({ ...c, personal_exemption_credit: e.target.value }))}
+              className="block-input" step="1" min="0" />
+          </Field>
+          <Field label="SUI Rate (%)" hint="Employer-specific experience rate">
+            <input type="number" value={utahConfig.sui_rate} onChange={e => setUtahConfig(c => ({ ...c, sui_rate: e.target.value }))}
+              className="block-input" step="0.01" min="0" />
+          </Field>
+          <Field label="SUI Wage Base ($)">
+            <input type="number" value={utahConfig.sui_wage_base} onChange={e => setUtahConfig(c => ({ ...c, sui_wage_base: e.target.value }))}
+              className="block-input" step="100" min="0" />
+          </Field>
+          <Field label="Workers' Comp Rate (%)">
+            <input type="number" value={utahConfig.wc_rate} onChange={e => setUtahConfig(c => ({ ...c, wc_rate: e.target.value }))}
+              className="block-input" step="0.01" min="0" />
+          </Field>
+          <Field label="WC Class Code">
+            <input type="text" value={utahConfig.wc_class_code} onChange={e => setUtahConfig(c => ({ ...c, wc_class_code: e.target.value }))}
+              className="block-input" placeholder="8810" />
+          </Field>
+        </div>
+        <button onClick={handleSaveUtahConfig} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: '6px' }}>
+          Save Utah Config
+        </button>
+      </SectionCard>
 
       {/* ── Danger Zone ─────────────────────────────────── */}
       <DangerZone />

@@ -1147,6 +1147,50 @@ export function initDatabase(): Database.Database {
     UNIQUE(company_id, dimension, value)
   )`,
   "CREATE INDEX IF NOT EXISTS idx_class_settings_co ON classification_settings(company_id, dimension)",
+  // Tax System (2026-04-27) — Employee W-4 fields for 2020+ W-4
+  "ALTER TABLE employees ADD COLUMN w4_filing_status TEXT DEFAULT 'single'",
+  "ALTER TABLE employees ADD COLUMN w4_step2_checkbox INTEGER DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN w4_step3_dependent_credit REAL DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN w4_step4a_other_income REAL DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN w4_step4b_deductions REAL DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN w4_step4c_extra_withholding REAL DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN ut_exemptions INTEGER DEFAULT 1",
+  "ALTER TABLE employees ADD COLUMN ut_additional_withholding REAL DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN w4_received_date TEXT DEFAULT ''",
+  // Tax System (2026-04-27) — Utah withholding config
+  `CREATE TABLE IF NOT EXISTS utah_withholding_config (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    flat_rate REAL NOT NULL DEFAULT 0.0455,
+    personal_exemption_credit REAL NOT NULL DEFAULT 393,
+    sui_rate REAL NOT NULL DEFAULT 0.012,
+    sui_wage_base REAL NOT NULL DEFAULT 44800,
+    wc_rate REAL NOT NULL DEFAULT 0.008,
+    wc_class_code TEXT DEFAULT '8810',
+    wc_carrier TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, tax_year)
+  )`,
+  // Tax System (2026-04-27) — Tax filing period tracking
+  `CREATE TABLE IF NOT EXISTS tax_filing_periods (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    quarter INTEGER NOT NULL,
+    form_type TEXT NOT NULL,
+    status TEXT DEFAULT 'not_filed',
+    filed_date TEXT DEFAULT '',
+    confirmation_number TEXT DEFAULT '',
+    amount_due REAL DEFAULT 0,
+    amount_paid REAL DEFAULT 0,
+    payment_date TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, tax_year, quarter, form_type)
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

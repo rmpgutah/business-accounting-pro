@@ -29,6 +29,15 @@ interface Employee {
   state_allowances?: number;
   start_date?: string;
   routing_number?: string;
+  // W-4 / Utah withholding fields (from EmployeeForm tax section)
+  w4_filing_status?: string;
+  w4_step2_checkbox?: number;
+  w4_step3_dependent_credit?: number;
+  w4_step4a_other_income?: number;
+  w4_step4b_deductions?: number;
+  w4_step4c_extra_withholding?: number;
+  ut_exemptions?: number;
+  ut_additional_withholding?: number;
 }
 
 interface EmployeeDeduction {
@@ -454,21 +463,80 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     return map;
   }, [employees, hoursMap, stateTaxMap]);
 
-  // ─── Calculations ─────────────────────────────────────
-  const calculations = useMemo(() => {
-    return employees.map((emp) =>
-      calcPayStub(
-        emp,
-        hoursMap[emp.id],
-        adjustedStateTaxMap[emp.id],
-        deductionsByEmployee[emp.id],
-        runType,
-        periodStart,
-        periodEnd,
-        bonusMap[emp.id],
-        ytdMap[emp.id],
-      )
-    );
+  // ─── Calculations (async to allow TaxCalculationEngine override) ──
+  const [calculations, setCalculations] = useState<PayCalc[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const computeAll = async () => {
+      // Step 1: Compute all stubs synchronously (inline math — always runs)
+      const baseCalcs = employees.map((emp) =>
+        calcPayStub(
+          emp,
+          hoursMap[emp.id],
+          adjustedStateTaxMap[emp.id],
+          deductionsByEmployee[emp.id],
+          runType,
+          periodStart,
+          periodEnd,
+          bonusMap[emp.id],
+          ytdMap[emp.id],
+        )
+      );
+
+      // Step 2: For employees with W-4 data, override taxes via TaxCalculationEngine
+      const finalCalcs = await Promise.all(
+        baseCalcs.map(async (calc) => {
+          const emp = calc.employee;
+          if (!emp.w4_filing_status) return calc;
+          try {
+            const engineResult = await api.taxCalcPayroll(
+              calc.gross_pay,
+              emp.pay_schedule,
+              {
+                w4_filing_status: emp.w4_filing_status,
+                w4_step2_checkbox: !!emp.w4_step2_checkbox,
+                w4_step3_dependent_credit: emp.w4_step3_dependent_credit ?? 0,
+                w4_step4a_other_income: emp.w4_step4a_other_income ?? 0,
+                w4_step4b_deductions: emp.w4_step4b_deductions ?? 0,
+                w4_step4c_extra_withholding: emp.w4_step4c_extra_withholding ?? 0,
+              },
+              {
+                ut_exemptions: emp.ut_exemptions ?? 1,
+                ut_additional_withholding: emp.ut_additional_withholding ?? 0,
+              },
+              ytdMap[emp.id]?.ytdGross ?? 0,
+            );
+            if (engineResult) {
+              const updated = { ...calc };
+              updated.federal_tax = roundCents(engineResult.federal_withholding);
+              updated.state_tax = roundCents(engineResult.utah_withholding);
+              updated.social_security = roundCents(engineResult.ss_employee);
+              updated.medicare = roundCents(engineResult.medicare_employee);
+              updated.employer_ss = roundCents(engineResult.ss_employer);
+              updated.employer_medicare = roundCents(engineResult.medicare_employer);
+              updated.employer_futa = roundCents(engineResult.futa);
+              // Recalculate net pay with engine-provided tax values
+              updated.net_pay = roundCents(
+                updated.gross_pay - updated.federal_tax - updated.state_tax -
+                updated.social_security - updated.medicare -
+                updated.pre_tax_deductions - updated.post_tax_deductions
+              );
+              return updated;
+            }
+          } catch (err) {
+            console.warn('Tax engine fallback — using inline calc for', emp.name, err);
+          }
+          return calc;
+        })
+      );
+
+      if (!cancelled) setCalculations(finalCalcs);
+    };
+
+    computeAll();
+    return () => { cancelled = true; };
   }, [employees, hoursMap, adjustedStateTaxMap, deductionsByEmployee, runType, periodStart, periodEnd, bonusMap, ytdMap]);
 
   const totals = useMemo(() => {

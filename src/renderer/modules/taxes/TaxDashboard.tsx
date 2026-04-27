@@ -2,380 +2,467 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {
   DollarSign,
   TrendingUp,
-  Calculator,
+  Shield,
   AlertTriangle,
-  Calendar,
   CheckCircle,
   Clock,
+  ChevronDown,
 } from 'lucide-react';
-import { format as fmtDate } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, roundCents } from '../../lib/format';
-import { fiscalYearStart, fiscalYearEnd } from '../../lib/date-helpers';
-import {
-  FEDERAL_BRACKETS_2025,
-  STANDARD_DEDUCTION_2025,
-  calcFederalTaxAnnual,
-  type FilingStatus,
-} from '../../lib/tax-brackets';
+import { formatCurrency, formatDate } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
-interface QuarterPayment {
-  quarter: string;
-  dueDate: string;
-  amount: number;
-  paid: boolean;
-  paidAmount: number;
+interface DashboardData {
+  ytd_payroll: number;
+  ytd_federal: number;
+  ytd_state: number;
+  ytd_fica: number;
+  py_payroll: number;
+  filings: Array<{
+    form_type: string;
+    quarter: number;
+    status: string;
+    filed_date?: string;
+  }>;
+  quarters: Array<{
+    quarter: number;
+    federal: number;
+    state: number;
+    fica: number;
+  }>;
 }
 
-
-const SE_TAX_RATE = 0.153;
-const SE_INCOME_FACTOR = 0.9235;
-
-function calcSelfEmploymentTax(netIncome: number): number {
-  const seIncome = netIncome * SE_INCOME_FACTOR;
-  return Math.max(0, seIncome * SE_TAX_RATE);
-}
-
-// ─── Quarterly Due Dates ────────────────────────────────
-function getQuarterlyDueDates(year: number): { quarter: string; dueDate: string }[] {
-  return [
-    { quarter: 'Q1 (Jan-Mar)', dueDate: `${year}-04-15` },
-    { quarter: 'Q2 (Apr-May)', dueDate: `${year}-06-15` },
-    { quarter: 'Q3 (Jun-Aug)', dueDate: `${year}-09-15` },
-    { quarter: 'Q4 (Sep-Dec)', dueDate: `${year + 1}-01-15` },
-  ];
-}
-
-// ─── Stat Card ──────────────────────────────────────────
-interface StatCardProps {
+interface Deadline {
+  form: string;
   label: string;
-  value: string;
-  icon: React.ReactNode;
-  accentClass: string;
-  subtitle?: string;
+  quarter?: number;
+  dueDate: Date;
+  daysUntil: number;
+  status: 'filed' | 'not_filed' | 'overdue';
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, value, icon, accentClass, subtitle }) => (
+// ─── Due date computation ───────────────────────────────
+function computeDeadlines(year: number, filings: DashboardData['filings']): Deadline[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const quarterDueDates: { q: number; month: number; day: number; year: number }[] = [
+    { q: 1, month: 3, day: 30, year },     // Apr 30
+    { q: 2, month: 6, day: 31, year },     // Jul 31
+    { q: 3, month: 9, day: 31, year },     // Oct 31
+    { q: 4, month: 0, day: 31, year: year + 1 }, // Jan 31 next year
+  ];
+
+  const deadlines: Deadline[] = [];
+
+  // 941 / TC-941 / SUI per quarter
+  for (const { q, month, day, year: dueYear } of quarterDueDates) {
+    const due = new Date(dueYear, month, day);
+    const daysUntil = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+
+    for (const form of ['941', 'TC-941', 'SUI'] as const) {
+      const filing = filings.find((f) => f.form_type === form && f.quarter === q);
+      const status: Deadline['status'] =
+        filing?.status === 'filed' ? 'filed' : daysUntil < 0 ? 'overdue' : 'not_filed';
+
+      deadlines.push({
+        form,
+        label: form === '941' ? 'Federal 941' : form === 'TC-941' ? 'Utah TC-941' : 'Utah SUI',
+        quarter: q,
+        dueDate: due,
+        daysUntil,
+        status,
+      });
+    }
+  }
+
+  // 940 (FUTA) - Jan 31 of following year
+  const futaDue = new Date(year + 1, 0, 31);
+  const futaDays = Math.ceil((futaDue.getTime() - today.getTime()) / 86_400_000);
+  const futaFiling = filings.find((f) => f.form_type === '940');
+  deadlines.push({
+    form: '940',
+    label: 'FUTA 940',
+    dueDate: futaDue,
+    daysUntil: futaDays,
+    status: futaFiling?.status === 'filed' ? 'filed' : futaDays < 0 ? 'overdue' : 'not_filed',
+  });
+
+  // W-2 / W-3 - Jan 31 of following year
+  const w2Due = new Date(year + 1, 0, 31);
+  const w2Days = Math.ceil((w2Due.getTime() - today.getTime()) / 86_400_000);
+  const w2Filing = filings.find((f) => f.form_type === 'W-2');
+  const w3Filing = filings.find((f) => f.form_type === 'W-3');
+  deadlines.push({
+    form: 'W-2',
+    label: 'W-2 (Employees)',
+    dueDate: w2Due,
+    daysUntil: w2Days,
+    status: w2Filing?.status === 'filed' ? 'filed' : w2Days < 0 ? 'overdue' : 'not_filed',
+  });
+  deadlines.push({
+    form: 'W-3',
+    label: 'W-3 (Transmittal)',
+    dueDate: w2Due,
+    daysUntil: w2Days,
+    status: w3Filing?.status === 'filed' ? 'filed' : w2Days < 0 ? 'overdue' : 'not_filed',
+  });
+
+  return deadlines;
+}
+
+// ─── KPI Card ───────────────────────────────────────────
+const KPICard: React.FC<{
+  label: string;
+  value: number;
+  subtitle?: string;
+  borderColor: string;
+}> = ({ label, value, subtitle, borderColor }) => (
   <div
-    className={`block-card p-4 border-l-2 ${accentClass}`}
+    className={`block-card p-4 border-l-2 ${borderColor}`}
     style={{ borderRadius: '6px' }}
   >
-    <div className="flex items-start justify-between">
-      <div>
-        <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
-          {label}
-        </span>
-        <p className="text-2xl font-mono text-text-primary mt-1">{value}</p>
-        {subtitle && (
-          <span className="text-xs text-text-muted mt-0.5 block">{subtitle}</span>
-        )}
-      </div>
-      <div
-        className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-        style={{ borderRadius: '6px' }}
-      >
-        {icon}
-      </div>
-    </div>
+    <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+      {label}
+    </span>
+    <p className="text-2xl font-mono text-text-primary mt-1">{formatCurrency(value)}</p>
+    {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
   </div>
 );
 
 // ─── Component ──────────────────────────────────────────
 const TaxDashboard: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const [ytdIncome, setYtdIncome] = useState(0);
-  const [ytdExpenses, setYtdExpenses] = useState(0);
-  const [taxPayments, setTaxPayments] = useState<any[]>([]);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  // Filing status drives the bracket table and standard deduction.
-  // Default to single; can be wired to a settings field later.
-  const [filingStatus] = useState<FilingStatus>('single');
-  const FEDERAL_BRACKETS = FEDERAL_BRACKETS_2025[filingStatus];
-  const STD_DEDUCTION = STANDARD_DEDUCTION_2025[filingStatus];
-
+  const [error, setError] = useState('');
   const currentYear = new Date().getFullYear();
-  // DATE: Item #9 — fiscal-year-aware bounds. Falls back to calendar Jan-Dec
-  // when no fiscal_year_start is configured. The `currentYear` (calendar) is
-  // still used for the tax_payments lookup keyed by tax filing year.
-  const fyMonth = activeCompany?.fiscal_year_start || 1;
-  const yearStart = fiscalYearStart(new Date(), fyMonth);
-  const yearEnd = fiscalYearEnd(new Date(), fyMonth);
-  // toISOString() returns the UTC date, which is wrong for users west of
-  // UTC late in the day (would mark the next quarterly deadline as already
-  // past). Use local-date format() so "today" matches what the user sees.
-  const today = fmtDate(new Date(), 'yyyy-MM-dd');
+  const [year, setYear] = useState(currentYear);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!activeCompany) return;
-      try {
-        // Bug fix #7: rawQuery calls were missing company_id — showed all-company totals.
-        const [incomeData, expenseData, payments] = await Promise.all([
-          api.rawQuery(
-            `SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE company_id = ? AND status = 'paid' AND issue_date BETWEEN ? AND ?`,
-            [activeCompany.id, yearStart, yearEnd]
-          ),
-          api.rawQuery(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date BETWEEN ? AND ?`,
-            [activeCompany.id, yearStart, yearEnd]
-          ),
-          api.query('tax_payments', { company_id: activeCompany.id, year: currentYear }),
-        ]);
-        if (cancelled) return;
-        setYtdIncome(incomeData?.[0]?.total ?? 0);
-        setYtdExpenses(expenseData?.[0]?.total ?? 0);
-        setTaxPayments(Array.isArray(payments) ? payments : []);
-      } catch (err) {
-        console.error('Failed to load tax data:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [activeCompany, currentYear, yearStart, yearEnd]);
+    if (!activeCompany) return;
+    setLoading(true);
+    setError('');
+    api
+      .taxDashboardSummary(year)
+      .then((d) => setData(d))
+      .catch((err) => {
+        console.error('Failed to load tax dashboard:', err);
+        setError(err?.message || 'Failed to load tax dashboard data');
+      })
+      .finally(() => setLoading(false));
+  }, [activeCompany, year]);
 
-  const netIncome = useMemo(() => Math.max(0, ytdIncome - ytdExpenses), [ytdIncome, ytdExpenses]);
-  // Apply filing-status-aware standard deduction before bracket calc.
-  const taxableIncome = useMemo(() => Math.max(0, netIncome - STD_DEDUCTION), [netIncome, STD_DEDUCTION]);
-  const federalTax = useMemo(() => calcFederalTaxAnnual(taxableIncome, filingStatus), [taxableIncome, filingStatus]);
-  // SE tax is computed on net SE earnings, NOT on taxable income after std deduction.
-  const seTax = useMemo(() => calcSelfEmploymentTax(netIncome), [netIncome]);
-  const totalEstimatedTax = roundCents(federalTax + seTax);
+  // Upcoming deadlines
+  const deadlines = useMemo(() => {
+    if (!data) return [];
+    return computeDeadlines(year, data.filings);
+  }, [data, year]);
 
-  // Quarterly amounts: round Q1-Q3 to cents, stuff remainder into Q4 so the
-  // four rows sum to exactly totalEstimatedTax (no penny drift).
-  const quarterlyAmounts = useMemo(() => {
-    const q = roundCents(totalEstimatedTax / 4);
-    const q4 = roundCents(totalEstimatedTax - q * 3);
-    return [q, q, q, q4];
-  }, [totalEstimatedTax]);
+  // Filter to unfiled/overdue and sort by most urgent
+  const upcomingDeadlines = useMemo(
+    () =>
+      deadlines
+        .filter((d) => d.status !== 'filed')
+        .sort((a, b) => a.daysUntil - b.daysUntil)
+        .slice(0, 8),
+    [deadlines]
+  );
 
-  const quarters = useMemo(() => {
-    const dueDates = getQuarterlyDueDates(currentYear);
-    return dueDates.map((q, i) => {
-      const paymentsForQ = taxPayments.filter(
-        (p) => p.period === q.quarter || p.period === q.quarter.split(' ')[0]
-      );
-      const paidAmount = paymentsForQ.reduce((s: number, p: any) => s + (p.amount || 0), 0);
-      const amount = quarterlyAmounts[i];
-      return {
-        ...q,
-        amount,
-        paid: amount > 0 && paidAmount >= amount,
-        paidAmount,
-      } as QuarterPayment;
-    });
-  }, [currentYear, taxPayments, quarterlyAmounts]);
+  // Quarterly chart data
+  const quarterlyMax = useMemo(() => {
+    if (!data?.quarters) return 1;
+    return Math.max(
+      ...data.quarters.map((q) => q.federal + q.state + q.fica),
+      1
+    );
+  }, [data]);
 
-  const nextDue = quarters.find((q) => !q.paid && q.dueDate >= today);
+  // Filing status grid forms
+  const FORM_TYPES = ['941', 'TC-941', 'SUI', '940', 'W-2', 'W-3'];
+  const QUARTERS = [1, 2, 3, 4];
 
-  const effectiveRate = netIncome > 0 ? (totalEstimatedTax / netIncome) * 100 : 0;
+  const getFilingStatus = (form: string, quarter: number): string => {
+    if (!data?.filings) return 'not_filed';
+    const filing = data.filings.find(
+      (f) => f.form_type === form && f.quarter === quarter
+    );
+    return filing?.status || 'not_filed';
+  };
+
+  const yearRange = useMemo(() => {
+    const years: number[] = [];
+    for (let y = currentYear - 3; y <= currentYear + 1; y++) years.push(y);
+    return years;
+  }, [currentYear]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-text-muted text-sm">
-        Loading tax data...
+        Loading tax dashboard...
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Next Payment Due Alert */}
-      {nextDue && (
-        <div
-          className="block-card p-4 border-l-2 border-l-accent-warning flex items-center gap-3"
-          style={{ borderRadius: '6px' }}
-        >
-          <AlertTriangle size={18} className="text-accent-warning flex-shrink-0" />
-          <div className="flex-1">
-            <span className="text-sm font-semibold text-text-primary">
-              Next Estimated Payment Due
-            </span>
-            <p className="text-xs text-text-muted mt-0.5">
-              {nextDue.quarter} &mdash; {formatCurrency(nextDue.amount)} due by{' '}
-              {formatDate(nextDue.dueDate)}
-            </p>
-          </div>
-          <span className="text-lg font-mono font-bold text-accent-warning">
-            {formatCurrency(nextDue.amount)}
-          </span>
-        </div>
+      {error && (
+        <ErrorBanner message={error} title="Dashboard Error" onDismiss={() => setError('')} />
       )}
 
-      {/* Stat Cards */}
+      {/* Year selector */}
+      <div className="flex items-center gap-3">
+        <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+          Tax Year
+        </span>
+        <div className="relative">
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="block-select text-sm pr-8"
+            style={{ borderRadius: '6px' }}
+          >
+            {yearRange.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={14}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+          />
+        </div>
+      </div>
+
+      {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard
-          label="YTD Income"
-          value={formatCurrency(ytdIncome)}
-          icon={<TrendingUp size={16} className="text-accent-income" />}
-          accentClass="border-l-accent-income"
+        <KPICard
+          label="YTD Payroll"
+          value={data?.ytd_payroll ?? 0}
+          borderColor="border-l-accent-blue"
+          subtitle={
+            data && data.py_payroll > 0
+              ? `vs PY: ${formatCurrency(data.py_payroll)}`
+              : undefined
+          }
         />
-        <StatCard
-          label="YTD Deductible Expenses"
-          value={formatCurrency(ytdExpenses)}
-          icon={<DollarSign size={16} className="text-accent-expense" />}
-          accentClass="border-l-accent-expense"
+        <KPICard
+          label="YTD Federal Tax"
+          value={data?.ytd_federal ?? 0}
+          borderColor="border-l-accent-expense"
         />
-        <StatCard
-          label="Est. Taxable Income"
-          value={formatCurrency(netIncome)}
-          icon={<Calculator size={16} className="text-accent-blue" />}
-          accentClass="border-l-accent-blue"
+        <KPICard
+          label="YTD State Tax"
+          value={data?.ytd_state ?? 0}
+          borderColor="border-l-accent-warning"
         />
-        <StatCard
-          label="Est. Total Tax Liability"
-          value={formatCurrency(totalEstimatedTax)}
-          icon={<AlertTriangle size={16} className="text-accent-warning" />}
-          accentClass="border-l-accent-warning"
-          subtitle={`Effective rate: ${effectiveRate.toFixed(1)}%`}
+        <KPICard
+          label="YTD FICA"
+          value={data?.ytd_fica ?? 0}
+          borderColor="border-l-accent-income"
         />
       </div>
 
-      {/* Tax Breakdown */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Tax Breakdown
-          </h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-text-secondary">Federal Income Tax</span>
-              <span className="text-sm font-mono text-text-primary">{formatCurrency(federalTax)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-text-secondary">
-                Self-Employment Tax (15.3%)
-              </span>
-              <span className="text-sm font-mono text-text-primary">{formatCurrency(seTax)}</span>
-            </div>
-            <div
-              className="border-t border-border-primary pt-3 flex items-center justify-between"
-            >
-              <span className="text-sm font-semibold text-text-primary">Total Estimated</span>
-              <span className="text-sm font-mono font-bold text-accent-warning">
-                {formatCurrency(totalEstimatedTax)}
-              </span>
-            </div>
+      {/* Upcoming Deadlines */}
+      {upcomingDeadlines.length > 0 && (
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="px-5 py-4 border-b border-border-primary">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Upcoming Deadlines
+            </h3>
           </div>
-        </div>
+          <div className="divide-y divide-border-primary">
+            {upcomingDeadlines.map((d, i) => {
+              const urgent = d.daysUntil <= 7;
+              const warning = d.daysUntil > 7 && d.daysUntil <= 30;
+              const colorClass = d.status === 'overdue'
+                ? 'text-accent-expense'
+                : urgent
+                  ? 'text-accent-expense'
+                  : warning
+                    ? 'text-accent-warning'
+                    : 'text-text-muted';
 
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
-          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Federal Bracket Detail
-          </h3>
-          <div className="space-y-2">
-            {FEDERAL_BRACKETS.map((b, i) => {
-              const bracketTaxable = Math.max(
-                0,
-                Math.min(netIncome, b.max) - b.min
-              );
-              const bracketTax = bracketTaxable * b.rate;
-              if (bracketTaxable === 0 && i > 0) return null;
               return (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-text-muted">
-                    {(b.rate * 100).toFixed(0)}% up to{' '}
-                    {b.max === Infinity ? '...' : formatCurrency(b.max)}
+                <div key={`${d.form}-${d.quarter ?? 'annual'}-${i}`} className="px-5 py-3 flex items-center gap-4">
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-text-primary">{d.label}</span>
+                    {d.quarter && (
+                      <span className="text-xs text-text-muted ml-2">Q{d.quarter}</span>
+                    )}
+                  </div>
+                  <span className="text-xs font-mono text-text-secondary">
+                    {formatDate(d.dueDate.toISOString().slice(0, 10))}
                   </span>
-                  <span className="font-mono text-text-secondary">
-                    {formatCurrency(bracketTaxable)} &rarr; {formatCurrency(bracketTax)}
+                  <span className={`text-xs font-semibold ${colorClass} min-w-[80px] text-right`}>
+                    {d.status === 'overdue' ? (
+                      <span className="inline-flex items-center gap-1">
+                        <AlertTriangle size={12} /> Overdue
+                      </span>
+                    ) : (
+                      `${d.daysUntil}d remaining`
+                    )}
                   </span>
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Quarterly Estimated Payments */}
-      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-        <div className="px-5 py-4 border-b border-border-primary">
-          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-            Quarterly Estimated Payments &mdash; {currentYear}
+      {/* Quarterly Tax Liability Bar Chart */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
+            Quarterly Tax Liability
           </h3>
-        </div>
-        <table className="block-table">
-          <thead>
-            <tr>
-              <th>Quarter</th>
-              <th>Due Date</th>
-              <th className="text-right">Est. Amount</th>
-              <th className="text-right">Paid</th>
-              <th className="text-right">Remaining</th>
-              <th className="text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {quarters.map((q) => {
-              const remaining = Math.max(0, q.amount - q.paidAmount);
-              const overdue = !q.paid && q.dueDate < today;
-              // Flag quarters where the user paid MORE than the estimated amount.
-              const overpaid = q.amount > 0 && q.paidAmount > q.amount + 0.005;
+          <div className="flex items-end gap-3 h-48">
+            {(data?.quarters ?? []).map((q) => {
+              const total = q.federal + q.state + q.fica;
+              const pct = total / quarterlyMax;
+              const fedPct = total > 0 ? (q.federal / total) * 100 : 0;
+              const statePct = total > 0 ? (q.state / total) * 100 : 0;
+              const ficaPct = total > 0 ? (q.fica / total) * 100 : 0;
               return (
-                <tr key={q.quarter}>
-                  <td className="text-text-primary font-medium text-sm">{q.quarter}</td>
-                  <td className="font-mono text-text-secondary text-xs">
-                    {formatDate(q.dueDate)}
-                  </td>
-                  <td className="text-right font-mono text-text-secondary text-sm">
-                    {formatCurrency(q.amount)}
-                  </td>
-                  <td className="text-right font-mono text-accent-income text-sm">
-                    {formatCurrency(q.paidAmount)}
-                  </td>
-                  <td className="text-right font-mono text-text-primary text-sm">
-                    {formatCurrency(remaining)}
-                  </td>
-                  <td className="text-center">
-                    {overpaid ? (
-                      <span className="block-badge block-badge-purple inline-flex items-center gap-1" title={`Paid ${formatCurrency(q.paidAmount - q.amount)} above estimated`}>
-                        <CheckCircle size={12} /> Overpaid
-                      </span>
-                    ) : q.paid ? (
-                      <span className="block-badge block-badge-income inline-flex items-center gap-1">
-                        <CheckCircle size={12} /> Paid
-                      </span>
-                    ) : overdue ? (
-                      <span className="block-badge block-badge-expense inline-flex items-center gap-1">
-                        <AlertTriangle size={12} /> Overdue
-                      </span>
-                    ) : (
-                      <span className="block-badge block-badge-warning inline-flex items-center gap-1">
-                        <Clock size={12} /> Pending
-                      </span>
-                    )}
-                  </td>
-                </tr>
+                <div key={q.quarter} className="flex-1 flex flex-col items-center gap-2">
+                  <div
+                    className="w-full flex flex-col justify-end overflow-hidden"
+                    style={{
+                      height: `${Math.max(pct * 100, 4)}%`,
+                      borderRadius: '4px 4px 0 0',
+                      minHeight: '8px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: `${ficaPct}%`,
+                        background: 'var(--color-accent-income)',
+                        minHeight: ficaPct > 0 ? '3px' : 0,
+                      }}
+                    />
+                    <div
+                      style={{
+                        height: `${statePct}%`,
+                        background: 'var(--color-accent-warning)',
+                        minHeight: statePct > 0 ? '3px' : 0,
+                      }}
+                    />
+                    <div
+                      style={{
+                        height: `${fedPct}%`,
+                        background: 'var(--color-accent-expense)',
+                        minHeight: fedPct > 0 ? '3px' : 0,
+                      }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-semibold text-text-muted">
+                    Q{q.quarter}
+                  </span>
+                  <span className="text-[10px] font-mono text-text-secondary">
+                    {formatCurrency(total)}
+                  </span>
+                </div>
               );
             })}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={2} className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider">
-                Total
-              </td>
-              <td className="text-right font-mono font-bold text-text-primary">
-                {formatCurrency(totalEstimatedTax)}
-              </td>
-              <td className="text-right font-mono font-bold text-accent-income">
-                {formatCurrency(quarters.reduce((s, q) => s + q.paidAmount, 0))}
-              </td>
-              <td className="text-right font-mono font-bold text-text-primary">
-                {formatCurrency(
-                  quarters.reduce((s, q) => s + Math.max(0, q.amount - q.paidAmount), 0)
-                )}
-              </td>
-              <td />
-            </tr>
-          </tfoot>
-        </table>
+          </div>
+          {/* Legend */}
+          <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border-primary">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3" style={{ background: 'var(--color-accent-expense)', borderRadius: '6px' }} />
+              <span className="text-[10px] text-text-muted">Federal</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3" style={{ background: 'var(--color-accent-warning)', borderRadius: '6px' }} />
+              <span className="text-[10px] text-text-muted">State</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3" style={{ background: 'var(--color-accent-income)', borderRadius: '6px' }} />
+              <span className="text-[10px] text-text-muted">FICA</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Filing Status Grid */}
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="px-5 py-4 border-b border-border-primary">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Filing Status
+            </h3>
+          </div>
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Form</th>
+                {QUARTERS.map((q) => (
+                  <th key={q} className="text-center">
+                    Q{q}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {FORM_TYPES.map((form) => {
+                const isAnnual = ['940', 'W-2', 'W-3'].includes(form);
+                return (
+                  <tr key={form}>
+                    <td className="text-sm font-medium text-text-primary">{form}</td>
+                    {QUARTERS.map((q) => {
+                      if (isAnnual && q < 4) {
+                        return (
+                          <td key={q} className="text-center">
+                            <span className="text-[10px] text-text-muted">--</span>
+                          </td>
+                        );
+                      }
+                      if (isAnnual && q === 4) {
+                        const status = getFilingStatus(form, 0);
+                        return (
+                          <td key={q} className="text-center">
+                            <FilingBadge status={status} />
+                          </td>
+                        );
+                      }
+                      const status = getFilingStatus(form, q);
+                      return (
+                        <td key={q} className="text-center">
+                          <FilingBadge status={status} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
+  );
+};
+
+// ─── Filing Status Badge ────────────────────────────────
+const FilingBadge: React.FC<{ status: string }> = ({ status }) => {
+  if (status === 'filed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent-income">
+        <CheckCircle size={11} /> Filed
+      </span>
+    );
+  }
+  if (status === 'overdue') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent-expense">
+        <AlertTriangle size={11} /> Overdue
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-text-muted">
+      <Clock size={11} /> Pending
+    </span>
   );
 };
 

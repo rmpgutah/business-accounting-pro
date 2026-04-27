@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Users, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -42,6 +42,15 @@ interface EmployeeFormData {
   account_number: string;
   account_type: 'checking' | 'savings';
   notes: string;
+  w4_filing_status: 'single' | 'married' | 'head_of_household';
+  w4_step2_checkbox: boolean;
+  w4_step3_dependent_credit: string;
+  w4_step4a_other_income: string;
+  w4_step4b_deductions: string;
+  w4_step4c_extra_withholding: string;
+  ut_exemptions: string;
+  ut_additional_withholding: string;
+  w4_received_date: string;
 }
 
 interface EmployeeFormProps {
@@ -82,6 +91,15 @@ const EMPTY_FORM: EmployeeFormData = {
   account_number: '',
   account_type: 'checking',
   notes: '',
+  w4_filing_status: 'single',
+  w4_step2_checkbox: false,
+  w4_step3_dependent_credit: '0',
+  w4_step4a_other_income: '0',
+  w4_step4b_deductions: '0',
+  w4_step4c_extra_withholding: '0',
+  ut_exemptions: '1',
+  ut_additional_withholding: '0',
+  w4_received_date: '',
 };
 
 const FILING_STATUS_LABELS: Record<string, string> = {
@@ -369,6 +387,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             account_number: emp.account_number ?? '',
             account_type: emp.account_type ?? 'checking',
             notes: emp.notes ?? '',
+            w4_filing_status: emp.w4_filing_status || 'single',
+            w4_step2_checkbox: !!emp.w4_step2_checkbox,
+            w4_step3_dependent_credit: String(emp.w4_step3_dependent_credit ?? 0),
+            w4_step4a_other_income: String(emp.w4_step4a_other_income ?? 0),
+            w4_step4b_deductions: String(emp.w4_step4b_deductions ?? 0),
+            w4_step4c_extra_withholding: String(emp.w4_step4c_extra_withholding ?? 0),
+            ut_exemptions: String(emp.ut_exemptions ?? 1),
+            ut_additional_withholding: String(emp.ut_additional_withholding ?? 0),
+            w4_received_date: emp.w4_received_date || '',
           });
         }
       } catch (err) {
@@ -486,6 +513,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         account_number: form.account_number.trim(),
         account_type: form.account_type,
         notes: form.notes.trim(),
+        w4_filing_status: form.w4_filing_status,
+        w4_step2_checkbox: form.w4_step2_checkbox ? 1 : 0,
+        w4_step3_dependent_credit: parseFloat(form.w4_step3_dependent_credit) || 0,
+        w4_step4a_other_income: parseFloat(form.w4_step4a_other_income) || 0,
+        w4_step4b_deductions: parseFloat(form.w4_step4b_deductions) || 0,
+        w4_step4c_extra_withholding: parseFloat(form.w4_step4c_extra_withholding) || 0,
+        ut_exemptions: parseInt(form.ut_exemptions) || 1,
+        ut_additional_withholding: parseFloat(form.ut_additional_withholding) || 0,
+        w4_received_date: form.w4_received_date,
       };
 
       if (isEditing && employeeId) {
@@ -812,6 +848,81 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                       value={form.state_allowances}
                       onChange={(e) => setField('state_allowances', e.target.value)}
                     />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ─── W-4 Information (2020+) ─── */}
+            {form.type === 'employee' && (
+              <div className="block-card space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: '6px' }}>
+                    <FileText size={16} className="text-accent-blue" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-text-primary">W-4 Information (2020+)</h3>
+                    <p className="text-xs text-text-muted mt-0.5">Federal W-4 and Utah TC-40W withholding data</p>
+                  </div>
+                </div>
+                <div className="border-t border-border-primary pt-4 space-y-3">
+                  {/* W-4 Filing Status */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-2">W-4 Filing Status</label>
+                    <div className="flex gap-4">
+                      {(['single', 'married', 'head_of_household'] as const).map(s => (
+                        <label key={s} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="w4_filing_status" value={s} checked={form.w4_filing_status === s}
+                            onChange={() => setForm(f => ({ ...f, w4_filing_status: s }))}
+                            className="accent-accent-blue" />
+                          <span className="text-xs text-text-secondary">
+                            {s === 'single' ? 'Single' : s === 'married' ? 'Married' : 'Head of Household'}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Step 2 Checkbox */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={form.w4_step2_checkbox}
+                      onChange={e => setForm(f => ({ ...f, w4_step2_checkbox: e.target.checked }))}
+                      className="w-4 h-4 accent-accent-blue" />
+                    <span className="text-xs text-text-secondary">Step 2: Multiple Jobs or Spouse Works</span>
+                  </label>
+                  {/* Steps 3, 4a, 4b, 4c */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 3: Dependent Credit ($)</label>
+                      <input type="number" value={form.w4_step3_dependent_credit} onChange={e => setForm(f => ({ ...f, w4_step3_dependent_credit: e.target.value }))} className="block-input" min="0" step="100" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 4a: Other Income ($)</label>
+                      <input type="number" value={form.w4_step4a_other_income} onChange={e => setForm(f => ({ ...f, w4_step4a_other_income: e.target.value }))} className="block-input" min="0" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 4b: Deductions ($)</label>
+                      <input type="number" value={form.w4_step4b_deductions} onChange={e => setForm(f => ({ ...f, w4_step4b_deductions: e.target.value }))} className="block-input" min="0" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 4c: Extra Withholding ($)</label>
+                      <input type="number" value={form.w4_step4c_extra_withholding} onChange={e => setForm(f => ({ ...f, w4_step4c_extra_withholding: e.target.value }))} className="block-input" min="0" />
+                    </div>
+                  </div>
+                  {/* Utah Fields */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Utah Exemptions</label>
+                      <input type="number" value={form.ut_exemptions} onChange={e => setForm(f => ({ ...f, ut_exemptions: e.target.value }))} className="block-input" min="0" max="10" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">UT Additional W/H ($)</label>
+                      <input type="number" value={form.ut_additional_withholding} onChange={e => setForm(f => ({ ...f, ut_additional_withholding: e.target.value }))} className="block-input" min="0" />
+                    </div>
+                  </div>
+                  {/* W-4 Received Date */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">W-4 Received Date</label>
+                    <input type="date" value={form.w4_received_date} onChange={e => setForm(f => ({ ...f, w4_received_date: e.target.value }))} className="block-input" />
                   </div>
                 </div>
               </div>

@@ -3765,6 +3765,417 @@ export function registerIpcHandlers(): void {
     return { seeded: true, year: currentYear, message: 'Use tax:seed-year to seed data for ' + currentYear };
   });
 
+  // ─── Tax System: IPC Handlers ──────────────────────────────
+
+  ipcMain.handle('tax:get-utah-config', (_event, { year }: { year: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+    return dbInstance.prepare(
+      'SELECT * FROM utah_withholding_config WHERE company_id = ? AND tax_year = ?'
+    ).get(companyId, year) ?? null;
+  });
+
+  ipcMain.handle('tax:save-utah-config', (_event, { year, config }: { year: number; config: Record<string, any> }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    const dbInstance = db.getDb();
+    const existing = dbInstance.prepare(
+      'SELECT id FROM utah_withholding_config WHERE company_id = ? AND tax_year = ?'
+    ).get(companyId, year) as any;
+
+    const flat_rate = config.flat_rate ?? 0.0455;
+    const personal_exemption_credit = config.personal_exemption_credit ?? 393;
+    const sui_rate = config.sui_rate ?? 0.012;
+    const sui_wage_base = config.sui_wage_base ?? 44800;
+    const wc_rate = config.wc_rate ?? 0.008;
+    const wc_class_code = config.wc_class_code ?? '8810';
+    const wc_carrier = config.wc_carrier ?? '';
+
+    let id: string;
+    if (existing) {
+      id = existing.id;
+      dbInstance.prepare(`
+        UPDATE utah_withholding_config
+        SET flat_rate = ?, personal_exemption_credit = ?, sui_rate = ?, sui_wage_base = ?,
+            wc_rate = ?, wc_class_code = ?, wc_carrier = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(flat_rate, personal_exemption_credit, sui_rate, sui_wage_base, wc_rate, wc_class_code, wc_carrier, id);
+    } else {
+      id = uuid();
+      dbInstance.prepare(`
+        INSERT INTO utah_withholding_config (id, company_id, tax_year, flat_rate, personal_exemption_credit, sui_rate, sui_wage_base, wc_rate, wc_class_code, wc_carrier)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, companyId, year, flat_rate, personal_exemption_credit, sui_rate, sui_wage_base, wc_rate, wc_class_code, wc_carrier);
+    }
+    scheduleAutoBackup();
+    return { success: true, id };
+  });
+
+  ipcMain.handle('tax:get-filing-summary', (_event, { year, quarter }: { year: number; quarter?: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+
+    const quarters = quarter ? [quarter] : [1, 2, 3, 4];
+    const results: any[] = [];
+
+    for (const q of quarters) {
+      const startMonth = (q - 1) * 3 + 1;
+      const endMonth = q * 3;
+      const startDate = `${year}-${String(startMonth).padStart(2, '0')}-01`;
+      const endDay = new Date(year, endMonth, 0).getDate();
+      const endDate = `${year}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+
+      const agg = dbInstance.prepare(`
+        SELECT
+          COUNT(DISTINCT ps.employee_id) as employee_count,
+          COALESCE(SUM(ps.gross_pay), 0) as total_gross,
+          COALESCE(SUM(ps.federal_tax), 0) as total_federal,
+          COALESCE(SUM(ps.state_tax), 0) as total_state,
+          COALESCE(SUM(ps.social_security), 0) as total_ss,
+          COALESCE(SUM(ps.medicare), 0) as total_medicare
+        FROM pay_stubs ps
+        JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+        WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+      `).get(companyId, startDate, endDate) as any;
+
+      const filing941 = dbInstance.prepare(
+        "SELECT * FROM tax_filing_periods WHERE company_id = ? AND tax_year = ? AND quarter = ? AND form_type = '941'"
+      ).get(companyId, year, q) as any;
+
+      const filingTC941 = dbInstance.prepare(
+        "SELECT * FROM tax_filing_periods WHERE company_id = ? AND tax_year = ? AND quarter = ? AND form_type = 'tc-941'"
+      ).get(companyId, year, q) as any;
+
+      const ss_ee = db.roundCents(agg.total_ss);
+      const ss_er = db.roundCents(agg.total_ss);
+      const med_ee = db.roundCents(agg.total_medicare);
+      const med_er = db.roundCents(agg.total_medicare);
+      const fed_wh = db.roundCents(agg.total_federal);
+      const liability_941 = db.roundCents(fed_wh + ss_ee + ss_er + med_ee + med_er);
+
+      results.push({
+        quarter: q,
+        startDate,
+        endDate,
+        employee_count: agg.employee_count,
+        total_gross: db.roundCents(agg.total_gross),
+        total_federal: fed_wh,
+        total_state: db.roundCents(agg.total_state),
+        total_ss: ss_ee,
+        total_medicare: med_ee,
+        ss_employer: ss_er,
+        medicare_employer: med_er,
+        liability_941,
+        filing_941: filing941 ?? null,
+        filing_tc941: filingTC941 ?? null,
+      });
+    }
+    return results;
+  });
+
+  ipcMain.handle('tax:record-filing', (_event, { form_type, year, quarter, filed_date, confirmation_number, amount_paid, payment_date, notes }: {
+    form_type: string; year: number; quarter: number; filed_date?: string; confirmation_number?: string; amount_paid?: number; payment_date?: string; notes?: string;
+  }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { error: 'No active company' };
+    const dbInstance = db.getDb();
+
+    const existing = dbInstance.prepare(
+      'SELECT id, amount_paid FROM tax_filing_periods WHERE company_id = ? AND tax_year = ? AND quarter = ? AND form_type = ?'
+    ).get(companyId, year, quarter, form_type) as any;
+
+    let id: string;
+    if (existing) {
+      id = existing.id;
+      const newAmountPaid = db.roundCents((existing.amount_paid || 0) + (amount_paid || 0));
+      dbInstance.prepare(`
+        UPDATE tax_filing_periods
+        SET status = 'filed', filed_date = COALESCE(?, filed_date), confirmation_number = COALESCE(?, confirmation_number),
+            amount_paid = ?, payment_date = COALESCE(?, payment_date), notes = COALESCE(?, notes), updated_at = datetime('now')
+        WHERE id = ?
+      `).run(filed_date || null, confirmation_number || null, newAmountPaid, payment_date || null, notes || null, id);
+    } else {
+      id = uuid();
+      dbInstance.prepare(`
+        INSERT INTO tax_filing_periods (id, company_id, tax_year, quarter, form_type, status, filed_date, confirmation_number, amount_paid, payment_date, notes)
+        VALUES (?, ?, ?, ?, ?, 'filed', ?, ?, ?, ?, ?)
+      `).run(id, companyId, year, quarter, form_type, filed_date || '', confirmation_number || '', db.roundCents(amount_paid || 0), payment_date || '', notes || '');
+    }
+    scheduleAutoBackup();
+    return { success: true, id };
+  });
+
+  ipcMain.handle('tax:get-w2-data', (_event, { year, employee_id }: { year: number; employee_id?: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+
+    let sql = `
+      SELECT
+        e.id as employee_id,
+        e.name,
+        e.ssn,
+        e.ssn_last4,
+        e.address_line1,
+        e.address_line2,
+        e.city,
+        e.state,
+        e.zip,
+        COALESCE(SUM(ps.gross_pay), 0) as box1,
+        COALESCE(SUM(ps.federal_tax), 0) as box2,
+        COALESCE(SUM(ps.gross_pay), 0) as box3,
+        COALESCE(SUM(ps.social_security), 0) as box4,
+        COALESCE(SUM(ps.gross_pay), 0) as box5,
+        COALESCE(SUM(ps.medicare), 0) as box6,
+        COALESCE(SUM(ps.gross_pay), 0) as box16,
+        COALESCE(SUM(ps.state_tax), 0) as box17
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      JOIN employees e ON ps.employee_id = e.id
+      WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+    `;
+    const params: any[] = [companyId, startDate, endDate];
+
+    if (employee_id) {
+      sql += ' AND ps.employee_id = ?';
+      params.push(employee_id);
+    }
+
+    sql += ' GROUP BY ps.employee_id ORDER BY e.name';
+
+    const rows = dbInstance.prepare(sql).all(...params) as any[];
+    return rows.map((r: any) => ({
+      ...r,
+      box1: db.roundCents(r.box1),
+      box2: db.roundCents(r.box2),
+      box3: db.roundCents(r.box3),
+      box4: db.roundCents(r.box4),
+      box5: db.roundCents(r.box5),
+      box6: db.roundCents(r.box6),
+      box16: db.roundCents(r.box16),
+      box17: db.roundCents(r.box17),
+    }));
+  });
+
+  ipcMain.handle('tax:get-w3-data', (_event, { year }: { year: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+
+    const row = dbInstance.prepare(`
+      SELECT
+        COUNT(DISTINCT ps.employee_id) as employee_count,
+        COALESCE(SUM(ps.gross_pay), 0) as box1,
+        COALESCE(SUM(ps.federal_tax), 0) as box2,
+        COALESCE(SUM(ps.gross_pay), 0) as box3,
+        COALESCE(SUM(ps.social_security), 0) as box4,
+        COALESCE(SUM(ps.gross_pay), 0) as box5,
+        COALESCE(SUM(ps.medicare), 0) as box6,
+        COALESCE(SUM(ps.gross_pay), 0) as box16,
+        COALESCE(SUM(ps.state_tax), 0) as box17
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+    `).get(companyId, startDate, endDate) as any;
+
+    if (!row) return null;
+    return {
+      employee_count: row.employee_count,
+      box1: db.roundCents(row.box1),
+      box2: db.roundCents(row.box2),
+      box3: db.roundCents(row.box3),
+      box4: db.roundCents(row.box4),
+      box5: db.roundCents(row.box5),
+      box6: db.roundCents(row.box6),
+      box16: db.roundCents(row.box16),
+      box17: db.roundCents(row.box17),
+    };
+  });
+
+  ipcMain.handle('tax:dashboard-summary', (_event, { year }: { year: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+    const pyStart = `${year - 1}-01-01`;
+    const pyEnd = `${year - 1}-12-31`;
+
+    // YTD totals
+    const ytd = dbInstance.prepare(`
+      SELECT
+        COALESCE(SUM(ps.gross_pay), 0) as total_gross,
+        COALESCE(SUM(ps.federal_tax), 0) as total_federal,
+        COALESCE(SUM(ps.state_tax), 0) as total_state,
+        COALESCE(SUM(ps.social_security), 0) as total_ss,
+        COALESCE(SUM(ps.medicare), 0) as total_medicare
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+    `).get(companyId, startDate, endDate) as any;
+
+    // Prior year payroll total
+    const py = dbInstance.prepare(`
+      SELECT COALESCE(SUM(ps.gross_pay), 0) as total_gross
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+    `).get(companyId, pyStart, pyEnd) as any;
+
+    // Filing periods for this year
+    const filings = dbInstance.prepare(
+      'SELECT * FROM tax_filing_periods WHERE company_id = ? AND tax_year = ? ORDER BY quarter, form_type'
+    ).all(companyId, year) as any[];
+
+    // Per-quarter breakdown
+    const quarters: any[] = [];
+    for (let q = 1; q <= 4; q++) {
+      const sm = (q - 1) * 3 + 1;
+      const em = q * 3;
+      const qs = `${year}-${String(sm).padStart(2, '0')}-01`;
+      const ed = new Date(year, em, 0).getDate();
+      const qe = `${year}-${String(em).padStart(2, '0')}-${String(ed).padStart(2, '0')}`;
+
+      const qa = dbInstance.prepare(`
+        SELECT
+          COALESCE(SUM(ps.federal_tax), 0) as federal,
+          COALESCE(SUM(ps.state_tax), 0) as state,
+          COALESCE(SUM(ps.social_security), 0) as ss,
+          COALESCE(SUM(ps.medicare), 0) as medicare
+        FROM pay_stubs ps
+        JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+        WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+      `).get(companyId, qs, qe) as any;
+
+      quarters.push({
+        quarter: q,
+        federal: db.roundCents(qa.federal),
+        state: db.roundCents(qa.state),
+        fica: db.roundCents(qa.ss * 2 + qa.medicare * 2),
+      });
+    }
+
+    return {
+      ytd_payroll: db.roundCents(ytd.total_gross),
+      ytd_federal: db.roundCents(ytd.total_federal),
+      ytd_state: db.roundCents(ytd.total_state),
+      ytd_fica: db.roundCents(ytd.total_ss * 2 + ytd.total_medicare * 2),
+      py_payroll: db.roundCents(py.total_gross),
+      filings,
+      quarters,
+    };
+  });
+
+  ipcMain.handle('tax:liability-report', (_event, { year, quarter_start, quarter_end }: { year: number; quarter_start: number; quarter_end: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    const startMonth = (quarter_start - 1) * 3 + 1;
+    const endMonth = quarter_end * 3;
+    const periodStart = `${year}-${String(startMonth).padStart(2, '0')}-01`;
+    const endDay = new Date(year, endMonth, 0).getDate();
+    const periodEnd = `${year}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+    const ytdStart = `${year}-01-01`;
+
+    const aggregateSql = `
+      SELECT
+        COALESCE(SUM(ps.gross_pay), 0) as wages,
+        COALESCE(SUM(ps.federal_tax), 0) as federal_wh,
+        COALESCE(SUM(ps.social_security), 0) as ss_ee,
+        COALESCE(SUM(ps.medicare), 0) as med_ee,
+        COALESCE(SUM(ps.state_tax), 0) as state_wh
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+    `;
+
+    const period = dbInstance.prepare(aggregateSql).get(companyId, periodStart, periodEnd) as any;
+    const ytdRow = dbInstance.prepare(aggregateSql).get(companyId, ytdStart, periodEnd) as any;
+
+    return {
+      period: {
+        wages: db.roundCents(period.wages),
+        federal_wh: db.roundCents(period.federal_wh),
+        ss_ee: db.roundCents(period.ss_ee),
+        med_ee: db.roundCents(period.med_ee),
+        state_wh: db.roundCents(period.state_wh),
+      },
+      ytd: {
+        wages: db.roundCents(ytdRow.wages),
+        federal_wh: db.roundCents(ytdRow.federal_wh),
+        ss_ee: db.roundCents(ytdRow.ss_ee),
+        med_ee: db.roundCents(ytdRow.med_ee),
+        state_wh: db.roundCents(ytdRow.state_wh),
+      },
+      periodStart,
+      periodEnd,
+    };
+  });
+
+  ipcMain.handle('tax:employee-tax-summary', (_event, { year, employee_id }: { year: number; employee_id?: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+
+    let sql = `
+      SELECT
+        e.id as employee_id,
+        e.name,
+        e.w4_filing_status,
+        e.w4_step2_checkbox,
+        e.w4_step3_dependent_credit,
+        COALESCE(SUM(ps.gross_pay), 0) as gross,
+        COALESCE(SUM(ps.federal_tax), 0) as federal,
+        COALESCE(SUM(ps.social_security), 0) as ss,
+        COALESCE(SUM(ps.medicare), 0) as medicare,
+        COALESCE(SUM(ps.state_tax), 0) as state,
+        COALESCE(SUM(ps.net_pay), 0) as net
+      FROM pay_stubs ps
+      JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+      JOIN employees e ON ps.employee_id = e.id
+      WHERE pr.company_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?
+    `;
+    const params: any[] = [companyId, startDate, endDate];
+
+    if (employee_id) {
+      sql += ' AND ps.employee_id = ?';
+      params.push(employee_id);
+    }
+
+    sql += ' GROUP BY ps.employee_id ORDER BY e.name';
+
+    const rows = dbInstance.prepare(sql).all(...params) as any[];
+    return rows.map((r: any) => ({
+      ...r,
+      gross: db.roundCents(r.gross),
+      federal: db.roundCents(r.federal),
+      ss: db.roundCents(r.ss),
+      medicare: db.roundCents(r.medicare),
+      state: db.roundCents(r.state),
+      net: db.roundCents(r.net),
+    }));
+  });
+
+  ipcMain.handle('tax:calc-payroll', (_event, { grossPay, payFrequency, w4, utah, ytdGross }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const { calculateFullPayroll } = require('../services/TaxCalculationEngine');
+    return calculateFullPayroll(grossPay, payFrequency, w4, utah, ytdGross, companyId, 2026);
+  });
+
   // ─── Categories: Seed Defaults ───────────────────────────
   ipcMain.handle('categories:seed-defaults', (_event, { company_id }: { company_id: string }) => {
     return seedDefaultCategories(company_id);

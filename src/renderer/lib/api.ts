@@ -780,6 +780,28 @@ const api = {
   customFieldsSearch: (companyId: string, entityType: string, fieldKey: string, op: string, value: any) =>
     window.electronAPI.invoke('customFields:search', { companyId, entityType, fieldKey, op, value }),
 
+  // ─── Tax System ─────────────────────────────────
+  taxGetUtahConfig: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:get-utah-config', { year }),
+  taxSaveUtahConfig: (year: number, config: Record<string, any>): Promise<any> =>
+    window.electronAPI.invoke('tax:save-utah-config', { year, config }),
+  taxGetFilingSummary: (year: number, quarter?: number): Promise<any> =>
+    window.electronAPI.invoke('tax:get-filing-summary', { year, quarter }),
+  taxRecordFiling: (data: { form_type: string; year: number; quarter: number; filed_date?: string; confirmation_number?: string; amount_paid?: number; payment_date?: string; notes?: string }): Promise<any> =>
+    window.electronAPI.invoke('tax:record-filing', data),
+  taxGetW2Data: (year: number, employee_id?: string): Promise<any[]> =>
+    window.electronAPI.invoke('tax:get-w2-data', { year, employee_id }),
+  taxGetW3Data: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:get-w3-data', { year }),
+  taxDashboardSummary: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:dashboard-summary', { year }),
+  taxLiabilityReport: (year: number, quarter_start: number, quarter_end: number): Promise<any> =>
+    window.electronAPI.invoke('tax:liability-report', { year, quarter_start, quarter_end }),
+  taxEmployeeTaxSummary: (year: number, employee_id?: string): Promise<any[]> =>
+    window.electronAPI.invoke('tax:employee-tax-summary', { year, employee_id }),
+  taxCalcPayroll: (grossPay: number, payFrequency: string, w4: any, utah: any, ytdGross: number): Promise<any> =>
+    window.electronAPI.invoke('tax:calc-payroll', { grossPay, payFrequency, w4, utah, ytdGross }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };
