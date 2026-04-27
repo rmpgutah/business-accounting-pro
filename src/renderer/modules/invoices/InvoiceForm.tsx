@@ -1106,6 +1106,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       </div>
 
       {/* Line Items */}
+      {/*
+        Layout note: this table has 12-14 columns depending on type config.
+        Without a min-width, the column width percentages collapse in narrow
+        windows and inputs become unusable (~50px wide). We:
+          1. Switch the wrapper from overflow-hidden → overflow-x-auto so a
+             horizontal scrollbar appears when the viewport can't hold the
+             natural width.
+          2. Pin a min-width on the table itself (~1100px without item code,
+             ~1200px with) so percentages always resolve against a usable
+             baseline. Full-screen view stays scrollbar-free; narrow windows
+             gain a scroll affordance instead of a crushed form.
+          3. Mark header cells nowrap so labels like "TAX %" / "UNIT PRICE"
+             never wrap onto two lines.
+      */}
       <div className="block-card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
           <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Line Items</span>
@@ -1117,23 +1131,27 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           )}
         </div>
 
-        <table className="block-table">
+        <div className="overflow-x-auto">
+        <table
+          className="block-table"
+          style={{ minWidth: typeConfig.showItemCode ? 1200 : 1080, tableLayout: 'fixed' }}
+        >
           <thead>
             <tr>
-              <th style={{ width: '2%' }}></th>
-              {typeConfig.showItemCode && <th style={{ width: '9%' }}>SKU / Code</th>}
-              <th style={{ width: typeConfig.showItemCode ? '24%' : '30%' }}>Description</th>
-              {typeConfig.showUnit && <th style={{ width: '6%' }}>Unit</th>}
-              <th style={{ width: '8%' }}>{typeConfig.qtyLabel}</th>
-              <th style={{ width: '12%' }}>{typeConfig.unitPriceLabel}</th>
-              <th style={{ width: '8%' }} className="text-right">Base</th>
-              <th style={{ width: '8%' }}>Tax %</th>
-              <th style={{ width: '5%' }}>Disc%</th>
-              <th style={{ width: '5%' }}>Tax Ovr%</th>
-              <th style={{ width: '8%' }} className="text-right">Tax</th>
-              <th style={{ width: '9%' }} className="text-right">Total</th>
-              <th style={{ width: '10%' }}>Account</th>
-              <th style={{ width: '7%' }}></th>
+              <th style={{ width: '2%', whiteSpace: 'nowrap' }}></th>
+              {typeConfig.showItemCode && <th style={{ width: '9%', whiteSpace: 'nowrap' }}>SKU / Code</th>}
+              <th style={{ width: typeConfig.showItemCode ? '24%' : '30%', whiteSpace: 'nowrap' }}>Description</th>
+              {typeConfig.showUnit && <th style={{ width: '6%', whiteSpace: 'nowrap' }}>Unit</th>}
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }}>{typeConfig.qtyLabel}</th>
+              <th style={{ width: '12%', whiteSpace: 'nowrap' }}>{typeConfig.unitPriceLabel}</th>
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }} className="text-right">Base</th>
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }}>Tax %</th>
+              <th style={{ width: '5%', whiteSpace: 'nowrap' }}>Disc%</th>
+              <th style={{ width: '5%', whiteSpace: 'nowrap' }}>Tax Ovr%</th>
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }} className="text-right">Tax</th>
+              <th style={{ width: '9%', whiteSpace: 'nowrap' }} className="text-right">Total</th>
+              <th style={{ width: '10%', whiteSpace: 'nowrap' }}>Account</th>
+              <th style={{ width: '7%', whiteSpace: 'nowrap' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -1565,6 +1583,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             })}
           </tbody>
         </table>
+        </div>{/* /overflow-x-auto */}
 
         <div className="px-4 py-3 border-t border-border-primary">
           <RowTypeToolbar onAdd={addLine} />
