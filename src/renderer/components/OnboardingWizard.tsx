@@ -5,6 +5,7 @@ import api from '../lib/api';
 import { INDUSTRY_PRESETS, getPreset, type IndustryPreset } from '../lib/industry-presets';
 import { COA_TEMPLATES } from '../lib/coa-templates';
 import { useCompanyStore } from '../stores/companyStore';
+import { useModalBehavior, trapFocusOnKeyDown } from '../lib/use-modal-behavior';
 
 // Wizard step keys
 type StepKey = 'industry' | 'company' | 'branding' | 'banking' | 'team' | 'first-entity' | 'done';
@@ -543,13 +544,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ companyId, o
 
   const isLastInputStep = state.step === 'first-entity';
   const isDone = state.step === 'done';
-
+  // A11Y: ESC closes (only if not required), focus trap, scroll lock, role=dialog
+  const { containerRef } = useModalBehavior({ onClose, closeOnEscape: !required });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={required ? undefined : onClose}
+      role="presentation"
     >
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-wizard-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={trapFocusOnKeyDown(containerRef)}
         className="block-card flex flex-col"
         style={{
           width: '90vw',
@@ -568,7 +579,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ companyId, o
               <Sparkles size={16} color="white" />
             </div>
             <div>
-              <div className="text-sm font-bold text-text-primary">Onboarding Wizard</div>
+              <div id="onboarding-wizard-title" className="text-sm font-bold text-text-primary">Onboarding Wizard</div>
               <div className="text-xs text-text-muted">Step {stepIndex + 1} of {STEP_ORDER.length} — {STEP_LABEL[state.step]}</div>
             </div>
           </div>

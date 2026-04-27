@@ -7,7 +7,7 @@ import AppShell from './components/layout/AppShell';
 import CompanySetup from './components/onboarding/CompanySetup';
 import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
-import { registerKeyboardShortcuts, MODULE_ORDER } from './lib/keyboard-shortcuts';
+import { registerKeyboardShortcuts, registerCmdSGuard, MODULE_ORDER } from './lib/keyboard-shortcuts';
 import { QuickCreate } from './components/QuickCreate';
 import { usePersonalizationStore, applyPersonalization, applyModuleAccent } from './stores/personalizationStore';
 import PersonalizationWizard from './components/onboarding/PersonalizationWizard';
@@ -293,7 +293,10 @@ const App: React.FC = () => {
       },
     });
 
-    return cleanup;
+    // UX: Cmd+S — prevent browser save & broadcast app:cmd-save for forms.
+    const cleanupCmdS = registerCmdSGuard();
+
+    return () => { cleanup(); cleanupCmdS(); };
   }, [currentModule, setModule, setSearchOpen]);
 
   if (loading) {

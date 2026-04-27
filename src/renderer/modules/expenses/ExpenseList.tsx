@@ -8,6 +8,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import { ImportWizard } from '../../components/ImportWizard';
 import { useNavigation } from '../../lib/navigation';
 import EntityChip from '../../components/EntityChip';
@@ -476,7 +477,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     const desc = `Stripe refund ${refund.stripe_id}`;
     const date = refund.data?.created
       ? new Date(refund.data.created * 1000).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
+      : todayLocal();
     try {
       await api.create('expenses', {
         company_id: activeCompany.id, date, amount, description: desc,

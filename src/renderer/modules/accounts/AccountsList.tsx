@@ -8,6 +8,7 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import { ImportWizard } from '../../components/ImportWizard';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
@@ -278,7 +279,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       last_txn_date: a.last_txn_date || '', description: a.description || '',
     }));
     // downloadCSVBlob accepts row records directly — no pre-stringification.
-    downloadCSVBlob(rows, `chart-of-accounts-${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadCSVBlob(rows, `chart-of-accounts-${todayLocal()}.csv`);
   };
 
   // Drag-and-drop reordering / reparenting
@@ -754,7 +755,7 @@ const MergeDialog: React.FC<{ accounts: Account[]; onClose: () => void; onDone: 
 // ─── Opening Balance Dialog ─────────────────────────────
 const OpeningBalanceDialog: React.FC<{ account: Account; companyId: string; onClose: () => void; onDone: () => void }> = ({ account, companyId, onClose, onDone }) => {
   const [amount, setAmount] = useState('0');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocal());
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     const amt = parseFloat(amount);

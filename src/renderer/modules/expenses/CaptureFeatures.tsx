@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, X, Eye, EyeOff, FileText, Paperclip } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, roundCents } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import { FieldLabel } from '../../components/FieldLabel';
 
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'CNY', 'MXN', 'INR'];
@@ -543,7 +544,7 @@ export const BulkPasteModal: React.FC<{ companyId: string; onClose: () => void; 
 export const QuickAddBar: React.FC<{ companyId: string; onCreated: (id: string) => void }> = ({ companyId, onCreated }) => {
   const [vendor, setVendor] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocal());
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!amount) return;

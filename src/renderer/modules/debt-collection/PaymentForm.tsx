@@ -3,6 +3,7 @@ import { DollarSign, X } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, roundCents } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtData {
@@ -192,6 +193,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
@@ -204,6 +207,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={editId ? 'Edit payment' : 'Record payment'}
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
           className="block-card-elevated w-full max-w-[500px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >

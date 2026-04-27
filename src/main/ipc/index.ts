@@ -31,6 +31,9 @@ import https from 'https';
 const SYNC_SERVER = process.env.SYNC_SERVER_URL || 'https://accounting.rmpgutah.us';
 
 // Debounced auto-backup: waits 30s after last write, then uploads DB to server
+// CONCURRENCY: a single global timer is correct here — the SQLite file holds
+// ALL companies for the logged-in user, and the backup is keyed on user email.
+// Per-company debouncing would unnecessarily upload the same file N times.
 let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleAutoBackup() {
@@ -526,7 +529,17 @@ function postJournalEntry(
   }
 }
 
+// CONCURRENCY: ipcMain.handle throws if the same channel is registered twice.
+// Without this guard, calling registerIpcHandlers a second time (e.g. after a
+// restore-from-backup reinit, or if main.ts startup runs twice) would crash
+// the whole app the moment any handler-registration line runs. We register
+// handlers exactly once for the lifetime of the main process.
+let _ipcHandlersRegistered = false;
+
 export function registerIpcHandlers(): void {
+  if (_ipcHandlersRegistered) return;
+  _ipcHandlersRegistered = true;
+
   // Stripe integration — online-first with local SQLite cache fallback,
   // lives in its own module so the renderer can use Stripe offline.
   registerStripeIpc(ipcMain);
@@ -908,10 +921,23 @@ export function registerIpcHandlers(): void {
           const total = Number(invoiceData.total || invoiceData.subtotal) || 0;
           if (total > 0) {
             const invoiceNum = invoiceData.invoice_number || savedId.substring(0, 8);
+            // CALC: FX — multi-currency invoice JE must be posted in the
+            // company's reporting currency (USD). When invoice.currency !=
+            // USD, multiply by exchange_rate (units of USD per 1 unit of
+            // invoice currency). Default = 1.0 for USD-denominated invoices.
+            const invCurrency = String(invoiceData.currency || 'USD').toUpperCase();
+            const fxRate = Number(invoiceData.exchange_rate);
+            const usdRate = invCurrency === 'USD'
+              ? 1
+              : (Number.isFinite(fxRate) && fxRate > 0 ? fxRate : 1);
+            const totalUsd = Math.round(total * usdRate * 100) / 100;
+            const fxNote = invCurrency === 'USD'
+              ? ''
+              : ` (orig ${total} ${invCurrency} @ ${usdRate})`;
             postJournalEntry(rawDb, companyId, invoiceData.issue_date || new Date().toISOString().slice(0, 10),
               `Invoice created - #${invoiceNum}`, [
-                { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${invoiceNum}` },
-                { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${invoiceNum}` },
+                { nameHint: 'Receivable', debit: totalUsd, credit: 0, note: `AR for Invoice #${invoiceNum}${fxNote}` },
+                { nameHint: 'Revenue', debit: 0, credit: totalUsd, note: `Revenue from Invoice #${invoiceNum}${fxNote}` },
               ]);
           }
         }
@@ -1904,11 +1930,24 @@ export function registerIpcHandlers(): void {
       console.log('User not found locally, checking server for backup...');
       const backup = await downloadBackup(email);
       if (backup && backup.length > 1000) {
-        // Restore the backup
+        // CONCURRENCY: cancel any pending auto-backup so it doesn't race
+        // against the restore (would re-upload the soon-to-be-overwritten
+        // empty DB right as we restore the real one), then close the DB
+        // *before* overwriting the file so we don't tear out from under any
+        // open prepared statements / WAL state.
+        if (autoBackupTimer) {
+          clearTimeout(autoBackupTimer);
+          autoBackupTimer = null;
+        }
         const dbPath = db.getDbPath();
         try {
           db.getDb().pragma('wal_checkpoint(TRUNCATE)');
+          db.getDb().close();
         } catch (_) {}
+        // Also remove -wal and -shm so the restored DB isn't paired with a
+        // stale WAL from the old empty database.
+        try { fs.unlinkSync(dbPath + '-wal'); } catch (_) {}
+        try { fs.unlinkSync(dbPath + '-shm'); } catch (_) {}
         fs.writeFileSync(dbPath, backup);
         console.log(`Restored ${backup.length} byte backup from server for ${email}`);
         // Reinitialize database
@@ -2341,10 +2380,14 @@ export function registerIpcHandlers(): void {
           for (const r of rows) autoJEIds.push(r.id);
         }
 
-        // Delete their lines first (FK constraint), then the entries
+        // CONCURRENCY: hoist prepared statements out of the loop. `prepare`
+        // parses + caches each call; preparing inside a hot loop creates one
+        // statement object per iteration instead of reusing a single one.
+        const delLinesStmt = (dbInstance as any).prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`);
+        const delEntryStmt = (dbInstance as any).prepare(`DELETE FROM journal_entries WHERE id = ?`);
         for (const jeId of autoJEIds) {
-          (dbInstance as any).prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`).run(jeId);
-          (dbInstance as any).prepare(`DELETE FROM journal_entries WHERE id = ?`).run(jeId);
+          delLinesStmt.run(jeId);
+          delEntryStmt.run(jeId);
         }
         const deleted = autoJEIds.length;
 
@@ -2739,7 +2782,7 @@ export function registerIpcHandlers(): void {
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
         AND je.company_id = ? AND je.is_posted = 1
-        AND je.date >= ? AND je.date <= ?
+        AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
       WHERE a.company_id = ? AND a.type = 'revenue' AND a.is_active = 1
       GROUP BY a.id ORDER BY a.code
     `).all(companyId, startDate, endDate, companyId) as any[];
@@ -2752,7 +2795,7 @@ export function registerIpcHandlers(): void {
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
         AND je.company_id = ? AND je.is_posted = 1
-        AND je.date >= ? AND je.date <= ?
+        AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
       WHERE a.company_id = ? AND a.type = 'expense'
         AND (a.subtype LIKE '%cogs%' OR a.subtype LIKE '%cost_of%')
         AND a.is_active = 1
@@ -2767,7 +2810,7 @@ export function registerIpcHandlers(): void {
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
         AND je.company_id = ? AND je.is_posted = 1
-        AND je.date >= ? AND je.date <= ?
+        AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
       WHERE a.company_id = ? AND a.type = 'expense'
         AND a.subtype NOT LIKE '%cogs%' AND a.subtype NOT LIKE '%cost_of%'
         AND a.is_active = 1
@@ -2821,7 +2864,7 @@ export function registerIpcHandlers(): void {
           SELECT SUM(jel.debit - jel.credit)
           FROM journal_entry_lines jel
           JOIN journal_entries je ON je.id = jel.journal_entry_id
-          WHERE jel.account_id = a.id AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?
+          WHERE jel.account_id = a.id AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */
         ), 0) as balance
       FROM accounts a
       WHERE a.company_id = ? AND a.type = ? AND a.is_active = 1
@@ -2840,7 +2883,7 @@ export function registerIpcHandlers(): void {
       FROM journal_entry_lines jel
       JOIN journal_entries je ON je.id = jel.journal_entry_id
       JOIN accounts a ON a.id = jel.account_id
-      WHERE je.company_id = ? AND je.is_posted = 1 AND je.date <= ?
+      WHERE je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */
     `).get(companyId, asOfDate) as any;
 
     const totalAssets = assets.reduce((s: number, a: any) => s + (a.balance || 0), 0);
@@ -2869,15 +2912,15 @@ export function registerIpcHandlers(): void {
     const rows = dbInstance.prepare(`
       SELECT
         a.code, a.name, a.type, a.subtype,
-        COALESCE(SUM(CASE WHEN je.date >= ? THEN jel.debit ELSE 0 END), 0) as period_debit,
-        COALESCE(SUM(CASE WHEN je.date >= ? THEN jel.credit ELSE 0 END), 0) as period_credit,
+        COALESCE(SUM(CASE WHEN date(je.date) >= date(?) /* DATE: Item #7 — wrap for inclusive start-of-day */ THEN jel.debit ELSE 0 END), 0) as period_debit,
+        COALESCE(SUM(CASE WHEN date(je.date) >= date(?) /* DATE: Item #7 — wrap for inclusive start-of-day */ THEN jel.credit ELSE 0 END), 0) as period_credit,
         COALESCE(SUM(jel.debit), 0) as total_debit,
         COALESCE(SUM(jel.credit), 0) as total_credit,
         COALESCE(a.balance, 0) as opening_balance
       FROM accounts a
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-        AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?
+        AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */
       WHERE a.company_id = ? AND a.is_active = 1
       GROUP BY a.id
       HAVING total_debit > 0 OR total_credit > 0 OR opening_balance != 0
@@ -2984,7 +3027,8 @@ export function registerIpcHandlers(): void {
       JOIN journal_entries je ON je.id = jel.journal_entry_id
       JOIN accounts a ON a.id = jel.account_id
       WHERE je.company_id = ? AND je.is_posted = 1
-        AND je.date >= ? AND je.date <= ?
+        -- DATE: Item #7 — date() wrap on both sides so end-of-period is inclusive.
+        AND date(je.date) >= date(?) AND date(je.date) <= date(?)
     `;
     const params: any[] = [companyId, startDate, endDate];
 
@@ -3032,7 +3076,10 @@ export function registerIpcHandlers(): void {
           MIN(e.date) as first_transaction,
           MAX(e.date) as last_transaction
         FROM vendors v
-        LEFT JOIN expenses e ON e.vendor_id = v.id AND e.company_id = ? AND e.date BETWEEN ? AND ?
+        -- DATE: Item #6 — date() wraps both column and parameters so a stored
+        -- timestamp ('2026-04-15 14:30:00') still matches a date-only filter,
+        -- and end-of-period bounds are inclusive of the full day.
+        LEFT JOIN expenses e ON e.vendor_id = v.id AND e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
         WHERE v.company_id = ?
         GROUP BY v.id, v.name
         HAVING total_spend > 0
@@ -3092,7 +3139,7 @@ export function registerIpcHandlers(): void {
       FROM journal_entry_lines jel
       JOIN journal_entries je ON jel.journal_entry_id = je.id
       JOIN accounts a ON jel.account_id = a.id
-      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+      WHERE je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
         AND a.type IN ('liability') AND a.subtype IN ('long_term_liability','notes_payable','loan')
     `).get(companyId, startDate, endDate) as any;
 
@@ -3102,7 +3149,7 @@ export function registerIpcHandlers(): void {
       FROM journal_entry_lines jel
       JOIN journal_entries je ON jel.journal_entry_id = je.id
       JOIN accounts a ON jel.account_id = a.id
-      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+      WHERE je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
         AND a.type IN ('liability') AND a.subtype IN ('long_term_liability','notes_payable','loan')
     `).get(companyId, startDate, endDate) as any;
 
@@ -3112,7 +3159,7 @@ export function registerIpcHandlers(): void {
       FROM journal_entry_lines jel
       JOIN journal_entries je ON jel.journal_entry_id = je.id
       JOIN accounts a ON jel.account_id = a.id
-      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+      WHERE je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
         AND a.type = 'equity' AND a.subtype NOT IN ('retained_earnings','net_income')
     `).get(companyId, startDate, endDate) as any;
 
@@ -3122,7 +3169,7 @@ export function registerIpcHandlers(): void {
       FROM journal_entry_lines jel
       JOIN journal_entries je ON jel.journal_entry_id = je.id
       JOIN accounts a ON jel.account_id = a.id
-      WHERE je.company_id = ? AND je.date >= ? AND je.date <= ?
+      WHERE je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
         AND a.type = 'equity' AND a.subtype NOT IN ('retained_earnings','net_income')
     `).get(companyId, startDate, endDate) as any;
 
@@ -3365,23 +3412,36 @@ export function registerIpcHandlers(): void {
     const depreciable = Math.max(0, cost - salvage);
     const method = asset.depreciation_method;
 
-    for (let year = 1; year <= life; year++) {
+    // CALC: Mid-year purchase / actual-month convention (GAAP). An asset
+    // placed in service mid-year takes only a partial year of depreciation
+    // in year 1 (months remaining ÷ 12). The unused fraction rolls into
+    // year (life+1). E.g. July 1 purchase: year1 = 6/12, year (life+1) = 6/12.
+    // This matches the month-by-month accrual in `assets:run-depreciation`.
+    const purchaseMonth = isNaN(startDate.getTime()) ? 1 : (startDate.getMonth() + 1);
+    const year1Fraction = (13 - purchaseMonth) / 12; // Jan=12/12 (1.0), Dec=1/12
+    const totalYears = year1Fraction < 1 ? life + 1 : life;
+
+    for (let year = 1; year <= totalYears; year++) {
       let annualDep = 0;
+      const fraction = year === 1
+        ? year1Fraction
+        : (year === totalYears && totalYears > life ? (1 - year1Fraction) : 1);
       if (method === 'straight_line') {
-        annualDep = depreciable / life;
+        annualDep = (depreciable / life) * fraction;
       } else if (method === 'double_declining') {
         // Iterate on declining book value. Switch to straight-line over the
         // remaining life when SL would yield a larger deduction (standard
         // DDB-with-crossover convention used by IRS Pub 946 examples).
         const rate = 2 / life;
         const ddbDep = (bookValue - salvage) * rate;
-        const remainingYears = life - year + 1;
+        const remainingYears = Math.max(1, life - Math.min(year, life) + 1);
         const slDep = (bookValue - salvage) / remainingYears;
-        annualDep = Math.max(ddbDep, slDep);
+        annualDep = Math.max(ddbDep, slDep) * fraction;
       } else if (method === 'sum_of_years_digits') {
-        const remaining = life - year + 1;
+        const idx = Math.min(year, life);
+        const remaining = life - idx + 1;
         const sumYears = (life * (life + 1)) / 2;
-        annualDep = (remaining / sumYears) * depreciable;
+        annualDep = (remaining / sumYears) * depreciable * fraction;
       }
 
       // Salvage floor — never deduct more than the gap to salvage.
@@ -3391,7 +3451,7 @@ export function registerIpcHandlers(): void {
       // Last period absorbs rounding drift so the schedule closes exactly
       // on (cost - salvage). Without this 0.01-cent crumbs accumulate and
       // the final book value drifts off salvage by a few cents.
-      if (year === life) {
+      if (year === totalYears) {
         const accumSoFar = schedule.reduce((s, e) => s + e.depreciation_amount, 0);
         annualDep = cents(depreciable - accumSoFar);
         if (annualDep < 0) annualDep = 0;
@@ -4231,9 +4291,14 @@ export function registerIpcHandlers(): void {
           let interest: number;
 
           if (d.interest_type === 'compound') {
-            const n = d.compound_frequency || 12;
+            // CALC: A = P*(1 + r/n)^(n*t). compound_frequency = n
+            // (1=annual, 4=quarterly, 12=monthly, 365=daily). Daily compound
+            // = (1 + r/365)^(365*t), which is the exact form (not e^rt).
+            const nRaw = Number(d.compound_frequency);
+            const n = Number.isFinite(nRaw) && nRaw > 0 ? nRaw : 12;
             interest = d.original_amount * Math.pow(1 + d.interest_rate / n, n * years) - d.original_amount;
           } else {
+            // CALC: simple interest I = P*r*t.
             interest = d.original_amount * d.interest_rate * years;
           }
 
@@ -4843,7 +4908,8 @@ export function registerIpcHandlers(): void {
     const collectionByMonth = db.getDb().prepare(`
       SELECT strftime('%Y-%m', dp.received_date) as month, SUM(dp.amount) as total
       FROM debt_payments dp JOIN debts d ON dp.debt_id = d.id
-      WHERE d.company_id = ? AND dp.received_date BETWEEN ? AND ?
+      -- DATE: Item #6 — date() wrap so timestamp values match date-only bounds.
+      WHERE d.company_id = ? AND date(dp.received_date) BETWEEN date(?) AND date(?)
       GROUP BY month ORDER BY month
     `).all(companyId, startDate, endDate);
 
@@ -4922,6 +4988,34 @@ export function registerIpcHandlers(): void {
         const freqDays: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
         const days = freqDays[frequency] || 30;
         let d = new Date(start_date + 'T12:00:00');
+        // CALC: Standard amortization. Each installment payment is constant
+        // (= installment_amount). Per-installment interest = balance * rate
+        // per period; principal = payment - interest; new balance = balance
+        // - principal. Source: standard mortgage/loan amortization formula
+        //   PMT = P * r * (1+r)^n / ((1+r)^n - 1).
+        // Without dedicated principal/interest columns we cannot persist the
+        // split here, but we DO validate that the chosen installment_amount
+        // is at least sufficient to cover first-period interest — otherwise
+        // the loan never amortizes. The notes column receives a warning.
+        const debtRow = dbInstance.prepare(
+          'SELECT balance_due, interest_rate, interest_type FROM debts WHERE id = ?'
+        ).get(debt_id) as any;
+        const periodsPerYear = frequency === 'weekly' ? 52
+          : frequency === 'biweekly' ? 26 : 12;
+        const principal = Number(debtRow?.balance_due) || 0;
+        const annualRate = Number(debtRow?.interest_rate) || 0;
+        const periodRate = annualRate / periodsPerYear;
+        const firstInterest = principal * periodRate;
+        if (Number(installment_amount) > 0
+            && firstInterest > 0
+            && Number(installment_amount) < firstInterest) {
+          // Negative-amortization warning — installment doesn't even cover
+          // interest, balance grows.
+          // Stored as part of the plan's notes field for visibility.
+          const warn = ` [warning: installment $${Number(installment_amount).toFixed(2)} < first-period interest $${firstInterest.toFixed(2)} — negative amortization]`;
+          dbInstance.prepare('UPDATE debt_payment_plans SET notes = COALESCE(notes,\'\') || ? WHERE id = ?')
+            .run(warn, plan.id);
+        }
         for (let i = 0; i < (total_installments || 1); i++) {
           db.create('debt_plan_installments', {
             plan_id: plan.id,
@@ -4991,14 +5085,44 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('debt:settlement-accept', (_event, { debtId, settlementId, offer_amount }) => {
     try {
+      // CALC: Settlement-accept write-off JE (GAAP — direct write-off method).
+      // When a creditor accepts < balance_due, the difference (forgiven
+      // portion) is a bad-debt expense. JE: Dr Bad Debt Expense / Cr A/R
+      // (or whatever the receivable account is). The collected portion is
+      // recognized via the normal payment flow; here we only book the
+      // shortfall write-off so the balance closes to zero.
+      const dbi = db.getDb();
+      const debt = dbi.prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
+      const companyId = debt?.company_id || db.getCurrentCompanyId();
+      const priorBalance = Number(debt?.balance_due) || 0;
+      const writeOff = Math.max(0, Math.round((priorBalance - Number(offer_amount || 0)) * 100) / 100);
+
       db.update('debt_settlements', settlementId, {
         response: 'accepted',
         accepted_date: new Date().toISOString().slice(0, 10),
       });
       db.update('debts', debtId, { status: 'settled', balance_due: offer_amount });
+
+      if (companyId && writeOff > 0) {
+        try {
+          postJournalEntry(
+            dbi,
+            companyId,
+            new Date().toISOString().slice(0, 10),
+            `Settlement write-off — debt ${debt?.debtor_name || debtId.slice(0, 8)}`,
+            [
+              { nameHint: 'Bad Debt', debit: writeOff, credit: 0, note: 'Forgiven portion of settled debt' },
+              { nameHint: 'Receivable', debit: 0, credit: writeOff, note: `A/R write-off for debt ${debtId.slice(0, 8)}` },
+            ]
+          );
+        } catch (err) {
+          console.warn('settlement-accept: write-off JE failed:', (err as Error)?.message);
+        }
+      }
+
       logDebtAudit(debtId, 'settlement_accepted', 'status', 'in_collection', 'settled');
       scheduleAutoBackup();
-      return { ok: true };
+      return { ok: true, write_off_amount: writeOff };
     } catch (err: any) {
       return { error: err.message };
     }
@@ -5232,7 +5356,8 @@ export function registerIpcHandlers(): void {
         SELECT dla.*, d.debtor_name, d.balance_due, d.id as debt_id
         FROM debt_legal_actions dla
         JOIN debts d ON dla.debt_id = d.id
-        WHERE d.company_id = ? AND dla.hearing_date BETWEEN ? AND ?
+        -- DATE: Item #6 — date() wrap.
+        WHERE d.company_id = ? AND date(dla.hearing_date) BETWEEN date(?) AND date(?)
         ORDER BY dla.hearing_date ASC LIMIT 25
       `).all(companyId, today, weekAhead);
 
@@ -5761,7 +5886,9 @@ export function registerIpcHandlers(): void {
           MAX(pr.pay_date) as last_pay_date
         FROM pay_stubs ps
         JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
-        WHERE ps.employee_id = ? AND pr.pay_date BETWEEN ? AND ?
+        -- DATE: Item #6/#18 — date() wrap; pay_date stored as date-only string,
+        -- but be defensive in case future code ever stores a timestamp here.
+        WHERE ps.employee_id = ? AND date(pr.pay_date) BETWEEN date(?) AND date(?)
       `).get(employeeId, yearStart, yearEnd) as any;
 
       const deductions = dbInstance.prepare(`
@@ -5790,7 +5917,8 @@ export function registerIpcHandlers(): void {
         SELECT c.name as category, COALESCE(SUM(e.amount), 0) as actual
         FROM expenses e
         LEFT JOIN categories c ON e.category_id = c.id
-        WHERE e.company_id = ? AND e.date BETWEEN ? AND ?
+        -- DATE: Item #6 — date() wrap so end-of-period bounds are inclusive.
+        WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
         GROUP BY c.name
       `).all(companyId, budget.start_date, budget.end_date) as any[];
 
@@ -6597,7 +6725,7 @@ export function registerIpcHandlers(): void {
       const accts = dbi.prepare(
         `SELECT a.id, a.type, a.name, COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
             JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ? AND je.date <= ?), 0) as net_dr
+            WHERE jel.account_id = a.id AND je.company_id = ? AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */), 0) as net_dr
           FROM accounts a WHERE a.company_id = ? AND a.type IN ('revenue','expense')`
       ).all(companyId, periodEndDate, companyId) as any[];
       const entryNumber = `CLOSE-${periodEndDate}`;
@@ -6806,7 +6934,7 @@ export function registerIpcHandlers(): void {
        LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
        LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
          AND je.company_id = ? AND je.is_posted = 1
-         AND je.date >= ? AND je.date <= ?
+         AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
        WHERE a.company_id = ? AND a.type IN ('revenue','expense')
        GROUP BY a.id`
     ).all(companyId, periodStart, periodEnd, companyId) as any[];
@@ -6905,7 +7033,7 @@ export function registerIpcHandlers(): void {
       `SELECT SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS bal
        FROM journal_entry_lines jel
        JOIN journal_entries je ON je.id = jel.journal_entry_id
-       WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?`
+       WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
     ).get(accountId, companyId, asOfDate) as any;
     return r?.bal || 0;
   }
@@ -6966,7 +7094,7 @@ export function registerIpcHandlers(): void {
         `SELECT jel.id, jel.debit, jel.credit, jel.description, je.entry_number, je.date
          FROM journal_entry_lines jel
          JOIN journal_entries je ON je.id = jel.journal_entry_id
-         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?`
+         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
       ).all(accountId, companyId, asOfDate) as any[];
 
       const matches: any[] = [];
@@ -7103,7 +7231,7 @@ export function registerIpcHandlers(): void {
          LEFT JOIN bills b ON b.id = je.source_id AND je.source_type = 'bill'
          LEFT JOIN vendors v ON v.id = b.vendor_id
          WHERE je.company_id = ? AND je.is_posted = 1
-           AND je.date >= ? AND je.date <= ?
+           AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
            AND a.is_1099_eligible = 1 AND v.id IS NOT NULL
          GROUP BY v.id, a.id
          HAVING amount >= 600
@@ -7122,7 +7250,7 @@ export function registerIpcHandlers(): void {
          FROM accounts a
          LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
          LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-           AND je.company_id = ? AND je.is_posted = 1 AND je.date >= ? AND je.date <= ?
+           AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
          WHERE a.company_id = ? AND a.tax_line != ''
          GROUP BY a.id ORDER BY a.tax_line, a.code`
       ).all(companyId, periodStart, periodEnd, companyId);
@@ -7169,7 +7297,7 @@ export function registerIpcHandlers(): void {
         const balRow = dbi.prepare(
           `SELECT COALESCE(SUM(jel.debit - jel.credit),0) as bal FROM journal_entry_lines jel
            JOIN journal_entries je ON jel.journal_entry_id = je.id
-           WHERE jel.account_id = ? AND je.company_id = ? AND je.date <= ?`
+           WHERE jel.account_id = ? AND je.company_id = ? AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
         ).get(a.id, companyId, date) as any;
         const currentBal = Number(balRow?.bal) || 0;
         const target = currentBal * rate;
@@ -7277,7 +7405,7 @@ export function registerIpcHandlers(): void {
         const balRow = dbi.prepare(
           `SELECT COALESCE(SUM(jel.debit - jel.credit),0) as bal FROM journal_entry_lines jel
            JOIN journal_entries je ON jel.journal_entry_id = je.id
-           WHERE jel.account_id = ? AND je.company_id = ? AND je.date >= ? AND je.date <= ?`
+           WHERE jel.account_id = ? AND je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.`
         ).get(a.id, companyId, start, end) as any;
         const sign = a.type === 'revenue' ? -1 : 1;
         const amt = sign * (Number(balRow?.bal) || 0);
@@ -7319,7 +7447,7 @@ export function registerIpcHandlers(): void {
       const lines = dbi.prepare(
         `SELECT jel.id, jel.description as ldesc, je.description as jdesc
          FROM journal_entry_lines jel JOIN journal_entries je ON jel.journal_entry_id = je.id
-         WHERE jel.account_id = ? AND je.company_id = ? AND je.date >= ? AND je.date <= ?`
+         WHERE jel.account_id = ? AND je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.`
       ).all(sourceAccountId, companyId, dateFrom, dateTo) as any[];
       const matchIds = lines.filter(l => re.test(String(l.ldesc || '')) || re.test(String(l.jdesc || ''))).map(l => l.id);
       const stmt = dbi.prepare('UPDATE journal_entry_lines SET account_id = ? WHERE id = ?');
@@ -7397,7 +7525,7 @@ export function registerIpcHandlers(): void {
         `SELECT a.id,
           COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
             JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ? AND je.date <= ?),0) as bal
+            WHERE jel.account_id = a.id AND je.company_id = ? AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */),0) as bal
          FROM accounts a WHERE a.company_id = ? AND COALESCE(a.deleted_at,'') = ''`
       ).all(companyId, d, companyId) as any[];
       const upsert = dbi.prepare(
@@ -7642,7 +7770,7 @@ export function registerIpcHandlers(): void {
          FROM accounts a
          LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
          LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-           AND je.company_id = ? AND je.is_posted = 1 AND je.date >= ? AND je.date <= ?
+           AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
          WHERE a.company_id = ?
          GROUP BY a.id ORDER BY a.code`
       ).all(companyId, periodStart, periodEnd, companyId);
@@ -7691,7 +7819,7 @@ export function registerIpcHandlers(): void {
          FROM journal_entry_lines jel
          JOIN journal_entries je ON je.id = jel.journal_entry_id
          JOIN accounts a ON a.id = jel.account_id
-         WHERE je.company_id = ? AND je.is_posted = 1 AND je.date >= ? AND je.date <= ?
+         WHERE je.company_id = ? AND je.is_posted = 1 AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
            AND a.type IN ('revenue','expense')
          GROUP BY a.type`
       ).all(companyId, ps, pe) as any[];
@@ -7729,7 +7857,7 @@ export function registerIpcHandlers(): void {
          FROM accounts a
          LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
          LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-           AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?
+           AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */
          WHERE a.company_id = ? GROUP BY a.id`
       ).all(companyId, log.period_end, companyId) as any[];
       let count = 0;
@@ -7879,7 +8007,7 @@ export function registerIpcHandlers(): void {
         `SELECT jel.id, jel.debit, jel.credit, jel.description, je.entry_number, je.date
          FROM journal_entry_lines jel
          JOIN journal_entries je ON je.id = jel.journal_entry_id
-         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?`
+         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
       ).all(accountId, companyId, asOfDate) as any[];
 
       const matches: any[] = [];
@@ -7947,7 +8075,7 @@ export function registerIpcHandlers(): void {
           `SELECT SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS bal
            FROM journal_entry_lines jel
            JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?`
+           WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
         ).get(a.id, companyId, asOfDate) as any;
         const glBal = a.type === 'liability' ? -(gl?.bal || 0) : (gl?.bal || 0);
         let subTotal = 0;
@@ -8105,7 +8233,7 @@ export function registerIpcHandlers(): void {
          FROM accounts a
          LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
          LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-           AND je.company_id = ? AND je.is_posted = 1 AND je.date <= ?
+           AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */
          WHERE a.company_id = ? GROUP BY a.id ORDER BY a.code`
       ).all(companyId, asOfDate, companyId);
       return { company, asOfDate, balances };

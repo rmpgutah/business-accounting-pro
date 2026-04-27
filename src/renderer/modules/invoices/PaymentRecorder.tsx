@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { X, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
+import { todayLocal } from '../../lib/date-helpers';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -40,7 +42,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   const isEditing = !!editPaymentId;
 
   const [amount, setAmount] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState<string>(todayLocal());
   const [method, setMethod] = useState<string>('transfer');
   const [reference, setReference] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -72,7 +74,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           const paymentAmt = Number(p.amount) || 0;
           setAmount(String(paymentAmt || ''));
           setOriginalAmount(paymentAmt);
-          setDate(p.date || new Date().toISOString().slice(0, 10));
+          setDate(p.date || todayLocal());
           setMethod(p.payment_method || 'transfer');
           setReference(p.reference || '');
         }
@@ -100,7 +102,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       setError('Please select a payment date.');
       return;
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     if (date > today) {
       setError('Payment date cannot be in the future.');
       return;
@@ -132,6 +134,8 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, restore focus, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
@@ -142,6 +146,12 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       }}
     >
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-recorder-title"
+        tabIndex={-1}
+        onKeyDown={trapFocusOnKeyDown(containerRef)}
         className="block-card-elevated w-full max-w-md cursor-pointer"
         onClick={(e) => e.stopPropagation()}
       >
@@ -149,10 +159,11 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <DollarSign size={18} className="text-accent-income" />
-            <h2 className="text-base font-bold text-text-primary">{isEditing ? 'Edit Payment' : 'Record Payment'}</h2>
+            <h2 id="payment-recorder-title" className="text-base font-bold text-text-primary">{isEditing ? 'Edit Payment' : 'Record Payment'}</h2>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close payment recorder"
             className="text-text-muted hover:text-text-primary transition-colors p-1"
           >
             <X size={18} />

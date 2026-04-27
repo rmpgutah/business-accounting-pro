@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Scale, Save, ArrowRightLeft, RefreshCw, Star, Upload, Download, Bell, Layers, History, ListChecks } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
 
 // Star confidence indicator (1–5)
@@ -20,7 +21,7 @@ const AccountReconciliation: React.FC = () => {
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState('');
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(() => todayLocal());
   const [computed, setComputed] = useState<any>(null);
   const [matches, setMatches] = useState<{ matches: any[]; suggestions: any[] }>({ matches: [], suggestions: [] });
   const [history, setHistory] = useState<any[]>([]);
@@ -411,7 +412,7 @@ const AccountReconciliation: React.FC = () => {
         <button onClick={addSchedule} className="px-2 py-1 text-xs border border-border-primary mb-2">+ Schedule for selected account</button>
         {schedules.length === 0 && <div className="text-xs text-text-muted">No schedules set.</div>}
         {schedules.map((s: any) => {
-          const overdue = s.next_due && s.next_due <= new Date().toISOString().slice(0, 10);
+          const overdue = s.next_due && s.next_due <= todayLocal();
           return (
             <div key={s.id} className={`flex justify-between py-1 border-b border-border-primary text-xs ${overdue ? 'text-red-400' : ''}`}>
               <span>{s.code} {s.name} · {s.frequency} · threshold {formatCurrency(s.threshold || 0)}</span>

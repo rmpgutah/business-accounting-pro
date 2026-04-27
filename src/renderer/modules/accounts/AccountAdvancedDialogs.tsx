@@ -11,6 +11,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 
 interface AccountLite {
   id: string;
@@ -226,7 +227,7 @@ export const AliasesDialog: React.FC<{ account: AccountLite; onClose: () => void
 
 // ─── F6: FX Revaluation Dialog ──────────────────────────────
 export const FxRevalueDialog: React.FC<{ companyId: string; onClose: () => void; onDone: () => void }> = ({ companyId, onClose, onDone }) => {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocal());
   const [ratesText, setRatesText] = useState('EUR=1.08\nGBP=1.27\nCAD=0.74');
   const [busy, setBusy] = useState(false);
   const submit = async () => {
@@ -484,7 +485,7 @@ export const SplitDialog: React.FC<{ companyId: string; accounts: AccountLite[];
   const [src, setSrc] = useState(accounts[0]?.id || '');
   const [tgt, setTgt] = useState(accounts[1]?.id || '');
   const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(todayLocal());
   const [pat, setPat] = useState('.*');
   const [busy, setBusy] = useState(false);
   const exec = async () => {
@@ -607,7 +608,7 @@ export const ClassifyRulesDialog: React.FC<{ companyId: string; accounts: Accoun
 
 // ─── F25: Snapshot trigger ──────────────────────────────────
 export const SnapshotDialog: React.FC<{ companyId: string; onClose: () => void }> = ({ companyId, onClose }) => {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocal());
   const [busy, setBusy] = useState(false);
   const exec = async () => {
     setBusy(true);

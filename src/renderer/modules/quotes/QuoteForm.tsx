@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { FieldLabel } from '../../components/FieldLabel';
 import { formatCurrency, roundCents } from '../../lib/format';
+import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 
 // ─── Types ──────────────────────────────────────────────
@@ -59,8 +60,9 @@ const emptyForm: QuoteFormData = {
   quote_number: '',
   client_id: '',
   status: 'draft',
-  issue_date: new Date().toISOString().split('T')[0],
-  valid_until: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+  // DATE: Item #2 — local-time today, not UTC. Late-evening MT users would otherwise pre-fill tomorrow.
+  issue_date: todayLocal(),
+  valid_until: toLocalDateString(new Date(Date.now() + 30 * 86400000)),
   discount_amount: '0',
   notes: '',
   terms: '',
@@ -593,6 +595,8 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               className="block-input"
               value={form.valid_until}
               onChange={handleChange}
+              // DATE: Item #3 — prevent picking expiry before issue date.
+              min={form.issue_date || undefined}
             />
           </div>
 

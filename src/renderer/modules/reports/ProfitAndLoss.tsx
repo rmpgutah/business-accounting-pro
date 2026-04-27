@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Printer, Download, GitCompare } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfYear, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { fiscalYearStart, fiscalYearEnd } from '../../lib/date-helpers';
 import { generateReportHTML } from '../../lib/print-templates';
 import type { ReportColumn, ReportSummary } from '../../lib/print-templates';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -132,8 +133,9 @@ const PnLSpacer: React.FC = () => (
 // ─── Component ──────────────────────────────────────────
 const ProfitAndLoss: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // DATE: Item #9 — fiscal-year-aware default. Falls back to Jan 1 if no company yet.
   const [startDate, setStartDate] = useState(() =>
-    format(startOfYear(new Date()), 'yyyy-MM-dd')
+    fiscalYearStart(new Date(), 1)
   );
   const [endDate, setEndDate] = useState(() =>
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
@@ -445,8 +447,9 @@ const ProfitAndLoss: React.FC = () => {
         setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'));
         break;
       case 'This Year':
-        setStartDate(format(startOfYear(now), 'yyyy-MM-dd'));
-        setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'));
+        // DATE: Item #9 — "This Year" uses fiscal year, not calendar year.
+        setStartDate(fiscalYearStart(now, activeCompany?.fiscal_year_start || 1));
+        setEndDate(fiscalYearEnd(now, activeCompany?.fiscal_year_start || 1));
         break;
     }
   };

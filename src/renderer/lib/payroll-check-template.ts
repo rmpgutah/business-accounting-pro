@@ -337,7 +337,7 @@ export function generatePaycheckHTML(
       </div>
       <div style="text-align:center;width:220px;">
         ${coSignature
-          ? `<img src="${coSignature}" style="height:36px;max-width:200px;object-fit:contain;display:block;margin:0 auto 2px;" />`
+          ? `<img src="${coSignature}" alt="Authorized signature" style="height:36px;max-width:200px;object-fit:contain;display:block;margin:0 auto 2px;" />`
           : `<div style="height:36px;"></div>`
         }
         <div style="border-top:1.5px solid #000;padding-top:3px;">

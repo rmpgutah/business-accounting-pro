@@ -18,6 +18,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import SpreadsheetGrid, { GridColumn, GridRow } from './SpreadsheetGrid';
 import { formatCurrency } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 
 interface Account { id: string; code: string; name: string; type: string; subtype: string; balance: number; }
 
@@ -272,7 +273,7 @@ const PowerFeatures: React.FC<{ accounts: Account[] }> = ({ accounts }) => {
   const submitCmdK = async () => {
     if (!cmdKPreview || !cmdKPreview.debit || !cmdKPreview.credit || !activeCompany) return;
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocal();
       const entryNumber = 'JE-' + Date.now().toString().slice(-8);
       const je = await api.create('journal_entries', {
         company_id: activeCompany.id,

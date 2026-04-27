@@ -12,6 +12,30 @@ import { initQueue, connectWebSocket } from './sync';
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
 
+// CONCURRENCY: enforce single-instance — two app instances racing on the same
+// SQLite file conflicts despite WAL (only one writer allowed at a time), and
+// cron timers/intervals would also double-fire.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
+// CONCURRENCY: only allow http(s) URLs through to the OS shell — blocks
+// file://, mailto:, javascript:, etc. that could be used to exfiltrate or
+// open arbitrary files. mailto is intentionally handled by dedicated handlers.
+function safeOpenExternal(url: string): void {
+  if (typeof url !== 'string') return;
+  if (!/^https?:\/\//i.test(url)) return;
+  shell.openExternal(url).catch(() => {});
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -43,14 +67,14 @@ function createWindow() {
       || url.startsWith('devtools://');
     if (!allowed) {
       event.preventDefault();
-      shell.openExternal(url).catch(() => {});
+      safeOpenExternal(url);
     }
   });
   // SECURITY: Force window.open / target=_blank to open in the OS browser
   // rather than a child Electron window (which would inherit nodeIntegration
   // settings unless explicitly overridden).
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url).catch(() => {});
+    safeOpenExternal(url);
     return { action: 'deny' };
   });
 
@@ -131,18 +155,27 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  // CONCURRENCY: broadcast updater status to ALL renderer windows, not just
+  // mainWindow. If a second window is opened, it should still see the update
+  // banner.
+  const broadcast = (channel: string, payload: any) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send(channel, payload);
+    }
+  };
+
   autoUpdater.on('update-available', (info) => {
     console.log(`Update available: v${info.version} — downloading silently...`);
-    mainWindow?.webContents.send('update:downloading', info.version);
+    broadcast('update:downloading', info.version);
   });
 
   autoUpdater.on('download-progress', (progress) => {
-    mainWindow?.webContents.send('update:progress', Math.round(progress.percent));
+    broadcast('update:progress', Math.round(progress.percent));
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`Update v${info.version} downloaded — will install on next quit.`);
-    mainWindow?.webContents.send('update:ready', info.version);
+    broadcast('update:ready', info.version);
   });
 
   autoUpdater.on('error', (err) => {
@@ -163,6 +196,10 @@ function setupAutoUpdater() {
 let recurringInterval: ReturnType<typeof setInterval> | null = null;
 let notificationInterval: ReturnType<typeof setInterval> | null = null;
 let alertRulesInterval: ReturnType<typeof setInterval> | null = null;
+// CONCURRENCY: periodic WAL checkpoint — without this the -wal sidecar file
+// can grow unbounded under heavy write load (auto-backup runs every 30s of
+// activity but only checkpoints once on each backup).
+let walCheckpointInterval: ReturnType<typeof setInterval> | null = null;
 
 function startBackgroundServices() {
   // Run immediately on startup (non-blocking)
@@ -216,6 +253,16 @@ function startBackgroundServices() {
       console.error('Alert rules interval error:', err);
     }
   }, 24 * 60 * 60 * 1000);
+
+  // CONCURRENCY: WAL checkpoint every 5 minutes to bound -wal file growth.
+  // TRUNCATE mode resets the WAL to zero bytes if no readers are mid-txn.
+  walCheckpointInterval = setInterval(() => {
+    try {
+      getDb().pragma('wal_checkpoint(TRUNCATE)');
+    } catch (err) {
+      // DB may be reinitializing — safe to skip a tick
+    }
+  }, 5 * 60 * 1000);
 }
 
 function stopBackgroundServices() {
@@ -230,6 +277,10 @@ function stopBackgroundServices() {
   if (alertRulesInterval) {
     clearInterval(alertRulesInterval);
     alertRulesInterval = null;
+  }
+  if (walCheckpointInterval) {
+    clearInterval(walCheckpointInterval);
+    walCheckpointInterval = null;
   }
 }
 
@@ -249,21 +300,27 @@ app.whenReady().then(() => {
   startBackgroundServices();
   initQueue(dbInstance);
   connectWebSocket((event) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return;
+    // CONCURRENCY: broadcast push events to ALL open windows so multi-window
+    // sessions stay in sync. Previously only the first window got notified.
+    const allWindows = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+    if (allWindows.length === 0) return;
 
     if (event.type === 'invoice:paid') {
       const { invoiceId, companyId, amount, stripePaymentId } = event as any;
       try {
         dbInstance.prepare(`UPDATE invoices SET status = 'paid' WHERE id = ?`).run(invoiceId);
-        win.webContents.send('sync:invoice-paid', { invoiceId, companyId, amount, stripePaymentId });
+        for (const w of allWindows) {
+          w.webContents.send('sync:invoice-paid', { invoiceId, companyId, amount, stripePaymentId });
+        }
       } catch (e) {
         console.error('Failed to apply remote payment:', e);
       }
     }
 
     if (event.type === 'notification:create') {
-      win.webContents.send('notification:push', event);
+      for (const w of allWindows) {
+        w.webContents.send('notification:push', event);
+      }
     }
   });
 });

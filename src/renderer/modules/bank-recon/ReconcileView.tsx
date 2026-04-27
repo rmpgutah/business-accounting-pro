@@ -12,6 +12,7 @@ import {
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatDate } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface BankAccount {
@@ -244,7 +245,7 @@ const ReconcileView: React.FC = () => {
 
       // Bug fix #9b: schema column is last_reconciled_date, not last_reconciled.
       await api.update('bank_accounts', selectedBankId, {
-        last_reconciled_date: new Date().toISOString().split('T')[0],
+        last_reconciled_date: todayLocal(),
       });
 
       setSaveResult(

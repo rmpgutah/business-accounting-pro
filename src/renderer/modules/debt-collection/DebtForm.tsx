@@ -5,6 +5,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import { parseDateOnly, toLocalDateString } from '../../lib/date-helpers';
 import {
   DEBT_RISK, DEBT_SEGMENT, DEBT_ORIGINATION, DEBT_COLLECTABILITY,
   ClassificationSelect, riskCategoryFromScore,
@@ -430,9 +431,11 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
     if (!form.delinquent_date || !form.statute_years) return '';
     const years = parseInt(form.statute_years, 10);
     if (isNaN(years) || years <= 0) return '';
-    const d = new Date(form.delinquent_date);
+    // DATE: Item #4 — noon-anchor parse + local format so statute year math
+    // doesn't cross a UTC day boundary in either direction.
+    const d = parseDateOnly(form.delinquent_date);
     d.setFullYear(d.getFullYear() + years);
-    return d.toISOString().split('T')[0];
+    return toLocalDateString(d);
   }, [form.delinquent_date, form.statute_years]);
 
   // ── Submit ──

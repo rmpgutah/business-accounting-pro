@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Printer } from 'lucide-react';
-import { format, startOfYear, endOfYear, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { fiscalYearStart, fiscalYearEnd } from '../../lib/date-helpers';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -110,11 +111,12 @@ const Spacer: React.FC = () => (
 // ─── Component ──────────────────────────────────────────
 const TaxSummary: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // DATE: Item #9 — defaults to fiscal year boundaries (falls back to Jan 1).
   const [startDate, setStartDate] = useState(() =>
-    format(startOfYear(new Date()), 'yyyy-MM-dd')
+    fiscalYearStart(new Date(), 1)
   );
   const [endDate, setEndDate] = useState(() =>
-    format(endOfYear(new Date()), 'yyyy-MM-dd')
+    fiscalYearEnd(new Date(), 1)
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -212,15 +214,21 @@ const TaxSummary: React.FC = () => {
   const setPreset = (label: string) => {
     const now = new Date();
     switch (label) {
-      case 'This Year':
-        setStartDate(format(startOfYear(now), 'yyyy-MM-dd'));
-        setEndDate(format(endOfYear(now), 'yyyy-MM-dd'));
+      case 'This Year': {
+        // DATE: Item #9 — fiscal year boundaries.
+        const fy = activeCompany?.fiscal_year_start || 1;
+        setStartDate(fiscalYearStart(now, fy));
+        setEndDate(fiscalYearEnd(now, fy));
         break;
-      case 'Last Year':
-        const lastYear = new Date(now.getFullYear() - 1, 0, 1);
-        setStartDate(format(startOfYear(lastYear), 'yyyy-MM-dd'));
-        setEndDate(format(endOfYear(lastYear), 'yyyy-MM-dd'));
+      }
+      case 'Last Year': {
+        // DATE: Item #9 — prior fiscal year by anchoring 1 year before today.
+        const fy = activeCompany?.fiscal_year_start || 1;
+        const lastYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        setStartDate(fiscalYearStart(lastYear, fy));
+        setEndDate(fiscalYearEnd(lastYear, fy));
         break;
+      }
     }
   };
 

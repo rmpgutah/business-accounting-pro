@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';
 import { formatCurrency, roundCents } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import {
@@ -245,7 +246,8 @@ const PAYMENT_METHODS = [
 ];
 
 const emptyForm: ExpenseFormData = {
-  date: new Date().toISOString().split('T')[0],
+  // DATE: Item #2 — local-time today.
+  date: todayLocal(),
   amount: '',
   tax_amount: '',
   description: '',
@@ -337,7 +339,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [showAffidavit, setShowAffidavit] = useState(false);
   const [affidavit, setAffidavit] = useState({
-    statement: '', signed_name: '', signed_date: new Date().toISOString().slice(0, 10),
+    statement: '', signed_name: '', signed_date: todayLocal(),
   });
   // ── capture-feature state ──
   const [extraReceipts, setExtraReceipts] = useState<string[]>([]);
@@ -1491,7 +1493,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     onChange={(e) => setForm(p => ({
                       ...p,
                       reimbursed: e.target.checked,
-                      reimbursed_date: e.target.checked && !p.reimbursed_date ? new Date().toISOString().split('T')[0] : p.reimbursed_date,
+                      reimbursed_date: e.target.checked && !p.reimbursed_date ? todayLocal() : p.reimbursed_date,
                     }))}
                     className="w-4 h-4 accent-accent-income"
                   />

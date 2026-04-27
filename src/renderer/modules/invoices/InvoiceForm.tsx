@@ -11,6 +11,7 @@ import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
 import type { LineRowType } from '../../../shared/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import { roundCents } from '../../lib/format';
+import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -199,12 +200,16 @@ const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
   return 'INV-1001';
 };
 
-const todayISO = (): string => new Date().toISOString().slice(0, 10);
+// DATE: Item #2 — local time today.
+const todayISO = (): string => todayLocal();
 
+// DATE: Item #4 — noon-anchor for round-trip-safe date arithmetic, then format
+// in local time. Previously used toISOString() which could shift the day in TZ
+// east of UTC+12 even for a noon anchor.
 const addDays = (isoDate: string, days: number): string => {
   const d = new Date(isoDate + 'T12:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateString(d);
 };
 
 const TERMS_DAYS: Record<string, number> = {

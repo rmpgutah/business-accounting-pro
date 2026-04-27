@@ -4,6 +4,7 @@ import { Lock, Unlock, CheckCircle2, SkipForward, Calendar, FileText, AlertTrian
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import api from '../../lib/api';
+import { toLocalDateString, fiscalYearEnd } from '../../lib/date-helpers';
 
 const ADJUSTMENT_CATEGORIES = ['deferral', 'accrual', 'depreciation', 'inventory', 'revaluation', 'correction', 'other'] as const;
 
@@ -30,9 +31,21 @@ const PeriodCloseWorkflow: React.FC = () => {
   const today = new Date();
   const [periodStart, setPeriodStart] = useState(() => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`);
   const [periodEnd, setPeriodEnd] = useState(() => {
+    // DATE: Item #2/#12 — local-time month-end string. For year-end close, the
+    // user can use the "Fiscal Year-End" preset which respects fiscal_year_start.
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return lastDay.toISOString().slice(0, 10);
+    return toLocalDateString(lastDay);
   });
+  // DATE: Item #12 — convenience setter for fiscal year-end close.
+  const setFiscalYearEndPreset = useCallback(() => {
+    const fy = activeCompany?.fiscal_year_start || 1;
+    const fyEnd = fiscalYearEnd(new Date(), fy);
+    const fyEndDate = new Date(`${fyEnd}T12:00:00`);
+    const fyStart = new Date(fyEndDate.getFullYear(), fyEndDate.getMonth() - 11, 1);
+    setPeriodStart(toLocalDateString(fyStart));
+    setPeriodEnd(fyEnd);
+  }, [activeCompany?.fiscal_year_start]);
+  void setFiscalYearEndPreset; // exposed for future UI button; keeps logic colocated.
   const periodLabel = useMemo(() => `${periodStart}_${periodEnd}`, [periodStart, periodEnd]);
 
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);

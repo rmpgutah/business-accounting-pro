@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Shield, FileSearch, Receipt, Users, FileText, Download, Grid, ClipboardCheck, Mail, Hash, KeyRound, LayoutDashboard } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
 
 // ─── Compliance Center ───────────────────────────────────────
@@ -145,7 +146,7 @@ const Form1099: React.FC<{ companyId: string }> = ({ companyId }) => {
 // 26. Tax-line export
 const TaxLineExport: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [start, setStart] = useState(`${new Date().getFullYear()}-01-01`);
-  const [end, setEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [end, setEnd] = useState(todayLocal());
   const [rows, setRows] = useState<any[]>([]);
   const run = async () => {
     const r = await window.electronAPI.invoke('compliance:tax-line-export', { companyId, periodStart: start, periodEnd: end });
@@ -186,7 +187,7 @@ const TaxLineExport: React.FC<{ companyId: string }> = ({ companyId }) => {
 // 29. SOX SoD
 const SoDReport: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [start, setStart] = useState(`${new Date().getFullYear()}-01-01`);
-  const [end, setEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [end, setEnd] = useState(todayLocal());
   const [rows, setRows] = useState<any[]>([]);
   const run = async () => {
     const r = await window.electronAPI.invoke('compliance:sod-report', { companyId, periodStart: start, periodEnd: end });
@@ -272,7 +273,7 @@ const PostingRules: React.FC<{ companyId: string }> = ({ companyId }) => {
 // 30. Working papers export
 const WorkingPapers: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [start, setStart] = useState(`${new Date().getFullYear()}-01-01`);
-  const [end, setEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [end, setEnd] = useState(todayLocal());
   const [busy, setBusy] = useState(false);
   const generate = async () => {
     setBusy(true);
@@ -399,7 +400,7 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
     const evidence = prompt('Evidence reference (e.g. audit_log id, doc URL)?', '') || '';
     const notes = prompt('Notes?', '') || '';
     await window.electronAPI.invoke('sox:test-save', {
-      controlId, companyId, testedBy: 'user', testedAt: new Date().toISOString().slice(0, 10), result, evidence, notes,
+      controlId, companyId, testedBy: 'user', testedAt: todayLocal(), result, evidence, notes,
     });
     await loadTests(controlId);
     reload();
@@ -417,7 +418,7 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
       table{border-collapse:collapse;width:100%;font-size:11px;margin-top:6px;}td,th{border:1px solid #ccc;padding:4px;}.signoff{margin-top:32px;border-top:1px solid #000;padding-top:16px;}</style>
       </head><body>
       <h1>Sarbanes-Oxley Evidence Packet</h1>
-      <p>Date: ${new Date().toISOString().slice(0, 10)}</p>
+      <p>Date: ${todayLocal()}</p>
       <h2>Internal-Control Matrix</h2>
       <table><tr><th>Code</th><th>Description</th><th>Owner</th><th>Frequency</th><th>Risk</th><th>Last result</th></tr>
       ${(list || []).map((c: any) => `<tr><td>${c.code}</td><td>${c.description}</td><td>${c.owner}</td><td>${c.frequency}</td><td>${c.risk}</td><td>${c.last_result || 'untested'}</td></tr>`).join('')}
@@ -434,7 +435,7 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
         <p>Title: ____________________________</p>
       </div>
       </body></html>`;
-    await api.saveToPDF(html, `sarbanes-evidence-${new Date().toISOString().slice(0, 10)}`, { openAfterSave: true });
+    await api.saveToPDF(html, `sarbanes-evidence-${todayLocal()}`, { openAfterSave: true });
   };
 
   return (
@@ -516,7 +517,7 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
 
 // 24. Audit-letter generator
 const AuditLetter: React.FC<{ companyId: string }> = ({ companyId }) => {
-  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(todayLocal());
   const [auditor, setAuditor] = useState('');
   const generate = async () => {
     const res: any = await window.electronAPI.invoke('compliance:audit-letter-data', { companyId, asOfDate: asOf });
@@ -527,7 +528,7 @@ const AuditLetter: React.FC<{ companyId: string }> = ({ companyId }) => {
       <style>body{font-family:sans-serif;padding:32px;font-size:12px;line-height:1.5;}h1{font-size:16px;}table{border-collapse:collapse;font-size:11px;}td,th{border:1px solid #ccc;padding:4px;}</style>
       </head><body>
       <h1>${c.name || ''}</h1>
-      <p>${new Date().toISOString().slice(0, 10)}</p>
+      <p>${todayLocal()}</p>
       <p>To: ${auditor || 'External auditors'}</p>
       <p>This letter is in connection with your audit of our financial statements as of ${asOf}.</p>
       <p><b>Account balances</b></p>

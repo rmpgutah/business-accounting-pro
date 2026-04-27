@@ -161,6 +161,34 @@ function calcPayStub(
   const regular_portion = runType === 'bonus' && bonusAmount !== undefined ? regular_gross : (runType === 'bonus' ? 0 : regular_gross);
   const gross_pay = regular_portion + bonus;
 
+  // CALC: Negative-gross guard — a 'correction' run can pass a negative
+  // bonus/regular to reverse a prior overpayment, but the withholding
+  // formulas below (brackets × periods, FICA × cap-remaining) are only
+  // valid for non-negative wages. For negative gross we zero-out all
+  // taxes and rely on the user posting a manual reversing JE for the
+  // tax-side. (IRS Pub. 15 prior-period correction guidance.)
+  if (gross_pay < 0) {
+    return {
+      employee: emp,
+      hours,
+      hours_regular,
+      hours_overtime,
+      regular_pay: roundCents(regular_pay),
+      overtime_pay: roundCents(overtime_pay),
+      gross_pay: roundCents(gross_pay),
+      federal_tax: 0,
+      state_tax: 0,
+      social_security: 0,
+      medicare: 0,
+      pre_tax_deductions: 0,
+      post_tax_deductions: 0,
+      net_pay: roundCents(gross_pay),
+      employer_ss: 0,
+      employer_medicare: 0,
+      employer_futa: 0,
+    };
+  }
+
   const deductions = empDeductions ?? [];
 
   // Pre-tax deductions (reduce taxable income; garnishments are always post-tax)
@@ -194,8 +222,12 @@ function calcPayStub(
     : taxableGross * FALLBACK_STATE_TAX_RATE;
 
   // ─── Social Security (6.2% up to wage base, per-employee per-year) ──
-  // Track YTD wages and only apply 6.2% to the portion of THIS paycheck
-  // that fits under the cap. Source: IRC §3121(a)(1), 2025 OASDI max $176,100.
+  // CALC: Track YTD wages and only apply 6.2% to the portion of THIS
+  // paycheck that fits under the cap. A single paycheck that itself
+  // crosses the cap is split correctly via Math.min(taxableGross, cap-ytd):
+  // wages up to the remaining cap are taxed, the excess (including any
+  // supplemental/bonus portion above the cap) is not.
+  // Source: IRC §3121(a)(1), 2025 OASDI max $176,100.
   const ytdSs = ytd?.ytdSsWages ?? 0;
   const ssRemainingCap = Math.max(0, SS_WAGE_BASE_2025 - ytdSs);
   const ssTaxableThisRun = Math.min(taxableGross, ssRemainingCap);
@@ -550,7 +582,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     setError(null);
     setProcessing(true);
     try {
-      const year = new Date(payDate).getFullYear();
+      // DATE: Item #4 — noon-anchor parse so a yyyy-MM-dd Jan 1 doesn't read as
+      // Dec 31 of prior year (UTC midnight then local-shift west of UTC).
+      const year = new Date(payDate + 'T12:00:00').getFullYear();
       const totalTaxes = totals.federal_tax + totals.state_tax + totals.social_security + totals.medicare;
 
       // Fetch YTD for each employee first, then submit all in one server-side transaction

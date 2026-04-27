@@ -190,6 +190,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     setData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // UX: Cmd+S triggers save instead of "Save HTML"
+  useEffect(() => {
+    const onSave = () => { if (!saving) handleSave(); };
+    window.addEventListener('app:cmd-save', onSave);
+    return () => window.removeEventListener('app:cmd-save', onSave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
   // ─── Save ──────────────────────────────────────────
   const handleSave = async () => {
     if (saving) return;

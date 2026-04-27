@@ -27,6 +27,7 @@ import PaymentPlanCard from './PaymentPlanCard';
 import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useNavigation } from '../../lib/navigation';
 import { calcRiskScore, getRiskBadge, collectionScore, getCollectionBadge } from './riskScore';
@@ -770,7 +771,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             })()}
             {(() => {
               const brokenCount = promises.filter(
-                p => p.kept === 0 && p.promised_date < new Date().toISOString().slice(0, 10)
+                p => p.kept === 0 && p.promised_date < todayLocal()
               ).length;
               const score = calcRiskScore(debt, brokenCount);
               const risk = getRiskBadge(score);
@@ -1688,7 +1689,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {promises.map((p: any) => {
-                  const isPast = p.promised_date < new Date().toISOString().slice(0, 10);
+                  const isPast = p.promised_date < todayLocal();
                   const badgeColor = p.kept ? '#16a34a' : isPast ? '#ef4444' : '#d97706';
                   const badgeLabel = p.kept ? 'Kept' : isPast ? 'Broken' : 'Pending';
                   return (
@@ -2069,7 +2070,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <div className="block-card p-6">
               <SectionLabel>Payment Installments</SectionLabel>
               {(() => {
-                const today = new Date().toISOString().slice(0, 10);
+                const today = todayLocal();
                 const paid = installments.filter((i: any) => i.paid);
                 const overdue = installments.filter((i: any) => !i.paid && i.due_date < today);
                 const upcoming = installments.filter((i: any) => !i.paid && i.due_date >= today);

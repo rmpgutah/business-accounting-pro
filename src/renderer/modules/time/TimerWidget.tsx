@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, Square, Pause, Clock, AlertCircle } from 'lucide-react';
 import api from '../../lib/api';
+import { toLocalDateString } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -245,7 +246,13 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
 
     try {
       const result = await api.create('time_entries', {
-        date: startTime.toISOString().slice(0, 10),
+        // DATE: Item #16 — local-date string of the START time, not UTC. A
+        // timer started at 23:55 MST and stopped at 00:10 the next day is still
+        // logged on the start date. UTC slice would advance the day boundary.
+        // duration_minutes is computed from real elapsed wall-clock (Date.now
+        // diff) so it survives midnight rollover AND DST transitions
+        // (Item #17): springForward/fallBack don't change Date.now monotonics.
+        date: toLocalDateString(startTime),
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         duration_minutes: durationMinutes,

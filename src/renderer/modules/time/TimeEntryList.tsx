@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import { formatDate } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
@@ -80,7 +81,9 @@ function formatWeekRange(start: Date): string {
 }
 
 function isToday(dateStr: string): boolean {
-  return dateStr === new Date().toISOString().slice(0, 10);
+  // DATE: Item #2 — local-time today; UTC slice would mark "today" as tomorrow
+  // for late-evening Mountain Time users.
+  return dateStr === todayLocal();
 }
 
 // ─── Grouped Entries ────────────────────────────────────

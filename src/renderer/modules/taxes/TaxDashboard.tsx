@@ -12,6 +12,7 @@ import { format as fmtDate } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, roundCents } from '../../lib/format';
+import { fiscalYearStart, fiscalYearEnd } from '../../lib/date-helpers';
 import {
   FEDERAL_BRACKETS_2025,
   STANDARD_DEDUCTION_2025,
@@ -95,8 +96,12 @@ const TaxDashboard: React.FC = () => {
   const STD_DEDUCTION = STANDARD_DEDUCTION_2025[filingStatus];
 
   const currentYear = new Date().getFullYear();
-  const yearStart = `${currentYear}-01-01`;
-  const yearEnd = `${currentYear}-12-31`;
+  // DATE: Item #9 — fiscal-year-aware bounds. Falls back to calendar Jan-Dec
+  // when no fiscal_year_start is configured. The `currentYear` (calendar) is
+  // still used for the tax_payments lookup keyed by tax filing year.
+  const fyMonth = activeCompany?.fiscal_year_start || 1;
+  const yearStart = fiscalYearStart(new Date(), fyMonth);
+  const yearEnd = fiscalYearEnd(new Date(), fyMonth);
   // toISOString() returns the UTC date, which is wrong for users west of
   // UTC late in the day (would mark the next quarterly deadline as already
   // past). Use local-date format() so "today" matches what the user sees.

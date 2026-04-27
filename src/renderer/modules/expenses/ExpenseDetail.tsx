@@ -7,6 +7,7 @@ import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as Rec
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
@@ -58,7 +59,7 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
 
   const markReimbursed = async () => {
     try {
-      await api.update('expenses', expenseId, { reimbursed: 1, reimbursed_date: new Date().toISOString().slice(0, 10) });
+      await api.update('expenses', expenseId, { reimbursed: 1, reimbursed_date: todayLocal() });
       reload();
     } catch (e: any) { alert(e?.message || 'Update failed'); }
   };

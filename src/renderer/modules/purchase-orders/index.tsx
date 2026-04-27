@@ -9,6 +9,7 @@ import { useAppStore } from '../../stores/appStore';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
 
 // ─── Types ───────────────────────────────────────────────
@@ -106,7 +107,8 @@ interface DraftLineItem {
 
 // ─── Helpers ─────────────────────────────────────────────
 
-const today = () => new Date().toISOString().slice(0, 10);
+// DATE: Item #2 — local time today (UTC slice would shift day late evening MT).
+const today = () => todayLocal();
 
 let _tempId = 0;
 const newTempId = () => `tmp-${++_tempId}`;
@@ -605,6 +607,8 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
               className="block-input font-mono text-xs w-full"
               value={expectedDate}
               onChange={(e) => setExpectedDate(e.target.value)}
+              // DATE: Item #3 — expected delivery cannot be before order date.
+              min={orderDate || undefined}
             />
           </div>
           <div className="col-span-2">

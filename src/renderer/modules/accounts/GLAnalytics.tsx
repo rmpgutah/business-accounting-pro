@@ -19,6 +19,7 @@ import {
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import AnomalyDetector from './AnomalyDetector';
 import WorkingCapitalDashboard from './WorkingCapitalDashboard';
@@ -59,7 +60,7 @@ const last12Months = () => {
   }
   return out;
 };
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => todayLocal();
 const ymStart = (offsetMonths = 0) => {
   const d = new Date();
   d.setMonth(d.getMonth() + offsetMonths, 1);

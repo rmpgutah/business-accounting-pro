@@ -1992,7 +1992,9 @@ export function generateDemandLetterHTML(
     .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const todayLong = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  const fmtDateLocal = (s: string) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+  // DATE: Item #4 — noon-anchor instead of midnight; midnight UTC parses as
+  // previous day in TZ west of UTC and renders as the wrong calendar date.
+  const fmtDateLocal = (s: string) => s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
   const balanceDue = Number(debt.balance_due || 0);
@@ -2185,7 +2187,7 @@ export function generateCollectionLetterHTML(
   const originalAmt = debt?.original_amount || 0;
   const interestAmt = debt?.interest_accrued || 0;
   const feesAmt = debt?.fees_accrued || 0;
-  const dueDate = debt?.due_date ? new Date(debt.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+  const dueDate = debt?.due_date ? new Date(debt.due_date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
   const totalPaid = payments?.reduce((s: number, p: any) => s + (p.amount || 0), 0) || 0;
   const deadlineDate = new Date(Date.now() + 10 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const thirtyDayDate = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -2204,7 +2206,7 @@ export function generateCollectionLetterHTML(
   const accountRef = debt?.source_type === 'invoice'
     ? `Invoice #${esc((debt?.source_id || '').substring(0, 8).toUpperCase())}`
     : debt?.source_type === 'bill' ? `Bill #${esc((debt?.source_id || '').substring(0, 8).toUpperCase())}` : 'Manual Entry';
-  const delinquentDate = debt?.delinquent_date ? new Date(debt.delinquent_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+  const delinquentDate = debt?.delinquent_date ? new Date(debt.delinquent_date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
   const jurisdiction = esc(debt?.jurisdiction || 'the applicable jurisdiction');
   const interestRate = debt?.interest_rate ? `${(debt.interest_rate * 100).toFixed(2)}% per annum (${debt.interest_type === 'compound' ? 'compound' : 'simple'})` : 'N/A';
   const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(String(debt.delinquent_date).length === 10 ? debt.delinquent_date + 'T12:00:00' : debt.delinquent_date).getTime()) / 86_400_000)) : 0;

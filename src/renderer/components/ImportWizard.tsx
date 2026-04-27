@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Upload, X, Check } from 'lucide-react';
 import api from '../lib/api';
+import { useModalBehavior, trapFocusOnKeyDown } from '../lib/use-modal-behavior';
 
 interface Props {
   table: string;
@@ -66,12 +67,27 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
     setImporting(false);
   };
 
+  // A11Y: ESC close, body scroll lock, restore focus, focus trap, role=dialog
+  const { containerRef } = useModalBehavior({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-bg-secondary w-full max-w-xl border border-border-primary">
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-wizard-title"
+        tabIndex={-1}
+        onClick={e => e.stopPropagation()}
+        onKeyDown={trapFocusOnKeyDown(containerRef)}
+        className="bg-bg-secondary w-full max-w-xl border border-border-primary"
+      >
         <div className="flex justify-between items-center p-4 border-b border-border-primary">
-          <h2 className="font-black uppercase tracking-wider text-sm">Import {table} — Step {step} of 3</h2>
-          <button onClick={onCancel}><X size={18} /></button>
+          <h2 id="import-wizard-title" className="font-black uppercase tracking-wider text-sm">Import {table} — Step {step} of 3</h2>
+          <button onClick={onCancel} aria-label="Close import wizard"><X size={18} /></button>
         </div>
         <div className="p-4">
           {error && <div className="bg-accent-expense-bg border border-red-300 text-red-700 text-xs p-2 mb-3">{error}</div>}

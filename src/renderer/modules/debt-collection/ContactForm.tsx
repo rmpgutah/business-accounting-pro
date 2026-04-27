@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Types ──────────────────────────────────────────────
 interface ContactFormData {
@@ -116,6 +117,8 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, restore focus, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
@@ -128,12 +131,18 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contact-form-title"
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
           className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
-            <h3 className="text-base font-bold text-text-primary">
+            <h3 id="contact-form-title" className="text-base font-bold text-text-primary">
               {contactId ? 'Edit Contact' : 'Add Contact'}
             </h3>
             <button

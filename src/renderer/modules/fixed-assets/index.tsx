@@ -820,9 +820,34 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
     if (!asset) return;
     setDisposing(true);
     try {
+      // CALC: Disposal mid-life — compute book value at disposal date.
+      // book_value = purchase_price - accumulated_depreciation (through
+      // disposal). We use the latest schedule-row whose period falls on or
+      // before the disposal date; otherwise fall back to current_book_value.
+      // Source: GAAP — gain/loss on disposal = proceeds - book value.
+      let bookAtDisposal = asset.current_book_value
+        ?? ((asset.purchase_price || 0) - (asset.accumulated_depreciation || 0));
+      let accumAtDisposal = asset.accumulated_depreciation || 0;
+      if (Array.isArray(schedule) && schedule.length > 0 && disposeDate) {
+        // Walk schedule rows whose `period` (year-end) <= disposeDate; use
+        // the latest such row's book_value/accumulated. If disposal precedes
+        // year 1's period date, use prior history (or original cost).
+        const eligible = schedule.filter((s: any) => s.period && s.period <= disposeDate);
+        if (eligible.length > 0) {
+          const last = eligible[eligible.length - 1];
+          bookAtDisposal = last.book_value;
+          // CALC: defensively read both field names — IPC currently returns
+          // `accumulated_depreciation`; older versions used `accumulated`.
+          accumAtDisposal = last.accumulated_depreciation ?? (last as any).accumulated ?? accumAtDisposal;
+        }
+      }
       await api.update('fixed_assets', assetId, {
         status: 'disposed',
-        notes: `Disposed on ${disposeDate}. Disposal amount: ${disposeAmount || '0'}. ${asset.notes ?? ''}`.trim(),
+        disposal_date: disposeDate,
+        disposal_amount: parseFloat(disposeAmount || '0') || 0,
+        current_book_value: bookAtDisposal,
+        accumulated_depreciation: accumAtDisposal,
+        notes: `Disposed on ${disposeDate}. Proceeds: ${disposeAmount || '0'}. Book value at disposal: ${bookAtDisposal}. ${asset.notes ?? ''}`.trim(),
       });
       showToast('Asset marked as disposed.', true);
       setShowDisposeForm(false);

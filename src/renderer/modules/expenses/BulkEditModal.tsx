@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 interface Props {
   ids: string[];
@@ -61,12 +62,29 @@ const BulkEditModal: React.FC<Props> = ({ ids, onClose, onSaved }) => {
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, restore focus, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="block-card" style={{ width: 480, padding: 0 }}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-edit-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={trapFocusOnKeyDown(containerRef)}
+        className="block-card"
+        style={{ width: 480, padding: 0 }}
+      >
         <div className="flex items-center justify-between p-4 border-b border-border-primary">
-          <h3 className="text-sm font-bold uppercase text-text-primary">Bulk Edit ({ids.length} selected)</h3>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={18} /></button>
+          <h3 id="bulk-edit-title" className="text-sm font-bold uppercase text-text-primary">Bulk Edit ({ids.length} selected)</h3>
+          <button onClick={onClose} aria-label="Close bulk edit" className="text-text-muted hover:text-text-primary"><X size={18} /></button>
         </div>
         <div className="p-4 space-y-3">
           {err && <div className="text-xs text-accent-expense">{err}</div>}

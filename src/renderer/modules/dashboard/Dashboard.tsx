@@ -53,6 +53,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { usePersonalizationStore } from '../../stores/personalizationStore';
 import { formatCurrency, formatDate, percentChange } from '../../lib/format';
+import { fiscalYearStart } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
 
 function getGreeting(): string {
@@ -748,7 +749,8 @@ const Dashboard: React.FC = () => {
           (SELECT MAX(pr.pay_date) FROM payroll_runs pr WHERE pr.company_id = ?) as last_payroll_date,
           (SELECT COALESCE(SUM(pr.total_gross), 0) FROM payroll_runs pr WHERE pr.company_id = ? AND pr.pay_date >= ?) as ytd_payroll
          FROM employees WHERE company_id = ? AND status = 'active'`,
-        [cid, cid, new Date().getFullYear() + '-01-01', cid]
+        // DATE: Item #9 — YTD payroll respects company fiscal_year_start instead of hardcoded Jan 1.
+        [cid, cid, fiscalYearStart(new Date(), activeCompany.fiscal_year_start || 1), cid]
       ).then(r => {
         if (!cancelled) {
           const row = Array.isArray(r) ? r[0] : r;

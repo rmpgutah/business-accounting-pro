@@ -3,6 +3,7 @@ import { CreditCard, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatDate } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface TaxPayment {
@@ -74,7 +75,7 @@ const TaxPayments: React.FC = () => {
   const defaultForm = {
     type: 'federal_estimated' as PaymentType,
     amount: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: todayLocal(),
     period: 'Q1',
     year: currentYear,
     confirmation_number: '',

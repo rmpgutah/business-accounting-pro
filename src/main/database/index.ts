@@ -760,6 +760,12 @@ export function initDatabase(): Database.Database {
   )`,
   `CREATE INDEX IF NOT EXISTS idx_acct_alias_acct ON account_aliases(account_id)`,
   // F5/22: Multi-currency + sub-ledger + bank linkage + soft delete
+  // SCHEMA: accounts.deleted_at is INTENTIONALLY a soft-delete column.
+  // Existing journal_entry_lines that reference a soft-deleted account
+  // continue to resolve via the live FK (no ON DELETE CASCADE on accounts),
+  // which is the correct behaviour for an audit-trail system: GL history
+  // must remain queryable even after the chart of accounts changes. List
+  // queries hide soft-deleted rows via tablesWithDeletedAt auto-filter.
   "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'USD'",
   "ALTER TABLE accounts ADD COLUMN bank_account_id TEXT DEFAULT ''",
   "ALTER TABLE accounts ADD COLUMN subledger_type TEXT DEFAULT 'none'",
@@ -1142,9 +1148,48 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_class_settings_co ON classification_settings(company_id, dimension)",
   ];
+  // SCHEMA: previously this loop swallowed ALL errors silently, so a
+  // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
+  // indistinguishable from "column already exists" / "table already exists".
+  // We now whitelist the known-idempotent error shapes and warn on anything
+  // else so future destructive migrations surface in the logs.
+  const isIdempotentMigrationError = (msg: string): boolean => {
+    if (!msg) return false;
+    return (
+      /duplicate column name/i.test(msg) ||           // ALTER ADD COLUMN re-run
+      /already exists/i.test(msg) ||                  // CREATE TABLE / INDEX re-run
+      /index .* already exists/i.test(msg)
+    );
+  };
   for (const sql of migrations) {
-    try { db.exec(sql); } catch (_) { /* column already exists — ignore */ }
+    try {
+      db.exec(sql);
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      if (!isIdempotentMigrationError(msg)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[migrations] non-idempotent error for SQL: ${sql.slice(0, 80)}… → ${msg}`);
+      }
+    }
   }
+
+  // SCHEMA: minimal schema-version tracking. The migrations array above is
+  // currently all-idempotent (ADD COLUMN / CREATE TABLE IF NOT EXISTS /
+  // CREATE INDEX IF NOT EXISTS), so each migration tolerates being run on
+  // every boot. If a future migration is NOT idempotent (e.g. UPDATE,
+  // INSERT-without-guard, table rebuild), bump SCHEMA_VERSION below and run
+  // the destructive step inside the `if (currentVersion < N)` block. We use
+  // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
+  // table because it requires zero extra DDL and is atomic per pragma write.
+  try {
+    const SCHEMA_VERSION = 1;
+    const row = db.pragma('user_version', { simple: true }) as number;
+    const currentVersion = typeof row === 'number' ? row : 0;
+    if (currentVersion < SCHEMA_VERSION) {
+      // No destructive migrations yet — just stamp the version.
+      db.pragma(`user_version = ${SCHEMA_VERSION}`);
+    }
+  } catch (_) { /* pragma failure is non-fatal */ }
 
   // Seed Utah state tax bracket (flat 4.55% per HB 106, 2025).
   try {
@@ -1190,6 +1235,18 @@ export function queryAll(
 ): any[] {
   const conditions: string[] = [];
   const params: any[] = [];
+
+  // SCHEMA: auto-filter soft-deleted rows for tables with deleted_at.
+  // Caller can override with `include_deleted: true` to see all rows.
+  // The accounts table uses '' for live and a timestamp for deleted; tags/
+  // custom_field_definitions use NULL for live. Cover both shapes.
+  const includeDeleted = filters && (filters as any).include_deleted === true;
+  if (filters && 'include_deleted' in filters) {
+    delete (filters as any).include_deleted;
+  }
+  if (!includeDeleted && tablesWithDeletedAt.has(table)) {
+    conditions.push(`COALESCE(deleted_at, '') = ''`);
+  }
 
   for (const [key, value] of Object.entries(filters)) {
     if (value === null) {
@@ -1258,6 +1315,10 @@ export function create(table: string, data: Record<string, any>): any {
 // Tables that do NOT have an updated_at column.
 // Adding a table missing from this set causes every update() call on it
 // to append ", updated_at = datetime('now')" → immediate SQLite crash.
+// SCHEMA: tables that do NOT have an `updated_at` column. db.update() appends
+// ", updated_at = datetime('now')" unless the table is in this set, so any
+// table missing here AND missing the column will crash with
+// "no such column: updated_at" on its first update.
 const tablesWithoutUpdatedAt = new Set([
   // Child / junction tables (original)
   'invoice_line_items',
@@ -1282,7 +1343,8 @@ const tablesWithoutUpdatedAt = new Set([
   'user_companies',    // has created_at only
   // Debt collection child tables — created_at only
   'debt_contacts', 'debt_communications', 'debt_payments',
-  'debt_pipeline_stages', 'debt_evidence',
+  'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
+  'debt_automation_rules', 'debt_templates',
   'quote_line_items',
   // Invoice reminders — created_at only
   'invoice_reminders',
@@ -1295,7 +1357,7 @@ const tablesWithoutUpdatedAt = new Set([
   // Debt & Invoice Enhancement child tables — created_at only
   'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
   'debt_compliance_log', 'invoice_debt_links',
-  'expense_line_items', 'debt_disputes',
+  'expense_line_items', 'debt_disputes', 'debt_notes',
   // DC Immersive Workspace — created_at only
   'debt_audit_log', 'debt_payment_matches',
   // Advanced debt collection — created_at only
@@ -1313,6 +1375,32 @@ const tablesWithoutUpdatedAt = new Set([
   // Workflow + email templates child tables — created_at only
   'custom_statuses', 'status_transitions', 'entity_status_history',
   'email_template_history', 'email_schedules',
+  // SCHEMA: round-3 audit (2026-04-27) — recently-added tables that have
+  // created_at only. Without these, db.update() crashes with
+  // "no such column: updated_at" on the first edit.
+  'inventory_movements',           // child of inventory_items
+  'entity_relations',              // graph edge table — created_at only
+  'tb_elimination_entries',        // append-mostly intercompany TB
+  'je_history',                    // immutable JE snapshots
+  'tag_groups', 'tags', 'entity_tags', 'tag_rules',
+  'custom_field_definitions',
+  // SCHEMA: schema.sql tables that lack updated_at and were never declared here
+  'bill_line_items', 'bill_payments', 'po_line_items',
+  'asset_depreciation_entries', 'credit_note_items',
+  'federal_tax_brackets', 'state_tax_rates',
+  'exchange_rates', 'sync_queue', 'invoice_tokens',
+  'automation_rules', 'automation_run_log', 'financial_anomalies',
+  'rules', 'rule_logs', 'approval_queue',
+]);
+
+// SCHEMA: tables with a `deleted_at` column. queryAll() auto-filters these
+// to exclude soft-deleted rows unless the caller passes `include_deleted: true`.
+// Keep this in sync with any new soft-deletable table — adding the column
+// alone is not enough.
+const tablesWithDeletedAt = new Set([
+  'accounts',
+  'tags',
+  'custom_field_definitions',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {

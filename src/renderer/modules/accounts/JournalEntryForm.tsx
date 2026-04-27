@@ -8,6 +8,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { roundCents, formatCurrency } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 import { JE_TEMPLATES, findAccountByHint } from '../../lib/je-templates';
 import {
   resolveTemplateString, computeScheduleDates, detectAndSplit,
@@ -120,7 +121,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   const isLocked = isEdit && entry?.is_posted === 1;
 
   const [date, setDate] = useState(
-    entry?.date ?? new Date().toISOString().slice(0, 10)
+    entry?.date ?? todayLocal()
   );
   const [description, setDescription] = useState(entry?.description ?? '');
   const [reference, setReference] = useState(entry?.reference ?? '');
@@ -298,7 +299,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         localStorage.removeItem(draftKey(activeCompany.id, null));
         return;
       }
-      setDate(d.date ?? new Date().toISOString().slice(0, 10));
+      setDate(d.date ?? todayLocal());
       setDescription(d.description ?? '');
       setReference(d.reference ?? '');
       setKlass(d.klass ?? '');

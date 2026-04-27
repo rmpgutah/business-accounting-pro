@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface DemandLetterGeneratorProps {
@@ -184,7 +185,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
         title: 'Demand Letter - ' + selectedTemplate.name,
         description: 'Auto-generated demand letter',
         court_relevance: 'high',
-        date_of_evidence: new Date().toISOString().slice(0, 10),
+        date_of_evidence: todayLocal(),
       });
 
       setSuccessMsg('Demand letter generated and logged successfully.');

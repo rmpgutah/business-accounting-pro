@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import api from '../../lib/api';
+import { toLocalDateString } from '../../lib/date-helpers';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -48,9 +49,10 @@ function getMonday(d: Date): Date {
 function weekDateRange(weekStart: Date): { start: string; end: string } {
   const end = new Date(weekStart);
   end.setDate(end.getDate() + 6);
+  // DATE: Item #2 — local-time date string. UTC slice would shift the day west of UTC.
   return {
-    start: weekStart.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
+    start: toLocalDateString(weekStart),
+    end: toLocalDateString(end),
   };
 }
 

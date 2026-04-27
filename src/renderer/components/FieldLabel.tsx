@@ -16,7 +16,8 @@ export const FieldLabel: React.FC<Props> = ({ label, tooltip, required, htmlFor 
     className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1 mb-1.5"
   >
     {label}
-    {required && <span className="text-accent-expense">*</span>}
+    {/* A11Y: required indicator should be announced as "required" by screen readers */}
+    {required && <span className="text-accent-expense" aria-label="required">*</span>}
     {tooltip && (
       <Tooltip content={tooltip}>
         <HelpCircle size={11} className="text-text-muted cursor-help" />

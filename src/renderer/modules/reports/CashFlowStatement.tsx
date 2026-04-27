@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Printer, Download } from 'lucide-react';
-import { format, startOfYear, endOfMonth, parseISO } from 'date-fns';
+import { format, endOfMonth, parseISO } from 'date-fns';
+import { fiscalYearStart, fiscalYearEnd } from '../../lib/date-helpers';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -102,7 +103,8 @@ interface CashFlowData {
 const CashFlowStatement: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [startDate, setStartDate] = useState(() =>
-    format(startOfYear(new Date()), 'yyyy-MM-dd')
+    // DATE: Item #9 — fiscal-year-aware default.
+    fiscalYearStart(new Date(), 1)
   );
   const [endDate, setEndDate] = useState(() =>
     format(endOfMonth(new Date()), 'yyyy-MM-dd')
@@ -230,8 +232,9 @@ const CashFlowStatement: React.FC = () => {
         setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'));
         break;
       case 'This Year':
-        setStartDate(format(startOfYear(now), 'yyyy-MM-dd'));
-        setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'));
+        // DATE: Item #9/#10 — fiscal year, not calendar year.
+        setStartDate(fiscalYearStart(now, activeCompany?.fiscal_year_start || 1));
+        setEndDate(fiscalYearEnd(now, activeCompany?.fiscal_year_start || 1));
         break;
     }
   };

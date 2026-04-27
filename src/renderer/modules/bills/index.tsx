@@ -21,6 +21,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
+import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -124,12 +125,13 @@ interface LineItemDraft {
 }
 
 // ─── Constants ───────────────────────────────────────────
-const todayISO = (): string => new Date().toISOString().slice(0, 10);
+// DATE: Item #2 — local-time, not UTC. Late-evening MT users would otherwise default to tomorrow.
+const todayISO = (): string => todayLocal();
 
 const thirtyDaysLater = (): string => {
   const d = new Date();
   d.setDate(d.getDate() + 30);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateString(d);
 };
 
 let _lineKeyCounter = 0;
@@ -760,6 +762,8 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               className="block-input font-mono"
               value={form.due_date}
               onChange={(e) => updateField('due_date', e.target.value)}
+              // DATE: Item #3 — due date can't precede issue date.
+              min={form.issue_date || undefined}
             />
           </div>
 

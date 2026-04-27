@@ -30,8 +30,9 @@ export const QuickCreate: React.FC<Props> = ({ onNavigate, onClose }) => {
   const select = (view: string) => { onNavigate(view); onClose(); };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center pt-32 z-50" onClick={onClose}>
-      <div className="bg-bg-secondary w-full max-w-md border border-border-primary shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center pt-32 z-50" onClick={onClose} role="presentation">
+      {/* A11Y: dialog role + aria-modal so screen readers announce the popover */}
+      <div role="dialog" aria-modal="true" aria-label="Quick create" className="bg-bg-secondary w-full max-w-md border border-border-primary shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-primary">
           <Search size={16} className="text-text-muted flex-shrink-0" />
           <input ref={inputRef} className="flex-1 outline-none text-sm bg-transparent"
@@ -41,7 +42,7 @@ export const QuickCreate: React.FC<Props> = ({ onNavigate, onClose }) => {
               if (e.key === 'Escape') onClose();
               if (e.key === 'Enter' && filtered.length > 0) select(filtered[0].view);
             }} />
-          <button onClick={onClose}><X size={16} className="text-text-muted" /></button>
+          <button onClick={onClose} aria-label="Close quick create"><X size={16} className="text-text-muted" /></button>
         </div>
         {filtered.map((c, i) => (
           <button key={i} onClick={() => select(c.view)}

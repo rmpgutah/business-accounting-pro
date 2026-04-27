@@ -7,6 +7,7 @@ import {
   ACCOUNT_PURPOSE, ACCOUNT_CRITICALITY,
   ClassificationSelect,
 } from '../../lib/classifications';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 
@@ -244,15 +245,22 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
   let renameHistory: any[] = [];
   try { renameHistory = account?.rename_log ? JSON.parse(account.rename_log) : []; } catch {}
 
+  // A11Y: ESC close, body scroll lock, focus trap, restore focus, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl" style={{ borderRadius: '6px' }}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 bg-black/50" onClick={onClose} role="presentation">
+      <div ref={containerRef}
+           role="dialog" aria-modal="true" aria-labelledby="account-form-title"
+           tabIndex={-1}
+           onClick={(e) => e.stopPropagation()}
+           onKeyDown={trapFocusOnKeyDown(containerRef)}
+           className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl" style={{ borderRadius: '6px' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
-          <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h2 id="account-form-title" className="text-sm font-bold text-text-primary flex items-center gap-2">
             {isEdit ? 'Edit Account' : 'New Account'}
             {isLocked && <span className="flex items-center gap-1 text-[10px] text-accent-expense bg-accent-expense/10 px-2 py-0.5" style={{ borderRadius: '6px' }}><Lock size={10} /> Locked</span>}
           </h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={16} /></button>
+          <button onClick={onClose} aria-label="Close account form" className="text-text-muted hover:text-text-primary"><X size={16} /></button>
         </div>
 
         <div className="px-5 py-4 space-y-4 max-h-[75vh] overflow-y-auto">
@@ -341,7 +349,10 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Color</label>
             <div className="flex items-center gap-1.5 flex-wrap">
               {COLOR_PRESETS.map((c, i) => (
+                /* A11Y: aria-label + aria-pressed on icon-only color swatch */
                 <button key={i} type="button" onClick={() => setColor(c)} disabled={isLocked}
+                  aria-label={c ? `Color ${c}` : 'No color'}
+                  aria-pressed={color === c}
                   className={`w-6 h-6 border ${color === c ? 'border-accent-blue ring-2 ring-accent-blue/30' : 'border-border-primary'}`}
                   style={{ background: c || 'transparent', borderRadius: '6px' }}
                   title={c || 'No color'} />

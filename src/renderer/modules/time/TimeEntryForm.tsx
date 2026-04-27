@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Clock } from 'lucide-react';
 import api from '../../lib/api';
+import { todayLocal } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -51,7 +52,7 @@ function toDateStr(iso: string): string {
   try {
     return iso.slice(0, 10);
   } catch {
-    return new Date().toISOString().slice(0, 10);
+    return todayLocal();
   }
 }
 
@@ -79,7 +80,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
   const [inputMode, setInputMode] = useState<InputMode>('range');
   const [date, setDate] = useState(
-    entry ? toDateStr(entry.date) : new Date().toISOString().slice(0, 10)
+    entry ? toDateStr(entry.date) : todayLocal()
   );
   const [startTime, setStartTime] = useState(
     entry ? toTimeStr(entry.start_time) : '09:00'

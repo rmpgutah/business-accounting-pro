@@ -73,4 +73,19 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
   return () => window.removeEventListener('keydown', handler);
 }
 
+// UX: Cmd+S in any form should NEVER trigger the browser "Save HTML" handler.
+// We dispatch a CustomEvent that interested forms can listen for, and prevent
+// the default browser behavior. Forms wire useFormSave(handleSave) to react.
+export function registerCmdSGuard(): () => void {
+  const handler = (e: KeyboardEvent) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod || e.key.toLowerCase() !== 's') return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.dispatchEvent(new CustomEvent('app:cmd-save'));
+  };
+  window.addEventListener('keydown', handler, true);
+  return () => window.removeEventListener('keydown', handler, true);
+}
+
 export { MODULE_ORDER };

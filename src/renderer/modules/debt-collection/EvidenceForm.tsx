@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Paperclip } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Types ──────────────────────────────────────────────
 interface EvidenceFormData {
@@ -131,6 +132,8 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
@@ -143,12 +146,18 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="evidence-form-title"
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
           className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
-            <h3 className="text-base font-bold text-text-primary">
+            <h3 id="evidence-form-title" className="text-base font-bold text-text-primary">
               {evidenceId ? 'Edit Evidence' : 'Add Evidence'}
             </h3>
             <button

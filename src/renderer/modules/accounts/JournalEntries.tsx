@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, formatDate, roundCents } from '../../lib/format';
 import { downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
 import { incrementDate } from '../../lib/je-helpers';
+import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 
@@ -123,6 +124,18 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompany]);
+
+  // A11Y: ESC closes the JE import preview modal
+  useEffect(() => {
+    if (!importPreview) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setImportPreview(null); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [importPreview]);
 
   useEffect(() => {
     if (!activeCompany) return;
@@ -425,12 +438,14 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     if (!activeCompany) return;
     // F9: optional date increment
     const incStr = window.prompt('Clone — increment date by how many days? (blank = today, "ME" = next month-end)', '');
-    let newDate = new Date().toISOString().slice(0, 10);
+    // DATE: Item #2/#4 — local-time today and noon-anchored arithmetic.
+    let newDate = todayLocal();
     if (incStr != null && incStr.trim() !== '') {
       const trimmed = incStr.trim().toUpperCase();
       if (trimmed === 'ME') {
         const d = new Date(entry.date + 'T12:00:00');
-        newDate = new Date(d.getFullYear(), d.getMonth() + 2, 0).toISOString().slice(0, 10);
+        // Last day of *next* month (day 0 of month+2).
+        newDate = toLocalDateString(new Date(d.getFullYear(), d.getMonth() + 2, 0));
       } else {
         const n = parseInt(trimmed, 10);
         if (!isNaN(n)) newDate = incrementDate(entry.date, n);
@@ -467,7 +482,8 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
 
   const reverseEntry = async (entry: JournalEntry) => {
     if (!activeCompany) return;
-    const dateStr = window.prompt('Reverse entry — date for the reversing entry:', new Date().toISOString().slice(0, 10));
+    // DATE: Item #2 — local-time today.
+    const dateStr = window.prompt('Reverse entry — date for the reversing entry:', todayLocal());
     if (!dateStr) return;
     try {
       const lines: any = await api.query('journal_entry_lines', { journal_entry_id: entry.id });
@@ -701,12 +717,16 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
 
       {/* Import preview modal */}
       {importPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl"
+        // A11Y: backdrop click closes; role=dialog
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="presentation"
+             onClick={() => setImportPreview(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="je-import-preview-title"
+               onClick={(e) => e.stopPropagation()}
+               className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl"
                style={{ borderRadius: '6px' }}>
             <div className="px-5 py-3 border-b border-border-primary flex items-center justify-between">
-              <h3 className="text-sm font-bold">Import preview — {importPreview.length} rows</h3>
-              <button onClick={() => setImportPreview(null)} className="text-text-muted hover:text-text-primary">×</button>
+              <h3 id="je-import-preview-title" className="text-sm font-bold">Import preview — {importPreview.length} rows</h3>
+              <button onClick={() => setImportPreview(null)} aria-label="Close import preview" className="text-text-muted hover:text-text-primary">×</button>
             </div>
             <div className="px-5 py-3 max-h-96 overflow-y-auto">
               {importError && <p className="text-xs text-accent-expense mb-2">{importError}</p>}
@@ -772,10 +792,11 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
                     <button onClick={() => toggleOne(entry.id)} className="text-text-muted hover:text-text-primary">
                       {selectedIds.has(entry.id) ? <CheckSquare size={14} /> : <Square size={14} />}
                     </button>
-                    <button onClick={() => toggleStar(entry)} title="Star" className={entry.is_starred ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'}>
+                    {/* A11Y: aria-label on icon-only star/color buttons */}
+                    <button onClick={() => toggleStar(entry)} aria-label={entry.is_starred ? 'Unstar entry' : 'Star entry'} aria-pressed={!!entry.is_starred} title="Star" className={entry.is_starred ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'}>
                       <Star size={12} fill={entry.is_starred ? 'currentColor' : 'none'} />
                     </button>
-                    <button onClick={() => cycleColor(entry)} title="Cycle color tag" className="w-3 h-3 border border-border-primary"
+                    <button onClick={() => cycleColor(entry)} aria-label="Cycle color tag" title="Cycle color tag" className="w-3 h-3 border border-border-primary"
                             style={{ background: entry.color || 'transparent' }} />
                   </div>
                 </td>
