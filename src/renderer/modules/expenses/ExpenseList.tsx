@@ -252,6 +252,21 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     [filtered]
   );
 
+  // ─── Inline Summary Stats ─────────────────────────────
+  const summaryStats = useMemo(() => {
+    const t = filtered.reduce((s, e) => s + (e.amount ?? 0), 0);
+    const taxDed = filtered.filter(e => e.is_tax_deductible).reduce((s, e) => s + (e.amount ?? 0), 0);
+    const billable = filtered.filter(e => e.is_billable).reduce((s, e) => s + (e.amount ?? 0), 0);
+    const max = filtered.length > 0 ? Math.max(...filtered.map(e => e.amount ?? 0)) : 0;
+    return {
+      total: t,
+      avg: filtered.length > 0 ? t / filtered.length : 0,
+      taxDed,
+      billable,
+      max,
+    };
+  }, [filtered]);
+
   // ─── Selection Helpers ──────────────────────────────────
   const allSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
   const someSelected = selectedIds.size > 0;
@@ -833,6 +848,36 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           </div>
         </div>
       </div>
+
+      {/* Inline Summary Stats */}
+      {filtered.length > 0 && (
+        <div className="grid grid-cols-6 gap-3 mb-4">
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total</div>
+            <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(summaryStats.total)}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg</div>
+            <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(summaryStats.avg)}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Count</div>
+            <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{filtered.length}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Tax Deductible</div>
+            <div className="text-lg font-mono font-bold text-accent-income mt-0.5">{formatCurrency(summaryStats.taxDed)}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Billable</div>
+            <div className="text-lg font-mono font-bold text-accent-blue mt-0.5">{formatCurrency(summaryStats.billable)}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Largest</div>
+            <div className="text-lg font-mono font-bold text-accent-expense mt-0.5">{formatCurrency(summaryStats.max)}</div>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {filtered.length === 0 ? (
