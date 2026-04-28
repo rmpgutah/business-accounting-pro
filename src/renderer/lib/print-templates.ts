@@ -426,18 +426,35 @@ export function generateInvoiceHTML(
 
   const taxAmount      = Number(invoice.tax_amount || 0);
 
+  // MATH: Single source of truth for per-line discounted base — applies BOTH
+  // `discount_pct` (the active form field) AND `line_discount` (legacy /
+  // import-only field) so the per-line Amount column reconciles with the
+  // totals box regardless of which discount field is populated.
+  const lineDiscountedBase = (l: any): number => {
+    const base = Number(l.quantity || 0) * Number(l.unit_price || 0);
+    const afterPct = base * (1 - (Number(l.discount_pct || 0)) / 100);
+    if (!l.line_discount || Number(l.line_discount) <= 0) return afterPct;
+    return l.line_discount_type === 'flat'
+      ? Math.max(0, afterPct - Number(l.line_discount))
+      : afterPct * (1 - Number(l.line_discount) / 100);
+  };
+  const lineEffectiveRate = (l: any): number => {
+    const override = Number(l.tax_rate_override ?? -1);
+    return override >= 0 ? override : Number(l.tax_rate || 0);
+  };
+
   // Tax breakdown by rate (EU VAT Art. 226 / US mixed-rate compliance)
   const taxByRate: Record<string, { taxable: number; tax: number }> = {};
   for (const l of lineItems) {
     if ((l.row_type || 'item') !== 'item') continue;
-    const override = Number(l.tax_rate_override ?? -1);
-    const rate = override >= 0 ? override : Number(l.tax_rate || 0);
+    const rate = lineEffectiveRate(l);
     if (rate <= 0) continue;
-    const base = Number(l.quantity || 0) * Number(l.unit_price || 0) * (1 - (Number(l.discount_pct || 0)) / 100);
+    // MATH: round per-line so taxByRate sums match the per-line column sums.
+    const base = Math.round(lineDiscountedBase(l) * 100) / 100;
     const key = rate.toFixed(2);
     if (!taxByRate[key]) taxByRate[key] = { taxable: 0, tax: 0 };
-    taxByRate[key].taxable += base;
-    taxByRate[key].tax += base * (rate / 100);
+    taxByRate[key].taxable = Math.round((taxByRate[key].taxable + base) * 100) / 100;
+    taxByRate[key].tax = Math.round((taxByRate[key].tax + Math.round(base * (rate / 100) * 100) / 100) * 100) / 100;
   }
   const sortedRates = Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b));
   const hasMultipleRates = sortedRates.length > 1;
@@ -530,10 +547,19 @@ export function generateInvoiceHTML(
     }
 
     if (rowType === 'subtotal') {
+      // MATH: in-table subtotal row sums per-line "Amount" column values, which
+      // now include tax (matching the user's per-line tax-inclusive change).
+      // Sum (discountedBase + lineTax) for each item row so the running subtotal
+      // reconciles exactly to the visible Amount column above it.
       const subtotalAmt = lineItems
         .slice(lastSubtotalAt, i)
         .filter(r => (r.row_type || 'item') === 'item')
-        .reduce((sum, r) => sum + Number(r.amount || (r.quantity || 1) * (r.unit_price || 0)), 0);
+        .reduce((sum, r) => {
+          const base = Math.round(lineDiscountedBase(r) * 100) / 100;
+          const rate = lineEffectiveRate(r);
+          const tax = Math.round(base * (rate / 100) * 100) / 100;
+          return sum + base + tax;
+        }, 0);
       lastSubtotalAt = i + 1;
       return `<tr style="border-top:1px solid #334155;">
         <td colspan="${colSpan - 1}" style="font-weight:700;font-size:${isCompact?'11px':'12px'};color:#0f172a;">
@@ -551,18 +577,15 @@ export function generateInvoiceHTML(
       (l.italic || 0) ? 'font-style:italic' : '',
       (l.highlight_color || '') ? `background-color:${l.highlight_color}` : '',
     ].filter(Boolean).join(';');
-    const baseAmtRaw = Number(l.amount || (l.quantity || 1) * (l.unit_price || 0));
+    // MATH: pre-discount raw (qty × unit_price) for strikethrough display.
+    const baseAmtRaw = Number(l.quantity || 1) * Number(l.unit_price || 0);
     const hasLineDiscount = !!(l.line_discount && Number(l.line_discount) > 0);
-    const discountedPrice = (() => {
-      if (!hasLineDiscount) return baseAmtRaw;
-      if (l.line_discount_type === 'flat') return baseAmtRaw - Number(l.line_discount);
-      return baseAmtRaw * (1 - Number(l.line_discount) / 100);
-    })();
-
-    // Compute per-line tax (using rate override if present, else line tax_rate)
-    const lineTaxRateOverride = Number(l.tax_rate_override ?? -1);
-    const lineEffectiveTaxRate = lineTaxRateOverride >= 0 ? lineTaxRateOverride : Number(l.tax_rate || 0);
-    const lineTaxAmount = discountedPrice * (lineEffectiveTaxRate / 100);
+    const hasPctDiscount = !!(l.discount_pct && Number(l.discount_pct) > 0);
+    // MATH: shared discounted-base helper keeps line column reconciled to
+    // taxByRate / totals box. Round per-line so column sums match exactly.
+    const discountedPrice = Math.round(lineDiscountedBase(l) * 100) / 100;
+    const lineEffectiveTaxRate = lineEffectiveRate(l);
+    const lineTaxAmount = Math.round(discountedPrice * (lineEffectiveTaxRate / 100) * 100) / 100;
     const lineAmountWithTax = discountedPrice + lineTaxAmount;
 
     const cells = cols.map(c => {
@@ -584,8 +607,12 @@ export function generateInvoiceHTML(
         case 'tax_rate':     val = lineEffectiveTaxRate > 0 ? lineEffectiveTaxRate + '%' : '—'; break;
         case 'tax_amount':   val = lineEffectiveTaxRate > 0 ? fmt(lineTaxAmount) : '—'; break;
         case 'amount': {
-          if (hasLineDiscount && discountedPrice < baseAmtRaw) {
-            const dlbl = l.line_discount_type === 'flat' ? `−${fmt(Number(l.line_discount))}` : `−${Number(l.line_discount)}%`;
+          // MATH: show strikethrough whenever EITHER per-line discount field
+          // reduced the base — so the visual matches taxByRate / totals box.
+          if ((hasLineDiscount || hasPctDiscount) && discountedPrice < baseAmtRaw) {
+            const dlbl = hasLineDiscount
+              ? (l.line_discount_type === 'flat' ? `−${fmt(Number(l.line_discount))}` : `−${Number(l.line_discount)}%`)
+              : `−${Number(l.discount_pct)}%`;
             val = `<span style="text-decoration:line-through;color:#94a3b8;font-weight:400;font-size:10px;display:block;line-height:1.1;">${fmt(baseAmtRaw)}</span><span style="color:#16a34a;display:block;line-height:1.2;">${fmt(lineAmountWithTax)}</span><span style="font-size:8px;color:#16a34a;font-weight:600;">${dlbl}</span>`;
           } else {
             val = fmt(lineAmountWithTax);
@@ -596,7 +623,7 @@ export function generateInvoiceHTML(
       return `<td class="${cls}" style="${rowPad}">${val}</td>`;
     }).join('');
 
-    const discountAccent = hasLineDiscount && discountedPrice < baseAmtRaw
+    const discountAccent = (hasLineDiscount || hasPctDiscount) && discountedPrice < baseAmtRaw
       ? 'box-shadow: inset 3px 0 0 #16a34a; -webkit-print-color-adjust:exact; print-color-adjust:exact;'
       : '';
     const mergedRowStyle = [rowBg, lineStyleAttr, discountAccent].filter(Boolean).join(';');
@@ -807,7 +834,10 @@ export function generateInvoiceHTML(
 
   // ── Feature #4: totals composition donut ──
   const subtotalNum = Number(invoice.subtotal || 0);
-  const discTotal = discountAmount + (invoice.discount_pct ? subtotalNum * Number(invoice.discount_pct) / 100 : 0);
+  // MATH: Only the flat discount_amount is actually deducted from total.
+  // Header `discount_pct` is stored for reference but not subtracted, so
+  // including it in the donut would mis-state the visualization.
+  const discTotal = discountAmount;
   const totalsDonutHTML = (() => {
     const segs = [
       { value: subtotalNum, color: accent, label: 'Subtotal' },
@@ -945,7 +975,6 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
       <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
       ${taxBreakdownHTML}
       ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>\u2212${fmt(discountAmount)}</span></div>` : ''}
-      ${(invoice.discount_pct && invoice.discount_pct > 0) ? `<div class="totals-row" style="color:#16a34a"><span>Discount (${invoice.discount_pct}%)</span><span>\u2212${fmt(Number(invoice.subtotal || 0) * invoice.discount_pct / 100)}</span></div>` : ''}
       ${shippingAmount > 0 ? `<div class="totals-row"><span>Shipping</span><span>${fmt(shippingAmount)}</span></div>` : ''}
       <div class="totals-row totals-total">
         <span>${invoice.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}</span>

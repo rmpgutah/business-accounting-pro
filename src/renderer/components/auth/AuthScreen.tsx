@@ -20,11 +20,11 @@ const SAVED_EMAIL_KEY = 'bap-saved-email';
 const SAVED_NAME_KEY  = 'bap-saved-name';
 const REMEMBER_KEY    = 'bap-remember';
 
-// RMPG Flex-style dark gradient — deep black-to-charcoal with subtle red accent
+// Scenic mountain background with dark overlay for RMPG branding
+const BG_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80&auto=format';
 const BG_GRADIENT = 'linear-gradient(145deg, #0a0a0a 0%, #111111 20%, #0d0d0d 40%, #141414 60%, #0f0f0f 80%, #0a0a0a 100%)';
-// Subtle radial accent glow in the upper area for depth
-const BG_ACCENT = 'radial-gradient(ellipse 80% 50% at 30% 20%, rgba(180,30,30,0.06) 0%, transparent 70%)';
-const BG_COMBINED = `${BG_ACCENT}, ${BG_GRADIENT}`;
+const BG_OVERLAY = 'linear-gradient(rgba(5,10,20,0.55), rgba(5,10,20,0.70))';
+const BG_COMBINED = `${BG_OVERLAY}, url(${BG_IMAGE}) center/cover no-repeat, ${BG_GRADIENT}`;
 
 const AuthScreen: React.FC = () => {
   const setUser      = useAuthStore((s) => s.setUser);

@@ -492,9 +492,16 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </thead>
           <tbody>
             {lines.map((line) => {
-              const lineSubtotal = line.quantity * line.unit_price;
-              const lineTax = lineSubtotal * ((line.tax_rate || 0) / 100);
-              const lineTotal = lineSubtotal + lineTax;
+              // MATH: Apply per-line discount_pct to base, mirror InvoiceForm/print template
+              // so this UI table reconciles with the totals box and the printed PDF.
+              // Use tax_rate_override (when set, i.e. >= 0) to match how form computes tax.
+              const baseAmount = line.quantity * line.unit_price;
+              const discountedAmount = baseAmount * (1 - (line.discount_pct || 0) / 100);
+              const effectiveTaxRate = (line.tax_rate_override != null && line.tax_rate_override >= 0)
+                ? line.tax_rate_override
+                : (line.tax_rate || 0);
+              const lineTax = discountedAmount * (effectiveTaxRate / 100);
+              const lineTotal = discountedAmount + lineTax;
               return (
                 <tr key={line.id}>
                   <td className="text-text-primary">{line.description}</td>
@@ -503,10 +510,10 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                     {formatCurrency(line.unit_price)}
                   </td>
                   <td className="text-right font-mono text-text-secondary">
-                    {line.tax_rate > 0 ? `${line.tax_rate}%` : '--'}
+                    {effectiveTaxRate > 0 ? `${effectiveTaxRate}%` : '--'}
                   </td>
                   <td className="text-right font-mono text-text-secondary">
-                    {line.tax_rate > 0 ? formatCurrency(lineTax) : '--'}
+                    {effectiveTaxRate > 0 ? formatCurrency(lineTax) : '--'}
                   </td>
                   <td className="text-right font-mono text-text-primary">
                     {formatCurrency(lineTotal)}

@@ -49,9 +49,15 @@ export function buildInvoiceHTML(
       (l, i) => {
         const qty = Number(l.quantity) || 1;
         const rate = Number(l.unit_price) || 0;
-        const taxRate = Number(l.tax_rate) || 0;
+        // MATH: respect per-line tax_rate_override when set, matching how
+        // InvoiceForm/print-templates compute tax. Otherwise tax shown here
+        // and tax shown in the totals box would diverge for overridden rates.
+        const overrideRate = Number(l.tax_rate_override ?? -1);
+        const taxRate = overrideRate >= 0 ? overrideRate : (Number(l.tax_rate) || 0);
+        // l.amount is persisted as qty*unit_price*(1 - discount_pct/100) and
+        // already rounded. Fall back to qty*rate for not-yet-saved invoices.
         const lineSubtotal = Number(l.amount) || (qty * rate);
-        const lineTax = lineSubtotal * (taxRate / 100);
+        const lineTax = Math.round(lineSubtotal * (taxRate / 100) * 100) / 100;
         const lineTotalWithTax = lineSubtotal + lineTax;
         return `
     <tr${i % 2 === 1 ? ' style="background:#fafafa;"' : ''}>
@@ -237,6 +243,7 @@ export function buildInvoiceHTML(
       ${(invoice.discount_amount || invoice.tax_amount) ? `<div class="totals-row"><span>Pre-Tax Amount</span><span>${fmt((invoice.subtotal || 0) - (invoice.discount_amount || 0))}</span></div>` : ''}
       ${invoice.tax_amount ? `<div class="totals-row"><span>Tax</span><span>${fmt(invoice.tax_amount)}</span></div>` : ''}
       ${invoice.discount_amount ? `<div class="totals-row"><span>Discount</span><span>-${fmt(invoice.discount_amount)}</span></div>` : ''}
+      ${invoice.shipping_amount ? `<div class="totals-row"><span>Shipping</span><span>${fmt(invoice.shipping_amount)}</span></div>` : ''}
       <div class="totals-row totals-total"><span>Total</span><span>${fmt(invoice.total || 0)}</span></div>
       ${invoice.amount_paid > 0 ? `
         <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(invoice.amount_paid)}</span></div>

@@ -576,6 +576,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     // Header discount (issue #3) is applied AFTER tax. This matches the existing
     // user-visible behavior. Document choice: header discount does not reduce
     // taxable base; only per-line discount_pct does. Shipping is included.
+    // NOTE: form.discount_pct (header-level "Invoice Discount %") is stored
+    // for reference but is NOT deducted from total here, matching legacy
+    // behavior. The print template's totals box also no longer renders it
+    // as a deduction line — see print-templates.ts.
     const raw = roundCents(subtotal + taxTotal - (form.discount || 0) + (form.shipping_amount || 0) + shippingTax);
     return form.invoice_type === 'credit_note' ? -Math.abs(raw) : raw;
   }, [subtotal, taxTotal, form.discount, form.shipping_amount, form.invoice_type, shippingTax]);
@@ -1268,10 +1272,18 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               }
 
               if (rowType === 'subtotal') {
+                // MATH: subtotal cell sits in the "Total" column (which shows
+                // each item's discounted base + line tax). Sum that same value
+                // so the inline subtotal reconciles with the rows above it
+                // and with the print template's subtotal row.
                 const subtotalAmt = lines
                   .slice(0, idx)
                   .filter(r => (r.row_type || 'item') === 'item')
-                  .reduce((s, r) => s + r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100), 0);
+                  .reduce((s, r) => {
+                    const base = r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100);
+                    const rate = r.tax_rate_override >= 0 ? r.tax_rate_override : r.tax_rate;
+                    return s + base + base * (rate / 100);
+                  }, 0);
                 return (
                   <tr
                     key={line.id}
@@ -1603,6 +1615,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <span className="text-text-secondary">Subtotal</span>
             <span className="font-mono text-text-primary">{currencyFmt.format(subtotal)}</span>
           </div>
+          {(form.discount > 0) && (
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Pre-Tax Amount</span>
+              <span className="font-mono text-text-primary">{currencyFmt.format(subtotal - (form.discount || 0))}</span>
+            </div>
+          )}
           {sortedTaxRates.length > 1 ? (
             sortedTaxRates.map((rate) => (
               <div key={rate} className="flex justify-between text-sm">
