@@ -3,7 +3,7 @@ import { LogIn, UserPlus, Eye, EyeOff, ArrowRight, Shield, Lock, BarChart3 } fro
 import api from '../../lib/api';
 import { useAuthStore, AuthUser } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
-import logoUrl from '../../assets/RMPG_WHITE_NEGATIVE_TRANSPARENT_FIXED.png';
+import logoUrl from '../../assets/rmpg-seal.png';
 
 type Mode = 'login' | 'register' | 'pick-user';
 

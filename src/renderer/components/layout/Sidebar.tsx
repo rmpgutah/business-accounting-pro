@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import logoUrl from '../../assets/RMPG_WHITE_NEGATIVE_TRANSPARENT_FIXED.png';
+import logoUrl from '../../assets/rmpg-seal.png';
 import {
   LayoutDashboard,
   BookOpen,
@@ -207,8 +207,8 @@ const Sidebar: React.FC = () => {
         />
         {!sidebarCollapsed && (
           <div className="flex flex-col leading-tight overflow-hidden">
-            <span className="text-[11px] font-semibold text-text-primary tracking-tight">BAP</span>
-            <span className="text-[10px] text-text-muted truncate">Accounting Pro</span>
+            <span className="text-[11px] font-semibold text-text-primary tracking-tight">RMPG</span>
+            <span className="text-[10px] text-text-muted truncate">Accounting Manager Pro</span>
           </div>
         )}
       </div>
