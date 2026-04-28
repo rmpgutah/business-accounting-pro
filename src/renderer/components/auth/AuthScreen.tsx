@@ -20,12 +20,11 @@ const SAVED_EMAIL_KEY = 'bap-saved-email';
 const SAVED_NAME_KEY  = 'bap-saved-name';
 const REMEMBER_KEY    = 'bap-remember';
 
-// Mountain landscape — loads from Unsplash with CSS gradient fallback
-// Dark alpine lake at dusk — scenic but dark enough for the white logo to read clearly
-const BG_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80&auto=format';
-const BG_FALLBACK = 'linear-gradient(160deg, #06101e 0%, #0a1628 25%, #0e1d32 50%, #12253f 70%, #07101d 100%)';
-// Overlay darkens the photo so the white logo/text stay high-contrast regardless of image
-const BG_OVERLAY = 'linear-gradient(rgba(5,10,20,0.55), rgba(5,10,20,0.70))';
+// RMPG Flex-style dark gradient — deep black-to-charcoal with subtle red accent
+const BG_GRADIENT = 'linear-gradient(145deg, #0a0a0a 0%, #111111 20%, #0d0d0d 40%, #141414 60%, #0f0f0f 80%, #0a0a0a 100%)';
+// Subtle radial accent glow in the upper area for depth
+const BG_ACCENT = 'radial-gradient(ellipse 80% 50% at 30% 20%, rgba(180,30,30,0.06) 0%, transparent 70%)';
+const BG_COMBINED = `${BG_ACCENT}, ${BG_GRADIENT}`;
 
 const AuthScreen: React.FC = () => {
   const setUser      = useAuthStore((s) => s.setUser);
@@ -182,7 +181,7 @@ const AuthScreen: React.FC = () => {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',
-        background: `${BG_OVERLAY}, url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
+        background: BG_COMBINED,
         }}>
         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Loading...</div>
       </div>
@@ -192,7 +191,7 @@ const AuthScreen: React.FC = () => {
   return (
     <div style={{
       display: 'flex', minHeight: '100vh', width: '100%',
-      background: `${BG_OVERLAY}, url(${BG_IMAGE}) center/cover no-repeat, ${BG_FALLBACK}`,
+      background: BG_COMBINED,
       fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
     }}>
       {/* Drag region for macOS hiddenInset title bar */}
@@ -200,40 +199,103 @@ const AuthScreen: React.FC = () => {
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '38px', WebkitAppRegion: 'drag', zIndex: 10 }} />
 
       {/* ── Left branding panel ───────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px', minWidth: '300px' }}>
-        <img
-          src={logoUrl}
-          alt="RMPG Logo"
-          style={{
-            width: '96px',
-            height: '96px',
-            objectFit: 'contain',
-            marginBottom: '32px',
-            filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.5))',
-          }}
-        />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '60px', minWidth: '360px' }}>
+        {/* Logo — centered, large, with glow effect */}
+        <div style={{
+          position: 'relative',
+          marginBottom: '36px',
+        }}>
+          {/* Subtle red glow behind logo */}
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '240px',
+            height: '240px',
+            background: 'radial-gradient(circle, rgba(200,30,30,0.12) 0%, transparent 70%)',
+            borderRadius: '50%',
+            filter: 'blur(30px)',
+          }} />
+          <img
+            src={logoUrl}
+            alt="RMPG Accounting Manager Pro"
+            style={{
+              position: 'relative',
+              width: '180px',
+              height: '180px',
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 4px 30px rgba(0,0,0,0.6))',
+            }}
+          />
+        </div>
 
-        <h1 style={{ fontSize: '48px', fontWeight: 800, color: 'white', lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: '16px' }}>
-          Business<br />Accounting<br />Pro
+        {/* App Title */}
+        <h1 style={{
+          fontSize: '28px',
+          fontWeight: 800,
+          color: 'white',
+          lineHeight: 1.15,
+          letterSpacing: '-0.02em',
+          marginBottom: '6px',
+          textAlign: 'center',
+          textTransform: 'uppercase',
+        }}>
+          RMPG Accounting<br />Manager Pro
         </h1>
-        <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, maxWidth: '400px', marginBottom: '40px' }}>
+
+        {/* Divider accent line */}
+        <div style={{
+          width: '60px',
+          height: '3px',
+          background: 'linear-gradient(90deg, #b91c1c, #dc2626, #b91c1c)',
+          margin: '16px auto 20px',
+          borderRadius: '2px',
+        }} />
+
+        {/* Subtitle */}
+        <p style={{
+          fontSize: '13px',
+          color: 'rgba(255,255,255,0.5)',
+          lineHeight: 1.6,
+          maxWidth: '340px',
+          textAlign: 'center',
+          marginBottom: '36px',
+        }}>
           Complete financial management for your business. Invoicing, payroll, taxes, debt collection, and 34 integrated modules.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Feature bullets */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', maxWidth: '320px' }}>
           {[
-            // Neutral monochrome icons — the red/blue/green was fighting the logo
-            { Icon: Shield,    color: 'rgba(255,255,255,0.85)', bg: 'rgba(255,255,255,0.08)', text: 'Secure, encrypted local storage' },
-            { Icon: BarChart3, color: 'rgba(255,255,255,0.85)', bg: 'rgba(255,255,255,0.08)', text: 'Real-time financial analytics' },
-            { Icon: Lock,      color: 'rgba(255,255,255,0.85)', bg: 'rgba(255,255,255,0.08)', text: 'Your data never leaves your device' },
-          ].map(({ Icon, color, bg, text }) => (
+            { Icon: Shield,    text: 'Secure, encrypted local storage' },
+            { Icon: BarChart3, text: 'Real-time financial analytics' },
+            { Icon: Lock,      text: 'Your data never leaves your device' },
+          ].map(({ Icon, text }) => (
             <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon size={18} color={color} />
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '6px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <Icon size={15} color="rgba(255,255,255,0.7)" />
               </div>
-              <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>{text}</span>
+              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.02em' }}>{text}</span>
             </div>
           ))}
+        </div>
+
+        {/* Bottom attribution */}
+        <div style={{
+          marginTop: '48px',
+          fontSize: '10px',
+          color: 'rgba(255,255,255,0.2)',
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
+          textAlign: 'center',
+        }}>
+          Rocky Mountain Protective Group, LLC
         </div>
       </div>
 
