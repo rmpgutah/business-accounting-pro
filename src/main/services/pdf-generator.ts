@@ -46,15 +46,24 @@ export function buildInvoiceHTML(
 
   const lineRows = (lineItems || [])
     .map(
-      (l, i) => `
+      (l, i) => {
+        const qty = Number(l.quantity) || 1;
+        const rate = Number(l.unit_price) || 0;
+        const taxRate = Number(l.tax_rate) || 0;
+        const lineSubtotal = Number(l.amount) || (qty * rate);
+        const lineTax = lineSubtotal * (taxRate / 100);
+        const lineTotalWithTax = lineSubtotal + lineTax;
+        return `
     <tr${i % 2 === 1 ? ' style="background:#fafafa;"' : ''}>
       <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#1a1a1a;">${esc(l.description || '')}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${l.quantity || 1}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${fmt(l.unit_price || 0)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${l.tax_rate > 0 ? l.tax_rate + '%' : '\u2014'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1a1a1a;font-variant-numeric:tabular-nums;">${fmt(l.amount || (l.quantity || 1) * (l.unit_price || 0))}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${qty}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${fmt(rate)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${taxRate > 0 ? taxRate + '%' : '\u2014'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#334155;font-variant-numeric:tabular-nums;">${taxRate > 0 ? fmt(lineTax) : '\u2014'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;color:#1a1a1a;font-variant-numeric:tabular-nums;">${fmt(lineTotalWithTax)}</td>
     </tr>
-  `
+  `;
+      }
     )
     .join('');
 
@@ -217,7 +226,7 @@ export function buildInvoiceHTML(
 
   <table>
     <thead>
-      <tr><th>Description</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Amount</th></tr>
+      <tr><th>Description</th><th>Qty</th><th>Rate</th><th>Tax %</th><th>Tax Amount</th><th>Amount</th></tr>
     </thead>
     <tbody>${lineRows}</tbody>
   </table>
@@ -225,6 +234,7 @@ export function buildInvoiceHTML(
   <div class="totals-section">
     <div class="totals-box">
       <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal || 0)}</span></div>
+      ${(invoice.discount_amount || invoice.tax_amount) ? `<div class="totals-row"><span>Pre-Tax Amount</span><span>${fmt((invoice.subtotal || 0) - (invoice.discount_amount || 0))}</span></div>` : ''}
       ${invoice.tax_amount ? `<div class="totals-row"><span>Tax</span><span>${fmt(invoice.tax_amount)}</span></div>` : ''}
       ${invoice.discount_amount ? `<div class="totals-row"><span>Discount</span><span>-${fmt(invoice.discount_amount)}</span></div>` : ''}
       <div class="totals-row totals-total"><span>Total</span><span>${fmt(invoice.total || 0)}</span></div>

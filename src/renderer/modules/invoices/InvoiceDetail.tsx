@@ -486,25 +486,34 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <th className="text-right">Qty</th>
               <th className="text-right">Unit Price</th>
               <th className="text-right">Tax %</th>
+              <th className="text-right">Tax Amount</th>
               <th className="text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {lines.map((line) => (
-              <tr key={line.id}>
-                <td className="text-text-primary">{line.description}</td>
-                <td className="text-right font-mono text-text-secondary">{line.quantity}</td>
-                <td className="text-right font-mono text-text-secondary">
-                  {formatCurrency(line.unit_price)}
-                </td>
-                <td className="text-right font-mono text-text-secondary">
-                  {line.tax_rate > 0 ? `${line.tax_rate}%` : '--'}
-                </td>
-                <td className="text-right font-mono text-text-primary">
-                  {formatCurrency(line.quantity * line.unit_price)}
-                </td>
-              </tr>
-            ))}
+            {lines.map((line) => {
+              const lineSubtotal = line.quantity * line.unit_price;
+              const lineTax = lineSubtotal * ((line.tax_rate || 0) / 100);
+              const lineTotal = lineSubtotal + lineTax;
+              return (
+                <tr key={line.id}>
+                  <td className="text-text-primary">{line.description}</td>
+                  <td className="text-right font-mono text-text-secondary">{line.quantity}</td>
+                  <td className="text-right font-mono text-text-secondary">
+                    {formatCurrency(line.unit_price)}
+                  </td>
+                  <td className="text-right font-mono text-text-secondary">
+                    {line.tax_rate > 0 ? `${line.tax_rate}%` : '--'}
+                  </td>
+                  <td className="text-right font-mono text-text-secondary">
+                    {line.tax_rate > 0 ? formatCurrency(lineTax) : '--'}
+                  </td>
+                  <td className="text-right font-mono text-text-primary">
+                    {formatCurrency(lineTotal)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -515,6 +524,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <span className="text-text-secondary">Subtotal</span>
               <span className="font-mono text-text-primary">{formatCurrency(invoice.subtotal)}</span>
             </div>
+            {(invoice.discount_amount > 0 || invoice.tax_amount > 0) && (
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Pre-Tax Amount</span>
+                <span className="font-mono text-text-primary">{formatCurrency((invoice.subtotal || 0) - (invoice.discount_amount || 0))}</span>
+              </div>
+            )}
             {sortedTaxRates.length > 1 ? (
               sortedTaxRates.map((rate) => (
                 <div key={rate} className="flex justify-between text-sm">
