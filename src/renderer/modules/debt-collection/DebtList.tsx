@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign, ArrowUpDown, Phone, Mail, ArrowUpRight, Printer, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
@@ -44,6 +44,8 @@ interface Debt {
   segment?: string;
   origination_type?: string;
   collectability?: string;
+  amount_paid?: number;
+  last_contact_date?: string;
 }
 
 interface DebtListProps {
@@ -52,6 +54,14 @@ interface DebtListProps {
   onView: (id: string) => void;
   onEdit: (id: string) => void;
 }
+
+// ─── Risk Color Logic (Feature 25) ─────────────────────
+const riskColor = (ageDays: number, balance: number): string => {
+  if (ageDays > 90 || balance > 10000) return '#dc2626'; // red
+  if (ageDays > 60 || balance > 5000) return '#f59e0b'; // orange
+  if (ageDays > 30) return '#eab308'; // yellow
+  return '#22c55e'; // green
+};
 
 // ─── Aging Badge ────────────────────────────────────────
 const getAgingBadge = (delinquencyDate: string): { label: string; color: string; bg: string } => {
@@ -70,6 +80,12 @@ const priorityColor: Record<string, string> = {
   high: 'text-orange-500',
   critical: 'text-accent-expense',
 };
+
+// ─── Sort Options (Feature 22-24) ───────────────────────
+type SortField = 'created_at' | 'balance_due' | 'age' | 'priority_score' | 'debtor_name' | 'original_amount' | 'last_contact';
+type SortDir = 'asc' | 'desc';
+
+const PRIORITY_WEIGHT: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
 // ─── Component ──────────────────────────────────────────
 const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
@@ -93,6 +109,15 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     writeoffs_ytd: number;
   } | null>(null);
 
+  // Feature 19: Age Range Filter
+  const [ageFilter, setAgeFilter] = useState('');
+  // Feature 20: Amount Range Filter
+  const [amountMin, setAmountMin] = useState('');
+  const [amountMax, setAmountMax] = useState('');
+  // Feature 22-24: Sorting
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
   // Import overdue state
   const [showImportForm, setShowImportForm] = useState(false);
   const [importDays, setImportDays] = useState(30);
@@ -111,6 +136,9 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAssignCollector, setBulkAssignCollector] = useState('');
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Feature 26: Last Contact data
+  const [lastContactMap, setLastContactMap] = useState<Record<string, string>>({});
 
   // ─── Load Users ─────────────────────────────────────────
   useEffect(() => {
@@ -152,6 +180,23 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         api.debtStats(activeCompany.id)
           .then(r => { if (!cancelled) setStats(r ?? null); })
           .catch(() => {});
+
+        // Feature 26: Load last contact dates
+        try {
+          const contactRows = await api.rawQuery(`
+            SELECT dc.debt_id, MAX(dc.created_at) as last_contact
+            FROM debt_communications dc
+            JOIN debts d ON dc.debt_id = d.id
+            WHERE d.company_id = ? AND d.type = ?
+            GROUP BY dc.debt_id
+          `, [activeCompany.id, type]);
+          if (Array.isArray(contactRows)) {
+            const map: Record<string, string> = {};
+            contactRows.forEach((r: any) => { if (r.debt_id && r.last_contact) map[r.debt_id] = r.last_contact; });
+            if (!cancelled) setLastContactMap(map);
+          }
+        } catch (e) { /* non-critical */ }
+
       } catch (err: any) {
         console.error('Failed to load debts:', err);
         if (!cancelled) setLoadError(err?.message || 'Failed to load debts');
@@ -163,7 +208,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     return () => { cancelled = true; };
   }, [activeCompany, type]);
 
-  // ─── In-Memory Filters ──────────────────────────────────
+  // ─── Age Calculation ────────────────────────────────────
+  const ageDays = (delinquentDate: string): number => {
+    if (!delinquentDate) return 0;
+    return Math.floor((Date.now() - new Date(delinquentDate).getTime()) / 86400000);
+  };
+
+  // ─── In-Memory Filters (enhanced with Features 19-21) ──
   const filtered = useMemo(() => {
     return debts.filter((d) => {
       if (search) {
@@ -176,14 +227,82 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       if (dateFrom && d.delinquent_date < dateFrom) return false;
       if (dateTo && d.delinquent_date > dateTo) return false;
       if (collectorFilter && d.assigned_collector_id !== collectorFilter) return false;
+
+      // Feature 19: Age Range Filter
+      if (ageFilter) {
+        const age = ageDays(d.delinquent_date || d.created_at);
+        if (ageFilter === '0-30' && age > 30) return false;
+        if (ageFilter === '31-60' && (age <= 30 || age > 60)) return false;
+        if (ageFilter === '61-90' && (age <= 60 || age > 90)) return false;
+        if (ageFilter === '90+' && age <= 90) return false;
+      }
+
+      // Feature 20: Amount Range Filter
+      if (amountMin && d.balance_due < parseFloat(amountMin)) return false;
+      if (amountMax && d.balance_due > parseFloat(amountMax)) return false;
+
       return true;
     });
-  }, [debts, search, statusFilter, stageFilter, priorityFilter, dateFrom, dateTo, collectorFilter]);
+  }, [debts, search, statusFilter, stageFilter, priorityFilter, dateFrom, dateTo, collectorFilter, ageFilter, amountMin, amountMax]);
+
+  // Feature 22-24: Sorted list
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'debtor_name':
+          cmp = (a.debtor_name || '').localeCompare(b.debtor_name || '');
+          break;
+        case 'balance_due':
+          cmp = (a.balance_due || 0) - (b.balance_due || 0);
+          break;
+        case 'original_amount':
+          cmp = (a.original_amount || 0) - (b.original_amount || 0);
+          break;
+        case 'age':
+          cmp = ageDays(a.delinquent_date || a.created_at) - ageDays(b.delinquent_date || b.created_at);
+          break;
+        case 'priority_score': {
+          const scoreA = (PRIORITY_WEIGHT[a.priority] || 1) * (a.balance_due || 0) * ageDays(a.delinquent_date || a.created_at);
+          const scoreB = (PRIORITY_WEIGHT[b.priority] || 1) * (b.balance_due || 0) * ageDays(b.delinquent_date || b.created_at);
+          cmp = scoreA - scoreB;
+          break;
+        }
+        case 'last_contact': {
+          const dateA = lastContactMap[a.id] || '0000-00-00';
+          const dateB = lastContactMap[b.id] || '0000-00-00';
+          cmp = dateA.localeCompare(dateB);
+          break;
+        }
+        default: // created_at
+          cmp = (a.created_at || '').localeCompare(b.created_at || '');
+          break;
+      }
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+    return arr;
+  }, [filtered, sortField, sortDir, lastContactMap]);
 
   const totalOutstanding = useMemo(
     () => filtered.reduce((sum, d) => sum + (d.balance_due || 0), 0),
     [filtered]
   );
+
+  // Feature 16-18: Portfolio Summary Stats
+  const portfolioStats = useMemo(() => {
+    const totalCollected = filtered.reduce((sum, d) => sum + ((d.original_amount || 0) - (d.balance_due || 0)), 0);
+    const totalOriginal = filtered.reduce((sum, d) => sum + (d.original_amount || 0), 0);
+    const recoveryRate = totalOriginal > 0 ? ((totalCollected / totalOriginal) * 100).toFixed(1) : '0.0';
+    const avgBalance = filtered.length > 0 ? totalOutstanding / filtered.length : 0;
+    const largest = filtered.length > 0 ? Math.max(...filtered.map(d => d.balance_due || 0)) : 0;
+    let oldestAge = 0;
+    filtered.forEach(d => {
+      const age = ageDays(d.delinquent_date || d.created_at);
+      if (age > oldestAge) oldestAge = age;
+    });
+    return { totalCollected, recoveryRate, avgBalance, largest, oldestAge };
+  }, [filtered, totalOutstanding]);
 
   // ─── Import Overdue Invoices ────────────────────────────
   const handleImportOverdue = useCallback(async () => {
@@ -258,10 +377,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) {
+    if (selectedIds.size === sorted.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filtered.map(d => d.id)));
+      setSelectedIds(new Set(sorted.map(d => d.id)));
     }
   };
 
@@ -320,9 +439,125 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
     }
   };
 
-  // ─── Age Calculation ────────────────────────────────────
-  const ageDays = (delinquentDate: string): number => {
-    return Math.floor((Date.now() - new Date(delinquentDate).getTime()) / 86400000);
+  // Feature 28: Batch Escalate
+  const handleBulkEscalate = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Escalate ${selectedIds.size} selected debts to next stage?`)) return;
+    setBulkProcessing(true);
+    try {
+      let escalated = 0;
+      for (const id of selectedIds) {
+        try {
+          await api.debtAdvanceStage(id);
+          escalated++;
+        } catch { /* skip individual failures */ }
+      }
+      setSelectedIds(new Set());
+      await reload();
+      setOpSuccess(`Escalated ${escalated} debts to next stage`); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err) {
+      setOpError('Bulk escalate failed'); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  // Feature 30: Print Debt Register
+  const handlePrintRegister = useCallback(async () => {
+    if (!activeCompany) return;
+    const isRec = type === 'receivable';
+    const totalOrig = sorted.reduce((s, d) => s + (d.original_amount || 0), 0);
+    const totalBal = sorted.reduce((s, d) => s + (d.balance_due || 0), 0);
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Debt Register - ${activeCompany.name}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 30px; color: #1a1a2e; font-size: 11px; }
+          h1 { font-size: 18px; margin-bottom: 2px; }
+          .sub { font-size: 11px; color: #666; margin-bottom: 16px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
+          th { background: #f8f8fa; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+          .text-right { text-align: right; }
+          .mono { font-family: monospace; }
+          .bold { font-weight: 700; }
+          tfoot td { border-top: 2px solid #333; font-weight: 700; }
+          .stats { display: flex; gap: 24px; margin-bottom: 16px; }
+          .stat-item { }
+          .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
+          .stat-value { font-size: 14px; font-weight: 700; font-family: monospace; }
+        </style>
+      </head>
+      <body>
+        <h1>${isRec ? 'Receivables' : 'Payables'} Register</h1>
+        <div class="sub">${activeCompany.name} &mdash; ${new Date().toLocaleDateString()} &mdash; ${sorted.length} records</div>
+        <div class="stats">
+          <div class="stat-item"><div class="stat-label">Total Original</div><div class="stat-value">${formatCurrency(totalOrig)}</div></div>
+          <div class="stat-item"><div class="stat-label">Total Outstanding</div><div class="stat-value" style="color:#dc2626;">${formatCurrency(totalBal)}</div></div>
+          <div class="stat-item"><div class="stat-label">Recovery Rate</div><div class="stat-value">${portfolioStats.recoveryRate}%</div></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>${isRec ? 'Debtor' : 'Creditor'}</th>
+              <th>Source</th>
+              <th class="text-right">Original</th>
+              <th class="text-right">Balance Due</th>
+              <th>Age</th>
+              <th>Stage</th>
+              <th>Priority</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map((d, i) => {
+              const age = ageDays(d.delinquent_date || d.created_at);
+              const src = d.source_type === 'invoice' ? `INV ${(d.source_id || '').substring(0, 8)}` : 'Manual';
+              return `<tr>
+                <td class="mono">${i + 1}</td>
+                <td class="bold">${d.debtor_name}</td>
+                <td class="mono">${src}</td>
+                <td class="text-right mono">${formatCurrency(d.original_amount)}</td>
+                <td class="text-right mono bold" style="color:${d.balance_due > 0 ? '#dc2626' : '#16a34a'}">${formatCurrency(d.balance_due)}</td>
+                <td class="mono">${age}d</td>
+                <td>${d.current_stage || '—'}</td>
+                <td>${d.priority || '—'}</td>
+                <td>${d.status || '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" class="text-right">Totals</td>
+              <td class="text-right mono">${formatCurrency(totalOrig)}</td>
+              <td class="text-right mono" style="color:#dc2626;">${formatCurrency(totalBal)}</td>
+              <td colspan="4"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </body>
+      </html>
+    `;
+    await api.printPreview(html, `${isRec ? 'Receivables' : 'Payables'} Register`);
+  }, [activeCompany, sorted, type, portfolioStats]);
+
+  // ─── Sort Toggle Helper ─────────────────────────────────
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
+
+  const SortIndicator: React.FC<{ field: SortField }> = ({ field }) => {
+    if (sortField !== field) return null;
+    return <span className="ml-0.5 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>;
   };
 
   if (loading) {
@@ -357,7 +592,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isReceivable && (
             <>
               <button
@@ -431,7 +666,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <DollarSign size={14} />
             Match Payments
           </button>
-          {/* Feature 12: Auto-Assign */}
+          {/* Auto-Assign */}
           <button className="block-btn flex items-center gap-2 text-xs" onClick={async () => {
             if (!activeCompany) return;
             try {
@@ -449,7 +684,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <RefreshCw size={14} />
             Auto-Assign
           </button>
-          {/* Feature 13: Auto Priority */}
+          {/* Auto Priority */}
           <button className="block-btn flex items-center gap-2 text-xs" onClick={async () => {
             if (!activeCompany) return;
             try {
@@ -465,7 +700,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <AlertTriangle size={14} />
             Auto-Priority
           </button>
-          {/* Feature 20: Consolidate Selected */}
+          {/* Consolidate Selected */}
           {selectedIds.size >= 2 && (
             <button className="block-btn flex items-center gap-2 text-xs text-accent-blue" onClick={async () => {
               if (!activeCompany) return;
@@ -487,6 +722,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               Consolidate Selected
             </button>
           )}
+          {/* Feature 30: Print Register */}
+          <button className="block-btn flex items-center gap-2 text-xs" onClick={handlePrintRegister}>
+            <Printer size={14} />
+            Print Register
+          </button>
           <button className="block-btn flex items-center gap-2" onClick={handleExport}>
             <Download size={14} />
             Export CSV
@@ -507,6 +747,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         <div className="flex items-center gap-3 px-4 py-2.5 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: '6px' }}>
           <span className="text-xs font-bold text-accent-blue">{selectedIds.size} selected</span>
           <div className="flex items-center gap-2 ml-2">
+            {/* Feature 29: Batch Assign Collector */}
             <select className="block-select text-xs" style={{ width: 'auto', minWidth: 140 }} value={bulkAssignCollector} onChange={(e) => setBulkAssignCollector(e.target.value)}>
               <option value="">Assign Collector...</option>
               {[...users].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -516,7 +757,13 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             )}
           </div>
           {isReceivable && (
-            <button className="block-btn text-xs py-1 px-3" onClick={handleBulkAdvance} disabled={bulkProcessing}>Advance Stage</button>
+            <>
+              <button className="block-btn text-xs py-1 px-3" onClick={handleBulkAdvance} disabled={bulkProcessing}>Advance Stage</button>
+              {/* Feature 28: Batch Escalate */}
+              <button className="block-btn text-xs py-1 px-3 text-accent-expense" onClick={handleBulkEscalate} disabled={bulkProcessing}>
+                <span className="flex items-center gap-1"><ArrowUpRight size={12} /> Escalate</span>
+              </button>
+            </>
           )}
           <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(true)} disabled={bulkProcessing}>Hold</button>
           <button className="block-btn text-xs py-1 px-3" onClick={() => handleBulkHold(false)} disabled={bulkProcessing}>Release</button>
@@ -566,7 +813,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         </div>
       )}
 
-      {/* Summary Bar */}
+      {/* Summary Bar (original) */}
       {stats && (
         <SummaryBar items={[
           { label: 'Total Outstanding', value: formatCurrency(stats.total_outstanding) },
@@ -577,7 +824,35 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         ]} />
       )}
 
-      {/* Filters */}
+      {/* Feature 16-18: Portfolio Summary Cards */}
+      <div className="grid grid-cols-6 gap-3">
+        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <p className="text-lg font-bold font-mono text-accent-expense">{formatCurrency(totalOutstanding)}</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Total Outstanding</p>
+        </div>
+        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <p className="text-lg font-bold font-mono text-accent-income">{formatCurrency(portfolioStats.totalCollected)}</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Total Collected</p>
+        </div>
+        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <p className="text-lg font-bold font-mono" style={{ color: '#8b5cf6' }}>{portfolioStats.recoveryRate}%</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Recovery Rate</p>
+        </div>
+        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(portfolioStats.avgBalance)}</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Avg Balance</p>
+        </div>
+        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <p className="text-lg font-bold font-mono" style={{ color: '#dc2626' }}>{formatCurrency(portfolioStats.largest)}</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Largest Debt</p>
+        </div>
+        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <p className="text-lg font-bold font-mono" style={{ color: '#f59e0b' }}>{portfolioStats.oldestAge}d</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Oldest Account</p>
+        </div>
+      </div>
+
+      {/* Filters (enhanced with Features 19-21) */}
       <div className="block-card p-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
@@ -619,7 +894,6 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
             >
-              {/* Pipeline stages sorted alphabetically per directive; semantic workflow order is reminder → warning → final_notice → demand_letter → collections_agency → legal_action → judgment → garnishment. */}
               <option value="">All Stages</option>
               <option value="collections_agency">Collections Agency</option>
               <option value="demand_letter">Demand Letter</option>
@@ -643,6 +917,36 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <option value="low">Low</option>
             <option value="medium">Medium</option>
           </select>
+          {/* Feature 19: Age Range Filter */}
+          <select
+            className="block-select"
+            style={{ width: 'auto', minWidth: '110px' }}
+            value={ageFilter}
+            onChange={(e) => setAgeFilter(e.target.value)}
+          >
+            <option value="">All Ages</option>
+            <option value="0-30">0-30 days</option>
+            <option value="31-60">31-60 days</option>
+            <option value="61-90">61-90 days</option>
+            <option value="90+">90+ days</option>
+          </select>
+          {/* Feature 20: Amount Range Filter */}
+          <input
+            type="number"
+            className="block-input"
+            style={{ width: '100px' }}
+            placeholder="Min $"
+            value={amountMin}
+            onChange={(e) => setAmountMin(e.target.value)}
+          />
+          <input
+            type="number"
+            className="block-input"
+            style={{ width: '100px' }}
+            placeholder="Max $"
+            value={amountMax}
+            onChange={(e) => setAmountMax(e.target.value)}
+          />
           <input
             type="date"
             className="block-input"
@@ -659,6 +963,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             onChange={(e) => setDateTo(e.target.value)}
             placeholder="To"
           />
+          {/* Feature 21: Collector Filter */}
           <select
             className="block-select"
             style={{ fontSize: 12 }}
@@ -673,10 +978,49 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             ))}
           </select>
         </div>
+
+        {/* Feature 22-24: Sort Dropdown */}
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border-primary">
+          <ArrowUpDown size={12} className="text-text-muted" />
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Sort by:</span>
+          <select
+            className="block-select text-xs"
+            style={{ width: 'auto', minWidth: '160px' }}
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value as SortField)}
+          >
+            <option value="created_at">Date Created</option>
+            <option value="debtor_name">Name</option>
+            <option value="balance_due">Balance Due</option>
+            <option value="original_amount">Original Amount</option>
+            <option value="age">Age (Days)</option>
+            <option value="priority_score">Priority Score</option>
+            <option value="last_contact">Last Contact</option>
+          </select>
+          <button
+            className="block-btn text-xs py-1 px-2"
+            onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            {sortDir === 'asc' ? '▲ Asc' : '▼ Desc'}
+          </button>
+          {(ageFilter || amountMin || amountMax || statusFilter || stageFilter || priorityFilter || collectorFilter || dateFrom || dateTo || search) && (
+            <button
+              className="block-btn text-xs py-1 px-2 ml-2 text-accent-expense"
+              onClick={() => {
+                setSearch(''); setStatusFilter(''); setStageFilter(''); setPriorityFilter('');
+                setDateFrom(''); setDateTo(''); setCollectorFilter('');
+                setAgeFilter(''); setAmountMin(''); setAmountMax('');
+              }}
+            >
+              Clear All Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
-      {filtered.length === 0 ? (
+      {sorted.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">
             <Scale size={24} className="text-text-muted" />
@@ -703,35 +1047,52 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
               {isReceivable ? (
                 <tr>
                   <th style={{ width: 32 }}>
-                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                    <input type="checkbox" checked={selectedIds.size === sorted.length && sorted.length > 0} onChange={toggleSelectAll} />
                   </th>
-                  <th>Debtor</th>
+                  {/* Feature 25: Risk Indicator column */}
+                  <th style={{ width: 28 }}></th>
+                  <th className="cursor-pointer select-none" onClick={() => toggleSort('debtor_name')}>
+                    Debtor <SortIndicator field="debtor_name" />
+                  </th>
                   <th>Source</th>
-                  <th className="text-right">Original</th>
-                  <th className="text-right">Balance Due</th>
-                  <th className="text-right">Age (days)</th>
+                  <th className="text-right cursor-pointer select-none" onClick={() => toggleSort('original_amount')}>
+                    Original <SortIndicator field="original_amount" />
+                  </th>
+                  <th className="text-right cursor-pointer select-none" onClick={() => toggleSort('balance_due')}>
+                    Balance Due <SortIndicator field="balance_due" />
+                  </th>
+                  <th className="text-right cursor-pointer select-none" onClick={() => toggleSort('age')}>
+                    Age <SortIndicator field="age" />
+                  </th>
                   <th>Stage</th>
                   <th>Priority</th>
                   <th>Risk</th>
-                  <th style={{ width: '90px' }}>Actions</th>
+                  {/* Feature 26: Last Contact column */}
+                  <th className="cursor-pointer select-none" onClick={() => toggleSort('last_contact')}>
+                    Last Contact <SortIndicator field="last_contact" />
+                  </th>
+                  {/* Feature 27: Quick Actions */}
+                  <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               ) : (
                 <tr>
                   <th style={{ width: 32 }}>
-                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+                    <input type="checkbox" checked={selectedIds.size === sorted.length && sorted.length > 0} onChange={toggleSelectAll} />
                   </th>
+                  <th style={{ width: 28 }}></th>
                   <th>Creditor</th>
                   <th>Source</th>
                   <th className="text-right">Original</th>
                   <th className="text-right">Balance Due</th>
                   <th>Due Date</th>
                   <th>Status</th>
-                  <th style={{ width: '90px' }}>Actions</th>
+                  <th>Last Contact</th>
+                  <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               )}
             </thead>
             <tbody>
-              {filtered.map((debt) => {
+              {sorted.map((debt) => {
                 const sourceLabel =
                   debt.source_type === 'invoice'
                     ? `INV ${(debt.source_id || '').substring(0, 8)}`
@@ -739,15 +1100,31 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                 const balanceClass = debt.balance_due > 0 ? 'font-bold text-accent-expense' : 'font-bold';
                 const stageBadge = formatStatus(debt.current_stage);
                 const statusBadge = formatStatus(debt.status);
+                const age = ageDays(debt.delinquent_date || debt.created_at);
+                const rColor = riskColor(age, debt.balance_due || 0);
+                const lastContact = lastContactMap[debt.id];
+                const daysSinceContact = lastContact
+                  ? Math.floor((Date.now() - new Date(lastContact).getTime()) / 86400000)
+                  : null;
 
                 return isReceivable ? (
                   <tr
                     key={debt.id}
-                    className="cursor-pointer"
+                    className="cursor-pointer group"
                     onClick={() => onView(debt.id)}
                   >
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
+                    </td>
+                    {/* Feature 25: Risk Indicator Dot */}
+                    <td>
+                      <div
+                        style={{
+                          width: 10, height: 10, borderRadius: '50%', background: rColor,
+                          boxShadow: `0 0 4px ${rColor}66`,
+                        }}
+                        title={`Risk: ${age}d old, ${formatCurrency(debt.balance_due)} balance`}
+                      />
                     </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -830,6 +1207,17 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         );
                       })()}
                     </td>
+                    {/* Feature 26: Last Contact */}
+                    <td>
+                      {daysSinceContact != null ? (
+                        <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? '#dc2626' : daysSinceContact > 7 ? '#f59e0b' : '#16a34a' }}>
+                          {daysSinceContact}d ago
+                        </span>
+                      ) : (
+                        <span className="text-xs text-text-muted">Never</span>
+                      )}
+                    </td>
+                    {/* Feature 27: Quick Action Buttons */}
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
@@ -849,6 +1237,22 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                           <Pencil size={14} />
                         </button>
                         <button
+                          className="block-btn p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Log Call"
+                          aria-label="Log call"
+                          onClick={() => onView(debt.id)}
+                        >
+                          <Phone size={13} />
+                        </button>
+                        <button
+                          className="block-btn p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Send Email"
+                          aria-label="Send email"
+                          onClick={() => onView(debt.id)}
+                        >
+                          <Mail size={13} />
+                        </button>
+                        <button
                           className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                           title="Delete"
                           aria-label="Delete debt"
@@ -862,11 +1266,21 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                 ) : (
                   <tr
                     key={debt.id}
-                    className="cursor-pointer"
+                    className="cursor-pointer group"
                     onClick={() => onView(debt.id)}
                   >
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(debt.id)} onChange={() => toggleSelect(debt.id)} />
+                    </td>
+                    {/* Risk Indicator */}
+                    <td>
+                      <div
+                        style={{
+                          width: 10, height: 10, borderRadius: '50%', background: rColor,
+                          boxShadow: `0 0 4px ${rColor}66`,
+                        }}
+                        title={`${age}d old, ${formatCurrency(debt.balance_due)} balance`}
+                      />
                     </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -921,6 +1335,16 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     <td>
                       <span className={statusBadge.className}>{statusBadge.label}</span>
                     </td>
+                    {/* Last Contact for payables */}
+                    <td>
+                      {daysSinceContact != null ? (
+                        <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? '#dc2626' : daysSinceContact > 7 ? '#f59e0b' : '#16a34a' }}>
+                          {daysSinceContact}d ago
+                        </span>
+                      ) : (
+                        <span className="text-xs text-text-muted">Never</span>
+                      )}
+                    </td>
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
@@ -940,6 +1364,22 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                           <Pencil size={14} />
                         </button>
                         <button
+                          className="block-btn p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Log Call"
+                          aria-label="Log call"
+                          onClick={() => onView(debt.id)}
+                        >
+                          <Phone size={13} />
+                        </button>
+                        <button
+                          className="block-btn p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Send Email"
+                          aria-label="Send email"
+                          onClick={() => onView(debt.id)}
+                        >
+                          <Mail size={13} />
+                        </button>
+                        <button
                           className="block-btn p-1 text-accent-expense hover:bg-accent-expense/10 transition-colors"
                           title="Delete"
                           aria-label="Delete debt"
@@ -956,15 +1396,18 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <tfoot>
               <tr>
                 <td
-                  colSpan={isReceivable ? 3 : 3}
+                  colSpan={isReceivable ? 4 : 4}
                   className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider"
                 >
                   Total
                 </td>
                 <td className="text-right font-mono font-bold text-text-primary">
+                  {formatCurrency(sorted.reduce((s, d) => s + (d.original_amount || 0), 0))}
+                </td>
+                <td className="text-right font-mono font-bold text-accent-expense">
                   {formatCurrency(totalOutstanding)}
                 </td>
-                <td colSpan={isReceivable ? 4 : 3} />
+                <td colSpan={isReceivable ? 6 : 4} />
               </tr>
             </tfoot>
           </table>
@@ -972,9 +1415,10 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {sorted.length > 0 && (
         <div className="text-xs text-text-muted">
-          Showing {filtered.length} of {debts.length} debt{debts.length !== 1 ? 's' : ''}
+          Showing {sorted.length} of {debts.length} debt{debts.length !== 1 ? 's' : ''}
+          {sortField !== 'created_at' && <span> &middot; Sorted by {sortField.replace('_', ' ')}</span>}
         </div>
       )}
 
