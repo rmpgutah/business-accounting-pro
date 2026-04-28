@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Printer, Download, GitCompare } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { Printer, Download, GitCompare, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, parseISO, differenceInDays, startOfYear } from 'date-fns';
+import {
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
+} from 'recharts';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { fiscalYearStart, fiscalYearEnd } from '../../lib/date-helpers';
 import { generateReportHTML } from '../../lib/print-templates';
 import type { ReportColumn, ReportSummary } from '../../lib/print-templates';
+import { downloadCSVBlob } from '../../lib/csv-export';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
@@ -26,6 +31,11 @@ interface PnLData {
   otherExpenses: LineItem[];
 }
 
+interface MonthlyRevenue {
+  month: string;
+  revenue: number;
+}
+
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -42,6 +52,43 @@ function fmtNeg(value: number): React.ReactElement {
     ? <span data-neg="true" className="acc-neg">{formatted}</span>
     : <span>{formatted}</span>;
 }
+
+// ─── Chart theme colors ────────────────────────────────
+const CHART_COLORS = [
+  '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+];
+
+// ─── KPI Card ───────────────────────────────────────────
+const KPICard: React.FC<{
+  label: string;
+  value: number;
+  subtitle?: string;
+  borderColor: string;
+}> = ({ label, value, subtitle, borderColor }) => (
+  <div
+    className={`block-card p-3 border-l-4 ${borderColor}`}
+    style={{ borderRadius: '6px' }}
+  >
+    <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+      {label}
+    </div>
+    <div className={`text-base font-bold font-mono mt-1 ${value >= 0 ? 'text-text-primary' : 'text-accent-expense'}`}>
+      {fmtNeg(value)}
+    </div>
+    {subtitle && (
+      <div className="text-[10px] text-text-muted mt-0.5">{subtitle}</div>
+    )}
+  </div>
+);
+
+// ─── Ratio Box ──────────────────────────────────────────
+const RatioBox: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+    <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{label}</div>
+    <div className="text-sm font-bold text-text-primary font-mono mt-1">{value}</div>
+  </div>
+);
 
 // ─── Render helpers ─────────────────────────────────────
 const SectionHeader: React.FC<{ label: string; cols?: number }> = ({ label, cols = 2 }) => (
@@ -63,7 +110,8 @@ const PnLLineRow: React.FC<{
   accent?: string;
   priorAmount?: number | null;
   change?: React.ReactNode;
-}> = ({ name, amount, indent = 0, bold = false, accent, priorAmount, change }) => (
+  annualized?: number | null;
+}> = ({ name, amount, indent = 0, bold = false, accent, priorAmount, change, annualized }) => (
   <tr className="border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors">
     <td
       className={`py-1.5 text-xs ${bold ? 'font-bold text-text-primary' : 'text-text-secondary'}`}
@@ -88,6 +136,11 @@ const PnLLineRow: React.FC<{
         {change}
       </td>
     )}
+    {annualized !== undefined && annualized !== null && (
+      <td className="py-1.5 text-right pr-6 font-mono text-xs text-text-muted">
+        {fmtNeg(annualized)}
+      </td>
+    )}
   </tr>
 );
 
@@ -99,7 +152,8 @@ const PnLSubtotalRow: React.FC<{
   doubleBorder?: boolean;
   priorAmount?: number | null;
   change?: React.ReactNode;
-}> = ({ label, amount, accent, topBorder, doubleBorder, priorAmount, change }) => (
+  annualized?: number | null;
+}> = ({ label, amount, accent, topBorder, doubleBorder, priorAmount, change, annualized }) => (
   <tr
     className={`${topBorder ? 'border-t border-border-primary report-subtotal-row' : ''} ${doubleBorder ? 'border-t-2 border-border-primary report-grand-total-row' : ''}`}
   >
@@ -119,6 +173,11 @@ const PnLSubtotalRow: React.FC<{
     {change !== undefined && (
       <td className="py-2 text-right pr-6 text-xs font-bold">
         {change}
+      </td>
+    )}
+    {annualized !== undefined && annualized !== null && (
+      <td className="py-2 text-right pr-6 font-mono text-xs font-bold text-text-muted">
+        {fmtNeg(annualized)}
       </td>
     )}
   </tr>
@@ -143,7 +202,9 @@ const ProfitAndLoss: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [compareYoY, setCompareYoY] = useState(false);
+  const [showAnnualized, setShowAnnualized] = useState(false);
   const [priorData, setPriorData] = useState<PnLData | null>(null);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
   const [data, setData] = useState<PnLData>({
     revenue: [],
     costOfServices: [],
@@ -213,10 +274,6 @@ const ProfitAndLoss: React.FC = () => {
               sub.includes('cogs') ||
               sub.includes('direct')
             ) {
-              // Convention: GL stores expenses as net credit-debit (negative).
-              // Display all expense categories as positive magnitudes so totals
-              // and per-line values use the same sign — abs at insertion, then
-              // sum directly with no further sign massaging.
               result.costOfServices.push({ ...item, total: Math.abs(item.total) });
             } else if (
               sub.includes('other') ||
@@ -237,6 +294,26 @@ const ProfitAndLoss: React.FC = () => {
         }
 
         setData(result);
+
+        // Load monthly revenue trend for sparkline
+        const yearStart = startDate.slice(0, 4) + '-01-01';
+        const yearEnd = startDate.slice(0, 4) + '-12-31';
+        const trendRows: any[] = await api.rawQuery(
+          `SELECT strftime('%Y-%m', je.date) as month, COALESCE(SUM(jel.credit - jel.debit), 0) as revenue
+           FROM journal_entry_lines jel
+           JOIN accounts a ON a.id = jel.account_id
+           JOIN journal_entries je ON je.id = jel.journal_entry_id
+           WHERE je.company_id = ? AND a.type = 'revenue'
+             AND date(je.date) >= date(?) AND date(je.date) <= date(?)
+           GROUP BY month ORDER BY month`,
+          [activeCompany.id, yearStart, yearEnd]
+        );
+        if (!cancelled) {
+          setMonthlyRevenue((trendRows ?? []).map((r: any) => ({
+            month: r.month,
+            revenue: Number(r.revenue) || 0,
+          })));
+        }
       } catch (err: any) {
         console.error('Failed to load P&L:', err);
         if (!cancelled) setError(err?.message || 'Failed to load Profit & Loss');
@@ -294,8 +371,6 @@ const ProfitAndLoss: React.FC = () => {
     [data.revenue]
   );
   const totalCOS = useMemo(
-    // costOfServices items are already stored positive (abs'd on insertion);
-    // sum directly so per-line + total share one sign convention.
     () => data.costOfServices.reduce((s, r) => s + r.total, 0),
     [data.costOfServices]
   );
@@ -319,6 +394,52 @@ const ProfitAndLoss: React.FC = () => {
     [data.otherExpenses]
   );
   const netIncome = netOperatingIncome + totalOtherIncome - totalOtherExpenses;
+  const totalExpenses = totalCOS + totalOpex + totalOtherExpenses;
+
+  // ─── EBITDA calculation ────────────────────────────────
+  const ebitda = useMemo(() => {
+    const allExpenses = [
+      ...data.costOfServices,
+      ...Object.values(data.operatingExpenses).flat(),
+      ...data.otherExpenses,
+    ];
+    let depreciation = 0;
+    let amortization = 0;
+    let interest = 0;
+    for (const item of allExpenses) {
+      const sub = item.subtype.toLowerCase();
+      const name = item.account_name.toLowerCase();
+      if (sub.includes('depreciation') || name.includes('depreciation')) depreciation += item.total;
+      if (sub.includes('amortization') || name.includes('amortization')) amortization += item.total;
+      if (sub.includes('interest') || name.includes('interest expense')) interest += item.total;
+    }
+    return netIncome + depreciation + amortization + interest;
+  }, [data, netIncome]);
+
+  // ─── Margin percentages ────────────────────────────────
+  const grossMarginPct = totalRevenue !== 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const operatingMarginPct = totalRevenue !== 0 ? (netOperatingIncome / totalRevenue) * 100 : 0;
+  const netMarginPct = totalRevenue !== 0 ? (netIncome / totalRevenue) * 100 : 0;
+  const cogsPct = totalRevenue !== 0 ? (totalCOS / totalRevenue) * 100 : 0;
+  const sgaPct = totalRevenue !== 0 ? (totalOpex / totalRevenue) * 100 : 0;
+
+  // ─── Annualization factor ──────────────────────────────
+  const annualizationFactor = useMemo(() => {
+    try {
+      const start = parseISO(startDate);
+      const end = parseISO(endDate);
+      const days = differenceInDays(end, start) + 1;
+      if (days >= 365) return null; // Full year or more, no projection needed
+      return 365 / days;
+    } catch {
+      return null;
+    }
+  }, [startDate, endDate]);
+
+  const annualize = (value: number): number | null => {
+    if (!showAnnualized || !annualizationFactor) return null;
+    return value * annualizationFactor;
+  };
 
   // ─── Prior year totals (for YoY) ──────────────────────
   const priorTotalRevenue = priorData?.revenue.reduce((s, r) => s + r.total, 0) ?? 0;
@@ -356,10 +477,38 @@ const ProfitAndLoss: React.FC = () => {
     );
   };
 
+  // ─── Expense pie chart data ────────────────────────────
+  const expensePieData = useMemo(() => {
+    const items: { name: string; value: number }[] = [];
+    for (const [subtype, lineItems] of Object.entries(data.operatingExpenses)) {
+      const total = lineItems.reduce((s, r) => s + r.total, 0);
+      if (total > 0) items.push({ name: subtype, value: total });
+    }
+    if (totalCOS > 0) items.push({ name: 'Cost of Goods/Services', value: totalCOS });
+    if (totalOtherExpenses > 0) items.push({ name: 'Other Expenses', value: totalOtherExpenses });
+    items.sort((a, b) => b.value - a.value);
+    return items.slice(0, 10);
+  }, [data.operatingExpenses, totalCOS, totalOtherExpenses]);
+
+  // ─── Revenue vs Expenses bar data ─────────────────────
+  const revExpBarData = useMemo(() => [
+    { name: 'Revenue', value: totalRevenue },
+    { name: 'Expenses', value: totalExpenses },
+    { name: 'Net Income', value: netIncome },
+  ], [totalRevenue, totalExpenses, netIncome]);
+
+  // ─── Col count for table ──────────────────────────────
+  const colCount = useMemo(() => {
+    let c = 2;
+    if (compareYoY && priorData) c += 2;
+    if (showAnnualized && annualizationFactor) c += 1;
+    return c;
+  }, [compareYoY, priorData, showAnnualized, annualizationFactor]);
+
   // ─── Build P&L report HTML for printing ────────────────
   const buildPnLHTML = useCallback(() => {
     const companyName = activeCompany?.name || 'Company';
-    const dateRange = `${format(parseISO(startDate), 'MMM d, yyyy')} \u2013 ${format(parseISO(endDate), 'MMM d, yyyy')}`;
+    const dateRange = `${format(parseISO(startDate), 'MMM d, yyyy')} – ${format(parseISO(endDate), 'MMM d, yyyy')}`;
 
     const columns: ReportColumn[] = [
       { key: 'name', label: 'Account', align: 'left', format: 'text' },
@@ -380,7 +529,6 @@ const ProfitAndLoss: React.FC = () => {
     if (data.costOfServices.length > 0) {
       rows.push({ name: 'COST OF GOODS / SERVICES', amount: '', _bold: true, _highlight: true });
       for (const r of data.costOfServices) {
-        // r.total is already positive (abs'd at insertion).
         rows.push({ name: `    ${r.account_name}`, amount: r.total });
       }
       rows.push({ name: 'Total Cost of Services', amount: totalCOS, _bold: true, _separator: true });
@@ -423,10 +571,15 @@ const ProfitAndLoss: React.FC = () => {
         value: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(netIncome),
         accent: netIncome >= 0 ? 'green' : 'red',
       },
+      {
+        label: 'EBITDA',
+        value: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(ebitda),
+        accent: ebitda >= 0 ? 'green' : 'red',
+      },
     ];
 
     return generateReportHTML('Profit & Loss Statement', companyName, dateRange, columns, rows, summary);
-  }, [data, activeCompany, startDate, endDate, totalRevenue, totalCOS, grossProfit, totalOpex, netOperatingIncome, totalOtherIncome, totalOtherExpenses, netIncome]);
+  }, [data, activeCompany, startDate, endDate, totalRevenue, totalCOS, grossProfit, totalOpex, netOperatingIncome, totalOtherIncome, totalOtherExpenses, netIncome, ebitda]);
 
   const handlePrintReport = async () => {
     const html = buildPnLHTML();
@@ -438,6 +591,34 @@ const ProfitAndLoss: React.FC = () => {
     await api.saveToPDF(html, `ProfitAndLoss-${startDate}-to-${endDate}`);
   };
 
+  // ─── CSV Export ────────────────────────────────────────
+  const handleExportCSV = () => {
+    const csvRows: Record<string, any>[] = [];
+    const addSection = (section: string, items: LineItem[]) => {
+      csvRows.push({ section, account: '', amount: '' });
+      for (const item of items) {
+        csvRows.push({ section: '', account: item.account_name, amount: item.total });
+      }
+    };
+
+    addSection('Revenue', data.revenue);
+    csvRows.push({ section: 'Total Revenue', account: '', amount: totalRevenue });
+    addSection('Cost of Goods/Services', data.costOfServices);
+    csvRows.push({ section: 'Total Cost of Services', account: '', amount: totalCOS });
+    csvRows.push({ section: 'Gross Profit', account: '', amount: grossProfit });
+    for (const [subtype, items] of Object.entries(data.operatingExpenses).sort(([a], [b]) => a.localeCompare(b))) {
+      addSection(`Operating Expenses - ${subtype}`, items);
+    }
+    csvRows.push({ section: 'Total Operating Expenses', account: '', amount: totalOpex });
+    csvRows.push({ section: 'Net Operating Income', account: '', amount: netOperatingIncome });
+    addSection('Other Income', data.otherIncome);
+    addSection('Other Expenses', data.otherExpenses);
+    csvRows.push({ section: 'Net Income', account: '', amount: netIncome });
+    csvRows.push({ section: 'EBITDA', account: '', amount: ebitda });
+
+    downloadCSVBlob(csvRows, `profit-and-loss-${startDate}-to-${endDate}.csv`);
+  };
+
   // ─── Quick date presets ─────────────────────────────────
   const setPreset = (label: string) => {
     const now = new Date();
@@ -447,11 +628,25 @@ const ProfitAndLoss: React.FC = () => {
         setEndDate(format(endOfMonth(now), 'yyyy-MM-dd'));
         break;
       case 'This Year':
-        // DATE: Item #9 — "This Year" uses fiscal year, not calendar year.
         setStartDate(fiscalYearStart(now, activeCompany?.fiscal_year_start || 1));
         setEndDate(fiscalYearEnd(now, activeCompany?.fiscal_year_start || 1));
         break;
     }
+  };
+
+  // ─── Custom recharts tooltip ──────────────────────────
+  const ChartTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="block-card p-2 text-xs" style={{ borderRadius: '6px' }}>
+        <div className="font-semibold text-text-primary">{label}</div>
+        {payload.map((p: any, i: number) => (
+          <div key={i} className="text-text-secondary">
+            {p.name}: {fmt.format(p.value)}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -503,6 +698,16 @@ const ProfitAndLoss: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2">
+          {annualizationFactor && (
+            <button
+              className={`p-2 transition-colors ${showAnnualized ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'}`}
+              style={{ borderRadius: '6px' }}
+              title="Annualized Projection"
+              onClick={() => setShowAnnualized(v => !v)}
+            >
+              <TrendingUp size={15} />
+            </button>
+          )}
           <button
             className={`p-2 transition-colors ${compareYoY ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'}`}
             style={{ borderRadius: '6px' }}
@@ -510,6 +715,14 @@ const ProfitAndLoss: React.FC = () => {
             onClick={() => setCompareYoY(v => !v)}
           >
             <GitCompare size={15} />
+          </button>
+          <button
+            className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+            style={{ borderRadius: '6px' }}
+            title="Export CSV"
+            onClick={handleExportCSV}
+          >
+            <FileSpreadsheet size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
@@ -536,194 +749,371 @@ const ProfitAndLoss: React.FC = () => {
           Generating report...
         </div>
       ) : (
-        <div
-          className="block-card overflow-hidden"
-          style={{ borderRadius: '6px' }}
-        >
-          {/* Report header */}
-          <div className="px-6 py-4 border-b border-border-primary bg-bg-tertiary/50 text-center">
-            <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
-              {activeCompany?.name ?? 'Company'}
-            </h2>
-            <h3 className="text-xs text-text-secondary mt-0.5">
-              Profit & Loss Statement
-            </h3>
-            <p className="text-[10px] text-text-muted mt-0.5">
-              {format(parseISO(startDate), 'MMM d, yyyy')} &ndash;{' '}
-              {format(parseISO(endDate), 'MMM d, yyyy')}
-            </p>
+        <>
+          {/* ─── KPI Summary Cards ─────────────────────── */}
+          <div className="grid grid-cols-5 gap-3">
+            <KPICard label="Total Revenue" value={totalRevenue} borderColor="border-l-accent-income" />
+            <KPICard label="Gross Profit" value={grossProfit} subtitle={`${grossMarginPct.toFixed(1)}% margin`} borderColor="border-l-accent-blue" />
+            <KPICard label="Operating Expenses" value={totalExpenses} borderColor="border-l-accent-expense" />
+            <KPICard label="Net Income" value={netIncome} subtitle={`${netMarginPct.toFixed(1)}% margin`} borderColor="border-l-accent-income" />
+            <KPICard label="EBITDA" value={ebitda} borderColor="border-l-[#8b5cf6]" />
           </div>
 
-          <table className="w-full text-sm">
-            {compareYoY && priorData && (
-              <thead>
-                <tr className="border-b border-border-primary">
-                  <th className="px-6 py-2 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Account</th>
-                  <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Current</th>
-                  <th className="py-2 text-right pr-4 text-xs font-bold text-text-muted uppercase tracking-wider">Prior Year</th>
-                  <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Change</th>
-                </tr>
-              </thead>
-            )}
-            <tbody>
-              {/* Revenue */}
-              <SectionHeader label="Revenue" cols={compareYoY && priorData ? 4 : 2} />
-              {data.revenue.map((r) => (
-                <PnLLineRow
-                  key={r.account_code}
-                  name={r.account_name}
-                  amount={r.total}
-                  indent={1}
-                  priorAmount={compareYoY && priorData ? (priorAmountMap.get(r.account_code) ?? 0) : undefined}
-                  change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0) : undefined}
-                />
-              ))}
-              <PnLSubtotalRow
-                label="Total Revenue"
-                amount={totalRevenue}
-                accent="text-accent-income"
-                topBorder
-                priorAmount={compareYoY && priorData ? priorTotalRevenue : undefined}
-                change={compareYoY && priorData ? changeArrow(totalRevenue, priorTotalRevenue) : undefined}
-              />
+          {/* ─── Operating Ratios Panel ────────────────── */}
+          <div className="grid grid-cols-5 gap-3">
+            <RatioBox label="Gross Margin" value={`${grossMarginPct.toFixed(1)}%`} />
+            <RatioBox label="Operating Margin" value={`${operatingMarginPct.toFixed(1)}%`} />
+            <RatioBox label="Net Margin" value={`${netMarginPct.toFixed(1)}%`} />
+            <RatioBox label="COGS % of Revenue" value={`${cogsPct.toFixed(1)}%`} />
+            <RatioBox label="SGA % of Revenue" value={`${sgaPct.toFixed(1)}%`} />
+          </div>
 
-              <PnLSpacer />
-
-              {/* Cost of Services */}
-              {data.costOfServices.length > 0 && (
-                <>
-                  <SectionHeader label="Cost of Goods / Services" />
-                  {data.costOfServices.map((r) => (
-                    <PnLLineRow
-                      key={r.account_code}
-                      name={r.account_name}
-                      amount={r.total}
-                      indent={1}
-                    />
-                  ))}
-                  <PnLSubtotalRow
-                    label="Total Cost of Services"
-                    amount={totalCOS}
-                    topBorder
+          {/* ─── Revenue Trend Sparkline ───────────────── */}
+          {monthlyRevenue.length > 0 && (
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
+                Monthly Revenue Trend ({startDate.slice(0, 4)})
+              </div>
+              <ResponsiveContainer width="100%" height={120}>
+                <LineChart data={monthlyRevenue}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
+                    tickFormatter={(v: string) => v.slice(5)}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <PnLSpacer />
-                </>
-              )}
+                  <YAxis
+                    tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    name="Revenue"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#22c55e' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-              {/* Gross Profit */}
-              <PnLSubtotalRow
-                label="Gross Profit"
-                amount={grossProfit}
-                accent={grossProfit >= 0 ? 'text-accent-income' : 'text-accent-expense'}
-                doubleBorder
-              />
+          {/* ─── P&L Table ─────────────────────────────── */}
+          <div
+            className="block-card overflow-hidden"
+            style={{ borderRadius: '6px' }}
+          >
+            {/* Report header */}
+            <div className="px-6 py-4 border-b border-border-primary bg-bg-tertiary/50 text-center">
+              <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
+                {activeCompany?.name ?? 'Company'}
+              </h2>
+              <h3 className="text-xs text-text-secondary mt-0.5">
+                Profit & Loss Statement
+              </h3>
+              <p className="text-[10px] text-text-muted mt-0.5">
+                {format(parseISO(startDate), 'MMM d, yyyy')} &ndash;{' '}
+                {format(parseISO(endDate), 'MMM d, yyyy')}
+              </p>
+            </div>
 
-              <PnLSpacer />
+            <table className="w-full text-sm">
+              {(compareYoY && priorData) || (showAnnualized && annualizationFactor) ? (
+                <thead>
+                  <tr className="border-b border-border-primary">
+                    <th className="px-6 py-2 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Account</th>
+                    <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Current</th>
+                    {compareYoY && priorData && (
+                      <>
+                        <th className="py-2 text-right pr-4 text-xs font-bold text-text-muted uppercase tracking-wider">Prior Year</th>
+                        <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Change</th>
+                      </>
+                    )}
+                    {showAnnualized && annualizationFactor && (
+                      <th className="py-2 text-right pr-6 text-xs font-bold text-text-muted uppercase tracking-wider">Annualized</th>
+                    )}
+                  </tr>
+                </thead>
+              ) : null}
+              <tbody>
+                {/* Revenue */}
+                <SectionHeader label="Revenue" cols={colCount} />
+                {data.revenue.map((r) => (
+                  <PnLLineRow
+                    key={r.account_code}
+                    name={r.account_name}
+                    amount={r.total}
+                    indent={1}
+                    priorAmount={compareYoY && priorData ? (priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                    change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                    annualized={annualize(r.total)}
+                  />
+                ))}
+                <PnLSubtotalRow
+                  label="Total Revenue"
+                  amount={totalRevenue}
+                  accent="text-accent-income"
+                  topBorder
+                  priorAmount={compareYoY && priorData ? priorTotalRevenue : undefined}
+                  change={compareYoY && priorData ? changeArrow(totalRevenue, priorTotalRevenue) : undefined}
+                  annualized={annualize(totalRevenue)}
+                />
 
-              {/* Operating Expenses */}
-              <SectionHeader label="Operating Expenses" />
-              {Object.entries(data.operatingExpenses)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([subtype, items]) => (
-                  <React.Fragment key={subtype}>
-                    <tr>
-                      <td
-                        colSpan={2}
-                        className="px-6 pt-2 pb-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider"
-                        style={{ paddingLeft: '24px' }}
-                      >
-                        {subtype}
-                      </td>
-                    </tr>
-                    {items.map((r) => (
+                <PnLSpacer />
+
+                {/* Cost of Services */}
+                {data.costOfServices.length > 0 && (
+                  <>
+                    <SectionHeader label="Cost of Goods / Services" cols={colCount} />
+                    {data.costOfServices.map((r) => (
                       <PnLLineRow
                         key={r.account_code}
                         name={r.account_name}
                         amount={r.total}
-                        indent={2}
+                        indent={1}
+                        priorAmount={compareYoY && priorData ? (priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                        change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0, true) : undefined}
+                        annualized={annualize(r.total)}
                       />
                     ))}
-                  </React.Fragment>
-                ))}
-              <PnLSubtotalRow
-                label="Total Operating Expenses"
-                amount={totalOpex}
-                accent="text-accent-expense"
-                topBorder
-              />
-
-              <PnLSpacer />
-
-              {/* Net Operating Income */}
-              <PnLSubtotalRow
-                label="Net Operating Income"
-                amount={netOperatingIncome}
-                accent={
-                  netOperatingIncome >= 0
-                    ? 'text-accent-income'
-                    : 'text-accent-expense'
-                }
-                doubleBorder
-              />
-
-              <PnLSpacer />
-
-              {/* Other Income / Expenses */}
-              {(data.otherIncome.length > 0 ||
-                data.otherExpenses.length > 0) && (
-                <>
-                  <SectionHeader label="Other Income & Expenses" />
-                  {data.otherIncome.map((r) => (
-                    <PnLLineRow
-                      key={r.account_code}
-                      name={r.account_name}
-                      amount={r.total}
-                      indent={1}
+                    <PnLSubtotalRow
+                      label="Total Cost of Services"
+                      amount={totalCOS}
+                      topBorder
+                      priorAmount={compareYoY && priorData ? priorTotalCOS : undefined}
+                      change={compareYoY && priorData ? changeArrow(totalCOS, priorTotalCOS, true) : undefined}
+                      annualized={annualize(totalCOS)}
                     />
+                    <PnLSpacer />
+                  </>
+                )}
+
+                {/* Gross Profit */}
+                <PnLSubtotalRow
+                  label="Gross Profit"
+                  amount={grossProfit}
+                  accent={grossProfit >= 0 ? 'text-accent-income' : 'text-accent-expense'}
+                  doubleBorder
+                  priorAmount={compareYoY && priorData ? priorGrossProfit : undefined}
+                  change={compareYoY && priorData ? changeArrow(grossProfit, priorGrossProfit) : undefined}
+                  annualized={annualize(grossProfit)}
+                />
+
+                <PnLSpacer />
+
+                {/* Operating Expenses */}
+                <SectionHeader label="Operating Expenses" cols={colCount} />
+                {Object.entries(data.operatingExpenses)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([subtype, items]) => (
+                    <React.Fragment key={subtype}>
+                      <tr>
+                        <td
+                          colSpan={colCount}
+                          className="px-6 pt-2 pb-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider"
+                          style={{ paddingLeft: '24px' }}
+                        >
+                          {subtype}
+                        </td>
+                      </tr>
+                      {items.map((r) => (
+                        <PnLLineRow
+                          key={r.account_code}
+                          name={r.account_name}
+                          amount={r.total}
+                          indent={2}
+                          priorAmount={compareYoY && priorData ? (priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                          change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0, true) : undefined}
+                          annualized={annualize(r.total)}
+                        />
+                      ))}
+                    </React.Fragment>
                   ))}
-                  {data.otherExpenses.map((r) => (
-                    <PnLLineRow
-                      key={r.account_code}
-                      name={r.account_name}
-                      amount={-r.total}
-                      indent={1}
+                <PnLSubtotalRow
+                  label="Total Operating Expenses"
+                  amount={totalOpex}
+                  accent="text-accent-expense"
+                  topBorder
+                  priorAmount={compareYoY && priorData ? priorTotalOpex : undefined}
+                  change={compareYoY && priorData ? changeArrow(totalOpex, priorTotalOpex, true) : undefined}
+                  annualized={annualize(totalOpex)}
+                />
+
+                <PnLSpacer />
+
+                {/* Net Operating Income */}
+                <PnLSubtotalRow
+                  label="Net Operating Income"
+                  amount={netOperatingIncome}
+                  accent={
+                    netOperatingIncome >= 0
+                      ? 'text-accent-income'
+                      : 'text-accent-expense'
+                  }
+                  doubleBorder
+                  priorAmount={compareYoY && priorData ? priorNetOperating : undefined}
+                  change={compareYoY && priorData ? changeArrow(netOperatingIncome, priorNetOperating) : undefined}
+                  annualized={annualize(netOperatingIncome)}
+                />
+
+                <PnLSpacer />
+
+                {/* Other Income / Expenses */}
+                {(data.otherIncome.length > 0 ||
+                  data.otherExpenses.length > 0) && (
+                  <>
+                    <SectionHeader label="Other Income & Expenses" cols={colCount} />
+                    {data.otherIncome.map((r) => (
+                      <PnLLineRow
+                        key={r.account_code}
+                        name={r.account_name}
+                        amount={r.total}
+                        indent={1}
+                        priorAmount={compareYoY && priorData ? (priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                        change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                        annualized={annualize(r.total)}
+                      />
+                    ))}
+                    {data.otherExpenses.map((r) => (
+                      <PnLLineRow
+                        key={r.account_code}
+                        name={r.account_name}
+                        amount={-r.total}
+                        indent={1}
+                        priorAmount={compareYoY && priorData ? -(priorAmountMap.get(r.account_code) ?? 0) : undefined}
+                        change={compareYoY && priorData ? changeArrow(r.total, priorAmountMap.get(r.account_code) ?? 0, true) : undefined}
+                        annualized={annualize(-r.total)}
+                      />
+                    ))}
+                    <PnLSubtotalRow
+                      label="Total Other Income/Expenses"
+                      amount={totalOtherIncome - totalOtherExpenses}
+                      topBorder
+                      priorAmount={compareYoY && priorData ? (priorTotalOtherIncome - priorTotalOtherExpenses) : undefined}
+                      change={compareYoY && priorData ? changeArrow(totalOtherIncome - totalOtherExpenses, priorTotalOtherIncome - priorTotalOtherExpenses) : undefined}
+                      annualized={annualize(totalOtherIncome - totalOtherExpenses)}
                     />
-                  ))}
-                  <PnLSubtotalRow
-                    label="Total Other Income/Expenses"
-                    amount={totalOtherIncome - totalOtherExpenses}
-                    topBorder
+                    <PnLSpacer />
+                  </>
+                )}
+
+                {/* Net Income */}
+                <tr className="border-t-2 border-text-primary bg-bg-tertiary/50 report-grand-total-row">
+                  <td className="px-6 py-3 text-sm font-bold text-text-primary">
+                    Net Income
+                  </td>
+                  <td
+                    className={`py-3 text-right pr-6 font-mono text-sm font-bold ${
+                      netIncome >= 0 ? 'text-accent-income' : 'text-accent-expense'
+                    }`}
+                  >
+                    {fmtNeg(netIncome)}
+                  </td>
+                  {compareYoY && priorData && (
+                    <td className="py-3 text-right pr-4 font-mono text-sm font-bold text-text-muted">
+                      {fmtNeg(priorNetIncome)}
+                    </td>
+                  )}
+                  {compareYoY && priorData && (
+                    <td className="py-3 text-right pr-6 text-sm font-bold">
+                      {changeArrow(netIncome, priorNetIncome)}
+                    </td>
+                  )}
+                  {showAnnualized && annualizationFactor && (
+                    <td className="py-3 text-right pr-6 font-mono text-sm font-bold text-text-muted">
+                      {fmtNeg(netIncome * annualizationFactor)}
+                    </td>
+                  )}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* ─── Charts Section ────────────────────────── */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Revenue vs Expenses Bar Chart */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
+                Revenue vs Expenses
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={revExpBarData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <PnLSpacer />
-                </>
-              )}
+                  <YAxis
+                    tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="value" name="Amount" radius={[4, 4, 0, 0]}>
+                    {revExpBarData.map((_entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={index === 0 ? '#22c55e' : index === 1 ? '#ef4444' : '#3b82f6'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
 
-              {/* Net Income */}
-              <tr className="border-t-2 border-text-primary bg-bg-tertiary/50 report-grand-total-row">
-                <td className="px-6 py-3 text-sm font-bold text-text-primary">
-                  Net Income
-                </td>
-                <td
-                  className={`py-3 text-right pr-6 font-mono text-sm font-bold ${
-                    netIncome >= 0 ? 'text-accent-income' : 'text-accent-expense'
-                  }`}
-                >
-                  {fmtNeg(netIncome)}
-                </td>
-                {compareYoY && priorData && (
-                  <td className="py-3 text-right pr-4 font-mono text-sm font-bold text-text-muted">
-                    {fmtNeg(priorNetIncome)}
-                  </td>
-                )}
-                {compareYoY && priorData && (
-                  <td className="py-3 text-right pr-6 text-sm font-bold">
-                    {changeArrow(netIncome, priorNetIncome)}
-                  </td>
-                )}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+            {/* Expense Breakdown Pie Chart */}
+            {expensePieData.length > 0 && (
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
+                  Expense Breakdown (Top 10)
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={expensePieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={80}
+                      paddingAngle={2}
+                    >
+                      {expensePieData.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any) => fmt.format(Number(value) || 0)}
+                      contentStyle={{
+                        background: 'var(--color-bg-secondary)',
+                        border: '1px solid var(--color-border-primary)',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                      }}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      formatter={(value: string) => (
+                        <span className="text-[10px] text-text-secondary">{value}</span>
+                      )}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </>
       )}
       <PrintReportFooter />
     </div>

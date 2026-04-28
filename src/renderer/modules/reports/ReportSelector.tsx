@@ -13,6 +13,11 @@ import {
   Receipt,
   Target,
   Users,
+  UserCircle,
+  Building2,
+  FolderKanban,
+  CalendarDays,
+  Package,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,7 +35,14 @@ export type ReportType =
   | 'tax-summary'
   | 'financial-statements'
   | 'budget-vs-actual'
-  | 'payroll-register';
+  | 'payroll-register'
+  | 'revenue-by-client'
+  | 'vendor-spend'
+  | 'project-profitability'
+  | 'income-by-month'
+  | 'debt-collection'
+  | 'inventory-valuation'
+  | 'sales-tax';
 
 interface ReportCard {
   id: ReportType;
@@ -149,12 +161,71 @@ const REPORTS: ReportCard[] = [
     icon: Users,
     accentClass: 'border-l-purple-500',
   },
+  {
+    id: 'revenue-by-client',
+    title: 'Revenue by Client',
+    description: 'Revenue breakdown by client with ranking, percentage of total, and trend indicators.',
+    icon: UserCircle,
+    accentClass: 'border-l-accent-blue',
+  },
+  {
+    id: 'vendor-spend',
+    title: 'Vendor Spend Analysis',
+    description: 'Spending by vendor with YoY comparison, top vendors, and payment terms compliance.',
+    icon: Building2,
+    accentClass: 'border-l-[#f97316]',
+  },
+  {
+    id: 'project-profitability',
+    title: 'Project Profitability',
+    description: 'Revenue, costs, and margin per project with budget vs actual comparison.',
+    icon: FolderKanban,
+    accentClass: 'border-l-accent-income',
+  },
+  {
+    id: 'income-by-month',
+    title: 'Income by Month',
+    description: 'Monthly income trend with year-over-year comparison and seasonal patterns.',
+    icon: CalendarDays,
+    accentClass: 'border-l-accent-blue',
+  },
+  {
+    id: 'debt-collection',
+    title: 'Debt Collection Report',
+    description: 'Portfolio performance, recovery rates, aging analysis, and collector effectiveness.',
+    icon: Scale,
+    accentClass: 'border-l-accent-expense',
+  },
+  {
+    id: 'inventory-valuation',
+    title: 'Inventory Valuation',
+    description: 'Current inventory value, turnover rate, and cost analysis by item and category.',
+    icon: Package,
+    accentClass: 'border-l-[#8b5cf6]',
+  },
+  {
+    id: 'sales-tax',
+    title: 'Sales Tax Report',
+    description: 'Sales tax collected, by jurisdiction, with filing period summaries.',
+    icon: Receipt,
+    accentClass: 'border-l-[#f59e0b]',
+  },
+];
+
+// ─── Category Groups ────────────────────────────────────
+const CATEGORIES = [
+  { title: 'Financial Statements', reports: ['profit-and-loss', 'balance-sheet', 'cash-flow', 'financial-statements'] },
+  { title: 'Ledger & Accounts', reports: ['trial-balance', 'general-ledger'] },
+  { title: 'Receivables & Revenue', reports: ['ar-aging', 'revenue-by-client', 'income-by-month', 'sales-tax'] },
+  { title: 'Payables & Expenses', reports: ['ap-aging', 'expense-by-category', 'expense-detail', 'vendor-spend'] },
+  { title: 'Operations', reports: ['budget-vs-actual', 'payroll-register', 'project-profitability', 'inventory-valuation'] },
+  { title: 'Collections', reports: ['debt-collection'] },
 ];
 
 // ─── Component ──────────────────────────────────────────
 const ReportSelector: React.FC<ReportSelectorProps> = ({ onSelect }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <div>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
           Choose a Report
@@ -164,39 +235,48 @@ const ReportSelector: React.FC<ReportSelectorProps> = ({ onSelect }) => {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {REPORTS.map((report) => {
-          const Icon = report.icon;
-          return (
-            <button
-              key={report.id}
-              onClick={() => onSelect(report.id)}
-              className={`block-card p-5 border-l-2 ${report.accentClass} text-left hover:bg-bg-hover transition-colors cursor-pointer group`}
-              style={{ borderRadius: '6px' }}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
+      {CATEGORIES.map((cat) => (
+        <div key={cat.title}>
+          <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3 mt-6">
+            {cat.title}
+          </h3>
+          <div className="grid grid-cols-3 gap-4">
+            {cat.reports.map((reportId) => {
+              const report = REPORTS.find((r) => r.id === reportId);
+              if (!report) return null;
+              const Icon = report.icon;
+              return (
+                <button
+                  key={report.id}
+                  onClick={() => onSelect(report.id)}
+                  className={`block-card p-5 border-l-2 ${report.accentClass} text-left hover:bg-bg-hover transition-colors cursor-pointer group`}
                   style={{ borderRadius: '6px' }}
                 >
-                  <Icon
-                    size={18}
-                    className="text-text-secondary group-hover:text-accent-blue transition-colors"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-text-primary group-hover:text-accent-blue transition-colors">
-                    {report.title}
-                  </h3>
-                  <p className="text-xs text-text-muted mt-1 leading-relaxed">
-                    {report.description}
-                  </p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
+                      style={{ borderRadius: '6px' }}
+                    >
+                      <Icon
+                        size={18}
+                        className="text-text-secondary group-hover:text-accent-blue transition-colors"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-text-primary group-hover:text-accent-blue transition-colors">
+                        {report.title}
+                      </h3>
+                      <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                        {report.description}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
