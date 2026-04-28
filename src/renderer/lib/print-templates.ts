@@ -336,7 +336,8 @@ const DEFAULT_COLUMNS: InvoiceColumnConfig[] = [
   { key: 'unit_label',  label: 'Unit',        visible: false, order: 3 },
   { key: 'unit_price',  label: 'Rate',        visible: true,  order: 4 },
   { key: 'tax_rate',    label: 'Tax %',       visible: true,  order: 5 },
-  { key: 'amount',      label: 'Amount',      visible: true,  order: 6 },
+  { key: 'tax_amount',  label: 'Tax Amount',  visible: true,  order: 6 },
+  { key: 'amount',      label: 'Amount',      visible: true,  order: 7 },
 ];
 
 export { DEFAULT_COLUMNS };
@@ -483,7 +484,7 @@ export function generateInvoiceHTML(
 
   // ── Column headers ──
   const colHeaders = cols.map(c => {
-    const right = ['quantity','unit_price','tax_rate','amount'].includes(c.key);
+    const right = ['quantity','unit_price','tax_rate','tax_amount','amount'].includes(c.key);
     return `<th class="${right ? 'text-right' : ''}">${c.label}</th>`;
   }).join('');
 
@@ -558,8 +559,14 @@ export function generateInvoiceHTML(
       return baseAmtRaw * (1 - Number(l.line_discount) / 100);
     })();
 
+    // Compute per-line tax (using rate override if present, else line tax_rate)
+    const lineTaxRateOverride = Number(l.tax_rate_override ?? -1);
+    const lineEffectiveTaxRate = lineTaxRateOverride >= 0 ? lineTaxRateOverride : Number(l.tax_rate || 0);
+    const lineTaxAmount = discountedPrice * (lineEffectiveTaxRate / 100);
+    const lineAmountWithTax = discountedPrice + lineTaxAmount;
+
     const cells = cols.map(c => {
-      const right = ['quantity','unit_price','tax_rate','amount'].includes(c.key);
+      const right = ['quantity','unit_price','tax_rate','tax_amount','amount'].includes(c.key);
       const cls = `${right ? 'text-right font-mono' : ''} ${c.key === 'amount' ? 'font-bold' : ''}`.trim();
       let val = '';
       switch (c.key) {
@@ -574,13 +581,14 @@ export function generateInvoiceHTML(
         case 'quantity':     val = String(l.quantity ?? 1); break;
         case 'unit_label':   val = esc(l.unit_label || ''); break;
         case 'unit_price':   val = fmt(l.unit_price || 0); break;
-        case 'tax_rate':     val = l.tax_rate > 0 ? l.tax_rate + '%' : '—'; break;
+        case 'tax_rate':     val = lineEffectiveTaxRate > 0 ? lineEffectiveTaxRate + '%' : '—'; break;
+        case 'tax_amount':   val = lineEffectiveTaxRate > 0 ? fmt(lineTaxAmount) : '—'; break;
         case 'amount': {
           if (hasLineDiscount && discountedPrice < baseAmtRaw) {
             const dlbl = l.line_discount_type === 'flat' ? `−${fmt(Number(l.line_discount))}` : `−${Number(l.line_discount)}%`;
-            val = `<span style="text-decoration:line-through;color:#94a3b8;font-weight:400;font-size:10px;display:block;line-height:1.1;">${fmt(baseAmtRaw)}</span><span style="color:#16a34a;display:block;line-height:1.2;">${fmt(discountedPrice)}</span><span style="font-size:8px;color:#16a34a;font-weight:600;">${dlbl}</span>`;
+            val = `<span style="text-decoration:line-through;color:#94a3b8;font-weight:400;font-size:10px;display:block;line-height:1.1;">${fmt(baseAmtRaw)}</span><span style="color:#16a34a;display:block;line-height:1.2;">${fmt(lineAmountWithTax)}</span><span style="font-size:8px;color:#16a34a;font-weight:600;">${dlbl}</span>`;
           } else {
-            val = fmt(discountedPrice);
+            val = fmt(lineAmountWithTax);
           }
           break;
         }
@@ -1606,6 +1614,22 @@ export function generatePayStubHTML(
         <td class="r mono b dark" style="font-size:13px;">${fmt(stub.gross_pay)}</td>
         <td class="r mono b muted">${fmt(ytd.gross_pay)}</td>
       </tr>
+      ${preTax > 0 ? `
+      <tr>
+        <td style="color:#7c3aed;padding-left:16px;">Less: Pre-Tax Deductions</td>
+        <td></td>
+        <td></td>
+        <td class="r mono" style="color:#7c3aed;">-${fmt(preTax)}</td>
+        <td class="r mono muted">--</td>
+      </tr>
+      <tr class="total-row">
+        <td class="b dark">Taxable Wages (Subject to Tax)</td>
+        <td></td>
+        <td></td>
+        <td class="r mono b dark" style="font-size:13px;">${fmt(stub.gross_pay - preTax)}</td>
+        <td class="r mono b muted">${fmt(ytd.gross_pay)}</td>
+      </tr>
+      ` : ''}
     </tbody>
   </table>
 
