@@ -1510,64 +1510,153 @@ export function generatePayStubHTML(
     </tbody>
   </table>
 
-  <!-- Deductions Section -->
-  <div class="section section-ded">Deductions</div>
+  <!-- Statutory Taxes Section -->
+  <div class="section section-ded">Statutory Tax Withholdings</div>
   <table>
     <thead><tr>
-      <th style="width:52%">Description</th>
-      <th class="r" style="width:24%">Current</th>
-      <th class="r" style="width:24%">YTD</th>
+      <th style="width:36%">Tax</th>
+      <th class="r" style="width:11%">Rate</th>
+      <th class="r" style="width:18%">Current</th>
+      <th class="r" style="width:18%">YTD</th>
+      <th class="r" style="width:17%">Taxable Wages</th>
     </tr></thead>
     <tbody>
-      <!-- Statutory Taxes -->
       <tr>
         <td>Federal Income Tax</td>
+        <td class="r mono muted">${stub.gross_pay > 0 ? (stub.federal_tax / stub.gross_pay * 100).toFixed(2) + '%' : '--'}</td>
         <td class="r mono red">${fmt(stub.federal_tax)}</td>
         <td class="r mono muted">${fmt(ytd.federal_tax)}</td>
+        <td class="r mono muted">${fmt(stub.gross_pay - preTax)}</td>
       </tr>
       <tr>
-        <td>State Income Tax</td>
+        <td>State Income Tax (UT)</td>
+        <td class="r mono muted">${stub.gross_pay > 0 ? (stub.state_tax / stub.gross_pay * 100).toFixed(2) + '%' : '--'}</td>
         <td class="r mono red">${fmt(stub.state_tax)}</td>
         <td class="r mono muted">${fmt(ytd.state_tax)}</td>
+        <td class="r mono muted">${fmt(stub.gross_pay)}</td>
       </tr>
       <tr>
-        <td>Social Security (OASDI) <span class="muted" style="font-size:9px;">6.2%</span></td>
+        <td>Social Security (OASDI) <span class="muted" style="font-size:8px;">cap $182,100</span></td>
+        <td class="r mono muted">6.20%</td>
         <td class="r mono red">${fmt(stub.social_security)}</td>
         <td class="r mono muted">${fmt(ytd.social_security)}</td>
+        <td class="r mono muted">${fmt(Math.min(stub.gross_pay, Math.max(0, 182100 - (ytd.gross_pay - stub.gross_pay))))}</td>
       </tr>
       <tr>
-        <td>Medicare (HI) <span class="muted" style="font-size:9px;">1.45%</span></td>
+        <td>Medicare (HI)</td>
+        <td class="r mono muted">1.45%</td>
         <td class="r mono red">${fmt(stub.medicare)}</td>
         <td class="r mono muted">${fmt(ytd.medicare)}</td>
+        <td class="r mono muted">${fmt(stub.gross_pay)}</td>
       </tr>
-      ${preTax > 0 ? `
-      <tr>
-        <td class="b" style="padding-top:10px; border-bottom: none;">Pre-Tax Deductions</td>
-        <td class="r mono red b" style="padding-top:10px; border-bottom: none;">${fmt(preTax)}</td>
-        <td class="r mono muted" style="padding-top:10px; border-bottom: none;">--</td>
-      </tr>
-      ` : ''}
-      ${postTax > 0 ? `
-      <tr>
-        <td class="b" style="padding-top:10px; border-bottom: none;">Post-Tax Deductions</td>
-        <td class="r mono red b" style="padding-top:10px; border-bottom: none;">${fmt(postTax)}</td>
-        <td class="r mono muted" style="padding-top:10px; border-bottom: none;">--</td>
-      </tr>
-      ` : ''}
-      ${deductionItems.length > 0 ? deductionItems.map(([name, amount]) => `
-      <tr class="sub-row">
-        <td style="padding-left:24px;">${esc(name)}</td>
-        <td class="r mono" style="color:#94a3b8;">${fmt(amount)}</td>
-        <td class="r mono muted">--</td>
-      </tr>
-      `).join('') : ''}
       <tr class="total-row">
-        <td class="b dark">Total Deductions</td>
-        <td class="r mono b red" style="font-size:13px;">${fmt(totalDed)}</td>
+        <td class="b dark" colspan="2">Total Statutory Taxes</td>
+        <td class="r mono b red" style="font-size:12px;">${fmt(taxDed)}</td>
         <td class="r mono b muted">${fmt(ytdTotalDed)}</td>
+        <td></td>
       </tr>
     </tbody>
   </table>
+
+  <!-- Effective Tax Rate Analysis -->
+  <div style="display:flex;gap:12px;margin:10px 0 6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div style="flex:1;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#991b1b;">Effective Fed Rate</div>
+      <div style="font-size:16px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums;margin-top:2px;">
+        ${stub.gross_pay > 0 ? (stub.federal_tax / stub.gross_pay * 100).toFixed(2) : '0.00'}%
+      </div>
+    </div>
+    <div style="flex:1;padding:8px 12px;background:#fefce8;border:1px solid #fde68a;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#854d0e;">Effective State Rate</div>
+      <div style="font-size:16px;font-weight:800;color:#d97706;font-variant-numeric:tabular-nums;margin-top:2px;">
+        ${stub.gross_pay > 0 ? (stub.state_tax / stub.gross_pay * 100).toFixed(2) : '0.00'}%
+      </div>
+    </div>
+    <div style="flex:1;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1e40af;">FICA Rate</div>
+      <div style="font-size:16px;font-weight:800;color:#2563eb;font-variant-numeric:tabular-nums;margin-top:2px;">
+        ${stub.gross_pay > 0 ? ((stub.social_security + stub.medicare) / stub.gross_pay * 100).toFixed(2) : '0.00'}%
+      </div>
+    </div>
+    <div style="flex:1;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#166534;">Total Tax Burden</div>
+      <div style="font-size:16px;font-weight:800;color:#16a34a;font-variant-numeric:tabular-nums;margin-top:2px;">
+        ${stub.gross_pay > 0 ? (taxDed / stub.gross_pay * 100).toFixed(2) : '0.00'}%
+      </div>
+    </div>
+  </div>
+
+  <!-- Pre-Tax & Post-Tax Deductions Section -->
+  ${(preTax > 0 || postTax > 0 || deductionItems.length > 0) ? `
+  <div class="section" style="background:#4c1d95;margin-top:16px;">Voluntary Deductions</div>
+  <table>
+    <thead><tr>
+      <th style="width:40%">Deduction</th>
+      <th class="r" style="width:15%">Type</th>
+      <th class="r" style="width:15%">Basis</th>
+      <th class="r" style="width:15%">Current</th>
+      <th class="r" style="width:15%">YTD</th>
+    </tr></thead>
+    <tbody>
+      ${deductionItems.length > 0 ? deductionItems.map(([name, amount]) => {
+        const isPre = name.toLowerCase().includes('401k') || name.toLowerCase().includes('hsa') || name.toLowerCase().includes('fsa') || name.toLowerCase().includes('health') || name.toLowerCase().includes('dental') || name.toLowerCase().includes('vision') || name.toLowerCase().includes('retirement');
+        return `
+      <tr>
+        <td class="dark">${esc(name)}</td>
+        <td class="r muted" style="font-size:10px;">${isPre ? 'Pre-Tax' : 'Post-Tax'}</td>
+        <td class="r muted" style="font-size:10px;">Per Period</td>
+        <td class="r mono red">${fmt(amount)}</td>
+        <td class="r mono muted">--</td>
+      </tr>`;
+      }).join('') : ''}
+      ${(preTax > 0 && deductionItems.length === 0) ? `
+      <tr>
+        <td class="dark">Pre-Tax Deductions</td>
+        <td class="r muted" style="font-size:10px;">Pre-Tax</td>
+        <td class="r muted" style="font-size:10px;">Per Period</td>
+        <td class="r mono red">${fmt(preTax)}</td>
+        <td class="r mono muted">--</td>
+      </tr>` : ''}
+      ${(postTax > 0 && deductionItems.length === 0) ? `
+      <tr>
+        <td class="dark">Post-Tax Deductions</td>
+        <td class="r muted" style="font-size:10px;">Post-Tax</td>
+        <td class="r muted" style="font-size:10px;">Per Period</td>
+        <td class="r mono red">${fmt(postTax)}</td>
+        <td class="r mono muted">--</td>
+      </tr>` : ''}
+      <tr class="total-row">
+        <td class="b dark" colspan="3">Total Voluntary Deductions</td>
+        <td class="r mono b red">${fmt(preTax + postTax)}</td>
+        <td class="r mono b muted">--</td>
+      </tr>
+    </tbody>
+  </table>
+  ` : ''}
+
+  <!-- Combined Deductions Summary -->
+  <div style="display:flex;gap:0;margin:12px 0;border:1px solid #cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Statutory Taxes</div>
+      <div style="font-size:14px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(taxDed)}</div>
+    </div>
+    ${preTax > 0 ? `
+    <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Pre-Tax</div>
+      <div style="font-size:14px;font-weight:800;color:#7c3aed;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(preTax)}</div>
+    </div>
+    ` : ''}
+    ${postTax > 0 ? `
+    <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Post-Tax</div>
+      <div style="font-size:14px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(postTax)}</div>
+    </div>
+    ` : ''}
+    <div style="flex:1;padding:10px 14px;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Total Deducted</div>
+      <div style="font-size:14px;font-weight:800;color:#0f172a;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(totalDed)}</div>
+    </div>
+  </div>
 
   ${deductionsDonutHTML}
   ${ytdProgressHTML}
@@ -1621,25 +1710,45 @@ export function generatePayStubHTML(
   <!-- Employer Contributions (informational, NOT deducted from pay) -->
   ${hasEmployerContribs ? `
   <div class="section section-employer no-break">Employer Contributions</div>
-  <div class="employer-note">Informational — Not deducted from pay</div>
+  <div class="employer-note">Informational — Employer-paid obligations not deducted from employee pay</div>
   <table class="employer-table">
     <thead><tr>
-      <th style="width:64%">Description</th>
-      <th class="r" style="width:36%">Current</th>
+      <th style="width:44%">Obligation</th>
+      <th class="r" style="width:14%">Rate</th>
+      <th class="r" style="width:21%">Current</th>
+      <th class="r" style="width:21%">Wage Base</th>
     </tr></thead>
     <tbody>
-      ${empSS > 0 ? `<tr><td>Social Security (Employer Share)</td><td class="r mono">${fmt(empSS)}</td></tr>` : ''}
-      ${empMed > 0 ? `<tr><td>Medicare (Employer Share)</td><td class="r mono">${fmt(empMed)}</td></tr>` : ''}
-      ${empFuta > 0 ? `<tr><td>Federal Unemployment (FUTA)</td><td class="r mono">${fmt(empFuta)}</td></tr>` : ''}
-      ${empSuta > 0 ? `<tr><td>State Unemployment (SUTA)</td><td class="r mono">${fmt(empSuta)}</td></tr>` : ''}
-      ${empMatch > 0 ? `<tr><td>Retirement Match</td><td class="r mono">${fmt(empMatch)}</td></tr>` : ''}
-      ${empHealth > 0 ? `<tr><td>Health Plan Contribution</td><td class="r mono">${fmt(empHealth)}</td></tr>` : ''}
+      ${empSS > 0 ? `<tr><td>Social Security (OASDI Match)</td><td class="r mono muted">6.20%</td><td class="r mono">${fmt(empSS)}</td><td class="r mono muted">$182,100</td></tr>` : ''}
+      ${empMed > 0 ? `<tr><td>Medicare (HI Match)</td><td class="r mono muted">1.45%</td><td class="r mono">${fmt(empMed)}</td><td class="r mono muted">No limit</td></tr>` : ''}
+      ${empFuta > 0 ? `<tr><td>Federal Unemployment (FUTA)</td><td class="r mono muted">0.60%</td><td class="r mono">${fmt(empFuta)}</td><td class="r mono muted">$7,000</td></tr>` : ''}
+      ${empSuta > 0 ? `<tr><td>State Unemployment (UT SUI)</td><td class="r mono muted">1.20%</td><td class="r mono">${fmt(empSuta)}</td><td class="r mono muted">$44,800</td></tr>` : ''}
+      ${empMatch > 0 ? `<tr><td>Retirement Plan Match</td><td class="r mono muted">--</td><td class="r mono">${fmt(empMatch)}</td><td class="r mono muted">--</td></tr>` : ''}
+      ${empHealth > 0 ? `<tr><td>Health Insurance Contribution</td><td class="r mono muted">--</td><td class="r mono">${fmt(empHealth)}</td><td class="r mono muted">--</td></tr>` : ''}
       <tr class="total-row">
-        <td class="b dark">Total Employer Contributions</td>
+        <td class="b dark" colspan="2">Total Employer Cost</td>
         <td class="r mono b dark">${fmt(employerTotal)}</td>
+        <td></td>
       </tr>
     </tbody>
   </table>
+
+  <!-- Total Compensation Statement -->
+  <div style="margin:12px 0;padding:12px 16px;background:#f0f9ff;border:2px solid #93c5fd;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1e40af;margin-bottom:8px;">Total Compensation Statement</div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #dbeafe;">
+      <span style="color:#475569;">Gross Earnings</span>
+      <span style="font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(stub.gross_pay)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #dbeafe;">
+      <span style="color:#475569;">Employer Contributions</span>
+      <span style="font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(employerTotal)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0 0;border-top:2px solid #1e40af;margin-top:4px;">
+      <span style="font-weight:800;color:#1e40af;">Total Compensation This Period</span>
+      <span style="font-weight:800;color:#1e40af;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(stub.gross_pay + employerTotal)}</span>
+    </div>
+  </div>
   ` : ''}
 
   <!-- Direct Deposit Info (last-4 only — full account never rendered) -->
@@ -1657,12 +1766,92 @@ export function generatePayStubHTML(
   </div>
   ` : ''}
 
+  <!-- Comprehensive YTD Breakdown -->
+  <div class="section no-break" style="background:#334155;margin-top:20px;">Year-to-Date Summary</div>
+  <table>
+    <thead><tr>
+      <th style="width:44%">Category</th>
+      <th class="r" style="width:28%">YTD Amount</th>
+      <th class="r" style="width:28%">Annualized Projection</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td class="dark b">Gross Earnings</td>
+        <td class="r mono b dark">${fmt(ytd.gross_pay)}</td>
+        <td class="r mono muted">${fmt(ytd.gross_pay / yearFrac)}</td>
+      </tr>
+      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <td style="padding-left:20px;">Federal Income Tax</td>
+        <td class="r mono red">${fmt(ytd.federal_tax)}</td>
+        <td class="r mono muted">${fmt(ytd.federal_tax / yearFrac)}</td>
+      </tr>
+      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <td style="padding-left:20px;">State Income Tax (UT)</td>
+        <td class="r mono red">${fmt(ytd.state_tax)}</td>
+        <td class="r mono muted">${fmt(ytd.state_tax / yearFrac)}</td>
+      </tr>
+      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <td style="padding-left:20px;">Social Security (OASDI)</td>
+        <td class="r mono red">${fmt(ytd.social_security)}</td>
+        <td class="r mono muted">${fmt(ytd.social_security / yearFrac)}</td>
+      </tr>
+      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <td style="padding-left:20px;">Medicare (HI)</td>
+        <td class="r mono red">${fmt(ytd.medicare)}</td>
+        <td class="r mono muted">${fmt(ytd.medicare / yearFrac)}</td>
+      </tr>
+      <tr class="total-row">
+        <td class="b dark">Total Taxes YTD</td>
+        <td class="r mono b red">${fmt(ytdTotalDed)}</td>
+        <td class="r mono b muted">${fmt(ytdTotalDed / yearFrac)}</td>
+      </tr>
+      <tr>
+        <td class="dark b" style="color:#16a34a;">Net Pay YTD</td>
+        <td class="r mono b green">${fmt(ytd.net_pay)}</td>
+        <td class="r mono b muted">${fmt(ytd.net_pay / yearFrac)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Hours-to-Date (hourly employees) -->
+  ${!isSalaried ? `
+  <div style="display:flex;gap:0;margin:10px 0;border:1px solid #cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div style="flex:1;padding:8px 14px;border-right:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Current Hours</div>
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${totalHours.toFixed(2)}</div>
+    </div>
+    <div style="flex:1;padding:8px 14px;border-right:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Regular</div>
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${hoursRegular.toFixed(2)}</div>
+    </div>
+    <div style="flex:1;padding:8px 14px;border-right:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Overtime</div>
+      <div style="font-size:14px;font-weight:800;color:${hoursOvertime > 0 ? '#d97706' : '#0f172a'};margin-top:2px;">${hoursOvertime.toFixed(2)}</div>
+    </div>
+    <div style="flex:1;padding:8px 14px;text-align:center;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Avg $/Hour</div>
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${totalHours > 0 ? fmt(stub.net_pay / totalHours) : '--'}</div>
+    </div>
+  </div>
+  ` : ''}
+
+  <!-- Important Notices -->
+  <div style="margin:16px 0 8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;font-size:9px;color:#92400e;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+    <div style="font-weight:700;margin-bottom:4px;">Important Information</div>
+    <div>&bull; Federal tax calculated per IRS Publication 15-T (2026) Percentage Method for W-4 (2020 or later).</div>
+    <div>&bull; Utah state tax calculated at the flat withholding rate per TC-40W, with applicable personal exemption credits.</div>
+    <div>&bull; Social Security (OASDI) tax applies to wages up to the annual wage base of $182,100 (2026). Once the cap is reached, no further SS tax is withheld.</div>
+    <div>&bull; Medicare (HI) tax of 1.45% applies to all wages with no cap. Additional 0.9% Medicare surtax applies to wages over $200,000 YTD.</div>
+    <div>&bull; This earnings statement is provided for informational purposes. Retain for your tax records. Report discrepancies to your employer within 30 days.</div>
+  </div>
+
   <!-- Confidential notice -->
-  <div class="confidential no-break">Confidential — Pay Information</div>
+  <div class="confidential no-break">Confidential Employee Pay Information &mdash; Retain for Tax Records</div>
 
   <!-- Footer -->
   <div class="footer no-break">
     <span>${companyName}${companyLegal ? ' &middot; ' + companyLegal : ''}</span>
+    <span>Pay Period ${esc(stub.period_start)} &ndash; ${esc(stub.period_end)}</span>
     <span>Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
   </div>
 
