@@ -1033,6 +1033,29 @@ export interface PayStubData {
   employer_suta?: number;
   employer_retirement_match?: number;
   employer_health_contribution?: number;
+  // ── Extended employee / payroll metadata ──
+  department?: string;
+  job_title?: string;
+  pay_type?: string;                 // salary | hourly
+  pay_rate?: number;                 // annual salary or hourly rate
+  pay_schedule?: string;             // weekly | biweekly | semimonthly | monthly
+  filing_status?: string;            // single | married | head_of_household
+  federal_allowances?: number;
+  state_name?: string;               // e.g. "Utah"
+  state_allowances?: number;
+  hire_date?: string;
+  employment_type?: string;          // full-time | part-time | contractor
+  run_type?: string;                 // regular | bonus | correction | off-cycle
+  pay_period_number?: number;        // e.g. 8 of 26
+  pay_periods_per_year?: number;     // 26 for biweekly
+  employer_ein?: string;
+  employer_state_id?: string;
+  w4_step2?: boolean;
+  w4_step3_credit?: number;
+  w4_step4c_extra?: number;
+  // ── YTD hours (optional) ──
+  ytd_hours_regular?: number;
+  ytd_hours_overtime?: number;
 }
 
 export interface YtdData {
@@ -1071,6 +1094,23 @@ export function generatePayStubHTML(
   const effectiveRate = totalHours > 0 ? stub.gross_pay / (hoursRegular + hoursOvertime * 1.5) : 0;
   const regularPay = isSalaried ? stub.gross_pay : effectiveRate * hoursRegular;
   const overtimePay = isSalaried ? 0 : effectiveRate * 1.5 * hoursOvertime;
+
+  // ── Extended metadata ──
+  const department = esc(stub.department || '');
+  const jobTitle = esc(stub.job_title || '');
+  const payType = stub.pay_type === 'salary' ? 'Salary' : stub.pay_type === 'hourly' ? 'Hourly' : '';
+  const payRate = stub.pay_rate ?? 0;
+  const payScheduleLabels: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-Weekly', semimonthly: 'Semi-Monthly', monthly: 'Monthly' };
+  const payScheduleLabel = payScheduleLabels[stub.pay_schedule || ''] || '';
+  const filingStatusLabels: Record<string, string> = { single: 'Single', married: 'Married Filing Jointly', head_of_household: 'Head of Household', married_joint: 'Married Filing Jointly', married_separate: 'Married Filing Separately', head_household: 'Head of Household' };
+  const filingLabel = filingStatusLabels[stub.filing_status || ''] || esc(stub.filing_status || '');
+  const hireDate = esc(stub.hire_date || '');
+  const empType = esc(stub.employment_type || '');
+  const runTypeLabels: Record<string, string> = { regular: 'Regular', bonus: 'Bonus', correction: 'Correction', 'off-cycle': 'Off-Cycle' };
+  const runTypeLabel = runTypeLabels[stub.run_type || 'regular'] || 'Regular';
+  const periodsPerYr = stub.pay_periods_per_year ?? 26;
+  const employerEIN = esc(stub.employer_ein || '');
+  const stateName = esc(stub.state_name || 'Utah');
 
   // Parse deduction detail JSON
   let deductionItems: [string, number][] = [];
@@ -1429,37 +1469,96 @@ export function generatePayStubHTML(
   </div>
   ` : ''}
 
-  <!-- Employee Info Grid -->
+  <!-- Employee Info Grid (expanded) -->
   <div class="info-grid">
     <div class="info-cell" style="grid-column: span 2;">
-      <div class="info-label">Employee</div>
+      <div class="info-label">Employee Name</div>
       <div class="info-value emp-name">${esc(stub.employee_name)}</div>
     </div>
+    <div class="info-cell">
+      <div class="info-label">Employee ID</div>
+      <div class="info-value">${employeeIdShort || '--'}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">SSN</div>
+      <div class="info-value mono">${ssnDisplay || 'XXX-XX-XXXX'}</div>
+    </div>
+
+    <div class="info-cell">
+      <div class="info-label">Department</div>
+      <div class="info-value">${department || '--'}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Job Title</div>
+      <div class="info-value">${jobTitle || '--'}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Hire Date</div>
+      <div class="info-value">${hireDate || '--'}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Employment</div>
+      <div class="info-value">${empType || '--'}</div>
+    </div>
+
     <div class="info-cell">
       <div class="info-label">Pay Date</div>
       <div class="info-value">${esc(stub.pay_date)}</div>
     </div>
     <div class="info-cell">
+      <div class="info-label">Period</div>
+      <div class="info-value">${esc(stub.period_start)} &ndash; ${esc(stub.period_end)}</div>
+    </div>
+    <div class="info-cell">
       <div class="info-label">Check #</div>
-      <div class="info-value">${esc(stub.check_number || '--')}</div>
+      <div class="info-value mono">${esc(stub.check_number || '--')}</div>
     </div>
     <div class="info-cell">
-      <div class="info-label">Period Start</div>
-      <div class="info-value">${esc(stub.period_start)}</div>
+      <div class="info-label">Run Type</div>
+      <div class="info-value">${runTypeLabel}</div>
+    </div>
+
+    <div class="info-cell">
+      <div class="info-label">Pay Type / Rate</div>
+      <div class="info-value">${payType}${payRate > 0 ? ' &mdash; ' + (payType === 'Salary' ? fmt(payRate) + '/yr' : fmt(payRate) + '/hr') : ''}</div>
     </div>
     <div class="info-cell">
-      <div class="info-label">Period End</div>
-      <div class="info-value">${esc(stub.period_end)}</div>
+      <div class="info-label">Schedule</div>
+      <div class="info-value">${payScheduleLabel || '--'}${periodsPerYr ? ' (' + periodsPerYr + '/yr)' : ''}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">Hours (Reg / OT)</div>
+      <div class="info-value">${isSalaried ? 'Salaried' : hoursRegular.toFixed(2) + ' / ' + hoursOvertime.toFixed(2)}</div>
     </div>
     <div class="info-cell">
       <div class="info-label">Total Hours</div>
-      <div class="info-value">${isSalaried ? 'Salaried' : totalHours.toFixed(2)}</div>
+      <div class="info-value">${isSalaried ? 'N/A' : totalHours.toFixed(2)}</div>
+    </div>
+
+    <div class="info-cell">
+      <div class="info-label">Filing Status (W-4)</div>
+      <div class="info-value">${filingLabel || '--'}</div>
     </div>
     <div class="info-cell">
-      <div class="info-label">Pay Type</div>
-      <div class="info-value">${isSalaried ? 'Salary' : 'Hourly'}</div>
+      <div class="info-label">Fed Allowances</div>
+      <div class="info-value">${stub.federal_allowances != null ? String(stub.federal_allowances) : '--'}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">State (${stateName})</div>
+      <div class="info-value">${stub.state_allowances != null ? stub.state_allowances + ' exempt.' : '--'}</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-label">W-4 Extra W/H</div>
+      <div class="info-value">${stub.w4_step4c_extra ? fmt(stub.w4_step4c_extra) : '--'}</div>
     </div>
   </div>
+
+  ${employerEIN ? `
+  <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;padding:4px 14px;margin-bottom:8px;">
+    <span>Employer EIN: <span class="mono dark" style="font-weight:600;">${employerEIN}</span></span>
+    <span>${companyAddr}</span>
+  </div>
+  ` : ''}
 
   ${ratePayHTML}
 
@@ -1835,14 +1934,66 @@ export function generatePayStubHTML(
   </div>
   ` : ''}
 
+  <!-- Social Security Wage Base Tracker -->
+  <div style="margin:14px 0;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+    <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:8px;">FICA Wage Base Tracking — 2026</div>
+    <div style="display:flex;gap:16px;">
+      <div style="flex:1;">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;margin-bottom:3px;">
+          <span>Social Security (OASDI)</span>
+          <span class="mono">${fmt(ytd.gross_pay)} of $182,100</span>
+        </div>
+        <div style="height:8px;background:#e2e8f0;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="height:100%;width:${Math.min(100, (ytd.gross_pay / 182100) * 100).toFixed(1)}%;background:${ytd.gross_pay >= 182100 ? '#dc2626' : '#2563eb'};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:2px;">
+          <span>${(Math.min(100, (ytd.gross_pay / 182100) * 100)).toFixed(1)}% used</span>
+          <span>${ytd.gross_pay >= 182100 ? 'CAP REACHED — No further SS withheld' : 'Remaining: ' + fmt(Math.max(0, 182100 - ytd.gross_pay))}</span>
+        </div>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;margin-bottom:3px;">
+          <span>Medicare Surtax Threshold</span>
+          <span class="mono">${fmt(ytd.gross_pay)} of $200,000</span>
+        </div>
+        <div style="height:8px;background:#e2e8f0;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="height:100%;width:${Math.min(100, (ytd.gross_pay / 200000) * 100).toFixed(1)}%;background:${ytd.gross_pay >= 200000 ? '#dc2626' : '#7c3aed'};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:2px;">
+          <span>${(Math.min(100, (ytd.gross_pay / 200000) * 100)).toFixed(1)}% toward threshold</span>
+          <span>${ytd.gross_pay >= 200000 ? '0.9% SURTAX ACTIVE' : 'Before surtax: ' + fmt(Math.max(0, 200000 - ytd.gross_pay))}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pay Calculation Detail -->
+  <div style="margin:10px 0;padding:10px 14px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:9px;color:#475569;line-height:1.7;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+    <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:4px;">Pay Calculation Detail</div>
+    ${isSalaried ? `
+    <div>&bull; <strong>Annual Salary:</strong> ${payRate > 0 ? fmt(payRate) : 'Per employment agreement'} &divide; ${periodsPerYr} periods = <strong>${fmt(stub.gross_pay)}</strong> per period</div>
+    ` : `
+    <div>&bull; <strong>Regular:</strong> ${hoursRegular.toFixed(2)} hours &times; ${fmt(effectiveRate)} = ${fmt(regularPay)}</div>
+    ${hoursOvertime > 0 ? `<div>&bull; <strong>Overtime:</strong> ${hoursOvertime.toFixed(2)} hours &times; ${fmt(effectiveRate)} &times; 1.5 = ${fmt(overtimePay)}</div>` : ''}
+    <div>&bull; <strong>Gross Pay:</strong> ${fmt(regularPay)}${hoursOvertime > 0 ? ' + ' + fmt(overtimePay) : ''} = <strong>${fmt(stub.gross_pay)}</strong></div>
+    `}
+    <div>&bull; <strong>Federal W/H:</strong> Annualized gross ${fmt(stub.gross_pay * periodsPerYr)} &minus; std deduction &rarr; bracket calc &divide; ${periodsPerYr}${stub.w4_step4c_extra ? ' + $' + stub.w4_step4c_extra.toFixed(2) + ' extra' : ''} = <strong>${fmt(stub.federal_tax)}</strong></div>
+    <div>&bull; <strong>${stateName} W/H:</strong> Annualized gross &times; flat rate &minus; exemption credits &divide; ${periodsPerYr} = <strong>${fmt(stub.state_tax)}</strong></div>
+    <div>&bull; <strong>SS (OASDI):</strong> Taxable wages ${fmt(Math.min(stub.gross_pay, Math.max(0, 182100 - (ytd.gross_pay - stub.gross_pay))))} &times; 6.2% = <strong>${fmt(stub.social_security)}</strong></div>
+    <div>&bull; <strong>Medicare (HI):</strong> ${fmt(stub.gross_pay)} &times; 1.45% = <strong>${fmt(stub.medicare)}</strong></div>
+    <div>&bull; <strong>Net Pay:</strong> ${fmt(stub.gross_pay)} &minus; ${fmt(taxDed)} taxes${preTax > 0 ? ' &minus; ' + fmt(preTax) + ' pre-tax' : ''}${postTax > 0 ? ' &minus; ' + fmt(postTax) + ' post-tax' : ''} = <strong style="color:#16a34a;">${fmt(stub.net_pay)}</strong></div>
+  </div>
+
   <!-- Important Notices -->
-  <div style="margin:16px 0 8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;font-size:9px;color:#92400e;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
+  <div style="margin:10px 0 8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;font-size:9px;color:#92400e;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
     <div style="font-weight:700;margin-bottom:4px;">Important Information</div>
-    <div>&bull; Federal tax calculated per IRS Publication 15-T (2026) Percentage Method for W-4 (2020 or later).</div>
-    <div>&bull; Utah state tax calculated at the flat withholding rate per TC-40W, with applicable personal exemption credits.</div>
-    <div>&bull; Social Security (OASDI) tax applies to wages up to the annual wage base of $182,100 (2026). Once the cap is reached, no further SS tax is withheld.</div>
-    <div>&bull; Medicare (HI) tax of 1.45% applies to all wages with no cap. Additional 0.9% Medicare surtax applies to wages over $200,000 YTD.</div>
-    <div>&bull; This earnings statement is provided for informational purposes. Retain for your tax records. Report discrepancies to your employer within 30 days.</div>
+    <div>&bull; Federal tax calculated per IRS Publication 15-T (2026) Percentage Method for Form W-4 (2020 or later).</div>
+    <div>&bull; ${stateName} state tax calculated at the flat withholding rate per TC-40W, with applicable personal exemption credits.</div>
+    <div>&bull; Social Security (OASDI) tax applies to wages up to the annual wage base of $182,100 (2026). Once the cap is reached, no further SS tax is withheld for the remainder of the calendar year.</div>
+    <div>&bull; Medicare (HI) tax of 1.45% applies to all wages with no cap. Additional 0.9% Medicare surtax applies to combined wages exceeding $200,000 YTD (IRC &sect;3101(b)(2)).</div>
+    <div>&bull; Pre-tax deductions (401(k), HSA, health insurance) reduce taxable income for federal and state withholding but remain subject to FICA taxes unless specifically exempted.</div>
+    <div>&bull; This earnings statement is provided for informational purposes. Retain for your personal tax records. Report discrepancies to your employer within 30 days of receipt.</div>
+    <div>&bull; Employer contributions shown are paid by the employer and do not reduce your take-home pay. They represent additional compensation value beyond your gross earnings.</div>
   </div>
 
   <!-- Confidential notice -->

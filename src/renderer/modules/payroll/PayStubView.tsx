@@ -189,6 +189,10 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     // Format ISO dates to human-readable strings before handing off to PDF template
     // (the template auto-detects ISO vs display-formatted for any internal
     // date math, so this is safe).
+    // Compute pay period number (which period of the year this is)
+    const payScheduleMap: Record<string, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 };
+    const periodsPerYear = payScheduleMap[employee?.pay_schedule || 'biweekly'] || 26;
+
     const stubForPrint = {
       ...stub,
       period_start: formatDate(stub.period_start),
@@ -204,14 +208,28 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
       bank_name: acctLast4 ? (employee?.bank_name || 'Bank Account') : undefined,
       bank_account_last4: acctLast4 || undefined,
       // ── Employer contributions (informational, NOT deducted from pay) ──
-      // SS/Medicare employer share equals the employee withholding amount at
-      // the same statutory rates (6.2% / 1.45%). Other employer obligations
-      // (FUTA/SUTA/match) are not stored per-stub, so pass 0 unless surfaced
-      // explicitly by upstream payroll processing.
       employer_social_security: stub.social_security || 0,
       employer_medicare:        stub.medicare || 0,
       employer_retirement_match: (employerContribs?.match || 0),
       employer_health_contribution: (employerContribs?.health || 0),
+      // ── Extended employee / payroll metadata ──
+      department: employee?.department || undefined,
+      job_title: employee?.job_title || undefined,
+      pay_type: employee?.pay_type || undefined,
+      pay_rate: employee?.pay_rate ? Number(employee.pay_rate) : undefined,
+      pay_schedule: employee?.pay_schedule || undefined,
+      filing_status: employee?.w4_filing_status || employee?.filing_status || undefined,
+      federal_allowances: employee?.federal_allowances ? Number(employee.federal_allowances) : undefined,
+      state_name: employee?.state || 'Utah',
+      state_allowances: employee?.state_allowances ? Number(employee.state_allowances) : undefined,
+      hire_date: employee?.start_date ? formatDate(employee.start_date) : undefined,
+      employment_type: employee?.employment_type || undefined,
+      run_type: (stub as any).run_type || undefined,
+      pay_periods_per_year: periodsPerYear,
+      employer_ein: activeCompany?.tax_id || undefined,
+      w4_step2: employee?.w4_step2_checkbox ? true : undefined,
+      w4_step3_credit: employee?.w4_step3_dependent_credit ? Number(employee.w4_step3_dependent_credit) : undefined,
+      w4_step4c_extra: employee?.w4_step4c_extra_withholding ? Number(employee.w4_step4c_extra_withholding) : undefined,
     };
     return generatePayStubHTML(stubForPrint, ytd, activeCompany);
   };
