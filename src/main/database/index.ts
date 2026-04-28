@@ -1226,11 +1226,102 @@ export function initDatabase(): Database.Database {
   // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
   // table because it requires zero extra DDL and is atomic per pragma write.
   try {
-    const SCHEMA_VERSION = 1;
+    const SCHEMA_VERSION = 2;
     const row = db.pragma('user_version', { simple: true }) as number;
     const currentVersion = typeof row === 'number' ? row : 0;
+
+    // Version 2: Seed detailed tax-aligned expense accounts into existing companies
+    if (currentVersion < 2) {
+      const newAccounts: Array<{ code: string; name: string; type: string; subtype: string }> = [
+        { code: '5000', name: 'Cost of Goods Sold', type: 'expense', subtype: 'cogs' },
+        { code: '5200', name: 'Materials & Supplies (COGS)', type: 'expense', subtype: 'cogs' },
+        { code: '5300', name: 'Freight & Shipping (COGS)', type: 'expense', subtype: 'cogs' },
+        { code: '5400', name: 'Direct Labor', type: 'expense', subtype: 'cogs' },
+        { code: '6050', name: 'Vehicle Expense', type: 'expense', subtype: 'operating' },
+        { code: '6110', name: 'Credit Card Processing Fees', type: 'expense', subtype: 'operating' },
+        { code: '6120', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
+        { code: '6150', name: 'Commissions & Fees', type: 'expense', subtype: 'operating' },
+        { code: '6250', name: 'Depletion', type: 'expense', subtype: 'operating' },
+        { code: '6310', name: 'Insurance — Health (Employees)', type: 'expense', subtype: 'operating' },
+        { code: '6320', name: 'Insurance — Workers Comp', type: 'expense', subtype: 'operating' },
+        { code: '6330', name: 'Insurance — Professional / E&O', type: 'expense', subtype: 'operating' },
+        { code: '6340', name: 'Insurance — Vehicle', type: 'expense', subtype: 'operating' },
+        { code: '6350', name: 'Insurance — Property', type: 'expense', subtype: 'operating' },
+        { code: '6410', name: 'Postage & Shipping', type: 'expense', subtype: 'operating' },
+        { code: '6420', name: 'Printing & Copying', type: 'expense', subtype: 'operating' },
+        { code: '6450', name: 'Interest — Mortgage (Business)', type: 'expense', subtype: 'operating' },
+        { code: '6460', name: 'Interest — Other Business Loans', type: 'expense', subtype: 'operating' },
+        { code: '6500', name: 'Legal Fees', type: 'expense', subtype: 'operating' },
+        { code: '6510', name: 'Accounting & Tax Preparation', type: 'expense', subtype: 'operating' },
+        { code: '6520', name: 'Professional Services — Other', type: 'expense', subtype: 'operating' },
+        { code: '6550', name: 'Rent — Office / Workspace', type: 'expense', subtype: 'operating' },
+        { code: '6560', name: 'Rent — Equipment / Machinery', type: 'expense', subtype: 'operating' },
+        { code: '6600', name: 'Repairs & Maintenance', type: 'expense', subtype: 'operating' },
+        { code: '6650', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
+        { code: '6660', name: 'Computer & IT Equipment', type: 'expense', subtype: 'operating' },
+        { code: '6700', name: 'Taxes — Business License & Permits', type: 'expense', subtype: 'taxes' },
+        { code: '6710', name: 'Taxes — Property', type: 'expense', subtype: 'taxes' },
+        { code: '6720', name: 'Taxes — Sales / Use', type: 'expense', subtype: 'taxes' },
+        { code: '6730', name: 'Taxes — State Franchise / Excise', type: 'expense', subtype: 'taxes' },
+        { code: '6800', name: 'Travel — Airfare', type: 'expense', subtype: 'operating' },
+        { code: '6810', name: 'Travel — Lodging', type: 'expense', subtype: 'operating' },
+        { code: '6820', name: 'Travel — Ground Transportation', type: 'expense', subtype: 'operating' },
+        { code: '6830', name: 'Meals — Business (50% deductible)', type: 'expense', subtype: 'operating' },
+        { code: '6840', name: 'Entertainment (non-deductible)', type: 'expense', subtype: 'operating' },
+        { code: '6850', name: 'Parking & Tolls', type: 'expense', subtype: 'operating' },
+        { code: '6910', name: 'Utilities — Gas / Heating', type: 'expense', subtype: 'operating' },
+        { code: '6920', name: 'Utilities — Water / Sewer', type: 'expense', subtype: 'operating' },
+        { code: '6930', name: 'Utilities — Telephone / Internet', type: 'expense', subtype: 'operating' },
+        { code: '6940', name: 'Utilities — Trash / Waste', type: 'expense', subtype: 'operating' },
+        { code: '6950', name: 'Cell Phone', type: 'expense', subtype: 'operating' },
+        { code: '7010', name: 'Payroll Tax Expense — FICA', type: 'expense', subtype: 'payroll' },
+        { code: '7020', name: 'Payroll Tax Expense — FUTA', type: 'expense', subtype: 'payroll' },
+        { code: '7030', name: 'Payroll Tax Expense — SUTA', type: 'expense', subtype: 'payroll' },
+        { code: '7040', name: 'Employee Benefits', type: 'expense', subtype: 'payroll' },
+        { code: '7050', name: 'Retirement Plan Contributions', type: 'expense', subtype: 'payroll' },
+        { code: '7060', name: 'Workers Compensation Premium', type: 'expense', subtype: 'payroll' },
+        { code: '7100', name: 'Officer Compensation', type: 'expense', subtype: 'payroll' },
+        { code: '7210', name: 'Amortization Expense', type: 'expense', subtype: 'operating' },
+        { code: '7220', name: 'Section 179 Expense', type: 'expense', subtype: 'operating' },
+        { code: '7300', name: 'Education & Training', type: 'expense', subtype: 'operating' },
+        { code: '7310', name: 'Conferences & Seminars', type: 'expense', subtype: 'operating' },
+        { code: '7320', name: 'Dues & Memberships', type: 'expense', subtype: 'operating' },
+        { code: '7330', name: 'Charitable Contributions', type: 'expense', subtype: 'operating' },
+        { code: '7340', name: 'Books & Publications', type: 'expense', subtype: 'operating' },
+        { code: '7400', name: 'Home Office — Direct Expenses', type: 'expense', subtype: 'operating' },
+        { code: '7410', name: 'Home Office — Indirect Expenses', type: 'expense', subtype: 'operating' },
+        { code: '8000', name: 'Bad Debts', type: 'expense', subtype: 'other' },
+        { code: '8100', name: 'Penalties & Fines', type: 'expense', subtype: 'other' },
+        { code: '8200', name: 'Loss on Disposal of Assets', type: 'expense', subtype: 'other' },
+        { code: '8300', name: 'Foreign Currency Loss', type: 'expense', subtype: 'other' },
+      ];
+      try {
+        const dbI = getDb();
+        const companies = dbI.prepare('SELECT id FROM companies').all() as Array<{ id: string }>;
+        const insertStmt = dbI.prepare(
+          `INSERT OR IGNORE INTO accounts (id, company_id, code, name, type, subtype, is_active, balance)
+           VALUES (?, ?, ?, ?, ?, ?, 1, 0)`
+        );
+        const seedTx = dbI.transaction(() => {
+          for (const co of companies) {
+            for (const acct of newAccounts) {
+              // Skip if code already exists for this company
+              const exists = dbI.prepare(
+                'SELECT id FROM accounts WHERE company_id = ? AND code = ?'
+              ).get(co.id, acct.code);
+              if (!exists) {
+                insertStmt.run(uuid(), co.id, acct.code, acct.name, acct.type, acct.subtype);
+              }
+            }
+          }
+        });
+        seedTx();
+      } catch (seedErr: any) {
+        console.warn('[schema v2] Failed to seed new expense accounts:', seedErr?.message);
+      }
+    }
+
     if (currentVersion < SCHEMA_VERSION) {
-      // No destructive migrations yet — just stamp the version.
       db.pragma(`user_version = ${SCHEMA_VERSION}`);
     }
   } catch (_) { /* pragma failure is non-fatal */ }
@@ -1551,22 +1642,84 @@ export function seedDefaultAccounts(companyId: string): void {
     { code: '4100', name: 'Consulting Revenue', type: 'revenue', subtype: 'operating' },
     { code: '4200', name: 'Project Revenue', type: 'revenue', subtype: 'operating' },
     { code: '4900', name: 'Other Income', type: 'revenue', subtype: 'other' },
-    { code: '5000', name: 'Cost of Services', type: 'expense', subtype: 'cogs' },
-    { code: '6000', name: 'Advertising & Marketing', type: 'expense', subtype: 'operating' },
-    { code: '6100', name: 'Bank Fees', type: 'expense', subtype: 'operating' },
-    { code: '6200', name: 'Contractors', type: 'expense', subtype: 'operating' },
-    { code: '6300', name: 'Insurance', type: 'expense', subtype: 'operating' },
-    { code: '6400', name: 'Office Supplies', type: 'expense', subtype: 'operating' },
-    { code: '6500', name: 'Professional Fees', type: 'expense', subtype: 'operating' },
-    { code: '6600', name: 'Rent', type: 'expense', subtype: 'operating' },
-    { code: '6700', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
-    { code: '6800', name: 'Travel & Meals', type: 'expense', subtype: 'operating' },
-    { code: '6900', name: 'Utilities', type: 'expense', subtype: 'operating' },
-    { code: '7000', name: 'Payroll Expense', type: 'expense', subtype: 'payroll' },
-    { code: '7100', name: 'Payroll Tax Expense', type: 'expense', subtype: 'payroll' },
-    { code: '7200', name: 'Depreciation Expense', type: 'expense', subtype: 'operating' },
-    { code: '7500', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
-    { code: '9000', name: 'Miscellaneous Expense', type: 'expense', subtype: 'other' },
+    // ─── COGS (5000s) — IRS Schedule C Line 4 / Form 1120 Line 2 ───
+    { code: '5000', name: 'Cost of Goods Sold', type: 'expense', subtype: 'cogs' },
+    { code: '5100', name: 'Cost of Services', type: 'expense', subtype: 'cogs' },
+    { code: '5200', name: 'Materials & Supplies (COGS)', type: 'expense', subtype: 'cogs' },
+    { code: '5300', name: 'Freight & Shipping (COGS)', type: 'expense', subtype: 'cogs' },
+    { code: '5400', name: 'Direct Labor', type: 'expense', subtype: 'cogs' },
+    // ─── Operating Expenses (6000s) — IRS Schedule C Lines 8–27 ───
+    { code: '6000', name: 'Advertising & Marketing', type: 'expense', subtype: 'operating' },    // Sch C Line 8
+    { code: '6050', name: 'Vehicle Expense', type: 'expense', subtype: 'operating' },             // Sch C Line 9
+    { code: '6100', name: 'Bank Fees & Service Charges', type: 'expense', subtype: 'operating' }, // Sch C Line 27a
+    { code: '6110', name: 'Credit Card Processing Fees', type: 'expense', subtype: 'operating' },
+    { code: '6120', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
+    { code: '6150', name: 'Commissions & Fees', type: 'expense', subtype: 'operating' },          // Sch C Line 10
+    { code: '6200', name: 'Contract Labor', type: 'expense', subtype: 'operating' },              // Sch C Line 11
+    { code: '6250', name: 'Depletion', type: 'expense', subtype: 'operating' },                   // Sch C Line 12
+    { code: '6300', name: 'Insurance — General Liability', type: 'expense', subtype: 'operating' }, // Sch C Line 15
+    { code: '6310', name: 'Insurance — Health (Employees)', type: 'expense', subtype: 'operating' },
+    { code: '6320', name: 'Insurance — Workers Comp', type: 'expense', subtype: 'operating' },
+    { code: '6330', name: 'Insurance — Professional / E&O', type: 'expense', subtype: 'operating' },
+    { code: '6340', name: 'Insurance — Vehicle', type: 'expense', subtype: 'operating' },
+    { code: '6350', name: 'Insurance — Property', type: 'expense', subtype: 'operating' },
+    { code: '6400', name: 'Office Supplies', type: 'expense', subtype: 'operating' },             // Sch C Line 22
+    { code: '6410', name: 'Postage & Shipping', type: 'expense', subtype: 'operating' },
+    { code: '6420', name: 'Printing & Copying', type: 'expense', subtype: 'operating' },
+    { code: '6450', name: 'Interest — Mortgage (Business)', type: 'expense', subtype: 'operating' }, // Sch C Line 16a
+    { code: '6460', name: 'Interest — Other Business Loans', type: 'expense', subtype: 'operating' }, // Sch C Line 16b
+    { code: '6500', name: 'Legal Fees', type: 'expense', subtype: 'operating' },                  // Sch C Line 17
+    { code: '6510', name: 'Accounting & Tax Preparation', type: 'expense', subtype: 'operating' },
+    { code: '6520', name: 'Professional Services — Other', type: 'expense', subtype: 'operating' },
+    { code: '6550', name: 'Rent — Office / Workspace', type: 'expense', subtype: 'operating' },   // Sch C Line 20b
+    { code: '6560', name: 'Rent — Equipment / Machinery', type: 'expense', subtype: 'operating' }, // Sch C Line 20a
+    { code: '6600', name: 'Repairs & Maintenance', type: 'expense', subtype: 'operating' },       // Sch C Line 21
+    { code: '6650', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
+    { code: '6660', name: 'Computer & IT Equipment', type: 'expense', subtype: 'operating' },
+    { code: '6700', name: 'Taxes — Business License & Permits', type: 'expense', subtype: 'taxes' }, // Sch C Line 23
+    { code: '6710', name: 'Taxes — Property', type: 'expense', subtype: 'taxes' },
+    { code: '6720', name: 'Taxes — Sales / Use', type: 'expense', subtype: 'taxes' },
+    { code: '6730', name: 'Taxes — State Franchise / Excise', type: 'expense', subtype: 'taxes' },
+    { code: '6800', name: 'Travel — Airfare', type: 'expense', subtype: 'operating' },            // Sch C Line 24a
+    { code: '6810', name: 'Travel — Lodging', type: 'expense', subtype: 'operating' },
+    { code: '6820', name: 'Travel — Ground Transportation', type: 'expense', subtype: 'operating' },
+    { code: '6830', name: 'Meals — Business (50% deductible)', type: 'expense', subtype: 'operating' }, // Sch C Line 24b
+    { code: '6840', name: 'Entertainment (non-deductible)', type: 'expense', subtype: 'operating' },
+    { code: '6850', name: 'Parking & Tolls', type: 'expense', subtype: 'operating' },
+    { code: '6900', name: 'Utilities — Electric', type: 'expense', subtype: 'operating' },        // Sch C Line 25
+    { code: '6910', name: 'Utilities — Gas / Heating', type: 'expense', subtype: 'operating' },
+    { code: '6920', name: 'Utilities — Water / Sewer', type: 'expense', subtype: 'operating' },
+    { code: '6930', name: 'Utilities — Telephone / Internet', type: 'expense', subtype: 'operating' },
+    { code: '6940', name: 'Utilities — Trash / Waste', type: 'expense', subtype: 'operating' },
+    { code: '6950', name: 'Cell Phone', type: 'expense', subtype: 'operating' },
+    // ─── Payroll (7000s) — IRS Schedule C Lines 14, 26 ───
+    { code: '7000', name: 'Wages & Salaries', type: 'expense', subtype: 'payroll' },              // Sch C Line 26
+    { code: '7010', name: 'Payroll Tax Expense — FICA', type: 'expense', subtype: 'payroll' },
+    { code: '7020', name: 'Payroll Tax Expense — FUTA', type: 'expense', subtype: 'payroll' },
+    { code: '7030', name: 'Payroll Tax Expense — SUTA', type: 'expense', subtype: 'payroll' },
+    { code: '7040', name: 'Employee Benefits', type: 'expense', subtype: 'payroll' },             // Sch C Line 14
+    { code: '7050', name: 'Retirement Plan Contributions', type: 'expense', subtype: 'payroll' },
+    { code: '7060', name: 'Workers Compensation Premium', type: 'expense', subtype: 'payroll' },
+    { code: '7100', name: 'Officer Compensation', type: 'expense', subtype: 'payroll' },          // Form 1120 Line 12
+    // ─── Depreciation & Amortization (7200s) ───
+    { code: '7200', name: 'Depreciation Expense', type: 'expense', subtype: 'operating' },        // Sch C Line 13
+    { code: '7210', name: 'Amortization Expense', type: 'expense', subtype: 'operating' },
+    { code: '7220', name: 'Section 179 Expense', type: 'expense', subtype: 'operating' },
+    // ─── Education, Dues, Charitable (7300s) ───
+    { code: '7300', name: 'Education & Training', type: 'expense', subtype: 'operating' },
+    { code: '7310', name: 'Conferences & Seminars', type: 'expense', subtype: 'operating' },
+    { code: '7320', name: 'Dues & Memberships', type: 'expense', subtype: 'operating' },
+    { code: '7330', name: 'Charitable Contributions', type: 'expense', subtype: 'operating' },    // Form 1120 Line 19
+    { code: '7340', name: 'Books & Publications', type: 'expense', subtype: 'operating' },
+    // ─── Home Office (7400s) — Form 8829 ───
+    { code: '7400', name: 'Home Office — Direct Expenses', type: 'expense', subtype: 'operating' },
+    { code: '7410', name: 'Home Office — Indirect Expenses', type: 'expense', subtype: 'operating' },
+    // ─── Bad Debt & Other (8000s–9000s) ───
+    { code: '8000', name: 'Bad Debts', type: 'expense', subtype: 'other' },                       // Sch C Line 27a (bad debts)
+    { code: '8100', name: 'Penalties & Fines', type: 'expense', subtype: 'other' },
+    { code: '8200', name: 'Loss on Disposal of Assets', type: 'expense', subtype: 'other' },
+    { code: '8300', name: 'Foreign Currency Loss', type: 'expense', subtype: 'other' },
+    { code: '9000', name: 'Miscellaneous Expense', type: 'expense', subtype: 'other' },           // Sch C Line 27a catch-all
   ];
 
   for (const acct of defaults) {
