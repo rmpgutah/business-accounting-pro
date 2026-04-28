@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { UserCircle, Plus, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2, CheckCircle, XCircle, Users } from 'lucide-react';
+import { UserCircle, Plus, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2, CheckCircle, XCircle, Users, Printer, Tag, Shield } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency, formatStatus } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 import {
   CLIENT_TIER, CLIENT_LIFECYCLE, CLIENT_RISK, CLIENT_INDUSTRY, CLIENT_SEGMENT,
@@ -30,7 +30,14 @@ interface Client {
   risk_rating?: string;
 }
 
-type SortField = 'name' | 'email' | 'phone' | 'status' | 'payment_terms';
+interface RevenueData {
+  client_id: string;
+  revenue: number;
+  last_invoice: string | null;
+  last_activity: string | null;
+}
+
+type SortField = 'name' | 'email' | 'phone' | 'status' | 'payment_terms' | 'revenue' | 'lastActivity';
 type SortDir = 'asc' | 'desc';
 type StatusFilter = 'all' | 'active' | 'inactive' | 'prospect';
 
@@ -63,6 +70,34 @@ const SortableHeader: React.FC<{
   );
 };
 
+// ─── Health Indicator ───────────────────────────────────
+const HealthDot: React.FC<{ lastInvoice: string | null; outstanding: number }> = ({ lastInvoice, outstanding }) => {
+  let color = 'var(--color-text-muted)'; // gray = no data
+  let title = 'No activity';
+
+  if (lastInvoice) {
+    const daysSince = Math.floor((Date.now() - new Date(lastInvoice).getTime()) / (1000 * 60 * 60 * 24));
+    if (daysSince <= 30) {
+      color = 'var(--color-accent-income)';
+      title = `Active (${daysSince}d ago)`;
+    } else if (daysSince <= 90) {
+      color = '#f59e0b';
+      title = `Aging (${daysSince}d ago)`;
+    } else {
+      color = 'var(--color-accent-expense)';
+      title = `Dormant (${daysSince}d ago)`;
+    }
+  }
+
+  return (
+    <div
+      className="w-2.5 h-2.5 shrink-0"
+      style={{ background: color, borderRadius: '50%' }}
+      title={title}
+    />
+  );
+};
+
 // ─── Component ──────────────────────────────────────────
 const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -70,6 +105,9 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [tierFilter, setTierFilter] = useState('all');
+  const [industryFilter, setIndustryFilter] = useState('all');
+  const [riskFilter, setRiskFilter] = useState('all');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -78,6 +116,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   const [clientSummary, setClientSummary] = useState<any>(null);
   const [showImport, setShowImport] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [revenueMap, setRevenueMap] = useState<Map<string, RevenueData>>(new Map());
+  const [bulkTierOpen, setBulkTierOpen] = useState(false);
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [bulkTagValue, setBulkTagValue] = useState('');
+  const [summaryStats, setSummaryStats] = useState<any>(null);
 
   // ─── Load Data ──────────────────────────────────────
   useEffect(() => {
@@ -87,7 +130,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       try {
         setLoading(true);
         setLoadError('');
-        const [rows, clientSummaryResult] = await Promise.all([
+        const [rows, clientSummaryResult, revenueRows, statsRow] = await Promise.all([
           api.query('clients', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' }),
           api.rawQuery(
             `SELECT
@@ -96,11 +139,39 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             FROM invoices WHERE company_id = ? AND status = 'overdue'`,
             [activeCompany.id]
           ),
+          api.rawQuery(
+            `SELECT client_id,
+              COALESCE(SUM(total), 0) as revenue,
+              MAX(issue_date) as last_invoice,
+              MAX(COALESCE(updated_at, issue_date)) as last_activity
+            FROM invoices WHERE company_id = ?
+            GROUP BY client_id`,
+            [activeCompany.id]
+          ),
+          api.rawQuery(
+            `SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) as active,
+              SUM(CASE WHEN status='prospect' THEN 1 ELSE 0 END) as prospects,
+              COALESCE((SELECT SUM(total) FROM invoices WHERE company_id = ?), 0) as total_revenue,
+              COALESCE((SELECT SUM(total - amount_paid) FROM invoices WHERE company_id = ?), 0) as outstanding
+            FROM clients WHERE company_id = ?`,
+            [activeCompany.id, activeCompany.id, activeCompany.id]
+          ),
         ]);
         if (!cancelled) {
           setClients(Array.isArray(rows) ? rows : []);
           const clientRow = Array.isArray(clientSummaryResult) ? clientSummaryResult[0] : clientSummaryResult;
           setClientSummary(clientRow ?? null);
+
+          // Build revenue map
+          const revArr = Array.isArray(revenueRows) ? revenueRows : [];
+          const map = new Map<string, RevenueData>();
+          revArr.forEach((r: any) => map.set(r.client_id, r));
+          setRevenueMap(map);
+
+          const sRow = Array.isArray(statsRow) ? statsRow[0] : statsRow;
+          setSummaryStats(sRow ?? null);
         }
       } catch (err: any) {
         console.error('Failed to load clients:', err);
@@ -115,6 +186,13 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     load();
     return () => { cancelled = true; };
   }, [activeCompany]);
+
+  // ─── Unique industries for filter ───────────────────
+  const uniqueIndustries = useMemo(() => {
+    const set = new Set<string>();
+    clients.forEach(c => { if (c.industry) set.add(c.industry); });
+    return Array.from(set).sort();
+  }, [clients]);
 
   // ─── Sort Handler ───────────────────────────────────
   const handleSort = (field: SortField) => {
@@ -135,6 +213,21 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       list = list.filter((c) => c.status === statusFilter);
     }
 
+    // Tier filter
+    if (tierFilter !== 'all') {
+      list = list.filter((c) => (c.tier || '') === tierFilter);
+    }
+
+    // Industry filter
+    if (industryFilter !== 'all') {
+      list = list.filter((c) => (c.industry || '') === industryFilter);
+    }
+
+    // Risk filter
+    if (riskFilter !== 'all') {
+      list = list.filter((c) => (c.risk_rating || '') === riskFilter);
+    }
+
     // Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -149,15 +242,25 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
 
     // Sort
     list.sort((a, b) => {
-      const aVal = (a[sortField] ?? '') as string | number;
-      const bVal = (b[sortField] ?? '') as string | number;
+      let aVal: string | number;
+      let bVal: string | number;
+      if (sortField === 'revenue') {
+        aVal = revenueMap.get(a.id)?.revenue ?? 0;
+        bVal = revenueMap.get(b.id)?.revenue ?? 0;
+      } else if (sortField === 'lastActivity') {
+        aVal = revenueMap.get(a.id)?.last_activity ?? '';
+        bVal = revenueMap.get(b.id)?.last_activity ?? '';
+      } else {
+        aVal = (a[sortField] ?? '') as string | number;
+        bVal = (b[sortField] ?? '') as string | number;
+      }
       if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
 
     return list;
-  }, [clients, statusFilter, searchQuery, sortField, sortDir]);
+  }, [clients, statusFilter, tierFilter, industryFilter, riskFilter, searchQuery, sortField, sortDir, revenueMap]);
 
   // ─── Selection Helpers ──────────────────────────────
   const allSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(c.id));
@@ -181,13 +284,28 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   }, [allSelected, filtered]);
 
   // Clear selection when filters change
-  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, statusFilter]);
+  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, statusFilter, tierFilter, industryFilter, riskFilter]);
 
   // ─── Batch Actions ──────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    const rows = await api.query('clients', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' });
+    const [rows, revenueRows] = await Promise.all([
+      api.query('clients', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' }),
+      api.rawQuery(
+        `SELECT client_id,
+          COALESCE(SUM(total), 0) as revenue,
+          MAX(issue_date) as last_invoice,
+          MAX(COALESCE(updated_at, issue_date)) as last_activity
+        FROM invoices WHERE company_id = ?
+        GROUP BY client_id`,
+        [activeCompany.id]
+      ),
+    ]);
     setClients(Array.isArray(rows) ? rows : []);
+    const revArr = Array.isArray(revenueRows) ? revenueRows : [];
+    const map = new Map<string, RevenueData>();
+    revArr.forEach((r: any) => map.set(r.client_id, r));
+    setRevenueMap(map);
     setSelectedIds(new Set());
   }, [activeCompany]);
 
@@ -209,6 +327,42 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
     finally { setBatchLoading(false); }
   }, [selectedIds, reload]);
 
+  const handleBatchSetProspect = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('clients', Array.from(selectedIds), { status: 'prospect' });
+      await reload();
+    } catch (err: any) { console.error('Batch set prospect failed:', err); alert('Failed: ' + (err?.message || 'Unknown error')); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  const handleBatchSetTier = useCallback(async (tier: string) => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('clients', Array.from(selectedIds), { tier });
+      await reload();
+    } catch (err: any) { console.error('Batch set tier failed:', err); alert('Failed: ' + (err?.message || 'Unknown error')); }
+    finally { setBatchLoading(false); setBulkTierOpen(false); }
+  }, [selectedIds, reload]);
+
+  const handleBatchAddTag = useCallback(async () => {
+    if (!bulkTagValue.trim()) return;
+    setBatchLoading(true);
+    try {
+      const tagToAdd = bulkTagValue.trim();
+      const selected = clients.filter(c => selectedIds.has(c.id));
+      for (const client of selected) {
+        const existing = client.tags ? client.tags.split(',').map(t => t.trim()) : [];
+        if (!existing.includes(tagToAdd)) {
+          existing.push(tagToAdd);
+          await api.update('clients', client.id, { tags: existing.join(', ') });
+        }
+      }
+      await reload();
+    } catch (err: any) { console.error('Batch tag failed:', err); alert('Failed: ' + (err?.message || 'Unknown error')); }
+    finally { setBatchLoading(false); setBulkTagOpen(false); setBulkTagValue(''); }
+  }, [selectedIds, clients, bulkTagValue, reload]);
+
   const handleBatchDelete = useCallback(async () => {
     setBatchLoading(true);
     try {
@@ -226,21 +380,80 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       phone: c.phone,
       status: c.status,
       type: c.type,
+      tier: c.tier || '',
+      industry: c.industry || '',
+      risk_rating: c.risk_rating || '',
       payment_terms: c.payment_terms ? `Net ${c.payment_terms}` : '',
+      revenue: revenueMap.get(c.id)?.revenue ?? 0,
       tags: c.tags || '',
     }));
     downloadCSVBlob(exportData, 'clients-export.csv');
-  }, [filtered, selectedIds]);
+  }, [filtered, selectedIds, revenueMap]);
+
+  // ─── Print Client Directory ─────────────────────────
+  const handlePrintDirectory = useCallback(() => {
+    const rows = filtered.map(c => {
+      const rev = revenueMap.get(c.id);
+      return `<tr>
+        <td>${c.name}</td>
+        <td>${c.email || '--'}</td>
+        <td>${c.phone || '--'}</td>
+        <td>${c.status}</td>
+        <td>${c.tier || '--'}</td>
+        <td style="text-align:right">${formatCurrency(rev?.revenue ?? 0)}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `
+      <html><head><title>Client Directory</title>
+      <style>
+        body { font-family: 'Helvetica Neue', sans-serif; color: #1a1a2e; padding: 40px; }
+        h1 { font-size: 22px; border-bottom: 2px solid #1a1a2e; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #ddd; font-size: 12px; }
+        th { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #666; background: #f5f5f5; }
+        .footer { margin-top: 40px; font-size: 10px; color: #999; text-align: center; border-top: 1px solid #ddd; padding-top: 12px; }
+        .count { font-size: 12px; color: #666; margin-top: 8px; }
+      </style></head><body>
+      <h1>Client Directory</h1>
+      <div class="count">${filtered.length} client${filtered.length !== 1 ? 's' : ''} &bull; Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Tier</th><th style="text-align:right">Revenue</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="footer">Business Accounting Pro &mdash; Client Directory</div>
+      </body></html>
+    `;
+    api.printPreview(html, 'Client Directory');
+  }, [filtered, revenueMap]);
+
+  // ─── Clear all filters ──────────────────────────────
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setTierFilter('all');
+    setIndustryFilter('all');
+    setRiskFilter('all');
+  }, []);
+
+  const hasFilters = statusFilter !== 'all' || tierFilter !== 'all' || industryFilter !== 'all' || riskFilter !== 'all' || searchQuery.trim() !== '';
 
   // ─── Render ─────────────────────────────────────────
   return (
-    <div className="p-6 space-y-4 overflow-y-auto h-full" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
+    <div className="space-y-4 overflow-y-auto" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
       {loadError && <ErrorBanner message={loadError} title="Failed to load clients" onDismiss={() => setLoadError('')} />}
+
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
         <div className="module-actions">
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+          <button onClick={handlePrintDirectory} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }}>
+            <Printer size={14} />
+            Print Directory
+          </button>
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }}>
             Import CSV
           </button>
           <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>
@@ -250,7 +463,39 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         </div>
       </div>
 
-      {/* Summary Bar */}
+      {/* Inline Summary Stats (6 cards) */}
+      {summaryStats && (
+        <div className="grid grid-cols-6 gap-3">
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Clients</div>
+            <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{summaryStats.total ?? 0}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active</div>
+            <div className="text-lg font-mono font-bold text-accent-income mt-0.5">{summaryStats.active ?? 0}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Prospects</div>
+            <div className="text-lg font-mono font-bold text-accent-blue mt-0.5">{summaryStats.prospects ?? 0}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Revenue</div>
+            <div className="text-lg font-mono font-bold text-accent-blue mt-0.5">{formatCurrency(summaryStats.total_revenue ?? 0)}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Outstanding AR</div>
+            <div className="text-lg font-mono font-bold text-accent-expense mt-0.5">{formatCurrency(summaryStats.outstanding ?? 0)}</div>
+          </div>
+          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Revenue</div>
+            <div className="text-lg font-mono font-bold text-text-primary mt-0.5">
+              {formatCurrency((summaryStats.active ?? 0) > 0 ? (summaryStats.total_revenue ?? 0) / (summaryStats.active ?? 1) : 0)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Bar (overdue) */}
       {clientSummary && (
         <SummaryBar items={[
           { label: 'Total Receivables', value: formatCurrency(clientSummary.total_receivables), accent: 'orange', tooltip: 'Sum of all outstanding invoice balances across overdue clients' },
@@ -258,9 +503,9 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         ]} />
       )}
 
-      {/* Toolbar: Search + Filter */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
+      {/* Toolbar: Search + Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             className="block-input pl-8"
@@ -283,6 +528,48 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             <option value="prospect">Prospect</option>
           </select>
         </div>
+        <select
+          className="block-select"
+          style={{ width: 'auto', minWidth: '110px' }}
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value)}
+        >
+          <option value="all">All Tiers</option>
+          <option value="enterprise">Enterprise</option>
+          <option value="premium">Premium</option>
+          <option value="standard">Standard</option>
+          <option value="basic">Basic</option>
+        </select>
+        {uniqueIndustries.length > 0 && (
+          <select
+            className="block-select"
+            style={{ width: 'auto', minWidth: '130px' }}
+            value={industryFilter}
+            onChange={(e) => setIndustryFilter(e.target.value)}
+          >
+            <option value="all">All Industries</option>
+            {uniqueIndustries.map(ind => (
+              <option key={ind} value={ind}>{ind}</option>
+            ))}
+          </select>
+        )}
+        <select
+          className="block-select"
+          style={{ width: 'auto', minWidth: '110px' }}
+          value={riskFilter}
+          onChange={(e) => setRiskFilter(e.target.value)}
+        >
+          <option value="all">All Risk</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+        {hasFilters && (
+          <button className="text-[10px] font-semibold text-accent-blue uppercase tracking-wider hover:underline" onClick={clearFilters}>
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -302,7 +589,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               Add Client
             </button>
           ) : (
-            <button className="block-btn text-xs" onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>
+            <button className="block-btn text-xs" onClick={clearFilters}>
               Clear filters
             </button>
           )}
@@ -322,15 +609,16 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     style={{ accentColor: '#3b82f6' }}
                   />
                 </th>
+                <th style={{ width: '30px' }} title="Client Health" />
                 <SortableHeader field="name" label="Name" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="phone" label="Phone" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <th>Tier</th>
                 <th>Industry</th>
-                <th>Segment</th>
-                <th>Lifecycle</th>
                 <th>Risk</th>
+                <SortableHeader field="revenue" label="Revenue" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                <SortableHeader field="lastActivity" label="Last Invoice" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <th>Tags</th>
               </tr>
@@ -338,6 +626,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             <tbody>
               {filtered.map((client) => {
                 const isSelected = selectedIds.has(client.id);
+                const rev = revenueMap.get(client.id);
                 return (
                   <tr
                     key={client.id}
@@ -354,6 +643,9 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                       />
                     </td>
                     <td>
+                      <HealthDot lastInvoice={rev?.last_invoice ?? null} outstanding={0} />
+                    </td>
+                    <td>
                       <div className="flex items-center gap-2">
                         <UserCircle size={16} className="text-text-muted shrink-0" />
                         <span className="text-text-primary font-medium block truncate max-w-[200px]">{client.name}</span>
@@ -368,9 +660,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     </td>
                     <td><ClassificationBadge def={CLIENT_TIER} value={client.tier} /></td>
                     <td><ClassificationBadge def={CLIENT_INDUSTRY} value={client.industry} /></td>
-                    <td><ClassificationBadge def={CLIENT_SEGMENT} value={client.segment} /></td>
-                    <td><ClassificationBadge def={CLIENT_LIFECYCLE} value={client.lifecycle_stage} /></td>
                     <td><ClassificationBadge def={CLIENT_RISK} value={client.risk_rating} /></td>
+                    <td className="text-right font-mono text-accent-blue text-xs">{formatCurrency(rev?.revenue ?? 0)}</td>
+                    <td className="text-text-secondary font-mono text-xs">
+                      {rev?.last_invoice ? formatDate(rev.last_invoice) : '--'}
+                    </td>
                     <td className="text-text-secondary font-mono">
                       {client.payment_terms ? `Net ${client.payment_terms}` : '--'}
                     </td>
@@ -449,8 +743,71 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <XCircle size={13} />
-            Set Inactive
+            Inactive
           </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBatchSetProspect}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <Users size={13} />
+            Prospect
+          </button>
+
+          {/* Bulk Set Tier */}
+          <div className="relative">
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+              onClick={() => { setBulkTierOpen(!bulkTierOpen); setBulkTagOpen(false); }}
+              disabled={batchLoading}
+              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <Shield size={13} />
+              Set Tier
+            </button>
+            {bulkTierOpen && (
+              <div className="absolute bottom-full mb-1 left-0 z-50 border border-border-primary shadow-lg p-1" style={{ background: 'rgba(18,20,28,0.95)', borderRadius: '6px', minWidth: '120px' }}>
+                {['enterprise', 'premium', 'standard', 'basic'].map(tier => (
+                  <button
+                    key={tier}
+                    className="block w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary capitalize"
+                    onClick={() => handleBatchSetTier(tier)}
+                    style={{ borderRadius: '4px' }}
+                  >
+                    {tier}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Bulk Tag */}
+          <div className="relative">
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+              onClick={() => { setBulkTagOpen(!bulkTagOpen); setBulkTierOpen(false); }}
+              disabled={batchLoading}
+              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <Tag size={13} />
+              Add Tag
+            </button>
+            {bulkTagOpen && (
+              <div className="absolute bottom-full mb-1 left-0 z-50 border border-border-primary shadow-lg p-2 flex items-center gap-2" style={{ background: 'rgba(18,20,28,0.95)', borderRadius: '6px', minWidth: '200px' }}>
+                <input
+                  className="block-input text-xs flex-1"
+                  placeholder="Tag name..."
+                  value={bulkTagValue}
+                  onChange={(e) => setBulkTagValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleBatchAddTag(); }}
+                  autoFocus
+                />
+                <button className="block-btn-primary text-xs px-2 py-1" onClick={handleBatchAddTag}>Add</button>
+              </div>
+            )}
+          </div>
 
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
@@ -458,7 +815,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
-            Export CSV
+            Export
           </button>
 
           {!showDeleteConfirm ? (
