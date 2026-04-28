@@ -9,6 +9,7 @@ import {
   ChevronUp,
   Printer,
   X,
+  Info,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -277,6 +278,63 @@ const TaxFiling: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [listKey, setListKey] = useState(0);
 
+  // Feature 46: Filing Checklist
+  const CHECKLIST_ITEMS = [
+    'All payroll runs for the quarter are complete',
+    'Employee W-4s are current and on file',
+    'Tax deposits have been made on time',
+    'Gross wages reconcile with payroll records',
+    'Employer FICA match amounts verified',
+    'State withholding amounts verified',
+    'Prior quarter amendments (if any) submitted',
+  ];
+  const [checklists, setChecklists] = useState<Record<number, boolean[]>>({});
+  const toggleCheckItem = (q: number, idx: number) => {
+    setChecklists((prev) => {
+      const arr = prev[q] ? [...prev[q]] : CHECKLIST_ITEMS.map(() => false);
+      arr[idx] = !arr[idx];
+      return { ...prev, [q]: arr };
+    });
+  };
+
+  // Feature 47: Filing Notes
+  const [filingNotes, setFilingNotes] = useState<Record<number, string>>({});
+
+  // Feature 51: Amendment Tracker
+  const [amendments, setAmendments] = useState<Record<number, boolean>>({});
+
+  // Feature 48: Penalty Calculator helpers
+  const isPastDue = (dueDate: string) => {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date();
+  };
+  const calcDaysLate = (dueDate: string) => {
+    if (!dueDate) return 0;
+    const diff = new Date().getTime() - new Date(dueDate).getTime();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  };
+  const calcPenalty = (balanceDue: number, daysLate: number) => {
+    if (balanceDue <= 0 || daysLate <= 0) return 0;
+    return balanceDue * 0.005 * Math.ceil(daysLate / 30);
+  };
+
+  // Feature 49: Annual summary computed
+  const annualTotals = useMemo(() => {
+    const totals = { wages: 0, liability941: 0, tc941: 0, deposits: 0, balance: 0 };
+    summary.forEach((qs) => {
+      totals.wages += qs.wages || 0;
+      totals.liability941 += qs.total_liability || 0;
+      totals.tc941 += qs.state_wh || 0;
+      totals.deposits += (qs.deposits_made || 0) + (qs.state_deposits || 0);
+      totals.balance += (qs.balance_due || 0) + (qs.state_balance_due || 0);
+    });
+    return totals;
+  }, [summary]);
+
+  // Feature 52-53: New Hire / Termination counts
+  const [newHireCount, setNewHireCount] = useState(0);
+  const [termCount, setTermCount] = useState(0);
+
   const yearRange = useMemo(() => {
     const years: number[] = [];
     for (let y = currentYear - 3; y <= currentYear + 1; y++) years.push(y);
@@ -291,11 +349,22 @@ const TaxFiling: React.FC = () => {
       api.taxGetFilingSummary(year),
       api.taxGetW2Data(year),
       api.taxGetW3Data(year),
+      api.rawQuery(
+        `SELECT
+          COALESCE(SUM(CASE WHEN start_date >= ? AND start_date <= ? THEN 1 ELSE 0 END), 0) as new_hires,
+          COALESCE(SUM(CASE WHEN end_date >= ? AND end_date <= ? THEN 1 ELSE 0 END), 0) as terms
+        FROM employees WHERE company_id = ?`,
+        [`${year}-01-01`, `${year}-12-31`, `${year}-01-01`, `${year}-12-31`, activeCompany.id]
+      ),
     ])
-      .then(([filingSummary, w2, w3]) => {
+      .then(([filingSummary, w2, w3, hireTerm]: any[]) => {
         setSummary(Array.isArray(filingSummary) ? filingSummary : []);
         setW2Data(Array.isArray(w2) ? w2 : []);
         setW3Data(w3 || null);
+        if (Array.isArray(hireTerm) && hireTerm.length > 0) {
+          setNewHireCount(hireTerm[0].new_hires || 0);
+          setTermCount(hireTerm[0].terms || 0);
+        }
       })
       .catch((err) => {
         console.error('Failed to load filing data:', err);
@@ -409,6 +478,43 @@ const TaxFiling: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Feature 50: Form 944 Support Indicator */}
+      {annualTotals.wages > 0 && annualTotals.wages < 50000 && (
+        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-accent-blue/20 text-xs text-text-secondary mb-0" style={{ borderRadius: '6px' }}>
+          <Info size={14} className="text-accent-blue shrink-0" />
+          Annual wages under $50,000 — your business may qualify for Form 944 (annual filing) instead of quarterly 941. Contact the IRS to request this option.
+        </div>
+      )}
+
+      {/* Feature 49: Annual Filing Summary */}
+      {summary.length > 0 && (
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+          <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Annual Filing Summary — {year}</h3>
+          <div className="grid grid-cols-5 gap-3">
+            <div className="text-center">
+              <div className="text-[10px] text-text-muted uppercase">Total Wages</div>
+              <div className="text-lg font-mono font-bold text-text-primary mt-1">{formatCurrency(annualTotals.wages)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-text-muted uppercase">Total 941 Liability</div>
+              <div className="text-lg font-mono font-bold text-accent-expense mt-1">{formatCurrency(annualTotals.liability941)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-text-muted uppercase">Total TC-941</div>
+              <div className="text-lg font-mono font-bold text-accent-warning mt-1">{formatCurrency(annualTotals.tc941)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-text-muted uppercase">Total Deposits</div>
+              <div className="text-lg font-mono font-bold text-accent-income mt-1">{formatCurrency(annualTotals.deposits)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-text-muted uppercase">Balance Due</div>
+              <div className="text-lg font-mono font-bold text-accent-expense mt-1">{formatCurrency(annualTotals.balance)}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Per-Quarter Sections */}
       {[1, 2, 3, 4].map((q) => {
@@ -630,6 +736,70 @@ const TaxFiling: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Feature 48: Estimated Tax Penalty Calculator */}
+                {qs.balance_due > 0 && isPastDue(dueDate) && (() => {
+                  const daysLate = calcDaysLate(dueDate);
+                  const penalty = calcPenalty(qs.balance_due, daysLate);
+                  return (
+                    <div className="block-card-elevated p-3 border-l-2 border-l-accent-expense" style={{ borderRadius: '6px' }}>
+                      <div className="text-[10px] font-semibold text-accent-expense uppercase tracking-wider">Estimated Late Payment Penalty</div>
+                      <div className="grid grid-cols-3 gap-3 mt-2 text-xs">
+                        <div>
+                          <span className="text-text-muted">Days Late</span>
+                          <div className="font-mono font-bold text-text-primary">{daysLate}</div>
+                        </div>
+                        <div>
+                          <span className="text-text-muted">Penalty Rate</span>
+                          <div className="font-mono font-bold text-text-primary">0.5%/mo + interest</div>
+                        </div>
+                        <div>
+                          <span className="text-text-muted">Est. Penalty</span>
+                          <div className="font-mono font-bold text-accent-expense">{formatCurrency(penalty)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Feature 46: Pre-Filing Checklist */}
+                <div className="block-card-elevated p-4" style={{ borderRadius: '6px' }}>
+                  <h4 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Pre-Filing Checklist — Q{q}</h4>
+                  <div className="space-y-1.5">
+                    {CHECKLIST_ITEMS.map((label, i) => {
+                      const checked = checklists[q]?.[i] || false;
+                      return (
+                        <label key={i} className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary">
+                          <input type="checkbox" checked={checked} onChange={() => toggleCheckItem(q, i)} className="w-3.5 h-3.5 accent-accent-income" />
+                          <span className={checked ? 'line-through text-text-muted' : ''}>{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Feature 47: Filing Notes */}
+                <div>
+                  <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Filing Notes</label>
+                  <textarea
+                    className="block-input w-full text-xs"
+                    rows={2}
+                    placeholder="Notes for this quarter's filing..."
+                    value={filingNotes[q] || ''}
+                    onChange={(e) => setFilingNotes((n) => ({ ...n, [q]: e.target.value }))}
+                  />
+                </div>
+
+                {/* Feature 51: Amendment Tracker */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={amendments[q] || false}
+                    onChange={(e) => setAmendments((a) => ({ ...a, [q]: e.target.checked }))}
+                    className="w-3.5 h-3.5 accent-accent-warning"
+                  />
+                  <span className="text-xs text-text-secondary">Amendment filed for this quarter (941-X / TC-941X)</span>
+                </div>
               </div>
             )}
 
@@ -735,6 +905,20 @@ const TaxFiling: React.FC = () => {
             No W-2 data available for {year}.
           </div>
         )}
+      </div>
+
+      {/* Feature 52-53: New Hire / Termination Summary */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <h4 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">New Hires — {year}</h4>
+          <div className="text-2xl font-mono font-bold text-accent-income">{newHireCount}</div>
+          <div className="text-xs text-text-muted mt-1">Employees with start_date in {year}</div>
+        </div>
+        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <h4 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Terminations — {year}</h4>
+          <div className="text-2xl font-mono font-bold text-accent-expense">{termCount}</div>
+          <div className="text-xs text-text-muted mt-1">Employees with end_date in {year}</div>
+        </div>
       </div>
     </div>
   );
