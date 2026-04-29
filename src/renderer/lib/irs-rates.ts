@@ -98,9 +98,10 @@ export const IRS_RECEIPT_THRESHOLD = 75;
 export function computeReceiptExpiry(dateISO: string): string {
   if (!dateISO) return '';
   try {
-    const d = new Date(dateISO);
+    // DATE: anchor at noon to avoid UTC shift, then format from local components.
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(dateISO) ? new Date(`${dateISO}T12:00:00`) : new Date(dateISO);
     d.setFullYear(d.getFullYear() + IRS_RECEIPT_RETENTION_YEARS);
-    return d.toISOString().slice(0, 10);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   } catch {
     return '';
   }

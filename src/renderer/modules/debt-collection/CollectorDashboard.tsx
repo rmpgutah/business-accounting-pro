@@ -276,13 +276,15 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       } catch (e) { console.error('Priority queue load failed:', e); }
 
       // Feature 9: Recent Activity Feed
+      // SCHEMA: debt_communications has `body` (not `notes`); we surface that
+      // field as `notes` in the result set so the UI can render either source.
       try {
         const feedRows = await api.rawQuery(`
           SELECT * FROM (
-            SELECT 'communication' as type, dc.created_at, dc.type as comm_type, dc.notes, d.debtor_name, d.id as debt_id
+            SELECT 'communication' as type, dc.logged_at as created_at, dc.type as comm_type, dc.body as notes, d.debtor_name, d.id as debt_id
             FROM debt_communications dc JOIN debts d ON dc.debt_id = d.id
             WHERE d.company_id = ?
-            ORDER BY dc.created_at DESC LIMIT 10
+            ORDER BY dc.logged_at DESC LIMIT 10
           )
           UNION ALL
           SELECT * FROM (
@@ -309,10 +311,12 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       } catch (e) { console.error('Compliance load failed:', e); }
 
       // Feature 11: Monthly Collection Goal
+      // DATE: format from local Y/M/D — toISOString().slice(0,10) shifts the
+      // day across the UTC boundary in non-UTC timezones.
       try {
         const monthStart = new Date();
         monthStart.setDate(1);
-        const monthStr = monthStart.toISOString().slice(0, 10);
+        const monthStr = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-01`;
 
         const collectedRows = await api.rawQuery(`
           SELECT COALESCE(SUM(dp.amount), 0) as collected
@@ -355,10 +359,11 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       } catch (e) { console.error('Collector perf load failed:', e); }
 
       // Feature 13: This Week Quick Stats
+      // DATE: format from local Y/M/D — toISOString() shifts day in non-UTC zones.
       try {
         const weekStart = new Date();
         weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const weekStr = weekStart.toISOString().slice(0, 10);
+        const weekStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
 
         const wRows = await api.rawQuery(`
           SELECT COALESCE(SUM(dp.amount), 0) as collected
@@ -371,7 +376,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           SELECT COUNT(*) as calls
           FROM debt_communications dc
           JOIN debts d ON dc.debt_id = d.id
-          WHERE d.company_id = ? AND dc.created_at >= ? AND dc.type IN ('phone', 'call')
+          WHERE d.company_id = ? AND dc.logged_at >= ? AND dc.type = 'phone'
         `, [activeCompany.id, weekStr]);
 
         const promiseRows = await api.rawQuery(`

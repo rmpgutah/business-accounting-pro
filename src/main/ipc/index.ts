@@ -433,6 +433,15 @@ const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> 
   'Processing Fees':       { type: 'expense', subtype: 'operating' },
 };
 
+// DATE: today's date as YYYY-MM-DD in the user's local timezone. Use this
+// instead of new Date().toISOString().slice(0,10), which UTC-shifts the day
+// for any local time outside the [00:00, 24:00 - tzoffset] window. Affects
+// JE posting dates, settlement accept dates, and any "now" we persist.
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function findAccount(dbInstance: any, companyId: string, nameHint: string): string | null {
   // Determine expected account type (if known) to prevent cross-type matching
   const expectedType = ACCOUNT_TYPE_FALLBACK[nameHint]?.type;
@@ -957,7 +966,7 @@ export function registerIpcHandlers(): void {
             const fxNote = invCurrency === 'USD'
               ? ''
               : ` (orig ${total} ${invCurrency} @ ${usdRate})`;
-            postJournalEntry(rawDb, companyId, invoiceData.issue_date || new Date().toISOString().slice(0, 10),
+            postJournalEntry(rawDb, companyId, invoiceData.issue_date || localToday(),
               `Invoice created - #${invoiceNum}`, [
                 { nameHint: 'Receivable', debit: totalUsd, credit: 0, note: `AR for Invoice #${invoiceNum}${fxNote}` },
                 { nameHint: 'Revenue', debit: 0, credit: totalUsd, note: `Revenue from Invoice #${invoiceNum}${fxNote}` },
@@ -1081,7 +1090,7 @@ export function registerIpcHandlers(): void {
                 if (cat?.name) expenseHint = cat.name;
               } catch { /* ignore */ }
             }
-            postJournalEntry(rawDb, companyId, expenseData.date || new Date().toISOString().slice(0, 10),
+            postJournalEntry(rawDb, companyId, expenseData.date || localToday(),
               `Expense recorded - ${desc}`, [
                 { nameHint: expenseHint, debit: amount, credit: 0, note: desc },
                 { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
@@ -1145,11 +1154,14 @@ export function registerIpcHandlers(): void {
     // Seed default categories for new company
     seedDefaultCategories(company.id);
     db.switchCompany(company.id);
+    scheduleAutoBackup();
     return company;
   });
 
   ipcMain.handle('company:update', (_event, { id, data }) => {
-    return db.update('companies', id, data);
+    const result = db.update('companies', id, data);
+    scheduleAutoBackup();
+    return result;
   });
 
   ipcMain.handle('company:switch', (_event, companyId) => {
@@ -1757,12 +1769,15 @@ export function registerIpcHandlers(): void {
     if (!companyId) return { error: 'No active company' };
     try {
       const existing = db.getDb().prepare('SELECT id FROM invoice_settings WHERE company_id = ?').get(companyId) as any;
+      let result: any;
       if (existing) {
         db.update('invoice_settings', existing.id, data);
-        return db.getDb().prepare('SELECT * FROM invoice_settings WHERE company_id = ?').get(companyId);
+        result = db.getDb().prepare('SELECT * FROM invoice_settings WHERE company_id = ?').get(companyId);
       } else {
-        return db.create('invoice_settings', { ...data, company_id: companyId });
+        result = db.create('invoice_settings', { ...data, company_id: companyId });
       }
+      scheduleAutoBackup();
+      return result;
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
@@ -1906,7 +1921,8 @@ export function registerIpcHandlers(): void {
         WHERE d.company_id = ?
       `).all(companyId);
       const today = new Date();
-      const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().slice(0, 10);
+      // DATE: build Jan 1 string from the local year — toISOString() shifts day in non-UTC zones.
+      const startOfYear = `${today.getFullYear()}-01-01`;
       const paymentsYtd = payments.filter((p: any) => p.received_date >= startOfYear);
       const collectedYtd = paymentsYtd.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       return { debts, payments, collectedYtd };
@@ -2095,6 +2111,7 @@ export function registerIpcHandlers(): void {
       }
       results.push(record);
     }
+    if (results.length) scheduleAutoBackup();
     return results;
   });
 
@@ -2105,6 +2122,7 @@ export function registerIpcHandlers(): void {
       if (companyId) db.logAudit(companyId, table, id, 'delete');
       db.remove(table, id);
     }
+    if (ids.length) scheduleAutoBackup();
     return { deleted: ids.length };
   });
 
@@ -2181,7 +2199,7 @@ export function registerIpcHandlers(): void {
     if (!companyId) return { error: 'No company selected' };
 
     const { filePath: zipPath } = await dialog.showSaveDialog({
-      defaultPath: `backup-${new Date().toISOString().slice(0, 10)}.zip`,
+      defaultPath: `backup-${localToday()}.zip`,
       filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
     });
 
@@ -2424,7 +2442,7 @@ export function registerIpcHandlers(): void {
           const total = Number(inv.total || inv.subtotal) || 0;
           if (total <= 0) continue;
           const num = inv.invoice_number || inv.id.substring(0, 8);
-          postJournalEntry(dbInstance, companyId, inv.issue_date || new Date().toISOString().slice(0, 10),
+          postJournalEntry(dbInstance, companyId, inv.issue_date || localToday(),
             `Invoice created - #${num}`, [
               { nameHint: 'Receivable', debit: total, credit: 0, note: `AR for Invoice #${num}` },
               { nameHint: 'Revenue', debit: 0, credit: total, note: `Revenue from Invoice #${num}` },
@@ -2439,7 +2457,7 @@ export function registerIpcHandlers(): void {
         for (const p of payments) {
           const amount = Number(p.amount) || 0;
           if (amount <= 0) continue;
-          postJournalEntry(dbInstance, companyId, p.date || new Date().toISOString().slice(0, 10),
+          postJournalEntry(dbInstance, companyId, p.date || localToday(),
             `Payment received - ${p.invoice_number || p.invoice_id?.substring(0, 8) || 'unknown'}`, [
               { nameHint: 'Cash', debit: amount, credit: 0, note: 'Cash received' },
               { nameHint: 'Receivable', debit: 0, credit: amount, note: 'Clear AR' },
@@ -2460,7 +2478,7 @@ export function registerIpcHandlers(): void {
           if (amount <= 0) continue;
           const isPaid = ['paid', 'approved'].includes(exp.status);
           const expenseHint = exp.category_name || 'Expense';
-          postJournalEntry(dbInstance, companyId, exp.date || new Date().toISOString().slice(0, 10),
+          postJournalEntry(dbInstance, companyId, exp.date || localToday(),
             `Expense recorded - ${exp.description || exp.id.substring(0, 8)}`, [
               { nameHint: expenseHint, debit: amount, credit: 0, note: exp.description || 'Expense' },
               { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: isPaid ? 'Cash paid' : 'Accounts Payable' },
@@ -2475,7 +2493,7 @@ export function registerIpcHandlers(): void {
         for (const bp of billPayments) {
           const amount = Number(bp.amount) || 0;
           if (amount <= 0) continue;
-          postJournalEntry(dbInstance, companyId, bp.date || new Date().toISOString().slice(0, 10),
+          postJournalEntry(dbInstance, companyId, bp.date || localToday(),
             `Bill payment - ${bp.bill_number || bp.bill_id?.substring(0, 8) || 'unknown'}`, [
               { nameHint: 'Payable', debit: amount, credit: 0, note: 'AP cleared' },
               { nameHint: 'Cash', debit: 0, credit: amount, note: 'Cash paid' },
@@ -2530,7 +2548,13 @@ export function registerIpcHandlers(): void {
       return { paymentId, newStatus, newAmountPaid };
     });
 
-    return tx();
+    const result = tx();
+    // Without scheduleAutoBackup the VPS backup would miss new payments —
+    // user-visible because the dashboard still shows them, but a fresh
+    // restore would lose every payment until the next mutation that
+    // happens to schedule a backup.
+    scheduleAutoBackup();
+    return result;
   });
 
   // ─── Payroll YTD Totals ───────────────────────────────────
@@ -2724,6 +2748,7 @@ export function registerIpcHandlers(): void {
       dbInstance.prepare(
         "UPDATE settings SET value = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(value, existing.id);
+      scheduleAutoBackup();
     } else {
       db.create('settings', { company_id: companyId, key, value });
     }
@@ -3303,6 +3328,7 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       console.warn('bills:pay recordRelation failed:', (err as Error)?.message);
     }
+    scheduleAutoBackup();
     return result;
   });
 
@@ -3331,6 +3357,7 @@ export function registerIpcHandlers(): void {
       WHERE company_id = ? AND status IN ('pending','received','approved','partial')
         AND due_date < date('now')
     `).run(companyId);
+    if (result.changes > 0) scheduleAutoBackup();
     return result.changes;
   });
 
@@ -3352,6 +3379,7 @@ export function registerIpcHandlers(): void {
     const dbInstance = db.getDb();
     dbInstance.prepare(`UPDATE purchase_orders SET status = 'approved', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`)
       .run(approvedBy || '', poId);
+    scheduleAutoBackup();
     return { success: true };
   });
 
@@ -3402,6 +3430,7 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       console.warn('po:convert-bill recordRelation failed:', (err as Error)?.message);
     }
+    scheduleAutoBackup();
     return result;
   });
 
@@ -3553,6 +3582,7 @@ export function registerIpcHandlers(): void {
       }
     });
     depTx();
+    if (processed > 0) scheduleAutoBackup();
     return { processed };
   });
 
@@ -3607,6 +3637,7 @@ export function registerIpcHandlers(): void {
       }
     });
     applyTx();
+    if (applied > 0) scheduleAutoBackup();
     return { applied };
   });
 
@@ -3648,7 +3679,9 @@ export function registerIpcHandlers(): void {
 
       return { applied: applyAmt, invoiceStatus: newStatus, creditNoteStatus: cnStatus };
     });
-    return applyTx();
+    const result = applyTx();
+    scheduleAutoBackup();
+    return result;
   });
 
   // ─── Dynamic Tax Configuration ────────────────────────────
@@ -4786,7 +4819,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:smart-recommendations', (_event, { companyId }: { companyId: string }) => {
     try {
       const dbInstance = db.getDb();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       const recommendations: Array<{ debtId: string; debtorName: string; recommendation: string; reason: string; priority: string }> = [];
 
       const debts = dbInstance.prepare(`
@@ -5499,7 +5532,7 @@ export function registerIpcHandlers(): void {
     try {
       db.update('debt_plan_installments', installmentId, {
         paid: paid ? 1 : 0,
-        paid_date: paid ? new Date().toISOString().slice(0, 10) : '',
+        paid_date: paid ? localToday() : '',
       });
       scheduleAutoBackup();
       return { ok: true };
@@ -5533,7 +5566,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:settlement-respond', (_event, { settlementId, response, counter_amount }) => {
     try {
       const data: any = { response };
-      if (response === 'accepted') data.accepted_date = new Date().toISOString().slice(0, 10);
+      if (response === 'accepted') data.accepted_date = localToday();
       if (counter_amount != null) data.counter_amount = counter_amount;
       db.update('debt_settlements', settlementId, data);
       scheduleAutoBackup();
@@ -5559,7 +5592,7 @@ export function registerIpcHandlers(): void {
 
       db.update('debt_settlements', settlementId, {
         response: 'accepted',
-        accepted_date: new Date().toISOString().slice(0, 10),
+        accepted_date: localToday(),
       });
       db.update('debts', debtId, { status: 'settled', balance_due: offer_amount });
 
@@ -5568,7 +5601,7 @@ export function registerIpcHandlers(): void {
           postJournalEntry(
             dbi,
             companyId,
-            new Date().toISOString().slice(0, 10),
+            localToday(),
             `Settlement write-off — debt ${debt?.debtor_name || debtId.slice(0, 8)}`,
             [
               { nameHint: 'Bad Debt', debit: writeOff, credit: 0, note: 'Forgiven portion of settled debt' },
@@ -5679,7 +5712,7 @@ export function registerIpcHandlers(): void {
         `SELECT id, promised_date, promised_amount, kept, notes FROM debt_promises WHERE debt_id = ? ORDER BY promised_date DESC`
       ).all(debtId) as any[];
       for (const p of promises) {
-        const status = p.kept ? 'Kept' : (p.promised_date < new Date().toISOString().slice(0, 10) ? 'Broken' : 'Pending');
+        const status = p.kept ? 'Kept' : (p.promised_date < localToday() ? 'Broken' : 'Pending');
         events.push({ id: p.id, ts: p.promised_date + 'T00:00:00', kind: 'promise', label: `Promise to pay $${Number(p.promised_amount).toFixed(2)} — ${status}`, detail: p.notes || '', icon: 'promise' });
       }
 
@@ -5792,7 +5825,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:collector-dashboard', (_event, { companyId }: { companyId: string }) => {
     try {
       const dbInstance = db.getDb();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       const weekAhead = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
 
       const brokenPromises = dbInstance.prepare(`
@@ -5920,7 +5953,7 @@ export function registerIpcHandlers(): void {
                 amount: txn.amount,
                 method: 'ach',
                 reference_number: txn.id,
-                received_date: txn.date || new Date().toISOString().slice(0, 10),
+                received_date: txn.date || localToday(),
                 applied_to_principal: txn.amount,
                 applied_to_interest: 0,
                 applied_to_fees: 0,
@@ -5947,7 +5980,7 @@ export function registerIpcHandlers(): void {
                 amount: txn.amount,
                 method: 'ach',
                 reference_number: txn.id,
-                received_date: txn.date || new Date().toISOString().slice(0, 10),
+                received_date: txn.date || localToday(),
                 applied_to_principal: txn.amount,
                 applied_to_interest: 0,
                 applied_to_fees: 0,
@@ -6025,7 +6058,7 @@ export function registerIpcHandlers(): void {
         amount: txn.amount,
         method: 'ach',
         reference_number: txn.id,
-        received_date: txn.date || new Date().toISOString().slice(0, 10),
+        received_date: txn.date || localToday(),
         applied_to_principal: txn.amount,
         applied_to_interest: 0,
         applied_to_fees: 0,
@@ -6175,7 +6208,7 @@ export function registerIpcHandlers(): void {
   // Feature 16: Freeze/Resume Interest
   ipcMain.handle('debt:freeze-interest', (_event, { debtId, freeze, reason }: { debtId: string; freeze: boolean; reason?: string }) => {
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       db.getDb().prepare(`UPDATE debts SET interest_frozen = ?, interest_frozen_date = ?, interest_frozen_reason = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(freeze ? 1 : 0, freeze ? today : '', reason || '', debtId);
       logDebtAudit(debtId, 'field_edit', 'interest_frozen', freeze ? '0' : '1', freeze ? '1' : '0');
@@ -6193,7 +6226,7 @@ export function registerIpcHandlers(): void {
       const debts = dbInstance.prepare(
         `SELECT id, balance_due, statute_of_limitations_date FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off')`
       ).all(companyId) as any[];
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       let updated = 0;
       const tx = dbInstance.transaction(() => {
         for (const d of debts) {
@@ -6262,7 +6295,7 @@ export function registerIpcHandlers(): void {
       const companyId = db.getCurrentCompanyId();
       if (!companyId) return { applied: 0 };
       const dbInstance = db.getDb();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       const overdue = dbInstance.prepare(`
         SELECT id, total, late_fee_pct, late_fee_grace_days, due_date
         FROM invoices
@@ -7078,7 +7111,7 @@ export function registerIpcHandlers(): void {
       if (!batch) return { error: 'Batch not found' };
       const lines: string[] = [];
       lines.push('record_type,company,employee,routing,account,account_type,amount,effective_date,batch_id');
-      lines.push(`HEADER,"${batch.company_name || ''}","${batch.employee_name || ''}","${batch.routing_number || ''}","${batch.account_number || ''}","${batch.account_type || ''}",${Number(batch.total_amount).toFixed(2)},${(batch.paid_date || new Date().toISOString().slice(0, 10))},${batch.id}`);
+      lines.push(`HEADER,"${batch.company_name || ''}","${batch.employee_name || ''}","${batch.routing_number || ''}","${batch.account_number || ''}","${batch.account_type || ''}",${Number(batch.total_amount).toFixed(2)},${(batch.paid_date || localToday())},${batch.id}`);
       lines.push(`ENTRY,,"${batch.employee_name || ''}","${batch.routing_number || ''}","${batch.account_number || ''}","${batch.account_type || ''}",${Number(batch.total_amount).toFixed(2)},,${batch.id}`);
       const result = await dialog.showSaveDialog({
         title: 'Export ACH-ready CSV',
@@ -7255,7 +7288,7 @@ export function registerIpcHandlers(): void {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Account History — ${acct.code}</title>
         <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;color:#666;font-weight:normal;margin:0 0 16px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f5f5f5;text-align:left;padding:6px 8px;border-bottom:2px solid #333}</style></head>
         <body><h1>${(company as any).name || ''}</h1><h2>Account History — ${acct.code} ${acct.name}</h2>
-        <p style="font-size:11px;color:#555">Type: ${acct.type} • Subtype: ${acct.subtype || '—'} • Generated: ${new Date().toISOString().slice(0, 10)}</p>
+        <p style="font-size:11px;color:#555">Type: ${acct.type} • Subtype: ${acct.subtype || '—'} • Generated: ${localToday()}</p>
         <table><thead><tr><th>Date</th><th>Entry #</th><th>Description</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
         <tbody>${rowHtml || '<tr><td colspan="6" style="padding:16px;text-align:center;color:#888">No transactions</td></tr>'}</tbody></table>
         </body></html>`;
@@ -7859,7 +7892,7 @@ export function registerIpcHandlers(): void {
       const start = `${year}-01-01`, end = `${year}-12-31`;
       const lines: string[] = [];
       lines.push(`V042`); lines.push(`ABusiness Accounting Pro`);
-      lines.push(`D ${new Date().toISOString().slice(0, 10).replace(/-/g, '/')}`);
+      lines.push(`D ${localToday().replace(/-/g, '/')}`);
       lines.push(`^`);
       for (const a of accts) {
         const balRow = dbi.prepare(
@@ -7980,7 +8013,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('accounts:snapshot-balances', (_e, { companyId, date }: { companyId: string; date?: string }) => {
     try {
       const dbi = db.getDb();
-      const d = date || new Date().toISOString().slice(0, 10);
+      const d = date || localToday();
       const accts = dbi.prepare(
         `SELECT a.id,
           COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
@@ -8084,7 +8117,7 @@ export function registerIpcHandlers(): void {
           `SELECT * FROM journal_entry_lines WHERE journal_entry_id = ?`
         ).all(je.id) as any[];
         const newId = uuid();
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localToday();
         const numRow = dbInstance.prepare(
           "SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1"
         ).get(companyId) as any;
@@ -8676,7 +8709,7 @@ export function registerIpcHandlers(): void {
         `INSERT INTO sox_control_tests (id, control_id, company_id, tested_by, tested_at, result, evidence, notes)
          VALUES (?,?,?,?,?,?,?,?)`
       ).run(id, data.controlId, data.companyId, data.testedBy || '',
-            data.testedAt || new Date().toISOString().slice(0, 10),
+            data.testedAt || localToday(),
             data.result || 'pass', data.evidence || '', data.notes || '');
       db.getDb().prepare(`UPDATE sox_controls SET last_reviewed_at = datetime('now') WHERE id = ?`).run(data.controlId);
       return { id };

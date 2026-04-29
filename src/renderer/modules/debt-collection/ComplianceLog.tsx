@@ -146,9 +146,10 @@ const ViolationTracker: React.FC<{ companyId: string }> = ({ companyId }) => {
     const load = async () => {
       setLoading(true);
       try {
+        // SCHEMA: debt_communications uses logged_at (not created_at).
         const res = await api.rawQuery(
           `SELECT d.id, d.debtor_name, d.cease_desist_active,
-            (SELECT COUNT(*) FROM debt_communications dc WHERE dc.debt_id = d.id AND d.cease_desist_active = 1 AND dc.created_at > COALESCE(d.interest_frozen_date, '2000-01-01')) as post_cd_contacts,
+            (SELECT COUNT(*) FROM debt_communications dc WHERE dc.debt_id = d.id AND d.cease_desist_active = 1 AND dc.logged_at > COALESCE(d.interest_frozen_date, '2000-01-01')) as post_cd_contacts,
             d.statute_of_limitations_date,
             CASE WHEN d.statute_of_limitations_date IS NOT NULL AND julianday(d.statute_of_limitations_date) < julianday('now') THEN 1 ELSE 0 END as sol_expired
           FROM debts d WHERE d.company_id = ? AND d.status = 'active'`,
@@ -498,12 +499,18 @@ const DocumentVerification: React.FC<{ companyId: string }> = ({ companyId }) =>
     const load = async () => {
       setLoading(true);
       try {
+        // SCHEMA: debt_evidence column is `type` (CHECK list of evidence types,
+        // not `evidence_type`). The valid types are contract/invoice/communication
+        // /payment_record/delivery_proof/signed_agreement/witness_statement/photo/
+        // other — there is no 'original_contract'/'itemized_statement'/'assignment'.
+        // Map this UI's checks onto the actual values: contract → contract,
+        // statement → invoice, assignment → signed_agreement.
         const res = await api.rawQuery(
           `SELECT d.id, d.debtor_name, d.original_amount,
             (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id) as evidence_count,
-            (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id AND de.evidence_type = 'original_contract') as has_contract,
-            (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id AND de.evidence_type = 'itemized_statement') as has_statement,
-            (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id AND de.evidence_type = 'assignment') as has_assignment
+            (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id AND de.type = 'contract') as has_contract,
+            (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id AND de.type = 'invoice') as has_statement,
+            (SELECT COUNT(*) FROM debt_evidence de WHERE de.debt_id = d.id AND de.type = 'signed_agreement') as has_assignment
           FROM debts d WHERE d.company_id = ? AND d.status IN ('active','in_collection','legal')
           ORDER BY d.debtor_name`,
           [companyId]

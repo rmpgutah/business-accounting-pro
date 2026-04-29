@@ -452,7 +452,7 @@ const TaxReports: React.FC = () => {
     setDepositLoading(true);
     setDepositError('');
     api.rawQuery(
-      `SELECT id, form_type, quarter, year, amount_paid, payment_date, confirmation_number, notes
+      `SELECT id, form_type, quarter, tax_year as year, amount_paid, payment_date, confirmation_number, notes
       FROM tax_filing_periods WHERE company_id = ? AND amount_paid > 0 ORDER BY payment_date DESC`,
       [activeCompany.id]
     )

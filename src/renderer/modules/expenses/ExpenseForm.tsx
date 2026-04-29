@@ -891,11 +891,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         else if (recurringFreq === 'quarterly') nxt.setMonth(nxt.getMonth() + 3);
         else nxt.setFullYear(nxt.getFullYear() + 1);
         try {
+          // DATE: format from local components — toISOString() shifts day in non-UTC zones.
+          const nxtIso = `${nxt.getFullYear()}-${String(nxt.getMonth() + 1).padStart(2, '0')}-${String(nxt.getDate()).padStart(2, '0')}`;
           await api.create('recurring_templates', {
             company_id: activeCompany.id, type: 'expense',
             name: form.description || `Recurring expense ${form.date}`,
             frequency: recurringFreq,
-            next_date: nxt.toISOString().slice(0, 10),
+            next_date: nxtIso,
             is_active: 1,
             template_data: payload,
           });

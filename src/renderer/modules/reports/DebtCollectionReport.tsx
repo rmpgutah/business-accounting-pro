@@ -42,11 +42,15 @@ const DebtCollectionReport: React.FC = () => {
 
     const load = async () => {
       try {
-        // Get all debts
+        // Get all debts. assigned_to is the legacy free-text column; the
+        // FK `assigned_collector_id` (added later) joins to users for the
+        // collector's display name. Prefer the FK and fall back to text.
         const debts: any[] = await api.rawQuery(
-          `SELECT d.id, d.original_amount, d.current_balance, d.status, d.assigned_to,
+          `SELECT d.id, d.original_amount, d.balance_due, d.status,
+                  COALESCE(NULLIF(u.display_name, ''), NULLIF(u.email, ''), NULLIF(d.assigned_to, ''), 'Unassigned') as collector_name,
                   d.due_date, julianday('now') - julianday(d.due_date) as days_past_due
            FROM debts d
+           LEFT JOIN users u ON d.assigned_collector_id = u.id
            WHERE d.company_id = ?`,
           [activeCompany.id]
         );
@@ -57,8 +61,8 @@ const DebtCollectionReport: React.FC = () => {
            FROM debt_payments dp
            JOIN debts d ON dp.debt_id = d.id
            WHERE d.company_id = ?
-             AND dp.payment_date >= ?
-             AND dp.payment_date <= ?
+             AND dp.received_date >= ?
+             AND dp.received_date <= ?
            GROUP BY dp.debt_id`,
           [activeCompany.id, startDate, endDate]
         );
@@ -69,7 +73,7 @@ const DebtCollectionReport: React.FC = () => {
 
         const portfolio = (debts ?? []).reduce((s: number, d: any) => s + (Number(d.original_amount) || 0), 0);
         const collected = (payments ?? []).reduce((s: number, p: any) => s + (Number(p.collected) || 0), 0);
-        const outstanding = (debts ?? []).reduce((s: number, d: any) => s + (Number(d.current_balance) || 0), 0);
+        const outstanding = (debts ?? []).reduce((s: number, d: any) => s + (Number(d.balance_due) || 0), 0);
 
         setTotalPortfolio(portfolio);
         setTotalCollected(collected);
@@ -84,7 +88,7 @@ const DebtCollectionReport: React.FC = () => {
         };
 
         (debts ?? []).forEach((d: any) => {
-          const balance = Number(d.current_balance) || 0;
+          const balance = Number(d.balance_due) || 0;
           if (balance <= 0) return;
           const days = Number(d.days_past_due) || 0;
           let bucket: string;
@@ -101,7 +105,7 @@ const DebtCollectionReport: React.FC = () => {
         // Collector performance
         const collectorMap = new Map<string, { assigned: number; collected: number }>();
         (debts ?? []).forEach((d: any) => {
-          const name = d.assigned_to || 'Unassigned';
+          const name = d.collector_name || 'Unassigned';
           if (!collectorMap.has(name)) collectorMap.set(name, { assigned: 0, collected: 0 });
           const entry = collectorMap.get(name)!;
           entry.assigned += Number(d.original_amount) || 0;

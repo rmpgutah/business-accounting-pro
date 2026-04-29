@@ -62,9 +62,10 @@ const last12Months = () => {
 };
 const todayISO = () => todayLocal();
 const ymStart = (offsetMonths = 0) => {
+  // DATE: build YYYY-MM-DD from local components — toISOString() shifts day in non-UTC zones.
   const d = new Date();
   d.setMonth(d.getMonth() + offsetMonths, 1);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 };
 
 const Card: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (

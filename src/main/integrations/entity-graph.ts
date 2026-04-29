@@ -135,8 +135,9 @@ function clientGraph(companyId: string, clientId: string): RelatedGroup[] {
        ORDER BY start_date DESC NULLS LAST LIMIT 50`, [companyId, clientId]);
   if (projects.length) groups.push({ key: 'projects', label: `Projects (${projects.length})`, entityType: 'project', rows: projects });
 
+  // SCHEMA: debts has no debt_number column — use debtor_name as the human label.
   const debts = safeAll(
-    `SELECT id, debt_number, balance_due, status, delinquent_date
+    `SELECT id, debtor_name, balance_due, status, delinquent_date
        FROM debts WHERE company_id = ? AND debtor_id = ?
        ORDER BY delinquent_date DESC NULLS LAST LIMIT 50`, [companyId, clientId]);
   if (debts.length) groups.push({
@@ -195,8 +196,9 @@ function invoiceGraph(companyId: string, invoiceId: string): RelatedGroup[] {
        WHERE ili.invoice_id = ?`, [invoiceId]);
   if (timeEntries.length) groups.push({ key: 'time', label: `Time Entries (${timeEntries.length})`, entityType: 'time_entry', rows: timeEntries });
 
+  // SCHEMA: debts has no debt_number column — use debtor_name as the human label.
   const debts = safeAll(
-    `SELECT d.id, d.debt_number, d.balance_due, d.status
+    `SELECT d.id, d.debtor_name, d.balance_due, d.status
        FROM debts d
        JOIN invoice_debt_links l ON l.debt_id = d.id
        WHERE d.company_id = ? AND l.invoice_id = ?`, [companyId, invoiceId]);
@@ -225,11 +227,14 @@ function billGraph(companyId: string, billId: string): RelatedGroup[] {
     rows: payments, total: sumField(payments, 'amount'),
   });
 
+  // SCHEMA: bills has no purchase_order_id column — the link lives in
+  // entity_relations (recorded by po:convert-bill) and as a `reference` text.
   const po = safeOne<{ id: string }>(
-    `SELECT po.id FROM purchase_orders po
+    `SELECT po.id, po.po_number FROM purchase_orders po
        WHERE po.company_id = ? AND po.id IN (
-         SELECT purchase_order_id FROM bills WHERE id = ?
-       )`, [companyId, billId]);
+         SELECT to_id FROM entity_relations
+          WHERE company_id = ? AND from_type = 'bill' AND from_id = ? AND to_type = 'purchase_order'
+       )`, [companyId, companyId, billId]);
   if (po) groups.push({ key: 'po', label: `Purchase Order`, entityType: 'purchase_order', rows: [po] });
 
   return groups;
@@ -269,21 +274,23 @@ function projectGraph(companyId: string, projectId: string): RelatedGroup[] {
 function debtGraph(companyId: string, debtId: string): RelatedGroup[] {
   const groups: RelatedGroup[] = [];
 
+  // SCHEMA: debt_payments uses received_date/method (not payment_date/payment_method);
+  // debt_communications uses logged_at; debt_evidence uses title/created_at.
   const payments = safeAll(
-    `SELECT id, payment_date, amount, payment_method, reference
-       FROM debt_payments WHERE debt_id = ? ORDER BY payment_date DESC`, [debtId]);
+    `SELECT id, received_date as payment_date, amount, method as payment_method, reference_number as reference
+       FROM debt_payments WHERE debt_id = ? ORDER BY received_date DESC`, [debtId]);
   if (payments.length) groups.push({
     key: 'payments', label: `Payments (${payments.length})`, entityType: 'payment',
     rows: payments, total: sumField(payments, 'amount'),
   });
 
   const comms = safeAll(
-    `SELECT id, occurred_at, type, direction, subject, outcome
-       FROM debt_communications WHERE debt_id = ? ORDER BY occurred_at DESC LIMIT 100`, [debtId]);
+    `SELECT id, logged_at as occurred_at, type, direction, subject, outcome
+       FROM debt_communications WHERE debt_id = ? ORDER BY logged_at DESC LIMIT 100`, [debtId]);
   if (comms.length) groups.push({ key: 'comms', label: `Communications (${comms.length})`, entityType: 'debt', rows: comms });
 
   const evidence = safeAll(
-    `SELECT id, type, label, uploaded_at FROM debt_evidence WHERE debt_id = ? ORDER BY uploaded_at DESC`, [debtId]);
+    `SELECT id, type, title as label, created_at as uploaded_at FROM debt_evidence WHERE debt_id = ? ORDER BY created_at DESC`, [debtId]);
   if (evidence.length) groups.push({ key: 'evidence', label: `Evidence (${evidence.length})`, entityType: 'debt', rows: evidence });
 
   const contacts = safeAll(
@@ -305,17 +312,19 @@ function debtGraph(companyId: string, debtId: string): RelatedGroup[] {
 
 function vendorGraph(companyId: string, vendorId: string): RelatedGroup[] {
   const groups: RelatedGroup[] = [];
+  // SCHEMA: bills uses issue_date (no bill_date column);
+  // purchase_orders uses issue_date (no order_date column).
   const bills = safeAll(
-    `SELECT id, bill_number, bill_date, due_date, total, status FROM bills
-       WHERE company_id = ? AND vendor_id = ? ORDER BY bill_date DESC`, [companyId, vendorId]);
+    `SELECT id, bill_number, issue_date as bill_date, due_date, total, status FROM bills
+       WHERE company_id = ? AND vendor_id = ? ORDER BY issue_date DESC`, [companyId, vendorId]);
   if (bills.length) groups.push({
     key: 'bills', label: `Bills (${bills.length})`, entityType: 'bill',
     rows: bills, total: sumField(bills, 'total'),
   });
 
   const pos = safeAll(
-    `SELECT id, po_number, order_date, total, status FROM purchase_orders
-       WHERE company_id = ? AND vendor_id = ? ORDER BY order_date DESC`, [companyId, vendorId]);
+    `SELECT id, po_number, issue_date as order_date, total, status FROM purchase_orders
+       WHERE company_id = ? AND vendor_id = ? ORDER BY issue_date DESC`, [companyId, vendorId]);
   if (pos.length) groups.push({
     key: 'pos', label: `Purchase Orders (${pos.length})`, entityType: 'purchase_order',
     rows: pos, total: sumField(pos, 'total'),

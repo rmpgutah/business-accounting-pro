@@ -3282,7 +3282,10 @@ body { background: #fff; }
     if (debt?.delinquent_date) events.push({ label: 'Delinquent', date: debt.delinquent_date });
     if (debt?.first_contact_date || debt?.first_contact_at) events.push({ label: 'First Contact', date: String(debt.first_contact_date || debt.first_contact_at).slice(0, 10) });
     if (debt?.last_demand_date) events.push({ label: 'Demand Letter', date: String(debt.last_demand_date).slice(0, 10) });
-    events.push({ label: 'Today', date: new Date().toISOString().slice(0, 10) });
+    // DATE: build YYYY-MM-DD from local components — toISOString() shifts day in non-UTC zones.
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    events.push({ label: 'Today', date: todayStr });
     const valid = events.filter(e => {
       const t = new Date(e.date + 'T12:00:00').getTime();
       return isFinite(t);

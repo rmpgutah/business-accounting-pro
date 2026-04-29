@@ -108,7 +108,8 @@ const ExpenseAnalytics: React.FC = () => {
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    // DATE: build YYYY-MM-DD from local components — toISOString() shifts day in non-UTC zones.
+    const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     expenses.forEach((e) => {
       if (e.date < start) return;
       const k = e.category_name || 'Uncategorized';
@@ -169,7 +170,8 @@ const ExpenseAnalytics: React.FC = () => {
   // ── Feature 5: budget vs actual ──
   const budgetVsActual = useMemo(() => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    // DATE: build YYYY-MM-DD from local components — toISOString() shifts day in non-UTC zones.
+    const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const totalsByCat = new Map<string, number>();
     expenses.forEach((e) => {
       if (e.date < start) return;

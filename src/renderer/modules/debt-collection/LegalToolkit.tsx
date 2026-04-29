@@ -117,7 +117,7 @@ const LitigationCostTracker: React.FC<{ companyId: string }> = ({ companyId }) =
         const res = await api.rawQuery(
           `SELECT d.id, d.debtor_name, d.original_amount,
             COALESCE(d.collection_costs, 0) as legal_costs,
-            COALESCE(d.amount_paid, 0) as recovered,
+            COALESCE(d.payments_made, 0) as recovered,
             d.status
           FROM debts d WHERE d.company_id = ? AND d.status IN ('legal','in_collection','active')
           ORDER BY legal_costs DESC`,
@@ -202,16 +202,32 @@ const JudgmentTracking: React.FC<{ companyId: string }> = ({ companyId }) => {
       setLoading(true);
       try {
         const res = await api.rawQuery(
+          // SCHEMA: judgment_date / judgment_amount live on debt_legal_actions
+          // (not on debts). Post-judgment interest rate isn't tracked, so we
+          // fall back to the debt's interest_rate when computing accrued interest.
           `SELECT d.id, d.debtor_name, d.original_amount, d.balance_due,
-            COALESCE(d.judgment_date, '') as judgment_date,
-            COALESCE(d.judgment_amount, d.original_amount) as judgment_amount,
-            COALESCE(d.post_judgment_interest_rate, 0) as interest_rate,
-            CASE WHEN d.judgment_date IS NOT NULL AND d.post_judgment_interest_rate > 0
-              THEN ROUND(COALESCE(d.judgment_amount, d.original_amount) * (d.post_judgment_interest_rate / 100.0) * (julianday('now') - julianday(d.judgment_date)) / 365.0, 2)
+            COALESCE((SELECT MAX(la.judgment_date) FROM debt_legal_actions la WHERE la.debt_id = d.id), '') as judgment_date,
+            COALESCE((SELECT MAX(la.judgment_amount) FROM debt_legal_actions la WHERE la.debt_id = d.id), d.original_amount) as judgment_amount,
+            COALESCE(d.interest_rate, 0) as interest_rate,
+            CASE
+              WHEN (SELECT MAX(la.judgment_date) FROM debt_legal_actions la WHERE la.debt_id = d.id) IS NOT NULL AND d.interest_rate > 0
+              THEN ROUND(
+                COALESCE(
+                  (SELECT MAX(la.judgment_amount) FROM debt_legal_actions la WHERE la.debt_id = d.id),
+                  d.original_amount
+                ) * (d.interest_rate / 100.0) * (julianday('now') - julianday(
+                  (SELECT MAX(la.judgment_date) FROM debt_legal_actions la WHERE la.debt_id = d.id)
+                )) / 365.0,
+                2
+              )
               ELSE 0
             END as accrued_interest
-          FROM debts d WHERE d.company_id = ? AND (d.status = 'legal' OR d.judgment_date IS NOT NULL)
-          ORDER BY d.judgment_date DESC`,
+          FROM debts d
+          WHERE d.company_id = ? AND (
+            d.status = 'legal' OR
+            EXISTS (SELECT 1 FROM debt_legal_actions la WHERE la.debt_id = d.id AND la.judgment_date IS NOT NULL)
+          )
+          ORDER BY judgment_date DESC`,
           [companyId]
         );
         setJudgments(Array.isArray(res) ? res : []);
@@ -543,17 +559,21 @@ const AttorneyAssignment: React.FC<{ companyId: string }> = ({ companyId }) => {
     const load = async () => {
       setLoading(true);
       try {
-        // Get debts in legal status and their assigned attorneys
+        // SCHEMA: there are no `assigned_attorney`/`attorney_email`/`attorney_fee_*`
+        // columns on debts — only `debtor_attorney_name` and `debtor_attorney_phone`
+        // (the opposing attorney). Map those to the columns this view expects so
+        // the panel at least lists outstanding legal accounts and the costs we DO
+        // track. Email and fee columns simply stay blank until a schema upgrade.
         const res = await api.rawQuery(
           `SELECT d.id, d.debtor_name, d.balance_due, d.status,
-            COALESCE(d.assigned_attorney, '') as attorney_name,
-            COALESCE(d.attorney_email, '') as attorney_email,
-            COALESCE(d.attorney_phone, '') as attorney_phone,
-            COALESCE(d.attorney_fee_type, '') as fee_type,
-            COALESCE(d.attorney_fee_amount, 0) as fee_amount,
+            COALESCE(d.debtor_attorney_name, '') as attorney_name,
+            '' as attorney_email,
+            COALESCE(d.debtor_attorney_phone, '') as attorney_phone,
+            '' as fee_type,
+            0 as fee_amount,
             COALESCE(d.collection_costs, 0) as legal_costs
           FROM debts d WHERE d.company_id = ? AND d.status IN ('legal','in_collection')
-          ORDER BY d.assigned_attorney, d.debtor_name`,
+          ORDER BY d.debtor_attorney_name, d.debtor_name`,
           [companyId]
         );
         setAttorneys(Array.isArray(res) ? res : []);
@@ -639,13 +659,16 @@ const PrintLegalSummary: React.FC<{ companyId: string }> = ({ companyId }) => {
   const handlePrint = async () => {
     setPrinting(true);
     try {
+      // SCHEMA: judgment_date / judgment_amount live on debt_legal_actions, not on debts.
+      // assigned_attorney does not exist on debts; use debtor_attorney_name as the closest proxy.
+      // payments_made (not amount_paid) is the recovery total on debts.
       const debts = await api.rawQuery(
         `SELECT d.id, d.debtor_name, d.original_amount, d.balance_due, d.status,
           COALESCE(d.collection_costs, 0) as legal_costs,
-          COALESCE(d.amount_paid, 0) as recovered,
-          COALESCE(d.judgment_date, '') as judgment_date,
-          COALESCE(d.judgment_amount, 0) as judgment_amount,
-          COALESCE(d.assigned_attorney, 'Unassigned') as attorney,
+          COALESCE(d.payments_made, 0) as recovered,
+          COALESCE((SELECT MAX(la.judgment_date) FROM debt_legal_actions la WHERE la.debt_id = d.id), '') as judgment_date,
+          COALESCE((SELECT MAX(la.judgment_amount) FROM debt_legal_actions la WHERE la.debt_id = d.id), 0) as judgment_amount,
+          COALESCE(NULLIF(d.debtor_attorney_name, ''), 'Unassigned') as attorney,
           COALESCE(d.statute_of_limitations_date, '') as sol_date
         FROM debts d WHERE d.company_id = ? AND d.status IN ('legal','in_collection','active')
         ORDER BY d.status, d.debtor_name`,

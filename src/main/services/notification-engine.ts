@@ -3,7 +3,11 @@ import * as db from '../database';
 // ─── Check Overdue Invoices ──────────────────────────────
 export function checkOverdueInvoices(companyId?: string): number {
   const dbInstance = db.getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  // DATE: format from local Y/M/D — toISOString() shifts day in non-UTC zones
+  // and would either over-collect ("today" is tomorrow's overdues) or
+  // under-collect ("today" is yesterday) depending on the local time.
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
   let created = 0;
 
   let sql = `
@@ -58,7 +62,11 @@ export function checkOverdueInvoices(companyId?: string): number {
 // ─── Check Budget Thresholds ─────────────────────────────
 export function checkBudgetThresholds(companyId?: string): number {
   const dbInstance = db.getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  // DATE: format from local Y/M/D — toISOString() shifts day in non-UTC zones
+  // and would either over-collect ("today" is tomorrow's overdues) or
+  // under-collect ("today" is yesterday) depending on the local time.
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
   let created = 0;
 
   let budgetSql = `
@@ -122,7 +130,11 @@ export function checkBudgetThresholds(companyId?: string): number {
 // ─── Check Unmatched Bank Transactions ───────────────────
 export function checkUnmatchedTransactions(companyId?: string): number {
   const dbInstance = db.getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  // DATE: format from local Y/M/D — toISOString() shifts day in non-UTC zones
+  // and would either over-collect ("today" is tomorrow's overdues) or
+  // under-collect ("today" is yesterday) depending on the local time.
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
   let created = 0;
 
   let sql = `

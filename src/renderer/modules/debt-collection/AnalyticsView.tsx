@@ -66,8 +66,13 @@ const TOOLTIP_STYLE = {
   borderRadius: '6px',
 };
 
+// DATE: Format as YYYY-MM-DD using local Y/M/D — toISOString() shifts the day
+// for any timezone east or west of UTC depending on the local time of day.
 function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function velocityColor(days: number): string {
@@ -247,27 +252,46 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
       } catch (_) { setPlanPerf(null); }
 
       // Feature 35: Geographic Distribution
+      // SCHEMA: debts has `debtor_address` (free-form) and `payments_made`
+      // (not amount_paid). Use balance_due directly for outstanding.
       try {
         const geoRes = await api.rawQuery(
-          `SELECT COALESCE(d.debtor_state, 'Unknown') as state, COUNT(*) as count, COALESCE(SUM(d.original_amount - d.amount_paid), 0) as balance FROM debts d WHERE d.company_id = ? AND d.status != 'closed' GROUP BY state ORDER BY balance DESC LIMIT 10`,
+          `SELECT COALESCE(NULLIF(TRIM(SUBSTR(d.debtor_address, MAX(1, LENGTH(d.debtor_address) - 8))), ''), 'Unknown') as state,
+                  COUNT(*) as count,
+                  COALESCE(SUM(d.balance_due), 0) as balance
+           FROM debts d
+           WHERE d.company_id = ? AND d.status NOT IN ('settled','written_off')
+           GROUP BY state ORDER BY balance DESC LIMIT 10`,
           [resolvedId]
         );
         setGeoData(Array.isArray(geoRes) ? geoRes : []);
       } catch (_) { setGeoData([]); }
 
       // Feature 36: Collector Comparison (more detailed than existing table)
+      // SCHEMA: column is `payments_made` (not amount_paid).
       try {
         const collComp = await api.rawQuery(
-          `SELECT COALESCE(u.display_name, u.email, 'Unassigned') as name, COUNT(*) as accounts, COALESCE(SUM(d.amount_paid), 0) as collected, COALESCE(SUM(d.balance_due), 0) as outstanding, CASE WHEN SUM(d.original_amount) > 0 THEN ROUND(SUM(d.amount_paid) * 100.0 / SUM(d.original_amount), 1) ELSE 0 END as recovery_rate FROM debts d LEFT JOIN users u ON d.assigned_collector_id = u.id WHERE d.company_id = ? AND d.status NOT IN ('closed','written_off') GROUP BY name ORDER BY collected DESC`,
+          `SELECT COALESCE(u.display_name, u.email, 'Unassigned') as name,
+                  COUNT(*) as accounts,
+                  COALESCE(SUM(d.payments_made), 0) as collected,
+                  COALESCE(SUM(d.balance_due), 0) as outstanding,
+                  CASE WHEN SUM(d.original_amount) > 0
+                       THEN ROUND(SUM(d.payments_made) * 100.0 / SUM(d.original_amount), 1)
+                       ELSE 0 END as recovery_rate
+           FROM debts d
+           LEFT JOIN users u ON d.assigned_collector_id = u.id
+           WHERE d.company_id = ? AND d.status NOT IN ('settled','written_off')
+           GROUP BY name ORDER BY collected DESC`,
           [resolvedId]
         );
         setCollectorComparison(Array.isArray(collComp) ? collComp : []);
       } catch (_) { setCollectorComparison([]); }
 
       // Feature 37: Collection Cost ROI
+      // SCHEMA: column is `payments_made` (not amount_paid).
       try {
         const roiRes = await api.rawQuery(
-          `SELECT COALESCE(SUM(amount_paid), 0) as total_collected, COALESCE(SUM(collection_costs), 0) as total_costs FROM debts WHERE company_id = ?`,
+          `SELECT COALESCE(SUM(payments_made), 0) as total_collected, COALESCE(SUM(collection_costs), 0) as total_costs FROM debts WHERE company_id = ?`,
           [resolvedId]
         );
         if (Array.isArray(roiRes) && roiRes.length > 0) {

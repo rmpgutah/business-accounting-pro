@@ -15,16 +15,27 @@ export interface ResolveCtx {
   accounts: Array<{ id: string; code: string; name: string }>;
 }
 
+// DATE: Format last-day-of-month as YYYY-MM-DD using local Y/M/D components,
+// not toISOString().slice(0,10) — the latter shifts by ±1 day in non-UTC zones
+// because new Date(y, m, 0) yields midnight local, which serializes to the
+// previous UTC date for any timezone west of UTC.
+const fmtYmd = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const lastDayOfMonth = (iso: string) => {
   const d = new Date(iso + 'T12:00:00');
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return last.toISOString().slice(0, 10);
+  return fmtYmd(last);
 };
 
 const lastDayOfPriorMonth = (iso: string) => {
   const d = new Date(iso + 'T12:00:00');
   const last = new Date(d.getFullYear(), d.getMonth(), 0);
-  return last.toISOString().slice(0, 10);
+  return fmtYmd(last);
 };
 
 async function balanceOfAccount(companyId: string, accountId: string, asOfIso: string): Promise<number> {
@@ -75,7 +86,7 @@ export function computeScheduleDates(start: string, frequency: Frequency, count 
     else if (frequency === 'monthly') c.setMonth(d.getMonth() + i);
     else if (frequency === 'quarterly') c.setMonth(d.getMonth() + 3 * i);
     else if (frequency === 'annually') c.setFullYear(d.getFullYear() + i);
-    out.push(c.toISOString().slice(0, 10));
+    out.push(fmtYmd(c));
   }
   return out;
 }
@@ -161,13 +172,13 @@ export function rememberBalancer(companyId: string, accountId: string) {
 export function incrementDate(iso: string, days: number): string {
   const d = new Date(iso + 'T12:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return fmtYmd(d);
 }
 
 export function nextMonthEnd(iso: string): string {
   const d = new Date(iso + 'T12:00:00');
   const last = new Date(d.getFullYear(), d.getMonth() + 2, 0);
-  return last.toISOString().slice(0, 10);
+  return fmtYmd(last);
 }
 
 // ─── Printable cover sheet HTML ───────────────────────────

@@ -52,13 +52,13 @@ const SalesTaxReport: React.FC = () => {
 
         // Tax payments made
         const taxPaidRows: any[] = await api.rawQuery(
-          `SELECT strftime('%Y-%m', payment_date) as period,
+          `SELECT strftime('%Y-%m', date) as period,
                   COALESCE(SUM(amount), 0) as tax_paid
            FROM tax_payments
            WHERE company_id = ?
-             AND payment_date >= ?
-             AND payment_date <= ?
-           GROUP BY strftime('%Y-%m', payment_date)
+             AND date >= ?
+             AND date <= ?
+           GROUP BY strftime('%Y-%m', date)
            ORDER BY period`,
           [activeCompany.id, startDate, endDate]
         );

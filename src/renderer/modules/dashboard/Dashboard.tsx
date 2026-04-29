@@ -720,7 +720,7 @@ const Dashboard: React.FC = () => {
 
       // Debt collection summary
       api.rawQuery(
-        'SELECT COUNT(*) as count, COALESCE(SUM(balance_due),0) as total FROM debts WHERE company_id = ? AND status NOT IN ("settled","written_off")',
+        "SELECT COUNT(*) as count, COALESCE(SUM(balance_due),0) as total FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off')",
         [cid]
       ).then(r => {
         if (!cancelled) {
