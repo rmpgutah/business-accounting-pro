@@ -670,6 +670,10 @@ export function registerIpcHandlers(): void {
     'debt_skip_traces',
     // Quote system child tables — company_id lives on parent quotes table
     'quote_activity_log',
+    // Invoice activity log — company_id lives on parent invoices table
+    'invoice_activity_log',
+    // Expense activity log — company_id lives on parent expenses table
+    'expense_activity_log',
     // Advanced System (2026-04-28) — user-scoped or company_id absent
     'custom_shortcuts',
     'command_history',

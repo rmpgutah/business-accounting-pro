@@ -1351,6 +1351,44 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_pattern_cache_lookup ON pattern_cache(company_id, pattern_type, entity_id)",
   "CREATE INDEX IF NOT EXISTS idx_predictions_lookup ON predictions(company_id, prediction_type, target_entity_id)",
   "CREATE INDEX IF NOT EXISTS idx_anomaly_log_unresolved ON anomaly_log(company_id, resolved, detected_at DESC)",
+  // Invoice System Enhancements (2026-04-29)
+  "ALTER TABLE invoices ADD COLUMN auto_send_reminders INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN payment_link TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN portal_viewed_count INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN last_viewed_at TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN times_sent INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN tags TEXT DEFAULT '[]'",
+  "ALTER TABLE invoices ADD COLUMN priority TEXT DEFAULT 'normal'",
+  "ALTER TABLE invoices ADD COLUMN sales_rep_id TEXT DEFAULT ''",
+  "ALTER TABLE invoices ADD COLUMN deposit_required REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN deposit_paid REAL DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS invoice_activity_log (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    activity_type TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    user_name TEXT DEFAULT '',
+    metadata_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_invoice_activity_invoice ON invoice_activity_log(invoice_id, created_at DESC)",
+  // Expense System Enhancements (2026-04-29)
+  "ALTER TABLE expenses ADD COLUMN merchant_location TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN tip_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN auto_categorized INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN flagged_for_review INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN flag_reason TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN expense_owner_id TEXT DEFAULT ''",
+  `CREATE TABLE IF NOT EXISTS expense_activity_log (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+    activity_type TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    user_name TEXT DEFAULT '',
+    metadata_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_expense_activity_expense ON expense_activity_log(expense_id, created_at DESC)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
@@ -1688,6 +1726,10 @@ const tablesWithoutUpdatedAt = new Set([
   'rules', 'rule_logs', 'approval_queue',
   // Quote system child tables — created_at only
   'quote_activity_log',
+  // Invoice activity log — created_at only
+  'invoice_activity_log',
+  // Expense activity log — created_at only
+  'expense_activity_log',
   // Advanced System (2026-04-28) — append-only / no updated_at
   'command_history',
   'workflow_executions',

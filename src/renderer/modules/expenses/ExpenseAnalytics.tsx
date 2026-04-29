@@ -17,7 +17,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
 
-interface Row { date: string; amount: number; category_id?: string; category_name?: string; vendor_name?: string; project_id?: string; }
+interface Row { date: string; amount: number; category_id?: string; category_name?: string; vendor_name?: string; vendor_id?: string; project_id?: string; is_tax_deductible?: number; miles?: number; mileage_rate?: number; flagged_for_review?: number; id?: string; description?: string; }
 interface CatRow { id: string; name: string; monthly_cap?: number; }
 interface ProjRow { id: string; name: string; budget?: number; }
 
@@ -50,7 +50,8 @@ const ExpenseAnalytics: React.FC = () => {
         const year = new Date().getFullYear();
         const [exps, cats, projs, rev, txCats, projInv] = await Promise.all([
           api.rawQuery(
-            `SELECT e.date, e.amount, e.category_id, e.project_id,
+            `SELECT e.id, e.date, e.amount, e.category_id, e.project_id, e.vendor_id,
+                    e.is_tax_deductible, e.miles, e.mileage_rate, e.flagged_for_review, e.description,
                     c.name as category_name, v.name as vendor_name
              FROM expenses e
              LEFT JOIN categories c ON c.id = e.category_id
@@ -276,6 +277,145 @@ const ExpenseAnalytics: React.FC = () => {
     return { deductible, nonDeductible };
   }, [expenses, taxCats]);
 
+  // ── Change 46: Tax-Deductibility Analysis ──
+  const taxDeductibilityYTD = useMemo(() => {
+    const yr = String(new Date().getFullYear());
+    const ytd = expenses.filter((e) => (e.date || '').startsWith(yr));
+    let deductible = 0, nonDeductible = 0;
+    const catTotals = new Map<string, { name: string; amount: number; deductible: boolean }>();
+    ytd.forEach((e) => {
+      const isDed = e.is_tax_deductible !== 0;
+      if (isDed) deductible += Number(e.amount) || 0;
+      else nonDeductible += Number(e.amount) || 0;
+      const k = e.category_id || 'uncat';
+      if (!catTotals.has(k)) catTotals.set(k, { name: e.category_name || 'Uncategorized', amount: 0, deductible: isDed });
+      catTotals.get(k)!.amount += Number(e.amount) || 0;
+    });
+    const total = deductible + nonDeductible;
+    const pct = total > 0 ? (deductible / total) * 100 : 0;
+    const topCats = Array.from(catTotals.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    // Common Schedule C line mappings for top expense categories
+    const scheduleCMap: Record<string, string> = {
+      'advertising': 'Line 8',
+      'travel': 'Line 24a',
+      'meals': 'Line 24b',
+      'office': 'Line 18',
+      'office expense': 'Line 18',
+      'office supplies': 'Line 22',
+      'supplies': 'Line 22',
+      'utilities': 'Line 25',
+      'rent': 'Line 20b',
+      'insurance': 'Line 15',
+      'legal': 'Line 17',
+      'legal & professional': 'Line 17',
+      'professional services': 'Line 17',
+      'wages': 'Line 26',
+      'depreciation': 'Line 13',
+      'mileage': 'Line 9',
+      'car & truck': 'Line 9',
+      'taxes': 'Line 23',
+      'repairs': 'Line 21',
+      'commissions': 'Line 10',
+      'contract labor': 'Line 11',
+      'employee benefits': 'Line 14',
+      'interest': 'Line 16',
+      'pension': 'Line 19',
+    };
+    const linedCats = topCats.map((c) => {
+      const k = (c.name || '').toLowerCase();
+      let line = '';
+      for (const [name, l] of Object.entries(scheduleCMap)) {
+        if (k.includes(name)) { line = l; break; }
+      }
+      return { ...c, scheduleCLine: line };
+    });
+    return { deductible, nonDeductible, pct, total, topCats: linedCats };
+  }, [expenses]);
+
+  // ── Change 47: Anomaly Detection ──
+  const anomalies = useMemo(() => {
+    const byVendor = new Map<string, number[]>();
+    expenses.forEach((e) => {
+      const v = e.vendor_id || '';
+      if (!v) return;
+      if (!byVendor.has(v)) byVendor.set(v, []);
+      byVendor.get(v)!.push(Number(e.amount) || 0);
+    });
+    const stats = new Map<string, { mean: number; std: number }>();
+    byVendor.forEach((arr, v) => {
+      if (arr.length < 3) return;
+      const mean = arr.reduce((s, n) => s + n, 0) / arr.length;
+      const variance = arr.reduce((s, n) => s + (n - mean) ** 2, 0) / arr.length;
+      const std = Math.sqrt(variance);
+      stats.set(v, { mean, std });
+    });
+    const out: Array<{ id?: string; date: string; vendor: string; amount: number; mean: number; z: number; description?: string }> = [];
+    expenses.forEach((e) => {
+      const s = stats.get(e.vendor_id || '');
+      if (!s || s.std === 0) return;
+      const z = (Number(e.amount) - s.mean) / s.std;
+      if (z > 2) {
+        out.push({
+          id: e.id,
+          date: e.date,
+          vendor: e.vendor_name || '—',
+          amount: Number(e.amount) || 0,
+          mean: s.mean,
+          z,
+          description: e.description,
+        });
+      }
+    });
+    return out.sort((a, b) => b.z - a.z).slice(0, 10);
+  }, [expenses]);
+
+  // ── Change 48: Monthly Burn Rate ──
+  const burnRate = useMemo(() => {
+    const last6 = trend12.slice(-6);
+    const total = last6.reduce((s, m) => s + m.total, 0);
+    const avg = last6.length > 0 ? total / last6.length : 0;
+    // Trend: compare first 3 vs last 3 months
+    const firstHalf = last6.slice(0, 3).reduce((s, m) => s + m.total, 0) / 3;
+    const lastHalf = last6.slice(3).reduce((s, m) => s + m.total, 0) / 3;
+    const delta = lastHalf - firstHalf;
+    const trend: 'increasing' | 'decreasing' | 'stable' =
+      Math.abs(delta) < (avg * 0.05) ? 'stable' :
+      delta > 0 ? 'increasing' : 'decreasing';
+    return { avg, trend, delta };
+  }, [trend12]);
+
+  // ── Change 49: Top Vendors with Predicted Spend ──
+  const topVendorsForecast = useMemo(() => {
+    return topVendors.slice(0, 10).map((v) => {
+      const monthly: number[] = trend12.map(() => 0);
+      expenses.forEach((e) => {
+        if ((e.vendor_name || '(no vendor)') !== v.name) return;
+        const idx = trend12.findIndex((m) => m.ym === ymKey(e.date));
+        if (idx >= 0) monthly[idx] += Number(e.amount) || 0;
+      });
+      // Simple prediction: average of last 3 months
+      const last3 = monthly.slice(-3);
+      const projected = last3.length > 0 ? last3.reduce((s, n) => s + n, 0) / last3.length : 0;
+      return { ...v, projected };
+    });
+  }, [topVendors, expenses, trend12]);
+
+  // ── Change 50: Mileage Total ──
+  const mileageTotals = useMemo(() => {
+    const yr = String(new Date().getFullYear());
+    const ytd = expenses.filter((e) => (e.date || '').startsWith(yr));
+    let totalMiles = 0;
+    let totalDeduction = 0;
+    ytd.forEach((e) => {
+      const m = Number(e.miles) || 0;
+      if (m <= 0) return;
+      const rate = Number(e.mileage_rate) || 0.7;
+      totalMiles += m;
+      totalDeduction += m * rate;
+    });
+    return { totalMiles, totalDeduction };
+  }, [expenses]);
+
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading analytics...</div>;
   }
@@ -447,6 +587,157 @@ const ExpenseAnalytics: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Change 46: Tax Deductibility Analysis */}
+      <div className="block-card" style={card}>
+        <h3 className="text-sm font-bold uppercase text-text-primary mb-3">Tax Deductibility Analysis (YTD)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Deductible YTD</div>
+            <div className="text-2xl font-mono font-bold text-accent-income mt-1">{formatCurrency(taxDeductibilityYTD.deductible)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Non-Deductible</div>
+            <div className="text-2xl font-mono font-bold text-text-secondary mt-1">{formatCurrency(taxDeductibilityYTD.nonDeductible)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Deductible %</div>
+            <div className="text-2xl font-mono font-bold text-text-primary mt-1">{taxDeductibilityYTD.pct.toFixed(1)}%</div>
+          </div>
+        </div>
+        {taxDeductibilityYTD.topCats.length > 0 && (
+          <div>
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Top Categories — Schedule C Line Hints</div>
+            <table className="block-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th className="text-right">YTD Spend</th>
+                  <th className="text-center">Deductible</th>
+                  <th>Schedule C Line</th>
+                </tr>
+              </thead>
+              <tbody>
+                {taxDeductibilityYTD.topCats.map((c, i) => (
+                  <tr key={i}>
+                    <td className="text-text-primary font-medium">{c.name}</td>
+                    <td className="text-right font-mono">{formatCurrency(c.amount)}</td>
+                    <td className="text-center">
+                      {c.deductible
+                        ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#16a34a22', color: '#16a34a' }}>YES</span>
+                        : <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>NO</span>}
+                    </td>
+                    <td className="text-text-secondary text-xs">{c.scheduleCLine || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Change 47: Anomaly Detection */}
+      <div className="block-card" style={card}>
+        <h3 className="text-sm font-bold uppercase text-text-primary mb-3">Anomaly Detection (z-score &gt; 2)</h3>
+        {anomalies.length === 0 ? (
+          <div className="text-text-muted text-sm py-6 text-center">No anomalous expenses detected. All vendor amounts are within normal ranges.</div>
+        ) : (
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Vendor</th>
+                <th>Description</th>
+                <th className="text-right">Amount</th>
+                <th className="text-right">Vendor Mean</th>
+                <th className="text-right">z-score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anomalies.map((a, i) => (
+                <tr key={i} style={{ background: 'rgba(239,68,68,0.06)' }}>
+                  <td className="font-mono text-xs">{a.date}</td>
+                  <td>{a.vendor}</td>
+                  <td className="text-text-secondary text-xs truncate max-w-[200px]">{a.description || '—'}</td>
+                  <td className="text-right font-mono text-accent-expense">{formatCurrency(a.amount)}</td>
+                  <td className="text-right font-mono text-text-muted">{formatCurrency(a.mean)}</td>
+                  <td className="text-right font-mono" style={{ color: '#ef4444', fontWeight: 700 }}>{a.z.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Change 48: Monthly Burn Rate */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="block-card" style={card}>
+          <h3 className="text-sm font-bold uppercase text-text-primary mb-3">Monthly Burn Rate</h3>
+          <div className="text-3xl font-mono font-bold text-text-primary">{formatCurrency(burnRate.avg)}</div>
+          <div className="text-xs text-text-muted mt-1">Average monthly spend, last 6 months</div>
+          <div className="mt-3 flex items-center gap-2">
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: 6,
+              background: burnRate.trend === 'increasing' ? '#ef444422' : burnRate.trend === 'decreasing' ? '#22c55e22' : '#6b728022',
+              color: burnRate.trend === 'increasing' ? '#ef4444' : burnRate.trend === 'decreasing' ? '#22c55e' : '#94a3b8',
+              textTransform: 'uppercase',
+            }}>
+              {burnRate.trend === 'increasing' ? '↑ Increasing' : burnRate.trend === 'decreasing' ? '↓ Decreasing' : '→ Stable'}
+            </span>
+            {burnRate.trend !== 'stable' && (
+              <span className="text-xs text-text-muted">Δ {formatCurrency(burnRate.delta)} per month</span>
+            )}
+          </div>
+        </div>
+
+        {/* Change 50: Mileage Total */}
+        <div className="block-card" style={card}>
+          <h3 className="text-sm font-bold uppercase text-text-primary mb-3">Mileage YTD</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Miles</div>
+              <div className="text-2xl font-mono font-bold text-text-primary mt-1">{mileageTotals.totalMiles.toFixed(1)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Deduction</div>
+              <div className="text-2xl font-mono font-bold text-accent-income mt-1">{formatCurrency(mileageTotals.totalDeduction)}</div>
+            </div>
+          </div>
+          <div className="text-[10px] text-text-muted mt-3">Reported on Schedule C, Line 9 (Car &amp; Truck Expenses). 2026 standard rate: $0.70/mile.</div>
+        </div>
+      </div>
+
+      {/* Change 49: Top Vendors with Predicted Spend */}
+      <div className="block-card" style={card}>
+        <h3 className="text-sm font-bold uppercase text-text-primary mb-3">Top Vendors — Projected Next Month</h3>
+        {topVendorsForecast.length === 0 ? (
+          <div className="text-text-muted text-sm py-6 text-center">No vendor history yet.</div>
+        ) : (
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th className="text-right">Total Spend</th>
+                <th className="text-right">Avg Last 3 Months</th>
+                <th className="text-right">Projected Next Month</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topVendorsForecast.map((v, i) => (
+                <tr key={i}>
+                  <td className="text-text-primary font-medium">{v.name}</td>
+                  <td className="text-right font-mono">{formatCurrency(v.total)}</td>
+                  <td className="text-right font-mono text-text-secondary">{formatCurrency(v.projected)}</td>
+                  <td className="text-right font-mono text-accent-blue">{formatCurrency(v.projected)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Per-project profitability */}

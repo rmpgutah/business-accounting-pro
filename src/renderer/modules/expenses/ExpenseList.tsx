@@ -43,6 +43,19 @@ interface Expense {
   project_name?: string;
   receipt_path?: string | null;
   receipts_json?: string | null;
+  approval_status?: string;
+  // Expense System Enhancements (2026-04-29)
+  auto_categorized?: number;
+  flagged_for_review?: number;
+  flag_reason?: string;
+  merchant_location?: string;
+  tip_amount?: number;
+  expense_owner_id?: string;
+  currency?: string;
+  exchange_rate?: number;
+  miles?: number;
+  mileage_rate?: number;
+  created_at?: string;
 }
 
 interface Category {
@@ -65,8 +78,8 @@ interface SavedView {
   visibleCols: ColKey[];
 }
 
-type GroupKey = 'none' | 'vendor' | 'category' | 'project' | 'month';
-type ColKey = 'date' | 'description' | 'category' | 'vendor' | 'project' | 'amount' | 'status' | 'billable' | 'actions';
+type GroupKey = 'none' | 'vendor' | 'category' | 'project' | 'month' | 'quarter' | 'dayofweek' | 'taxded' | 'currency';
+type ColKey = 'date' | 'description' | 'category' | 'vendor' | 'project' | 'amount' | 'status' | 'approval' | 'receipt' | 'taxded' | 'mileage' | 'billable' | 'actions';
 const ALL_COLS: { key: ColKey; label: string }[] = [
   { key: 'date', label: 'Date' },
   { key: 'description', label: 'Description' },
@@ -75,9 +88,18 @@ const ALL_COLS: { key: ColKey; label: string }[] = [
   { key: 'project', label: 'Project' },
   { key: 'amount', label: 'Amount' },
   { key: 'status', label: 'Status' },
+  { key: 'approval', label: 'Approval' },
+  { key: 'receipt', label: 'Receipt' },
+  { key: 'taxded', label: 'Tax Deductible' },
+  { key: 'mileage', label: 'Mileage' },
   { key: 'billable', label: 'Billable' },
   { key: 'actions', label: 'Actions' },
 ];
+
+const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CHF', 'MXN', 'INR'];
+
+// Default visible columns (mileage and approval hidden by default)
+const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vendor', 'project', 'amount', 'status', 'receipt', 'taxded', 'billable', 'actions'];
 
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
@@ -128,14 +150,21 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       const raw = localStorage.getItem(COLS_KEY('anon'));
       if (raw) return JSON.parse(raw);
     } catch {}
-    return ALL_COLS.map((c) => c.key);
+    return DEFAULT_VISIBLE_COLS;
   });
   const [pinnedVendors, setPinnedVendors] = useState<Set<string>>(new Set());
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [showViewsMenu, setShowViewsMenu] = useState(false);
-  const [editCell, setEditCell] = useState<{ id: string; field: 'amount' | 'description' } | null>(null);
+  const [editCell, setEditCell] = useState<{ id: string; field: 'amount' | 'description' | 'category_id' } | null>(null);
   const [editValue, setEditValue] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Advanced filters (Expense System Enhancements 11-15)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [hasReceiptFilter, setHasReceiptFilter] = useState<'any' | 'yes' | 'no'>('any');
+  const [autoCatFilter, setAutoCatFilter] = useState<'any' | 'yes' | 'no'>('any');
+  const [flaggedFilter, setFlaggedFilter] = useState<'any' | 'yes' | 'no'>('any');
+  const [currencyFilter, setCurrencyFilter] = useState<string>('');
 
   useEffect(() => {
     try { localStorage.setItem(COLS_KEY(userId), JSON.stringify(visibleCols)); } catch {}
@@ -243,9 +272,26 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       const maxN = parseFloat(amountMax);
       if (!isNaN(minN) && (e.amount ?? 0) < minN) return false;
       if (!isNaN(maxN) && (e.amount ?? 0) > maxN) return false;
+      // Advanced filters (Expense Enhancements 11-15)
+      if (hasReceiptFilter !== 'any') {
+        const has = !!(e.receipt_path && e.receipt_path.trim());
+        if (hasReceiptFilter === 'yes' && !has) return false;
+        if (hasReceiptFilter === 'no' && has) return false;
+      }
+      if (autoCatFilter !== 'any') {
+        const yes = !!e.auto_categorized;
+        if (autoCatFilter === 'yes' && !yes) return false;
+        if (autoCatFilter === 'no' && yes) return false;
+      }
+      if (flaggedFilter !== 'any') {
+        const yes = !!e.flagged_for_review;
+        if (flaggedFilter === 'yes' && !yes) return false;
+        if (flaggedFilter === 'no' && yes) return false;
+      }
+      if (currencyFilter && (e.currency || 'USD') !== currencyFilter) return false;
       return true;
     });
-  }, [expenses, search, categoryFilter, dateFrom, dateTo, reimbursableOnly, amountMin, amountMax]);
+  }, [expenses, search, categoryFilter, dateFrom, dateTo, reimbursableOnly, amountMin, amountMax, hasReceiptFilter, autoCatFilter, flaggedFilter, currencyFilter]);
 
   const total = useMemo(
     () => filtered.reduce((sum, e) => sum + (e.amount || 0), 0),
@@ -357,6 +403,124 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     downloadCSVBlob(exportData, 'expenses-export.csv');
   }, [filtered, selectedIds]);
 
+  // ── Excel-formatted CSV export (Change 30) ──
+  const handleExportExcel = useCallback(() => {
+    const selected = (selectedIds.size > 0 ? filtered.filter(e => selectedIds.has(e.id)) : filtered);
+    const rows = selected.map(e => ({
+      Date: e.date,
+      Description: e.description || '',
+      Category: e.category_name || '',
+      Vendor: e.vendor_name || '',
+      Amount: `$${(e.amount ?? 0).toFixed(2)}`,
+      Currency: e.currency || 'USD',
+      Tax: `$${(e.tax_amount ?? 0).toFixed(2)}`,
+      Status: e.status,
+      Approval: e.approval_status || '',
+      Billable: e.is_billable ? 'Yes' : 'No',
+      Deductible: e.is_tax_deductible === 0 ? 'No' : 'Yes',
+      'Payment Method': e.payment_method || '',
+      Reference: e.reference || '',
+      Mileage: (e.miles || 0).toString(),
+    }));
+    downloadCSVBlob(rows, `expenses-excel-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [filtered, selectedIds]);
+
+  // ── QuickBooks IIF format export (Change 29) ──
+  const handleExportIIF = useCallback(() => {
+    const selected = (selectedIds.size > 0 ? filtered.filter(e => selectedIds.has(e.id)) : filtered);
+    const lines: string[] = [];
+    lines.push('!TRNS\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tMEMO');
+    lines.push('!SPL\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tMEMO');
+    lines.push('!ENDTRNS');
+    selected.forEach((e) => {
+      const date = (e.date || '').replace(/-/g, '/');
+      const amt = -(e.amount ?? 0);
+      const memo = (e.description || '').replace(/[\t\r\n]/g, ' ');
+      const vendor = (e.vendor_name || '').replace(/[\t\r\n]/g, ' ');
+      const cat = (e.category_name || 'Uncategorized Expense').replace(/[\t\r\n]/g, ' ');
+      lines.push(`TRNS\tCHECK\t${date}\tChecking\t${vendor}\t${amt.toFixed(2)}\t${e.reference || ''}\t${memo}`);
+      lines.push(`SPL\tCHECK\t${date}\t${cat}\t${vendor}\t${(e.amount ?? 0).toFixed(2)}\t${memo}`);
+      lines.push('ENDTRNS');
+    });
+    const blob = new Blob([lines.join('\r\n')], { type: 'application/iif' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expenses-quickbooks-${new Date().toISOString().slice(0, 10)}.iif`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered, selectedIds]);
+
+  // ── Bulk Auto-Categorize (Change 21) ──
+  const handleBulkAutoCategorize = useCallback(async () => {
+    setBatchLoading(true);
+    let applied = 0;
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        const exp = expenses.find((e) => e.id === id);
+        if (!exp || !exp.vendor_id || exp.category_id) continue;
+        try {
+          const sugg: any = await api.intelSuggestCategory(exp.vendor_id);
+          if (sugg && sugg.category_id && (sugg.confidence === undefined || sugg.confidence >= 0.7)) {
+            await api.update('expenses', id, { category_id: sugg.category_id, auto_categorized: 1 });
+            applied++;
+          }
+        } catch {}
+      }
+      await reload();
+      alert(`Auto-categorized ${applied} of ${ids.length} expenses.`);
+    } catch (err: any) {
+      alert('Auto-categorize failed: ' + (err?.message || ''));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [selectedIds, expenses, reload]);
+
+  // ── Bulk Flag for Review (Change 22) ──
+  const handleBulkFlag = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('expenses', Array.from(selectedIds), { flagged_for_review: 1, flag_reason: 'Bulk flagged for review' });
+      await reload();
+    } catch (err: any) { alert('Flag failed: ' + (err?.message || '')); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  // ── Bulk Mark Tax Deductible (Change 23) ──
+  const handleBulkMarkDeductible = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      await api.batchUpdate('expenses', Array.from(selectedIds), { is_tax_deductible: 1 });
+      await reload();
+    } catch (err: any) { alert('Mark deductible failed: ' + (err?.message || '')); }
+    finally { setBatchLoading(false); }
+  }, [selectedIds, reload]);
+
+  // ── Bulk Currency Convert to USD (Change 24) ──
+  const handleBulkConvertUSD = useCallback(async () => {
+    if (!confirm(`Convert ${selectedIds.size} expenses to USD using stored exchange rates?`)) return;
+    setBatchLoading(true);
+    let converted = 0;
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        const exp = expenses.find((e) => e.id === id);
+        if (!exp || (exp.currency || 'USD') === 'USD') continue;
+        const rate = exp.exchange_rate && exp.exchange_rate > 0 ? exp.exchange_rate : 1;
+        const newAmount = Number(((exp.amount ?? 0) * rate).toFixed(2));
+        await api.update('expenses', id, { amount: newAmount, currency: 'USD', exchange_rate: 1 });
+        converted++;
+      }
+      await reload();
+      alert(`Converted ${converted} of ${ids.length} expenses to USD.`);
+    } catch (err: any) {
+      alert('Currency convert failed: ' + (err?.message || ''));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [selectedIds, expenses, reload]);
+
   // ── Quick stats strip (feature 18) ──
   const quickStats = useMemo(() => {
     const now = new Date();
@@ -420,14 +584,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   }, [selectedIds, reload]);
 
   // ── Inline edit (feature 12) ──
-  const startEdit = (id: string, field: 'amount' | 'description', value: any) => {
+  const startEdit = (id: string, field: 'amount' | 'description' | 'category_id', value: any) => {
     setEditCell({ id, field });
     setEditValue(String(value ?? ''));
   };
-  const commitEdit = async () => {
+  const commitEdit = async (overrideValue?: string) => {
     if (!editCell) return;
+    const value = overrideValue !== undefined ? overrideValue : editValue;
     try {
-      const val: any = editCell.field === 'amount' ? Number(editValue) : editValue;
+      const val: any = editCell.field === 'amount' ? Number(value) : value;
       await api.update('expenses', editCell.id, { [editCell.field]: val });
       await reload();
     } catch (err: any) { alert('Save failed: ' + (err?.message || '')); }
@@ -470,6 +635,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   const groups = useMemo(() => {
     if (groupBy === 'none') return null;
     const map = new Map<string, Expense[]>();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     filtered.forEach((e) => {
       let key: string;
       switch (groupBy) {
@@ -477,6 +643,21 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         case 'category': key = e.category_name || '(uncategorized)'; break;
         case 'project': key = e.project_name || '(no project)'; break;
         case 'month': key = (e.date || '').slice(0, 7) || '(no date)'; break;
+        case 'quarter': {
+          const d = new Date((e.date || '') + 'T00:00:00');
+          if (isNaN(d.getTime())) { key = '(no date)'; break; }
+          const q = Math.floor(d.getMonth() / 3) + 1;
+          key = `Q${q} ${d.getFullYear()}`;
+          break;
+        }
+        case 'dayofweek': {
+          const d = new Date((e.date || '') + 'T00:00:00');
+          if (isNaN(d.getTime())) { key = '(no date)'; break; }
+          key = dayNames[d.getDay()];
+          break;
+        }
+        case 'taxded': key = e.is_tax_deductible === 0 ? 'Non-Deductible' : 'Deductible'; break;
+        case 'currency': key = e.currency || 'USD'; break;
         default: key = '';
       }
       if (!map.has(key)) map.set(key, []);
@@ -484,6 +665,45 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     });
     return Array.from(map.entries()).sort((a, b) => a[0] < b[0] ? 1 : -1);
   }, [filtered, groupBy]);
+
+  // ── Anomaly highlighting (z-score per vendor) ──
+  const anomalyIds = useMemo(() => {
+    const byVendor = new Map<string, number[]>();
+    filtered.forEach((e) => {
+      const v = e.vendor_id || '';
+      if (!v) return;
+      if (!byVendor.has(v)) byVendor.set(v, []);
+      byVendor.get(v)!.push(Number(e.amount) || 0);
+    });
+    const stats = new Map<string, { mean: number; std: number }>();
+    byVendor.forEach((arr, v) => {
+      if (arr.length < 3) return;
+      const mean = arr.reduce((s, n) => s + n, 0) / arr.length;
+      const variance = arr.reduce((s, n) => s + (n - mean) ** 2, 0) / arr.length;
+      const std = Math.sqrt(variance);
+      stats.set(v, { mean, std });
+    });
+    const set = new Set<string>();
+    filtered.forEach((e) => {
+      const s = stats.get(e.vendor_id || '');
+      if (!s || s.std === 0) return;
+      const z = (Number(e.amount) - s.mean) / s.std;
+      if (z > 2) set.add(e.id);
+    });
+    return set;
+  }, [filtered]);
+
+  // ── Recently added flag (3-day window) ──
+  const recentlyAddedIds = useMemo(() => {
+    const set = new Set<string>();
+    const cutoff = Date.now() - 3 * 86400000;
+    filtered.forEach((e) => {
+      if (!e.created_at) return;
+      const t = new Date(e.created_at.replace(' ', 'T') + 'Z').getTime();
+      if (!isNaN(t) && t >= cutoff) set.add(e.id);
+    });
+    return set;
+  }, [filtered]);
 
   // ── Stripe refund capture (feature 23) ──
   const captureRefund = async (refund: any) => {
@@ -522,12 +742,15 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     const matchHint = matchedExpenseIds.has(exp.id);
     const isEditingAmount = editCell?.id === exp.id && editCell.field === 'amount';
     const isEditingDesc = editCell?.id === exp.id && editCell.field === 'description';
+    const isEditingCat = editCell?.id === exp.id && editCell.field === 'category_id';
     const projBal = exp.project_id ? projectBalance.get(exp.project_id) || 0 : 0;
     const proj = exp.project_id ? projects.find((p) => p.id === exp.project_id) : null;
     const projOver = !!(proj && (proj.budget || 0) > 0 && projBal > (proj.budget || 0));
+    const isAnomaly = anomalyIds.has(exp.id);
+    const isRecent = recentlyAddedIds.has(exp.id);
 
     return (
-      <tr key={exp.id} className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`} onClick={() => (onView ? onView(exp.id) : onEdit(exp.id))}>
+      <tr key={exp.id} className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`} style={isAnomaly ? { background: 'rgba(239,68,68,0.06)' } : undefined} onClick={() => (onView ? onView(exp.id) : onEdit(exp.id))}>
         <td onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: '#3b82f6' }} />
         </td>
@@ -539,7 +762,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 autoFocus value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditCell(null); }}
-                onBlur={commitEdit}
+                onBlur={() => commitEdit()}
                 className="block-input"
                 onClick={(e) => e.stopPropagation()}
               />
@@ -551,6 +774,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 {exp.reimbursed ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#16a34a22', color: '#16a34a' }}>REIMBURSED</span> : null}
                 {matchHint && <span title="A bank transaction matches this expense" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#06b6d422', color: '#06b6d4' }}><Banknote size={10} style={{ display: 'inline', marginRight: 2 }} />MATCH?</span>}
                 {exp.custom_fields && exp.custom_fields !== '{}' && <span title="Has detailed info"><FileText size={12} className="text-accent-blue shrink-0" /></span>}
+                {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#ef4444' }}>FLAGGED</span> : null}
+                {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#a855f7' }}>AUTO</span> : null}
+                {isAnomaly ? <span title="Unusually high amount for this vendor" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444433', color: '#ef4444' }}>ANOMALY</span> : null}
+                {isRecent ? <span title="Added in the last 3 days" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#22c55e22', color: '#22c55e' }}>NEW</span> : null}
                 {/* Capture #2: receipt thumbnail with hover preview */}
                 {exp.receipt_path ? (
                   <span className="relative group inline-flex" title={exp.receipt_path.split(/[/\\]/).pop()}>
@@ -565,13 +792,28 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           </td>
         )}
         {colVisible('category') && (
-          <td className="text-text-secondary truncate max-w-[160px]">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block w-2 h-2 shrink-0" style={{ background: exp.category_color || '#6b7280', borderRadius: '50%' }} />
-              <span className="truncate">{exp.category_name || '-'}</span>
-              {exp.vendor_is_1099 ? <span title="1099-relevant" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#2563eb22', color: '#60a5fa' }}>1099</span> : null}
-              {exp.is_tax_deductible === 0 ? <span title="Non-deductible" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>NON-DED</span> : null}
-            </span>
+          <td className="text-text-secondary truncate max-w-[160px]" onClick={(e) => e.stopPropagation()}>
+            {isEditingCat ? (
+              <select
+                autoFocus
+                className="block-select"
+                value={editValue}
+                onChange={(e) => { setEditValue(e.target.value); commitEdit(e.target.value); }}
+                onBlur={() => setEditCell(null)}
+              >
+                <option value="">(none)</option>
+                {[...categories].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="inline-flex items-center gap-1.5" onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'category_id', exp.category_id || ''); }}>
+                <span className="inline-block w-2 h-2 shrink-0" style={{ background: exp.category_color || '#6b7280', borderRadius: '50%' }} />
+                <span className="truncate">{exp.category_name || '-'}</span>
+                {exp.vendor_is_1099 ? <span title="1099-relevant" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#2563eb22', color: '#60a5fa' }}>1099</span> : null}
+                {exp.is_tax_deductible === 0 ? <span title="Non-deductible" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>NON-DED</span> : null}
+              </span>
+            )}
           </td>
         )}
         {colVisible('vendor') && (
@@ -600,7 +842,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 autoFocus type="number" step="0.01" value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditCell(null); }}
-                onBlur={commitEdit}
+                onBlur={() => commitEdit()}
                 className="block-input text-right"
                 onClick={(e) => e.stopPropagation()}
               />
@@ -610,6 +852,41 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           </td>
         )}
         {colVisible('status') && <td><span className={formatStatus(exp.status).className}>{formatStatus(exp.status).label}</span></td>}
+        {colVisible('approval') && (
+          <td>
+            {(() => {
+              const a = (exp.approval_status || '').toLowerCase();
+              const map: Record<string, { bg: string; fg: string; label: string }> = {
+                approved: { bg: '#16a34a22', fg: '#16a34a', label: 'APPROVED' },
+                pending: { bg: '#d9770622', fg: '#f59e0b', label: 'PENDING' },
+                submitted: { bg: '#2563eb22', fg: '#60a5fa', label: 'SUBMITTED' },
+                rejected: { bg: '#ef444422', fg: '#ef4444', label: 'REJECTED' },
+                draft: { bg: '#6b728022', fg: '#94a3b8', label: 'DRAFT' },
+              };
+              const s = map[a] || { bg: '#6b728022', fg: '#94a3b8', label: (exp.approval_status || '-').toUpperCase() };
+              return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: s.bg, color: s.fg }}>{s.label}</span>;
+            })()}
+          </td>
+        )}
+        {colVisible('receipt') && (
+          <td className="text-center">
+            {exp.receipt_path ? <span title="Receipt attached" className="text-accent-income">&#10003;</span> : <span className="text-text-muted">-</span>}
+          </td>
+        )}
+        {colVisible('taxded') && (
+          <td>
+            {exp.is_tax_deductible === 0 ? (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>Non-Deductible</span>
+            ) : (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#16a34a22', color: '#16a34a' }}>Deductible</span>
+            )}
+          </td>
+        )}
+        {colVisible('mileage') && (
+          <td className="text-right font-mono text-xs text-text-secondary">
+            {(exp.miles || 0) > 0 ? `${(exp.miles ?? 0).toFixed(1)} mi · ${formatCurrency((exp.miles || 0) * (exp.mileage_rate || 0.7))}` : '-'}
+          </td>
+        )}
         {colVisible('billable') && <td className="text-center">{exp.is_billable ? <span className="text-accent-income">&#10003;</span> : <span className="text-text-muted">-</span>}</td>}
         {colVisible('actions') && (
           <td onClick={(e) => e.stopPropagation()}>
@@ -658,6 +935,12 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           </button>
           <button onClick={() => setShowBulkPaste(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             Bulk Paste
+          </button>
+          <button onClick={handleExportExcel} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" title="Export Excel-formatted CSV">
+            <Download size={13} /> Excel
+          </button>
+          <button onClick={handleExportIIF} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" title="Export QuickBooks IIF">
+            <Download size={13} /> QB IIF
           </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNew}>
             <Plus size={16} />
@@ -803,7 +1086,25 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             <option value="category">Group by Category</option>
             <option value="project">Group by Project</option>
             <option value="month">Group by Month</option>
+            <option value="quarter">Group by Quarter</option>
+            <option value="dayofweek">Group by Day of Week</option>
+            <option value="taxded">Group by Tax Deductibility</option>
+            <option value="currency">Group by Currency</option>
           </select>
+
+          {/* Advanced filters toggle */}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters((v) => !v)}
+            className="px-3 py-2 text-xs font-bold uppercase border"
+            style={{
+              borderColor: showAdvancedFilters ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
+              color: showAdvancedFilters ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
+              borderRadius: 4,
+            }}
+          >
+            Advanced
+          </button>
 
           {/* Saved views menu (feature 13) */}
           <div className="relative">
@@ -847,6 +1148,58 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             )}
           </div>
         </div>
+
+        {/* Advanced Filters panel */}
+        {showAdvancedFilters && (
+          <div className="mt-3 pt-3 border-t border-border-primary grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Has Receipt</div>
+              <select className="block-select" value={hasReceiptFilter} onChange={(e) => setHasReceiptFilter(e.target.value as any)}>
+                <option value="any">Any</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Auto-Categorized</div>
+              <select className="block-select" value={autoCatFilter} onChange={(e) => setAutoCatFilter(e.target.value as any)}>
+                <option value="any">Any</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Flagged for Review</div>
+              <select className="block-select" value={flaggedFilter} onChange={(e) => setFlaggedFilter(e.target.value as any)}>
+                <option value="any">Any</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Currency</div>
+              <select className="block-select" value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
+                <option value="">All</option>
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setHasReceiptFilter('any');
+                  setAutoCatFilter('any');
+                  setFlaggedFilter('any');
+                  setCurrencyFilter('');
+                  setAmountMin('');
+                  setAmountMax('');
+                }}
+                className="w-full px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue"
+              >
+                Clear Advanced
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Inline Summary Stats */}
@@ -911,6 +1264,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 {colVisible('project') && <th>Project</th>}
                 {colVisible('amount') && <th className="text-right">Amount</th>}
                 {colVisible('status') && <th>Status</th>}
+                {colVisible('approval') && <th>Approval</th>}
+                {colVisible('receipt') && <th className="text-center">Receipt</th>}
+                {colVisible('taxded') && <th>Tax</th>}
+                {colVisible('mileage') && <th className="text-right">Mileage</th>}
                 {colVisible('billable') && <th className="text-center">Billable</th>}
                 {colVisible('actions') && <th style={{ width: '90px' }}>Actions</th>}
               </tr>
@@ -1074,6 +1431,44 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           >
             <Download size={13} />
             Export CSV
+          </button>
+
+          {/* New bulk actions (Changes 21-24) */}
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkAutoCategorize}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(168,85,247,0.40)', color: '#a855f7', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            title="Auto-categorize via vendor history"
+          >
+            Auto-Cat
+          </button>
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkFlag}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(239,68,68,0.40)', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            title="Flag selected for review"
+          >
+            Flag
+          </button>
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkMarkDeductible}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(34,197,94,0.40)', color: '#16a34a', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            title="Mark as tax deductible"
+          >
+            Tax-Ded
+          </button>
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkConvertUSD}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(96,165,250,0.40)', color: '#60a5fa', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            title="Convert to USD"
+          >
+            → USD
           </button>
 
           {!showDeleteConfirm ? (

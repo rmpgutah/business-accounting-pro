@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle, Package } from 'lucide-react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle, Package, Tag as TagIcon, Bell } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
@@ -11,7 +11,7 @@ import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 
-// ─── Types ─────��────────────���───────────────────────────
+// ─── Types ─────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
 
 interface Invoice {
@@ -26,7 +26,12 @@ interface Invoice {
   notes?: string;
   invoice_type?: string;
   currency?: string;
+  tags?: string;
+  sales_rep_id?: string;
 }
+
+type AgingFilter = 'all' | 'current' | '1-30' | '31-60' | '61-90' | '90+';
+type SortKey = 'issue_date' | 'due_date' | 'total' | 'days_outstanding';
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
   standard:    '',
@@ -102,6 +107,64 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [feedback, setFeedback] = useState<{ type: string; message: string } | null>(null);
   const [loadError, setLoadError] = useState('');
 
+  // Advanced filters / sorting / extra columns
+  const [showFilters, setShowFilters] = useState(false);
+  const [agingFilter, setAgingFilter] = useState<AgingFilter>('all');
+  const [amountMin, setAmountMin] = useState<string>('');
+  const [amountMax, setAmountMax] = useState<string>('');
+  const [tagFilter, setTagFilter] = useState<string>('');
+  const [salesRepFilter, setSalesRepFilter] = useState<string>('');
+  const [sortKey, setSortKey] = useState<SortKey>('issue_date');
+  const [showPredictedColumn, setShowPredictedColumn] = useState(false);
+  const [predictedDates, setPredictedDates] = useState<Record<string, string>>({});
+  const [bulkTagText, setBulkTagText] = useState<string>('');
+  const [showBulkTag, setShowBulkTag] = useState(false);
+
+  // Helper: parse stored tags (JSON array)
+  const parseTags = (raw: any): string[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(String);
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed) return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map(String);
+      } catch (_) { /* fall through */ }
+      return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  // Helper: days outstanding (positive = overdue, negative = due in N days)
+  const daysOutstanding = (inv: Invoice): number => {
+    if (inv.status === 'paid' || (inv as any).status === 'void' || (inv as any).status === 'cancelled') return 0;
+    if (!inv.due_date) return 0;
+    const ms = Date.now() - new Date(inv.due_date).getTime();
+    return Math.floor(ms / (1000 * 60 * 60 * 24));
+  };
+
+  // Helper: aging bucket for an unpaid invoice
+  const agingBucket = (inv: Invoice): AgingFilter => {
+    if (inv.status === 'paid') return 'current';
+    const d = daysOutstanding(inv);
+    if (d <= 0) return 'current';
+    if (d <= 30) return '1-30';
+    if (d <= 60) return '31-60';
+    if (d <= 90) return '61-90';
+    return '90+';
+  };
+
+  // Helper: risk dot color based on aging
+  const riskColor = (inv: Invoice): string => {
+    if (inv.status === 'paid') return '#22c55e';
+    const d = daysOutstanding(inv);
+    if (d <= 0) return '#22c55e';
+    if (d <= 30) return '#facc15';
+    if (d <= 60) return '#f97316';
+    return '#ef4444';
+  };
+
   // Overdue → debt conversion
   const [candidates, setCandidates] = useState<any[]>([]);
   const [showConvertModal, setShowConvertModal] = useState(false);
@@ -163,7 +226,20 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     return map;
   }, [clients]);
 
-  // Filter + search
+  // Build the unique tags / sales reps lists for filter dropdowns
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach((inv) => parseTags(inv.tags).forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [invoices]);
+
+  const allSalesReps = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach((inv) => { if (inv.sales_rep_id) set.add(inv.sales_rep_id); });
+    return Array.from(set).sort();
+  }, [invoices]);
+
+  // Filter + search + advanced filters
   const filtered = useMemo(() => {
     let list = invoices;
 
@@ -180,8 +256,93 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       );
     }
 
-    return list;
-  }, [invoices, activeTab, search, clientMap]);
+    // Aging filter
+    if (agingFilter !== 'all') {
+      list = list.filter((inv) => agingBucket(inv) === agingFilter);
+    }
+
+    // Amount range
+    const min = amountMin === '' ? null : Number(amountMin);
+    const max = amountMax === '' ? null : Number(amountMax);
+    if (min !== null && !Number.isNaN(min)) list = list.filter((inv) => inv.total >= min);
+    if (max !== null && !Number.isNaN(max)) list = list.filter((inv) => inv.total <= max);
+
+    // Tag filter
+    if (tagFilter) {
+      list = list.filter((inv) => parseTags(inv.tags).includes(tagFilter));
+    }
+
+    // Sales rep filter
+    if (salesRepFilter) {
+      list = list.filter((inv) => inv.sales_rep_id === salesRepFilter);
+    }
+
+    // Sort
+    const sorted = [...list];
+    if (sortKey === 'days_outstanding') {
+      sorted.sort((a, b) => daysOutstanding(b) - daysOutstanding(a));
+    } else if (sortKey === 'total') {
+      sorted.sort((a, b) => (b.total || 0) - (a.total || 0));
+    } else if (sortKey === 'due_date') {
+      sorted.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
+    } else {
+      sorted.sort((a, b) => (b.issue_date || '').localeCompare(a.issue_date || ''));
+    }
+
+    return sorted;
+  }, [invoices, activeTab, search, clientMap, agingFilter, amountMin, amountMax, tagFilter, salesRepFilter, sortKey]);
+
+  // Inline KPI stats — computed from filtered list
+  const kpiStats = useMemo(() => {
+    const totalInvoiced = filtered.reduce((s, i) => s + (i.total || 0), 0);
+    const collected = filtered.reduce((s, i) => s + (i.amount_paid || 0), 0);
+    const outstanding = filtered.reduce((s, i) => {
+      if (i.status === 'paid') return s;
+      return s + ((i.total || 0) - (i.amount_paid || 0));
+    }, 0);
+    const overdue = filtered
+      .filter((i) => i.status === 'overdue')
+      .reduce((s, i) => s + ((i.total || 0) - (i.amount_paid || 0)), 0);
+    const largest = filtered.reduce((m, i) => Math.max(m, i.total || 0), 0);
+    // Avg days to pay — only for paid invoices in filtered
+    const paidWithDays = filtered.filter((i) => i.status === 'paid' && i.issue_date && i.due_date);
+    const avgDays = paidWithDays.length > 0
+      ? paidWithDays.reduce((s, i) => {
+          const start = new Date(i.issue_date).getTime();
+          const end = new Date(i.due_date).getTime();
+          return s + Math.max(0, (end - start) / (1000 * 60 * 60 * 24));
+        }, 0) / paidWithDays.length
+      : 0;
+    return { totalInvoiced, collected, outstanding, overdue, largest, avgDays };
+  }, [filtered]);
+
+  // Lazy-load predicted payment dates when column toggled on
+  useEffect(() => {
+    if (!showPredictedColumn) return;
+    let cancelled = false;
+    (async () => {
+      // Only predict for unpaid invoices visible in current filter
+      const targets = filtered.filter((inv) => inv.status !== 'paid').slice(0, 50);
+      const next: Record<string, string> = { ...predictedDates };
+      for (const inv of targets) {
+        if (next[inv.id] !== undefined) continue;
+        try {
+          const r: any = await api.intelPredictPayment(inv.id);
+          if (cancelled) return;
+          if (r && (r.predicted_date || r.predictedDate)) {
+            next[inv.id] = String(r.predicted_date || r.predictedDate);
+          } else {
+            next[inv.id] = '';
+          }
+        } catch (_) {
+          next[inv.id] = '';
+        }
+      }
+      if (!cancelled) setPredictedDates(next);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPredictedColumn, filtered]);
 
   // ─── Selection Helpers ──────────────────────────────────
   const allSelected = filtered.length > 0 && filtered.every(inv => selectedIds.has(inv.id));
@@ -266,6 +427,82 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       setConverting(prev => { const next = new Set(prev); next.delete(invoiceId); return next; });
     }
   }, [activeCompany, reload]);
+
+  const handleBulkSendReminders = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      let scheduled = 0;
+      for (const id of ids) {
+        try {
+          await api.invoiceScheduleReminders(id);
+          await api.create('invoice_activity_log', {
+            invoice_id: id,
+            activity_type: 'reminder_scheduled',
+            description: 'Reminder scheduled (bulk)',
+          });
+          scheduled++;
+        } catch (_) { /* skip individual failures */ }
+      }
+      setFeedback({ type: 'success', message: `Scheduled reminders for ${scheduled} invoice(s)` });
+      setTimeout(() => setFeedback(null), 4000);
+      await reload();
+    } catch (err: any) {
+      console.error('Bulk send reminders failed:', err);
+      alert('Failed to send reminders: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [selectedIds, reload]);
+
+  const handleBulkApplyLateFee = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const result = await api.applyLateFees();
+      if (result?.applied != null) {
+        setFeedback({
+          type: 'success',
+          message: `Applied late fees to ${result.applied} eligible invoice(s)`,
+        });
+      }
+      setTimeout(() => setFeedback(null), 4000);
+      await reload();
+    } catch (err: any) {
+      console.error('Bulk apply late fee failed:', err);
+      alert('Failed to apply late fees: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [reload]);
+
+  const handleBulkTag = useCallback(async () => {
+    if (!bulkTagText.trim()) {
+      setShowBulkTag(false);
+      return;
+    }
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const newTags = bulkTagText.split(',').map((t) => t.trim()).filter(Boolean);
+      for (const id of ids) {
+        const inv = invoices.find((i) => i.id === id);
+        if (!inv) continue;
+        const existing = parseTags(inv.tags);
+        const merged = Array.from(new Set([...existing, ...newTags]));
+        await api.update('invoices', id, { tags: JSON.stringify(merged) });
+      }
+      setFeedback({ type: 'success', message: `Tagged ${ids.length} invoice(s)` });
+      setTimeout(() => setFeedback(null), 4000);
+      setBulkTagText('');
+      setShowBulkTag(false);
+      await reload();
+    } catch (err: any) {
+      console.error('Bulk tag failed:', err);
+      alert('Failed to tag invoices: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [bulkTagText, selectedIds, invoices, reload]);
 
   const handleExportSelected = useCallback(() => {
     const selected = filtered.filter(inv => selectedIds.has(inv.id));
@@ -363,6 +600,121 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           { label: 'Collected This Month', value: formatCurrency(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
         ]} />
       )}
+
+      {/* Inline KPI row — based on currently filtered list */}
+      <div className="grid grid-cols-6 gap-2">
+        {[
+          { label: 'Total Invoiced', value: formatCurrency(kpiStats.totalInvoiced), color: 'text-text-primary' },
+          { label: 'Outstanding', value: formatCurrency(kpiStats.outstanding), color: 'text-accent-warning' },
+          { label: 'Collected', value: formatCurrency(kpiStats.collected), color: 'text-accent-income' },
+          { label: 'Overdue', value: formatCurrency(kpiStats.overdue), color: 'text-accent-expense' },
+          { label: 'Avg Days to Pay', value: `${kpiStats.avgDays.toFixed(1)}d`, color: 'text-text-primary' },
+          { label: 'Largest', value: formatCurrency(kpiStats.largest), color: 'text-text-primary' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="block-card p-3">
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
+              {kpi.label}
+            </div>
+            <div className={`text-sm font-bold font-mono ${kpi.color}`}>{kpi.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Advanced Filters */}
+      <div className="block-card p-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <button
+            className="block-btn text-xs flex items-center gap-2"
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            <Search size={12} />
+            {showFilters ? 'Hide Filters' : 'Advanced Filters'}
+          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Sort</label>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="block-select text-xs"
+            >
+              <option value="issue_date">Issue Date</option>
+              <option value="due_date">Due Date</option>
+              <option value="total">Total</option>
+              <option value="days_outstanding">Days Outstanding</option>
+            </select>
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider ml-3 flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showPredictedColumn}
+                onChange={(e) => setShowPredictedColumn(e.target.checked)}
+                style={{ accentColor: '#3b82f6' }}
+              />
+              Predicted Pay Date
+            </label>
+          </div>
+        </div>
+        {showFilters && (
+          <div className="grid grid-cols-4 gap-3 mt-3">
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Aging</label>
+              <select
+                value={agingFilter}
+                onChange={(e) => setAgingFilter(e.target.value as AgingFilter)}
+                className="block-select w-full text-xs"
+              >
+                <option value="all">All</option>
+                <option value="current">Current</option>
+                <option value="1-30">1-30 days overdue</option>
+                <option value="31-60">31-60 days</option>
+                <option value="61-90">61-90 days</option>
+                <option value="90+">90+ days</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Amount Range</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={amountMin}
+                  onChange={(e) => setAmountMin(e.target.value)}
+                  placeholder="Min"
+                  className="block-input text-xs flex-1"
+                />
+                <span className="text-text-muted text-xs">—</span>
+                <input
+                  type="number"
+                  value={amountMax}
+                  onChange={(e) => setAmountMax(e.target.value)}
+                  placeholder="Max"
+                  className="block-input text-xs flex-1"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Tag</label>
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="block-select w-full text-xs"
+              >
+                <option value="">All Tags</option>
+                {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Sales Rep</label>
+              <select
+                value={salesRepFilter}
+                onChange={(e) => setSalesRepFilter(e.target.value)}
+                className="block-select w-full text-xs"
+              >
+                <option value="">All Sales Reps</option>
+                {allSalesReps.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Overdue → Collections Banner */}
       {candidates.length > 0 && !bannerDismissed && (
@@ -524,10 +876,13 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     style={{ accentColor: '#3b82f6' }}
                   />
                 </th>
+                <th style={{ width: '24px' }} title="Risk indicator"></th>
                 <th>Invoice #</th>
                 <th>Client Name</th>
                 <th>Issue Date</th>
                 <th>Due Date</th>
+                <th>Days</th>
+                {showPredictedColumn && <th>Predicted Pay</th>}
                 <th className="text-right">Total</th>
                 <th className="text-right">Amount Paid</th>
                 <th className="text-right">Balance Due</th>
@@ -540,6 +895,23 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 const balance = inv.total - inv.amount_paid;
                 const badge = formatStatus(inv.status);
                 const isSelected = selectedIds.has(inv.id);
+                const days = daysOutstanding(inv);
+                const daysLabel = inv.status === 'paid'
+                  ? '—'
+                  : days > 0
+                    ? `${days}d overdue`
+                    : days === 0
+                      ? 'Due today'
+                      : `Due in ${Math.abs(days)}d`;
+                const daysColor = inv.status === 'paid'
+                  ? 'text-text-muted'
+                  : days > 60
+                    ? 'text-accent-expense'
+                    : days > 30
+                      ? 'text-orange-400'
+                      : days > 0
+                        ? 'text-accent-warning'
+                        : 'text-text-secondary';
                 return (
                   <tr
                     key={inv.id}
@@ -553,6 +925,18 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         onChange={() => toggleSelect(inv.id)}
                         className="cursor-pointer"
                         style={{ accentColor: '#3b82f6' }}
+                      />
+                    </td>
+                    <td>
+                      <span
+                        title={inv.status === 'paid' ? 'Paid' : `${days > 0 ? days : 0} days overdue`}
+                        style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: 6,
+                          background: riskColor(inv),
+                        }}
                       />
                     </td>
                     <td className="font-mono text-accent-blue">
@@ -574,6 +958,16 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     </td>
                     <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>
                     <td className="text-text-secondary">{formatDate(inv.due_date)}</td>
+                    <td className={`text-xs font-semibold ${daysColor}`}>{daysLabel}</td>
+                    {showPredictedColumn && (
+                      <td className="text-text-muted text-xs">
+                        {predictedDates[inv.id] === undefined
+                          ? '…'
+                          : predictedDates[inv.id]
+                            ? formatDate(predictedDates[inv.id])
+                            : '—'}
+                      </td>
+                    )}
                     <td className="text-right font-mono text-text-primary">
                       {formatCurrency(inv.total)}
                     </td>
@@ -679,6 +1073,66 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <FileText size={13} />
             Export PDF
           </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkSendReminders}
+            disabled={batchLoading}
+            title="Schedule reminders for selected invoices"
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <Bell size={13} />
+            Send Reminders
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkApplyLateFee}
+            disabled={batchLoading}
+            title="Apply late fees to all eligible invoices"
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <DollarSign size={13} />
+            Apply Late Fee
+          </button>
+
+          {!showBulkTag ? (
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+              onClick={() => setShowBulkTag(true)}
+              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <TagIcon size={13} />
+              Tag
+            </button>
+          ) : (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={bulkTagText}
+                onChange={(e) => setBulkTagText(e.target.value)}
+                placeholder="tag1, tag2"
+                className="block-input text-xs"
+                style={{ width: 130 }}
+                autoFocus
+              />
+              <button
+                className="text-xs font-semibold"
+                onClick={handleBulkTag}
+                disabled={batchLoading || !bulkTagText.trim()}
+                style={{ background: 'var(--color-accent-blue)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Apply
+              </button>
+              <button
+                className="text-xs font-semibold text-text-muted"
+                onClick={() => { setShowBulkTag(false); setBulkTagText(''); }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
 
           {!showDeleteConfirm ? (
             <button

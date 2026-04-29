@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2 } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Eye as EyeIcon } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
@@ -38,6 +38,29 @@ interface Invoice {
   invoice_type?: string;
   currency?: string;
   shipping_amount?: number;
+  // 2026-04 enhancements
+  times_sent?: number;
+  portal_viewed_count?: number;
+  last_viewed_at?: string;
+  tags?: string;
+}
+
+interface ActivityEntry {
+  id: string;
+  invoice_id: string;
+  activity_type: string;
+  description: string;
+  user_name: string;
+  metadata_json?: string;
+  created_at: string;
+}
+
+interface PaymentPrediction {
+  predicted_date?: string;
+  predictedDate?: string;
+  avg_days_to_pay?: number;
+  confidence?: number;
+  [key: string]: any;
 }
 
 const INVOICE_TYPE_COLORS: Record<string, string> = {
@@ -114,6 +137,11 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
   const [paymentSchedule, setPaymentSchedule] = useState<any[]>([]);
   const [debtLink, setDebtLink] = useState<any>(null);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [prediction, setPrediction] = useState<PaymentPrediction | null>(null);
+  const [allClientInvoices, setAllClientInvoices] = useState<any[]>([]);
+  const [applyingLateFee, setApplyingLateFee] = useState(false);
+  const [convertingRecurring, setConvertingRecurring] = useState(false);
 
   const buildHTML = () => {
     if (!invoice) return '';
@@ -166,6 +194,29 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         .then(r => { setPaymentSchedule(Array.isArray(r) ? r : []); })
         .catch(() => {});
       api.getInvoiceDebtLink(invoiceId).then(setDebtLink).catch(() => {});
+
+      // Activity log
+      api.rawQuery(
+        `SELECT * FROM invoice_activity_log WHERE invoice_id = ? ORDER BY created_at DESC LIMIT 50`,
+        [invoiceId]
+      ).then((rows: any) => {
+        setActivityLog(Array.isArray(rows) ? rows : []);
+      }).catch(() => {});
+
+      // Predicted payment (only if unpaid)
+      if (inv.status !== 'paid' && (inv.status as string) !== 'void' && (inv.status as string) !== 'cancelled') {
+        api.intelPredictPayment(invoiceId).then((r: any) => {
+          if (r && !r.error) setPrediction(r);
+        }).catch(() => {});
+      }
+
+      // All client invoices (for Statement print)
+      if (inv.client_id) {
+        api.query('invoices', { client_id: inv.client_id }, { field: 'issue_date', dir: 'desc' })
+          .then((rows: any) => {
+            setAllClientInvoices(Array.isArray(rows) ? rows : []);
+          }).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to load invoice detail:', err);
     } finally {
@@ -274,6 +325,100 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     } finally {
       setSchedulingReminders(false);
     }
+  };
+
+  const handleApplyLateFee = async () => {
+    if (!invoice) return;
+    setApplyingLateFee(true);
+    try {
+      const result = await api.applyLateFees();
+      await api.create('invoice_activity_log', {
+        invoice_id: invoice.id,
+        activity_type: 'late_fee_applied',
+        description: `Late fees evaluated — ${result?.applied || 0} invoice(s) updated`,
+      });
+      loadData();
+    } catch (err: any) {
+      console.error('Apply late fee failed:', err);
+      setActionError(`Failed to apply late fee: ${err?.message ?? String(err)}`);
+    } finally {
+      setApplyingLateFee(false);
+    }
+  };
+
+  const handleConvertToRecurring = async () => {
+    if (!invoice) return;
+    setConvertingRecurring(true);
+    try {
+      // Shell: log the intent, then route the user to the Recurring module.
+      await api.create('invoice_activity_log', {
+        invoice_id: invoice.id,
+        activity_type: 'convert_to_recurring',
+        description: 'User clicked Convert to Recurring',
+      });
+      sessionStorage.setItem('nav:source_invoice', invoice.id);
+      setModule('recurring');
+    } catch (err: any) {
+      console.error('Convert to recurring failed:', err);
+      setActionError(`Failed to convert: ${err?.message ?? String(err)}`);
+    } finally {
+      setConvertingRecurring(false);
+    }
+  };
+
+  const handlePrintStatement = async () => {
+    if (!invoice || !client) return;
+    const rows = allClientInvoices;
+    const totalOutstanding = rows
+      .filter((r) => r.status !== 'paid' && r.status !== 'void' && r.status !== 'cancelled')
+      .reduce((s: number, r: any) => s + ((r.total || 0) - (r.amount_paid || 0)), 0);
+    const html = `
+      <html><head><title>Statement — ${client.name}</title>
+      <style>
+        body { font-family: -apple-system, sans-serif; padding: 32px; color: #111; }
+        h1 { font-size: 22px; margin-bottom: 4px; }
+        .sub { color: #555; font-size: 12px; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+        th { background: #f4f4f4; }
+        .num { text-align: right; font-family: monospace; }
+        .total { font-weight: bold; font-size: 14px; margin-top: 16px; text-align: right; }
+        .row-current { background: #fff7d6; }
+      </style></head><body>
+        <h1>Customer Statement</h1>
+        <div class="sub">${client.name} — Generated ${new Date().toLocaleDateString()}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Issue Date</th>
+              <th>Due Date</th>
+              <th>Status</th>
+              <th class="num">Total</th>
+              <th class="num">Paid</th>
+              <th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r: any) => {
+              const balance = (r.total || 0) - (r.amount_paid || 0);
+              const cls = r.id === invoice.id ? 'row-current' : '';
+              return `<tr class="${cls}">
+                <td>${r.invoice_number || ''}</td>
+                <td>${formatDate(r.issue_date)}</td>
+                <td>${formatDate(r.due_date)}</td>
+                <td>${r.status || ''}</td>
+                <td class="num">${formatCurrency(r.total || 0)}</td>
+                <td class="num">${formatCurrency(r.amount_paid || 0)}</td>
+                <td class="num">${formatCurrency(balance)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <div class="total">Total Outstanding: ${formatCurrency(totalOutstanding)}</div>
+      </body></html>
+    `;
+    await api.printPreview(html, `Statement — ${client.name}`);
   };
 
   const handlePaymentSaved = () => {
@@ -627,6 +772,173 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         )}
       </div>
 
+      {/* Aging Banner — for unpaid invoices */}
+      {invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled' && (() => {
+        const dueDate = new Date(invoice.due_date);
+        const days = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        let label = '';
+        let color = '#22c55e';
+        let bg = 'rgba(34,197,94,0.10)';
+        let border = '#22c55e';
+        if (days <= 0) {
+          label = days === 0 ? 'Due today' : `Due in ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'}`;
+        } else if (days <= 30) {
+          label = `${days} day${days === 1 ? '' : 's'} overdue`;
+          color = '#facc15'; bg = 'rgba(250,204,21,0.10)'; border = '#facc15';
+        } else if (days <= 60) {
+          label = `${days} days overdue`;
+          color = '#f97316'; bg = 'rgba(249,115,22,0.10)'; border = '#f97316';
+        } else if (days <= 90) {
+          label = `${days} days overdue`;
+          color = '#ef4444'; bg = 'rgba(239,68,68,0.10)'; border = '#ef4444';
+        } else {
+          label = `${days} days overdue — critical`;
+          color = '#dc2626'; bg = 'rgba(220,38,38,0.15)'; border = '#dc2626';
+        }
+        return (
+          <div
+            className="flex items-center justify-between px-4 py-3"
+            style={{ background: bg, border: `1px solid ${border}`, borderRadius: 6 }}
+          >
+            <div className="flex items-center gap-2">
+              <Calendar size={16} style={{ color }} />
+              <span className="text-sm font-bold" style={{ color }}>
+                {label}
+              </span>
+              <span className="text-xs text-text-muted">
+                Balance: {formatCurrency(invoice.total - invoice.amount_paid)}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Predicted Payment + Engagement Metrics */}
+      {(invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled') && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="block-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={14} className="text-accent-blue" />
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                Predicted Payment
+              </span>
+            </div>
+            {prediction && (prediction.predicted_date || prediction.predictedDate) ? (
+              <div className="space-y-2">
+                <div>
+                  <div className="text-[11px] text-text-muted">Expected Pay Date</div>
+                  <div className="text-lg font-bold font-mono text-text-primary">
+                    {formatDate(String(prediction.predicted_date || prediction.predictedDate))}
+                  </div>
+                </div>
+                {prediction.avg_days_to_pay != null && (
+                  <div>
+                    <div className="text-[11px] text-text-muted">Client Avg Days to Pay</div>
+                    <div className="text-sm font-mono text-text-secondary">
+                      {Number(prediction.avg_days_to_pay).toFixed(1)} days
+                    </div>
+                  </div>
+                )}
+                {prediction.confidence != null && (
+                  <div>
+                    <div className="text-[11px] text-text-muted">Confidence</div>
+                    <div className="text-sm font-mono text-text-secondary">
+                      {(Number(prediction.confidence) * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-text-muted">
+                Not enough payment history to predict.
+              </div>
+            )}
+          </div>
+
+          <div className="block-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <EyeIcon size={14} className="text-accent-blue" />
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                Engagement
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[11px] text-text-muted">Times Sent</div>
+                <div className="text-lg font-bold font-mono text-text-primary">
+                  {invoice.times_sent ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-text-muted">Times Viewed</div>
+                <div className="text-lg font-bold font-mono text-text-primary">
+                  {invoice.portal_viewed_count ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-text-muted">Last Viewed</div>
+                <div className="text-sm font-mono text-text-secondary">
+                  {invoice.last_viewed_at ? formatDate(invoice.last_viewed_at) : '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions Row */}
+      <div className="block-card p-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Quick Actions
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {invoice.status !== 'paid' && (
+              <button
+                className="block-btn flex items-center gap-2 text-xs"
+                onClick={handleScheduleReminders}
+                disabled={schedulingReminders}
+              >
+                <Bell size={12} />
+                {schedulingReminders ? 'Scheduling…' : 'Send Reminder'}
+              </button>
+            )}
+            {invoice.status !== 'paid' && (invoice.late_fee_pct ?? 0) > 0 && (
+              <button
+                className="block-btn flex items-center gap-2 text-xs"
+                onClick={handleApplyLateFee}
+                disabled={applyingLateFee}
+              >
+                <DollarSign size={12} />
+                {applyingLateFee ? 'Applying…' : 'Apply Late Fee'}
+              </button>
+            )}
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handleConvertToRecurring}
+              disabled={convertingRecurring}
+            >
+              <Repeat size={12} />
+              Convert to Recurring
+            </button>
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handleDuplicate}
+            >
+              <Copy size={12} />
+              Duplicate Invoice
+            </button>
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handlePrintStatement}
+            >
+              <Printer size={12} />
+              Print Statement
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Payment History */}
       <div className="block-card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-border-primary">
@@ -779,6 +1091,86 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           onSaved={handlePaymentSaved}
         />
       )}
+
+      {/* Invoice-specific Activity Timeline */}
+      <div className="block-card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-primary flex items-center gap-2">
+          <Activity size={14} className="text-text-muted" />
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Invoice Activity Timeline
+          </span>
+        </div>
+        {activityLog.length === 0 ? (
+          <div className="p-6 text-center text-sm text-text-muted">
+            No activity logged yet.
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {activityLog.map((a) => {
+              const ICONS: Record<string, React.ReactNode> = {
+                sent: <Send size={12} />,
+                viewed: <Eye size={12} />,
+                paid: <DollarSign size={12} />,
+                payment_recorded: <DollarSign size={12} />,
+                reminder_scheduled: <Bell size={12} />,
+                reminder_sent: <Bell size={12} />,
+                late_fee_applied: <DollarSign size={12} />,
+                convert_to_recurring: <Repeat size={12} />,
+                duplicate_created: <Copy size={12} />,
+              };
+              const COLORS: Record<string, string> = {
+                sent: '#3b82f6',
+                viewed: '#8b5cf6',
+                paid: '#22c55e',
+                payment_recorded: '#22c55e',
+                reminder_scheduled: '#f59e0b',
+                reminder_sent: '#f59e0b',
+                late_fee_applied: '#ef4444',
+                convert_to_recurring: '#3b82f6',
+                duplicate_created: '#6b7280',
+              };
+              const icon = ICONS[a.activity_type] || <Activity size={12} />;
+              const color = COLORS[a.activity_type] || '#6b7280';
+              return (
+                <li
+                  key={a.id}
+                  style={{
+                    padding: '10px 16px',
+                    borderBottom: '1px solid var(--color-border-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                      background: `${color}22`, color, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {icon}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="text-xs text-text-primary font-medium">
+                      {a.activity_type.replace(/_/g, ' ')}
+                      {a.user_name && (
+                        <span className="text-text-muted font-normal"> · {a.user_name}</span>
+                      )}
+                    </div>
+                    {a.description && (
+                      <div className="text-[11px] text-text-secondary truncate">{a.description}</div>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-text-muted whitespace-nowrap">
+                    {a.created_at ? formatDate(a.created_at) : '—'}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
       {/* ── Cross-entity panels — related records + activity timeline ── */}
       <div className="grid grid-cols-2 gap-4 mt-6">
