@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Zap,
-  Check,
   X,
   Save,
   Link2,
-  Unlink,
   RefreshCw,
   Trash2,
+  Sparkles,
+  Printer,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -63,6 +63,12 @@ const ReconcileView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
   const [savedMatches, setSavedMatches] = useState<any[]>([]);
+
+  // Quick filters for the bank-transaction list
+  const [filterUnmatched, setFilterUnmatched] = useState(false);
+  const [filterDeposits, setFilterDeposits] = useState(false);
+  const [filterDebits, setFilterDebits] = useState(false);
+  const [hideCleared, setHideCleared] = useState(false);
 
   // Load bank accounts
   useEffect(() => {
@@ -175,6 +181,160 @@ const ReconcileView: React.FC = () => {
     () => bookEntries.filter((e) => !matchedBookIds.has(e.id)),
     [bookEntries, matchedBookIds]
   );
+
+  // Apply quick filter toggles to the bank-side list
+  const filteredBank = useMemo(() => {
+    let list = unmatchedBank;
+    if (filterUnmatched) list = list.filter((t) => t.status !== 'matched');
+    if (filterDeposits) list = list.filter((t) => t.amount > 0);
+    if (filterDebits) list = list.filter((t) => t.amount < 0);
+    if (hideCleared) list = list.filter((t) => t.status !== 'matched');
+    return list;
+  }, [unmatchedBank, filterUnmatched, filterDeposits, filterDebits, hideCleared]);
+
+  // ─── Smart match suggestions (per unmatched bank txn) ──
+  // For each unmatched bank txn, find the best book entry by amount + date proximity.
+  // Confidence: amount match (50pts) + date within 7d (40pts) + description token overlap (10pts).
+  const suggestions = useMemo(() => {
+    const result = new Map<
+      string,
+      { bookId: string; confidence: number }
+    >();
+    for (const bt of unmatchedBank) {
+      let best: { id: string; conf: number } | null = null;
+      const btAmt = Math.abs(bt.amount);
+      const btDate = new Date(bt.date).getTime();
+      const btDescTokens = (bt.description || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((t) => t.length > 3);
+      for (const be of unmatchedBook) {
+        const beAmt = Math.abs(be.amount);
+        const amtDiff = Math.abs(btAmt - beAmt);
+        if (amtDiff > 1.0) continue; // too different
+        let conf = 0;
+        if (amtDiff < 0.01) conf += 50;
+        else if (amtDiff < 0.5) conf += 35;
+        else conf += 20;
+        const dateDiffDays =
+          Math.abs(btDate - new Date(be.entry_date).getTime()) / 86400000;
+        if (dateDiffDays <= 1) conf += 40;
+        else if (dateDiffDays <= 7) conf += 30;
+        else if (dateDiffDays <= 30) conf += 15;
+        const beTokens = (be.memo || '')
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((t) => t.length > 3);
+        const overlap = btDescTokens.filter((t) => beTokens.includes(t)).length;
+        if (overlap > 0) conf += Math.min(10, overlap * 5);
+        if (!best || conf > best.conf) {
+          best = { id: be.id, conf };
+        }
+      }
+      if (best && best.conf > 50) {
+        result.set(bt.id, { bookId: best.id, confidence: best.conf });
+      }
+    }
+    return result;
+  }, [unmatchedBank, unmatchedBook]);
+
+  // Bulk match: auto-match all bank txns with confidence > 95
+  const bulkMatch = useCallback(() => {
+    const newMatches: MatchedPair[] = [...matchedPairs];
+    const usedBank = new Set(newMatches.map((m) => m.bank.id));
+    const usedBook = new Set(newMatches.map((m) => m.book.id));
+    let added = 0;
+    for (const [bankId, sug] of suggestions.entries()) {
+      if (sug.confidence < 95) continue;
+      if (usedBank.has(bankId) || usedBook.has(sug.bookId)) continue;
+      const bank = bankTxns.find((t) => t.id === bankId);
+      const book = bookEntries.find((e) => e.id === sug.bookId);
+      if (!bank || !book) continue;
+      newMatches.push({ bank, book });
+      usedBank.add(bankId);
+      usedBook.add(sug.bookId);
+      added += 1;
+    }
+    setMatchedPairs(newMatches);
+    setSaveResult(
+      added > 0
+        ? `Bulk matched ${added} high-confidence pair${added !== 1 ? 's' : ''}.`
+        : 'No high-confidence matches found.'
+    );
+  }, [suggestions, matchedPairs, bankTxns, bookEntries]);
+
+  // Reconciliation progress = matched / total bank txns
+  const progressPct = useMemo(() => {
+    const total = bankTxns.length;
+    if (total === 0) return 0;
+    const matched = total - unmatchedBank.length + matchedPairs.length;
+    return Math.min(100, Math.max(0, (matched / total) * 100));
+  }, [bankTxns, unmatchedBank, matchedPairs]);
+
+  // Print reconciliation report
+  const printReport = async () => {
+    const acct = bankAccounts.find((b) => b.id === selectedBankId);
+    const totalBank = bankTxns.reduce((s, t) => s + t.amount, 0);
+    const matchedRows = savedMatches
+      .map(
+        (m: any) => `<tr>
+        <td>${formatDate(m.bank_date)}</td>
+        <td>${m.bank_desc || ''}</td>
+        <td style="text-align:right">${(m.bank_amount ?? 0).toFixed(2)}</td>
+        <td>${m.book_memo || ''}</td>
+        <td style="text-align:right">${(m.book_amount ?? 0).toFixed(2)}</td>
+      </tr>`
+      )
+      .join('');
+    const unmatchedRows = unmatchedBank
+      .map(
+        (t) => `<tr>
+        <td>${formatDate(t.date)}</td>
+        <td>${t.description || ''}</td>
+        <td style="text-align:right">${t.amount.toFixed(2)}</td>
+        <td>${t.status}</td>
+      </tr>`
+      )
+      .join('');
+    const html = `
+      <html><head><title>Reconciliation Report</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#222}
+        h1{font-size:18px;margin:0 0 4px 0}
+        h2{font-size:14px;margin:24px 0 6px 0}
+        .sub{font-size:11px;color:#666;margin-bottom:16px}
+        table{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:18px}
+        th,td{border:1px solid #ddd;padding:5px 6px;text-align:left}
+        th{background:#f3f4f6;text-transform:uppercase;font-size:10px}
+        .meta{font-size:11px;margin-bottom:14px}
+        .meta div{margin-bottom:3px}
+      </style></head><body>
+        <h1>Bank Reconciliation Report</h1>
+        <div class="sub">${activeCompany?.name ?? ''} — ${new Date().toLocaleString()}</div>
+        <div class="meta">
+          <div><strong>Account:</strong> ${acct?.name ?? '—'}</div>
+          <div><strong>Bank txn count:</strong> ${bankTxns.length}</div>
+          <div><strong>Net per bank:</strong> ${totalBank.toFixed(2)}</div>
+          <div><strong>Saved matches:</strong> ${savedMatches.length}</div>
+          <div><strong>Unmatched:</strong> ${unmatchedBank.length}</div>
+          <div><strong>Progress:</strong> ${progressPct.toFixed(0)}%</div>
+        </div>
+        <h2>Saved Matches</h2>
+        <table><thead><tr>
+          <th>Bank Date</th><th>Bank Description</th><th style="text-align:right">Bank Amt</th>
+          <th>Book Memo</th><th style="text-align:right">Book Amt</th>
+        </tr></thead><tbody>${matchedRows || '<tr><td colspan="5">None</td></tr>'}</tbody></table>
+        <h2>Unmatched Bank Transactions</h2>
+        <table><thead><tr>
+          <th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th>Status</th>
+        </tr></thead><tbody>${unmatchedRows || '<tr><td colspan="4">None</td></tr>'}</tbody></table>
+      </body></html>`;
+    try {
+      await api.printPreview(html, 'Reconciliation Report');
+    } catch {
+      /* ignore */
+    }
+  };
 
   // ─── Manual match ─────────────────────────────────────
   useEffect(() => {
@@ -293,9 +453,30 @@ const ReconcileView: React.FC = () => {
             disabled={!selectedBankId || loading}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
             style={{ borderRadius: '6px' }}
+            title="Auto-match by amount (exact)"
           >
             <Zap size={14} />
             Auto-Match
+          </button>
+          <button
+            onClick={bulkMatch}
+            disabled={!selectedBankId || loading || suggestions.size === 0}
+            className="block-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+            style={{ borderRadius: '6px' }}
+            title="Bulk match all >95% confidence suggestions"
+          >
+            <Sparkles size={14} />
+            Bulk Match
+          </button>
+          <button
+            onClick={printReport}
+            disabled={!selectedBankId || loading}
+            className="block-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+            style={{ borderRadius: '6px' }}
+            title="Print reconciliation report"
+          >
+            <Printer size={14} />
+            Print Report
           </button>
           <button
             onClick={loadTransactions}
@@ -308,6 +489,98 @@ const ReconcileView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Progress bar + quick filters */}
+      {selectedBankId && bankTxns.length > 0 && (
+        <div className="block-card p-3 space-y-2" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+              Reconciliation Progress
+            </span>
+            <span className="text-xs font-mono text-text-primary">
+              {progressPct.toFixed(0)}% • {bankTxns.length - unmatchedBank.length + matchedPairs.length} of {bankTxns.length} matched
+            </span>
+          </div>
+          <div
+            style={{
+              height: 8,
+              background: 'var(--color-bg-tertiary)',
+              borderRadius: '6px',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPct}%`,
+                height: '100%',
+                background:
+                  progressPct >= 90
+                    ? '#22c55e'
+                    : progressPct >= 50
+                      ? '#3b82f6'
+                      : '#eab308',
+                transition: 'width 0.3s',
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <span className="text-[10px] text-text-muted uppercase tracking-wider mr-1">
+              Filters:
+            </span>
+            <button
+              onClick={() => setFilterUnmatched((v) => !v)}
+              className={`px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                filterUnmatched
+                  ? 'bg-accent-blue text-white border-accent-blue'
+                  : 'bg-bg-secondary text-text-muted border-border-primary hover:text-text-primary'
+              }`}
+              style={{ borderRadius: '6px' }}
+            >
+              Only Unmatched
+            </button>
+            <button
+              onClick={() => setFilterDeposits((v) => !v)}
+              className={`px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                filterDeposits
+                  ? 'bg-accent-blue text-white border-accent-blue'
+                  : 'bg-bg-secondary text-text-muted border-border-primary hover:text-text-primary'
+              }`}
+              style={{ borderRadius: '6px' }}
+            >
+              Only Deposits
+            </button>
+            <button
+              onClick={() => setFilterDebits((v) => !v)}
+              className={`px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                filterDebits
+                  ? 'bg-accent-blue text-white border-accent-blue'
+                  : 'bg-bg-secondary text-text-muted border-border-primary hover:text-text-primary'
+              }`}
+              style={{ borderRadius: '6px' }}
+            >
+              Only Debits
+            </button>
+            <button
+              onClick={() => setHideCleared((v) => !v)}
+              className={`px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                hideCleared
+                  ? 'bg-accent-blue text-white border-accent-blue'
+                  : 'bg-bg-secondary text-text-muted border-border-primary hover:text-text-primary'
+              }`}
+              style={{ borderRadius: '6px' }}
+            >
+              Hide Cleared
+            </button>
+            {suggestions.size > 0 && (
+              <span className="text-[10px] text-accent-blue ml-auto inline-flex items-center gap-1">
+                <Sparkles size={11} />
+                {suggestions.size} smart suggestion
+                {suggestions.size !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Save result */}
       {saveResult && (
@@ -342,7 +615,7 @@ const ReconcileView: React.FC = () => {
             >
               <div className="px-4 py-2 bg-bg-tertiary border-b border-border-primary flex items-center justify-between">
                 <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
-                  Bank Transactions ({unmatchedBank.length})
+                  Bank Transactions ({filteredBank.length})
                 </span>
                 {selectedBank && (
                   <span className="text-[10px] text-accent-blue font-mono">
@@ -351,12 +624,14 @@ const ReconcileView: React.FC = () => {
                 )}
               </div>
               <div className="max-h-72 overflow-y-auto">
-                {unmatchedBank.length === 0 ? (
+                {filteredBank.length === 0 ? (
                   <div className="px-4 py-8 text-center text-xs text-text-muted">
                     No unmatched bank transactions.
                   </div>
                 ) : (
-                  unmatchedBank.map((txn) => (
+                  filteredBank.map((txn) => {
+                    const sug = suggestions.get(txn.id);
+                    return (
                     <div
                       key={txn.id}
                       onClick={() =>
@@ -402,11 +677,41 @@ const ReconcileView: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      <span className="text-[10px] text-text-muted font-mono">
-                        {formatDate(txn.date)}
-                      </span>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className="text-[10px] text-text-muted font-mono">
+                          {formatDate(txn.date)}
+                        </span>
+                        {sug && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const book = bookEntries.find(
+                                (b) => b.id === sug.bookId
+                              );
+                              if (book) {
+                                setMatchedPairs((prev) => [
+                                  ...prev,
+                                  { bank: txn, book },
+                                ]);
+                              }
+                            }}
+                            className="text-[9px] font-semibold inline-flex items-center gap-1 px-1.5 py-0.5 transition-colors"
+                            style={{
+                              borderRadius: '4px',
+                              border: '1px solid var(--color-accent-blue)',
+                              color: 'var(--color-accent-blue)',
+                              background: 'rgba(59,130,246,0.08)',
+                            }}
+                            title={`Suggested match (${sug.confidence}% confidence)`}
+                          >
+                            <Sparkles size={9} />
+                            {sug.confidence}%
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ))
+                  );
+                })
                 )}
               </div>
             </div>

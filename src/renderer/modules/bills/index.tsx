@@ -14,6 +14,11 @@ import {
   Eye,
   Printer,
   Download,
+  LayoutDashboard,
+  List,
+  TrendingUp,
+  Users,
+  Activity,
 } from 'lucide-react';
 import { generateBillHTML } from '../../lib/print-templates';
 import { EmptyState } from '../../components/EmptyState';
@@ -74,6 +79,7 @@ interface BillPayment {
 interface Vendor {
   id: string;
   name: string;
+  is_1099_eligible?: number;
 }
 
 interface Account {
@@ -193,6 +199,19 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Smart filters
+  const [showFilters, setShowFilters] = useState(false);
+  const [minAmount, setMinAmount] = useState<string>('');
+  const [maxAmount, setMaxAmount] = useState<string>('');
+  const [ageFilter, setAgeFilter] = useState<'all' | '0-30' | '31-60' | '61-90' | '90+'>('all');
+  const [dueSoon, setDueSoon] = useState(false);
+  const [recurringOnly, setRecurringOnly] = useState(false);
+
+  // Bulk action selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [opMessage, setOpMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -227,6 +246,12 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
     return m;
   }, [vendors]);
 
+  const vendor1099Map = useMemo(() => {
+    const m = new Map<string, boolean>();
+    vendors.forEach((v) => m.set(v.id, !!v.is_1099_eligible));
+    return m;
+  }, [vendors]);
+
   const filtered = useMemo(() => {
     let list = bills;
     if (activeTab !== 'all') {
@@ -241,8 +266,301 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
           (b.notes ?? '').toLowerCase().includes(q)
       );
     }
+
+    // Smart filters
+    const min = parseFloat(minAmount);
+    const max = parseFloat(maxAmount);
+    if (!isNaN(min)) list = list.filter((b) => b.total >= min);
+    if (!isNaN(max)) list = list.filter((b) => b.total <= max);
+
+    if (ageFilter !== 'all') {
+      const today = new Date();
+      list = list.filter((b) => {
+        if (!b.due_date) return false;
+        const due = new Date(b.due_date);
+        const daysOverdue = Math.floor(
+          (today.getTime() - due.getTime()) / 86400000
+        );
+        if (daysOverdue < 0) return false; // not yet due
+        if (ageFilter === '0-30') return daysOverdue <= 30;
+        if (ageFilter === '31-60') return daysOverdue > 30 && daysOverdue <= 60;
+        if (ageFilter === '61-90') return daysOverdue > 60 && daysOverdue <= 90;
+        if (ageFilter === '90+') return daysOverdue > 90;
+        return true;
+      });
+    }
+
+    if (dueSoon) {
+      const today = new Date();
+      const sevenDays = new Date();
+      sevenDays.setDate(sevenDays.getDate() + 7);
+      list = list.filter((b) => {
+        if (!b.due_date) return false;
+        const due = new Date(b.due_date);
+        return (
+          due >= today &&
+          due <= sevenDays &&
+          b.amount_paid < b.total - 0.001
+        );
+      });
+    }
+
+    if (recurringOnly) {
+      list = list.filter((b) =>
+        (b.notes ?? '').toLowerCase().includes('recurring')
+      );
+    }
+
     return list;
-  }, [bills, activeTab, search, vendorMap]);
+  }, [
+    bills,
+    activeTab,
+    search,
+    vendorMap,
+    minAmount,
+    maxAmount,
+    ageFilter,
+    dueSoon,
+    recurringOnly,
+  ]);
+
+  // Late-fee detection: any unpaid bill > 30 days past due
+  const lateFeeCount = useMemo(() => {
+    const today = new Date();
+    return bills.filter((b) => {
+      if (b.amount_paid >= b.total - 0.001) return false;
+      if (!b.due_date) return false;
+      const due = new Date(b.due_date);
+      return (today.getTime() - due.getTime()) / 86400000 > 30;
+    }).length;
+  }, [bills]);
+
+  // ─── Bulk action handlers ───────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((b) => b.id)));
+  };
+
+  const flashMessage = (kind: 'success' | 'error', text: string) => {
+    setOpMessage({ kind, text });
+    setTimeout(() => setOpMessage(null), 4000);
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      let count = 0;
+      for (const id of selectedIds) {
+        const b = bills.find((x) => x.id === id);
+        if (b && (b.status === 'draft' || b.status === 'pending')) {
+          await api.update('bills', id, { status: 'approved' });
+          count += 1;
+        }
+      }
+      setSelectedIds(new Set());
+      flashMessage('success', `Approved ${count} bill${count !== 1 ? 's' : ''}`);
+      // refresh list
+      const billData = await api.query(
+        'bills',
+        { company_id: activeCompany!.id },
+        { field: 'bill_date', dir: 'desc' },
+        2000
+      );
+      setBills(Array.isArray(billData) ? billData : []);
+    } catch (err: any) {
+      flashMessage('error', 'Failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkPay = async () => {
+    if (selectedIds.size === 0) return;
+    if (
+      !window.confirm(
+        `Mark ${selectedIds.size} bill${selectedIds.size !== 1 ? 's' : ''} as fully paid? This sets amount_paid to total and status to paid.`
+      )
+    )
+      return;
+    setBulkBusy(true);
+    try {
+      let count = 0;
+      for (const id of selectedIds) {
+        const b = bills.find((x) => x.id === id);
+        if (!b) continue;
+        await api.update('bills', id, {
+          amount_paid: b.total,
+          status: 'paid',
+        });
+        count += 1;
+      }
+      setSelectedIds(new Set());
+      flashMessage('success', `Marked ${count} bill${count !== 1 ? 's' : ''} as paid`);
+      const billData = await api.query(
+        'bills',
+        { company_id: activeCompany!.id },
+        { field: 'bill_date', dir: 'desc' },
+        2000
+      );
+      setBills(Array.isArray(billData) ? billData : []);
+    } catch (err: any) {
+      flashMessage('error', 'Failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkSchedule = async () => {
+    if (selectedIds.size === 0) return;
+    const dateStr = window.prompt(
+      'Enter scheduled payment date (YYYY-MM-DD):',
+      new Date().toISOString().slice(0, 10)
+    );
+    if (!dateStr) return;
+    setBulkBusy(true);
+    try {
+      let count = 0;
+      for (const id of selectedIds) {
+        const b = bills.find((x) => x.id === id);
+        if (!b) continue;
+        const newNotes = `${(b.notes ?? '').trim()} [Scheduled: ${dateStr}]`.trim();
+        await api.update('bills', id, { notes: newNotes });
+        count += 1;
+      }
+      setSelectedIds(new Set());
+      flashMessage('success', `Scheduled ${count} bill${count !== 1 ? 's' : ''} for ${dateStr}`);
+    } catch (err: any) {
+      flashMessage('error', 'Failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkExport = () => {
+    if (selectedIds.size === 0) return;
+    const rows = ['Bill Number,Vendor,Issue Date,Due Date,Total,Amount Paid,Balance,Status'];
+    for (const id of selectedIds) {
+      const b = bills.find((x) => x.id === id);
+      if (!b) continue;
+      const balance = b.total - b.amount_paid;
+      rows.push(
+        [
+          JSON.stringify(b.bill_number),
+          JSON.stringify(vendorMap.get(b.vendor_id) ?? ''),
+          b.issue_date,
+          b.due_date,
+          b.total,
+          b.amount_paid,
+          balance,
+          b.status,
+        ].join(',')
+      );
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bills-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    flashMessage('success', `Exported ${selectedIds.size} bill${selectedIds.size !== 1 ? 's' : ''}`);
+  };
+
+  const handlePrintAPAging = async () => {
+    const today = new Date();
+    const buckets = {
+      current: [] as Bill[],
+      d30: [] as Bill[],
+      d60: [] as Bill[],
+      d90: [] as Bill[],
+      d90plus: [] as Bill[],
+    };
+    for (const b of bills) {
+      if (b.amount_paid >= b.total - 0.001) continue;
+      if (!b.due_date) {
+        buckets.current.push(b);
+        continue;
+      }
+      const days = Math.floor(
+        (today.getTime() - new Date(b.due_date).getTime()) / 86400000
+      );
+      if (days < 0) buckets.current.push(b);
+      else if (days <= 30) buckets.d30.push(b);
+      else if (days <= 60) buckets.d60.push(b);
+      else if (days <= 90) buckets.d90.push(b);
+      else buckets.d90plus.push(b);
+    }
+    const renderRows = (list: Bill[]) =>
+      list
+        .map((b) => {
+          const balance = b.total - b.amount_paid;
+          return `<tr>
+            <td>${b.bill_number}</td>
+            <td>${vendorMap.get(b.vendor_id) ?? ''}</td>
+            <td>${b.issue_date}</td>
+            <td>${b.due_date ?? ''}</td>
+            <td style="text-align:right">${formatCurrency(b.total)}</td>
+            <td style="text-align:right">${formatCurrency(balance)}</td>
+          </tr>`;
+        })
+        .join('');
+    const sumBalance = (list: Bill[]) =>
+      list.reduce((s, b) => s + (b.total - b.amount_paid), 0);
+    const html = `
+      <html><head><title>AP Aging Report</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#222}
+        h1{font-size:18px;margin:0 0 4px 0}
+        h2{font-size:13px;margin:18px 0 6px 0;border-bottom:1px solid #ddd;padding-bottom:3px}
+        .sub{font-size:11px;color:#666;margin-bottom:14px}
+        table{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:10px}
+        th,td{border:1px solid #ddd;padding:5px 6px;text-align:left}
+        th{background:#f3f4f6;text-transform:uppercase;font-size:10px}
+        .summary{margin-top:18px;font-size:12px}
+        .summary div{margin-bottom:4px}
+      </style></head><body>
+        <h1>Accounts Payable Aging Report</h1>
+        <div class="sub">${activeCompany?.name ?? ''} — ${new Date().toLocaleString()}</div>
+        <div class="summary">
+          <div><strong>Current (not yet due):</strong> ${buckets.current.length} bills, ${formatCurrency(sumBalance(buckets.current))}</div>
+          <div><strong>0-30 days:</strong> ${buckets.d30.length} bills, ${formatCurrency(sumBalance(buckets.d30))}</div>
+          <div><strong>31-60 days:</strong> ${buckets.d60.length} bills, ${formatCurrency(sumBalance(buckets.d60))}</div>
+          <div><strong>61-90 days:</strong> ${buckets.d90.length} bills, ${formatCurrency(sumBalance(buckets.d90))}</div>
+          <div><strong>90+ days:</strong> ${buckets.d90plus.length} bills, ${formatCurrency(sumBalance(buckets.d90plus))}</div>
+        </div>
+        ${[
+          ['Current (not yet due)', buckets.current],
+          ['0-30 days', buckets.d30],
+          ['31-60 days', buckets.d60],
+          ['61-90 days', buckets.d90],
+          ['90+ days', buckets.d90plus],
+        ]
+          .map(([title, list]) => {
+            const rows = renderRows(list as Bill[]);
+            if (!rows) return `<h2>${title}</h2><div style="font-size:11px;color:#999">None</div>`;
+            return `<h2>${title}</h2>
+              <table><thead><tr>
+                <th>Bill #</th><th>Vendor</th><th>Issue</th><th>Due</th>
+                <th style="text-align:right">Total</th><th style="text-align:right">Balance</th>
+              </tr></thead><tbody>${rows}</tbody></table>`;
+          })
+          .join('')}
+      </body></html>`;
+    try {
+      await api.printPreview(html, 'AP Aging Report');
+    } catch {
+      /* ignore */
+    }
+  };
 
   if (loading) {
     return (
@@ -258,12 +576,61 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       <div className="module-header">
         <h1 className="module-title text-text-primary">Bills / Accounts Payable</h1>
         <div className="module-actions">
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handlePrintAPAging}
+            disabled={bills.length === 0}
+            title="Print AP aging report"
+          >
+            <Printer size={14} /> AP Aging
+          </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNew}>
             <Plus size={16} />
             New Bill
           </button>
         </div>
       </div>
+
+      {/* Op message */}
+      {opMessage && (
+        <div
+          className={`text-xs px-3 py-2 border ${
+            opMessage.kind === 'success'
+              ? 'text-accent-income bg-accent-income/10 border-accent-income/20'
+              : 'text-accent-expense bg-accent-expense/10 border-accent-expense/20'
+          }`}
+          style={{ borderRadius: '6px' }}
+        >
+          {opMessage.text}
+        </div>
+      )}
+
+      {/* Late-fee alert banner */}
+      {lateFeeCount > 0 && (
+        <div
+          className="block-card p-3 flex items-start gap-3"
+          style={{
+            borderRadius: '6px',
+            borderColor: 'rgba(239,68,68,0.4)',
+            background: 'rgba(239,68,68,0.08)',
+          }}
+        >
+          <AlertTriangle
+            size={18}
+            className="text-accent-expense flex-shrink-0 mt-0.5"
+          />
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-text-primary">
+              {lateFeeCount} bill{lateFeeCount !== 1 ? 's' : ''} over 30 days
+              past due — late fees may apply
+            </div>
+            <div className="text-xs text-text-muted mt-1">
+              Review the AP aging report to see the affected vendors and
+              outstanding balances.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4 report-summary-tiles">
@@ -340,22 +707,144 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative flex-shrink-0">
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
-          />
-          <input
-            type="text"
-            placeholder="Search bills..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="block-input pl-8"
-            style={{ width: '260px' }}
-          />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            className={`block-btn text-xs ${showFilters ? 'border-accent-blue text-accent-blue' : ''}`}
+            onClick={() => setShowFilters((v) => !v)}
+            title="Toggle smart filters"
+          >
+            Smart Filters
+          </button>
+          {/* Search */}
+          <div className="relative">
+            <Search
+              size={14}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
+            />
+            <input
+              type="text"
+              placeholder="Search bills..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="block-input pl-8"
+              style={{ width: '260px' }}
+            />
+          </div>
         </div>
       </div>
+
+      {/* Smart filters panel */}
+      {showFilters && (
+        <div className="block-card p-3 grid grid-cols-5 gap-3" style={{ borderRadius: '6px' }}>
+          <div>
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">
+              Min Amount
+            </label>
+            <input
+              type="number"
+              className="block-input text-xs"
+              placeholder="0"
+              value={minAmount}
+              onChange={(e) => setMinAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">
+              Max Amount
+            </label>
+            <input
+              type="number"
+              className="block-input text-xs"
+              placeholder="No limit"
+              value={maxAmount}
+              onChange={(e) => setMaxAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">
+              Age Bucket
+            </label>
+            <select
+              className="block-select text-xs"
+              value={ageFilter}
+              onChange={(e) => setAgeFilter(e.target.value as typeof ageFilter)}
+            >
+              <option value="all">All</option>
+              <option value="0-30">0-30 days</option>
+              <option value="31-60">31-60 days</option>
+              <option value="61-90">61-90 days</option>
+              <option value="90+">90+ days</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dueSoon}
+                onChange={(e) => setDueSoon(e.target.checked)}
+                style={{ accentColor: '#3b82f6' }}
+              />
+              Due in 7 days
+            </label>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={recurringOnly}
+                onChange={(e) => setRecurringOnly(e.target.checked)}
+                style={{ accentColor: '#3b82f6' }}
+              />
+              Recurring only
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div
+          className="block-card p-3 flex items-center justify-between"
+          style={{
+            borderRadius: '6px',
+            borderColor: 'rgba(59,130,246,0.3)',
+          }}
+        >
+          <span className="text-xs font-semibold text-text-primary">
+            {selectedIds.size} bill{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs"
+              onClick={handleBulkApprove}
+              disabled={bulkBusy}
+            >
+              <CheckCircle size={12} /> Approve
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs"
+              onClick={handleBulkSchedule}
+              disabled={bulkBusy}
+            >
+              <Clock size={12} /> Schedule
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs"
+              onClick={handleBulkPay}
+              disabled={bulkBusy}
+            >
+              <DollarSign size={12} /> Mark Paid
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs"
+              onClick={handleBulkExport}
+              disabled={bulkBusy}
+            >
+              <Download size={12} /> Export CSV
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {filtered.length === 0 ? (
@@ -384,15 +873,27 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
           <table className="block-table">
             <thead>
               <tr>
+                <th style={{ width: '32px' }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={
+                      filtered.length > 0 && selectedIds.size === filtered.length
+                    }
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <th>Bill #</th>
                 <th>Vendor</th>
+                <th style={{ width: '50px' }} title="1099 eligible">1099</th>
                 <th>Issue Date</th>
                 <th>Due Date</th>
                 <th className="text-right">Total</th>
                 <th className="text-right">Amount Paid</th>
                 <th className="text-right">Balance</th>
                 <th>Status</th>
-                <th style={{ width: '80px' }}>Actions</th>
+                <th style={{ width: '120px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -400,12 +901,23 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                 const balance = bill.total - bill.amount_paid;
                 const badge = formatStatus(bill.status);
                 const vendorName = vendorMap.get(bill.vendor_id) ?? '—';
+                const is1099 = vendor1099Map.get(bill.vendor_id) ?? false;
+                const canPay = balance > 0.001;
                 return (
                   <tr
                     key={bill.id}
                     className="cursor-pointer"
                     onClick={() => onView(bill.id)}
                   >
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(bill.id)}
+                        onChange={() => toggleSelect(bill.id)}
+                        className="cursor-pointer"
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                    </td>
                     <td className="font-mono text-accent-blue text-xs" onClick={(e) => e.stopPropagation()}>
                       <EntityChip type="bill" id={bill.id} label={bill.bill_number} variant="inline" />
                     </td>
@@ -414,6 +926,24 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                         <EntityChip type="vendor" id={bill.vendor_id} label={vendorName} variant="inline" />
                       ) : (
                         <span className="block truncate max-w-[180px]">{vendorName}</span>
+                      )}
+                    </td>
+                    <td className="text-center">
+                      {is1099 ? (
+                        <span
+                          className="text-[9px] font-semibold px-1.5 py-0.5"
+                          style={{
+                            borderRadius: '4px',
+                            background: 'rgba(59,130,246,0.12)',
+                            color: 'var(--color-accent-blue)',
+                            border: '1px solid rgba(59,130,246,0.3)',
+                          }}
+                          title="Vendor is 1099 eligible"
+                        >
+                          1099
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-text-muted">—</span>
                       )}
                     </td>
                     <td className="font-mono text-text-secondary text-xs">{formatDate(bill.issue_date)}</td>
@@ -435,13 +965,25 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                       <span className={badge.className}>{badge.label}</span>
                     </td>
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="block-btn text-xs py-1 px-2"
-                        style={{ borderRadius: '6px' }}
-                        onClick={() => onView(bill.id)}
-                      >
-                        View
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="block-btn text-xs py-1 px-2"
+                          style={{ borderRadius: '6px' }}
+                          onClick={() => onView(bill.id)}
+                        >
+                          View
+                        </button>
+                        {canPay && (
+                          <button
+                            className="block-btn-primary text-xs py-1 px-2 inline-flex items-center gap-1"
+                            style={{ borderRadius: '6px' }}
+                            onClick={() => onView(bill.id)}
+                            title="Open bill to record payment"
+                          >
+                            <DollarSign size={11} /> Pay
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1456,10 +1998,509 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
 };
 
 // ═══════════════════════════════════════════════════════════
+// BillsDashboard — Tabbed Dashboard view
+// ═══════════════════════════════════════════════════════════
+const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
+  onView,
+}) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [payments, setPayments] = useState<BillPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!activeCompany) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [billData, vendorData] = await Promise.all([
+          api.query(
+            'bills',
+            { company_id: activeCompany.id },
+            { field: 'bill_date', dir: 'desc' },
+            5000
+          ),
+          api.query('vendors', { company_id: activeCompany.id }),
+        ]);
+        if (cancelled) return;
+        const billList = Array.isArray(billData) ? billData : [];
+        setBills(billList);
+        setVendors(Array.isArray(vendorData) ? vendorData : []);
+
+        // Load all payments via rawQuery
+        try {
+          const pays: any[] = await api.rawQuery(
+            `SELECT bp.* FROM bill_payments bp
+             JOIN bills b ON b.id = bp.bill_id
+             WHERE b.company_id = ?
+             ORDER BY bp.payment_date DESC LIMIT 5000`,
+            [activeCompany.id]
+          );
+          if (!cancelled) setPayments(Array.isArray(pays) ? pays : []);
+        } catch {
+          /* ignore */
+        }
+      } catch (err) {
+        console.error('Bills dashboard load failed:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompany]);
+
+  const vendorMap = useMemo(() => {
+    const m = new Map<string, string>();
+    vendors.forEach((v) => m.set(v.id, v.name));
+    return m;
+  }, [vendors]);
+
+  const stats = useMemo(() => {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const sevenDays = new Date();
+    sevenDays.setDate(sevenDays.getDate() + 7);
+
+    let totalOutstanding = 0;
+    let overdueAmount = 0;
+    let thisMonthCount = 0;
+    let comingDue = 0;
+
+    for (const b of bills) {
+      const balance = b.total - b.amount_paid;
+      if (balance > 0.001) {
+        totalOutstanding += balance;
+        if (b.due_date && new Date(b.due_date) < today) {
+          overdueAmount += balance;
+        }
+        if (b.due_date) {
+          const due = new Date(b.due_date);
+          if (due >= today && due <= sevenDays) {
+            comingDue += 1;
+          }
+        }
+      }
+      if (b.issue_date && new Date(b.issue_date) >= monthStart) {
+        thisMonthCount += 1;
+      }
+    }
+
+    // Average days to pay: for paid bills with payments, avg(payment_date - issue_date)
+    let dtpSum = 0;
+    let dtpCount = 0;
+    for (const p of payments) {
+      const bill = bills.find((b) => b.id === p.bill_id);
+      if (!bill) continue;
+      const issue = new Date(bill.issue_date);
+      const pay = new Date(p.payment_date);
+      const days = Math.floor((pay.getTime() - issue.getTime()) / 86400000);
+      if (days >= 0 && days < 365) {
+        dtpSum += days;
+        dtpCount += 1;
+      }
+    }
+    const avgDaysToPay = dtpCount > 0 ? Math.round(dtpSum / dtpCount) : 0;
+
+    // Top 5 vendors by spend
+    const vendorSpend = new Map<string, number>();
+    for (const b of bills) {
+      const cur = vendorSpend.get(b.vendor_id) ?? 0;
+      vendorSpend.set(b.vendor_id, cur + (b.total || 0));
+    }
+    const topVendors = [...vendorSpend.entries()]
+      .map(([id, total]) => ({ id, total, name: vendorMap.get(id) ?? '—' }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    return {
+      totalOutstanding,
+      overdueAmount,
+      thisMonthCount,
+      comingDue,
+      avgDaysToPay,
+      topVendors,
+    };
+  }, [bills, payments, vendorMap]);
+
+  // Aging buckets
+  const aging = useMemo(() => {
+    const today = new Date();
+    const buckets = {
+      d30: { count: 0, amount: 0 },
+      d60: { count: 0, amount: 0 },
+      d90: { count: 0, amount: 0 },
+      d90plus: { count: 0, amount: 0 },
+    };
+    for (const b of bills) {
+      const balance = b.total - b.amount_paid;
+      if (balance <= 0.001 || !b.due_date) continue;
+      const days = Math.floor(
+        (today.getTime() - new Date(b.due_date).getTime()) / 86400000
+      );
+      if (days < 0) continue;
+      if (days <= 30) {
+        buckets.d30.count += 1;
+        buckets.d30.amount += balance;
+      } else if (days <= 60) {
+        buckets.d60.count += 1;
+        buckets.d60.amount += balance;
+      } else if (days <= 90) {
+        buckets.d90.count += 1;
+        buckets.d90.amount += balance;
+      } else {
+        buckets.d90plus.count += 1;
+        buckets.d90plus.amount += balance;
+      }
+    }
+    return buckets;
+  }, [bills]);
+
+  // Cash flow impact: due in 30/60/90 days
+  const cashFlow = useMemo(() => {
+    const today = new Date();
+    const inDays = (n: number) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + n);
+      return d;
+    };
+    const next30 = inDays(30);
+    const next60 = inDays(60);
+    const next90 = inDays(90);
+    let s30 = 0;
+    let s60 = 0;
+    let s90 = 0;
+    for (const b of bills) {
+      const balance = b.total - b.amount_paid;
+      if (balance <= 0.001 || !b.due_date) continue;
+      const due = new Date(b.due_date);
+      if (due > today && due <= next30) s30 += balance;
+      if (due > today && due <= next60) s60 += balance;
+      if (due > today && due <= next90) s90 += balance;
+    }
+    return { s30, s60, s90 };
+  }, [bills]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">
+        Loading dashboard...
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-5 overflow-y-auto h-full">
+      {/* 6 KPI cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="stat-label text-text-muted">Total Outstanding</div>
+              <div className="stat-value font-mono text-accent-expense">
+                {formatCurrency(stats.totalOutstanding)}
+              </div>
+            </div>
+            <DollarSign
+              size={20}
+              className="text-accent-expense opacity-60 mt-1"
+            />
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="stat-label text-text-muted">Overdue Amount</div>
+              <div className="stat-value font-mono text-accent-expense">
+                {formatCurrency(stats.overdueAmount)}
+              </div>
+            </div>
+            <AlertTriangle
+              size={20}
+              className="text-accent-expense opacity-60 mt-1"
+            />
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="stat-label text-text-muted">This Month Bills</div>
+              <div className="stat-value font-mono text-accent-blue">
+                {stats.thisMonthCount}
+              </div>
+            </div>
+            <FileText
+              size={20}
+              className="text-accent-blue opacity-60 mt-1"
+            />
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="stat-label text-text-muted">Avg Days to Pay</div>
+              <div className="stat-value font-mono text-text-primary">
+                {stats.avgDaysToPay}
+              </div>
+            </div>
+            <Activity
+              size={20}
+              className="text-accent-blue opacity-60 mt-1"
+            />
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="stat-label text-text-muted">Due in 7 Days</div>
+              <div className="stat-value font-mono text-accent-blue">
+                {stats.comingDue}
+              </div>
+            </div>
+            <Clock size={20} className="text-accent-blue opacity-60 mt-1" />
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="stat-label text-text-muted">Top Vendors</div>
+              <div className="stat-value font-mono text-text-primary text-base">
+                {stats.topVendors.length}
+              </div>
+            </div>
+            <Users size={20} className="text-accent-blue opacity-60 mt-1" />
+          </div>
+        </div>
+      </div>
+
+      {/* Two-column: aging + cash flow */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* AP Aging Snapshot */}
+        <div className="block-card p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-border-primary">
+            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+              AP Aging Snapshot
+            </span>
+          </div>
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Bucket</th>
+                <th className="text-right">Count</th>
+                <th className="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="text-sm text-text-primary">0-30 days</td>
+                <td className="text-right font-mono text-xs">
+                  {aging.d30.count}
+                </td>
+                <td className="text-right font-mono text-xs text-accent-expense">
+                  {formatCurrency(aging.d30.amount)}
+                </td>
+              </tr>
+              <tr>
+                <td className="text-sm text-text-primary">31-60 days</td>
+                <td className="text-right font-mono text-xs">
+                  {aging.d60.count}
+                </td>
+                <td className="text-right font-mono text-xs text-accent-expense">
+                  {formatCurrency(aging.d60.amount)}
+                </td>
+              </tr>
+              <tr>
+                <td className="text-sm text-text-primary">61-90 days</td>
+                <td className="text-right font-mono text-xs">
+                  {aging.d90.count}
+                </td>
+                <td className="text-right font-mono text-xs text-accent-expense">
+                  {formatCurrency(aging.d90.amount)}
+                </td>
+              </tr>
+              <tr>
+                <td className="text-sm text-text-primary font-semibold">
+                  90+ days
+                </td>
+                <td className="text-right font-mono text-xs">
+                  {aging.d90plus.count}
+                </td>
+                <td className="text-right font-mono text-xs text-accent-expense font-semibold">
+                  {formatCurrency(aging.d90plus.amount)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Cash flow impact */}
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
+            Cash Flow Impact (Upcoming Bills)
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-text-secondary">Next 30 days</span>
+              <span className="font-mono text-accent-expense">
+                {formatCurrency(cashFlow.s30)}
+              </span>
+            </div>
+            <div
+              style={{
+                height: 8,
+                background: 'var(--color-bg-tertiary)',
+                borderRadius: '6px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${
+                    cashFlow.s90 > 0
+                      ? (cashFlow.s30 / cashFlow.s90) * 100
+                      : 0
+                  }%`,
+                  height: '100%',
+                  background: '#ef4444',
+                }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-text-secondary">Next 60 days</span>
+              <span className="font-mono text-accent-expense">
+                {formatCurrency(cashFlow.s60)}
+              </span>
+            </div>
+            <div
+              style={{
+                height: 8,
+                background: 'var(--color-bg-tertiary)',
+                borderRadius: '6px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${
+                    cashFlow.s90 > 0
+                      ? (cashFlow.s60 / cashFlow.s90) * 100
+                      : 0
+                  }%`,
+                  height: '100%',
+                  background: '#f97316',
+                }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-text-secondary">Next 90 days</span>
+              <span className="font-mono text-accent-expense">
+                {formatCurrency(cashFlow.s90)}
+              </span>
+            </div>
+            <div
+              style={{
+                height: 8,
+                background: 'var(--color-bg-tertiary)',
+                borderRadius: '6px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `100%`,
+                  height: '100%',
+                  background: '#eab308',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Top 5 vendors by spend */}
+      <div className="block-card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-primary">
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Top 5 Vendors by Spend
+          </span>
+        </div>
+        {stats.topVendors.length === 0 ? (
+          <div className="p-4 text-center text-xs text-text-muted">
+            No vendor spend data yet.
+          </div>
+        ) : (
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th className="text-right">Total Billed</th>
+                <th className="text-right">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.topVendors.map((v) => {
+                const totalAll = stats.topVendors.reduce(
+                  (s, x) => s + x.total,
+                  0
+                );
+                const share = totalAll > 0 ? (v.total / totalAll) * 100 : 0;
+                return (
+                  <tr key={v.id}>
+                    <td className="text-sm text-text-primary">{v.name}</td>
+                    <td className="text-right font-mono text-text-secondary text-xs">
+                      {formatCurrency(v.total)}
+                    </td>
+                    <td className="text-right">
+                      <div
+                        className="inline-block"
+                        style={{
+                          width: 100,
+                          height: 8,
+                          background: 'var(--color-bg-tertiary)',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          verticalAlign: 'middle',
+                          marginRight: 6,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${share}%`,
+                            height: '100%',
+                            background: 'var(--color-accent-blue)',
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-text-muted">
+                        {share.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════
 // BillsModule — Router
 // ═══════════════════════════════════════════════════════════
+type BillsTabId = 'dashboard' | 'list';
+
 const BillsModule: React.FC = () => {
   const [view, setView] = useState<View>('list');
+  const [activeBillTab, setActiveBillTab] = useState<BillsTabId>('dashboard');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [listKey, setListKey] = useState(0);
@@ -1522,12 +2563,41 @@ const BillsModule: React.FC = () => {
     );
   }
 
+  // Tabbed list view
   return (
-    <BillsList
-      key={listKey}
-      onNew={goToNew}
-      onView={goToDetail}
-    />
+    <div className="overflow-y-auto h-full">
+      {/* Tab bar */}
+      <div className="px-6 pt-4">
+        <div className="flex border-b border-border-primary">
+          <button
+            onClick={() => setActiveBillTab('dashboard')}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-[1px] ${
+              activeBillTab === 'dashboard'
+                ? 'text-accent-blue border-accent-blue'
+                : 'text-text-muted hover:text-text-primary border-transparent'
+            }`}
+          >
+            <LayoutDashboard size={14} />
+            Dashboard
+          </button>
+          <button
+            onClick={() => setActiveBillTab('list')}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-[1px] ${
+              activeBillTab === 'list'
+                ? 'text-accent-blue border-accent-blue'
+                : 'text-text-muted hover:text-text-primary border-transparent'
+            }`}
+          >
+            <List size={14} />
+            All Bills
+          </button>
+        </div>
+      </div>
+      {activeBillTab === 'dashboard' && <BillsDashboard onView={goToDetail} />}
+      {activeBillTab === 'list' && (
+        <BillsList key={listKey} onNew={goToNew} onView={goToDetail} />
+      )}
+    </div>
   );
 };
 

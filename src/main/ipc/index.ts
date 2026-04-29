@@ -734,6 +734,32 @@ export function registerIpcHandlers(): void {
       }
       syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
+      // Reactive engine: emit semantic events for known table types so workflows can react.
+      try {
+        if (companyId && record?.id) {
+          const eventTypeMap: Record<string, string> = {
+            clients: 'client.created',
+            vendors: 'vendor.created',
+            time_entries: 'time.entry_created',
+            quotes: 'quote.created',
+            debts: 'debt.created',
+            projects: 'project.created',
+            budgets: 'budget.created',
+            bills: 'bill.created',
+            fixed_assets: 'asset.acquired',
+          };
+          const evtType = eventTypeMap[table];
+          if (evtType) {
+            eventBus.emit({
+              type: evtType as any,
+              companyId,
+              entityType: table,
+              entityId: record.id as string,
+              data: payload as Record<string, any>,
+            }).catch(() => {});
+          }
+        }
+      } catch { /* fire-and-forget */ }
       return record;
     } catch (err) {
       console.error(`db:create [${table}] failed:`, err);
@@ -2344,7 +2370,20 @@ export function registerIpcHandlers(): void {
   // ─── Recurring Transaction Processing ────────────────
   ipcMain.handle('recurring:process-now', () => {
     const companyId = db.getCurrentCompanyId();
-    return processRecurringTemplates(companyId || undefined);
+    const result = processRecurringTemplates(companyId || undefined);
+    // Reactive engine: emit recurring.processed.
+    try {
+      if (companyId) {
+        eventBus.emit({
+          type: 'recurring.processed',
+          companyId,
+          entityType: 'recurring',
+          entityId: '',
+          data: { result },
+        }).catch(() => {});
+      }
+    } catch { /* fire-and-forget */ }
+    return result;
   });
 
   ipcMain.handle('recurring:last-processed', () => {
@@ -2799,6 +2838,26 @@ export function registerIpcHandlers(): void {
 
     const result = tx();
     scheduleAutoBackup();
+    // Reactive engine: emit payroll.processed event.
+    try {
+      if (companyId && result?.runId) {
+        eventBus.emit({
+          type: 'payroll.processed',
+          companyId,
+          entityType: 'payroll_run',
+          entityId: result.runId,
+          data: {
+            totalGross,
+            totalNet,
+            totalTaxes,
+            employeeCount: employeeCount || stubs.length,
+            periodStart,
+            periodEnd,
+            payDate,
+          },
+        }).catch(() => {});
+      }
+    } catch { /* fire-and-forget */ }
     return result;
   });
 
@@ -3408,6 +3467,25 @@ export function registerIpcHandlers(): void {
       console.warn('bills:pay recordRelation failed:', (err as Error)?.message);
     }
     scheduleAutoBackup();
+    // Reactive engine: emit bill.paid for workflows.
+    try {
+      if (companyId && billId) {
+        eventBus.emit({
+          type: result.newStatus === 'paid' ? 'bill.paid' : 'bill.updated',
+          companyId,
+          entityType: 'bill',
+          entityId: billId,
+          data: {
+            payment_id: result.paymentId,
+            amount,
+            date,
+            payment_method: paymentMethod || 'check',
+            new_status: result.newStatus,
+            amount_paid: result.newAmountPaid,
+          },
+        }).catch(() => {});
+      }
+    } catch { /* fire-and-forget */ }
     return result;
   });
 
@@ -3662,6 +3740,18 @@ export function registerIpcHandlers(): void {
     });
     depTx();
     if (processed > 0) scheduleAutoBackup();
+    // Reactive engine: emit asset.depreciated when at least one asset was depreciated.
+    try {
+      if (companyId && processed > 0) {
+        eventBus.emit({
+          type: 'asset.depreciated',
+          companyId,
+          entityType: 'fixed_assets',
+          entityId: '',
+          data: { processed, period_date: periodDate },
+        }).catch(() => {});
+      }
+    } catch { /* fire-and-forget */ }
     return { processed };
   });
 
@@ -4582,10 +4672,42 @@ export function registerIpcHandlers(): void {
           `UPDATE inventory_items SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?`
         ).run(delta, itemId);
 
-        const item = rawDb.prepare(`SELECT quantity FROM inventory_items WHERE id = ?`).get(itemId) as any;
-        return { ok: true, newQuantity: item?.quantity ?? 0 };
+        const item = rawDb.prepare(`SELECT quantity, reorder_point FROM inventory_items WHERE id = ?`).get(itemId) as any;
+        return { ok: true, newQuantity: item?.quantity ?? 0, reorderPoint: item?.reorder_point ?? 0 };
       });
-      return adjust();
+      const r = adjust();
+      // Reactive engine: emit inventory.received / low_stock / out_of_stock.
+      try {
+        if (companyId && itemId) {
+          if (type !== 'out') {
+            eventBus.emit({
+              type: 'inventory.received',
+              companyId,
+              entityType: 'inventory_item',
+              entityId: itemId,
+              data: { quantity, unit_cost: unitCost || 0, reference: reference || '', new_quantity: r.newQuantity },
+            }).catch(() => {});
+          }
+          if (r.newQuantity <= 0) {
+            eventBus.emit({
+              type: 'inventory.out_of_stock',
+              companyId,
+              entityType: 'inventory_item',
+              entityId: itemId,
+              data: { new_quantity: r.newQuantity },
+            }).catch(() => {});
+          } else if ((r as any).reorderPoint > 0 && r.newQuantity <= (r as any).reorderPoint) {
+            eventBus.emit({
+              type: 'inventory.low_stock',
+              companyId,
+              entityType: 'inventory_item',
+              entityId: itemId,
+              data: { new_quantity: r.newQuantity, reorder_point: (r as any).reorderPoint },
+            }).catch(() => {});
+          }
+        }
+      } catch { /* fire-and-forget */ }
+      return r;
     } catch (err: any) {
       return { error: err.message };
     }
@@ -6567,7 +6689,20 @@ export function registerIpcHandlers(): void {
       return { invoice_id: invoiceId };
     });
 
-    return convertTx();
+    const convertResult = convertTx();
+    // Reactive engine: emit quote.converted for workflows.
+    try {
+      if (companyId && quoteId && convertResult?.invoice_id) {
+        eventBus.emit({
+          type: 'quote.converted',
+          companyId,
+          entityType: 'quote',
+          entityId: quoteId,
+          data: { invoice_id: convertResult.invoice_id },
+        }).catch(() => {});
+      }
+    } catch { /* fire-and-forget */ }
+    return convertResult;
   });
 
   // ─── Client Insights ─────────────────────────────────────

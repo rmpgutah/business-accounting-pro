@@ -3,6 +3,7 @@ import {
   Boxes, Plus, ChevronLeft, BarChart2, List, Calendar,
   AlertCircle, RefreshCw, Edit2, Trash2, Eye, TrendingDown,
   Hash, MapPin, Tag, DollarSign, Clock, CheckCircle, XCircle,
+  LayoutDashboard, FileText, Image, Shield, Printer, AlertTriangle, Layers,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -151,6 +152,15 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [toast, setToast] = useState<Toast | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('dashboard');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [upcomingDep, setUpcomingDep] = useState<{ month: string; total: number }[]>([]);
+  const [section179Total, setSection179Total] = useState<number>(0);
+  const [bonusTotal, setBonusTotal] = useState<number>(0);
+  const [warrantyAlerts, setWarrantyAlerts] = useState<any[]>([]);
+  // 2026 limits
+  const SECTION_179_CAP_2026 = 1_160_000;
+  const BONUS_DEPRECIATION_RATE_2026 = 0.4;
 
   const showToast = (msg: string, ok = true) => {
     const t = { id: ++toastId, msg, ok };
@@ -176,6 +186,71 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Load dashboard-specific data
+  useEffect(() => {
+    if (!activeCompany) return;
+    let cancelled = false;
+    const loadDash = async () => {
+      // Upcoming depreciation (next 12 months)
+      try {
+        const rows = await api.rawQuery(
+          `SELECT strftime('%Y-%m', period_date) AS month, COALESCE(SUM(depreciation_amount), 0) AS total
+             FROM asset_depreciation_entries e
+             JOIN fixed_assets a ON e.asset_id = a.id
+            WHERE a.company_id = ?
+              AND date(period_date) >= date('now')
+              AND date(period_date) <= date('now', '+12 months')
+            GROUP BY month
+            ORDER BY month`,
+          [activeCompany.id]
+        ).catch(() => []);
+        if (!cancelled) {
+          setUpcomingDep(Array.isArray(rows) ? rows.map((r: any) => ({ month: r.month, total: Number(r.total) || 0 })) : []);
+        }
+      } catch {}
+
+      // Section 179 sum (try column - gracefully fallback)
+      try {
+        const yearStart = `${new Date().getFullYear()}-01-01`;
+        const rows = await api.rawQuery(
+          `SELECT COALESCE(SUM(section_179_amount), 0) AS total
+             FROM fixed_assets WHERE company_id = ? AND date(purchase_date) >= ?`,
+          [activeCompany.id, yearStart]
+        ).catch(() => null);
+        if (!cancelled && Array.isArray(rows) && rows[0]) setSection179Total(Number(rows[0].total) || 0);
+      } catch { /* column may not exist */ }
+
+      // Bonus depreciation eligibility sum (try column)
+      try {
+        const yearStart = `${new Date().getFullYear()}-01-01`;
+        const rows = await api.rawQuery(
+          `SELECT COALESCE(SUM(bonus_depreciation_amount), 0) AS total
+             FROM fixed_assets WHERE company_id = ? AND date(purchase_date) >= ?`,
+          [activeCompany.id, yearStart]
+        ).catch(() => null);
+        if (!cancelled && Array.isArray(rows) && rows[0]) setBonusTotal(Number(rows[0].total) || 0);
+      } catch { /* column may not exist */ }
+
+      // Warranty expiration (try column - gracefully fallback)
+      try {
+        const rows = await api.rawQuery(
+          `SELECT id, name, asset_code, warranty_expiration
+             FROM fixed_assets
+            WHERE company_id = ?
+              AND warranty_expiration IS NOT NULL
+              AND date(warranty_expiration) <= date('now', '+90 days')
+              AND date(warranty_expiration) >= date('now')
+            ORDER BY warranty_expiration ASC
+            LIMIT 10`,
+          [activeCompany.id]
+        ).catch(() => []);
+        if (!cancelled) setWarrantyAlerts(Array.isArray(rows) ? rows : []);
+      } catch { /* column may not exist */ }
+    };
+    loadDash();
+    return () => { cancelled = true; };
+  }, [activeCompany, assets.length]);
+
   const filtered = useMemo(() => {
     return assets.filter((a) => {
       if (statusFilter !== 'all' && a.status !== statusFilter) return false;
@@ -184,14 +259,152 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
     });
   }, [assets, statusFilter, categoryFilter]);
 
-  const stats = useMemo(() => ({
-    count: assets.length,
-    totalCost: assets.reduce((s, a) => s + (a.purchase_price || 0), 0),
-    // Inner expression already covers the nullish case via (price - accum)
-    // → outer ?? was unreachable. One nullish-fallback chain is enough.
-    totalBook: assets.reduce((s, a) => s + (a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))), 0),
-    totalAccDep: assets.reduce((s, a) => s + (a.accumulated_depreciation || 0), 0),
-  }), [assets]);
+  const stats = useMemo(() => {
+    const year = new Date().getFullYear();
+    return {
+      count: assets.length,
+      totalCost: assets.reduce((s, a) => s + (a.purchase_price || 0), 0),
+      // Inner expression already covers the nullish case via (price - accum)
+      // → outer ?? was unreachable. One nullish-fallback chain is enough.
+      totalBook: assets.reduce((s, a) => s + (a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))), 0),
+      totalAccDep: assets.reduce((s, a) => s + (a.accumulated_depreciation || 0), 0),
+      acquiredYear: assets.filter((a) => a.purchase_date && new Date(a.purchase_date).getFullYear() === year).length,
+      disposedYear: assets.filter((a) => a.status === 'disposed' && (a as any).disposal_date && new Date((a as any).disposal_date).getFullYear() === year).length,
+    };
+  }, [assets]);
+
+  // Category breakdown
+  const categoryStats = useMemo(() => {
+    const map: Record<string, { count: number; book: number }> = {};
+    for (const a of assets) {
+      const k = a.category || 'other';
+      if (!map[k]) map[k] = { count: 0, book: 0 };
+      map[k].count += 1;
+      map[k].book += a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0));
+    }
+    return Object.entries(map).map(([k, v]) => ({ category: k, ...v }))
+      .sort((a, b) => b.book - a.book);
+  }, [assets]);
+
+  // Disposed assets with gain/loss
+  const disposedAssets = useMemo(() => {
+    return assets.filter((a) => a.status === 'disposed').map((a) => {
+      const proceeds = Number((a as any).disposal_amount) || 0;
+      const book = a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0));
+      const gainLoss = proceeds - book;
+      return { ...a, proceeds, book, gainLoss };
+    });
+  }, [assets]);
+
+  // Aging assets (5+ years)
+  const agingAssets = useMemo(() => {
+    const fiveYearsAgo = Date.now() - 5 * 365 * 24 * 60 * 60 * 1000;
+    return assets.filter((a) => a.purchase_date && new Date(a.purchase_date).getTime() < fiveYearsAgo);
+  }, [assets]);
+
+  // Selection helpers
+  const toggleAssetSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllAssets = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((a) => a.id)));
+  };
+
+  const handleBulkRunDep = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      const periodDate = format(new Date(), 'yyyy-MM-01');
+      let processed = 0;
+      for (const id of selectedIds) {
+        try {
+          await window.electronAPI.invoke('assets:run-depreciation', { periodDate, assetId: id });
+          processed += 1;
+        } catch { /* ignore individual failure */ }
+      }
+      showToast(`Depreciation run for ${processed} of ${selectedIds.size} asset(s).`, processed > 0);
+      setSelectedIds(new Set());
+      load();
+    } catch {
+      showToast('Bulk depreciation failed.', false);
+    }
+  };
+
+  const handlePrintRegister = async () => {
+    const html = `
+      <html><head><title>Fixed Asset Register</title>
+      <style>
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; color: #111; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .sub { color: #666; font-size: 12px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #f5f5f5; font-weight: 700; text-transform: uppercase; font-size: 10px; }
+        td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, monospace; }
+        tfoot td { font-weight: 700; border-top: 2px solid #333; }
+      </style></head><body>
+      <h1>Fixed Asset Register</h1>
+      <div class="sub">${activeCompany?.name || ''} · Generated ${new Date().toLocaleDateString()}</div>
+      <table>
+        <thead><tr>
+          <th>Code</th><th>Name</th><th>Category</th><th>Purchase Date</th>
+          <th class="num">Cost</th><th class="num">Acc. Dep.</th><th class="num">Book Value</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${assets.map((a) => `<tr>
+            <td>${a.asset_code || ''}</td>
+            <td>${a.name}</td>
+            <td>${CATEGORY_LABELS[a.category] || a.category}</td>
+            <td>${a.purchase_date || ''}</td>
+            <td class="num">${formatCurrency(a.purchase_price)}</td>
+            <td class="num">${formatCurrency(a.accumulated_depreciation || 0)}</td>
+            <td class="num">${formatCurrency(a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0)))}</td>
+            <td>${a.status}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr>
+          <td colspan="4">Totals</td>
+          <td class="num">${formatCurrency(stats.totalCost)}</td>
+          <td class="num">${formatCurrency(stats.totalAccDep)}</td>
+          <td class="num">${formatCurrency(stats.totalBook)}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+      </body></html>
+    `;
+    try { await api.printPreview(html, 'Fixed Asset Register'); } catch (err) { console.error(err); }
+  };
+
+  const handlePrintTags = async () => {
+    const targets = selectedIds.size > 0 ? assets.filter((a) => selectedIds.has(a.id)) : assets;
+    const html = `
+      <html><head><title>Asset Tags</title>
+      <style>
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 12px; color: #111; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .tag { border: 2px solid #333; padding: 12px; text-align: center; page-break-inside: avoid; }
+        .code { font-family: ui-monospace, Menlo, monospace; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+        .name { font-size: 11px; margin-bottom: 6px; }
+        .barcode { height: 36px; background: repeating-linear-gradient(90deg, #000 0 2px, #fff 2px 4px, #000 4px 5px, #fff 5px 8px); margin-bottom: 4px; }
+        .meta { font-size: 9px; color: #666; }
+      </style></head><body>
+      <div class="grid">
+        ${targets.map((a) => `<div class="tag">
+          <div class="code">${a.asset_code || a.id.slice(0, 8)}</div>
+          <div class="barcode"></div>
+          <div class="name">${a.name}</div>
+          <div class="meta">${CATEGORY_LABELS[a.category] || a.category}${a.location ? ' · ' + a.location : ''}</div>
+        </div>`).join('')}
+      </div>
+      </body></html>
+    `;
+    try { await api.printPreview(html, 'Asset Tags'); } catch (err) { console.error(err); }
+  };
 
   const handleRunDep = async () => {
     if (!activeCompany) return;
@@ -249,6 +462,18 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={handlePrintRegister}
+            className="block-btn flex items-center gap-2 px-3 py-1.5 text-xs"
+          >
+            <FileText size={13} /> Print Register
+          </button>
+          <button
+            onClick={handlePrintTags}
+            className="block-btn flex items-center gap-2 px-3 py-1.5 text-xs"
+          >
+            <Printer size={13} /> Asset Tags
+          </button>
+          <button
             onClick={handleRunDep}
             disabled={runningDep}
             className="block-btn flex items-center gap-2 px-3 py-1.5 text-xs"
@@ -266,24 +491,238 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: 'Total Assets', value: String(stats.count), icon: <Boxes size={16} /> },
-          { label: 'Original Cost', value: fmt.format(stats.totalCost), icon: <DollarSign size={16} /> },
-          { label: 'Book Value', value: fmt.format(stats.totalBook), icon: <TrendingDown size={16} /> },
-          { label: 'Accumulated Dep.', value: fmt.format(stats.totalAccDep), icon: <BarChart2 size={16} /> },
-        ].map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-text-muted">{s.icon}</span>
-              <span className="stat-label">{s.label}</span>
-            </div>
-            <div className="stat-value">{s.value}</div>
-          </div>
+      {/* Tab Bar */}
+      <div className="flex border-b border-border-primary">
+        {([
+          ['dashboard', 'Dashboard', <LayoutDashboard size={13} key="d" />],
+          ['list', 'Asset List', <List size={13} key="l" />],
+        ] as const).map(([key, label, icon]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key as any)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
+              activeTab === key
+                ? 'border-accent-blue text-accent-blue'
+                : 'border-transparent text-text-muted hover:text-text-primary'
+            }`}
+          >
+            {icon}
+            {label}
+          </button>
         ))}
       </div>
 
+      {/* Dashboard Tab */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-5">
+          {/* 6 KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Total Assets', value: String(stats.count), icon: <Boxes size={14} />, color: 'text-accent-blue' },
+              { label: 'Cost Basis', value: fmt.format(stats.totalCost), icon: <DollarSign size={14} />, color: 'text-text-primary' },
+              { label: 'Acc. Dep.', value: fmt.format(stats.totalAccDep), icon: <TrendingDown size={14} />, color: 'text-accent-expense' },
+              { label: 'Net Book Value', value: fmt.format(stats.totalBook), icon: <BarChart2 size={14} />, color: 'text-accent-income' },
+              { label: 'Acquired YTD', value: String(stats.acquiredYear), icon: <Plus size={14} />, color: 'text-accent-blue' },
+              { label: 'Disposed YTD', value: String(stats.disposedYear), icon: <XCircle size={14} />, color: stats.disposedYear > 0 ? 'text-accent-expense' : 'text-text-muted' },
+            ].map((k) => (
+              <div key={k.label} className="block-card p-3" style={{ borderRadius: '6px' }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={k.color}>{k.icon}</span>
+                  <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{k.label}</span>
+                </div>
+                <div className="text-base font-bold text-text-primary font-mono">{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Upcoming Depreciation */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                <Calendar size={14} className="text-accent-blue" /> Depreciation Schedule (Next 12 Months)
+              </h3>
+              {upcomingDep.length === 0 ? (
+                <p className="text-xs text-text-muted">No depreciation scheduled.</p>
+              ) : (() => {
+                const max = Math.max(...upcomingDep.map((u) => u.total), 1);
+                return (
+                  <div className="space-y-2">
+                    {upcomingDep.map((u) => (
+                      <div key={u.month}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-text-secondary font-mono">{u.month}</span>
+                          <span className="font-mono text-text-muted">{fmt.format(u.total)}</span>
+                        </div>
+                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                          <div className="h-full bg-accent-expense transition-all" style={{ width: `${(u.total / max) * 100}%`, borderRadius: '6px' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Assets by Category */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                <Layers size={14} className="text-accent-blue" /> Assets by Category
+              </h3>
+              {categoryStats.length === 0 ? (
+                <p className="text-xs text-text-muted">No assets.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead><tr><th>Category</th><th className="text-right">Count</th><th className="text-right">Book Value</th></tr></thead>
+                  <tbody>
+                    {categoryStats.map((c) => (
+                      <tr key={c.category}>
+                        <td className="text-text-primary">{CATEGORY_LABELS[c.category] || c.category}</td>
+                        <td className="text-right font-mono">{c.count}</td>
+                        <td className="text-right font-mono text-text-secondary">{fmt.format(c.book)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Disposal Tracker */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                <XCircle size={14} className="text-accent-expense" /> Disposal Tracker
+              </h3>
+              {disposedAssets.length === 0 ? (
+                <p className="text-xs text-text-muted">No disposed assets.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead><tr><th>Asset</th><th className="text-right">Proceeds</th><th className="text-right">Book</th><th className="text-right">Gain/Loss</th></tr></thead>
+                  <tbody>
+                    {disposedAssets.map((a) => (
+                      <tr key={a.id}>
+                        <td className="text-text-primary truncate max-w-[160px]">{a.name}</td>
+                        <td className="text-right font-mono text-text-secondary">{fmt.format(a.proceeds)}</td>
+                        <td className="text-right font-mono text-text-secondary">{fmt.format(a.book)}</td>
+                        <td className={`text-right font-mono font-bold ${a.gainLoss >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
+                          {fmt.format(a.gainLoss)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Aging Assets */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                <Clock size={14} className="text-accent-warning" /> Aging Assets (5+ Years)
+              </h3>
+              {agingAssets.length === 0 ? (
+                <p className="text-xs text-text-muted">No aging assets.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead><tr><th>Asset</th><th>Purchased</th><th className="text-right">Book Value</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {agingAssets.slice(0, 10).map((a) => {
+                      const book = a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0));
+                      const fullyDep = book <= (a.salvage_value || 0);
+                      return (
+                        <tr key={a.id}>
+                          <td className="text-text-primary truncate max-w-[160px]">{a.name}</td>
+                          <td className="text-text-muted font-mono text-[10px]">{a.purchase_date?.slice(0, 10) || '—'}</td>
+                          <td className="text-right font-mono text-text-secondary">{fmt.format(book)}</td>
+                          <td>
+                            <span className={`block-badge ${fullyDep ? 'block-badge-blue' : 'block-badge-warning'} text-[10px]`}>
+                              {fullyDep ? 'Fully Dep.' : 'Active'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Section 179 Tracker */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2">
+                <Shield size={14} className="text-accent-blue" /> Section 179 (2026)
+              </h3>
+              <div className="text-2xl font-bold text-text-primary font-mono">{fmt.format(section179Total)}</div>
+              <div className="text-xs text-text-muted mb-2">of {fmt.format(SECTION_179_CAP_2026)} cap</div>
+              <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                <div
+                  className="h-full bg-accent-income transition-all"
+                  style={{ width: `${Math.min((section179Total / SECTION_179_CAP_2026) * 100, 100)}%`, borderRadius: '6px' }}
+                />
+              </div>
+              <p className="text-[10px] text-text-muted mt-2">
+                {((section179Total / SECTION_179_CAP_2026) * 100).toFixed(1)}% used
+              </p>
+            </div>
+
+            {/* Bonus Depreciation */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2">
+                <TrendingDown size={14} className="text-accent-expense" /> Bonus Depreciation (40%)
+              </h3>
+              <div className="text-2xl font-bold text-text-primary font-mono">{fmt.format(bonusTotal)}</div>
+              <div className="text-xs text-text-muted">claimed in 2026</div>
+              <p className="text-[10px] text-text-muted mt-2">
+                2026 bonus rate: {(BONUS_DEPRECIATION_RATE_2026 * 100).toFixed(0)}% (phasing down).
+              </p>
+            </div>
+
+            {/* Warranty Alerts */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2">
+                <AlertTriangle size={14} className="text-accent-warning" /> Warranty Expiring (90d)
+              </h3>
+              {warrantyAlerts.length === 0 ? (
+                <p className="text-xs text-text-muted">No warranties expiring soon.</p>
+              ) : (
+                <div className="space-y-1">
+                  {warrantyAlerts.map((w: any) => (
+                    <div key={w.id} className="flex items-center justify-between text-xs py-1 border-b border-border-primary/40 last:border-b-0">
+                      <span className="text-text-primary truncate max-w-[140px]">{w.name}</span>
+                      <span className="text-accent-warning font-mono text-[10px]">{w.warranty_expiration?.slice(0, 10)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List Tab Stats */}
+      {activeTab === 'list' && (
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Total Assets', value: String(stats.count), icon: <Boxes size={16} /> },
+            { label: 'Original Cost', value: fmt.format(stats.totalCost), icon: <DollarSign size={16} /> },
+            { label: 'Book Value', value: fmt.format(stats.totalBook), icon: <TrendingDown size={16} /> },
+            { label: 'Accumulated Dep.', value: fmt.format(stats.totalAccDep), icon: <BarChart2 size={16} /> },
+          ].map((s) => (
+            <div key={s.label} className="stat-card">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-text-muted">{s.icon}</span>
+                <span className="stat-label">{s.label}</span>
+              </div>
+              <div className="stat-value">{s.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* List Tab Content */}
+      {activeTab === 'list' && (
+      <>
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Status tabs */}
@@ -317,6 +756,26 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
         </select>
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+          <span className="text-xs font-semibold text-text-primary">
+            {selectedIds.size} asset{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button className="block-btn text-xs" onClick={toggleAllAssets}>
+              {selectedIds.size === filtered.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <button className="block-btn text-xs" onClick={handleBulkRunDep}>
+              <RefreshCw size={11} className="inline mr-1" /> Bulk Run Depreciation
+            </button>
+            <button className="block-btn text-xs" onClick={handlePrintTags}>
+              <Printer size={11} className="inline mr-1" /> Print Tags
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="block-card overflow-hidden">
         {loading ? (
@@ -337,6 +796,14 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
           <table className="block-table w-full">
             <thead>
               <tr>
+                <th className="w-8 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleAllAssets}
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <th>Asset Code</th>
                 <th>Name</th>
                 <th>Category</th>
@@ -346,12 +813,25 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                 <th className="text-right">Acc. Dep.</th>
                 <th className="text-right">Book Value</th>
                 <th>Status</th>
+                <th className="text-center">Photo</th>
+                <th className="text-center">Insured</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => (
+              {filtered.map((a) => {
+                const photoPath = (a as any).photo_path;
+                const insurance = (a as any).insurance_policy || (a as any).insurance_coverage;
+                return (
                 <tr key={a.id} className="hover:bg-bg-hover cursor-pointer transition-colors" onClick={() => onView(a.id)}>
+                  <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(a.id)}
+                      onChange={() => toggleAssetSelect(a.id)}
+                      style={{ accentColor: '#3b82f6' }}
+                    />
+                  </td>
                   <td className="font-mono text-xs text-accent-blue">{a.asset_code}</td>
                   <td className="font-semibold text-text-primary truncate max-w-[200px]">{a.name}</td>
                   <td><ClassificationBadge def={ASSET_CATEGORY} value={a.category} /></td>
@@ -367,6 +847,12 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                       {a.status === 'fully_depreciated' ? 'Fully Dep.' : a.status.charAt(0).toUpperCase() + a.status.slice(1)}
                     </span>
                   </td>
+                  <td className="text-center">
+                    {photoPath ? <Image size={13} className="text-accent-income inline" /> : <span className="text-text-muted">—</span>}
+                  </td>
+                  <td className="text-center">
+                    {insurance ? <Shield size={13} className="text-accent-blue inline" /> : <span className="text-text-muted">—</span>}
+                  </td>
                   <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
                       <button onClick={() => onView(a.id)} className="block-btn p-1.5" title="View">
@@ -381,11 +867,14 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

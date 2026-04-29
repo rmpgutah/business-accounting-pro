@@ -19,7 +19,7 @@ export type EventType =
   | 'client.created' | 'client.updated' | 'client.status_changed'
   | 'vendor.created' | 'vendor.updated'
   // Quote
-  | 'quote.created' | 'quote.sent' | 'quote.accepted'
+  | 'quote.created' | 'quote.updated' | 'quote.sent' | 'quote.accepted'
   | 'quote.rejected' | 'quote.converted' | 'quote.expired'
   // Debt
   | 'debt.created' | 'debt.escalated' | 'debt.payment_received'
@@ -27,9 +27,23 @@ export type EventType =
   // Payroll
   | 'payroll.processed' | 'payroll.paid'
   // Project
-  | 'project.created' | 'project.budget_warning' | 'project.completed'
+  | 'project.created' | 'project.budget_warning' | 'project.budget_exceeded' | 'project.completed'
   // Tax
   | 'tax.filing_due' | 'tax.deposit_due'
+  // Bill (AP)
+  | 'bill.created' | 'bill.updated' | 'bill.paid' | 'bill.overdue'
+  // Budget
+  | 'budget.created' | 'budget.exceeded'
+  // Inventory
+  | 'inventory.low_stock' | 'inventory.out_of_stock' | 'inventory.received'
+  // Fixed Assets
+  | 'asset.acquired' | 'asset.disposed' | 'asset.depreciated'
+  // Time Tracking
+  | 'time.entry_created' | 'time.entry_updated'
+  // Recurring
+  | 'recurring.processed'
+  // Bank
+  | 'bank.imported' | 'bank.matched'
   // Generic
   | 'entity.deleted';
 

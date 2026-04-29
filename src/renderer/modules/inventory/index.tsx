@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  Package, Plus, Search, Filter, AlertTriangle, X, ArrowDown, ArrowUp, RefreshCw, History, Pencil, Trash2, ArrowUpDown,
+  Package, Plus, Search, Filter, AlertTriangle, X, ArrowDown, ArrowUp, RefreshCw, History, Pencil, Trash2,
+  LayoutDashboard, List, FileText, Download, TrendingDown, AlertCircle, DollarSign, Boxes,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
@@ -88,7 +89,15 @@ const Inventory: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'low-stock'>('all');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'all' | 'low-stock'>('dashboard');
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  // Dashboard data
+  const [reorderAlerts, setReorderAlerts] = useState<any[]>([]);
+  const [topMovers, setTopMovers] = useState<any[]>([]);
+  const [slowMovers, setSlowMovers] = useState<any[]>([]);
+  const [valueTrend, setValueTrend] = useState<{ month: string; value: number }[]>([]);
+  const [soldThisMonth, setSoldThisMonth] = useState(0);
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -133,6 +142,94 @@ const Inventory: React.FC = () => {
 
   useEffect(() => { loadItems(); }, [activeCompany]);
 
+  // ─── Load Dashboard Data ──────────────────────────────
+  useEffect(() => {
+    if (!activeCompany) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [reorderRows, topMoverRows, slowRows, soldRow, monthsRows] = await Promise.all([
+          api.rawQuery(
+            `SELECT id, name, sku, quantity, reorder_point, reorder_qty, unit_cost
+               FROM inventory_items
+              WHERE company_id = ? AND reorder_point > 0 AND quantity <= reorder_point AND quantity >= 0
+              ORDER BY (quantity - reorder_point) ASC
+              LIMIT 10`,
+            [activeCompany.id]
+          ).catch(() => []),
+          api.rawQuery(
+            `SELECT i.id, i.name, i.sku,
+              COALESCE(SUM(CASE WHEN m.type = 'in' THEN m.quantity ELSE 0 END), 0) AS qty_in,
+              COALESCE(SUM(CASE WHEN m.type = 'out' THEN m.quantity ELSE 0 END), 0) AS qty_out
+             FROM inventory_items i
+             LEFT JOIN inventory_movements m ON m.item_id = i.id AND julianday('now') - julianday(m.created_at) <= 30
+             WHERE i.company_id = ?
+             GROUP BY i.id
+             HAVING qty_in > 0 OR qty_out > 0
+             ORDER BY (qty_in + qty_out) DESC
+             LIMIT 8`,
+            [activeCompany.id]
+          ).catch(() => []),
+          api.rawQuery(
+            `SELECT i.id, i.name, i.quantity, i.unit_cost,
+              COALESCE(MAX(m.created_at), i.created_at) AS last_movement
+             FROM inventory_items i
+             LEFT JOIN inventory_movements m ON m.item_id = i.id
+             WHERE i.company_id = ?
+             GROUP BY i.id
+             HAVING julianday('now') - julianday(last_movement) > 60
+             ORDER BY last_movement ASC
+             LIMIT 10`,
+            [activeCompany.id]
+          ).catch(() => []),
+          api.rawQuery(
+            `SELECT COALESCE(SUM(quantity), 0) AS total
+              FROM inventory_movements m
+              JOIN inventory_items i ON m.item_id = i.id
+              WHERE i.company_id = ?
+                AND m.type = 'out'
+                AND strftime('%Y-%m', m.created_at) = strftime('%Y-%m', 'now')`,
+            [activeCompany.id]
+          ).catch(() => []),
+          // Approximation of inventory_value over months: current items value with running adjustments
+          api.rawQuery(
+            `SELECT strftime('%Y-%m', m.created_at) AS month,
+              SUM(CASE WHEN m.type = 'in' THEN m.quantity * COALESCE(m.unit_cost, 0)
+                       WHEN m.type = 'out' THEN -m.quantity * COALESCE(m.unit_cost, 0)
+                       ELSE 0 END) AS delta
+             FROM inventory_movements m
+             JOIN inventory_items i ON m.item_id = i.id
+             WHERE i.company_id = ?
+               AND julianday('now') - julianday(m.created_at) <= 200
+             GROUP BY month
+             ORDER BY month`,
+            [activeCompany.id]
+          ).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setReorderAlerts(Array.isArray(reorderRows) ? reorderRows : []);
+        setTopMovers(Array.isArray(topMoverRows) ? topMoverRows : []);
+        setSlowMovers(Array.isArray(slowRows) ? slowRows : []);
+        setSoldThisMonth(Array.isArray(soldRow) && soldRow[0] ? Number(soldRow[0].total) || 0 : 0);
+
+        // Build a 6-month trend: forward-add deltas to a baseline (current value)
+        if (Array.isArray(monthsRows) && monthsRows.length > 0) {
+          const trend = monthsRows.slice(-6).map((r: any) => ({
+            month: String(r.month || ''),
+            value: Math.max(0, Number(r.delta) || 0),
+          }));
+          setValueTrend(trend);
+        } else {
+          setValueTrend([]);
+        }
+      } catch (err) {
+        console.error('Dashboard load failed:', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [activeCompany, items.length]);
+
   // ─── Categories ───────────────────────────────────────
   const categories = useMemo(() => {
     const cats = new Set<string>();
@@ -168,6 +265,160 @@ const Inventory: React.FC = () => {
     items.reduce((sum, i) => sum + (i.quantity || 0) * (i.unit_cost || 0), 0), [items]);
   const lowStockCount = useMemo(() =>
     items.filter(i => i.reorder_point > 0 && i.quantity <= i.reorder_point).length, [items]);
+  const outOfStockCount = useMemo(() =>
+    items.filter(i => (i.quantity || 0) <= 0).length, [items]);
+  const overstockCount = useMemo(() =>
+    items.filter(i => i.reorder_point > 0 && i.quantity >= i.reorder_point * 3).length, [items]);
+  const avgItemValue = useMemo(() => items.length ? totalValue / items.length : 0, [items, totalValue]);
+
+  // ─── Stock status helper ──────────────────────────────
+  const stockStatus = (item: InventoryItem): { label: string; color: string; bg: string } => {
+    if ((item.quantity || 0) <= 0) return { label: 'Out', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
+    if (item.reorder_point > 0 && item.quantity <= item.reorder_point) return { label: 'Low', color: '#eab308', bg: 'rgba(234,179,8,0.12)' };
+    if (item.reorder_point > 0 && item.quantity >= item.reorder_point * 3) return { label: 'Overstock', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' };
+    return { label: 'In Stock', color: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
+  };
+
+  // ─── Category Breakdown ───────────────────────────────
+  const categoryBreakdown = useMemo(() => {
+    const map: Record<string, { count: number; value: number }> = {};
+    for (const i of items) {
+      const k = i.category || 'Uncategorized';
+      if (!map[k]) map[k] = { count: 0, value: 0 };
+      map[k].count += 1;
+      map[k].value += (i.quantity || 0) * (i.unit_cost || 0);
+    }
+    return Object.entries(map).map(([cat, v]) => ({ category: cat, ...v }))
+      .sort((a, b) => b.value - a.value);
+  }, [items]);
+
+  // ─── Selection helpers ───────────────────────────────
+  const toggleItemSelect = (id: string) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllItems = () => {
+    if (selectedItemIds.size === filtered.length) setSelectedItemIds(new Set());
+    else setSelectedItemIds(new Set(filtered.map((i) => i.id)));
+  };
+
+  // ─── Bulk actions ────────────────────────────────────
+  const handleBulkArchive = async () => {
+    if (selectedItemIds.size === 0) return;
+    if (!window.confirm(`Archive (delete) ${selectedItemIds.size} items? This cannot be undone.`)) return;
+    try {
+      for (const id of selectedItemIds) {
+        await api.remove('inventory_items', id);
+      }
+      setSelectedItemIds(new Set());
+      setOpSuccess('Items archived'); setTimeout(() => setOpSuccess(''), 3000);
+      await loadItems();
+    } catch (err: any) {
+      setOpError('Bulk archive failed: ' + (err?.message || ''));
+      setTimeout(() => setOpError(''), 5000);
+    }
+  };
+
+  const handleBulkReorder = async () => {
+    if (selectedItemIds.size === 0) return;
+    const list = items.filter((i) => selectedItemIds.has(i.id));
+    const totalQty = list.reduce((s, i) => s + (i.reorder_qty || 0), 0);
+    const totalCost = list.reduce((s, i) => s + (i.reorder_qty || 0) * (i.unit_cost || 0), 0);
+    alert(`Draft reorder generated for ${list.length} items: ${totalQty} units, ${formatCurrency(totalCost)} total. (Create this in the Bills module.)`);
+  };
+
+  const handleBulkUpdateCost = async () => {
+    if (selectedItemIds.size === 0) return;
+    const newCost = window.prompt('Enter new unit cost (applies to all selected):');
+    if (!newCost) return;
+    const cost = parseFloat(newCost);
+    if (!Number.isFinite(cost) || cost < 0) { alert('Invalid cost'); return; }
+    try {
+      for (const id of selectedItemIds) {
+        await api.update('inventory_items', id, { unit_cost: cost });
+      }
+      setSelectedItemIds(new Set());
+      setOpSuccess('Unit cost updated'); setTimeout(() => setOpSuccess(''), 3000);
+      await loadItems();
+    } catch (err: any) {
+      setOpError('Bulk update failed: ' + (err?.message || ''));
+      setTimeout(() => setOpError(''), 5000);
+    }
+  };
+
+  // ─── Print Inventory Valuation ────────────────────────
+  const handlePrintValuation = async () => {
+    const html = `
+      <html><head><title>Inventory Valuation Report</title>
+      <style>
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; color: #111; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .sub { color: #666; font-size: 12px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #f5f5f5; font-weight: 700; text-transform: uppercase; font-size: 10px; }
+        td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, monospace; }
+        tfoot td { font-weight: 700; border-top: 2px solid #333; }
+      </style></head><body>
+      <h1>Inventory Valuation Report</h1>
+      <div class="sub">${activeCompany?.name || ''} · Generated ${new Date().toLocaleDateString()}</div>
+      <table>
+        <thead><tr>
+          <th>Name</th><th>SKU</th><th>Category</th>
+          <th class="num">Qty</th><th class="num">Unit Cost</th><th class="num">Total Value</th>
+        </tr></thead>
+        <tbody>
+          ${items.map((i) => `<tr>
+            <td>${i.name}</td>
+            <td>${i.sku || ''}</td>
+            <td>${i.category || ''}</td>
+            <td class="num">${i.quantity}</td>
+            <td class="num">${formatCurrency(i.unit_cost)}</td>
+            <td class="num">${formatCurrency((i.quantity || 0) * (i.unit_cost || 0))}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr>
+          <td colspan="5">Total Inventory Value</td>
+          <td class="num">${formatCurrency(totalValue)}</td>
+        </tr></tfoot>
+      </table>
+      </body></html>
+    `;
+    try { await api.printPreview(html, 'Inventory Valuation Report'); } catch (err) { console.error(err); }
+  };
+
+  // ─── Export to CSV ────────────────────────────────────
+  const handleExportCsv = () => {
+    const header = ['Name', 'SKU', 'Description', 'Category', 'Quantity', 'Unit Cost', 'Total Value', 'Reorder Point', 'Reorder Qty', 'Status'];
+    const rows = items.map((i) => [
+      i.name,
+      i.sku || '',
+      (i.description || '').replace(/\n/g, ' '),
+      i.category || '',
+      i.quantity,
+      i.unit_cost,
+      (i.quantity || 0) * (i.unit_cost || 0),
+      i.reorder_point,
+      i.reorder_qty,
+      stockStatus(i).label,
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => {
+        const s = String(cell ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // ─── Create Item ──────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -304,20 +555,211 @@ const Inventory: React.FC = () => {
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-border-primary">
-        {([['all', 'All Items'], ['low-stock', `Low Stock${lowStockCount > 0 ? ` (${lowStockCount})` : ''}`]] as const).map(([key, label]) => (
+        {([
+          ['dashboard', 'Dashboard'],
+          ['all', 'All Items'],
+          ['low-stock', `Low Stock${lowStockCount > 0 ? ` (${lowStockCount})` : ''}`],
+        ] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key as any)}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === key
                 ? key === 'low-stock' ? 'border-accent-expense text-accent-expense' : 'border-accent-blue text-accent-blue'
                 : 'border-transparent text-text-muted hover:text-text-secondary transition-colors'
             }`}
           >
+            {key === 'dashboard' && <LayoutDashboard size={12} />}
+            {key === 'all' && <List size={12} />}
+            {key === 'low-stock' && <AlertTriangle size={12} />}
             {label}
           </button>
         ))}
       </div>
+
+      {/* Dashboard Tab */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-5">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Total Items', value: String(items.length), icon: <Boxes size={14} />, color: 'text-accent-blue' },
+              { label: 'Stock Value', value: fmt.format(totalValue), icon: <DollarSign size={14} />, color: 'text-accent-income' },
+              { label: 'Low Stock', value: String(lowStockCount), icon: <AlertTriangle size={14} />, color: lowStockCount > 0 ? 'text-accent-warning' : 'text-text-muted' },
+              { label: 'Out of Stock', value: String(outOfStockCount), icon: <AlertCircle size={14} />, color: outOfStockCount > 0 ? 'text-accent-expense' : 'text-text-muted' },
+              { label: 'Sold (Month)', value: String(soldThisMonth), icon: <TrendingDown size={14} />, color: 'text-accent-blue' },
+              { label: 'Avg Item Value', value: fmt.format(avgItemValue), icon: <DollarSign size={14} />, color: 'text-text-primary' },
+            ].map((k) => (
+              <div key={k.label} className="block-card p-3" style={{ borderRadius: '6px' }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={k.color}>{k.icon}</span>
+                  <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{k.label}</span>
+                </div>
+                <div className="text-base font-bold text-text-primary font-mono">{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Stock Status Distribution */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3">Stock Status Distribution</h3>
+              {(() => {
+                const inStock = items.length - lowStockCount - outOfStockCount - overstockCount;
+                const total = items.length || 1;
+                const segments = [
+                  { label: 'In Stock', count: Math.max(0, inStock), color: '#22c55e' },
+                  { label: 'Low', count: lowStockCount - outOfStockCount > 0 ? lowStockCount - outOfStockCount : Math.max(0, lowStockCount), color: '#eab308' },
+                  { label: 'Out', count: outOfStockCount, color: '#ef4444' },
+                  { label: 'Overstock', count: overstockCount, color: '#3b82f6' },
+                ];
+                return (
+                  <div className="space-y-2">
+                    {segments.map((s) => (
+                      <div key={s.label}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-text-secondary">{s.label}</span>
+                          <span className="font-mono text-text-muted">{s.count} ({((s.count / total) * 100).toFixed(0)}%)</span>
+                        </div>
+                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                          <div className="h-full transition-all" style={{ width: `${(s.count / total) * 100}%`, backgroundColor: s.color, borderRadius: '6px' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Reorder Alerts */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
+                <AlertTriangle size={14} className="text-accent-warning" /> Reorder Alerts
+              </h3>
+              {reorderAlerts.length === 0 ? (
+                <p className="text-xs text-text-muted">No items need reordering.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead>
+                    <tr><th>Item</th><th>SKU</th><th className="text-right">Qty</th><th className="text-right">Reorder At</th><th className="text-right">Order</th></tr>
+                  </thead>
+                  <tbody>
+                    {reorderAlerts.map((r) => (
+                      <tr key={r.id}>
+                        <td className="text-text-primary truncate max-w-[140px]">{r.name}</td>
+                        <td className="text-text-muted font-mono">{r.sku || '—'}</td>
+                        <td className="text-right text-accent-expense font-mono">{r.quantity}</td>
+                        <td className="text-right text-text-muted font-mono">{r.reorder_point}</td>
+                        <td className="text-right text-accent-blue font-mono">{r.reorder_qty || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top Movers */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3">Top Movers (Last 30 Days)</h3>
+              {topMovers.length === 0 ? (
+                <p className="text-xs text-text-muted">No movement data.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead>
+                    <tr><th>Item</th><th>SKU</th><th className="text-right">In</th><th className="text-right">Out</th></tr>
+                  </thead>
+                  <tbody>
+                    {topMovers.map((m) => (
+                      <tr key={m.id}>
+                        <td className="text-text-primary truncate max-w-[160px]">{m.name}</td>
+                        <td className="text-text-muted font-mono">{m.sku || '—'}</td>
+                        <td className="text-right text-accent-income font-mono">{m.qty_in}</td>
+                        <td className="text-right text-accent-expense font-mono">{m.qty_out}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Slow Movers */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3">Slow-Moving Inventory (60+ days)</h3>
+              {slowMovers.length === 0 ? (
+                <p className="text-xs text-text-muted">No slow movers.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead>
+                    <tr><th>Item</th><th className="text-right">Qty</th><th className="text-right">Value</th><th>Last Movement</th></tr>
+                  </thead>
+                  <tbody>
+                    {slowMovers.map((s) => (
+                      <tr key={s.id}>
+                        <td className="text-text-primary truncate max-w-[160px]">{s.name}</td>
+                        <td className="text-right font-mono">{s.quantity}</td>
+                        <td className="text-right font-mono text-text-muted">{fmt.format((s.quantity || 0) * (s.unit_cost || 0))}</td>
+                        <td className="text-text-muted text-[10px] font-mono">{(s.last_movement || '').slice(0, 10) || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Value Trend */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3">Inventory Value Trend (Movement Volume)</h3>
+              {valueTrend.length === 0 ? (
+                <p className="text-xs text-text-muted">No trend data.</p>
+              ) : (() => {
+                const max = Math.max(...valueTrend.map((v) => v.value), 1);
+                return (
+                  <div className="space-y-2">
+                    {valueTrend.map((v) => (
+                      <div key={v.month}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-text-secondary font-mono">{v.month}</span>
+                          <span className="font-mono text-text-muted">{fmt.format(v.value)}</span>
+                        </div>
+                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                          <div className="h-full bg-accent-blue transition-all" style={{ width: `${(v.value / max) * 100}%`, borderRadius: '6px' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Category Breakdown */}
+            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <h3 className="text-sm font-bold text-text-primary mb-3">Category Breakdown</h3>
+              {categoryBreakdown.length === 0 ? (
+                <p className="text-xs text-text-muted">No items.</p>
+              ) : (
+                <table className="block-table w-full text-xs">
+                  <thead>
+                    <tr><th>Category</th><th className="text-right">Items</th><th className="text-right">Value</th></tr>
+                  </thead>
+                  <tbody>
+                    {categoryBreakdown.map((c) => (
+                      <tr key={c.category}>
+                        <td className="text-text-primary">{c.category}</td>
+                        <td className="text-right font-mono">{c.count}</td>
+                        <td className="text-right font-mono text-text-secondary">{fmt.format(c.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Item Form */}
       {showForm && (
@@ -497,20 +939,45 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input type="text" placeholder="Search inventory..." className="block-input pl-9 w-full" value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Filters + List Actions (only on list tabs) */}
+      {activeTab !== 'dashboard' && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input type="text" placeholder="Search inventory..." className="block-input pl-9 w-full" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-text-muted" />
+            <select className="block-select" style={{ width: 'auto', minWidth: '150px' }} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+              <option value="">All Categories</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <button className="block-btn inline-flex items-center gap-1.5 text-xs" onClick={handlePrintValuation}>
+            <FileText size={12} /> Print Valuation
+          </button>
+          <button className="block-btn inline-flex items-center gap-1.5 text-xs" onClick={handleExportCsv}>
+            <Download size={12} /> Export CSV
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-text-muted" />
-          <select className="block-select" style={{ width: 'auto', minWidth: '150px' }} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-            <option value="">All Categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+      )}
+
+      {/* Bulk Action Bar */}
+      {activeTab !== 'dashboard' && selectedItemIds.size > 0 && (
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+          <span className="text-xs font-semibold text-text-primary">
+            {selectedItemIds.size} item{selectedItemIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button className="block-btn text-xs" onClick={toggleAllItems}>
+              {selectedItemIds.size === filtered.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <button className="block-btn text-xs" onClick={handleBulkReorder}>Bulk Reorder</button>
+            <button className="block-btn text-xs" onClick={handleBulkUpdateCost}>Update Unit Cost</button>
+            <button className="block-btn text-xs text-accent-expense" onClick={handleBulkArchive}>Archive Selected</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Low Stock Alert Banner */}
       {activeTab === 'all' && lowStockCount > 0 && (
@@ -528,7 +995,7 @@ const Inventory: React.FC = () => {
       {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {/* Table */}
-      {filtered.length === 0 ? (
+      {activeTab !== 'dashboard' && (filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><Package size={24} className="text-text-muted" /></div>
           <p className="text-sm text-text-secondary font-medium">
@@ -543,21 +1010,48 @@ const Inventory: React.FC = () => {
           <table className="block-table">
             <thead>
               <tr>
+                <th className="w-8 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedItemIds.size === filtered.length}
+                    onChange={toggleAllItems}
+                    style={{ accentColor: '#3b82f6' }}
+                  />
+                </th>
                 <th className="cursor-pointer select-none" onClick={() => handleInvSort('name')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="cursor-pointer select-none" onClick={() => handleInvSort('sku')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">SKU {sortField === 'sku' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="cursor-pointer select-none" onClick={() => handleInvSort('category')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Category {sortField === 'category' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th>Status</th>
                 <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('quantity')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Qty {sortField === 'quantity' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('unit_cost')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Unit Cost {sortField === 'unit_cost' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th className="text-right">Total Value</th>
                 <th className="text-right">Reorder At</th>
+                <th className="text-right">Suggested</th>
+                <th className="text-right">Days Stock</th>
                 <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(item => {
                 const isLow = item.reorder_point > 0 && item.quantity <= item.reorder_point;
+                const status = stockStatus(item);
+                // Days of stock: assume 30-day consumption from movements; fallback to reorder_qty as proxy
+                // Without per-item consumption data we use reorder_qty as a daily proxy (very rough).
+                const dailyConsumption = item.reorder_qty > 0 ? item.reorder_qty / 30 : 0;
+                const daysOfStock = dailyConsumption > 0 ? Math.round(item.quantity / dailyConsumption) : null;
+                const suggestedReorder = isLow
+                  ? Math.max(item.reorder_qty || 0, item.reorder_point - item.quantity + (item.reorder_qty || 0))
+                  : 0;
                 return (
                   <tr key={item.id} style={isLow ? { background: 'rgba(239,68,68,0.04)' } : {}}>
+                    <td className="text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedItemIds.has(item.id)}
+                        onChange={() => toggleItemSelect(item.id)}
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                    </td>
                     <td className="text-text-primary font-medium">
                       <div className="flex items-center gap-2">
                         {isLow && <AlertTriangle size={12} className="text-accent-expense shrink-0" />}
@@ -567,6 +1061,14 @@ const Inventory: React.FC = () => {
                     </td>
                     <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>
                     <td className="text-text-secondary text-sm truncate max-w-[140px]"><ClassificationBadge def={INVENTORY_CATEGORY} value={item.category} /></td>
+                    <td>
+                      <span
+                        className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5"
+                        style={{ color: status.color, background: status.bg, borderRadius: '6px' }}
+                      >
+                        {status.label}
+                      </span>
+                    </td>
                     <td className={`text-right font-mono font-semibold ${isLow ? 'text-accent-expense' : 'text-text-primary'}`}>
                       {item.quantity}
                       {isLow && item.reorder_qty > 0 && (
@@ -576,6 +1078,8 @@ const Inventory: React.FC = () => {
                     <td className="text-right font-mono text-text-secondary text-sm">{fmt.format(item.unit_cost)}</td>
                     <td className="text-right font-mono text-text-primary font-medium text-sm">{fmt.format(item.quantity * item.unit_cost)}</td>
                     <td className="text-right font-mono text-text-muted text-sm">{item.reorder_point || '—'}</td>
+                    <td className="text-right font-mono text-accent-blue text-sm">{suggestedReorder > 0 ? suggestedReorder : '—'}</td>
+                    <td className="text-right font-mono text-text-muted text-sm">{daysOfStock !== null ? `${daysOfStock}d` : '—'}</td>
                     <td className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button
@@ -614,16 +1118,16 @@ const Inventory: React.FC = () => {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5} className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider">Total Value</td>
+                <td colSpan={7} className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider">Total Value</td>
                 <td className="text-right font-mono font-bold text-text-primary">{fmt.format(filtered.reduce((s, i) => s + i.quantity * i.unit_cost, 0))}</td>
-                <td colSpan={2} />
+                <td colSpan={4} />
               </tr>
             </tfoot>
           </table>
         </div>
-      )}
+      ))}
 
-      {filtered.length > 0 && (
+      {activeTab !== 'dashboard' && filtered.length > 0 && (
         <div className="text-xs text-text-muted">
           Showing {filtered.length} of {items.length} item{items.length !== 1 ? 's' : ''}
         </div>
