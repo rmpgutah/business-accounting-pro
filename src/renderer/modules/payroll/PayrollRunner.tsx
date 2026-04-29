@@ -89,6 +89,8 @@ interface PayCalc {
 interface PayrollRunnerProps {
   onComplete: () => void;
   onBack: () => void;
+  /** When set, the runner loads this existing run and saves over it instead of creating a new run. */
+  editRunId?: string;
 }
 
 // ─── Constants ──────────────────────────────────────────
@@ -363,8 +365,10 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
 );
 
 // ─── Component ──────────────────────────────────────────
-const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => {
+const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editRunId }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const isEditing = !!editRunId;
+  const [editLoading, setEditLoading] = useState<boolean>(!!editRunId);
   const [step, setStep] = useState(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -464,6 +468,47 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     load();
     return () => { cancelled = true; };
   }, [activeCompany]);
+
+  // ─── Load existing run for editing ─────────────────────
+  // When editRunId is provided, fetch the run + its stubs and pre-populate
+  // the form with the same period, run type, notes, and per-employee hours.
+  useEffect(() => {
+    if (!editRunId || !activeCompany) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const run = await api.get('payroll_runs', editRunId);
+        if (!run || cancelled) return;
+        setPeriodStart(run.pay_period_start || '');
+        setPeriodEnd(run.pay_period_end || '');
+        setPayDate(run.pay_date || '');
+        if (run.run_type) {
+          const rt = String(run.run_type) as 'regular' | 'bonus' | 'correction' | 'off_cycle';
+          setRunType(rt);
+        }
+        setRunNotes(run.notes || '');
+
+        // Load existing stubs to populate hours/bonus maps
+        const existingStubs = await api.query('pay_stubs', { payroll_run_id: editRunId });
+        if (!cancelled && Array.isArray(existingStubs)) {
+          const hoursOverride: Record<string, number> = {};
+          const bonusOverride: Record<string, number> = {};
+          for (const s of existingStubs) {
+            const totalHours = (s.hours_regular || 0) + (s.hours_overtime || 0);
+            if (totalHours > 0) hoursOverride[s.employee_id] = totalHours;
+          }
+          setHoursMap(hoursOverride);
+          setBonusMap(bonusOverride);
+        }
+      } catch (err: any) {
+        console.error('Failed to load run for editing:', err);
+        if (!cancelled) setError('Failed to load existing payroll run');
+      } finally {
+        if (!cancelled) setEditLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editRunId, activeCompany]);
 
   // ─── Recalculate state tax when hours change ───────────
   // The initial stateTaxMap was computed with DEFAULT hours. When the user
@@ -705,18 +750,32 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         })
       );
 
-      const result = await (api.processPayroll as any)({
-        periodStart,
-        periodEnd,
-        payDate,
-        totalGross: totals.gross_pay,
-        totalTaxes,
-        totalNet: totals.net_pay,
-        stubs,
-        runType,
-        notes: runNotes,
-        employeeCount: calculations.length,
-      });
+      const result = isEditing
+        ? await (api.editPayroll as any)({
+            runId: editRunId,
+            periodStart,
+            periodEnd,
+            payDate,
+            totalGross: totals.gross_pay,
+            totalTaxes,
+            totalNet: totals.net_pay,
+            stubs,
+            runType,
+            notes: runNotes,
+            employeeCount: calculations.length,
+          })
+        : await (api.processPayroll as any)({
+            periodStart,
+            periodEnd,
+            payDate,
+            totalGross: totals.gross_pay,
+            totalTaxes,
+            totalNet: totals.net_pay,
+            stubs,
+            runType,
+            notes: runNotes,
+            employeeCount: calculations.length,
+          });
 
       // BUG 1: Handle duplicate payroll run error
       if (result?.error) {
@@ -734,10 +793,12 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
     }
   };
 
-  if (loading) {
+  if (loading || editLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <span className="text-text-muted text-sm font-mono">Loading employees...</span>
+        <span className="text-text-muted text-sm font-mono">
+          {editLoading ? 'Loading run for editing...' : 'Loading employees...'}
+        </span>
       </div>
     );
   }
@@ -755,7 +816,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack }) => 
         </button>
         <div className="flex items-center gap-2">
           <Calculator size={20} className="text-text-muted" />
-          <h1 className="text-lg font-bold text-text-primary">Run Payroll</h1>
+          <h1 className="text-lg font-bold text-text-primary">{isEditing ? 'Edit Payroll Run' : 'Run Payroll'}</h1>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Users, DollarSign, FileText, Calculator, Plus, Trash2, Printer,
-  LayoutDashboard, ChevronDown, ChevronRight, Download, TrendingUp, Clock, ArrowRight, Eye,
+  LayoutDashboard, ChevronDown, ChevronRight, Download, TrendingUp, Clock, ArrowRight, Eye, Edit,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -116,6 +116,7 @@ const PayrollModule: React.FC = () => {
 
   // Payroll runner
   const [showRunner, setShowRunner] = useState(false);
+  const [editingRunId, setEditingRunId] = useState<string | null>(null);
 
   // History
   const [runs, setRuns] = useState<PayrollRun[]>([]);
@@ -334,6 +335,7 @@ const PayrollModule: React.FC = () => {
   // ─── Payroll runner callbacks ─────────────────────────
   const handleRunComplete = () => {
     setShowRunner(false);
+    setEditingRunId(null);
     setActiveTab('history');
     loadHistory();
   };
@@ -520,8 +522,12 @@ const PayrollModule: React.FC = () => {
   if (showRunner) {
     return (
       <PayrollRunner
+        editRunId={editingRunId || undefined}
         onComplete={handleRunComplete}
-        onBack={() => setShowRunner(false)}
+        onBack={() => {
+          setShowRunner(false);
+          setEditingRunId(null);
+        }}
       />
     );
   }
@@ -555,6 +561,7 @@ const PayrollModule: React.FC = () => {
               }`}
               onClick={() => {
                 if (tab.key === 'run') {
+                  setEditingRunId(null);
                   setShowRunner(true);
                 } else {
                   setActiveTab(tab.key);
@@ -619,7 +626,10 @@ const PayrollModule: React.FC = () => {
                   <button
                     className="block-btn-primary inline-flex items-center gap-1.5 text-xs"
                     style={{ borderRadius: '6px' }}
-                    onClick={() => setShowRunner(true)}
+                    onClick={() => {
+                      setEditingRunId(null);
+                      setShowRunner(true);
+                    }}
                   >
                     <Calculator size={14} />
                     Run Payroll
@@ -826,6 +836,17 @@ const PayrollModule: React.FC = () => {
                             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Net</div>
                             <div className="text-sm font-mono font-semibold text-accent-income">{fmt.format(run.total_net ?? 0)}</div>
                           </div>
+                          <button
+                            className="block-btn flex items-center gap-1 text-[10px] px-2 py-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingRunId(run.id);
+                              setShowRunner(true);
+                            }}
+                            title="Edit this payroll run"
+                          >
+                            <Edit size={12} /> Edit
+                          </button>
                           <button
                             className="block-btn text-accent-expense hover:bg-accent-expense/10 flex items-center gap-1 text-[10px] px-2 py-1"
                             onClick={async (e) => {

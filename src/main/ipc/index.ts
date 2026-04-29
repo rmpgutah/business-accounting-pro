@@ -2861,6 +2861,126 @@ export function registerIpcHandlers(): void {
     return result;
   });
 
+  // ─── Payroll Edit (replace existing run) ────────────────
+  // Mirrors payroll:process but UPDATEs the existing run, deletes
+  // and re-inserts pay_stubs, and reverses + reposts the GL entry.
+  ipcMain.handle('payroll:edit', (_event, {
+    runId,
+    periodStart, periodEnd, payDate,
+    totalGross, totalTaxes, totalNet,
+    stubs,
+    runType,
+    notes,
+    employeeCount,
+  }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) throw new Error('No active company');
+    if (!runId) return { error: 'runId is required for edit' };
+    const dbInstance = db.getDb();
+
+    // Verify run exists and belongs to this company
+    const existing = (dbInstance as any).prepare(
+      `SELECT id, pay_date, pay_period_start FROM payroll_runs WHERE id = ? AND company_id = ?`
+    ).get(runId, companyId) as any;
+    if (!existing) return { error: 'Payroll run not found' };
+
+    const tx = (dbInstance as any).transaction(() => {
+      // 1. Delete existing pay stubs
+      (dbInstance as any).prepare(`DELETE FROM pay_stubs WHERE payroll_run_id = ?`).run(runId);
+
+      // 2. Delete the previously auto-posted journal entry for this run
+      const oldJE = (dbInstance as any).prepare(
+        `SELECT id FROM journal_entries WHERE company_id = ? AND description LIKE ?`
+      ).get(companyId, `Payroll - ${existing.pay_period_start}%`) as any;
+      if (oldJE) {
+        (dbInstance as any).prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`).run(oldJE.id);
+        (dbInstance as any).prepare(`DELETE FROM journal_entries WHERE id = ?`).run(oldJE.id);
+      }
+
+      // 3. Update the run row with new totals + period info
+      (dbInstance as any).prepare(`
+        UPDATE payroll_runs SET pay_period_start = ?, pay_period_end = ?, pay_date = ?, total_gross = ?, total_taxes = ?, total_net = ?, run_type = ?, notes = ?, employee_count = ?, updated_at = datetime('now')
+        WHERE id = ? AND company_id = ?
+      `).run(periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet, runType || 'regular', notes || '', employeeCount || stubs.length, runId, companyId);
+
+      // 4. Insert new stubs (mirror payroll:process logic)
+      let lastCheckNum = 1000;
+      try {
+        const lastCheck = (dbInstance as any).prepare(
+          `SELECT check_number FROM pay_stubs WHERE check_number != '' ORDER BY CAST(check_number AS INTEGER) DESC LIMIT 1`
+        ).get() as any;
+        if (lastCheck?.check_number) {
+          lastCheckNum = parseInt(lastCheck.check_number, 10) || 1000;
+        }
+      } catch { /* ignore */ }
+
+      for (const s of stubs) {
+        lastCheckNum++;
+        const checkNumber = String(lastCheckNum).padStart(6, '0');
+
+        const payYear = (payDate || '').substring(0, 4);
+        let ytdFederal = s.federalTax || 0, ytdState = s.stateTax || 0, ytdSS = s.ss || 0, ytdMedicare = s.medicare || 0;
+        if (payYear && s.employeeId) {
+          try {
+            // Exclude THIS run from the YTD sum (we just deleted its stubs but be explicit)
+            const prior = (dbInstance as any).prepare(`
+              SELECT COALESCE(SUM(ps.federal_tax), 0) AS f, COALESCE(SUM(ps.state_tax), 0) AS st,
+                     COALESCE(SUM(ps.social_security), 0) AS ss, COALESCE(SUM(ps.medicare), 0) AS m
+              FROM pay_stubs ps JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+              WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ? AND pr.status != 'draft' AND pr.id != ?
+            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`, runId) as any;
+            if (prior) { ytdFederal += prior.f || 0; ytdState += prior.st || 0; ytdSS += prior.ss || 0; ytdMedicare += prior.m || 0; }
+          } catch { /* ignore */ }
+        }
+
+        (dbInstance as any).prepare(`
+          INSERT INTO pay_stubs (id, payroll_run_id, employee_id, hours_regular, hours_overtime, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, ytd_gross, ytd_taxes, ytd_net, pretax_deductions, posttax_deductions, deduction_detail, check_number, ytd_federal_tax, ytd_state_tax, ytd_social_security, ytd_medicare)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuid(), runId, s.employeeId, s.hours, s.hoursOvertime || 0, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}', checkNumber, ytdFederal, ytdState, ytdSS, ytdMedicare);
+      }
+
+      // 5. Re-post journal entry with updated totals
+      const totalFederalTax = stubs.reduce((sum: number, s: any) => sum + (s.federalTax || 0), 0);
+      const totalStateTax = stubs.reduce((sum: number, s: any) => sum + (s.stateTax || 0), 0);
+      const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
+      const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+
+      postJournalEntry(dbInstance, companyId, payDate, `Payroll - ${periodStart} to ${periodEnd}`, [
+        { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages (edited)' },
+        { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable' },
+        { nameHint: 'Federal Withholding', debit: 0, credit: totalFederalTax, note: 'Federal income tax withheld' },
+        { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
+        { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
+        { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+      ]);
+    });
+    tx();
+
+    scheduleAutoBackup();
+
+    // Emit event for workflows
+    try {
+      eventBus.emit({
+        type: 'payroll.processed',
+        companyId,
+        entityType: 'payroll_run',
+        entityId: runId,
+        data: {
+          totalGross,
+          totalNet,
+          totalTaxes,
+          employeeCount: employeeCount || stubs.length,
+          periodStart,
+          periodEnd,
+          payDate,
+          edited: true,
+        },
+      }).catch(() => {});
+    } catch { /* fire-and-forget */ }
+
+    return { success: true, runId };
+  });
+
   // ─── Settings get / set ───────────────────────────────────
   // Bug fix: settings module queried all companies' settings because
   // api.query('settings') had no company_id filter; also needed

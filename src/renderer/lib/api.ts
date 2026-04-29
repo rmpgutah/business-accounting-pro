@@ -289,6 +289,16 @@ const api = {
   }): Promise<{ runId: string; error?: string }> =>
     window.electronAPI.invoke('payroll:process', args),
 
+  // Payroll Edit (replace existing run)
+  editPayroll: (args: {
+    runId: string;
+    periodStart: string; periodEnd: string; payDate: string;
+    totalGross: number; totalTaxes: number; totalNet: number;
+    stubs: Array<{ employeeId: string; hours: number; hoursOvertime?: number; grossPay: number; federalTax: number; stateTax: number; ss: number; medicare: number; netPay: number; ytdGross: number; ytdTaxes: number; ytdNet: number; preTaxDeductions?: number; postTaxDeductions?: number; deductionDetail?: string }>;
+    runType?: string; notes?: string; employeeCount?: number;
+  }): Promise<{ runId?: string; error?: string; success?: boolean }> =>
+    window.electronAPI.invoke('payroll:edit', args),
+
   // Payroll YTD
   // Bug fix #37-39: YTD values are now calculated from actual prior pay stubs.
   payrollYtd: (employeeId: string, year: number): Promise<{
