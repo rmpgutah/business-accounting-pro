@@ -819,6 +819,98 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // FK cleanup map: tables whose deletion requires nulling/deleting related rows
+  // because the referencing FKs are NOT ON DELETE CASCADE.
+  // Each entry returns SQL statements to run BEFORE the parent delete.
+  const cleanupReferencesBeforeDelete = (table: string, id: string): void => {
+    const dbI = db.getDb();
+    const run = (sql: string) => { try { dbI.prepare(sql).run(id); } catch {} };
+    switch (table) {
+      case 'invoices':
+        // Delete payments (NOT NULL FK — can't null it)
+        run(`DELETE FROM payments WHERE invoice_id = ?`);
+        // Null FK references (optional FKs)
+        run(`UPDATE time_entries SET invoice_id = NULL, is_invoiced = 0 WHERE invoice_id = ?`);
+        run(`UPDATE stripe_transactions SET invoice_id = NULL WHERE invoice_id = ?`);
+        run(`UPDATE credit_notes SET invoice_id = NULL WHERE invoice_id = ?`);
+        run(`UPDATE quotes SET converted_invoice_id = NULL WHERE converted_invoice_id = ?`);
+        run(`DELETE FROM invoice_debt_links WHERE invoice_id = ?`);
+        run(`DELETE FROM invoice_reminders WHERE invoice_id = ?`);
+        run(`DELETE FROM invoice_payment_schedule WHERE invoice_id = ?`);
+        // invoice_line_items has ON DELETE CASCADE, no manual cleanup needed
+        break;
+      case 'clients':
+        // Null FKs in many tables that reference clients
+        run(`UPDATE invoices SET client_id = NULL WHERE client_id = ?`);
+        run(`UPDATE expenses SET client_id = NULL WHERE client_id = ?`);
+        run(`UPDATE time_entries SET client_id = NULL WHERE client_id = ?`);
+        run(`UPDATE projects SET client_id = NULL WHERE client_id = ?`);
+        run(`UPDATE quotes SET client_id = NULL WHERE client_id = ?`);
+        run(`UPDATE debts SET client_id = NULL WHERE client_id = ?`);
+        run(`DELETE FROM client_contacts WHERE client_id = ?`);
+        break;
+      case 'vendors':
+        run(`UPDATE expenses SET vendor_id = NULL WHERE vendor_id = ?`);
+        run(`UPDATE bills SET vendor_id = NULL WHERE vendor_id = ?`);
+        run(`UPDATE purchase_orders SET vendor_id = NULL WHERE vendor_id = ?`);
+        break;
+      case 'projects':
+        run(`UPDATE expenses SET project_id = NULL WHERE project_id = ?`);
+        run(`UPDATE time_entries SET project_id = NULL WHERE project_id = ?`);
+        run(`UPDATE invoice_line_items SET project_id = NULL WHERE project_id = ?`);
+        break;
+      case 'employees':
+        run(`UPDATE time_entries SET employee_id = NULL WHERE employee_id = ?`);
+        run(`DELETE FROM employee_deductions WHERE employee_id = ?`);
+        // pay_stubs has FK without cascade — but deleting an employee with
+        // pay history would be destructive. Block with clear error if any.
+        try {
+          const stubs = dbI.prepare(`SELECT COUNT(*) as c FROM pay_stubs WHERE employee_id = ?`).get(id) as any;
+          if (stubs?.c > 0) {
+            throw new Error(`Cannot delete employee with ${stubs.c} pay stub(s). Mark inactive instead.`);
+          }
+        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+        break;
+      case 'bills':
+        run(`DELETE FROM bill_payments WHERE bill_id = ?`);
+        run(`DELETE FROM bill_line_items WHERE bill_id = ?`);
+        break;
+      case 'purchase_orders':
+        run(`DELETE FROM po_line_items WHERE po_id = ?`);
+        run(`UPDATE bills SET purchase_order_id = NULL WHERE purchase_order_id = ?`);
+        break;
+      case 'fixed_assets':
+        run(`DELETE FROM asset_depreciation_entries WHERE asset_id = ?`);
+        break;
+      case 'budgets':
+        run(`DELETE FROM budget_lines WHERE budget_id = ?`);
+        break;
+      case 'quotes':
+        run(`DELETE FROM quote_line_items WHERE quote_id = ?`);
+        break;
+      case 'debts':
+        // Most debt child tables have ON DELETE CASCADE in schema
+        // but invoice_debt_links does not
+        run(`DELETE FROM invoice_debt_links WHERE debt_id = ?`);
+        break;
+      case 'payroll_runs':
+        run(`DELETE FROM pay_stubs WHERE payroll_run_id = ?`);
+        break;
+      case 'inventory_items':
+        run(`DELETE FROM inventory_movements WHERE item_id = ?`);
+        break;
+      case 'accounts':
+        // Accounts can't be deleted if they have journal entries — block
+        try {
+          const lines = dbI.prepare(`SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?`).get(id) as any;
+          if (lines?.c > 0) {
+            throw new Error(`Cannot delete account with ${lines.c} journal entry line(s). Use soft delete (mark inactive) instead.`);
+          }
+        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+        break;
+    }
+  };
+
   ipcMain.handle('db:delete', (_event, { table, id }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
     if (PROTECTED_TABLES.has(table)) return { error: `Direct deletes from ${table} are not allowed — use dedicated handler` };
@@ -839,6 +931,9 @@ export function registerIpcHandlers(): void {
       }
       const companyId = db.getCurrentCompanyId();
       if (companyId) db.logAudit(companyId, table, id, 'delete');
+      // Clean up FK references in related tables BEFORE the parent delete,
+      // so SQLite doesn't throw FOREIGN KEY constraint failed.
+      cleanupReferencesBeforeDelete(table, id);
       db.remove(table, id);
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
@@ -2202,12 +2297,24 @@ export function registerIpcHandlers(): void {
   // ─── Batch Delete ──────────────────────────────────────
   ipcMain.handle('batch:delete', (_event, { table, ids }: { table: string; ids: string[] }) => {
     const companyId = db.getCurrentCompanyId();
+    const errors: Array<{ id: string; error: string }> = [];
+    let deleted = 0;
     for (const id of ids) {
-      if (companyId) db.logAudit(companyId, table, id, 'delete');
-      db.remove(table, id);
+      try {
+        if (companyId) db.logAudit(companyId, table, id, 'delete');
+        // Clean up FK references in related tables BEFORE the parent delete.
+        cleanupReferencesBeforeDelete(table, id);
+        db.remove(table, id);
+        deleted++;
+      } catch (err: any) {
+        errors.push({ id, error: err?.message || 'unknown error' });
+      }
     }
-    if (ids.length) scheduleAutoBackup();
-    return { deleted: ids.length };
+    if (deleted) scheduleAutoBackup();
+    if (errors.length) {
+      return { deleted, errors, error: `Deleted ${deleted} of ${ids.length}. ${errors.length} failed: ${errors.map(e => e.error).slice(0, 3).join('; ')}` };
+    }
+    return { deleted };
   });
 
   // ─── CSV Import: Preview ──────────────────────────────
