@@ -52,6 +52,7 @@ interface Employee {
   w4_step4c_extra_withholding?: number;
   ut_exemptions?: number;
   ut_additional_withholding?: number;
+  w4_received_date?: string;
 }
 
 interface EmployeeDeduction {
@@ -555,11 +556,22 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
         )
       );
 
-      // Step 2: For employees with W-4 data, override taxes via TaxCalculationEngine
+      // Step 2: For employees with an actual W-4 form on file, optionally
+      // refine taxes via TaxCalculationEngine. We use the inline calculation
+      // (which is now Pub 15-T compliant after the std-deduction fix) unless
+      // the employee has explicitly recorded a W-4 received date — that's
+      // the signal that the W-4 fields are real, not just schema defaults.
+      // SAFETY: never override state_tax with engine.utah_withholding for
+      // employees in non-Utah states; the inline path uses StateTaxEngine
+      // which handles all 50 states correctly.
       const finalCalcs = await Promise.all(
         baseCalcs.map(async (calc) => {
           const emp = calc.employee;
-          if (!emp.w4_filing_status) return calc;
+          // Skip override for legacy employees (no explicit W-4 on file).
+          // Inline math handles them correctly.
+          if (!emp.w4_received_date && !emp.w4_step3_dependent_credit && !emp.w4_step4a_other_income && !emp.w4_step4b_deductions && !emp.w4_step4c_extra_withholding && !emp.w4_step2_checkbox) {
+            return calc;
+          }
           try {
             const engineResult = await api.taxCalcPayroll(
               calc.gross_pay,
@@ -580,8 +592,22 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
             );
             if (engineResult) {
               const updated = { ...calc };
-              updated.federal_tax = roundCents(engineResult.federal_withholding);
-              updated.state_tax = roundCents(engineResult.utah_withholding);
+              // SAFETY: only adopt engine federal if it produces a non-zero
+              // value when inline expected one. If engine returns 0 but the
+              // employee earns above the std deduction, keep the inline value.
+              const engineFed = roundCents(engineResult.federal_withholding);
+              const inlineFed = calc.federal_tax;
+              updated.federal_tax = (engineFed === 0 && inlineFed > 0) ? inlineFed : engineFed;
+
+              // SAFETY: only override state with Utah engine if employee IS
+              // in Utah. Otherwise keep the inline state tax (StateTaxEngine).
+              const empState = (emp.state || '').toUpperCase();
+              if (empState === 'UT') {
+                const engineState = roundCents(engineResult.utah_withholding);
+                updated.state_tax = (engineState === 0 && calc.state_tax > 0) ? calc.state_tax : engineState;
+              }
+              // For non-Utah states, keep calc.state_tax (already from inline)
+
               updated.social_security = roundCents(engineResult.ss_employee);
               updated.medicare = roundCents(engineResult.medicare_employee);
               updated.employer_ss = roundCents(engineResult.ss_employer);
