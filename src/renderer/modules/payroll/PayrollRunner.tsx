@@ -6,6 +6,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import { roundCents } from '../../lib/format';
 import {
   calcFederalTaxAnnual,
+  STANDARD_DEDUCTION_2025,
   SS_RATE,
   SS_WAGE_BASE_2025,
   MEDICARE_RATE,
@@ -13,7 +14,18 @@ import {
   ADDL_MEDICARE_THRESHOLD,
   FUTA_RATE,
   FUTA_WAGE_BASE,
+  type FilingStatus,
 } from '../../lib/tax-brackets';
+
+// MAP: DB stores filing_status as 'single' | 'married_joint' | 'married_separate'
+// | 'head_household' (from EmployeeForm), or as 'married' (from W-4 fields).
+// The bracket helper expects 'single' | 'mfj' | 'hoh'. Normalize here.
+const mapFilingStatus = (raw?: string): FilingStatus => {
+  const s = (raw || 'single').toLowerCase();
+  if (s.includes('joint') || s === 'married' || s === 'mfj') return 'mfj';
+  if (s.includes('head') || s === 'hoh') return 'hoh';
+  return 'single';
+};
 
 // ─── Types ──────────────────────────────────────────────
 interface Employee {
@@ -25,6 +37,8 @@ interface Employee {
   pay_rate: number;
   pay_schedule: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
   status: 'active' | 'inactive';
+  filing_status?: string;       // legacy filing_status column on employees
+  federal_allowances?: number;  // legacy allowances count
   state?: string;
   state_allowances?: number;
   start_date?: string;
@@ -221,8 +235,19 @@ function calcPayStub(
   // Annualized regular taxable gross for bracket calc.
   const annualTaxableRegular = taxableRegular * periods;
 
-  // Federal tax: brackets on regular portion + flat 22% on supplemental.
-  const federalAnnualRegular = calcFederalTaxAnnual(annualTaxableRegular, 'single');
+  // MATH: IRS Pub 15-T Percentage Method requires subtracting the standard
+  // deduction (and per-allowance adjustment for legacy W-4) BEFORE applying
+  // the bracket table. Previously we passed gross-after-pretax directly,
+  // over-stating federal withholding (or under-stating once engine override
+  // ran with proper deduction handling — causing reconciliation issues).
+  const filingStatus = mapFilingStatus(emp.filing_status || emp.w4_filing_status);
+  const stdDeduction = STANDARD_DEDUCTION_2025[filingStatus];
+  // Legacy per-allowance amount per IRS pre-2020 method ($4,300 in 2025).
+  const allowanceAmt = (emp.federal_allowances || 0) * 4300;
+  const annualTaxableAfterDed = Math.max(0, annualTaxableRegular - stdDeduction - allowanceAmt);
+
+  // Federal tax: brackets on the post-deduction income + flat 22% on supplemental.
+  const federalAnnualRegular = calcFederalTaxAnnual(annualTaxableAfterDed, filingStatus);
   const federal_tax = (federalAnnualRegular / periods) + (taxableBonus * 0.22);
 
   // State tax: use engine result if provided, else flat fallback on taxable gross
