@@ -21,6 +21,7 @@ import {
   CategoryRow, buildCategoryTree, flattenCategoryTree, suggestCategoryForVendor,
   categoryMonthlyUsage, parseJSON, CustomFieldDef,
 } from './expense-helpers';
+import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -427,6 +428,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     if (!form.vendor_id) { setSuggestedCategoryId(''); return; }
     suggestCategoryForVendor(form.vendor_id).then(id => setSuggestedCategoryId(id || ''));
   }, [form.vendor_id]);
+
+  // IntelligenceService smart-default: auto-fill category when vendor changes
+  // and no category is yet selected. Uses the IPC-backed pattern store.
+  const suggested = useSuggestedCategory(form.vendor_id);
+  useEffect(() => {
+    if (suggested && !form.category_id) {
+      setForm(f => ({ ...f, category_id: suggested }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggested]);
 
   // Capture #11: prior expense lookup for "copy from prior" / auto-fill
   useEffect(() => {

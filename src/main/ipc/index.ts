@@ -25,6 +25,9 @@ import {
 import { promises as fsp } from 'fs';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
 import { calculateFullPayroll } from '../services/TaxCalculationEngine';
+import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
+import { eventBus } from '../services/EventBus';
+import { workflowEngine } from '../services/WorkflowEngine';
 import http from 'http';
 import https from 'https';
 
@@ -572,6 +575,12 @@ export function registerIpcHandlers(): void {
   if (_ipcHandlersRegistered) return;
   _ipcHandlersRegistered = true;
 
+  // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
+  // and ensure EventBus singleton is initialized.
+  bootstrapBuiltinCommands();
+  void eventBus;
+  workflowEngine.start();
+
   // Stripe integration — online-first with local SQLite cache fallback,
   // lives in its own module so the renderer can use Stripe offline.
   registerStripeIpc(ipcMain);
@@ -661,6 +670,11 @@ export function registerIpcHandlers(): void {
     'debt_skip_traces',
     // Quote system child tables — company_id lives on parent quotes table
     'quote_activity_log',
+    // Advanced System (2026-04-28) — user-scoped or company_id absent
+    'custom_shortcuts',
+    'command_history',
+    'workflow_executions',
+    'workflow_event_log',
   ]);
 
   // SECURITY: Tables that hold credentials/secrets must not be writable via the
@@ -919,7 +933,7 @@ export function registerIpcHandlers(): void {
 
   // ─── Atomic invoice save (header + line items in one transaction) ─────────
   // Prevents orphaned invoice headers when a line item insert fails.
-  ipcMain.handle('invoice:save', (_event, { invoiceId, invoiceData, lineItems, isEdit }: {
+  ipcMain.handle('invoice:save', async (_event, { invoiceId, invoiceData, lineItems, isEdit }: {
     invoiceId: string | null;
     invoiceData: Record<string, any>;
     lineItems: Array<Record<string, any>>;
@@ -1010,6 +1024,24 @@ export function registerIpcHandlers(): void {
       }
 
       scheduleAutoBackup();
+
+      // Reactive engine: emit invoice lifecycle events to drive workflows.
+      try {
+        if (companyId && savedId) {
+          await eventBus.emit({
+            type: isEdit ? 'invoice.updated' : 'invoice.created',
+            companyId,
+            entityType: 'invoice',
+            entityId: savedId,
+            data: {
+              total: invoiceData?.total,
+              client_id: invoiceData?.client_id,
+              status: invoiceData?.status,
+            },
+          }).catch(() => {});
+        }
+      } catch { /* fire-and-forget */ }
+
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
@@ -1026,7 +1058,7 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Atomic expense save (header + line items in one transaction) ─────────
-  ipcMain.handle('expense:save', (_event, { expenseId, expenseData, lineItems, isEdit }: {
+  ipcMain.handle('expense:save', async (_event, { expenseId, expenseData, lineItems, isEdit }: {
     expenseId: string | null;
     expenseData: Record<string, any>;
     lineItems: Array<Record<string, any>>;
@@ -1129,6 +1161,25 @@ export function registerIpcHandlers(): void {
       if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
 
       scheduleAutoBackup();
+
+      // Reactive engine: emit expense lifecycle events to drive workflows.
+      try {
+        if (companyId && savedId) {
+          await eventBus.emit({
+            type: isEdit ? 'expense.updated' : 'expense.created',
+            companyId,
+            entityType: 'expense',
+            entityId: savedId,
+            data: {
+              amount: expenseData?.amount,
+              vendor_id: expenseData?.vendor_id,
+              category_id: expenseData?.category_id,
+              status: expenseData?.status,
+            },
+          }).catch(() => {});
+        }
+      } catch { /* fire-and-forget */ }
+
       return { id: savedId };
     } catch (err) {
       console.error('expense:save failed:', err);
@@ -2519,7 +2570,7 @@ export function registerIpcHandlers(): void {
   // ─── Invoice Record Payment ───────────────────────────────
   // Consolidated handler: creates payment record, updates invoice status,
   // and posts DR Cash / CR Accounts Receivable journal entry in one transaction.
-  ipcMain.handle('invoice:record-payment', (_event, { invoiceId, amount, date, method, reference }: any) => {
+  ipcMain.handle('invoice:record-payment', async (_event, { invoiceId, amount, date, method, reference }: any) => {
     if (!amount || amount <= 0) return { error: 'Amount must be greater than zero' };
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
@@ -2557,6 +2608,27 @@ export function registerIpcHandlers(): void {
     // restore would lose every payment until the next mutation that
     // happens to schedule a backup.
     scheduleAutoBackup();
+
+    // Reactive engine: emit payment + (optionally) invoice.paid events.
+    try {
+      await eventBus.emit({
+        type: 'payment.received',
+        companyId,
+        entityType: 'invoice',
+        entityId: invoiceId,
+        data: { amount, method },
+      }).catch(() => {});
+      if (result?.newStatus === 'paid') {
+        await eventBus.emit({
+          type: 'invoice.paid',
+          companyId,
+          entityType: 'invoice',
+          entityId: invoiceId,
+          data: { total: amount },
+        }).catch(() => {});
+      }
+    } catch { /* fire-and-forget */ }
+
     return result;
   });
 
@@ -9959,6 +10031,232 @@ export function registerIpcHandlers(): void {
       ).all(companyId, entityType, fieldKey, param) as any[];
       return rows.map(r => r.entity_id);
     } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // ─── Advanced System (2026-04-28) — Cognitive Command Layer IPC ────────
+  ipcMain.handle('command:list', () => {
+    const { commandRegistry } = require('../services/CommandRegistry');
+    return commandRegistry.all().map((c: any) => ({
+      id: c.id, module: c.module, label: c.label,
+      description: c.description, keywords: c.keywords,
+      params: c.params, scope: c.scope,
+    }));
+  });
+
+  ipcMain.handle('command:search', (_event, { query }: { query: string }) => {
+    const { commandRegistry } = require('../services/CommandRegistry');
+    return commandRegistry.search(query).map((c: any) => ({
+      id: c.id, module: c.module, label: c.label,
+      description: c.description, keywords: c.keywords,
+    }));
+  });
+
+  ipcMain.handle('command:log-execution', (_event, { user_id, command_id, params, result, duration_ms }: any) => {
+    const dbI = db.getDb();
+    dbI.prepare(
+      `INSERT INTO command_history (id, user_id, command_id, params_json, result, duration_ms)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(uuid(), user_id || 'anon', command_id, JSON.stringify(params || {}), result || 'success', duration_ms || 0);
+    return { success: true };
+  });
+
+  ipcMain.handle('command:history', (_event, { user_id, limit }: { user_id?: string; limit?: number }) => {
+    const dbI = db.getDb();
+    return dbI.prepare(
+      `SELECT * FROM command_history WHERE user_id = ? ORDER BY executed_at DESC LIMIT ?`
+    ).all(user_id || 'anon', limit || 50);
+  });
+
+  ipcMain.handle('command:frequent', (_event, { user_id, limit }: { user_id?: string; limit?: number }) => {
+    const dbI = db.getDb();
+    return dbI.prepare(
+      `SELECT command_id, COUNT(*) as count FROM command_history
+       WHERE user_id = ? AND executed_at >= date('now', '-30 days')
+       GROUP BY command_id ORDER BY count DESC LIMIT ?`
+    ).all(user_id || 'anon', limit || 10);
+  });
+
+  ipcMain.handle('shortcut:list', (_event, { user_id }: { user_id?: string }) => {
+    const dbI = db.getDb();
+    return dbI.prepare(`SELECT * FROM custom_shortcuts WHERE user_id = ?`).all(user_id || 'anon');
+  });
+
+  ipcMain.handle('shortcut:save', (_event, { user_id, key_combo, command_id, params }: any) => {
+    const dbI = db.getDb();
+    const existing = dbI.prepare(
+      `SELECT id FROM custom_shortcuts WHERE user_id = ? AND key_combo = ?`
+    ).get(user_id || 'anon', key_combo) as any;
+    if (existing) {
+      dbI.prepare(
+        `UPDATE custom_shortcuts SET command_id = ?, params_json = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(command_id, JSON.stringify(params || {}), existing.id);
+      return { success: true, id: existing.id };
+    }
+    const id = uuid();
+    dbI.prepare(
+      `INSERT INTO custom_shortcuts (id, user_id, key_combo, command_id, params_json) VALUES (?, ?, ?, ?, ?)`
+    ).run(id, user_id || 'anon', key_combo, command_id, JSON.stringify(params || {}));
+    return { success: true, id };
+  });
+
+  ipcMain.handle('shortcut:delete', (_event, { id }: { id: string }) => {
+    db.getDb().prepare(`DELETE FROM custom_shortcuts WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('macro:list', (_event, { user_id }: { user_id?: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    return db.getDb().prepare(
+      `SELECT * FROM macros WHERE (user_id = ? OR is_shared = 1) AND company_id = ? ORDER BY name`
+    ).all(user_id || 'anon', companyId);
+  });
+
+  ipcMain.handle('macro:save', (_event, { id, user_id, name, description, action_sequence, is_shared }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    const dbI = db.getDb();
+    const seqJson = JSON.stringify(action_sequence || []);
+    if (id) {
+      dbI.prepare(
+        `UPDATE macros SET name = ?, description = ?, action_sequence_json = ?, is_shared = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(name || '', description || '', seqJson, is_shared ? 1 : 0, id);
+      return { success: true, id };
+    }
+    const newId = uuid();
+    dbI.prepare(
+      `INSERT INTO macros (id, user_id, company_id, name, description, action_sequence_json, is_shared) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(newId, user_id || 'anon', companyId, name || '', description || '', seqJson, is_shared ? 1 : 0);
+    scheduleAutoBackup();
+    return { success: true, id: newId };
+  });
+
+  ipcMain.handle('macro:delete', (_event, { id }: { id: string }) => {
+    db.getDb().prepare(`DELETE FROM macros WHERE id = ?`).run(id);
+    scheduleAutoBackup();
+    return { success: true };
+  });
+
+  // ─── Reactive Engine — Workflow Definitions, Executions, Events ────────
+  ipcMain.handle('workflow:list', () => {
+    const companyId = db.getCurrentCompanyId();
+    return db.getDb().prepare(
+      `SELECT * FROM workflow_definitions WHERE company_id = ? ORDER BY name`
+    ).all(companyId);
+  });
+
+  ipcMain.handle('workflow:save', (_event, { id, name, description, trigger_type, trigger_config, conditions, actions, is_active, rate_limit_per_hour, requires_approval }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    const dbI = db.getDb();
+    if (id) {
+      dbI.prepare(
+        `UPDATE workflow_definitions SET name = ?, description = ?, trigger_type = ?, trigger_config_json = ?, conditions_json = ?, actions_json = ?, is_active = ?, rate_limit_per_hour = ?, requires_approval = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(
+        name || '', description || '', trigger_type || 'event',
+        JSON.stringify(trigger_config || {}),
+        JSON.stringify(conditions || []),
+        JSON.stringify(actions || []),
+        is_active ? 1 : 0,
+        rate_limit_per_hour || 0,
+        requires_approval ? 1 : 0,
+        id
+      );
+      scheduleAutoBackup();
+      return { success: true, id };
+    }
+    const newId = uuid();
+    dbI.prepare(
+      `INSERT INTO workflow_definitions (id, company_id, name, description, trigger_type, trigger_config_json, conditions_json, actions_json, is_active, rate_limit_per_hour, requires_approval) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      newId, companyId, name || '', description || '', trigger_type || 'event',
+      JSON.stringify(trigger_config || {}),
+      JSON.stringify(conditions || []),
+      JSON.stringify(actions || []),
+      is_active ? 1 : 0,
+      rate_limit_per_hour || 0,
+      requires_approval ? 1 : 0
+    );
+    scheduleAutoBackup();
+    return { success: true, id: newId };
+  });
+
+  ipcMain.handle('workflow:delete', (_event, { id }: { id: string }) => {
+    db.getDb().prepare(`DELETE FROM workflow_definitions WHERE id = ?`).run(id);
+    scheduleAutoBackup();
+    return { success: true };
+  });
+
+  ipcMain.handle('workflow:executions', (_event, { workflowId, limit }: { workflowId?: string; limit?: number }) => {
+    const dbI = db.getDb();
+    if (workflowId) {
+      return dbI.prepare(
+        `SELECT * FROM workflow_executions WHERE workflow_id = ? ORDER BY triggered_at DESC LIMIT ?`
+      ).all(workflowId, limit || 50);
+    }
+    const companyId = db.getCurrentCompanyId();
+    return dbI.prepare(
+      `SELECT we.* FROM workflow_executions we
+       JOIN workflow_definitions wd ON wd.id = we.workflow_id
+       WHERE wd.company_id = ? ORDER BY we.triggered_at DESC LIMIT ?`
+    ).all(companyId, limit || 50);
+  });
+
+  ipcMain.handle('workflow:event-log', (_event, { limit }: { limit?: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    return db.getDb().prepare(
+      `SELECT * FROM workflow_event_log WHERE company_id = ? ORDER BY occurred_at DESC LIMIT ?`
+    ).all(companyId, limit || 100);
+  });
+
+  ipcMain.handle('workflow:emit-event', async (_event, { type, entityType, entityId, data }: any) => {
+    const companyId = db.getCurrentCompanyId();
+    await eventBus.emit({ type, companyId: companyId || '', entityType, entityId, data });
+    return { success: true };
+  });
+
+  // ─── Predictive Intelligence Layer ──────────────────────
+  ipcMain.handle('intel:suggest-category', (_event, { vendor_id }: { vendor_id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !vendor_id) return null;
+    const { intelligenceService } = require('../services/IntelligenceService');
+    return intelligenceService.suggestCategory(companyId, vendor_id);
+  });
+
+  ipcMain.handle('intel:duplicate-invoices', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const { intelligenceService } = require('../services/IntelligenceService');
+    return intelligenceService.detectDuplicateInvoices(companyId);
+  });
+
+  ipcMain.handle('intel:payroll-anomaly', (_event, { employee_id, gross }: any) => {
+    const { intelligenceService } = require('../services/IntelligenceService');
+    return intelligenceService.detectPayrollAnomaly(employee_id, gross);
+  });
+
+  ipcMain.handle('intel:cash-forecast', (_event, { days_ahead }: { days_ahead: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const { intelligenceService } = require('../services/IntelligenceService');
+    return intelligenceService.forecastCashFlow(companyId, days_ahead || 30);
+  });
+
+  ipcMain.handle('intel:predict-payment', (_event, { invoice_id }: { invoice_id: string }) => {
+    const { intelligenceService } = require('../services/IntelligenceService');
+    return intelligenceService.predictPaymentDate(invoice_id);
+  });
+
+  ipcMain.handle('intel:refresh-patterns', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { success: false };
+    const { intelligenceService } = require('../services/IntelligenceService');
+    intelligenceService.refreshPatterns(companyId);
+    return { success: true };
+  });
+
+  ipcMain.handle('intel:list-anomalies', () => {
+    const companyId = db.getCurrentCompanyId();
+    return db.getDb().prepare(
+      `SELECT * FROM anomaly_log WHERE company_id = ? AND resolved = 0 ORDER BY detected_at DESC LIMIT 100`
+    ).all(companyId);
   });
 }
 

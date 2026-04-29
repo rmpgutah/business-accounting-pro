@@ -802,6 +802,44 @@ const api = {
   taxCalcPayroll: (grossPay: number, payFrequency: string, w4: any, utah: any, ytdGross: number): Promise<any> =>
     window.electronAPI.invoke('tax:calc-payroll', { grossPay, payFrequency, w4, utah, ytdGross }),
 
+  // ─── Cognitive Command Layer ─────────────────
+  listCommands: () => window.electronAPI.invoke('command:list'),
+  searchCommands: (query: string) => window.electronAPI.invoke('command:search', { query }),
+  logCommandExecution: (data: { user_id?: string; command_id: string; params?: any; result?: string; duration_ms?: number }) =>
+    window.electronAPI.invoke('command:log-execution', data),
+  commandHistory: (user_id?: string, limit?: number) =>
+    window.electronAPI.invoke('command:history', { user_id, limit }),
+  frequentCommands: (user_id?: string, limit?: number) =>
+    window.electronAPI.invoke('command:frequent', { user_id, limit }),
+  listShortcuts: (user_id?: string) => window.electronAPI.invoke('shortcut:list', { user_id }),
+  saveShortcut: (data: { user_id?: string; key_combo: string; command_id: string; params?: any }) =>
+    window.electronAPI.invoke('shortcut:save', data),
+  deleteShortcut: (id: string) => window.electronAPI.invoke('shortcut:delete', { id }),
+  listMacros: (user_id?: string) => window.electronAPI.invoke('macro:list', { user_id }),
+  saveMacro: (data: { id?: string; user_id?: string; name: string; description?: string; action_sequence: any[]; is_shared?: boolean }) =>
+    window.electronAPI.invoke('macro:save', data),
+  deleteMacro: (id: string) => window.electronAPI.invoke('macro:delete', { id }),
+
+  // ─── Reactive Engine ────────────────
+  listWorkflows: () => window.electronAPI.invoke('workflow:list'),
+  saveWorkflow: (data: any) => window.electronAPI.invoke('workflow:save', data),
+  deleteWorkflow: (id: string) => window.electronAPI.invoke('workflow:delete', { id }),
+  workflowExecutions: (workflowId?: string, limit?: number) =>
+    window.electronAPI.invoke('workflow:executions', { workflowId, limit }),
+  workflowEventLog: (limit?: number) =>
+    window.electronAPI.invoke('workflow:event-log', { limit }),
+  emitEvent: (type: string, entityType?: string, entityId?: string, data?: any) =>
+    window.electronAPI.invoke('workflow:emit-event', { type, entityType, entityId, data }),
+
+  // ─── Predictive Intelligence ────────────────
+  intelSuggestCategory: (vendor_id: string) => window.electronAPI.invoke('intel:suggest-category', { vendor_id }),
+  intelDuplicateInvoices: () => window.electronAPI.invoke('intel:duplicate-invoices'),
+  intelPayrollAnomaly: (employee_id: string, gross: number) => window.electronAPI.invoke('intel:payroll-anomaly', { employee_id, gross }),
+  intelCashForecast: (days_ahead: number) => window.electronAPI.invoke('intel:cash-forecast', { days_ahead }),
+  intelPredictPayment: (invoice_id: string) => window.electronAPI.invoke('intel:predict-payment', { invoice_id }),
+  intelRefreshPatterns: () => window.electronAPI.invoke('intel:refresh-patterns'),
+  intelListAnomalies: () => window.electronAPI.invoke('intel:list-anomalies'),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

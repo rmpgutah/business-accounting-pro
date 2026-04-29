@@ -1239,6 +1239,118 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(company_id, status)",
   "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
   "CREATE INDEX IF NOT EXISTS idx_quotes_follow_up ON quotes(company_id, follow_up_date)",
+  // Advanced System (2026-04-28) — Cognitive Command Layer
+  `CREATE TABLE IF NOT EXISTS custom_shortcuts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    key_combo TEXT NOT NULL,
+    command_id TEXT NOT NULL,
+    params_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS macros (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    action_sequence_json TEXT NOT NULL DEFAULT '[]',
+    is_shared INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS command_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    command_id TEXT NOT NULL,
+    params_json TEXT DEFAULT '{}',
+    executed_at TEXT DEFAULT (datetime('now')),
+    result TEXT DEFAULT 'success',
+    duration_ms INTEGER DEFAULT 0
+  )`,
+  // Advanced System (2026-04-28) — Reactive Engine
+  `CREATE TABLE IF NOT EXISTS workflow_definitions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    trigger_type TEXT NOT NULL DEFAULT 'event',
+    trigger_config_json TEXT NOT NULL DEFAULT '{}',
+    conditions_json TEXT NOT NULL DEFAULT '[]',
+    actions_json TEXT NOT NULL DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    version INTEGER DEFAULT 1,
+    parent_workflow_id TEXT DEFAULT NULL,
+    rate_limit_per_hour INTEGER DEFAULT 0,
+    requires_approval INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS workflow_executions (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
+    triggered_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    payload_json TEXT DEFAULT '{}',
+    result_json TEXT DEFAULT '{}',
+    error_message TEXT DEFAULT '',
+    duration_ms INTEGER DEFAULT 0
+  )`,
+  `CREATE TABLE IF NOT EXISTS workflow_event_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    entity_type TEXT DEFAULT '',
+    entity_id TEXT DEFAULT '',
+    payload_json TEXT DEFAULT '{}',
+    occurred_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // Advanced System (2026-04-28) — Predictive Intelligence
+  `CREATE TABLE IF NOT EXISTS pattern_cache (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    pattern_type TEXT NOT NULL,
+    entity_type TEXT DEFAULT '',
+    entity_id TEXT DEFAULT '',
+    pattern_data_json TEXT NOT NULL DEFAULT '{}',
+    confidence REAL DEFAULT 0,
+    sample_size INTEGER DEFAULT 0,
+    last_computed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS predictions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    prediction_type TEXT NOT NULL,
+    target_entity_type TEXT DEFAULT '',
+    target_entity_id TEXT DEFAULT '',
+    predicted_value REAL DEFAULT 0,
+    confidence REAL DEFAULT 0,
+    confidence_low REAL DEFAULT 0,
+    confidence_high REAL DEFAULT 0,
+    prediction_data_json TEXT DEFAULT '{}',
+    computed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS anomaly_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    anomaly_type TEXT NOT NULL,
+    severity TEXT DEFAULT 'medium',
+    details_json TEXT DEFAULT '{}',
+    resolved INTEGER DEFAULT 0,
+    resolved_at TEXT,
+    resolved_by TEXT DEFAULT '',
+    detected_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_command_history_user ON command_history(user_id, executed_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_workflow_event_log_type ON workflow_event_log(company_id, event_type, occurred_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow ON workflow_executions(workflow_id, triggered_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_pattern_cache_lookup ON pattern_cache(company_id, pattern_type, entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_predictions_lookup ON predictions(company_id, prediction_type, target_entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_anomaly_log_unresolved ON anomaly_log(company_id, resolved, detected_at DESC)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
@@ -1576,6 +1688,12 @@ const tablesWithoutUpdatedAt = new Set([
   'rules', 'rule_logs', 'approval_queue',
   // Quote system child tables — created_at only
   'quote_activity_log',
+  // Advanced System (2026-04-28) — append-only / no updated_at
+  'command_history',
+  'workflow_executions',
+  'workflow_event_log',
+  'predictions',
+  'anomaly_log',
 ]);
 
 // SCHEMA: tables with a `deleted_at` column. queryAll() auto-filters these

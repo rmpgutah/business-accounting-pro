@@ -9,6 +9,7 @@ import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import { registerKeyboardShortcuts, registerCmdSGuard, MODULE_ORDER } from './lib/keyboard-shortcuts';
 import { QuickCreate } from './components/QuickCreate';
+import CommandPalette from './components/CommandPalette';
 import { usePersonalizationStore, applyPersonalization, applyModuleAccent } from './stores/personalizationStore';
 import PersonalizationWizard from './components/onboarding/PersonalizationWizard';
 import OnboardingWizard from './components/OnboardingWizard';
@@ -173,6 +174,7 @@ const App: React.FC = () => {
   const logout = useAuthStore((s) => s.logout);
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // ─── Onboarding wizard (industry preset + setup) ─────────
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -222,6 +224,18 @@ const App: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setQuickCreateOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Cmd+K (Ctrl+K on Win/Linux) — toggle command palette.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen(o => !o);
       }
     };
     window.addEventListener('keydown', handler);
@@ -338,6 +352,7 @@ const App: React.FC = () => {
           onComplete={onboarding.dismiss}
         />
       )}
+      <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </AppShell>
   );
 };

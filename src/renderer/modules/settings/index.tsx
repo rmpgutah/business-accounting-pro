@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
   Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download, PenTool,
-  Calculator, Landmark,
+  Calculator, Landmark, Keyboard, Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
@@ -17,6 +17,7 @@ import WorkflowSettings from './WorkflowSettings';
 import NumberingSettings from './NumberingSettings';
 import EmailTemplatesSettings from './EmailTemplatesSettings';
 import StatusBuilderSettings from './StatusBuilderSettings';
+import MacroRecorder from '../../components/MacroRecorder';
 
 // ─── Types ──────────────────────────────────────────────
 interface SettingsMap {
@@ -350,6 +351,10 @@ export default function SettingsModule() {
   });
   const [backupMsg, setBackupMsg] = useState('');
 
+  // ── Macros ──
+  const [macroOpen, setMacroOpen] = useState(false);
+  const [macros, setMacros] = useState<any[]>([]);
+
   // ── Federal / Utah Tax Config ──
   const [taxYear, setTaxYear] = useState(2026);
   const [fedConstants, setFedConstants] = useState<any>(null);
@@ -404,6 +409,11 @@ export default function SettingsModule() {
   useEffect(() => {
     if (activeCompany) setCompanyForm({ ...activeCompany });
   }, [activeCompany]);
+
+  // ── Load macros once on mount ──
+  useEffect(() => {
+    api.listMacros().then(setMacros).catch(() => setMacros([]));
+  }, []);
 
   // ─── Load federal constants & Utah config when year changes ──
   useEffect(() => {
@@ -1047,6 +1057,43 @@ export default function SettingsModule() {
       {/* ── Status Builder (custom statuses + transitions) ── */}
       <StatusBuilderSettings />
 
+      {/* ── Keyboard Shortcuts & Macros ─────────────────── */}
+      <SectionCard icon={Keyboard} title="Keyboard Shortcuts & Macros" description="Customize Cmd+K palette and record macros for repeated actions">
+        <div className="space-y-3">
+          <div className="text-xs text-text-secondary">
+            Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-[10px] font-mono" style={{ borderRadius: '4px' }}>⌘K</kbd> anywhere in the app to open the command palette.
+          </div>
+          <div>
+            <button onClick={() => setMacroOpen(true)} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+              <Plus size={12} /> Record New Macro
+            </button>
+          </div>
+          {macros.length > 0 && (
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-2">Saved Macros</label>
+              <div className="space-y-1.5">
+                {macros.map((m: any) => (
+                  <div key={m.id} className="flex items-center justify-between p-2 bg-bg-tertiary border border-border-primary text-xs" style={{ borderRadius: '6px' }}>
+                    <div>
+                      <div className="text-text-primary font-medium">{m.name}</div>
+                      {m.description && <div className="text-text-muted text-[10px]">{m.description}</div>}
+                    </div>
+                    <button onClick={async () => {
+                      if (confirm('Delete this macro?')) {
+                        await api.deleteMacro(m.id);
+                        api.listMacros().then(setMacros);
+                      }
+                    }} className="text-text-muted hover:text-accent-expense">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
       {/* ── Workflow Automation ─────────────────────────── */}
       <WorkflowSettings />
 
@@ -1138,6 +1185,13 @@ export default function SettingsModule() {
 
       {/* ── Danger Zone ─────────────────────────────────── */}
       <DangerZone />
+
+      {/* ── Macro Recorder Modal ────────────────────────── */}
+      <MacroRecorder
+        isOpen={macroOpen}
+        onClose={() => setMacroOpen(false)}
+        onSaved={() => api.listMacros().then(setMacros)}
+      />
     </div>
   );
 }

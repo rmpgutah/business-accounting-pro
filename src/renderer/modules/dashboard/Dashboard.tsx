@@ -55,6 +55,7 @@ import { usePersonalizationStore } from '../../stores/personalizationStore';
 import { formatCurrency, formatDate, percentChange } from '../../lib/format';
 import { fiscalYearStart } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
+import InsightsPanel from '../../components/InsightsPanel';
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -895,6 +896,12 @@ const Dashboard: React.FC = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* AI Insights Panel — IntelligenceService-driven cash forecast,
+          duplicate invoices, and anomaly alerts. */}
+      <div className="no-print">
+        <InsightsPanel />
       </div>
 
       {/* Rules Activity Strip */}

@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, ToggleLeft, ToggleRight, Clock, Plus, Trash2, Edit2, X, Save } from 'lucide-react';
+import { Zap, ToggleLeft, ToggleRight, Clock, Plus, Trash2, Edit2, Save, GitBranch, History } from 'lucide-react';
 import api from '../../lib/api';
 import { formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import WorkflowList from './WorkflowList';
+import WorkflowBuilder from './WorkflowBuilder';
+import WorkflowExecutionLog from './WorkflowExecutionLog';
+
+type AutomationTab = 'rules' | 'workflows' | 'execution-log';
 
 // ─── Types ───────────────────────────────────────────────
 interface AutomationRule {
@@ -207,8 +212,8 @@ function RuleBuilder({
   );
 }
 
-// ─── Main Component ──────────────────────────────────────
-const AutomationsModule: React.FC = () => {
+// ─── Rules Tab (existing rule-based automations) ─────────
+const RulesTab: React.FC = () => {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [selected, setSelected] = useState<AutomationRule | null>(null);
   const [runLog, setRunLog] = useState<RunLogEntry[]>([]);
@@ -521,6 +526,92 @@ const AutomationsModule: React.FC = () => {
         )}
       </div>
     </div>
+    </div>
+  );
+};
+
+// ─── Top-level Automations Module with tabs ──────────────
+const AutomationsModule: React.FC = () => {
+  const [tab, setTab] = useState<AutomationTab>('workflows');
+  const [workflowView, setWorkflowView] = useState<'list' | 'edit'>('list');
+  const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null);
+
+  const tabs: { id: AutomationTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'workflows', label: 'Workflows', icon: <GitBranch size={12} /> },
+    { id: 'rules', label: 'Rules (Legacy)', icon: <Zap size={12} /> },
+    { id: 'execution-log', label: 'Activity', icon: <History size={12} /> },
+  ];
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Tab bar */}
+      <div className="border-b-2 border-border-primary bg-bg-secondary px-4 py-2 flex items-center gap-1 shrink-0">
+        {tabs.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                setTab(t.id);
+                if (t.id === 'workflows') {
+                  setWorkflowView('list');
+                  setEditingWorkflowId(null);
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 transition-colors ${
+                active
+                  ? 'bg-bg-primary text-text-primary border border-border-primary'
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'
+              }`}
+              style={{ borderRadius: '6px' }}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-hidden">
+        {tab === 'rules' && <RulesTab />}
+
+        {tab === 'workflows' && (
+          <div className="h-full overflow-y-auto bg-bg-primary p-6">
+            {workflowView === 'list' ? (
+              <WorkflowList
+                onNew={() => {
+                  setEditingWorkflowId(null);
+                  setWorkflowView('edit');
+                }}
+                onEdit={(id) => {
+                  setEditingWorkflowId(id);
+                  setWorkflowView('edit');
+                }}
+              />
+            ) : (
+              <WorkflowBuilder
+                workflowId={editingWorkflowId}
+                onSaved={() => {
+                  setWorkflowView('list');
+                  setEditingWorkflowId(null);
+                }}
+                onCancel={() => {
+                  setWorkflowView('list');
+                  setEditingWorkflowId(null);
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        {tab === 'execution-log' && (
+          <div className="h-full overflow-y-auto bg-bg-primary p-6">
+            <WorkflowExecutionLog />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
