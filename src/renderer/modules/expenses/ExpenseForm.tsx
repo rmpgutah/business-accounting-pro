@@ -354,22 +354,35 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
   const isEditing = !!expenseId;
 
-  // Auto-calculate total from line items
-  // Round each line before summing so parent.amount == sum(line.amount) exactly.
-  const lineItemTotal = useMemo(() =>
-    lineItems.reduce((sum, li) => sum + roundCents(li.quantity * li.unit_price) + roundCents(li.tax_amount || 0), 0),
+  // Auto-calculate totals from line items.
+  // MATH: expense.amount stores the PRE-TAX subtotal; expense.tax_amount stores
+  // the tax separately. So the line "Amount" column shows pre-tax (qty × price)
+  // and we expose three values: subtotal, tax total, grand total (subtotal+tax).
+  const lineItemSubtotal = useMemo(() =>
+    lineItems.reduce((sum, li) => sum + roundCents(li.quantity * li.unit_price), 0),
     [lineItems]
   );
   const lineItemTaxTotal = useMemo(() =>
     lineItems.reduce((sum, li) => sum + roundCents(li.tax_amount || 0), 0),
     [lineItems]
   );
+  const lineItemGrandTotal = useMemo(() =>
+    roundCents(lineItemSubtotal + lineItemTaxTotal),
+    [lineItemSubtotal, lineItemTaxTotal]
+  );
+  // Backwards-compat alias used as the saved expense.amount (PRE-TAX subtotal).
+  const lineItemTotal = lineItemSubtotal;
 
   useEffect(() => {
     if (useLineItems && lineItems.length > 0) {
-      setForm(prev => ({ ...prev, amount: lineItemTotal.toFixed(2) }));
+      // Form's "Amount" field is the pre-tax subtotal (matches DB convention).
+      setForm(prev => ({
+        ...prev,
+        amount: lineItemSubtotal.toFixed(2),
+        tax_amount: lineItemTaxTotal.toFixed(2),
+      }));
     }
-  }, [lineItemTotal, useLineItems]);
+  }, [lineItemSubtotal, lineItemTaxTotal, useLineItems]);
 
   // Line item handlers
   const handleLineChange = (index: number, field: keyof ExpenseLineItem, value: any) => {
@@ -1060,7 +1073,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Amount */}
           <div>
-            <FieldLabel label="Amount" required tooltip={useLineItems ? 'Auto-calculated from line items' : 'Total amount of the expense including any taxes'} />
+            <FieldLabel label="Amount" required tooltip={useLineItems ? 'Pre-tax subtotal — auto-calculated from line items (tax is tracked separately)' : 'Pre-tax amount of the expense (tax is entered separately in Tax Amount)'} />
             <div className="relative">
               <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
@@ -1160,7 +1173,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                         onChange={(e) => handleLineChange(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="col-span-2 text-right font-mono text-sm text-text-secondary">
-                      {formatCurrency(li.quantity * li.unit_price + (li.tax_amount || 0))}
+                      {formatCurrency(li.quantity * li.unit_price)}
                     </div>
                     <div className="col-span-1 text-center">
                       {lineItems.length > 1 && (
@@ -1205,14 +1218,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                   </div>
                 ))}
 
-                {/* Add line + total */}
-                <div className="flex items-center justify-between pt-3 border-t border-border-primary">
+                {/* Add line + totals breakdown */}
+                <div className="flex items-start justify-between pt-3 border-t border-border-primary">
                   <button type="button" onClick={addLineItem}
                     className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5">
                     <Plus size={12} /> Add Item
                   </button>
-                  <div className="text-sm font-bold text-text-primary font-mono">
-                    Total: {formatCurrency(lineItemTotal)}
+                  <div className="text-right space-y-1">
+                    <div className="flex justify-between gap-8 text-xs text-text-muted font-mono">
+                      <span>Subtotal:</span>
+                      <span>{formatCurrency(lineItemSubtotal)}</span>
+                    </div>
+                    {lineItemTaxTotal > 0 && (
+                      <div className="flex justify-between gap-8 text-xs text-text-muted font-mono">
+                        <span>Tax:</span>
+                        <span>{formatCurrency(lineItemTaxTotal)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-8 text-sm font-bold text-text-primary font-mono pt-1 border-t border-border-primary">
+                      <span>Total:</span>
+                      <span>{formatCurrency(lineItemGrandTotal)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
