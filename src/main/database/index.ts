@@ -1622,12 +1622,40 @@ export function getById(table: string, id: string): any {
   return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
 }
 
+// Cache of known columns per table to avoid repeated PRAGMA queries.
+// Cleared on schema reload (rare during runtime).
+const tableColumnCache: Map<string, Set<string>> = new Map();
+
+function getTableColumns(table: string): Set<string> {
+  const cached = tableColumnCache.get(table);
+  if (cached) return cached;
+  try {
+    const rows = getDb().prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    const cols = new Set(rows.map(r => r.name));
+    tableColumnCache.set(table, cols);
+    return cols;
+  } catch {
+    return new Set();
+  }
+}
+
 export function create(table: string, data: Record<string, any>): any {
   const id = data.id || uuid();
   const record = { ...data, id };
 
+  // SAFETY: filter out keys that aren't actual columns. Without this, a stale
+  // form payload (e.g., a column added to the form but missing migration) blows
+  // up the entire INSERT with "table has no column named X" — surfaced to the
+  // user as "Failed to save". Now we silently drop unknown keys and log them.
+  const knownCols = getTableColumns(table);
+  const droppedKeys: string[] = [];
+
   const serialized: Record<string, any> = {};
   for (const [key, value] of Object.entries(record)) {
+    if (knownCols.size > 0 && !knownCols.has(key)) {
+      droppedKeys.push(key);
+      continue;
+    }
     if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
       serialized[key] = JSON.stringify(value);
     } else if (typeof value === 'boolean') {
@@ -1635,6 +1663,10 @@ export function create(table: string, data: Record<string, any>): any {
     } else {
       serialized[key] = value;
     }
+  }
+
+  if (droppedKeys.length > 0) {
+    console.warn(`[db.create:${table}] dropped unknown columns:`, droppedKeys);
   }
 
   const keys = Object.keys(serialized);
@@ -1756,8 +1788,17 @@ export function update(table: string, id: string, data: Record<string, any>): an
     if ('id' in data) delete (data as any).id;
     if ('created_at' in data) delete (data as any).created_at;
   }
+
+  // SAFETY: filter out keys that aren't actual columns (matches db.create).
+  const knownCols = getTableColumns(table);
+  const droppedKeys: string[] = [];
+
   const serialized: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
+    if (knownCols.size > 0 && !knownCols.has(key)) {
+      droppedKeys.push(key);
+      continue;
+    }
     if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
       serialized[key] = JSON.stringify(value);
     } else if (typeof value === 'boolean') {
@@ -1765,6 +1806,15 @@ export function update(table: string, id: string, data: Record<string, any>): an
     } else {
       serialized[key] = value;
     }
+  }
+
+  if (droppedKeys.length > 0) {
+    console.warn(`[db.update:${table}] dropped unknown columns:`, droppedKeys);
+  }
+
+  if (Object.keys(serialized).length === 0) {
+    // Nothing to update — return the existing row instead of building empty SQL.
+    return getById(table, id);
   }
 
   const sets = Object.keys(serialized).map(k => `${k} = ?`).join(', ');

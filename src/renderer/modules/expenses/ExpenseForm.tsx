@@ -929,9 +929,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       }
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save expense:', err);
-      alert('Failed to save expense. Please try again.');
+      const msg = err?.message || String(err) || 'Unknown error';
+      // VISIBILITY: surface the actual underlying error (often SQLite column
+      // mismatch, missing FK target, etc.) instead of swallowing into a
+      // generic "try again" message that gives the user nothing to act on.
+      alert(`Failed to save expense:\n\n${msg}\n\nCheck the DevTools console (Cmd+Option+I) for full details.`);
     } finally {
       setSaving(false);
     }
