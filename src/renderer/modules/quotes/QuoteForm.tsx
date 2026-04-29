@@ -29,11 +29,38 @@ interface QuoteFormData {
   discount_amount: string;
   notes: string;
   terms: string;
+  // Metadata
+  po_number: string;
+  job_reference: string;
+  sales_rep_id: string;
+  tags: string;
+  currency: string;
+  internal_notes: string;
+  // Pipeline
+  probability: string;
+  expected_close_date: string;
+  deal_size_category: string;
+  follow_up_date: string;
+  lost_reason: string;
 }
 
 interface Client {
   id: string;
   name: string;
+}
+
+interface SalesRep {
+  id: string;
+  name: string;
+}
+
+interface ActivityLogRow {
+  id: string;
+  quote_id: string;
+  activity_type: string;
+  description: string;
+  user_name: string;
+  created_at: string;
 }
 
 interface QuoteFormProps {
@@ -66,6 +93,19 @@ const emptyForm: QuoteFormData = {
   discount_amount: '0',
   notes: '',
   terms: '',
+  // Metadata
+  po_number: '',
+  job_reference: '',
+  sales_rep_id: '',
+  tags: '',
+  currency: 'USD',
+  internal_notes: '',
+  // Pipeline
+  probability: '50',
+  expected_close_date: '',
+  deal_size_category: '',
+  follow_up_date: '',
+  lost_reason: '',
 };
 
 function emptyLine(): LineItem {
@@ -87,6 +127,9 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
   const [form, setForm] = useState<QuoteFormData>({ ...emptyForm });
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityLogRow[]>([]);
+  const [originalStatus, setOriginalStatus] = useState<string>('draft');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
@@ -109,13 +152,20 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [cliData, nextNum] = await Promise.all([
+        const [cliData, repData, nextNum] = await Promise.all([
           api.query('clients', { company_id: activeCompany.id }),
+          api
+            .rawQuery(
+              `SELECT id, name FROM users WHERE company_id = ? OR company_id IS NULL ORDER BY name`,
+              [activeCompany.id]
+            )
+            .catch(() => []),
           quoteId ? Promise.resolve('') : api.quotesNextNumber(),
         ]);
         if (cancelled) return;
 
         setClients(Array.isArray(cliData) ? cliData : []);
+        setSalesReps(Array.isArray(repData) ? (repData as SalesRep[]) : []);
 
         if (quoteId) {
           const existing = await api.get('quotes', quoteId);
@@ -129,13 +179,36 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               discount_amount: String(existing.discount_amount ?? 0),
               notes: existing.notes || '',
               terms: existing.terms || '',
+              po_number: existing.po_number || '',
+              job_reference: existing.job_reference || '',
+              sales_rep_id: existing.sales_rep_id || '',
+              tags: existing.tags || '',
+              currency: existing.currency || 'USD',
+              internal_notes: existing.internal_notes || '',
+              probability:
+                existing.probability !== undefined && existing.probability !== null
+                  ? String(existing.probability)
+                  : '50',
+              expected_close_date: existing.expected_close_date || '',
+              deal_size_category: existing.deal_size_category || '',
+              follow_up_date: existing.follow_up_date || '',
+              lost_reason: existing.lost_reason || '',
             });
+            setOriginalStatus(existing.status || 'draft');
 
-            // Load line items
-            const lineData = await api.rawQuery(
-              'SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order',
-              [quoteId]
-            );
+            // Load line items + activity log
+            const [lineData, actData] = await Promise.all([
+              api.rawQuery(
+                'SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order',
+                [quoteId]
+              ),
+              api
+                .rawQuery(
+                  'SELECT * FROM quote_activity_log WHERE quote_id = ? ORDER BY created_at DESC LIMIT 5',
+                  [quoteId]
+                )
+                .catch(() => []),
+            ]);
             if (Array.isArray(lineData) && lineData.length > 0) {
               setLines(
                 lineData.map((l: any) => ({
@@ -149,6 +222,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                 }))
               );
             }
+            setActivityLog(Array.isArray(actData) ? (actData as ActivityLogRow[]) : []);
           }
         } else {
           setForm((prev) => ({ ...prev, quote_number: nextNum || '' }));
@@ -261,6 +335,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
     setSaving(true);
 
     try {
+      const today = new Date().toISOString().slice(0, 10);
       const quotePayload: Record<string, any> = {
         quote_number: form.quote_number.trim(),
         client_id: form.client_id || null,
@@ -273,7 +348,33 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
         total: grandTotal,
         notes: form.notes.trim(),
         terms: form.terms.trim(),
+        // Metadata
+        po_number: form.po_number.trim() || null,
+        job_reference: form.job_reference.trim() || null,
+        sales_rep_id: form.sales_rep_id || null,
+        tags: form.tags.trim() || null,
+        currency: form.currency || 'USD',
+        internal_notes: form.internal_notes.trim() || null,
+        // Pipeline
+        probability:
+          form.probability === '' ? null : Math.max(0, Math.min(100, parseFloat(form.probability) || 0)),
+        expected_close_date: form.expected_close_date || null,
+        deal_size_category: form.deal_size_category || null,
+        follow_up_date: form.follow_up_date || null,
+        lost_reason: form.status === 'rejected' ? form.lost_reason.trim() || null : null,
       };
+
+      // Stamp status-transition timestamps
+      if (form.status === 'sent' && originalStatus !== 'sent') {
+        quotePayload.sent_date = today;
+      }
+      if (
+        (form.status === 'accepted' || form.status === 'converted') &&
+        originalStatus !== 'accepted' &&
+        originalStatus !== 'converted'
+      ) {
+        quotePayload.won_date = today;
+      }
 
       let savedQuoteId = quoteId;
 
@@ -293,6 +394,45 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
       } else {
         const record = await api.create('quotes', quotePayload);
         savedQuoteId = record.id;
+      }
+
+      // Log activity
+      try {
+        if (!isEditing) {
+          await api.create('quote_activity_log', {
+            quote_id: savedQuoteId,
+            activity_type: 'created',
+            description: `Quote ${form.quote_number} created`,
+          });
+        } else if (form.status !== originalStatus) {
+          let actType = 'updated';
+          let desc = `Status changed: ${originalStatus} → ${form.status}`;
+          if (form.status === 'sent') {
+            actType = 'sent';
+            desc = 'Quote sent to client';
+          } else if (form.status === 'accepted') {
+            actType = 'accepted';
+            desc = 'Quote accepted';
+          } else if (form.status === 'rejected') {
+            actType = 'rejected';
+            desc = form.lost_reason
+              ? `Quote rejected: ${form.lost_reason}`
+              : 'Quote rejected';
+          }
+          await api.create('quote_activity_log', {
+            quote_id: savedQuoteId,
+            activity_type: actType,
+            description: desc,
+          });
+        } else {
+          await api.create('quote_activity_log', {
+            quote_id: savedQuoteId,
+            activity_type: 'updated',
+            description: 'Quote updated',
+          });
+        }
+      } catch (logErr) {
+        console.warn('Activity log write failed:', logErr);
       }
 
       // Insert line items
@@ -333,6 +473,15 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
       if (result?.invoice_id) {
         setConvertSuccess('Converted to invoice successfully.');
         setForm((prev) => ({ ...prev, status: 'converted' }));
+        try {
+          await api.create('quote_activity_log', {
+            quote_id: quoteId,
+            activity_type: 'converted',
+            description: 'Converted to Invoice',
+          });
+        } catch {
+          /* non-fatal */
+        }
         // Offer to navigate to the new invoice
         if (window.confirm('Quote converted to invoice. Go to Invoicing now?')) {
           setModule('invoicing');
@@ -598,6 +747,35 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               // DATE: Item #3 — prevent picking expiry before issue date.
               min={form.issue_date || undefined}
             />
+            {/* Validity quick-pick buttons */}
+            <div className="flex gap-1 mt-2">
+              {[7, 14, 30, 60, 90].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => {
+                    const base = form.issue_date
+                      ? new Date(form.issue_date)
+                      : new Date();
+                    const newDate = new Date(base.getTime() + days * 86400000);
+                    setForm((prev) => ({
+                      ...prev,
+                      valid_until: toLocalDateString(newDate),
+                    }));
+                  }}
+                  className="text-[10px] font-semibold px-2 py-1 text-text-secondary hover:text-text-primary"
+                  style={{
+                    background: 'rgba(59,130,246,0.08)',
+                    border: '1px solid rgba(59,130,246,0.20)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                  title={`Set valid_until to ${days} days from issue`}
+                >
+                  +{days}d
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Discount */}
@@ -613,6 +791,192 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               value={form.discount_amount}
               onChange={handleChange}
             />
+          </div>
+        </div>
+
+        {/* ─── Quote Metadata Card ─────────────────────────── */}
+        <div
+          className="mt-6 p-4"
+          style={{
+            background: 'rgba(18,19,24,0.40)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '6px',
+          }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-accent-blue uppercase tracking-wider">
+              Quote Metadata
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-5">
+            <div>
+              <FieldLabel label="PO Number" tooltip="Client purchase order reference" />
+              <input
+                type="text"
+                name="po_number"
+                className="block-input"
+                value={form.po_number}
+                onChange={handleChange}
+                placeholder="e.g. PO-2024-001"
+              />
+            </div>
+            <div>
+              <FieldLabel label="Job Reference" tooltip="Internal job code or project reference" />
+              <input
+                type="text"
+                name="job_reference"
+                className="block-input"
+                value={form.job_reference}
+                onChange={handleChange}
+                placeholder="e.g. JOB-456"
+              />
+            </div>
+            <div>
+              <FieldLabel label="Sales Rep" tooltip="User responsible for this opportunity" />
+              <select
+                name="sales_rep_id"
+                className="block-select"
+                value={form.sales_rep_id}
+                onChange={handleChange}
+              >
+                <option value="">Unassigned</option>
+                {salesReps.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <FieldLabel label="Tags" tooltip="Comma-separated tags for filtering" />
+              <input
+                type="text"
+                name="tags"
+                className="block-input"
+                value={form.tags}
+                onChange={handleChange}
+                placeholder="hot, q4, retainer"
+              />
+            </div>
+            <div>
+              <FieldLabel label="Currency" tooltip="Currency code for this quote" />
+              <select
+                name="currency"
+                className="block-select"
+                value={form.currency}
+                onChange={handleChange}
+              >
+                <option value="USD">USD — US Dollar</option>
+                <option value="EUR">EUR — Euro</option>
+                <option value="GBP">GBP — British Pound</option>
+                <option value="CAD">CAD — Canadian Dollar</option>
+                <option value="AUD">AUD — Australian Dollar</option>
+                <option value="ZAR">ZAR — South African Rand</option>
+                <option value="JPY">JPY — Japanese Yen</option>
+              </select>
+            </div>
+            <div>
+              <FieldLabel label="Internal Notes" tooltip="Notes hidden from the client" />
+              <textarea
+                name="internal_notes"
+                className="block-input"
+                rows={1}
+                value={form.internal_notes}
+                onChange={handleChange}
+                placeholder="Internal-only context..."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Sales Pipeline Card ─────────────────────────── */}
+        <div
+          className="mt-4 p-4"
+          style={{
+            background: 'rgba(18,19,24,0.40)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '6px',
+          }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-accent-blue uppercase tracking-wider">
+              Sales Pipeline
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-5">
+            <div>
+              <FieldLabel
+                label={`Probability (${form.probability || 0}%)`}
+                tooltip="Likelihood this quote will close"
+              />
+              <input
+                type="range"
+                name="probability"
+                min="0"
+                max="100"
+                step="5"
+                value={form.probability}
+                onChange={handleChange}
+                className="w-full"
+                style={{ accentColor: '#3b82f6' }}
+              />
+              <div className="flex justify-between text-[9px] text-text-muted mt-1">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+            <div>
+              <FieldLabel label="Expected Close Date" tooltip="When you expect this quote to close" />
+              <input
+                type="date"
+                name="expected_close_date"
+                className="block-input"
+                value={form.expected_close_date}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <FieldLabel label="Deal Size" tooltip="Categorize by deal size for analytics" />
+              <select
+                name="deal_size_category"
+                className="block-select"
+                value={form.deal_size_category}
+                onChange={handleChange}
+              >
+                <option value="">— Select —</option>
+                <option value="small">Small (under $5k)</option>
+                <option value="medium">Medium ($5k-25k)</option>
+                <option value="large">Large ($25k-100k)</option>
+                <option value="enterprise">Enterprise ($100k+)</option>
+              </select>
+            </div>
+            <div>
+              <FieldLabel
+                label="Follow-Up Date"
+                tooltip="Reminder to circle back with the client"
+              />
+              <input
+                type="date"
+                name="follow_up_date"
+                className="block-input"
+                value={form.follow_up_date}
+                onChange={handleChange}
+              />
+            </div>
+            {form.status === 'rejected' && (
+              <div className="col-span-2">
+                <FieldLabel label="Lost Reason" tooltip="Why was this quote rejected?" />
+                <input
+                  type="text"
+                  name="lost_reason"
+                  className="block-input"
+                  value={form.lost_reason}
+                  onChange={handleChange}
+                  placeholder="e.g. Price, Timing, Competitor"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -786,6 +1150,49 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
           </button>
         </div>
       </form>
+
+      {/* ─── Activity Log (last 5) ───────────────────────── */}
+      {isEditing && (
+        <div className="block-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-accent-blue uppercase tracking-wider">
+              Recent Activity
+            </span>
+            <span className="text-[10px] text-text-muted">
+              Last {activityLog.length} entr{activityLog.length === 1 ? 'y' : 'ies'}
+            </span>
+          </div>
+          {activityLog.length === 0 ? (
+            <div className="text-xs text-text-muted py-4 text-center">No activity yet</div>
+          ) : (
+            <ul className="space-y-2">
+              {activityLog.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-start gap-2 text-xs"
+                  style={{
+                    borderLeft: '2px solid rgba(255,255,255,0.08)',
+                    paddingLeft: 8,
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-text-secondary">
+                      <span className="font-semibold text-text-primary capitalize">
+                        {a.activity_type.replace(/_/g, ' ')}
+                      </span>
+                      {a.description && <span className="ml-2">{a.description}</span>}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5">
+                      {new Date(a.created_at).toLocaleString()}
+                      {a.user_name ? ` · ${a.user_name}` : ''}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 };

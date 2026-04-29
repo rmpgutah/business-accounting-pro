@@ -1191,6 +1191,54 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year, quarter, form_type)
   )`,
+  // Quote System Enhancements (2026-04-28) — 95 features across pipeline, analytics, follow-up
+  "ALTER TABLE quotes ADD COLUMN po_number TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN job_reference TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN internal_notes TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE quotes ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+  "ALTER TABLE quotes ADD COLUMN sales_rep_id TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN deal_size_category TEXT DEFAULT 'standard'",
+  "ALTER TABLE quotes ADD COLUMN probability INTEGER DEFAULT 50",
+  "ALTER TABLE quotes ADD COLUMN expected_close_date TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN lost_reason TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN won_date TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN sent_date TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN viewed_date TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN follow_up_date TEXT DEFAULT ''",
+  "ALTER TABLE quotes ADD COLUMN tags TEXT DEFAULT '[]'",
+  "ALTER TABLE quotes ADD COLUMN shipping_amount REAL DEFAULT 0",
+  "ALTER TABLE quotes ADD COLUMN parent_quote_id TEXT DEFAULT NULL",
+  "ALTER TABLE quotes ADD COLUMN revision_number INTEGER DEFAULT 1",
+  "ALTER TABLE quote_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
+  "ALTER TABLE quote_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+  "ALTER TABLE quote_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
+  "ALTER TABLE quote_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
+  "ALTER TABLE quote_line_items ADD COLUMN item_code TEXT DEFAULT ''",
+  `CREATE TABLE IF NOT EXISTS quote_activity_log (
+    id TEXT PRIMARY KEY,
+    quote_id TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+    activity_type TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    user_name TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS quote_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    terms TEXT DEFAULT '',
+    line_items TEXT DEFAULT '[]',
+    default_validity_days INTEGER DEFAULT 30,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_quote_activity_quote ON quote_activity_log(quote_id)",
+  "CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(company_id, status)",
+  "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
+  "CREATE INDEX IF NOT EXISTS idx_quotes_follow_up ON quotes(company_id, follow_up_date)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
@@ -1526,6 +1574,8 @@ const tablesWithoutUpdatedAt = new Set([
   'exchange_rates', 'sync_queue', 'invoice_tokens',
   'automation_rules', 'automation_run_log', 'financial_anomalies',
   'rules', 'rule_logs', 'approval_queue',
+  // Quote system child tables — created_at only
+  'quote_activity_log',
 ]);
 
 // SCHEMA: tables with a `deleted_at` column. queryAll() auto-filters these

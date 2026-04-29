@@ -590,6 +590,7 @@ export function registerIpcHandlers(): void {
     'bank_accounts', 'bank_transactions', 'bank_reconciliation_matches',
     'documents', 'recurring_templates', 'tax_categories', 'tax_payments',
     'inventory_items', 'inventory_movements', 'quotes', 'quote_line_items',
+    'quote_activity_log', 'quote_templates',
     'bills', 'bill_line_items', 'bill_payments', 'purchase_orders', 'po_line_items',
     'fixed_assets', 'asset_depreciation_entries',
     'debts', 'debt_contacts', 'debt_communications', 'debt_payments',
@@ -658,6 +659,8 @@ export function registerIpcHandlers(): void {
     'debt_audit_log', 'debt_payment_matches',
     // Advanced debt collection child tables — company_id lives on parent
     'debt_skip_traces',
+    // Quote system child tables — company_id lives on parent quotes table
+    'quote_activity_log',
   ]);
 
   // SECURITY: Tables that hold credentials/secrets must not be writable via the
