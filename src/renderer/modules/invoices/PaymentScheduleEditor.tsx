@@ -58,7 +58,6 @@ const PaymentScheduleEditor: React.FC<Props> = ({ milestones, onChange, totalAmo
               />
               <input
                 type="number"
-                min={0}
                 step="0.01"
                 className="block-input text-right font-mono"
                 placeholder="Amount"

@@ -695,7 +695,6 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                         onChange={(e) => updateLine(line.tempId, 'quantity', e.target.value)}
                         placeholder="1"
                         type="number"
-                        min="0"
                         step="any"
                       />
                     </td>
@@ -706,7 +705,6 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                         onChange={(e) => updateLine(line.tempId, 'unit_price', e.target.value)}
                         placeholder="0.00"
                         type="number"
-                        min="0"
                         step="any"
                       />
                     </td>
@@ -745,7 +743,6 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                   value={taxPct}
                   onChange={(e) => setTaxPct(e.target.value)}
                   type="number"
-                  min="0"
                   max="100"
                   step="any"
                 />

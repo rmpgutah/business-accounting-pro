@@ -353,7 +353,6 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
                   className="block-input font-mono"
                   value={form.unit_price}
                   onChange={(e) => setForm((f) => ({ ...f, unit_price: parseFloat(e.target.value) || 0 }))}
@@ -366,7 +365,6 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
                   className="block-input font-mono"
                   value={form.default_quantity}
                   onChange={(e) => setForm((f) => ({ ...f, default_quantity: parseFloat(e.target.value) || 0 }))}
@@ -379,7 +377,6 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
                   className="block-input font-mono"
                   value={form.tax_rate}
                   onChange={(e) => setForm((f) => ({ ...f, tax_rate: parseFloat(e.target.value) || 0 }))}

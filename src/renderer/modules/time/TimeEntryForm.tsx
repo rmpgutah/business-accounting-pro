@@ -403,7 +403,6 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 onChange={(e) => setHourlyRate(e.target.value)}
                 className="block-input"
                 placeholder="0.00"
-                min={0}
                 step="0.01"
               />
             </div>

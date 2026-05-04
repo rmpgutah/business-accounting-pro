@@ -1155,23 +1155,23 @@ export default function SettingsModule() {
         <div className="grid grid-cols-2 gap-3">
           <Field label="Flat Withholding Rate (%)" hint="Utah TC-40W rate (default 4.55%)">
             <input type="number" value={utahConfig.flat_rate} onChange={e => setUtahConfig(c => ({ ...c, flat_rate: e.target.value }))}
-              className="block-input" step="0.01" min="0" max="100" />
+              className="block-input" step="0.01" max="100" />
           </Field>
           <Field label="Personal Exemption Credit ($)">
             <input type="number" value={utahConfig.personal_exemption_credit} onChange={e => setUtahConfig(c => ({ ...c, personal_exemption_credit: e.target.value }))}
-              className="block-input" step="1" min="0" />
+              className="block-input" step="1" />
           </Field>
           <Field label="SUI Rate (%)" hint="Employer-specific experience rate">
             <input type="number" value={utahConfig.sui_rate} onChange={e => setUtahConfig(c => ({ ...c, sui_rate: e.target.value }))}
-              className="block-input" step="0.01" min="0" />
+              className="block-input" step="0.01" />
           </Field>
           <Field label="SUI Wage Base ($)">
             <input type="number" value={utahConfig.sui_wage_base} onChange={e => setUtahConfig(c => ({ ...c, sui_wage_base: e.target.value }))}
-              className="block-input" step="100" min="0" />
+              className="block-input" step="100" />
           </Field>
           <Field label="Workers' Comp Rate (%)">
             <input type="number" value={utahConfig.wc_rate} onChange={e => setUtahConfig(c => ({ ...c, wc_rate: e.target.value }))}
-              className="block-input" step="0.01" min="0" />
+              className="block-input" step="0.01" />
           </Field>
           <Field label="WC Class Code">
             <input type="text" value={utahConfig.wc_class_code} onChange={e => setUtahConfig(c => ({ ...c, wc_class_code: e.target.value }))}

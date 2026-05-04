@@ -418,7 +418,6 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
                 className="block-input"
                 placeholder="0.00"
                 step="0.01"
-                min="0"
                 value={form.court_costs}
                 onChange={handleFormChange}
               />

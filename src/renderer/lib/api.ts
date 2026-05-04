@@ -112,6 +112,23 @@ const api = {
     window.electronAPI.invoke('invoice:send-email', html ? { invoiceId, html } : invoiceId),
   generateInvoiceToken: (invoiceId: string): Promise<{ token: string }> =>
     window.electronAPI.invoke('invoice:generate-token', invoiceId),
+  // PORTAL: extra surface for the share modal
+  invoiceTokenInfo: (invoiceId: string): Promise<{ token: string | null; expiresAt: number; lastView: any | null; error?: string }> =>
+    window.electronAPI.invoke('invoice:token-info', invoiceId),
+  invoiceRegenerateToken: (invoiceId: string): Promise<{ token?: string; expiresAt?: number; error?: string }> =>
+    window.electronAPI.invoke('invoice:regenerate-token', invoiceId),
+  invoiceDisableToken: (invoiceId: string): Promise<{ ok?: boolean; alreadyDisabled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:disable-token', invoiceId),
+  debtPortalTokenInfo: (debtId: string): Promise<{ token: string | null; expiresAt: number; lastView: any | null; error?: string }> =>
+    window.electronAPI.invoke('debt:portal-token-info', { debtId }),
+  debtRegeneratePortalToken: (debtId: string): Promise<{ token?: string; expiresAt?: number; portalUrl?: string; error?: string }> =>
+    window.electronAPI.invoke('debt:regenerate-portal-token', { debtId }),
+  debtDisablePortalToken: (debtId: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('debt:disable-portal-token', { debtId }),
+  portalBaseUrl: (): Promise<{ baseUrl: string }> =>
+    window.electronAPI.invoke('portal:base-url'),
+  shellOpenExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
+    window.electronAPI.invoke('shell:open-external', url),
   invoiceScheduleReminders: (invoiceId: string): Promise<{ scheduled: number }> =>
     window.electronAPI.invoke('invoice:schedule-reminders', { invoiceId }),
   invoiceListReminders: (invoiceId: string): Promise<any[]> =>

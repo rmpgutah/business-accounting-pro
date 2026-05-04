@@ -1189,10 +1189,8 @@ export function registerIpcHandlers(): void {
     lineItems: Array<Record<string, any>>;
     isEdit: boolean;
   }) => {
-    for (const li of lineItems) {
-      if (li.quantity != null && li.quantity < 0) return { error: 'Quantity cannot be negative' };
-      if (li.unit_price != null && li.unit_price < 0) return { error: 'Unit price cannot be negative' };
-    }
+    // Negative quantities and unit prices are valid (credits, refunds, returns, adjustments).
+    // No clamping here — the business logic upstream decides sign conventions.
     try {
       const companyId = db.getCurrentCompanyId();
       const rawDb = db.getDb();
@@ -1793,27 +1791,265 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Invoice Portal Token ──────────────────────────────
+  // PORTAL: token-expiry default is configurable via the
+  // `portal_token_expiry_days` setting (per-company). Falls back to 90.
+  // Settings UI may write any positive integer; we clamp to [1, 3650]
+  // to keep the math finite. Document this key alongside SYNC_SERVER.
+  function getPortalExpiryDays(companyId: string): number {
+    try {
+      const row = db.getDb().prepare(
+        "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_token_expiry_days'"
+      ).get(companyId) as any;
+      const v = parseInt(row?.value ?? '', 10);
+      if (Number.isFinite(v) && v > 0) return Math.min(v, 3650);
+    } catch { /* fall through */ }
+    return 90;
+  }
+
   ipcMain.handle('invoice:generate-token', (_event, invoiceId: string) => {
     const dbInstance = db.getDb();
+    // PORTAL: a stale (expires_at=0) row counts as "no usable token" so the
+    // user gets a fresh one after Disable; otherwise idempotent.
     const existing = dbInstance.prepare(
-      `SELECT token FROM invoice_tokens WHERE invoice_id = ?`
+      `SELECT token, expires_at FROM invoice_tokens WHERE invoice_id = ?`
     ).get(invoiceId) as any;
-    if (existing) return { token: existing.token };
+    if (existing && existing.expires_at && existing.expires_at > 0) {
+      return { token: existing.token };
+    }
 
     const token = crypto.randomBytes(32).toString('hex');
     const invoice = dbInstance.prepare(`SELECT due_date FROM invoices WHERE id = ?`).get(invoiceId) as any;
     const dueTs = invoice?.due_date
       ? new Date(invoice.due_date).getTime()
       : Date.now();
-    const expiresAt = Math.floor(dueTs / 1000) + 90 * 86400;
     const companyId = db.getCurrentCompanyId() ?? '';
+    const expiryDays = getPortalExpiryDays(companyId);
+    const expiresAt = Math.floor(dueTs / 1000) + expiryDays * 86400;
+    const tokenId = uuid();
+
+    // If a stale row existed, replace it rather than insert (uniq on invoice_id).
+    if (existing) {
+      dbInstance.prepare(`DELETE FROM invoice_tokens WHERE invoice_id = ?`).run(invoiceId);
+    }
 
     dbInstance.prepare(`
       INSERT INTO invoice_tokens (id, invoice_id, company_id, token, expires_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run(uuid(), invoiceId, companyId, token, expiresAt);
+    `).run(tokenId, invoiceId, companyId, token, expiresAt);
+
+    // Push the new token to the VPS replica IMMEDIATELY so the portal
+    // URL works the moment it's shared. Without this, the user would
+    // hit "Invoice not found" until the next auto-backup tick (30s+).
+    // Fire-and-forget — failure just means the token reaches the VPS
+    // on the next regular sync. Localhost path stays usable either way.
+    syncPush({
+      table_name: 'invoice_tokens',
+      operation: 'insert',
+      record_id: tokenId,
+      company_id: companyId,
+      payload: { id: tokenId, invoice_id: invoiceId, company_id: companyId, token, expires_at: expiresAt },
+    } as any).catch((err) => {
+      console.warn('[portal] immediate token sync failed (will retry on next backup):', err?.message ?? err);
+    });
 
     return { token };
+  });
+
+  // ─── Invoice Portal Token: info / regenerate / disable ──
+  // PORTAL: returns the current token row plus the most recent
+  // 'portal_view' audit entry (if any). Audit entries originate on the
+  // VPS replica when a recipient opens the portal; they only land on the
+  // desktop once the next server→desktop sync runs, so the renderer must
+  // tolerate "no entry yet" and show "Not available yet".
+  ipcMain.handle('invoice:token-info', (_event, invoiceId: string) => {
+    try {
+      const dbInstance = db.getDb();
+      const tokenRow = dbInstance.prepare(
+        `SELECT token, expires_at FROM invoice_tokens WHERE invoice_id = ?`
+      ).get(invoiceId) as any;
+      let lastView: any = null;
+      try {
+        lastView = dbInstance.prepare(
+          `SELECT timestamp, changes FROM audit_log
+           WHERE entity_type = 'invoice' AND entity_id = ? AND action = 'portal_view'
+           ORDER BY timestamp DESC LIMIT 1`
+        ).get(invoiceId) as any;
+      } catch { /* table may differ on legacy DBs */ }
+      return { token: tokenRow?.token ?? null, expiresAt: tokenRow?.expires_at ?? 0, lastView };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  ipcMain.handle('invoice:regenerate-token', (_event, invoiceId: string) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId() ?? '';
+      // INVALIDATION: mark the old row as expired so any link already shared
+      // stops working. We then delete it so the new token can take its place
+      // (invoice_id is effectively unique per token row in this codebase).
+      const old = dbInstance.prepare(
+        `SELECT id, token FROM invoice_tokens WHERE invoice_id = ?`
+      ).get(invoiceId) as any;
+      if (old) {
+        dbInstance.prepare(`UPDATE invoice_tokens SET expires_at = 0 WHERE id = ?`).run(old.id);
+        // Push the invalidation NOW so the VPS replica also rejects the old link.
+        syncPush({
+          table_name: 'invoice_tokens',
+          operation: 'update',
+          record_id: old.id,
+          company_id: companyId,
+          payload: { id: old.id, invoice_id: invoiceId, company_id: companyId, token: old.token, expires_at: 0 },
+        } as any).catch(() => {});
+        dbInstance.prepare(`DELETE FROM invoice_tokens WHERE id = ?`).run(old.id);
+      }
+      // Mint fresh.
+      const token = crypto.randomBytes(32).toString('hex');
+      const invoice = dbInstance.prepare(`SELECT due_date FROM invoices WHERE id = ?`).get(invoiceId) as any;
+      const dueTs = invoice?.due_date ? new Date(invoice.due_date).getTime() : Date.now();
+      const expiryDays = getPortalExpiryDays(companyId);
+      const expiresAt = Math.floor(dueTs / 1000) + expiryDays * 86400;
+      const tokenId = uuid();
+      dbInstance.prepare(`
+        INSERT INTO invoice_tokens (id, invoice_id, company_id, token, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(tokenId, invoiceId, companyId, token, expiresAt);
+      syncPush({
+        table_name: 'invoice_tokens',
+        operation: 'insert',
+        record_id: tokenId,
+        company_id: companyId,
+        payload: { id: tokenId, invoice_id: invoiceId, company_id: companyId, token, expires_at: expiresAt },
+      } as any).catch(() => {});
+      if (companyId) db.logAudit(companyId, 'invoice', invoiceId, 'update', { _action: 'portal_token_regenerated' });
+      return { token, expiresAt };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  ipcMain.handle('invoice:disable-token', (_event, invoiceId: string) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId() ?? '';
+      const row = dbInstance.prepare(
+        `SELECT id, token FROM invoice_tokens WHERE invoice_id = ?`
+      ).get(invoiceId) as any;
+      if (!row) return { ok: true, alreadyDisabled: true };
+      dbInstance.prepare(`UPDATE invoice_tokens SET expires_at = 0 WHERE id = ?`).run(row.id);
+      syncPush({
+        table_name: 'invoice_tokens',
+        operation: 'update',
+        record_id: row.id,
+        company_id: companyId,
+        payload: { id: row.id, invoice_id: invoiceId, company_id: companyId, token: row.token, expires_at: 0 },
+      } as any).catch(() => {});
+      if (companyId) db.logAudit(companyId, 'invoice', invoiceId, 'update', { _action: 'portal_token_disabled' });
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // ─── Debt Portal Token: info / regenerate / disable ─────
+  // The debt token is stored on the debts row itself (portal_token /
+  // portal_token_expires_at columns added in round 2). If those columns
+  // don't exist on a legacy DB we degrade silently rather than crashing.
+  ipcMain.handle('debt:portal-token-info', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const debt = dbInstance.prepare(`SELECT * FROM debts WHERE id = ?`).get(debtId) as any;
+      if (!debt) return { token: null, expiresAt: 0, lastView: null };
+      let lastView: any = null;
+      try {
+        lastView = dbInstance.prepare(
+          `SELECT timestamp, changes FROM audit_log
+           WHERE entity_type = 'debt' AND entity_id = ? AND action = 'portal_view'
+           ORDER BY timestamp DESC LIMIT 1`
+        ).get(debtId) as any;
+      } catch { /* ignore */ }
+      return {
+        token: debt.portal_token ?? null,
+        expiresAt: debt.portal_token_expires_at ?? 0,
+        lastView,
+      };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  ipcMain.handle('debt:regenerate-portal-token', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId() ?? '';
+      const debt = dbInstance.prepare(`SELECT id FROM debts WHERE id = ?`).get(debtId) as any;
+      if (!debt) return { error: 'Debt not found' };
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiryDays = getPortalExpiryDays(companyId);
+      const expiresAt = Math.floor(Date.now() / 1000) + expiryDays * 86400;
+      // PORTAL: try to persist on the debts row; if those columns are missing
+      // on an older DB, we still return the token so the immediate share works
+      // (but skip sync since there's nothing to write).
+      try {
+        dbInstance.prepare(
+          `UPDATE debts SET portal_token = ?, portal_token_expires_at = ?, updated_at = datetime('now') WHERE id = ?`
+        ).run(token, expiresAt, debtId);
+        syncPush({
+          table_name: 'debts',
+          operation: 'update',
+          record_id: debtId,
+          company_id: companyId,
+          payload: { id: debtId, portal_token: token, portal_token_expires_at: expiresAt },
+        } as any).catch(() => {});
+      } catch { /* legacy DB without columns */ }
+      if (companyId) db.logAudit(companyId, 'debt', debtId, 'update', { _action: 'portal_token_regenerated' });
+      const portalUrl = `${SYNC_SERVER}/portal/debt/${token}`;
+      return { token, expiresAt, portalUrl };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  ipcMain.handle('debt:disable-portal-token', (_event, { debtId }: { debtId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId() ?? '';
+      try {
+        dbInstance.prepare(
+          `UPDATE debts SET portal_token_expires_at = 0, updated_at = datetime('now') WHERE id = ?`
+        ).run(debtId);
+        syncPush({
+          table_name: 'debts',
+          operation: 'update',
+          record_id: debtId,
+          company_id: companyId,
+          payload: { id: debtId, portal_token_expires_at: 0 },
+        } as any).catch(() => {});
+      } catch { /* legacy DB */ }
+      if (companyId) db.logAudit(companyId, 'debt', debtId, 'update', { _action: 'portal_token_disabled' });
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // PORTAL: lets the renderer build the portal URL using the configured
+  // SYNC_SERVER without hard-coding the host. Returned here (rather than
+  // computed in the renderer) so a future env-driven override flows through.
+  ipcMain.handle('portal:base-url', () => {
+    return { baseUrl: SYNC_SERVER };
+  });
+
+  // SECURITY: only http(s) URLs reach the OS shell; rejects mailto/file/etc.
+  ipcMain.handle('shell:open-external', (_event, url: string) => {
+    if (typeof url !== 'string') return { ok: false };
+    if (!/^https?:\/\//i.test(url)) return { ok: false };
+    try {
+      shell.openExternal(url).catch(() => {});
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message };
+    }
   });
 
   // ─── Invoice Reminders ────────────────────────────────
@@ -6702,16 +6938,40 @@ export function registerIpcHandlers(): void {
   });
 
   // Feature 9: Generate Payment Portal Link
+  // PORTAL: idempotent — returns the existing live token if one is set.
+  // Persists portal_token / portal_token_expires_at on the debts row so the
+  // VPS replica can validate the link via the standard sync path. Falls back
+  // to ephemeral (in-memory only) on legacy DBs missing those columns.
   ipcMain.handle('debt:generate-portal-token', (_event, { debtId }: { debtId: string }) => {
     try {
-      const token = crypto.randomBytes(32).toString('hex');
-      // Store token in debt notes for now (lightweight approach)
-      const debt = db.getById('debts', debtId) as any;
+      const dbInstance = db.getDb();
+      const debt = dbInstance.prepare(`SELECT * FROM debts WHERE id = ?`).get(debtId) as any;
       if (!debt) return { error: 'Debt not found' };
-      db.update('debts', debtId, { notes: (debt.notes || '') });
-      // Return a generated portal URL
+
+      const existingToken: string | null = debt.portal_token ?? null;
+      const existingExpiry: number = debt.portal_token_expires_at ?? 0;
+      if (existingToken && existingExpiry > 0) {
+        return { token: existingToken, portalUrl: `${SYNC_SERVER}/portal/debt/${existingToken}` };
+      }
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const companyId = db.getCurrentCompanyId() ?? '';
+      const expiryDays = getPortalExpiryDays(companyId);
+      const expiresAt = Math.floor(Date.now() / 1000) + expiryDays * 86400;
+      try {
+        dbInstance.prepare(
+          `UPDATE debts SET portal_token = ?, portal_token_expires_at = ?, updated_at = datetime('now') WHERE id = ?`
+        ).run(token, expiresAt, debtId);
+        syncPush({
+          table_name: 'debts',
+          operation: 'update',
+          record_id: debtId,
+          company_id: companyId,
+          payload: { id: debtId, portal_token: token, portal_token_expires_at: expiresAt },
+        } as any).catch(() => {});
+      } catch { /* legacy DB without portal_token columns */ }
       const portalUrl = `${SYNC_SERVER}/portal/debt/${token}`;
-      return { token, portalUrl };
+      return { token, portalUrl, expiresAt };
     } catch (err: any) {
       return { error: err.message };
     }

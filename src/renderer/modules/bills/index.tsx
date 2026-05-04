@@ -1416,7 +1416,6 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                   <td className="p-1">
                     <input
                       type="number"
-                      min={0}
                       step="0.01"
                       className="block-input text-right font-mono text-xs"
                       value={line.unit_price}
@@ -1456,7 +1455,6 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             <span className="text-text-secondary flex-shrink-0">Tax %</span>
             <input
               type="number"
-              min={0}
               step="0.01"
               className="block-input text-right font-mono w-24"
               style={{ borderRadius: '6px' }}

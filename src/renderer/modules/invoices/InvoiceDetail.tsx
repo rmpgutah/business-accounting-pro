@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Eye as EyeIcon } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Share2, Eye as EyeIcon } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
+import PortalShareModal from '../../components/PortalShareModal';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
@@ -61,6 +62,32 @@ interface PaymentPrediction {
   avg_days_to_pay?: number;
   confidence?: number;
   [key: string]: any;
+}
+
+// PORTAL: privacy preview — returns ONLY the fields the public portal exposes.
+// Internal-only fields (internal_notes, created_by, late_fee_pct, etc.) are
+// deliberately excluded so the user can audit what the recipient sees before
+// they share. Keep this in sync with what the server-side portal renders.
+export function getInvoicePortalPreview(
+  invoice: { invoice_number: string; issue_date: string; due_date: string; total: number; amount_paid: number; status: string; currency?: string; notes?: string; terms?: string },
+  client: { name?: string } | null,
+): React.ReactNode {
+  return (
+    <div className="space-y-1">
+      <div><span className="text-text-muted">Invoice:</span> <span className="font-mono">{invoice.invoice_number}</span></div>
+      <div><span className="text-text-muted">Bill to:</span> {client?.name ?? '—'}</div>
+      <div><span className="text-text-muted">Issued:</span> {invoice.issue_date || '—'}</div>
+      <div><span className="text-text-muted">Due:</span> {invoice.due_date || '—'}</div>
+      <div><span className="text-text-muted">Status:</span> {invoice.status}</div>
+      <div><span className="text-text-muted">Total:</span> {(invoice.currency ?? 'USD')} {invoice.total?.toFixed(2)}</div>
+      <div><span className="text-text-muted">Paid:</span> {(invoice.currency ?? 'USD')} {invoice.amount_paid?.toFixed(2)}</div>
+      {invoice.terms && <div><span className="text-text-muted">Terms:</span> {invoice.terms}</div>}
+      {invoice.notes && <div><span className="text-text-muted">Notes:</span> {invoice.notes}</div>}
+      <div className="text-text-muted italic pt-1 border-t border-border-primary mt-2">
+        Hidden from recipient: internal notes, created-by, late-fee config.
+      </div>
+    </div>
+  );
 }
 
 const INVOICE_TYPE_COLORS: Record<string, string> = {
@@ -142,6 +169,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [allClientInvoices, setAllClientInvoices] = useState<any[]>([]);
   const [applyingLateFee, setApplyingLateFee] = useState(false);
   const [convertingRecurring, setConvertingRecurring] = useState(false);
+  // PORTAL: share modal + cached base URL (resolved from main via `portal:base-url`).
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://accounting.rmpgutah.us');
+  useEffect(() => {
+    api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
+  }, []);
 
   const buildHTML = () => {
     if (!invoice) return '';
@@ -287,12 +320,14 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const handleCopyPortalLink = async () => {
     try {
       const { token } = await api.generateInvoiceToken(invoice!.id);
-      const url = `https://accounting.rmpgutah.us/portal/${token}`;
+      // PORTAL: build URL from configured SYNC_SERVER (setting-driven), not a hardcoded host.
+      const url = `${portalBaseUrl}/portal/${token}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to copy portal link:', err);
+      setActionError(`Copy failed: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -499,9 +534,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <button
             onClick={handleCopyPortalLink}
-            className="px-3 py-1.5 border-2 border-border-primary text-xs font-bold uppercase tracking-wider hover:bg-bg-primary hover:text-white transition-colors"
+            className="px-3 py-1.5 border-2 border-border-primary text-xs font-bold uppercase tracking-wider hover:bg-bg-primary hover:text-white transition-colors flex items-center gap-1"
+            title="Copy a shareable portal link to the clipboard"
           >
-            {copied ? 'Copied!' : 'Copy Portal Link'}
+            {copied ? <><span aria-hidden>✓</span> Copied!</> : 'Copy Portal Link'}
+          </button>
+          {/* A11Y: live region announces the copy action without stealing focus. */}
+          <span aria-live="polite" className="sr-only">{copied ? 'Portal link copied to clipboard' : ''}</span>
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="block-btn flex items-center gap-2"
+            title="Open share options (regenerate, disable, preview)"
+          >
+            <Share2 size={14} />
+            Share
           </button>
           <button
             onClick={handleDuplicate}
@@ -1089,6 +1135,20 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           editPaymentId={editPaymentId}
           onClose={() => { setShowPaymentModal(false); setEditPaymentId(null); }}
           onSaved={handlePaymentSaved}
+        />
+      )}
+
+      {/* PORTAL: share modal — token + expiry + regenerate / disable / preview. */}
+      {showShareModal && invoice && (
+        <PortalShareModal
+          title={`Share invoice ${invoice.invoice_number}`}
+          buildUrl={(token) => `${portalBaseUrl}/portal/${token}`}
+          fetchInfo={() => api.invoiceTokenInfo(invoice.id)}
+          generateToken={() => api.generateInvoiceToken(invoice.id)}
+          regenerate={() => api.invoiceRegenerateToken(invoice.id)}
+          disable={() => api.invoiceDisableToken(invoice.id)}
+          previewNode={getInvoicePortalPreview(invoice, client)}
+          onClose={() => setShowShareModal(false)}
         />
       )}
 

@@ -301,7 +301,6 @@ const TaxPayments: React.FC = () => {
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
                   className="block-input"
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}

@@ -796,7 +796,7 @@ const Inventory: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Unit Cost</label>
-                <input type="number" step="0.01" className="block-input w-full" value={formData.unit_cost} onChange={e => setFormData({ ...formData, unit_cost: Number(e.target.value) })} min={0} />
+                <input type="number" step="0.01" className="block-input w-full" value={formData.unit_cost} onChange={e => setFormData({ ...formData, unit_cost: Number(e.target.value) })} />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Reorder Point</label>
@@ -863,7 +863,7 @@ const Inventory: React.FC = () => {
                 <div>
                   <label className="block text-xs text-text-muted mb-1">Unit Cost (optional)</label>
                   <input
-                    type="number" min="0" step="0.01" className="block-input w-full font-mono"
+                    type="number" step="0.01" className="block-input w-full font-mono"
                     value={adjustForm.unit_cost} placeholder={String(adjustItem.unit_cost)}
                     onChange={e => setAdjustForm(p => ({ ...p, unit_cost: e.target.value }))}
                   />

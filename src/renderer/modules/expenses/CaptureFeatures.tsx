@@ -235,7 +235,6 @@ export const FuelPanel: React.FC<{ value: FuelState; onChange: (v: FuelState) =>
             type="number"
             inputMode="decimal"
             step="0.001"
-            min="0"
             className="block-input font-mono"
             value={value.fuel_price_per_gallon || ''}
             placeholder="0.000"
@@ -308,7 +307,7 @@ export const TaxBasisBar: React.FC<{
       <span className="text-xs font-semibold uppercase text-text-muted">Tax:</span>
       <label className="flex items-center gap-1 text-xs"><input type="radio" checked={!taxInclusive} onChange={() => onChange({ tax_inclusive: false })} /> Exclusive</label>
       <label className="flex items-center gap-1 text-xs"><input type="radio" checked={taxInclusive} onChange={() => onChange({ tax_inclusive: true })} /> Inclusive</label>
-      <input type="number" step="0.01" min="0" placeholder="rate %" className="block-input" style={{ width: 90 }}
+      <input type="number" step="0.01" placeholder="rate %" className="block-input" style={{ width: 90 }}
         value={taxRate || ''} onChange={e => onChange({ tax_rate: parseFloat(e.target.value) || 0 })} />
       {preTax != null && <span className="text-[11px] text-text-muted">Pre-tax: {formatCurrency(preTax)}</span>}
     </div>

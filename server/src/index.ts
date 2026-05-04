@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
+import path from 'path';
 import rateLimit from 'express-rate-limit';
 import { initDb } from './db';
 import { initWebSocket } from './ws';
@@ -52,6 +53,28 @@ initDb();
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/sync', apiLimiter, syncRouter);
 app.use('/api/backup', apiLimiter, backupRouter);
+
+// Portal — order matters here:
+//   1) Serve static SPA assets (Vite's base:'/portal/' emits absolute
+//      `/portal/assets/*.js` and `/portal/favicon.svg`). express.static
+//      handles these without falling through to portalRouter, so the
+//      `:token` route below never tries to match `/assets`.
+//   2) Mount the portalRouter for API + the SPA-fallback route at /:token.
+//      The router's own `/:token` handler does `res.sendFile('index.html')`
+//      so React-Router-style deep links resolve to the SPA shell.
+const portalDist = path.join(__dirname, '..', 'portal', 'dist');
+app.use('/portal', express.static(portalDist, {
+  // Don't auto-serve index.html on directory hits — let the router decide.
+  index: false,
+  // Cache hashed asset bundles aggressively; index.html short.
+  setHeaders: (res, filePath) => {
+    if (/\/assets\//.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 app.use('/portal', apiLimiter, portalRouter);
 app.use('/api/stripe', apiLimiter, stripeRouter);
 app.get('/health', (_req, res) => res.json({ ok: true }));

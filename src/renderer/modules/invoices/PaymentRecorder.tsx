@@ -210,7 +210,6 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
             </label>
             <input
               type="number"
-              min={0}
               step="0.01"
               max={balanceDue}
               className="block-input font-mono"

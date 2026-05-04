@@ -220,7 +220,6 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
                     <input
                       type="number"
                       step="1"
-                      min="0"
                       className="block-input text-sm font-mono text-right"
                       value={c.monthly_cap || 0}
                       onChange={(e) => updateCat(c.id, { monthly_cap: parseFloat(e.target.value) || 0 })}

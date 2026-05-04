@@ -540,7 +540,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Credit Limit</label>
-                <input className="block-input" type="number" min={0} step="100" value={data.credit_limit} onChange={(e) => setData(p => ({ ...p, credit_limit: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
+                <input className="block-input" type="number" step="100" value={data.credit_limit} onChange={(e) => setData(p => ({ ...p, credit_limit: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Preferred Payment</label>
@@ -585,7 +585,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                     <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Default Late Fee %</label>
                     <input
                       type="number"
-                      min={0}
                       step="0.1"
                       className="block-input"
                       placeholder="e.g. 1.5"

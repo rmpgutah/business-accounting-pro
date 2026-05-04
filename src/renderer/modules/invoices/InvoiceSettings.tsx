@@ -125,6 +125,17 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
   const [saveError, setSaveError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [settings, setSettings] = useState<FullSettings>(DEFAULT_SETTINGS);
+  // PORTAL: lifecycle of the portal_token_expiry_days setting is independent
+  // from invoice_settings — it lives in the generic settings k/v table so the
+  // server-side backup picks it up via the standard sync path. Track it
+  // separately so saving the form doesn't blow away unrelated settings.
+  const [portalExpiryDays, setPortalExpiryDays] = useState<number>(90);
+  useEffect(() => {
+    api.getSetting('portal_token_expiry_days').then(v => {
+      const n = parseInt(v ?? '', 10);
+      if (Number.isFinite(n) && n > 0) setPortalExpiryDays(n);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -184,6 +195,9 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
         column_config: JSON.stringify(settings.column_config),
       };
       await api.saveInvoiceSettings(payload);
+      // PORTAL: persist independent setting alongside the form save.
+      const clamped = Math.max(1, Math.min(3650, Math.round(portalExpiryDays || 90)));
+      await api.setSetting('portal_token_expiry_days', String(clamped));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
@@ -472,6 +486,17 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   <input type="number" min={0} max={365} className="block-input" style={{ width: 120 }}
                     value={settings.default_due_days}
                     onChange={(e) => setSettings((p) => ({ ...p, default_due_days: parseInt(e.target.value) || 30 }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+                    Portal Token Expiry (Days)
+                  </label>
+                  <input type="number" min={1} max={3650} className="block-input" style={{ width: 120 }}
+                    value={portalExpiryDays}
+                    onChange={(e) => setPortalExpiryDays(parseInt(e.target.value) || 90)} />
+                  <p className="text-[11px] text-text-muted mt-1">
+                    How long generated portal links (invoice + debt) stay valid. Default 90.
+                  </p>
                 </div>
               </div>
             </div>

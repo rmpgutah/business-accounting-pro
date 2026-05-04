@@ -461,7 +461,6 @@ const TaxConfiguration: React.FC = () => {
                   value={calcGross}
                   onChange={(e) => setCalcGross(e.target.value)}
                   placeholder="5000.00"
-                  min="0"
                   step="0.01"
                 />
               </div>
@@ -497,7 +496,6 @@ const TaxConfiguration: React.FC = () => {
                   value={calcYtdGross}
                   onChange={(e) => setCalcYtdGross(e.target.value)}
                   placeholder="0.00"
-                  min="0"
                   step="0.01"
                 />
               </div>
@@ -706,7 +704,6 @@ const TaxConfiguration: React.FC = () => {
                       className="block-input w-full"
                       value={prefs.tax_penalty_rate || '5'}
                       onChange={(e) => savePref('tax_penalty_rate', e.target.value)}
-                      min="0"
                       max="100"
                       step="0.1"
                     />
@@ -722,7 +719,6 @@ const TaxConfiguration: React.FC = () => {
                       className="block-input w-full"
                       value={prefs.underpayment_penalty_rate || '8'}
                       onChange={(e) => savePref('underpayment_penalty_rate', e.target.value)}
-                      min="0"
                       max="100"
                       step="0.1"
                     />
@@ -746,7 +742,6 @@ const TaxConfiguration: React.FC = () => {
                       className="block-input w-full"
                       value={prefs.supplemental_rate || '22'}
                       onChange={(e) => savePref('supplemental_rate', e.target.value)}
-                      min="0"
                       max="100"
                       step="0.1"
                     />
@@ -788,7 +783,6 @@ const TaxConfiguration: React.FC = () => {
                         className="block-input w-full"
                         value={prefs.hsa_limit_single || '4300'}
                         onChange={(e) => savePref('hsa_limit_single', e.target.value)}
-                        min="0"
                         step="50"
                       />
                     </div>
@@ -799,7 +793,6 @@ const TaxConfiguration: React.FC = () => {
                         className="block-input w-full"
                         value={prefs.hsa_limit_family || '8550'}
                         onChange={(e) => savePref('hsa_limit_family', e.target.value)}
-                        min="0"
                         step="50"
                       />
                     </div>
@@ -821,7 +814,6 @@ const TaxConfiguration: React.FC = () => {
                           style={{ width: '60px' }}
                           value={prefs.tip_credit_rate || '7.65'}
                           onChange={(e) => savePref('tip_credit_rate', e.target.value)}
-                          min="0"
                           max="100"
                           step="0.01"
                         />

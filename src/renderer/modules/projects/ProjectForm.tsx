@@ -331,7 +331,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
               <input
                 className="block-input font-mono"
                 type="number"
-                min="0"
                 step="0.01"
                 value={form.budget}
                 onChange={(e) => set('budget', e.target.value)}
@@ -362,7 +361,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ projectId, onClose, onSaved }
             <input
               className="block-input font-mono"
               type="number"
-              min="0"
               step="0.01"
               value={form.hourly_rate}
               onChange={(e) => set('hourly_rate', e.target.value)}

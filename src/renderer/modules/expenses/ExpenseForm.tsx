@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Receipt, DollarSign, Paperclip, X, Plus, Trash2, FileText, AlertTriangle, Sparkles } from 'lucide-react';
 import api from '../../lib/api';
-import { required, validateForm, minValue } from '../../lib/validation';
+import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';
@@ -760,15 +760,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     }
 
     const checks: Array<string | null> = [
-      minValue(parseFloat(form.amount) || 0, 0.01, 'Amount'),
       required(form.date, 'Date'),
       required(form.category_id, 'Category'),
     ];
-    // Validate tax doesn't exceed amount
     const amt = parseFloat(form.amount) || 0;
+    if (!form.amount || isNaN(parseFloat(form.amount)) || amt === 0) {
+      checks.push('Amount is required (use a negative value for refunds/credits)');
+    }
+    // Tax amount may be negative (refund of tax). Sanity-check magnitude only.
     const tax = parseFloat(form.tax_amount) || 0;
-    if (tax < 0) checks.push('Tax amount cannot be negative');
-    if (tax > amt) checks.push('Tax amount cannot exceed the expense amount');
+    if (Math.abs(tax) > Math.abs(amt) && amt !== 0) {
+      checks.push('Tax amount cannot exceed the expense amount in magnitude');
+    }
     // Reimbursed date must come after expense date when reimbursed
     if (form.reimbursed && form.reimbursed_date && form.reimbursed_date < form.date) {
       checks.push('Reimbursed date cannot be before the expense date');
@@ -781,8 +784,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     if (useLineItems) {
       const hasLine = lineItems.some((l) => l.description.trim().length > 0);
       if (!hasLine) checks.push('At least one line item with a description is required');
-      const badLine = lineItems.some((l) => l.quantity < 0 || l.unit_price < 0);
-      if (badLine) checks.push('Line item quantity and unit price cannot be negative');
+      // Negative quantity/unit_price is allowed for credits, refunds, and adjustments.
     }
     // Rejection requires a reason
     if (form.status === 'rejected' && !form.rejection_reason.trim()) {
@@ -1084,7 +1086,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 type="number"
                 name="amount"
                 step="0.01"
-                min="0"
                 className={`block-input pl-8 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.amount}
@@ -1106,7 +1107,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 type="number"
                 name="tax_amount"
                 step="0.01"
-                min="0"
                 className="block-input pl-8"
                 placeholder="0.00"
                 value={form.tax_amount}
@@ -1166,12 +1166,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                         onChange={(e) => handleLineChange(idx, 'description', e.target.value)} />
                     </div>
                     <div className="col-span-2">
-                      <input type="number" className="block-input text-sm text-right font-mono" step="1" min="0"
+                      <input type="number" className="block-input text-sm text-right font-mono" step="1"
                         value={li.quantity}
                         onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="col-span-2">
-                      <input type="number" className="block-input text-sm text-right font-mono" step="0.01" min="0"
+                      <input type="number" className="block-input text-sm text-right font-mono" step="0.01"
                         placeholder="0.00"
                         value={li.unit_price || ''}
                         onChange={(e) => handleLineChange(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
@@ -1191,7 +1191,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     <div className="col-span-1"></div>
                     <div className="col-span-11 flex items-center gap-3 pb-1">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Tax rate</label>
-                      <input type="number" step="0.0001" min="0" max="1"
+                      <input type="number" step="0.0001" max="1"
                         className="block-input text-xs font-mono text-right"
                         style={{ width: 90 }}
                         value={li.tax_rate || 0}
@@ -1475,7 +1475,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             <FieldLabel label="VAT / GST" tooltip="Foreign tax — separate from US sales tax" />
             <div className="relative">
               <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-              <input type="number" step="0.01" min="0" className="block-input pl-8" placeholder="0.00"
+              <input type="number" step="0.01" className="block-input pl-8" placeholder="0.00"
                 value={form.vat_gst} onChange={e => setForm(p => ({ ...p, vat_gst: e.target.value }))} />
             </div>
           </div>
@@ -1666,7 +1666,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               {form.currency && form.currency !== 'USD' && (
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Foreign Tax (VAT/GST)</label>
-                  <input type="number" step="0.01" min="0" className="block-input"
+                  <input type="number" step="0.01" className="block-input"
                     placeholder="0.00" value={form.foreign_tax_amount}
                     onChange={(e) => setForm(p => ({ ...p, foreign_tax_amount: e.target.value }))} />
                 </div>

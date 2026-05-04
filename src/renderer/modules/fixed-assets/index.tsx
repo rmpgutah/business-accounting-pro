@@ -1177,7 +1177,6 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
                 className="block-input w-full"
                 value={form.purchase_price}
                 onChange={(e) => set('purchase_price', e.target.value)}
-                min="0"
                 step="0.01"
                 placeholder="0.00"
               />
@@ -1188,7 +1187,6 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
                 className="block-input w-full"
                 value={form.salvage_value}
                 onChange={(e) => set('salvage_value', e.target.value)}
-                min="0"
                 step="0.01"
                 placeholder="0.00"
               />
@@ -1449,7 +1447,6 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
                 value={disposeAmount}
                 onChange={(e) => setDisposeAmount(e.target.value)}
                 placeholder="0.00"
-                min="0"
                 step="0.01"
               />
             </div>

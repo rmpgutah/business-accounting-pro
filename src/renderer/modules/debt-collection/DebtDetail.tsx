@@ -20,8 +20,10 @@ import {
   Receipt,
   Trash2,
   Plus,
+  Share2,
 } from 'lucide-react';
 import api from '../../lib/api';
+import PortalShareModal from '../../components/PortalShareModal';
 import EntityChip from '../../components/EntityChip';
 import PaymentPlanCard from './PaymentPlanCard';
 import SettlementCard from './SettlementCard';
@@ -312,6 +314,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const [timeline, setTimeline] = useState<any[]>([]);
   const [quickNote, setQuickNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+
+  // PORTAL: share modal + base URL.
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [portalCopied, setPortalCopied] = useState(false);
+  const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://accounting.rmpgutah.us');
+  useEffect(() => {
+    api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
+  }, []);
 
   // Promise-to-Pay state
   const [promises, setPromises] = useState<any[]>([]);
@@ -1066,20 +1076,36 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           {/* Feature 9: Copy Payment Link */}
           <button
             className="block-btn flex items-center gap-2 text-xs"
+            title="Copy a shareable payment portal link"
             onClick={async () => {
               try {
                 const result = await api.generateDebtPortalToken(debtId);
-                if (result?.portalUrl) {
-                  await navigator.clipboard.writeText(result.portalUrl);
-                  alert('Payment link copied to clipboard');
-                }
+                if (result?.error) throw new Error(result.error);
+                // PORTAL: prefer building from configured SYNC_SERVER (matches share modal).
+                const url = result?.token
+                  ? `${portalBaseUrl}/portal/debt/${result.token}`
+                  : (result?.portalUrl ?? '');
+                if (!url) throw new Error('No portal URL returned');
+                await navigator.clipboard.writeText(url);
+                setPortalCopied(true);
+                setTimeout(() => setPortalCopied(false), 2000);
               } catch (err: any) {
                 alert('Failed to generate link: ' + (err?.message || 'Unknown error'));
               }
             }}
           >
             <FileText size={14} />
-            Copy Payment Link
+            {portalCopied ? 'Copied!' : 'Copy Payment Link'}
+          </button>
+          {/* A11Y: announce copy success to screen readers without stealing focus. */}
+          <span aria-live="polite" className="sr-only">{portalCopied ? 'Payment link copied to clipboard' : ''}</span>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => setShowShareModal(true)}
+            title="Open share options (regenerate, disable, preview)"
+          >
+            <Share2 size={14} />
+            Share
           </button>
           {/* Feature 16: Interest Freeze/Resume */}
           <button
@@ -1214,7 +1240,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <div className="grid grid-cols-4 gap-3 items-end">
               <div>
                 <label className="block text-xs text-text-muted mb-1">Amount</label>
-                <input type="number" step="0.01" min="0" className="block-input" placeholder="0.00" value={feeForm.amount} onChange={(e) => setFeeForm(f => ({ ...f, amount: e.target.value }))} />
+                <input type="number" step="0.01" className="block-input" placeholder="0.00" value={feeForm.amount} onChange={(e) => setFeeForm(f => ({ ...f, amount: e.target.value }))} />
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Fee Type</label>
@@ -1672,7 +1698,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs text-text-muted mb-1">Amount</label>
-                  <input type="number" min={0} step="0.01" className="block-input" value={promiseForm.promised_amount} onChange={(e) => setPromiseForm(p => ({...p, promised_amount: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
+                  <input type="number" step="0.01" className="block-input" value={promiseForm.promised_amount} onChange={(e) => setPromiseForm(p => ({...p, promised_amount: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
                 </div>
                 <div>
                   <label className="block text-xs text-text-muted mb-1">Notes</label>
@@ -2360,8 +2386,42 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           50% { opacity: 0.4; }
         }
       `}</style>
+
+      {/* PORTAL: share modal — same UX as InvoiceDetail. */}
+      {showShareModal && debt && (
+        <PortalShareModal
+          title={`Share debt ${debt.debtor_name ?? ''}`.trim()}
+          buildUrl={(token) => `${portalBaseUrl}/portal/debt/${token}`}
+          fetchInfo={() => api.debtPortalTokenInfo(debtId)}
+          generateToken={async () => {
+            const r = await api.generateDebtPortalToken(debtId);
+            return { token: r?.token, error: r?.error };
+          }}
+          regenerate={() => api.debtRegeneratePortalToken(debtId)}
+          disable={() => api.debtDisablePortalToken(debtId)}
+          previewNode={getDebtPortalPreview(debt)}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 };
+
+// PORTAL: privacy preview for debt — only the public-portal fields.
+// Hidden: collector_id, internal compliance notes, risk_score, etc.
+function getDebtPortalPreview(debt: any): React.ReactNode {
+  return (
+    <div className="space-y-1">
+      <div><span className="text-text-muted">Debtor:</span> {debt?.debtor_name ?? '—'}</div>
+      <div><span className="text-text-muted">Account:</span> <span className="font-mono">{debt?.account_number ?? debt?.id?.slice(0, 8) ?? '—'}</span></div>
+      <div><span className="text-text-muted">Original amount:</span> ${Number(debt?.original_amount ?? 0).toFixed(2)}</div>
+      <div><span className="text-text-muted">Current balance:</span> ${Number(debt?.current_balance ?? debt?.balance ?? 0).toFixed(2)}</div>
+      {debt?.due_date && <div><span className="text-text-muted">Due:</span> {debt.due_date}</div>}
+      <div className="text-text-muted italic pt-1 border-t border-border-primary mt-2">
+        Hidden from recipient: assigned collector, internal notes, risk score, compliance log.
+      </div>
+    </div>
+  );
+}
 
 export default DebtDetail;

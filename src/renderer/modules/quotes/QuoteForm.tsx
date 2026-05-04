@@ -785,7 +785,6 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               type="number"
               name="discount_amount"
               step="0.01"
-              min="0"
               className="block-input"
               placeholder="0.00"
               value={form.discount_amount}
@@ -1027,7 +1026,6 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                         type="number"
                         className="block-input text-right"
                         step="0.01"
-                        min="0"
                         value={line.quantity}
                         onChange={(e) => updateLine(idx, 'quantity', e.target.value)}
                       />
@@ -1037,7 +1035,6 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                         type="number"
                         className="block-input text-right"
                         step="0.01"
-                        min="0"
                         placeholder="0.00"
                         value={line.unit_price}
                         onChange={(e) => updateLine(idx, 'unit_price', e.target.value)}
@@ -1048,7 +1045,6 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                         type="number"
                         className="block-input text-right"
                         step="0.01"
-                        min="0"
                         placeholder="0"
                         value={line.tax_rate}
                         onChange={(e) => updateLine(idx, 'tax_rate', e.target.value)}

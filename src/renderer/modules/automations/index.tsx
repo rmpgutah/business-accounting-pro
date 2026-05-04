@@ -142,7 +142,6 @@ function RuleBuilder({
           <input
             className="block-input w-32 font-mono"
             type="number"
-            min="0"
             value={form.days_threshold}
             onChange={e => set('days_threshold', e.target.value)}
             placeholder={form.trigger_type === 'low_cash_balance' ? '1000' : '7'}

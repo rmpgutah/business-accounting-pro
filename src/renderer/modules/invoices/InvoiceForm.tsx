@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical, ChevronUp, ChevronDown, Bold, Italic } from 'lucide-react';
 import api from '../../lib/api';
 import { FieldLabel } from '../../components/FieldLabel';
-import { required, validateForm, minValue } from '../../lib/validation';
+import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ClientContext } from '../../components/ContextPanel';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
@@ -1490,16 +1490,14 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                   <td className="p-1">
                     <input
                       type="number"
-                      min={0}
                       className="block-input text-right font-mono"
                       value={line.quantity}
-                      onChange={(e) => updateLine(idx, 'quantity', Math.max(0, parseFloat(e.target.value) || 0))}
+                      onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)}
                     />
                   </td>
                   <td className="p-1">
                     <input
                       type="number"
-                      min={0}
                       step="0.01"
                       className="block-input text-right font-mono"
                       value={line.unit_price}
@@ -1510,7 +1508,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                   <td className="p-1">
                     <input
                       type="number"
-                      min={0}
                       step="0.01"
                       className="block-input text-right font-mono"
                       value={line.tax_rate}
@@ -1521,7 +1518,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     {/* Per-line discount % */}
                     <input
                       type="number"
-                      min={0}
                       max={100}
                       step="0.1"
                       className="block-input text-right font-mono"
@@ -1638,7 +1634,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <span className="text-text-secondary">Discount (flat)</span>
             <input
               type="number"
-              min={0}
               step="0.01"
               className="block-input text-right font-mono w-28"
               value={form.discount}
@@ -1649,7 +1644,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <span className="text-text-secondary">Shipping</span>
             <input
               type="number"
-              min={0}
               step="0.01"
               className="block-input text-right font-mono w-28"
               value={form.shipping_amount || ''}
@@ -1729,12 +1723,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           })}
           <div>
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Invoice Discount %</label>
-            <input type="number" min={0} max={100} step="0.1" className="block-input" placeholder="0" value={form.discount_pct || ''} onChange={e => setForm(p => ({ ...p, discount_pct: parseFloat(e.target.value) || 0 }))} />
+            <input type="number" max={100} step="0.1" className="block-input" placeholder="0" value={form.discount_pct || ''} onChange={e => setForm(p => ({ ...p, discount_pct: parseFloat(e.target.value) || 0 }))} />
           </div>
           <div className="flex gap-3">
             <div style={{ flex: 1 }}>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Late Fee %</label>
-              <input type="number" min={0} step="0.1" className="block-input" placeholder="e.g. 1.5" value={form.late_fee_pct || ''} onChange={e => setForm(p => ({ ...p, late_fee_pct: parseFloat(e.target.value) || 0 }))} />
+              <input type="number" step="0.1" className="block-input" placeholder="e.g. 1.5" value={form.late_fee_pct || ''} onChange={e => setForm(p => ({ ...p, late_fee_pct: parseFloat(e.target.value) || 0 }))} />
             </div>
             <div style={{ flex: 1 }}>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Grace Days</label>

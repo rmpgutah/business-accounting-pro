@@ -327,7 +327,6 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
                     <input
                       type="number"
                       step="0.01"
-                      min="0"
                       className="block-input"
                       value={line.amount}
                       onChange={(e) => updateLine(idx, 'amount', e.target.value)}

@@ -270,7 +270,7 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Amount {form.calculation === 'percentage' ? '(%)' : '($)'}</label>
-              <input type="number" step="0.01" min="0" className="block-input font-mono" value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} />
+              <input type="number" step="0.01" className="block-input font-mono" value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Tax Treatment</label>
@@ -776,7 +776,6 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                       className="block-input w-full pl-6 font-mono"
                       type="number"
                       step="0.01"
-                      min="0"
                       value={form.pay_rate}
                       onChange={(e) => setField('pay_rate', e.target.value)}
                       placeholder="0.00"
@@ -893,19 +892,19 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 3: Dependent Credit ($)</label>
-                      <input type="number" value={form.w4_step3_dependent_credit} onChange={e => setForm(f => ({ ...f, w4_step3_dependent_credit: e.target.value }))} className="block-input" min="0" step="100" />
+                      <input type="number" value={form.w4_step3_dependent_credit} onChange={e => setForm(f => ({ ...f, w4_step3_dependent_credit: e.target.value }))} className="block-input" step="100" />
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 4a: Other Income ($)</label>
-                      <input type="number" value={form.w4_step4a_other_income} onChange={e => setForm(f => ({ ...f, w4_step4a_other_income: e.target.value }))} className="block-input" min="0" />
+                      <input type="number" value={form.w4_step4a_other_income} onChange={e => setForm(f => ({ ...f, w4_step4a_other_income: e.target.value }))} className="block-input" />
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 4b: Deductions ($)</label>
-                      <input type="number" value={form.w4_step4b_deductions} onChange={e => setForm(f => ({ ...f, w4_step4b_deductions: e.target.value }))} className="block-input" min="0" />
+                      <input type="number" value={form.w4_step4b_deductions} onChange={e => setForm(f => ({ ...f, w4_step4b_deductions: e.target.value }))} className="block-input" />
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Step 4c: Extra Withholding ($)</label>
-                      <input type="number" value={form.w4_step4c_extra_withholding} onChange={e => setForm(f => ({ ...f, w4_step4c_extra_withholding: e.target.value }))} className="block-input" min="0" />
+                      <input type="number" value={form.w4_step4c_extra_withholding} onChange={e => setForm(f => ({ ...f, w4_step4c_extra_withholding: e.target.value }))} className="block-input" />
                     </div>
                   </div>
                   {/* Utah Fields */}
@@ -916,7 +915,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">UT Additional W/H ($)</label>
-                      <input type="number" value={form.ut_additional_withholding} onChange={e => setForm(f => ({ ...f, ut_additional_withholding: e.target.value }))} className="block-input" min="0" />
+                      <input type="number" value={form.ut_additional_withholding} onChange={e => setForm(f => ({ ...f, ut_additional_withholding: e.target.value }))} className="block-input" />
                     </div>
                   </div>
                   {/* W-4 Received Date */}

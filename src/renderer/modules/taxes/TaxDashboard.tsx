@@ -968,7 +968,6 @@ const TaxDashboard: React.FC = () => {
               className="block-input w-full"
               value={calcGross}
               onChange={(e) => setCalcGross(e.target.value)}
-              min="0"
               step="0.01"
             />
           </div>

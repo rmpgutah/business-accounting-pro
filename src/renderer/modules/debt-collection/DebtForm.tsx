@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Scale, Save, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
-import { required, validateForm, minValue } from '../../lib/validation';
+import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import { parseDateOnly, toLocalDateString } from '../../lib/date-helpers';
@@ -445,10 +445,13 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
 
     const checks: Array<string | null> = [
       required(form.debtor_name, 'Debtor Name'),
-      minValue(parseFloat(form.original_amount) || 0, 0.01, 'Original Amount'),
       required(form.due_date, 'Due Date'),
     ];
     const validationErrors = validateForm(checks);
+    const origAmtVal = parseFloat(form.original_amount);
+    if (!form.original_amount || isNaN(origAmtVal) || origAmtVal === 0) {
+      validationErrors.push('Original Amount is required (use a negative value for credits)');
+    }
     if (form.debtor_email && !/^\S+@\S+\.\S+$/.test(form.debtor_email)) {
       validationErrors.push('Email is not a valid format');
     }
@@ -886,7 +889,6 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   type="number"
                   name="original_amount"
                   step="0.01"
-                  min="0"
                   className="block-input pl-8"
                   placeholder="0.00"
                   value={form.original_amount}
@@ -1018,7 +1020,6 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                 type="number"
                 name="interest_rate"
                 step="0.01"
-                min="0"
                 className="block-input"
                 placeholder="e.g. 5.5"
                 value={form.interest_rate}
@@ -1162,7 +1163,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Est. Monthly Income</label>
-              <input type="number" min={0} step="100" className="block-input" value={form.monthly_income_estimate} onChange={(e) => setForm(p => ({...p, monthly_income_estimate: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
+              <input type="number" step="100" className="block-input" value={form.monthly_income_estimate} onChange={(e) => setForm(p => ({...p, monthly_income_estimate: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Best Contact Time</label>
@@ -1223,7 +1224,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Monthly Income</label>
-              <input type="number" min={0} step="100" className="block-input" placeholder="0.00" value={form.debtor_income_monthly || ''} onChange={(e) => setForm(p => ({...p, debtor_income_monthly: parseFloat(e.target.value) || 0}))} />
+              <input type="number" step="100" className="block-input" placeholder="0.00" value={form.debtor_income_monthly || ''} onChange={(e) => setForm(p => ({...p, debtor_income_monthly: parseFloat(e.target.value) || 0}))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Bank Name</label>
@@ -1289,7 +1290,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
           <div className="grid grid-cols-3 gap-5">
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Total Costs</label>
-              <input type="number" min={0} step="0.01" className="block-input" placeholder="0.00" value={form.collection_costs || ''} onChange={(e) => setForm(p => ({...p, collection_costs: parseFloat(e.target.value) || 0}))} />
+              <input type="number" step="0.01" className="block-input" placeholder="0.00" value={form.collection_costs || ''} onChange={(e) => setForm(p => ({...p, collection_costs: parseFloat(e.target.value) || 0}))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Agency Commission %</label>
@@ -1297,7 +1298,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Commission Paid</label>
-              <input type="number" min={0} step="0.01" className="block-input" placeholder="0.00" value={form.agency_commission_paid || ''} onChange={(e) => setForm(p => ({...p, agency_commission_paid: parseFloat(e.target.value) || 0}))} />
+              <input type="number" step="0.01" className="block-input" placeholder="0.00" value={form.agency_commission_paid || ''} onChange={(e) => setForm(p => ({...p, agency_commission_paid: parseFloat(e.target.value) || 0}))} />
             </div>
           </div>
         </div>

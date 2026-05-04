@@ -264,7 +264,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
                   <input
                     type="number"
                     step="0.01"
-                    min="0"
                     className="block-input flex-1"
                     placeholder="0.00"
                     value={amount}
