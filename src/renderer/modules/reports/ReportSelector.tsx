@@ -26,6 +26,7 @@ export type ReportType =
   | 'profit-and-loss'
   | 'balance-sheet'
   | 'cash-flow'
+  | 'cash-flow-forecast'    // P4.35
   | 'ar-aging'
   | 'ap-aging'
   | 'trial-balance'
@@ -39,6 +40,7 @@ export type ReportType =
   | 'revenue-by-client'
   | 'vendor-spend'
   | 'project-profitability'
+  | 'customer-profitability' // P4.37
   | 'income-by-month'
   | 'debt-collection'
   | 'inventory-valuation'
@@ -81,6 +83,22 @@ const REPORTS: ReportCard[] = [
       'Cash inflows and outflows from operating, investing, and financing activities.',
     icon: Banknote,
     accentClass: 'border-l-accent-warning',
+  },
+  {
+    id: 'cash-flow-forecast',
+    title: 'Cash Flow Forecast',
+    description:
+      'Forward-looking 30/60/90/180-day projection from open invoices and bills. Highlights cash-shortfall risk dates.',
+    icon: TrendingUp,
+    accentClass: 'border-l-accent-blue',
+  },
+  {
+    id: 'customer-profitability',
+    title: 'Customer Profitability',
+    description:
+      'Per-client revenue, direct expenses, profit, and margin %. Identifies which clients actually drive profit.',
+    icon: Users,
+    accentClass: 'border-l-accent-blue',
   },
   {
     id: 'ar-aging',

@@ -662,6 +662,12 @@ const api = {
   snippetTrackUse: (id: string): Promise<{ ok?: boolean }> =>
     window.electronAPI.invoke('snippets:track-use', { id }),
 
+  // B5: Receipt OCR + parsing (offline via tesseract.js)
+  ocrScanReceiptPick: (): Promise<{ ok?: boolean; cancelled?: boolean; parsed?: any; filePath?: string; error?: string }> =>
+    window.electronAPI.invoke('ocr:scan-receipt-pick'),
+  ocrScanReceiptFile: (filePath: string): Promise<{ ok?: boolean; parsed?: any; error?: string }> =>
+    window.electronAPI.invoke('ocr:scan-receipt-file', { filePath }),
+
   // B3: Auto-categorize an expense based on history
   suggestExpenseCategory: (opts: { vendor_id?: string | null; vendor_name?: string | null; description?: string | null; amount?: number | null }): Promise<{ category_id: string | null; category_name: string | null; confidence: number; source: string; occurrences: number; totalSeen: number; error?: string }> =>
     window.electronAPI.invoke('expense:suggest-category', opts),

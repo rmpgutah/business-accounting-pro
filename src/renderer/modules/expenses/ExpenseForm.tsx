@@ -331,6 +331,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [receiptPath, setReceiptPath] = useState<string>('');
+  // B5 — OCR scan state
+  const [ocrBusy, setOcrBusy] = useState(false);
   const [details, setDetails] = useState<Record<string, any>>({});
   const [useLineItems, setUseLineItems] = useState(false);
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
@@ -1634,7 +1636,53 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Receipt drag-drop zone (#1, #2, #3, #23, #24) */}
           <div className="col-span-3">
-            <FieldLabel label="Receipts" tooltip="Drag-drop receipt files, click thumbnail to replace, or click + to add more" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <FieldLabel label="Receipts" tooltip="Drag-drop receipt files, click thumbnail to replace, or click + to add more" />
+              {/* B5 — Receipt OCR button */}
+              <button
+                type="button"
+                onClick={async () => {
+                  setOcrBusy(true);
+                  try {
+                    const res = await api.ocrScanReceiptPick();
+                    if (res.cancelled) return;
+                    if (!res.ok || !res.parsed) {
+                      alert('OCR failed: ' + (res.error || 'unknown'));
+                      return;
+                    }
+                    const p = res.parsed;
+                    // Auto-fill any blank fields with the OCR'd values; never
+                    // overwrite values the user has already typed.
+                    setForm((f) => ({
+                      ...f,
+                      date: f.date || p.receipt_date || f.date,
+                      amount: f.amount || (p.total ?? f.amount),
+                      tax_amount: f.tax_amount || (p.tax ?? f.tax_amount),
+                      description: f.description || p.line_items?.map((li: any) => li.description).slice(0, 3).join(', ') || p.vendor_name || f.description,
+                    }));
+                    if (res.filePath) setReceiptPath(res.filePath);
+                    const warns = (p.warnings || []).join(' · ');
+                    alert(
+                      `OCR complete (confidence ${p.confidence}%)\n\n` +
+                      (p.vendor_name ? 'Vendor: ' + p.vendor_name + '\n' : '') +
+                      (p.receipt_date ? 'Date: ' + p.receipt_date + '\n' : '') +
+                      (p.total != null ? 'Total: ' + p.currency + ' ' + p.total.toFixed(2) + '\n' : '') +
+                      (p.tax != null ? 'Tax: ' + p.tax.toFixed(2) + '\n' : '') +
+                      (p.line_items?.length ? '\n' + p.line_items.length + ' line items detected\n' : '') +
+                      (warns ? '\n⚠ ' + warns : '')
+                    );
+                  } finally {
+                    setOcrBusy(false);
+                  }
+                }}
+                disabled={ocrBusy}
+                className="block-btn text-xs flex items-center gap-1.5"
+                title="Scan a receipt image — auto-fills date, total, vendor"
+                style={{ padding: '4px 10px' }}
+              >
+                {ocrBusy ? '⌛ Scanning…' : '🔍 Scan Receipt (OCR)'}
+              </button>
+            </div>
             <ReceiptZone
               primaryPath={receiptPath}
               onSetPrimary={setReceiptPath}

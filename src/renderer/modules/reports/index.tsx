@@ -9,6 +9,8 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 
 const CashFlowStatement = React.lazy(() => import('./CashFlowStatement'));
+const CashFlowForecast = React.lazy(() => import('./CashFlowForecast'));
+const CustomerProfitability = React.lazy(() => import('./CustomerProfitability'));
 const ARAgingReport = React.lazy(() => import('./ARAgingReport'));
 const TaxSummary = React.lazy(() => import('./TaxSummary'));
 const TrialBalance = React.lazy(() => import('./TrialBalance'));
@@ -31,6 +33,8 @@ const REPORT_TITLES: Record<ReportType, string> = {
   'profit-and-loss': 'Profit & Loss',
   'balance-sheet': 'Balance Sheet',
   'cash-flow': 'Cash Flow Statement',
+  'cash-flow-forecast': 'Cash Flow Forecast',
+  'customer-profitability': 'Customer Profitability',
   'ar-aging': 'Accounts Receivable Aging',
   'ap-aging': 'Accounts Payable Aging',
   'trial-balance': 'Trial Balance',
@@ -195,6 +199,10 @@ const ReportsModule: React.FC = () => {
         return <ExpenseByCategory />;
       case 'cash-flow':
         return <Suspense fallback={<LazyFallback />}><CashFlowStatement /></Suspense>;
+      case 'cash-flow-forecast':
+        return <Suspense fallback={<LazyFallback />}><CashFlowForecast /></Suspense>;
+      case 'customer-profitability':
+        return <Suspense fallback={<LazyFallback />}><CustomerProfitability /></Suspense>;
       case 'ar-aging':
         return <Suspense fallback={<LazyFallback />}><ARAgingReport /></Suspense>;
       case 'ap-aging':

@@ -1153,6 +1153,40 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
+  // ─── B5: PDF/image receipt OCR + parsing ───────────────
+  // Two flows:
+  //   1. ocr:scan-receipt-file  — caller already has a path
+  //   2. ocr:scan-receipt-pick  — opens a file dialog first
+  // tesseract.js workers are ~50MB resident — lazy-loaded on first
+  // call; shutdown on app quit (see main.ts).
+  ipcMain.handle('ocr:scan-receipt-file', async (_event, { filePath }: { filePath: string }) => {
+    try {
+      const { scanReceipt } = require('../services/receipt-ocr');
+      const parsed = await scanReceipt(filePath);
+      return { ok: true, parsed };
+    } catch (err: any) {
+      console.error('[ocr] scan failed:', err);
+      return { ok: false, error: err?.message || 'OCR failed' };
+    }
+  });
+  ipcMain.handle('ocr:scan-receipt-pick', async () => {
+    try {
+      const { filePaths, canceled } = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [
+          { name: 'Receipts', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (canceled || !filePaths?.[0]) return { cancelled: true };
+      const { scanReceipt } = require('../services/receipt-ocr');
+      const parsed = await scanReceipt(filePaths[0]);
+      return { ok: true, parsed, filePath: filePaths[0] };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'OCR failed' };
+    }
+  });
+
   // ─── B3: Auto-categorization for new expenses ─────────
   ipcMain.handle('expense:suggest-category', (_event, opts: any) => {
     try {
