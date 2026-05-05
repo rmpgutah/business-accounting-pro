@@ -1458,6 +1458,25 @@ export function initDatabase(): Database.Database {
   // ALTER added separately so existing rows pick up the default.
   "ALTER TABLE portal_integration_settings ADD COLUMN health_check_path TEXT DEFAULT '/health'",
 
+  // ── P1.13: Soft-delete columns (2026-05-05) ───────────────────
+  // Records with deleted_at IS NOT NULL are hidden from list/get
+  // queries but remain physically present until the auto-purge cron
+  // physically removes them after 30 days. Users can restore from
+  // Settings → Trash within that window. Currently scoped to the
+  // four most-deleted entities — clients/vendors deliberately
+  // excluded because their FK references would orphan invoices/bills.
+  "ALTER TABLE invoices ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE bills ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE expenses ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE journal_entries ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  // Indexes — soft-deleted rows are a SMALL minority, so a partial
+  // index keyed on deleted_at IS NULL gives effectively-free
+  // filtering for the common case.
+  "CREATE INDEX IF NOT EXISTS idx_invoices_not_deleted ON invoices(company_id) WHERE deleted_at IS NULL",
+  "CREATE INDEX IF NOT EXISTS idx_bills_not_deleted ON bills(company_id) WHERE deleted_at IS NULL",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_not_deleted ON expenses(company_id) WHERE deleted_at IS NULL",
+  "CREATE INDEX IF NOT EXISTS idx_journal_entries_not_deleted ON journal_entries(company_id) WHERE deleted_at IS NULL",
+
   // ── P1.11: Double-entry balance enforcement (DB triggers) ──────
   //
   // Belt + suspenders: the JS layer already validates balance, but
@@ -1769,7 +1788,29 @@ export function queryAll(
   return getDb().prepare(sql).all(...params);
 }
 
+// ── P1.13: Soft-delete config ─────────────────────────────────
+// Tables in this set get the soft-delete treatment: remove() sets
+// deleted_at instead of physically removing the row; read helpers
+// filter out soft-deleted records. Other tables behave as before
+// (physical delete, no filter). To opt in another table, also add
+// the deleted_at column via a migration.
+export const SOFT_DELETE_TABLES = new Set([
+  'invoices',
+  'bills',
+  'expenses',
+  'journal_entries',
+]);
+
 export function getById(table: string, id: string): any {
+  if (SOFT_DELETE_TABLES.has(table)) {
+    return getDb().prepare(`SELECT * FROM ${table} WHERE id = ? AND deleted_at IS NULL`).get(id);
+  }
+  return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+}
+
+// Bypasses the soft-delete filter — used by the Trash UI to load
+// records the user is reviewing for restore/purge.
+export function getByIdIncludingDeleted(table: string, id: string): any {
   return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
 }
 
@@ -1929,6 +1970,12 @@ const tablesWithDeletedAt = new Set([
   'accounts',
   'tags',
   'custom_field_definitions',
+  // P1.13: Trash + 30-day recovery — extend SOFT_DELETE_TABLES too
+  // when adding here so remove() does the right thing.
+  'invoices',
+  'bills',
+  'expenses',
+  'journal_entries',
 ]);
 
 export function update(table: string, id: string, data: Record<string, any>): any {
@@ -1977,7 +2024,69 @@ export function update(table: string, id: string, data: Record<string, any>): an
 }
 
 export function remove(table: string, id: string): void {
+  // P1.13: soft-delete supported tables — sets deleted_at to now()
+  // so the row stays physically present for 30 days, after which the
+  // auto-purge cron physically removes it. User can restore from
+  // Settings → Trash within that window.
+  if (SOFT_DELETE_TABLES.has(table)) {
+    getDb().prepare(
+      `UPDATE ${table} SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`
+    ).run(id);
+    return;
+  }
   getDb().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+}
+
+// Force physical delete — used by Trash UI's "Purge" action and the
+// auto-purge cron. Bypasses the soft-delete write entirely.
+export function removeHard(table: string, id: string): void {
+  getDb().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+}
+
+// Undo a soft-delete — used by Trash UI's "Restore" action. No-op
+// for tables without deleted_at column.
+export function restoreFromTrash(table: string, id: string): boolean {
+  if (!SOFT_DELETE_TABLES.has(table)) return false;
+  const result = getDb().prepare(
+    `UPDATE ${table} SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL`
+  ).run(id);
+  return result.changes > 0;
+}
+
+// List all soft-deleted records across the supported tables for the
+// active company. Returns up to `limit` per table sorted by deleted_at
+// DESC so the most recently trashed appear first.
+export function listTrash(companyId: string, limit: number = 100): Record<string, any[]> {
+  const out: Record<string, any[]> = {};
+  for (const table of SOFT_DELETE_TABLES) {
+    try {
+      out[table] = getDb().prepare(
+        `SELECT * FROM ${table} WHERE company_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ?`
+      ).all(companyId, limit) as any[];
+    } catch {
+      out[table] = [];
+    }
+  }
+  return out;
+}
+
+// Auto-purge: physically delete soft-deleted records older than the
+// retention window. Called by the trash-purge cron daily. Returns
+// per-table counts so the cron can log a summary.
+export function purgeExpiredTrash(retentionDays: number = 30): Record<string, number> {
+  const out: Record<string, number> = {};
+  const cutoff = `datetime('now', '-${Math.max(1, Math.floor(retentionDays))} days')`;
+  for (const table of SOFT_DELETE_TABLES) {
+    try {
+      const result = getDb().prepare(
+        `DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}`
+      ).run();
+      out[table] = result.changes;
+    } catch {
+      out[table] = 0;
+    }
+  }
+  return out;
 }
 
 export function logAudit(

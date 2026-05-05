@@ -8,6 +8,7 @@ import { processRecurringTemplates } from './services/recurring-processor';
 import { runNotificationChecks } from './services/notification-engine';
 import { runAlertRules } from './crons/alerts';
 import { runOverdueCheck } from './crons/overdue-checker';
+import { runTrashPurge } from './crons/trash-purge';
 import { initQueue, connectWebSocket } from './sync';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -198,6 +199,7 @@ let recurringInterval: ReturnType<typeof setInterval> | null = null;
 let notificationInterval: ReturnType<typeof setInterval> | null = null;
 let alertRulesInterval: ReturnType<typeof setInterval> | null = null;
 let overdueCheckInterval: ReturnType<typeof setInterval> | null = null;
+let trashPurgeInterval: ReturnType<typeof setInterval> | null = null;
 // CONCURRENCY: periodic WAL checkpoint — without this the -wal sidecar file
 // can grow unbounded under heavy write load (auto-backup runs every 30s of
 // activity but only checkpoints once on each backup).
@@ -238,6 +240,18 @@ function startBackgroundServices() {
       if (overdueResult.errors.length) console.warn('Overdue checker errors:', overdueResult.errors);
     } catch (err) {
       console.error('Overdue checker startup error:', err);
+    }
+
+    // P1.13 — Physically purge soft-deleted records older than the
+    // retention window (default 30 days, per-company configurable).
+    try {
+      const purgeResult = runTrashPurge();
+      if (purgeResult.totalPurged > 0) {
+        console.log(`Trash purge: physically removed ${purgeResult.totalPurged} expired records across ${purgeResult.companiesScanned} companies`, purgeResult.byTable);
+      }
+      if (purgeResult.errors.length) console.warn('Trash purge errors:', purgeResult.errors);
+    } catch (err) {
+      console.error('Trash purge startup error:', err);
     }
   }, 2000);
 
@@ -284,6 +298,19 @@ function startBackgroundServices() {
     }
   }, 6 * 60 * 60 * 1000);
 
+  // Trash auto-purge: every 24 hours (nightly). Daily cadence is
+  // sufficient since the retention window is days, not hours.
+  trashPurgeInterval = setInterval(() => {
+    try {
+      const r = runTrashPurge();
+      if (r.totalPurged > 0) {
+        console.log(`Trash purge (24h): physically removed ${r.totalPurged} expired records`);
+      }
+    } catch (err) {
+      console.error('Trash purge interval error:', err);
+    }
+  }, 24 * 60 * 60 * 1000);
+
   // CONCURRENCY: WAL checkpoint every 5 minutes to bound -wal file growth.
   // TRUNCATE mode resets the WAL to zero bytes if no readers are mid-txn.
   walCheckpointInterval = setInterval(() => {
@@ -311,6 +338,10 @@ function stopBackgroundServices() {
   if (overdueCheckInterval) {
     clearInterval(overdueCheckInterval);
     overdueCheckInterval = null;
+  }
+  if (trashPurgeInterval) {
+    clearInterval(trashPurgeInterval);
+    trashPurgeInterval = null;
   }
   if (walCheckpointInterval) {
     clearInterval(walCheckpointInterval);

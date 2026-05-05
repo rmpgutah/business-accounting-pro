@@ -931,15 +931,90 @@ export function registerIpcHandlers(): void {
       }
       const companyId = db.getCurrentCompanyId();
       if (companyId) db.logAudit(companyId, table, id, 'delete');
-      // Clean up FK references in related tables BEFORE the parent delete,
-      // so SQLite doesn't throw FOREIGN KEY constraint failed.
-      cleanupReferencesBeforeDelete(table, id);
+      // P1.13: skip FK cleanup for soft-deletable tables — the row
+      // stays physically present so FK references remain valid.
+      // Cleanup only happens when the auto-purge cron physically
+      // removes the row 30 days later (via removeHard), at which
+      // point the same logic runs.
+      if (!db.SOFT_DELETE_TABLES.has(table)) {
+        cleanupReferencesBeforeDelete(table, id);
+      }
       db.remove(table, id);
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
     } catch (err) {
       console.error(`db:delete [${table}:${id}] failed:`, err);
       return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // ─── P1.13: Trash (soft-delete recovery) ──────────────
+  // Read-side counterpart to db.remove() now that supported tables
+  // soft-delete. The Trash UI calls these to list / restore / purge
+  // records the user has deleted within the 30-day retention window.
+
+  ipcMain.handle('trash:list', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { items: {} };
+      const items = db.listTrash(companyId, 100);
+      return { items };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to list trash' };
+    }
+  });
+
+  ipcMain.handle('trash:restore', (_event, { table, id }: { table: string; id: string }) => {
+    try {
+      if (!db.SOFT_DELETE_TABLES.has(table)) return { error: `Table ${table} does not support restore` };
+      const ok = db.restoreFromTrash(table, id);
+      if (!ok) return { error: 'Record not in trash or already restored' };
+      const companyId = db.getCurrentCompanyId();
+      if (companyId) db.logAudit(companyId, table, id, 'trash_restore');
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Restore failed' };
+    }
+  });
+
+  ipcMain.handle('trash:purge', (_event, { table, id }: { table: string; id: string }) => {
+    try {
+      if (!db.SOFT_DELETE_TABLES.has(table)) return { error: `Table ${table} does not support purge` };
+      // Run FK cleanup now since this is a true physical delete.
+      try { cleanupReferencesBeforeDelete(table, id); } catch (_) { /* best-effort */ }
+      db.removeHard(table, id);
+      const companyId = db.getCurrentCompanyId();
+      if (companyId) db.logAudit(companyId, table, id, 'trash_purge');
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Purge failed' };
+    }
+  });
+
+  ipcMain.handle('trash:empty', () => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { ok: false, error: 'No active company' };
+      // Empty Trash purges ALL soft-deleted records for the company,
+      // regardless of age. (Auto-purge cron handles age-based culling.)
+      let purged = 0;
+      for (const table of db.SOFT_DELETE_TABLES) {
+        const rows = db.getDb().prepare(
+          `SELECT id FROM ${table} WHERE company_id = ? AND deleted_at IS NOT NULL`
+        ).all(companyId) as Array<{ id: string }>;
+        for (const r of rows) {
+          try { cleanupReferencesBeforeDelete(table, r.id); } catch (_) {}
+          db.removeHard(table, r.id);
+          purged++;
+        }
+      }
+      if (companyId) db.logAudit(companyId, 'trash', 'empty', 'trash_empty', { purged });
+      scheduleAutoBackup();
+      return { ok: true, purged };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Empty trash failed' };
     }
   });
 

@@ -646,6 +646,19 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // P1.13: Trash (soft-delete recovery) ────────────────────
+  // listTrash returns records grouped by table; restore undoes a
+  // soft-delete; purge physically removes ONE record; empty purges
+  // ALL soft-deleted records for the active company.
+  trashList: (): Promise<{ items?: Record<string, any[]>; error?: string }> =>
+    window.electronAPI.invoke('trash:list'),
+  trashRestore: (table: string, id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('trash:restore', { table, id }),
+  trashPurge: (table: string, id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('trash:purge', { table, id }),
+  trashEmpty: (): Promise<{ ok?: boolean; purged?: number; error?: string }> =>
+    window.electronAPI.invoke('trash:empty'),
+
   // P1.12: Duplicate-invoice detector — returns up to 3 recent
   // invoices for the same client with similar total + due_date.
   // Caller decides whether to surface a confirm modal.

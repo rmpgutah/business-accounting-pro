@@ -18,6 +18,7 @@ import NumberingSettings from './NumberingSettings';
 import EmailTemplatesSettings from './EmailTemplatesSettings';
 import StatusBuilderSettings from './StatusBuilderSettings';
 import PortalIntegrationSettings from './PortalIntegrationSettings';
+import TrashSettings from './TrashSettings';
 import MacroRecorder from '../../components/MacroRecorder';
 
 // ─── Types ──────────────────────────────────────────────
@@ -1106,6 +1107,9 @@ export default function SettingsModule() {
 
       {/* ── Client Portal Integration (rmpgutahps.us) ──── */}
       <PortalIntegrationSettings />
+
+      {/* ── Trash (soft-delete recovery) ─────────────────── */}
+      <TrashSettings />
 
       {/* ── Cloud Backup (VPS) ──────────────────────────── */}
       <VpsBackup />
