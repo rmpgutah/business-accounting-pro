@@ -17,6 +17,32 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
+// ─── Client Portal URL Builder ───────────────────────────────
+// Constructs the deep-link a recipient sees on the QR code / email.
+// Three URL conventions are supported so admins can repoint the portal
+// without recompiling the template:
+//
+//   1. Template placeholder:  https://example.com/x/{token}
+//      → token is substituted at the {token} marker
+//   2. Login-style URL:       https://example.com/client/login
+//      → token is appended as ?invoice=<token> query param so the
+//        portal can route the recipient to the correct invoice after
+//        successful login
+//   3. Legacy path-style:     https://example.com/portal
+//      → token is appended as /<token>
+//
+// Default base: https://rmpgutahps.us/client/login (RMPG Pro Services
+// portal). Override per-tenant via InvoiceSettings.portal_base_url.
+export const DEFAULT_PORTAL_BASE = 'https://rmpgutahps.us/client/login';
+export function buildPortalUrl(base: string | null | undefined, token: string): string {
+  const url = (base || DEFAULT_PORTAL_BASE).trim();
+  if (!url) return '';
+  if (url.includes('{token}')) return url.replace(/\{token\}/g, token);
+  const noTrail = url.replace(/\/$/, '');
+  if (/\/login$/i.test(noTrail)) return `${noTrail}?invoice=${encodeURIComponent(token)}`;
+  return `${noTrail}/${token}`;
+}
+
 // ─── Currency Formatter ──────────────────────────────────────
 // formatCurrency guards against Infinity/NaN/non-finite values that would
 // otherwise render as "$NaN" or "$∞" in customer-facing PDFs.
@@ -661,7 +687,7 @@ export interface InvoiceSettings {
   column_config?: InvoiceColumnConfig[] | string;
   payment_qr_url?: string;       // legacy: arbitrary payment URL prefix
   show_payment_qr?: boolean | number;
-  portal_base_url?: string;       // overrides default https://accounting.rmpgutah.us
+  portal_base_url?: string;       // overrides default https://rmpgutahps.us/client/login (supports {token} placeholder, /login query-mode, or legacy /portal path-mode)
   // ── P1.4: Custom Letterhead ────────────────────────────
   // Wider banner image (full page-width, vs logo_data which is constrained).
   // 'top'     — banner above the existing header (additive)
@@ -1226,9 +1252,10 @@ export function generateInvoiceHTML(
   // QR code: prefer the deep-link to the client portal (portal_token)
   // since it scopes the recipient directly to THIS invoice. Falls back to
   // a custom payment URL the user configured in settings (legacy path).
-  const portalBase = (settings?.portal_base_url || 'https://accounting.rmpgutah.us').replace(/\/$/, '');
+  // buildPortalUrl() handles {token} substitution, /login query-param
+  // mode, and legacy /portal path-style URLs transparently.
   const portalDeepLink = invoice.portal_token
-    ? `${portalBase}/portal/${invoice.portal_token}`
+    ? buildPortalUrl(settings?.portal_base_url, invoice.portal_token)
     : (qrUrl ? `${qrUrl.replace(/\/$/, '')}/${invoice.invoice_number || ''}` : '');
   const showQRResolved = (showQR || !!invoice.portal_token) && !!portalDeepLink && !isQuote;
   const qrCaption = isCreditNote ? 'View Credit' : (balance > 0.005 ? 'Pay this Invoice' : 'View Receipt');

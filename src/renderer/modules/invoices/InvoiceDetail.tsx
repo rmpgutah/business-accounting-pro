@@ -171,7 +171,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [convertingRecurring, setConvertingRecurring] = useState(false);
   // PORTAL: share modal + cached base URL (resolved from main via `portal:base-url`).
   const [showShareModal, setShowShareModal] = useState(false);
-  const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://accounting.rmpgutah.us');
+  const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://rmpgutahps.us/client/login');
   useEffect(() => {
     api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
   }, []);

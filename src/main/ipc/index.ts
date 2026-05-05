@@ -2074,7 +2074,23 @@ export function registerIpcHandlers(): void {
   // SYNC_SERVER without hard-coding the host. Returned here (rather than
   // computed in the renderer) so a future env-driven override flows through.
   ipcMain.handle('portal:base-url', () => {
-    return { baseUrl: SYNC_SERVER };
+    // Returns the customer-facing portal URL — what we embed in QR codes
+    // and email merge variables. This is DIFFERENT from SYNC_SERVER:
+    //   • SYNC_SERVER  = backend API the desktop app talks to for sync
+    //   • portal URL   = where the recipient logs in / views their invoice
+    // The user can override per-company via settings table key
+    // 'portal_base_url'. Defaults to the RMPG Pro Services client portal.
+    const companyId = db.getCurrentCompanyId();
+    let baseUrl = 'https://rmpgutahps.us/client/login';
+    if (companyId) {
+      try {
+        const setting = db.getDb().prepare(
+          "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_base_url'"
+        ).get(companyId) as any;
+        if (setting?.value) baseUrl = setting.value;
+      } catch { /* fall through to default */ }
+    }
+    return { baseUrl };
   });
 
   // SECURITY: only http(s) URLs reach the OS shell; rejects mailto/file/etc.
@@ -10030,12 +10046,38 @@ export function registerIpcHandlers(): void {
   // Resolve the portal deep-link for an invoice — looks up the token in
   // invoice_tokens (creating one would require side effects, so we just
   // look it up). Returns empty string if no token exists yet.
-  function resolvePortalLink(invoiceId: string, fallbackBase: string = 'https://accounting.rmpgutah.us'): string {
+  //
+  // The base URL supports three formats so admins can swap portal
+  // endpoints without recompiling:
+  //   1. {token} placeholder substitution
+  //   2. /login → appends ?invoice=<token> query param
+  //   3. anything else → appends /<token> path segment
+  // Default points at https://rmpgutahps.us/client/login (RMPG Pro
+  // Services portal). Override per-tenant via the portal_base_url
+  // setting (settings table, key='portal_base_url').
+  function buildPortalUrl(base: string, token: string): string {
+    const url = (base || '').trim();
+    if (!url) return '';
+    if (url.includes('{token}')) return url.replace(/\{token\}/g, token);
+    const noTrail = url.replace(/\/$/, '');
+    if (/\/login$/i.test(noTrail)) return `${noTrail}?invoice=${encodeURIComponent(token)}`;
+    return `${noTrail}/${token}`;
+  }
+  function resolvePortalLink(invoiceId: string, fallbackBase: string = 'https://rmpgutahps.us/client/login'): string {
     try {
+      // Allow per-company override via settings table
+      const companyId = db.getCurrentCompanyId();
+      let base = fallbackBase;
+      if (companyId) {
+        const setting = db.getDb().prepare(
+          "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_base_url'"
+        ).get(companyId) as any;
+        if (setting?.value) base = setting.value;
+      }
       const row = db.getDb().prepare(
         `SELECT token FROM invoice_tokens WHERE invoice_id = ? AND expires_at > 0 ORDER BY expires_at DESC LIMIT 1`
       ).get(invoiceId) as any;
-      if (row?.token) return `${fallbackBase}/portal/${row.token}`;
+      if (row?.token) return buildPortalUrl(base, row.token);
     } catch { /* ignore */ }
     return '';
   }
