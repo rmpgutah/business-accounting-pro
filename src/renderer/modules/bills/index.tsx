@@ -1217,7 +1217,10 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
     return base;
   };
   const lineEffectiveRate = (l: LineItemDraft): number => {
-    if (l.tax_rate_override >= 0) return l.tax_rate_override;
+    // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0 in JavaScript,
+    // which would silently apply 0% tax to lines whose override is null.
+    const ovr = Number((l as any).tax_rate_override ?? -1);
+    if (ovr >= 0) return ovr;
     if (l.tax_rate > 0) return l.tax_rate;
     return form.tax_pct;  // bill default
   };
@@ -1887,7 +1890,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                       type="number"
                       step="0.01"
                       className="block-input text-right font-mono text-xs"
-                      value={line.tax_rate_override >= 0 ? line.tax_rate_override : ''}
+                      value={(() => { const _o = Number((line as any).tax_rate_override ?? -1); return _o >= 0 ? _o : ''; })()}
                       placeholder={String(form.tax_pct || 0)}
                       onChange={(e) => {
                         const v = e.target.value === '' ? -1 : (parseFloat(e.target.value) || 0);

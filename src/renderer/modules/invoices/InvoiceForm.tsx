@@ -551,7 +551,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
       const baseAmount = l.quantity * l.unit_price;
       const discountedAmount = roundCents(baseAmount * (1 - (l.discount_pct || 0) / 100));
-      const effectiveTaxRate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
+      // BUG FIX: `>= 0` treats null as 0 (because null coerces to 0). Use
+      // ?? -1 so null/undefined fall back to "no override" rather than
+      // silently zeroing the tax rate. Mirrors print-templates.ts.
+      const overrideVal = Number(l.tax_rate_override ?? -1);
+      const effectiveTaxRate = overrideVal >= 0 ? overrideVal : (l.tax_rate || 0);
       return s + roundCents(discountedAmount * (effectiveTaxRate / 100));
     }, 0),
     [lines]
@@ -561,7 +565,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     const map: Record<string, { taxable: number; tax: number }> = {};
     for (const l of lines) {
       if ((l.row_type || 'item') !== 'item') continue;
-      const rate = l.tax_rate_override >= 0 ? l.tax_rate_override : l.tax_rate;
+      // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+      const ovr = Number(l.tax_rate_override ?? -1);
+      const rate = ovr >= 0 ? ovr : (l.tax_rate || 0);
       if (rate <= 0) continue;
       const base = roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100));
       const key = rate.toFixed(2);
@@ -1205,7 +1211,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               const isItem = rowType === 'item';
               const baseAmount = line.quantity * line.unit_price;
               const amount = baseAmount * (1 - (line.discount_pct || 0) / 100);
-              const effectiveTaxRate = line.tax_rate_override >= 0 ? line.tax_rate_override : line.tax_rate;
+              // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+              const _ovr = Number(line.tax_rate_override ?? -1);
+              const effectiveTaxRate = _ovr >= 0 ? _ovr : (line.tax_rate || 0);
               const lineTax = isItem ? amount * (effectiveTaxRate / 100) : 0;
               const lineTotal = amount + lineTax;
 
@@ -1316,7 +1324,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                   .filter(r => (r.row_type || 'item') === 'item')
                   .reduce((s, r) => {
                     const base = r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100);
-                    const rate = r.tax_rate_override >= 0 ? r.tax_rate_override : r.tax_rate;
+                    // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+                    const _ovr = Number(r.tax_rate_override ?? -1);
+                    const rate = _ovr >= 0 ? _ovr : (r.tax_rate || 0);
                     return s + base + base * (rate / 100);
                   }, 0);
                 return (
@@ -1574,7 +1584,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       style={{ width: 70 }}
                       placeholder="Tax%"
                       title="Tax rate override (blank = invoice rate)"
-                      value={line.tax_rate_override >= 0 ? line.tax_rate_override : ''}
+                      value={(() => {
+                        // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+                        const _ovr = Number(line.tax_rate_override ?? -1);
+                        return _ovr >= 0 ? _ovr : '';
+                      })()}
                       onChange={e => {
                         const parsed = parseFloat(e.target.value);
                         const v = e.target.value === '' ? -1 : (isNaN(parsed) ? -1 : parsed);

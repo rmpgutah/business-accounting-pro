@@ -111,7 +111,11 @@ const DEFAULT_HOURS_MAP: Record<string, number> = {
   monthly: 2080 / 12,
 };
 
-const FALLBACK_STATE_TAX_RATE = 0.05;
+// Utah state income tax flat rate per TC-40W. Was 5.0% (legacy), then
+// 4.85% (2024), then 4.55% (2025–2026 per HB54). The 5.0% used here
+// previously over-withheld by ~10% versus the correct rate, causing
+// employee paystubs to show inflated state tax deductions.
+const FALLBACK_STATE_TAX_RATE = 0.0455;
 
 // Feature 14: Federal minimum wage constant
 const FEDERAL_MINIMUM_WAGE = 7.25;

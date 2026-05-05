@@ -2263,17 +2263,29 @@ export function generatePayStubHTML(
     <tbody>
       <tr>
         <td>Federal Income Tax</td>
-        <td class="r mono muted">${stub.gross_pay > 0 ? (stub.federal_tax / stub.gross_pay * 100).toFixed(2) + '%' : '--'}</td>
+        <td class="r mono muted">${(() => {
+          // BUG FIX: rate must use the SAME taxable base as the "Taxable Wages"
+          // column or the percentage is misleading. Federal withholding is
+          // computed against (gross - pre-tax deductions), not gross_pay.
+          const taxableFed = Math.max(0, stub.gross_pay - preTax);
+          return taxableFed > 0 ? (stub.federal_tax / taxableFed * 100).toFixed(2) + '%' : '--';
+        })()}</td>
         <td class="r mono red">${fmt(stub.federal_tax)}</td>
         <td class="r mono muted">${fmt(ytd.federal_tax)}</td>
-        <td class="r mono muted">${fmt(stub.gross_pay - preTax)}</td>
+        <td class="r mono muted">${fmt(Math.max(0, stub.gross_pay - preTax))}</td>
       </tr>
       <tr>
         <td>State Income Tax (UT)</td>
-        <td class="r mono muted">${stub.gross_pay > 0 ? (stub.state_tax / stub.gross_pay * 100).toFixed(2) + '%' : '--'}</td>
+        <td class="r mono muted">${(() => {
+          // BUG FIX: Utah honors federal pre-tax deductions (401(k), HSA, FSA,
+          // qualified health insurance), so state taxable wages should also
+          // exclude them. Some states differ — adjust per-state when adding.
+          const taxableState = Math.max(0, stub.gross_pay - preTax);
+          return taxableState > 0 ? (stub.state_tax / taxableState * 100).toFixed(2) + '%' : '--';
+        })()}</td>
         <td class="r mono red">${fmt(stub.state_tax)}</td>
         <td class="r mono muted">${fmt(ytd.state_tax)}</td>
-        <td class="r mono muted">${fmt(stub.gross_pay)}</td>
+        <td class="r mono muted">${fmt(Math.max(0, stub.gross_pay - preTax))}</td>
       </tr>
       <tr>
         <td>Social Security (OASDI) <span class="muted" style="font-size:8px;">cap $182,100</span></td>

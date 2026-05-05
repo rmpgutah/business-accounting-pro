@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Share2, Eye as EyeIcon } from 'lucide-react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Share2, Eye as EyeIcon, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import PortalShareModal from '../../components/PortalShareModal';
