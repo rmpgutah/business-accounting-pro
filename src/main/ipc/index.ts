@@ -1210,6 +1210,10 @@ export function registerIpcHandlers(): void {
       const companyId = db.getCurrentCompanyId();
       const rawDb = db.getDb();
 
+      // P1.14: capture pre-update snapshot for field-level diff in
+      // audit log. Only matters on edit (creates have no prior state).
+      const oldInvoice: any = (isEdit && invoiceId) ? db.getById('invoices', invoiceId) : null;
+
       const saveFn = rawDb.transaction(() => {
         let savedId: string;
 
@@ -1261,7 +1265,25 @@ export function registerIpcHandlers(): void {
       });
 
       const savedId = saveFn();
-      if (companyId) db.logAudit(companyId, 'invoices', savedId, isEdit ? 'update' : 'create');
+      // P1.14: emit field-level diff to audit_log on edit. Same shape
+      // as the generic db:update handler so the entity-timeline summary
+      // renders both kinds uniformly. Tracked fields are restricted to
+      // those the form actually sends (invoiceData keys), so we don't
+      // accidentally surface auto-managed columns like updated_at.
+      if (companyId) {
+        if (isEdit && oldInvoice) {
+          const newInvoice = db.getById('invoices', savedId) as any;
+          const changes: Record<string, { old: any; new: any }> = {};
+          for (const key of Object.keys(invoiceData)) {
+            if (oldInvoice[key] !== newInvoice?.[key]) {
+              changes[key] = { old: oldInvoice[key], new: newInvoice?.[key] };
+            }
+          }
+          db.logAudit(companyId, 'invoices', savedId, 'update', changes);
+        } else {
+          db.logAudit(companyId, 'invoices', savedId, 'create');
+        }
+      }
 
       // Record ad-hoc entity relations (advisory — never blocks the save).
       try {
@@ -1335,6 +1357,9 @@ export function registerIpcHandlers(): void {
     try {
       const companyId = db.getCurrentCompanyId();
       const rawDb = db.getDb();
+
+      // P1.14: pre-update snapshot for field-level diff audit
+      const oldExpense: any = (isEdit && expenseId) ? db.getById('expenses', expenseId) : null;
 
       const saveFn = rawDb.transaction(() => {
         let savedId: string;
@@ -1422,7 +1447,21 @@ export function registerIpcHandlers(): void {
       });
 
       const savedId = saveFn();
-      if (companyId) db.logAudit(companyId, 'expenses', savedId, isEdit ? 'update' : 'create');
+      // P1.14: emit field-level diff to audit_log on edit
+      if (companyId) {
+        if (isEdit && oldExpense) {
+          const newExpense = db.getById('expenses', savedId) as any;
+          const changes: Record<string, { old: any; new: any }> = {};
+          for (const key of Object.keys(expenseData)) {
+            if (oldExpense[key] !== newExpense?.[key]) {
+              changes[key] = { old: oldExpense[key], new: newExpense?.[key] };
+            }
+          }
+          db.logAudit(companyId, 'expenses', savedId, 'update', changes);
+        } else {
+          db.logAudit(companyId, 'expenses', savedId, 'create');
+        }
+      }
 
       scheduleAutoBackup();
 

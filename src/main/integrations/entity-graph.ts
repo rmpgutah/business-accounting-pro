@@ -573,9 +573,42 @@ export function timeline(companyId: string, type: string, id: string, limit = 10
     let parsed: Record<string, unknown> = {};
     try { parsed = JSON.parse(a.changes || '{}'); } catch {}
     const real = (parsed._action as string | undefined) ?? a.action;
+
+    // P1.14: build a human-readable summary of field-level changes for
+    // the timeline. The audit_log already captures { field: { old, new } }
+    // pairs (see db:update IPC handler) — we just need to surface them.
+    // Skips meta-fields starting with _ (e.g. _action) and rows where
+    // the value is unchanged or unrenderable.
+    let detail: string | undefined;
+    if (real === 'update' && a.changes) {
+      const fieldChanges: string[] = [];
+      for (const [field, val] of Object.entries(parsed)) {
+        if (field.startsWith('_')) continue; // skip meta keys
+        if (!val || typeof val !== 'object') continue;
+        const v = val as { old?: unknown; new?: unknown };
+        if (!('old' in v) || !('new' in v)) continue;
+        if (v.old === v.new) continue;
+        const fmt = (x: unknown): string => {
+          if (x === null || x === undefined) return '∅';
+          if (typeof x === 'number') return Number.isInteger(x) ? String(x) : x.toFixed(2);
+          if (typeof x === 'boolean') return x ? 'true' : 'false';
+          const s = String(x);
+          return s.length > 30 ? s.slice(0, 27) + '…' : s;
+        };
+        fieldChanges.push(`${field}: ${fmt(v.old)} → ${fmt(v.new)}`);
+      }
+      if (fieldChanges.length > 0) {
+        detail = fieldChanges.slice(0, 4).join(' · ');
+        if (fieldChanges.length > 4) {
+          detail += ` (+${fieldChanges.length - 4} more)`;
+        }
+      }
+    }
+
     events.push({
       id: `audit:${a.id}`, at: a.timestamp, kind: 'audit', action: real,
       title: real.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()),
+      detail,
       source: a.performed_by, metadata: parsed,
     });
   }

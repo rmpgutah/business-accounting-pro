@@ -92,19 +92,42 @@ const EntityTimeline: React.FC<Props> = ({ entityType, entityId, limit = 50, com
       )}
 
       <ol className="space-y-2">
-        {events.map((ev) => (
-          <li key={ev.id} className="flex gap-2 text-xs">
-            <span className="mt-0.5 shrink-0">{iconFor(ev)}</span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-text-primary truncate">{ev.title}</span>
-                <time className="text-[10px] text-text-muted shrink-0 font-mono" title={ev.at}>{relativeTime(ev.at)}</time>
+        {events.map((ev) => {
+          // P1.14: For audit-update events, render the field-level diff
+          // detail in a monospace block so before/after pairs line up.
+          // Hover shows the full unabbreviated detail (the backend caps
+          // visible diff at 4 fields with "…+N more" suffix).
+          const isAuditDiff = ev.kind === 'audit' && !!ev.detail;
+          return (
+            <li key={ev.id} className="flex gap-2 text-xs">
+              <span className="mt-0.5 shrink-0">{iconFor(ev)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-text-primary truncate">{ev.title}</span>
+                  <time className="text-[10px] text-text-muted shrink-0 font-mono" title={ev.at}>{relativeTime(ev.at)}</time>
+                </div>
+                {ev.detail && (
+                  <div
+                    className={isAuditDiff ? "text-[10.5px] text-text-secondary mt-1" : "text-[11px] text-text-secondary truncate"}
+                    style={isAuditDiff ? {
+                      fontFamily: 'SF Mono, Menlo, Consolas, monospace',
+                      background: 'rgba(0,0,0,0.04)',
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      borderLeft: '2px solid var(--color-accent-blue)',
+                      wordBreak: 'break-all',
+                      lineHeight: 1.4,
+                    } : undefined}
+                    title={ev.detail}
+                  >
+                    {ev.detail}
+                  </div>
+                )}
+                {ev.source && <div className="text-[10px] text-text-muted mt-0.5">by {ev.source}</div>}
               </div>
-              {ev.detail && <div className="text-[11px] text-text-secondary truncate">{ev.detail}</div>}
-              {ev.source && <div className="text-[10px] text-text-muted">{ev.source}</div>}
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
