@@ -18,24 +18,49 @@ function esc(s: string | null | undefined): string {
 // ─── Currency Formatter ──────────────────────────────────────
 // formatCurrency guards against Infinity/NaN/non-finite values that would
 // otherwise render as "$NaN" or "$∞" in customer-facing PDFs.
-export function formatCurrency(n: number | string | null | undefined): string {
+//
+// Multi-currency: pass an ISO 4217 code (USD, EUR, GBP, CAD, AUD, JPY,
+// MXN, INR, CHF, NZD, CNY, etc.) and Intl.NumberFormat will resolve the
+// correct symbol and minor-unit precision automatically (JPY → 0
+// decimals, USD/EUR/GBP → 2 decimals, BHD → 3 decimals).
+const SUPPORTED_CURRENCIES = new Set([
+  'USD','EUR','GBP','CAD','AUD','NZD','JPY','CNY','INR','MXN','CHF','SEK',
+  'NOK','DKK','HKD','SGD','ZAR','BRL','RUB','PLN','TRY','AED','SAR','ILS',
+]);
+function safeCurrencyCode(code: string | null | undefined): string {
+  const c = (code || '').toString().trim().toUpperCase();
+  return SUPPORTED_CURRENCIES.has(c) ? c : 'USD';
+}
+export function formatCurrency(
+  n: number | string | null | undefined,
+  currency?: string | null,
+): string {
   const num = typeof n === 'number' ? n : Number(n ?? 0);
   const safe = Number.isFinite(num) ? num : 0;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD', minimumFractionDigits: 2,
-  }).format(safe);
+  const code = safeCurrencyCode(currency);
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: code, minimumFractionDigits: undefined,
+    }).format(safe);
+  } catch {
+    // Fallback if an unsupported code somehow slipped through
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: 'USD', minimumFractionDigits: 2,
+    }).format(safe);
+  }
 }
 // Accounting-style negatives: -1234.56 → "(1,234.56)"
-export function formatAccountingAmount(n: number | string | null | undefined): string {
+export function formatAccountingAmount(
+  n: number | string | null | undefined,
+  currency?: string | null,
+): string {
   const num = typeof n === 'number' ? n : Number(n ?? 0);
   const safe = Number.isFinite(num) ? num : 0;
   if (safe < 0) {
-    const positive = new Intl.NumberFormat('en-US', {
-      style: 'currency', currency: 'USD', minimumFractionDigits: 2,
-    }).format(Math.abs(safe));
+    const positive = formatCurrency(Math.abs(safe), currency);
     return `(${positive})`;
   }
-  return formatCurrency(safe);
+  return formatCurrency(safe, currency);
 }
 const fmt = formatCurrency;
 
@@ -703,6 +728,13 @@ export function generateInvoiceHTML(
   settings?: InvoiceSettings,
   paymentSchedule?: any[]
 ): string {
+  // ── Multi-currency: shadow module-level `fmt` with a currency-bound
+  // version so every dollar amount in this invoice renders in its
+  // declared currency (USD, EUR, GBP, JPY, etc.). Zero call-site
+  // migration needed — JS closure scoping rebinds all references.
+  const docCurrency = invoice.currency || 'USD';
+  const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
+
   const accent    = settings?.accent_color || '#2563eb';
   const secondary = settings?.secondary_color || '#64748b';
   const style     = settings?.template_style || 'classic';
@@ -3832,6 +3864,10 @@ export function generateBillHTML(
   settings?: InvoiceSettings,
   accounts?: Array<{ id: string; code?: string; name?: string }>
 ): string {
+  // Multi-currency: shadow module-level fmt with bill's currency
+  const docCurrency = bill.currency || 'USD';
+  const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
+
   const accountMap = new Map<string, { code?: string; name?: string }>();
   (accounts || []).forEach(a => accountMap.set(a.id, a));
 
@@ -4006,6 +4042,10 @@ export function generatePurchaseOrderHTML(
     payment_terms?: string;
   }
 ): string {
+  // Multi-currency: shadow module-level fmt with PO's currency
+  const docCurrency = po.currency || 'USD';
+  const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
+
   const subtotal = Number(po.subtotal || 0);
   const tax = Number(po.tax_amount || 0);
   const total = Number(po.total || 0);
@@ -4201,6 +4241,10 @@ export function generateExpenseReceiptHTML(
   vendor?: any,
   lineItems?: any[]
 ): string {
+  // Multi-currency: shadow module-level fmt with expense's currency
+  const docCurrency = expense.currency || 'USD';
+  const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
+
   const total = Number(expense.amount || expense.total || 0);
   const tax = Number(expense.tax_amount || 0);
   const subtotal = Number(expense.subtotal || (total - tax));
