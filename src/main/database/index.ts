@@ -1513,6 +1513,28 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
 
+  // ── A7: Line-item snippets / field templates ─────────────────
+  // Reusable line-item presets users can drop onto invoices/quotes
+  // /bills with one click. Saves "Standard hourly consulting" once,
+  // reuses on every project.
+  `CREATE TABLE IF NOT EXISTS line_item_snippets (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    quantity REAL NOT NULL DEFAULT 1,
+    unit_label TEXT DEFAULT '',
+    unit_price REAL NOT NULL DEFAULT 0,
+    tax_rate REAL DEFAULT 0,
+    item_code TEXT DEFAULT '',
+    use_count INTEGER NOT NULL DEFAULT 0,
+    last_used_at TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_line_snippets_co_use ON line_item_snippets(company_id, use_count DESC)",
+
   // ── P4.49: Mileage log ────────────────────────────────────────
   // Records vehicle business miles for tax-deduction purposes.
   // The auto-computed `deduction_amount` uses the IRS-published

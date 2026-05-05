@@ -4,6 +4,8 @@ import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { batchDeleteWithUndo } from '../../lib/toastUndo';
+import { useToast } from '../../components/ToastProvider';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -101,11 +103,10 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   });
   const [search, setSearch] = useState('');
   // P2.24: debounce the search-driven filter so we don't re-filter
-  // 1000+ invoices on every keystroke. The input field stays
-  // responsive (controlled by `search`); the filter useMemo depends
-  // on `debouncedSearch` which lags by 200ms — pauses between
-  // words trigger the filter, mid-word typing doesn't.
+  // 1000+ invoices on every keystroke.
   const debouncedSearch = useDebouncedValue(search, 200);
+  // P3.25 Phase 2: toast-undo on delete
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
@@ -418,11 +419,20 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const handleBatchDelete = useCallback(async () => {
     setBatchLoading(true);
     try {
-      await api.batchDelete('invoices', Array.from(selectedIds));
-      await reload();
-    } catch (err: any) { console.error('Batch delete failed:', err); alert('Failed to delete invoices: ' + (err?.message || 'Unknown error')); }
-    finally { setBatchLoading(false); setShowDeleteConfirm(false); }
-  }, [selectedIds, reload]);
+      // P3.25 Phase 2: route through the toast-undo helper so the
+      // user gets an 8-second window to undo via ⌘Z. Soft-delete
+      // tables (invoices ARE one) restore from Trash on undo.
+      await batchDeleteWithUndo(toast, 'invoices', Array.from(selectedIds), {
+        onSuccess: () => reload(),
+      });
+    } catch (err: any) {
+      console.error('Batch delete failed:', err);
+      toast.error('Failed to delete invoices: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [selectedIds, reload, toast]);
 
   // P1.8 — Bulk export selected invoices to a ZIP archive (one PDF
   // per invoice, streamed via archiver to avoid holding all PDF

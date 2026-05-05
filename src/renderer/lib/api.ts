@@ -401,6 +401,12 @@ const api = {
     window.electronAPI.invoke('reports:general-ledger', { startDate, endDate, accountId }),
   reportCashFlow: (startDate: string, endDate: string) =>
     window.electronAPI.invoke('reports:cash-flow', { startDate, endDate }),
+  // P4.35 — Forward-looking cash flow forecast (next N days, default 90)
+  reportCashFlowForecast: (days?: number): Promise<any> =>
+    window.electronAPI.invoke('reports:cash-flow-forecast', { days }),
+  // P4.37 — Customer profitability ranking
+  reportCustomerProfitability: (startDate: string, endDate: string, limit?: number): Promise<any> =>
+    window.electronAPI.invoke('reports:customer-profitability', { startDate, endDate, limit }),
   vendorSpend: (startDate: string, endDate: string): Promise<any[]> =>
     window.electronAPI.invoke('reports:vendor-spend', { startDate, endDate }),
 
@@ -645,6 +651,24 @@ const api = {
   // Feature 9: Payment Portal Link
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
+
+  // A7: Line-item snippet library
+  snippetsList: (opts?: { category?: string }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('snippets:list', opts || {}),
+  snippetSave: (payload: any): Promise<any> =>
+    window.electronAPI.invoke('snippets:save', payload),
+  snippetDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('snippets:delete', { id }),
+  snippetTrackUse: (id: string): Promise<{ ok?: boolean }> =>
+    window.electronAPI.invoke('snippets:track-use', { id }),
+
+  // B3: Auto-categorize an expense based on history
+  suggestExpenseCategory: (opts: { vendor_id?: string | null; vendor_name?: string | null; description?: string | null; amount?: number | null }): Promise<{ category_id: string | null; category_name: string | null; confidence: number; source: string; occurrences: number; totalSeen: number; error?: string }> =>
+    window.electronAPI.invoke('expense:suggest-category', opts),
+
+  // B11: Suggest invoice matches for a bank-import line
+  suggestPaymentMatches: (opts: { amount: number; date: string; description: string }): Promise<any[]> =>
+    window.electronAPI.invoke('payment:suggest-matches', opts),
 
   // P4.49: Mileage log
   mileageList: (opts?: { year?: number; limit?: number }): Promise<any[] | { error?: string }> =>

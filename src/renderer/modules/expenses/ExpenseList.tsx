@@ -3,6 +3,8 @@ import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Downloa
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
+import { batchDeleteWithUndo } from '../../lib/toastUndo';
+import { useToast } from '../../components/ToastProvider';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -124,6 +126,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   const [bankTxns, setBankTxns] = useState<Array<{ id: string; date: string; amount: number }>>([]);
   const [stripeRefunds, setStripeRefunds] = useState<Array<{ id: string; stripe_id: string; data: any }>>([]);
   const [search, setSearch] = useState('');
+  const toast = useToast(); // P3.25 Phase 2: toast-undo on delete
   const [categoryFilter, setCategoryFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -370,11 +373,18 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   const handleBatchDelete = useCallback(async () => {
     setBatchLoading(true);
     try {
-      await api.batchDelete('expenses', Array.from(selectedIds));
-      await reload();
-    } catch (err: any) { console.error('Batch delete failed:', err); alert('Failed to delete expenses: ' + (err?.message || 'Unknown error')); }
-    finally { setBatchLoading(false); setShowDeleteConfirm(false); }
-  }, [selectedIds, reload]);
+      // P3.25 Phase 2: toast-undo for the bulk delete
+      await batchDeleteWithUndo(toast, 'expenses', Array.from(selectedIds), {
+        onSuccess: () => reload(),
+      });
+    } catch (err: any) {
+      console.error('Batch delete failed:', err);
+      toast.error('Failed to delete expenses: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [selectedIds, reload, toast]);
 
   const handleDuplicate = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

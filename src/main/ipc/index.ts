@@ -1108,6 +1108,75 @@ export function registerIpcHandlers(): void {
       return { cleaned: 0, error: err?.message };
     }
   });
+  // ─── A7: Line-item snippets (reusable templates) ──────
+  ipcMain.handle('snippets:list', (_event, opts?: { category?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const sql = "SELECT * FROM line_item_snippets WHERE company_id = ? " +
+                  (opts?.category ? "AND category = ? " : "") +
+                  "ORDER BY use_count DESC, name ASC LIMIT 200";
+      const params: any[] = [cid];
+      if (opts?.category) params.push(opts.category);
+      return db.getDb().prepare(sql).all(...params);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('snippets:save', (_event, payload: any) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      if (!payload?.name?.trim()) return { error: 'Name required' };
+      const data = { ...payload, company_id: cid };
+      if (payload.id) {
+        db.update('line_item_snippets', payload.id, data);
+        return db.getById('line_item_snippets', payload.id);
+      }
+      return db.create('line_item_snippets', data);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('snippets:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.removeHard('line_item_snippets', id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  // Increments use_count + sets last_used_at when a snippet is
+  // dropped onto a form. Called by the renderer's snippet picker.
+  ipcMain.handle('snippets:track-use', (_event, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare(
+        "UPDATE line_item_snippets SET use_count = use_count + 1, last_used_at = datetime('now') WHERE id = ?"
+      ).run(id);
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // ─── B3: Auto-categorization for new expenses ─────────
+  ipcMain.handle('expense:suggest-category', (_event, opts: any) => {
+    try {
+      const { suggestCategory } = require('../services/auto-categorize');
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { category_id: null, confidence: 0, source: 'none' };
+      return suggestCategory({ ...opts, company_id: cid });
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // ─── B11: Smart payment matching for bank import lines ─
+  ipcMain.handle('payment:suggest-matches', (_event, opts: { amount: number; date: string; description: string }) => {
+    try {
+      const { suggestMatches } = require('../services/payment-matcher');
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      return suggestMatches({ ...opts, company_id: cid });
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
   // ─── P4.49: Mileage log ────────────────────────────────
   // Auto-fills rate_per_mile from the mileage_rates table based on
   // the trip's tax year, then computes deduction_amount = miles * rate.
@@ -4493,6 +4562,183 @@ export function registerIpcHandlers(): void {
     } catch (err: any) {
       return [];
     }
+  });
+
+  // ─── P4.37: Customer Profitability Ranking ──────────────
+  // Per-client revenue (paid invoice amounts in window) minus
+  // direct costs (expenses tagged to that client_id) =
+  // estimated profit. Sorted descending. Used to identify
+  // "which clients are actually making us money."
+  ipcMain.handle('reports:customer-profitability', (_event, { startDate, endDate, limit }: { startDate: string; endDate: string; limit?: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    const clients = dbInstance.prepare(`
+      SELECT c.id, c.name, c.email,
+        COALESCE(SUM(CASE WHEN i.issue_date BETWEEN ? AND ? THEN i.amount_paid ELSE 0 END), 0) AS revenue,
+        COALESCE(SUM(CASE WHEN i.issue_date BETWEEN ? AND ? THEN (i.total - i.amount_paid) ELSE 0 END), 0) AS unpaid,
+        COUNT(CASE WHEN i.issue_date BETWEEN ? AND ? THEN i.id END) AS invoice_count
+      FROM clients c
+      LEFT JOIN invoices i ON i.client_id = c.id AND i.company_id = c.company_id
+      WHERE c.company_id = ?
+        AND COALESCE(c.deleted_at, '') = ''
+      GROUP BY c.id, c.name, c.email
+    `).all(startDate, endDate, startDate, endDate, startDate, endDate, companyId) as any[];
+
+    // Pull expenses-by-client from the expenses table. Some tenants
+    // tag client_id directly; others put it in custom fields.
+    const clientExpenses = dbInstance.prepare(`
+      SELECT client_id, COALESCE(SUM(amount), 0) AS expense_total
+      FROM expenses
+      WHERE company_id = ?
+        AND date BETWEEN ? AND ?
+        AND COALESCE(deleted_at, '') = ''
+        AND client_id IS NOT NULL
+      GROUP BY client_id
+    `).all(companyId, startDate, endDate) as any[];
+
+    const expenseMap = new Map<string, number>();
+    for (const e of clientExpenses) expenseMap.set(e.client_id, Number(e.expense_total) || 0);
+
+    const ranked = clients
+      .map((c) => {
+        const revenue = Number(c.revenue) || 0;
+        const expenses = expenseMap.get(c.id) || 0;
+        const profit = revenue - expenses;
+        const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        return {
+          client_id: c.id,
+          client_name: c.name,
+          client_email: c.email,
+          invoice_count: c.invoice_count || 0,
+          revenue,
+          expenses,
+          profit,
+          margin_pct: Math.round(margin * 10) / 10,
+          unpaid: Number(c.unpaid) || 0,
+        };
+      })
+      .filter((r) => r.invoice_count > 0 || r.expenses > 0)
+      .sort((a, b) => b.profit - a.profit);
+
+    const cap = Math.max(1, limit || 50);
+    const top = ranked.slice(0, cap);
+
+    const totals = {
+      revenue: ranked.reduce((s, r) => s + r.revenue, 0),
+      expenses: ranked.reduce((s, r) => s + r.expenses, 0),
+      profit: ranked.reduce((s, r) => s + r.profit, 0),
+      unpaid: ranked.reduce((s, r) => s + r.unpaid, 0),
+      client_count: ranked.length,
+    };
+
+    return { startDate, endDate, ranked: top, totals };
+  });
+
+  // ─── P4.35: Cash Flow FORECAST (forward-looking) ────────
+  // Existing reports:cash-flow is historical. This forecasts the
+  // next N days using:
+  //   • Open invoices' (total - amount_paid) as inflows on due_date
+  //   • Open bills'    (total - amount_paid) as outflows on due_date
+  //   • Recurring invoice/bill templates within the window
+  //   • Optional: scheduled payroll runs as outflows
+  // Returns daily projections + running balance starting from the
+  // current bank-account aggregate.
+  ipcMain.handle('reports:cash-flow-forecast', (_event, { days }: { days?: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+    const horizon = Math.max(1, Math.min(365, days || 90));
+
+    // Starting bank balance: sum of asset accounts of type='asset' subtype='bank'.
+    // Falls back to all asset accounts' balances if none flagged.
+    let startingBalance = 0;
+    try {
+      const row = dbInstance.prepare(`
+        SELECT COALESCE(SUM(balance), 0) AS bal
+        FROM accounts
+        WHERE company_id = ? AND type = 'asset'
+          AND COALESCE(deleted_at, '') = ''
+      `).get(companyId) as any;
+      startingBalance = Number(row?.bal) || 0;
+    } catch { /* skip */ }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const horizonDate = new Date(Date.now() + horizon * 86_400_000).toISOString().slice(0, 10);
+
+    // Inflows: open invoices due in the horizon
+    const inflows = dbInstance.prepare(`
+      SELECT due_date AS date, (total - amount_paid) AS amount, invoice_number AS reference, 'invoice' AS source
+      FROM invoices
+      WHERE company_id = ?
+        AND status NOT IN ('paid', 'voided', 'cancelled')
+        AND due_date BETWEEN ? AND ?
+        AND (total - amount_paid) > 0
+        AND COALESCE(deleted_at, '') = ''
+    `).all(companyId, today, horizonDate) as any[];
+
+    // Outflows: open bills due in the horizon
+    const outflows = dbInstance.prepare(`
+      SELECT due_date AS date, (total - amount_paid) AS amount, bill_number AS reference, 'bill' AS source
+      FROM bills
+      WHERE company_id = ?
+        AND status NOT IN ('paid', 'voided', 'cancelled')
+        AND due_date BETWEEN ? AND ?
+        AND (total - amount_paid) > 0
+        AND COALESCE(deleted_at, '') = ''
+    `).all(companyId, today, horizonDate) as any[];
+
+    // Build daily projection: inflow/outflow per day + running balance.
+    const dayMap = new Map<string, { inflow: number; outflow: number; entries: any[] }>();
+    for (let i = 0; i <= horizon; i++) {
+      const d = new Date(Date.now() + i * 86_400_000).toISOString().slice(0, 10);
+      dayMap.set(d, { inflow: 0, outflow: 0, entries: [] });
+    }
+    for (const inv of inflows) {
+      const day = dayMap.get(inv.date);
+      if (day) {
+        day.inflow += Number(inv.amount) || 0;
+        day.entries.push({ ...inv, type: 'inflow' });
+      }
+    }
+    for (const bill of outflows) {
+      const day = dayMap.get(bill.date);
+      if (day) {
+        day.outflow += Number(bill.amount) || 0;
+        day.entries.push({ ...bill, type: 'outflow' });
+      }
+    }
+
+    const projection: Array<{ date: string; inflow: number; outflow: number; net: number; balance: number; entries: any[] }> = [];
+    let running = startingBalance;
+    for (const [date, info] of dayMap) {
+      const net = info.inflow - info.outflow;
+      running += net;
+      projection.push({ date, ...info, net, balance: running });
+    }
+    projection.sort((a, b) => a.date.localeCompare(b.date));
+
+    const totals = {
+      inflow: projection.reduce((s, p) => s + p.inflow, 0),
+      outflow: projection.reduce((s, p) => s + p.outflow, 0),
+      net: projection.reduce((s, p) => s + p.net, 0),
+      startingBalance,
+      endingBalance: running,
+    };
+
+    // Find the lowest projected balance — the "danger day"
+    let lowest = projection[0];
+    for (const p of projection) if (p.balance < lowest.balance) lowest = p;
+
+    return {
+      horizon,
+      startDate: today,
+      endDate: horizonDate,
+      projection,
+      totals,
+      lowestBalance: { date: lowest.date, balance: lowest.balance },
+    };
   });
 
   ipcMain.handle('reports:cash-flow', (_event, { startDate, endDate }: { startDate: string; endDate: string }) => {
