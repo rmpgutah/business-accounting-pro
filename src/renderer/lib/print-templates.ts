@@ -531,16 +531,15 @@ function reportFooter(companyName: string): string {
 function statusStampCSS(color: string): string {
   return `
   .status-stamp {
-    position: fixed; top: 110px; right: 36px;
-    font-size: 28px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 3px; color: ${color};
-    border: 2px solid ${color}; border-radius: 3px;
-    padding: 4px 12px; opacity: 0.32; transform: rotate(-12deg);
-    pointer-events: none; background: rgba(255,255,255,0.5);
+    position: absolute; top: 92px; right: 32px;
+    font-size: 24px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 2.5px; color: ${color};
+    border: 2px solid ${color}; border-radius: 4px;
+    padding: 5px 14px; opacity: 0.18; transform: rotate(-10deg);
+    pointer-events: none; background: rgba(255,255,255,0.6);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
     z-index: 5;
   }
-  @media print { .status-stamp { position: fixed; } }
   `;
 }
 
@@ -1195,6 +1194,21 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .meta-row { display: flex; gap: 36px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; margin-bottom: 24px; flex-wrap: wrap; }
 .meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; }
 .meta-value { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px; }
+/* Per-document footer: reserves space via @page running content
+   so it never overlaps body content (replaces old position:fixed) */
+@page {
+  margin: 0.55in 0.5in 0.85in 0.5in;
+  @bottom-left {
+    content: "${companyName.replace(/"/g, '\\"')} · ${invoiceTypeLabel.replace(/"/g, '\\"')} #${(docNumberField || '').toString().replace(/"/g, '\\"')} · Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}";
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 8pt;
+    color: #94a3b8;
+    padding-bottom: 12pt;
+  }
+  @bottom-right {
+    padding-bottom: 12pt;
+  }
+}
 .totals { display: flex; justify-content: flex-end; margin-top: 14px; }
 .totals-box {
   width: 320px;
@@ -1279,17 +1293,6 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .footer-text { font-size: 11px; color: #64748b; line-height: 1.6; white-space: pre-line; }
 .footer-bottom { text-align: center; margin-top: 28px; font-size: 10px; color: #64748b; }
 .accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
-.print-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 9px;
-  color: #64748b;
-  padding: 4px 0;
-  border-top: 1px solid #e5e5e5;
-}
 .draft-watermark {
   position: fixed;
   top: 50%;
@@ -1409,9 +1412,6 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 </div>
 </div>
 
-<div class="print-footer fd-mono">
-  ${companyName} &middot; ${esc(invoiceTypeLabel)} #${esc(docNumberField)} &middot; Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-</div>
 </body></html>`;
 }
 
