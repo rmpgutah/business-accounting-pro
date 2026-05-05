@@ -1513,6 +1513,39 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
 
+  // ── P4.49: Mileage log ────────────────────────────────────────
+  // Records vehicle business miles for tax-deduction purposes.
+  // The auto-computed `deduction_amount` uses the IRS-published
+  // standard mileage rate for the trip's tax year, looked up from
+  // the mileage_rates table (seeded with current+historical rates).
+  `CREATE TABLE IF NOT EXISTS mileage_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    trip_date TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT '',
+    start_location TEXT DEFAULT '',
+    end_location TEXT DEFAULT '',
+    miles REAL NOT NULL DEFAULT 0,
+    rate_per_mile REAL NOT NULL DEFAULT 0,
+    deduction_amount REAL NOT NULL DEFAULT 0,
+    vehicle TEXT DEFAULT '',
+    project_id TEXT DEFAULT NULL,
+    client_id TEXT DEFAULT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_mileage_co_date ON mileage_log(company_id, trip_date DESC)",
+
+  // IRS standard mileage rates by year. Seeded at startup if empty.
+  // Rates source: https://www.irs.gov/tax-professionals/standard-mileage-rates
+  `CREATE TABLE IF NOT EXISTS mileage_rates (
+    year INTEGER PRIMARY KEY,
+    business_rate REAL NOT NULL,
+    medical_rate REAL DEFAULT 0,
+    charitable_rate REAL DEFAULT 0
+  )`,
+
   // ── P6.70: Outbound webhook subscriptions ─────────────────────
   // Each row is a "fire HTTP POST when event_type happens for this
   // company" rule. event_type='*' matches all events.
@@ -1809,6 +1842,21 @@ export function initDatabase(): Database.Database {
          VALUES (?, 'UT', 2025, 0, NULL, 0.0455)`
       ).run(id);
     }
+  } catch (_) { /* ignore */ }
+
+  // P4.49: seed IRS mileage rates (current + historical) for the
+  // mileage_log auto-deduction calculation. Idempotent via INSERT OR IGNORE.
+  try {
+    const rates: Array<[number, number, number, number]> = [
+      // [year, business, medical, charitable]
+      [2024, 0.67, 0.21, 0.14],
+      [2025, 0.70, 0.21, 0.14],
+      [2026, 0.70, 0.21, 0.14], // mid-year update if/when IRS publishes
+    ];
+    const stmt = db.prepare(
+      "INSERT OR IGNORE INTO mileage_rates (year, business_rate, medical_rate, charitable_rate) VALUES (?, ?, ?, ?)"
+    );
+    for (const r of rates) stmt.run(...r);
   } catch (_) { /* ignore */ }
 
   // P1.18: stamp the schema version + app version after migrations.

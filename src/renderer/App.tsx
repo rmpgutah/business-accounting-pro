@@ -44,6 +44,7 @@ const PortalModule = lazy(() => import('./modules/portal'));
 const MobileModule = lazy(() => import('./modules/mobile'));
 const SettingsModule = lazy(() => import('./modules/settings'));
 const BillsModule = lazy(() => import('./modules/bills'));
+const MileageModule = lazy(() => import('./modules/mileage'));
 const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
 const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
@@ -80,6 +81,7 @@ const MODULE_NAMES: Record<string, string> = {
   'client-portal': 'Client Portal',
   mobile: 'Mobile',
   settings: 'Settings',
+  mileage: 'Mileage Log',
   bills: 'Bills & Accounts Payable',
   'purchase-orders': 'Purchase Orders',
   'fixed-assets': 'Fixed Assets',
@@ -130,6 +132,7 @@ const ModuleView: React.FC = () => {
       case 'mobile': return <MobileModule />;
       case 'settings': return <SettingsModule />;
       case 'bills': return <BillsModule />;
+      case 'mileage': return <MileageModule />;
       case 'purchase-orders': return <PurchaseOrdersModule />;
       case 'fixed-assets': return <FixedAssetsModule />;
       case 'automations': return <AutomationsModule />;

@@ -646,6 +646,18 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // P4.49: Mileage log
+  mileageList: (opts?: { year?: number; limit?: number }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('mileage:list', opts || {}),
+  mileageSave: (payload: any): Promise<any> =>
+    window.electronAPI.invoke('mileage:save', payload),
+  mileageDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('mileage:delete', { id }),
+  mileageSummary: (year: number): Promise<{ count: number; totalMiles: number; totalDeduction: number; error?: string }> =>
+    window.electronAPI.invoke('mileage:summary', { year }),
+  mileageCurrentRate: (year?: number): Promise<{ business_rate: number; medical_rate?: number; charitable_rate?: number; error?: string }> =>
+    window.electronAPI.invoke('mileage:current-rate', { year }),
+
   // P6.69: iCal calendar export
   exportInvoicesICS: (): Promise<{ ics?: string; error?: string }> =>
     window.electronAPI.invoke('cal:export-invoices-ics'),

@@ -1108,6 +1108,84 @@ export function registerIpcHandlers(): void {
       return { cleaned: 0, error: err?.message };
     }
   });
+  // ─── P4.49: Mileage log ────────────────────────────────
+  // Auto-fills rate_per_mile from the mileage_rates table based on
+  // the trip's tax year, then computes deduction_amount = miles * rate.
+  // Allows manual override of rate by passing rate_per_mile explicitly.
+  ipcMain.handle('mileage:list', (_event, opts?: { year?: number; limit?: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const y = opts?.year;
+      const lim = opts?.limit ?? 500;
+      const sql = "SELECT * FROM mileage_log WHERE company_id = ? " +
+                  (y ? "AND substr(trip_date, 1, 4) = ? " : "") +
+                  "ORDER BY trip_date DESC LIMIT ?";
+      const params = y ? [cid, String(y), lim] : [cid, lim];
+      return db.getDb().prepare(sql).all(...params);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('mileage:save', (_event, payload: any) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const tripYear = parseInt((payload.trip_date || '').slice(0, 4), 10);
+      // Auto-fill rate if not provided.
+      let rate = Number(payload.rate_per_mile ?? 0);
+      if (!rate && tripYear) {
+        const row = db.getDb().prepare("SELECT business_rate FROM mileage_rates WHERE year = ?").get(tripYear) as any;
+        if (row?.business_rate) rate = Number(row.business_rate);
+      }
+      const miles = Number(payload.miles ?? 0);
+      const deduction = Math.round(miles * rate * 100) / 100;
+      const data = {
+        ...payload,
+        company_id: cid,
+        rate_per_mile: rate,
+        deduction_amount: deduction,
+      };
+      if (payload.id) {
+        db.update('mileage_log', payload.id, data);
+        return db.getById('mileage_log', payload.id);
+      }
+      return db.create('mileage_log', data);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('mileage:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.removeHard('mileage_log', id);
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('mileage:summary', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { totalMiles: 0, totalDeduction: 0, count: 0 };
+      const row = db.getDb().prepare(
+        "SELECT COUNT(*) as count, COALESCE(SUM(miles), 0) as totalMiles, COALESCE(SUM(deduction_amount), 0) as totalDeduction " +
+        "FROM mileage_log WHERE company_id = ? AND substr(trip_date, 1, 4) = ?"
+      ).get(cid, String(year)) as any;
+      return row || { totalMiles: 0, totalDeduction: 0, count: 0 };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('mileage:current-rate', (_event, { year }: { year?: number }) => {
+    try {
+      const y = year || new Date().getFullYear();
+      const row = db.getDb().prepare("SELECT business_rate, medical_rate, charitable_rate FROM mileage_rates WHERE year = ?").get(y) as any;
+      return row || { business_rate: 0.70 }; // fallback to current default
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
   // ─── P6.69: iCal export ────────────────────────────────
   ipcMain.handle('cal:export-invoices-ics', () => {
     try {
