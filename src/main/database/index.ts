@@ -1457,6 +1457,89 @@ export function initDatabase(): Database.Database {
   // Laravel/Express patterns: /health, /status, /api/v1/health.
   // ALTER added separately so existing rows pick up the default.
   "ALTER TABLE portal_integration_settings ADD COLUMN health_check_path TEXT DEFAULT '/health'",
+
+  // ── P1.11: Double-entry balance enforcement (DB triggers) ──────
+  //
+  // Belt + suspenders: the JS layer already validates balance, but
+  // these triggers prevent corrupted data from EVER reaching the
+  // tables — even if a bug, an interrupted transaction, or a
+  // direct-SQL operator tries to insert unbalanced lines on a
+  // POSTED journal entry. Drafts (is_posted=0) remain editable
+  // mid-flow; the check only enforces when the entry is finalized.
+  //
+  // Tolerance: $0.005 to absorb floating-point rounding from REAL
+  // arithmetic (better-sqlite3 stores debit/credit as REAL).
+  //
+  // Why three triggers on journal_entry_lines (INSERT/UPDATE/DELETE):
+  // SQLite triggers fire per-row per-statement. A multi-line journal
+  // can be inserted line-by-line; we want the *final* state of the
+  // parent entry to balance. Each operation re-checks the parent's
+  // total. If the parent is still a draft (is_posted=0), the WHEN
+  // clause skips the trigger — line-level edits on drafts are free.
+  //
+  // Why one trigger on journal_entries: when a user flips is_posted
+  // from 0→1, we must validate that the entry balances at THAT
+  // moment. Without this, a user could insert unbalanced lines
+  // while the entry is a draft, then flip is_posted=1 in a single
+  // UPDATE — bypassing the line-level triggers.
+  `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_insert`,
+  `CREATE TRIGGER trg_je_lines_balanced_after_insert
+   AFTER INSERT ON journal_entry_lines
+   WHEN (SELECT is_posted FROM journal_entries WHERE id = NEW.journal_entry_id) = 1
+   BEGIN
+     SELECT CASE
+       WHEN ABS(
+         (SELECT COALESCE(SUM(debit), 0) FROM journal_entry_lines WHERE journal_entry_id = NEW.journal_entry_id)
+         - (SELECT COALESCE(SUM(credit), 0) FROM journal_entry_lines WHERE journal_entry_id = NEW.journal_entry_id)
+       ) > 0.005
+       THEN RAISE(ABORT, 'Posted journal entry must balance: total debits must equal total credits')
+     END;
+   END`,
+  `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_update`,
+  `CREATE TRIGGER trg_je_lines_balanced_after_update
+   AFTER UPDATE ON journal_entry_lines
+   WHEN (SELECT is_posted FROM journal_entries WHERE id = NEW.journal_entry_id) = 1
+   BEGIN
+     SELECT CASE
+       WHEN ABS(
+         (SELECT COALESCE(SUM(debit), 0) FROM journal_entry_lines WHERE journal_entry_id = NEW.journal_entry_id)
+         - (SELECT COALESCE(SUM(credit), 0) FROM journal_entry_lines WHERE journal_entry_id = NEW.journal_entry_id)
+       ) > 0.005
+       THEN RAISE(ABORT, 'Posted journal entry must balance: total debits must equal total credits')
+     END;
+   END`,
+  `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_delete`,
+  `CREATE TRIGGER trg_je_lines_balanced_after_delete
+   AFTER DELETE ON journal_entry_lines
+   WHEN (SELECT is_posted FROM journal_entries WHERE id = OLD.journal_entry_id) = 1
+   BEGIN
+     SELECT CASE
+       WHEN ABS(
+         (SELECT COALESCE(SUM(debit), 0) FROM journal_entry_lines WHERE journal_entry_id = OLD.journal_entry_id)
+         - (SELECT COALESCE(SUM(credit), 0) FROM journal_entry_lines WHERE journal_entry_id = OLD.journal_entry_id)
+       ) > 0.005
+       THEN RAISE(ABORT, 'Posted journal entry must balance: cannot delete a line that would unbalance the entry')
+     END;
+   END`,
+  // Trigger on journal_entries: when is_posted flips 0 → 1, validate
+  // that the entry balances at that moment. Catches the case where
+  // unbalanced draft lines were inserted under is_posted=0 and then
+  // the user attempts to post the entry in a single UPDATE.
+  // Also covers re-posting (1→1 update where lines may have changed
+  // between is_posted-related transactions).
+  `DROP TRIGGER IF EXISTS trg_je_balanced_on_post`,
+  `CREATE TRIGGER trg_je_balanced_on_post
+   AFTER UPDATE OF is_posted ON journal_entries
+   WHEN NEW.is_posted = 1
+   BEGIN
+     SELECT CASE
+       WHEN ABS(
+         (SELECT COALESCE(SUM(debit), 0) FROM journal_entry_lines WHERE journal_entry_id = NEW.id)
+         - (SELECT COALESCE(SUM(credit), 0) FROM journal_entry_lines WHERE journal_entry_id = NEW.id)
+       ) > 0.005
+       THEN RAISE(ABORT, 'Cannot post journal entry: total debits must equal total credits')
+     END;
+   END`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
