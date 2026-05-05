@@ -1429,6 +1429,29 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoice_settings ADD COLUMN letterhead_data TEXT DEFAULT NULL",
   "ALTER TABLE invoice_settings ADD COLUMN letterhead_position TEXT DEFAULT 'top'",
   "ALTER TABLE invoice_settings ADD COLUMN letterhead_height INTEGER DEFAULT 90",
+  // Client Portal API integration (rmpgutahps.us, 2026-05-05)
+  // portal_integration_settings: per-company config for the external
+  // client-portal integration. The api_key column stores a base64
+  // ciphertext produced by Electron's safeStorage (OS keychain backed).
+  // We never write the plaintext key to disk — even DB backups expose
+  // only the ciphertext, which is undecryptable without the OS keychain.
+  // last_sync_at / last_test_at help the UI show health indicators.
+  `CREATE TABLE IF NOT EXISTS portal_integration_settings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL UNIQUE,
+    portal_base_url TEXT NOT NULL DEFAULT 'https://rmpgutahps.us/client/login',
+    api_key_encrypted TEXT DEFAULT NULL,
+    api_endpoint TEXT NOT NULL DEFAULT 'https://rmpgutahps.us/api/v1',
+    auth_scheme TEXT NOT NULL DEFAULT 'bearer',
+    auto_sync_invoices INTEGER NOT NULL DEFAULT 0,
+    last_sync_at TEXT DEFAULT NULL,
+    last_sync_status TEXT DEFAULT NULL,
+    last_test_at TEXT DEFAULT NULL,
+    last_test_status TEXT DEFAULT NULL,
+    last_test_message TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

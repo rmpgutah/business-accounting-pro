@@ -2193,6 +2193,178 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Client Portal Integration (rmpgutahps.us) ───────────
+  // The API key is encrypted with Electron's safeStorage (OS keychain
+  // backed) before being written to SQLite. Plaintext never touches
+  // disk — DB backups expose only ciphertext, which is undecryptable
+  // without the user's OS login.
+  //
+  // SECURITY NOTE: safeStorage availability depends on the OS keychain
+  // being unlocked. On macOS/Windows this is normally true after login;
+  // on Linux it requires libsecret. If safeStorage is unavailable, we
+  // refuse to store the key and surface a clear error to the UI rather
+  // than silently falling back to plaintext.
+  function ensurePortalIntegrationRow(companyId: string): void {
+    const existing = db.getDb().prepare(
+      `SELECT id FROM portal_integration_settings WHERE company_id = ?`
+    ).get(companyId) as any;
+    if (existing) return;
+    db.getDb().prepare(
+      `INSERT INTO portal_integration_settings (id, company_id) VALUES (?, ?)`
+    ).run(uuid(), companyId);
+  }
+
+  ipcMain.handle('portal-integration:get', (_event) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { error: 'No active company' };
+      ensurePortalIntegrationRow(companyId);
+      const row = db.getDb().prepare(
+        `SELECT * FROM portal_integration_settings WHERE company_id = ?`
+      ).get(companyId) as any;
+      // Never return the ciphertext to the renderer — only a boolean
+      // indicating whether a key is stored. Treats the API key as a
+      // write-only field; user must rotate by entering a new value.
+      return {
+        portal_base_url: row?.portal_base_url || 'https://rmpgutahps.us/client/login',
+        api_endpoint: row?.api_endpoint || 'https://rmpgutahps.us/api/v1',
+        auth_scheme: row?.auth_scheme || 'bearer',
+        auto_sync_invoices: !!row?.auto_sync_invoices,
+        api_key_set: !!row?.api_key_encrypted,
+        last_sync_at: row?.last_sync_at || null,
+        last_sync_status: row?.last_sync_status || null,
+        last_test_at: row?.last_test_at || null,
+        last_test_status: row?.last_test_status || null,
+        last_test_message: row?.last_test_message || '',
+      };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to load portal integration settings' };
+    }
+  });
+
+  ipcMain.handle('portal-integration:save', async (_event, payload: {
+    portal_base_url?: string;
+    api_endpoint?: string;
+    auth_scheme?: 'bearer' | 'apikey-header';
+    auto_sync_invoices?: boolean;
+    api_key?: string;          // plaintext — encrypted before storage
+    clear_api_key?: boolean;   // explicit signal to wipe the stored key
+  }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { error: 'No active company' };
+      ensurePortalIntegrationRow(companyId);
+
+      const { safeStorage } = await import('electron');
+      const updates: Record<string, any> = {};
+      if (payload.portal_base_url !== undefined) updates.portal_base_url = payload.portal_base_url;
+      if (payload.api_endpoint !== undefined) updates.api_endpoint = payload.api_endpoint;
+      if (payload.auth_scheme !== undefined) updates.auth_scheme = payload.auth_scheme;
+      if (payload.auto_sync_invoices !== undefined) updates.auto_sync_invoices = payload.auto_sync_invoices ? 1 : 0;
+      if (payload.clear_api_key) {
+        updates.api_key_encrypted = null;
+      } else if (payload.api_key !== undefined) {
+        if (!safeStorage.isEncryptionAvailable()) {
+          return { error: 'OS keychain is not available — cannot securely store API key. Unlock your keychain (macOS Keychain Access / Windows Credential Manager) and try again.' };
+        }
+        const cipher = safeStorage.encryptString(payload.api_key);
+        updates.api_key_encrypted = cipher.toString('base64');
+      }
+      updates.updated_at = new Date().toISOString();
+
+      const row = db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any;
+      if (row) db.update('portal_integration_settings', row.id, updates);
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to save portal integration settings' };
+    }
+  });
+
+  // Decrypt the stored API key. Internal helper — NEVER expose this
+  // via IPC. Returns null if no key is stored or decryption fails.
+  async function getPortalApiKey(companyId: string): Promise<string | null> {
+    try {
+      const row = db.getDb().prepare(
+        `SELECT api_key_encrypted FROM portal_integration_settings WHERE company_id = ?`
+      ).get(companyId) as any;
+      if (!row?.api_key_encrypted) return null;
+      const { safeStorage } = await import('electron');
+      if (!safeStorage.isEncryptionAvailable()) return null;
+      const buf = Buffer.from(row.api_key_encrypted, 'base64');
+      return safeStorage.decryptString(buf);
+    } catch {
+      return null;
+    }
+  }
+
+  // Test the integration: makes an authenticated GET to the configured
+  // endpoint and reports back. Endpoint convention assumed:
+  //   GET <api_endpoint>/ping  → 200 OK with body { ok: true, ts }
+  // If your portal uses a different health-check path, configure it
+  // via api_endpoint (the path is appended to the base).
+  ipcMain.handle('portal-integration:test', async (_event) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { ok: false, error: 'No active company' };
+      ensurePortalIntegrationRow(companyId);
+      const row = db.getDb().prepare(
+        `SELECT api_endpoint, auth_scheme FROM portal_integration_settings WHERE company_id = ?`
+      ).get(companyId) as any;
+      const apiKey = await getPortalApiKey(companyId);
+      if (!apiKey) {
+        const msg = 'API key not configured';
+        db.update('portal_integration_settings', (db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any).id, {
+          last_test_at: new Date().toISOString(),
+          last_test_status: 'no_key',
+          last_test_message: msg,
+        });
+        return { ok: false, error: msg };
+      }
+      const endpoint = (row?.api_endpoint || 'https://rmpgutahps.us/api/v1').replace(/\/$/, '');
+      const headers: Record<string, string> = { 'Accept': 'application/json' };
+      if (row?.auth_scheme === 'apikey-header') {
+        headers['X-API-Key'] = apiKey;
+      } else {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      const url = `${endpoint}/ping`;
+      const start = Date.now();
+      const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(10_000) }).catch((err: any) => {
+        throw new Error(`Network error: ${err?.message || err}`);
+      });
+      const elapsed = Date.now() - start;
+      const txt = await res.text().catch(() => '');
+      const status = res.ok ? 'success' : `http_${res.status}`;
+      const message = res.ok
+        ? `Connected (${elapsed}ms)`
+        : `HTTP ${res.status} ${res.statusText} — ${txt.slice(0, 200)}`;
+      const updateRow = db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any;
+      if (updateRow) {
+        db.update('portal_integration_settings', updateRow.id, {
+          last_test_at: new Date().toISOString(),
+          last_test_status: status,
+          last_test_message: message,
+        });
+      }
+      return { ok: res.ok, status: res.status, elapsedMs: elapsed, message };
+    } catch (err: any) {
+      const message = err?.message || 'Test failed';
+      try {
+        const companyId = db.getCurrentCompanyId();
+        if (companyId) {
+          const r = db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any;
+          if (r) db.update('portal_integration_settings', r.id, {
+            last_test_at: new Date().toISOString(),
+            last_test_status: 'error',
+            last_test_message: message,
+          });
+        }
+      } catch { /* ignore */ }
+      return { ok: false, error: message };
+    }
+  });
+
   // ─── Invoice Reminders ────────────────────────────────
   ipcMain.handle('invoice:schedule-reminders', (_event, { invoiceId }: { invoiceId: string }) => {
     const invoice = db.getDb().prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;

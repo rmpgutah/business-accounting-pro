@@ -17,6 +17,7 @@ import WorkflowSettings from './WorkflowSettings';
 import NumberingSettings from './NumberingSettings';
 import EmailTemplatesSettings from './EmailTemplatesSettings';
 import StatusBuilderSettings from './StatusBuilderSettings';
+import PortalIntegrationSettings from './PortalIntegrationSettings';
 import MacroRecorder from '../../components/MacroRecorder';
 
 // ─── Types ──────────────────────────────────────────────
@@ -1102,6 +1103,9 @@ export default function SettingsModule() {
 
       {/* ── Email Templates ─────────────────────────────── */}
       <EmailTemplatesSettings />
+
+      {/* ── Client Portal Integration (rmpgutahps.us) ──── */}
+      <PortalIntegrationSettings />
 
       {/* ── Cloud Backup (VPS) ──────────────────────────── */}
       <VpsBackup />

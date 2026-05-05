@@ -131,6 +131,41 @@ const api = {
     window.electronAPI.invoke('debt:disable-portal-token', { debtId }),
   portalBaseUrl: (): Promise<{ baseUrl: string }> =>
     window.electronAPI.invoke('portal:base-url'),
+  // ─── Client Portal Integration (rmpgutahps.us) ─────────
+  // API key is encrypted via Electron safeStorage and stored as
+  // ciphertext only. The `get` endpoint returns api_key_set:boolean
+  // never the value — keys are write-only from the renderer.
+  portalIntegrationGet: (): Promise<{
+    portal_base_url?: string;
+    api_endpoint?: string;
+    auth_scheme?: 'bearer' | 'apikey-header';
+    auto_sync_invoices?: boolean;
+    api_key_set?: boolean;
+    last_sync_at?: string | null;
+    last_sync_status?: string | null;
+    last_test_at?: string | null;
+    last_test_status?: string | null;
+    last_test_message?: string;
+    error?: string;
+  }> =>
+    window.electronAPI.invoke('portal-integration:get'),
+  portalIntegrationSave: (payload: {
+    portal_base_url?: string;
+    api_endpoint?: string;
+    auth_scheme?: 'bearer' | 'apikey-header';
+    auto_sync_invoices?: boolean;
+    api_key?: string;          // plaintext — encrypted before storage
+    clear_api_key?: boolean;
+  }): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('portal-integration:save', payload),
+  portalIntegrationTest: (): Promise<{
+    ok: boolean;
+    status?: number;
+    elapsedMs?: number;
+    message?: string;
+    error?: string;
+  }> =>
+    window.electronAPI.invoke('portal-integration:test'),
   shellOpenExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
     window.electronAPI.invoke('shell:open-external', url),
   invoiceScheduleReminders: (invoiceId: string): Promise<{ scheduled: number }> =>
