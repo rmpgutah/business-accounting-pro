@@ -384,6 +384,29 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     }
   }, [lineItemSubtotal, lineItemTaxTotal, useLineItems]);
 
+  // ── AUTO-COMPUTE TAX AMOUNT in NON-itemized mode ──────────
+  // The user's complaint "federal taxes not calculating" was rooted in the
+  // single-line expense path having no auto-compute: users would enter
+  // amount + tax_rate but tax_amount stayed at whatever they last typed.
+  // Now: when in NON-itemized mode and tax_rate > 0, derive tax_amount
+  // from amount × rate. We only override if the user hasn't manually
+  // overridden tax_amount (to allow manual entry of unusual tax amounts).
+  useEffect(() => {
+    if (useLineItems) return; // line-items mode handled above
+    const amount = parseFloat(form.amount) || 0;
+    const rate = parseFloat(form.tax_rate) || 0;
+    if (rate <= 0 || amount <= 0) return;
+    const computed = form.tax_inclusive
+      ? amount - (amount / (1 + rate / 100))   // tax-inclusive: extract tax
+      : amount * (rate / 100);                  // tax-exclusive: add on top
+    const rounded = roundCents(computed).toFixed(2);
+    // Only update if different — prevents render loops.
+    if (rounded !== form.tax_amount) {
+      setForm(prev => ({ ...prev, tax_amount: rounded }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.amount, form.tax_rate, form.tax_inclusive, useLineItems]);
+
   // Line item handlers
   const handleLineChange = (index: number, field: keyof ExpenseLineItem, value: any) => {
     setLineItems(prev => {

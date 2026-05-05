@@ -128,7 +128,32 @@ interface LineItemDraft {
   quantity: number;
   unit_price: number;
   account_id: string;
+  // ── Invoice-parity fields (2026-04-29) ──
+  row_type: 'item' | 'section' | 'note' | 'subtotal';
+  unit_label: string;
+  item_code: string;
+  line_discount: number;
+  line_discount_type: 'percent' | 'flat';
+  discount_pct: number;
+  tax_rate: number;
+  tax_rate_override: number; // -1 = use bill default
+  bold: number;
+  italic: number;
+  highlight_color: string;
+  project_id: string;
 }
+
+export type BillType = 'standard' | 'service' | 'product' | 'recurring' | 'credit_memo';
+
+const BILL_TYPE_CONFIG: Record<BillType, { label: string; description: string; numberPrefix: string }> = {
+  standard:    { label: 'Standard',    description: 'General purpose bill',                  numberPrefix: 'BILL' },
+  service:     { label: 'Service',     description: 'Labor, consulting, or hourly services', numberPrefix: 'SVC'  },
+  product:     { label: 'Product',     description: 'Physical goods purchase',               numberPrefix: 'PRD'  },
+  recurring:   { label: 'Recurring',   description: 'Subscription or repeating bill',        numberPrefix: 'REC'  },
+  credit_memo: { label: 'Credit Memo', description: 'Credit / refund from vendor',           numberPrefix: 'CR'   },
+};
+
+const BILL_CURRENCIES = ['AUD', 'CAD', 'CHF', 'CNY', 'EUR', 'GBP', 'INR', 'JPY', 'MXN', 'USD'];
 
 // ─── Constants ───────────────────────────────────────────
 // DATE: Item #2 — local-time, not UTC. Late-evening MT users would otherwise default to tomorrow.
@@ -143,12 +168,24 @@ const thirtyDaysLater = (): string => {
 let _lineKeyCounter = 0;
 const newLineKey = () => `line-${++_lineKeyCounter}`;
 
-const newLineDraft = (): LineItemDraft => ({
+const newLineDraft = (rowType: 'item' | 'section' | 'note' | 'subtotal' = 'item'): LineItemDraft => ({
   _key: newLineKey(),
   description: '',
   quantity: 1,
   unit_price: 0,
   account_id: '',
+  row_type: rowType,
+  unit_label: '',
+  item_code: '',
+  line_discount: 0,
+  line_discount_type: 'percent',
+  discount_pct: 0,
+  tax_rate: 0,
+  tax_rate_override: -1,
+  bold: 0,
+  italic: 0,
+  highlight_color: '',
+  project_id: '',
 });
 
 const STATUS_TABS: { key: StatusTab; label: string }[] = [
@@ -1014,6 +1051,24 @@ interface BillFormData {
   status: BillStatus;
   notes: string;
   tax_pct: number;
+  // ── Invoice-parity fields (2026-04-29) ──
+  bill_type: BillType;
+  po_number: string;
+  job_reference: string;
+  internal_notes: string;
+  late_fee_pct: number;
+  late_fee_grace_days: number;
+  discount_pct: number;
+  discount: number;        // flat discount amount
+  shipping_amount: number;
+  currency: string;
+  exchange_rate: number;
+  terms: string;
+  terms_text: string;
+  custom_field_1: string;
+  custom_field_2: string;
+  custom_field_3: string;
+  custom_field_4: string;
 }
 
 const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
@@ -1034,6 +1089,24 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
     status: 'draft',
     notes: '',
     tax_pct: 0,
+    // Invoice-parity defaults
+    bill_type: 'standard',
+    po_number: '',
+    job_reference: '',
+    internal_notes: '',
+    late_fee_pct: 0,
+    late_fee_grace_days: 0,
+    discount_pct: 0,
+    discount: 0,
+    shipping_amount: 0,
+    currency: 'USD',
+    exchange_rate: 1.0,
+    terms: 'Net 30',
+    terms_text: '',
+    custom_field_1: '',
+    custom_field_2: '',
+    custom_field_3: '',
+    custom_field_4: '',
   });
 
   const [lines, setLines] = useState<LineItemDraft[]>([newLineDraft()]);
@@ -1073,6 +1146,24 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             status: bill.status ?? 'draft',
             notes: bill.notes ?? '',
             tax_pct: parseFloat(taxPct.toFixed(4)),
+            // Hydrate invoice-parity fields with safe fallbacks for legacy rows
+            bill_type: (bill.bill_type as BillType) || 'standard',
+            po_number: bill.po_number ?? '',
+            job_reference: bill.job_reference ?? '',
+            internal_notes: bill.internal_notes ?? '',
+            late_fee_pct: Number(bill.late_fee_pct ?? 0),
+            late_fee_grace_days: Number(bill.late_fee_grace_days ?? 0),
+            discount_pct: Number(bill.discount_pct ?? 0),
+            discount: Number(bill.discount_amount ?? 0),
+            shipping_amount: Number(bill.shipping_amount ?? 0),
+            currency: bill.currency || 'USD',
+            exchange_rate: Number(bill.exchange_rate ?? 1.0),
+            terms: bill.terms || 'Net 30',
+            terms_text: bill.terms_text ?? '',
+            custom_field_1: bill.custom_field_1 ?? '',
+            custom_field_2: bill.custom_field_2 ?? '',
+            custom_field_3: bill.custom_field_3 ?? '',
+            custom_field_4: bill.custom_field_4 ?? '',
           });
 
           const lineData = await api.query('bill_line_items', { bill_id: billId });
@@ -1082,9 +1173,21 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               lineData.map((l: any) => ({
                 _key: newLineKey(),
                 description: l.description ?? '',
-                quantity: l.quantity ?? 1,
-                unit_price: l.unit_price ?? 0,
+                quantity: Number(l.quantity ?? 1),
+                unit_price: Number(l.unit_price ?? 0),
                 account_id: l.account_id ?? '',
+                row_type: (l.row_type as LineItemDraft['row_type']) || 'item',
+                unit_label: l.unit_label ?? '',
+                item_code: l.item_code ?? '',
+                line_discount: Number(l.line_discount ?? 0),
+                line_discount_type: (l.line_discount_type as 'percent' | 'flat') || 'percent',
+                discount_pct: Number(l.discount_pct ?? 0),
+                tax_rate: Number(l.tax_rate ?? 0),
+                tax_rate_override: Number(l.tax_rate_override ?? -1),
+                bold: Number(l.bold ?? 0),
+                italic: Number(l.italic ?? 0),
+                highlight_color: l.highlight_color ?? '',
+                project_id: l.project_id ?? '',
               }))
             );
           }
@@ -1100,16 +1203,47 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
   }, [billId, activeCompany]);
 
   // ─── Calculations ────────────────────────────────────────
-  // Round each line to whole cents before summing — same convention as invoices.
+  // Per-line discount + tax applied (mirrors invoice math).
+  // line.row_type === 'item' contributes to subtotal/tax. Other row types
+  // (section, note, subtotal) are visual-only and ignored in totals.
+  const lineDiscountedBase = (l: LineItemDraft): number => {
+    const base = (l.quantity || 0) * (l.unit_price || 0);
+    if (l.discount_pct > 0) return base * (1 - l.discount_pct / 100);
+    if (l.line_discount > 0) {
+      return l.line_discount_type === 'flat'
+        ? base - l.line_discount
+        : base * (1 - l.line_discount / 100);
+    }
+    return base;
+  };
+  const lineEffectiveRate = (l: LineItemDraft): number => {
+    if (l.tax_rate_override >= 0) return l.tax_rate_override;
+    if (l.tax_rate > 0) return l.tax_rate;
+    return form.tax_pct;  // bill default
+  };
+
+  // Round each line to cents BEFORE summing — prevents float drift on
+  // multi-rate bills where per-line columns must reconcile with totals box.
   const subtotal = useMemo(
-    () => lines.reduce((s, l) => s + roundCents(l.quantity * l.unit_price), 0),
+    () => lines
+      .filter(l => l.row_type === 'item')
+      .reduce((s, l) => s + roundCents(lineDiscountedBase(l)), 0),
     [lines]
   );
   const taxAmount = useMemo(
-    () => roundCents(subtotal * (form.tax_pct / 100)),
-    [subtotal, form.tax_pct]
+    () => lines
+      .filter(l => l.row_type === 'item')
+      .reduce((s, l) => {
+        const base = roundCents(lineDiscountedBase(l));
+        const rate = lineEffectiveRate(l);
+        return s + roundCents(base * (rate / 100));
+      }, 0),
+    [lines, form.tax_pct]
   );
-  const total = useMemo(() => roundCents(subtotal + taxAmount), [subtotal, taxAmount]);
+  const total = useMemo(
+    () => roundCents(subtotal - (form.discount || 0) + taxAmount + (form.shipping_amount || 0)),
+    [subtotal, taxAmount, form.discount, form.shipping_amount]
+  );
 
   // ─── Handlers ────────────────────────────────────────────
   const updateField = useCallback(
@@ -1146,13 +1280,19 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
     if (form.issue_date && form.due_date && form.due_date < form.issue_date) {
       errs.push('Due date must be on or after issue date.');
     }
-    const validLines = lines.filter((l) => l.description.trim() || l.unit_price > 0);
+    const validLines = lines.filter((l) => l.description.trim() || Math.abs(l.unit_price) > 0);
     if (validLines.length === 0) errs.push('At least one line item is required.');
+    // CREDIT MEMO support: bill_type=credit_memo allows negative totals/qty/price.
+    // Standard bills still require positive totals to prevent accidental refunds.
+    const allowNegatives = form.bill_type === 'credit_memo';
     validLines.forEach((l, i) => {
-      if (l.quantity <= 0) errs.push(`Line item ${i + 1}: quantity must be greater than zero.`);
-      if (l.unit_price < 0) errs.push(`Line item ${i + 1}: unit price cannot be negative.`);
+      if (l.row_type === 'item' && l.quantity === 0) {
+        errs.push(`Line item ${i + 1}: quantity cannot be zero.`);
+      }
     });
-    if (total <= 0) errs.push('Bill total must be greater than zero.');
+    if (!allowNegatives && total <= 0) {
+      errs.push('Bill total must be greater than zero. (For refunds/credits, set Bill Type = Credit Memo.)');
+    }
     if (form.tax_pct < 0) errs.push('Tax percentage cannot be negative.');
     if (form.tax_pct > 100) errs.push('Tax percentage cannot exceed 100%.');
     if (errs.length > 0) { setErrors(errs); return; }
@@ -1169,8 +1309,26 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         status: form.status,
         subtotal,
         tax_amount: taxAmount,
+        discount_amount: form.discount || 0,
         total,
         notes: form.notes,
+        // ── Invoice-parity persistence ──
+        bill_type: form.bill_type,
+        po_number: form.po_number.trim(),
+        job_reference: form.job_reference.trim(),
+        internal_notes: form.internal_notes,
+        late_fee_pct: form.late_fee_pct,
+        late_fee_grace_days: form.late_fee_grace_days,
+        discount_pct: form.discount_pct,
+        currency: form.currency,
+        exchange_rate: form.exchange_rate,
+        terms: form.terms,
+        terms_text: form.terms_text,
+        shipping_amount: form.shipping_amount || 0,
+        custom_field_1: form.custom_field_1,
+        custom_field_2: form.custom_field_2,
+        custom_field_3: form.custom_field_3,
+        custom_field_4: form.custom_field_4,
       };
 
       let savedId: string;
@@ -1191,15 +1349,34 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         savedId = result?.id ?? result;
       }
 
-      // Create new line items
-      for (const line of validLines) {
+      // Create new line items with all invoice-parity fields.
+      // Sort order preserved from the form's array index so reload matches save.
+      for (let i = 0; i < validLines.length; i++) {
+        const line = validLines[i];
+        const base = roundCents(lineDiscountedBase(line));
+        const rate = lineEffectiveRate(line);
+        const lineTax = roundCents(base * (rate / 100));
         await api.create('bill_line_items', {
           bill_id: savedId,
           description: line.description,
           quantity: line.quantity,
           unit_price: line.unit_price,
-          amount: roundCents(line.quantity * line.unit_price),
+          amount: base,
           account_id: line.account_id || null,
+          row_type: line.row_type,
+          unit_label: line.unit_label,
+          item_code: line.item_code,
+          line_discount: line.line_discount,
+          line_discount_type: line.line_discount_type,
+          discount_pct: line.discount_pct,
+          tax_rate: line.tax_rate,
+          tax_rate_override: line.tax_rate_override,
+          tax_amount: lineTax,
+          bold: line.bold,
+          italic: line.italic,
+          highlight_color: line.highlight_color,
+          sort_order: i,
+          project_id: line.project_id || null,
         });
       }
 
@@ -1339,44 +1516,316 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         </div>
       </div>
 
-      {/* Line items */}
+      {/* ── Bill Type Selector (mirrors invoice_type) ────────── */}
+      <div className="block-card">
+        <FieldLabel>Bill Type</FieldLabel>
+        <div className="grid grid-cols-5 gap-2 mt-2">
+          {(Object.keys(BILL_TYPE_CONFIG) as BillType[]).map((bt) => {
+            const cfg = BILL_TYPE_CONFIG[bt];
+            const active = form.bill_type === bt;
+            return (
+              <button
+                key={bt}
+                onClick={() => updateField('bill_type', bt)}
+                className="text-left p-2 transition-colors"
+                style={{
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border-primary)',
+                  background: active ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)',
+                  color: active ? '#fff' : 'var(--color-text-primary)',
+                }}
+                title={cfg.description}
+              >
+                <div className="text-xs font-semibold">{cfg.label}</div>
+                <div className="text-[10px] mt-0.5" style={{ opacity: 0.8 }}>{cfg.description}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Bill Details (PO #, Job Ref, Currency, Internal Notes) ─ */}
+      <div className="block-card">
+        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Bill Details</div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <div>
+            <FieldLabel>PO Number</FieldLabel>
+            <input
+              type="text"
+              className="block-input"
+              placeholder="Optional vendor PO reference"
+              value={form.po_number}
+              onChange={(e) => updateField('po_number', e.target.value)}
+            />
+          </div>
+          <div>
+            <FieldLabel>Job Reference</FieldLabel>
+            <input
+              type="text"
+              className="block-input"
+              placeholder="Project / job tracking code"
+              value={form.job_reference}
+              onChange={(e) => updateField('job_reference', e.target.value)}
+            />
+          </div>
+          <div>
+            <FieldLabel>Currency</FieldLabel>
+            <select
+              className="block-select"
+              value={form.currency}
+              onChange={(e) => updateField('currency', e.target.value)}
+            >
+              {BILL_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <FieldLabel>Exchange Rate</FieldLabel>
+            <input
+              type="number"
+              step="0.0001"
+              className="block-input font-mono"
+              value={form.exchange_rate}
+              onChange={(e) => updateField('exchange_rate', parseFloat(e.target.value) || 1)}
+              disabled={form.currency === 'USD'}
+              title={form.currency === 'USD' ? 'Only used for non-USD bills' : ''}
+            />
+          </div>
+          <div>
+            <FieldLabel>Payment Terms</FieldLabel>
+            <input
+              type="text"
+              className="block-input"
+              placeholder="Net 30, Due on Receipt, etc."
+              value={form.terms}
+              onChange={(e) => updateField('terms', e.target.value)}
+            />
+          </div>
+          <div>
+            <FieldLabel>Internal Notes (staff only)</FieldLabel>
+            <textarea
+              className="block-input"
+              rows={2}
+              placeholder="Not visible on printed bill..."
+              value={form.internal_notes}
+              onChange={(e) => updateField('internal_notes', e.target.value)}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Late Fees ──────────────────────────────────────── */}
+      <div className="block-card">
+        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Late Fees</div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <div>
+            <FieldLabel>Late Fee % per month</FieldLabel>
+            <input
+              type="number"
+              step="0.01"
+              className="block-input font-mono"
+              value={form.late_fee_pct}
+              onChange={(e) => updateField('late_fee_pct', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div>
+            <FieldLabel>Grace Days</FieldLabel>
+            <input
+              type="number"
+              step="1"
+              className="block-input font-mono"
+              value={form.late_fee_grace_days}
+              onChange={(e) => updateField('late_fee_grace_days', parseInt(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+        {(form.late_fee_pct > 0) && (
+          <div className="text-[10px] text-text-muted mt-2">
+            Bills not paid within {form.late_fee_grace_days} days past due will accrue {form.late_fee_pct}%/month late fees.
+          </div>
+        )}
+      </div>
+
+      {/* ── Custom Fields ──────────────────────────────────── */}
+      <div className="block-card">
+        <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Custom Fields</div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          {[1, 2, 3, 4].map((n) => {
+            const key = `custom_field_${n}` as 'custom_field_1' | 'custom_field_2' | 'custom_field_3' | 'custom_field_4';
+            return (
+              <div key={n}>
+                <FieldLabel>Custom Field {n}</FieldLabel>
+                <input
+                  type="text"
+                  className="block-input"
+                  placeholder={`Optional metadata #${n}`}
+                  value={form[key]}
+                  onChange={(e) => updateField(key, e.target.value)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Line items — invoice-parity: row types, item code, unit label,
+           per-line tax + discount, bold/italic, highlight color */}
       <div className="block-card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
           <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             Line Items
           </span>
-          <button
-            className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-            style={{ borderRadius: '6px' }}
-            onClick={addLine}
-          >
-            <Plus size={14} />
-            Add Line
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
+              style={{ borderRadius: '6px' }}
+              onClick={addLine}
+              title="Add line item"
+            >
+              <Plus size={14} />
+              Item
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
+              style={{ borderRadius: '6px' }}
+              onClick={() => setLines((prev) => [...prev, newLineDraft('section')])}
+              title="Add section header"
+            >
+              <Plus size={14} />
+              Section
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
+              style={{ borderRadius: '6px' }}
+              onClick={() => setLines((prev) => [...prev, newLineDraft('note')])}
+              title="Add note"
+            >
+              <Plus size={14} />
+              Note
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
+              style={{ borderRadius: '6px' }}
+              onClick={() => setLines((prev) => [...prev, newLineDraft('subtotal')])}
+              title="Add subtotal row"
+            >
+              <Plus size={14} />
+              Subtotal
+            </button>
+          </div>
         </div>
 
-        <table className="block-table">
+        <table className="block-table" style={{ tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th style={{ width: '32%' }}>Description</th>
-              <th style={{ width: '20%' }}>Account</th>
-              <th style={{ width: '10%' }}>Qty</th>
-              <th style={{ width: '14%' }}>Unit Price</th>
-              <th style={{ width: '14%' }} className="text-right">Amount</th>
-              <th style={{ width: '10%' }}></th>
+              <th style={{ width: '8%' }}>Code</th>
+              <th style={{ width: '24%' }}>Description</th>
+              <th style={{ width: '14%' }}>Account</th>
+              <th style={{ width: '6%' }}>Qty</th>
+              <th style={{ width: '6%' }}>Unit</th>
+              <th style={{ width: '9%' }}>Unit Price</th>
+              <th style={{ width: '7%' }}>Disc %</th>
+              <th style={{ width: '6%' }}>Tax %</th>
+              <th style={{ width: '8%' }} className="text-right">Tax Amount</th>
+              <th style={{ width: '8%' }} className="text-right">Amount</th>
+              <th style={{ width: '4%' }}></th>
             </tr>
           </thead>
           <tbody>
             {lines.map((line) => {
-              const amount = line.quantity * line.unit_price;
+              // Section/note/subtotal rows render differently — no qty/price.
+              if (line.row_type === 'section') {
+                return (
+                  <tr key={line._key} style={{ background: 'var(--color-bg-tertiary)' }}>
+                    <td colSpan={10} className="p-2">
+                      <input
+                        className="block-input text-xs font-bold"
+                        placeholder="Section heading (e.g. Phase 1: Discovery)"
+                        value={line.description}
+                        onChange={(e) => updateLine(line._key, 'description', e.target.value)}
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted hover:text-accent-expense p-1" onClick={() => removeLine(line._key)} title="Remove">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
+              if (line.row_type === 'note') {
+                return (
+                  <tr key={line._key}>
+                    <td colSpan={10} className="p-2">
+                      <input
+                        className="block-input text-xs italic text-text-muted"
+                        placeholder="Note text (won't be totaled)"
+                        value={line.description}
+                        onChange={(e) => updateLine(line._key, 'description', e.target.value)}
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted hover:text-accent-expense p-1" onClick={() => removeLine(line._key)} title="Remove">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
+              if (line.row_type === 'subtotal') {
+                // Compute running subtotal of items above this row
+                const idx = lines.findIndex(l => l._key === line._key);
+                const itemsAbove = lines.slice(0, idx).filter(l => l.row_type === 'item');
+                const subtotalAbove = itemsAbove.reduce((s, l) => s + roundCents(lineDiscountedBase(l)), 0);
+                return (
+                  <tr key={line._key} style={{ background: 'var(--color-bg-secondary)' }}>
+                    <td colSpan={9} className="p-2 text-right text-xs font-semibold">
+                      <input
+                        className="block-input text-xs text-right font-semibold"
+                        placeholder="Subtotal label"
+                        value={line.description}
+                        onChange={(e) => updateLine(line._key, 'description', e.target.value)}
+                      />
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs font-bold">
+                      {formatCurrency(subtotalAbove)}
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted hover:text-accent-expense p-1" onClick={() => removeLine(line._key)} title="Remove">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
+              // Standard item row
+              const base = roundCents(lineDiscountedBase(line));
+              const rate = lineEffectiveRate(line);
+              const lineTax = roundCents(base * (rate / 100));
+              const total = roundCents(base + lineTax);
+              const styleAttrs: React.CSSProperties = {
+                background: line.highlight_color || undefined,
+              };
               return (
-                <tr key={line._key}>
+                <tr key={line._key} style={styleAttrs}>
+                  <td className="p-1">
+                    <input
+                      className="block-input text-xs font-mono"
+                      placeholder="SKU"
+                      value={line.item_code}
+                      onChange={(e) => updateLine(line._key, 'item_code', e.target.value)}
+                    />
+                  </td>
                   <td className="p-1">
                     <input
                       className="block-input text-xs"
                       placeholder="Item description"
                       value={line.description}
                       onChange={(e) => updateLine(line._key, 'description', e.target.value)}
+                      style={{
+                        fontWeight: line.bold ? 700 : undefined,
+                        fontStyle: line.italic ? 'italic' : undefined,
+                      }}
                     />
                   </td>
                   <td className="p-1">
@@ -1385,7 +1834,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                       value={line.account_id}
                       onChange={(e) => updateLine(line._key, 'account_id', e.target.value)}
                     >
-                      <option value="">Select account</option>
+                      <option value="">Account</option>
                       {groupAccountsByType(accounts).map((g) => (
                         <optgroup key={g.label} label={g.label}>
                           {g.items.map((a) => (
@@ -1400,17 +1849,18 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                   <td className="p-1">
                     <input
                       type="number"
-                      min={1}
-                      step="1"
+                      step="0.01"
                       className="block-input text-right font-mono text-xs"
                       value={line.quantity}
-                      onChange={(e) =>
-                        updateLine(
-                          line._key,
-                          'quantity',
-                          Math.max(1, parseFloat(e.target.value) || 1)
-                        )
-                      }
+                      onChange={(e) => updateLine(line._key, 'quantity', parseFloat(e.target.value) || 0)}
+                    />
+                  </td>
+                  <td className="p-1">
+                    <input
+                      className="block-input text-xs"
+                      placeholder="hrs / ea"
+                      value={line.unit_label}
+                      onChange={(e) => updateLine(line._key, 'unit_label', e.target.value)}
                     />
                   </td>
                   <td className="p-1">
@@ -1419,22 +1869,65 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                       step="0.01"
                       className="block-input text-right font-mono text-xs"
                       value={line.unit_price}
-                      onChange={(e) =>
-                        updateLine(line._key, 'unit_price', parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(e) => updateLine(line._key, 'unit_price', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className="p-1 text-right font-mono text-text-secondary text-xs">
-                    {formatCurrency(amount)}
+                  <td className="p-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="block-input text-right font-mono text-xs"
+                      value={line.discount_pct}
+                      onChange={(e) => updateLine(line._key, 'discount_pct', parseFloat(e.target.value) || 0)}
+                      title="Per-line discount %"
+                    />
+                  </td>
+                  <td className="p-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="block-input text-right font-mono text-xs"
+                      value={line.tax_rate_override >= 0 ? line.tax_rate_override : ''}
+                      placeholder={String(form.tax_pct || 0)}
+                      onChange={(e) => {
+                        const v = e.target.value === '' ? -1 : (parseFloat(e.target.value) || 0);
+                        updateLine(line._key, 'tax_rate_override', v);
+                      }}
+                      title="Override bill default tax rate (blank = use default)"
+                    />
+                  </td>
+                  <td className="p-1 text-right font-mono text-text-muted text-xs">
+                    {formatCurrency(lineTax)}
+                  </td>
+                  <td className="p-1 text-right font-mono text-text-primary text-xs font-semibold">
+                    {formatCurrency(total)}
                   </td>
                   <td className="p-1 text-center">
-                    <button
-                      className="text-text-muted hover:text-accent-expense transition-colors p-1"
-                      onClick={() => removeLine(line._key)}
-                      title="Remove line"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center justify-center gap-0.5">
+                      <button
+                        className={`p-0.5 ${line.bold ? 'text-accent-blue' : 'text-text-muted'} hover:text-text-primary`}
+                        onClick={() => updateLine(line._key, 'bold', line.bold ? 0 : 1)}
+                        title="Bold"
+                        style={{ fontSize: '10px', fontWeight: 700 }}
+                      >
+                        B
+                      </button>
+                      <button
+                        className={`p-0.5 ${line.italic ? 'text-accent-blue' : 'text-text-muted'} hover:text-text-primary`}
+                        onClick={() => updateLine(line._key, 'italic', line.italic ? 0 : 1)}
+                        title="Italic"
+                        style={{ fontSize: '10px', fontStyle: 'italic' }}
+                      >
+                        I
+                      </button>
+                      <button
+                        className="text-text-muted hover:text-accent-expense p-1"
+                        onClick={() => removeLine(line._key)}
+                        title="Remove line"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -1443,16 +1936,36 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         </table>
       </div>
 
+      {/* ── Terms & Conditions ──────────────────────── */}
+      <div className="block-card">
+        <FieldLabel>Terms &amp; Conditions (printed on bill)</FieldLabel>
+        <textarea
+          className="block-input"
+          rows={3}
+          placeholder="Optional terms shown on the printed bill PDF..."
+          value={form.terms_text}
+          onChange={(e) => updateField('terms_text', e.target.value)}
+          style={{ resize: 'vertical' }}
+        />
+      </div>
+
       {/* Totals */}
       <div className="flex justify-end">
-        <div className="block-card w-80 space-y-3">
+        <div className="block-card w-96 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-text-secondary">Subtotal</span>
             <span className="font-mono text-text-primary">{formatCurrency(subtotal)}</span>
           </div>
 
+          {form.discount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Pre-Tax Amount</span>
+              <span className="font-mono text-text-primary">{formatCurrency(subtotal - form.discount)}</span>
+            </div>
+          )}
+
           <div className="flex justify-between text-sm items-center gap-4">
-            <span className="text-text-secondary flex-shrink-0">Tax %</span>
+            <span className="text-text-secondary flex-shrink-0">Default Tax %</span>
             <input
               type="number"
               step="0.01"
@@ -1460,20 +1973,57 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               style={{ borderRadius: '6px' }}
               value={form.tax_pct}
               onChange={(e) => updateField('tax_pct', parseFloat(e.target.value) || 0)}
+              title="Applied to lines that don't have an override"
             />
           </div>
 
           <div className="flex justify-between text-sm">
-            <span className="text-text-secondary">Tax Amount</span>
+            <span className="text-text-secondary">Tax Amount (computed)</span>
             <span className="font-mono text-text-primary">{formatCurrency(taxAmount)}</span>
+          </div>
+
+          <div className="flex justify-between text-sm items-center gap-4">
+            <span className="text-text-secondary flex-shrink-0">Discount (flat $)</span>
+            <input
+              type="number"
+              step="0.01"
+              className="block-input text-right font-mono w-24"
+              style={{ borderRadius: '6px' }}
+              value={form.discount}
+              onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          <div className="flex justify-between text-sm items-center gap-4">
+            <span className="text-text-secondary flex-shrink-0">Shipping</span>
+            <input
+              type="number"
+              step="0.01"
+              className="block-input text-right font-mono w-24"
+              style={{ borderRadius: '6px' }}
+              value={form.shipping_amount}
+              onChange={(e) => updateField('shipping_amount', parseFloat(e.target.value) || 0)}
+            />
           </div>
 
           <div
             className="flex justify-between text-sm font-bold pt-3"
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
           >
-            <span className="text-text-primary">Total</span>
-            <span className="font-mono text-text-primary text-lg">{formatCurrency(total)}</span>
+            <span className="text-text-primary">
+              {form.bill_type === 'credit_memo' ? 'Credit Amount' : 'Total'}
+              {form.currency !== 'USD' && (
+                <span className="ml-2 text-[10px] font-normal text-text-muted">{form.currency}</span>
+              )}
+            </span>
+            <span
+              className="font-mono text-lg"
+              style={{ color: form.bill_type === 'credit_memo' && total > 0 ? '#22c55e' : 'var(--color-text-primary)' }}
+            >
+              {form.bill_type === 'credit_memo' && total > 0
+                ? `(${formatCurrency(Math.abs(total))}) CR`
+                : formatCurrency(total)}
+            </span>
           </div>
         </div>
       </div>
