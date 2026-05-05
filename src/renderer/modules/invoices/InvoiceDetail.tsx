@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Share2, Eye as EyeIcon } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -194,6 +194,75 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       : { portal_base_url: portalBaseUrl };
     return generateInvoiceHTML(invoice, activeCompany, client, lines, settingsWithBase, paymentSchedule);
   }, [showInlinePreview, invoice, client, lines, invoiceSettings, paymentSchedule, activeCompany, portalBaseUrl]);
+
+  // ── P1.10: Page-break analysis ───────────────────────────────
+  // After the iframe loads, walk the rendered DOM and figure out
+  // (a) how many printed pages this will produce and (b) which line
+  // items will straddle a page boundary (bad UX — a row split across
+  // two pages is hard to read).
+  //
+  // Page math: Letter = 8.5×11" = 816×1056 px @ 96 DPI. Default
+  // @page margins set in baseStyles are 0.55" top + 0.85" bottom +
+  // 0.5" sides → printable area is 7.5"w × 9.6"h = 720×921 px.
+  // The first page also reserves space for the @bottom-left/right
+  // running content (~12pt + padding ≈ 24px per box).
+  const previewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const PRINTABLE_PAGE_HEIGHT_PX = 921; // 9.6" at 96 DPI
+  const [pageAnalysis, setPageAnalysis] = useState<{
+    pageCount: number;
+    straddlers: Array<{ rowIndex: number; description: string; pageBoundary: number }>;
+    docHeightPx: number;
+  } | null>(null);
+
+  const analyzePages = useCallback(() => {
+    const iframe = previewIframeRef.current;
+    if (!iframe || !iframe.contentDocument) return;
+    try {
+      const doc = iframe.contentDocument;
+      const body = doc.body;
+      if (!body) return;
+      const docHeight = body.scrollHeight;
+      const pageCount = Math.max(1, Math.ceil(docHeight / PRINTABLE_PAGE_HEIGHT_PX));
+
+      // Find rows that straddle a page boundary. We only flag <tr>
+      // elements inside <tbody> (header rows are handled by CSS
+      // display:table-header-group which auto-repeats).
+      const straddlers: Array<{ rowIndex: number; description: string; pageBoundary: number }> = [];
+      const rows = Array.from(doc.querySelectorAll('tbody tr')) as HTMLElement[];
+      rows.forEach((row, idx) => {
+        const top = row.offsetTop;
+        const height = row.offsetHeight;
+        const bottom = top + height;
+        // For each page boundary the row crosses, record one warning.
+        for (let p = 1; p < pageCount; p++) {
+          const boundary = p * PRINTABLE_PAGE_HEIGHT_PX;
+          if (top < boundary && bottom > boundary) {
+            // Pull a short label from the first text-bearing cell.
+            const firstCell = row.querySelector('td');
+            const label = (firstCell?.textContent || '').trim().slice(0, 60) || `Row ${idx + 1}`;
+            straddlers.push({ rowIndex: idx + 1, description: label, pageBoundary: p });
+          }
+        }
+      });
+
+      setPageAnalysis({ pageCount, straddlers, docHeightPx: docHeight });
+    } catch (err) {
+      // contentDocument access can throw if cross-origin (shouldn't
+      // happen with srcDoc, but defensive). Skip analysis on failure.
+      setPageAnalysis(null);
+    }
+  }, []);
+
+  // Re-run analysis whenever the preview HTML changes. Slight delay
+  // gives the iframe time to layout after srcDoc swap.
+  useEffect(() => {
+    if (!showInlinePreview || !inlinePreviewHTML) {
+      setPageAnalysis(null);
+      return;
+    }
+    const t = setTimeout(analyzePages, 250);
+    return () => clearTimeout(t);
+  }, [inlinePreviewHTML, showInlinePreview, analyzePages]);
 
   // PORTAL: lazy-resolve the invoice's portal token so the printed PDF
   // can render a scannable QR. Idempotent — the IPC handler returns the
@@ -1331,8 +1400,21 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             alignItems: 'center',
             background: 'var(--color-bg-primary)',
           }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: 8 }}>
               Live Preview
+              {pageAnalysis && (
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  background: pageAnalysis.straddlers.length > 0 ? 'rgba(217, 119, 6, 0.15)' : 'rgba(22, 163, 74, 0.12)',
+                  color: pageAnalysis.straddlers.length > 0 ? 'var(--color-warning, #d97706)' : 'var(--color-positive, #16a34a)',
+                  letterSpacing: '0.5px',
+                }}>
+                  {pageAnalysis.pageCount} page{pageAnalysis.pageCount === 1 ? '' : 's'}
+                </span>
+              )}
             </span>
             <button
               onClick={() => setShowInlinePreview(false)}
@@ -1342,11 +1424,48 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               ×
             </button>
           </div>
+
+          {/* P1.10: Page-break warning banner — only renders when at
+              least one row straddles a page boundary. Lists each
+              offender so the user knows exactly which line item to
+              shorten or reorder. */}
+          {pageAnalysis && pageAnalysis.straddlers.length > 0 && (
+            <div style={{
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--color-border-primary)',
+              background: 'rgba(217, 119, 6, 0.08)',
+              fontSize: 11,
+              color: 'var(--color-text-primary)',
+            }}>
+              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-warning, #d97706)' }}>
+                <AlertTriangle size={12} />
+                {pageAnalysis.straddlers.length} row{pageAnalysis.straddlers.length === 1 ? '' : 's'} will be split across pages
+              </div>
+              <ul style={{ margin: '4px 0 0 18px', padding: 0, listStyle: 'disc', color: 'var(--color-text-muted)' }}>
+                {pageAnalysis.straddlers.slice(0, 5).map((s, i) => (
+                  <li key={i} style={{ fontSize: 10.5, lineHeight: 1.5 }}>
+                    Row {s.rowIndex} ("{s.description.length > 40 ? s.description.slice(0, 40) + '…' : s.description}") straddles page {s.pageBoundary}/{s.pageBoundary + 1}
+                  </li>
+                ))}
+                {pageAnalysis.straddlers.length > 5 && (
+                  <li style={{ fontSize: 10.5, fontStyle: 'italic' }}>
+                    …and {pageAnalysis.straddlers.length - 5} more
+                  </li>
+                )}
+              </ul>
+              <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+                Tip: shorten descriptions, split into multiple lines, or insert a section row before the boundary.
+              </div>
+            </div>
+          )}
+
           <iframe
+            ref={previewIframeRef}
             srcDoc={inlinePreviewHTML}
             title="Invoice live preview"
             style={{ flex: 1, width: '100%', border: 'none', background: '#fff' }}
             sandbox="allow-same-origin"
+            onLoad={analyzePages}
           />
         </div>
       )}
