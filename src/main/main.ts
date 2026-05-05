@@ -9,6 +9,7 @@ import { runNotificationChecks } from './services/notification-engine';
 import { runAlertRules } from './crons/alerts';
 import { runOverdueCheck } from './crons/overdue-checker';
 import { runTrashPurge } from './crons/trash-purge';
+import { runIntegrityCheck, runVacuum } from './crons/integrity-check';
 import { initQueue, connectWebSocket } from './sync';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -200,6 +201,8 @@ let notificationInterval: ReturnType<typeof setInterval> | null = null;
 let alertRulesInterval: ReturnType<typeof setInterval> | null = null;
 let overdueCheckInterval: ReturnType<typeof setInterval> | null = null;
 let trashPurgeInterval: ReturnType<typeof setInterval> | null = null;
+let integrityCheckInterval: ReturnType<typeof setInterval> | null = null;
+let vacuumInterval: ReturnType<typeof setInterval> | null = null;
 // CONCURRENCY: periodic WAL checkpoint — without this the -wal sidecar file
 // can grow unbounded under heavy write load (auto-backup runs every 30s of
 // activity but only checkpoints once on each backup).
@@ -252,6 +255,21 @@ function startBackgroundServices() {
       if (purgeResult.errors.length) console.warn('Trash purge errors:', purgeResult.errors);
     } catch (err) {
       console.error('Trash purge startup error:', err);
+    }
+
+    // P1.15+P1.16+P1.17 — Integrity check at startup (skipping the
+    // expensive orphan scan; it runs nightly via the interval below).
+    try {
+      const ic = runIntegrityCheck({ skipOrphanScan: true });
+      if (!ic.ok) {
+        console.warn('[integrity] startup check found issues:', {
+          schemaDrift: ic.schemaDrift,
+          pragmaIntegrity: ic.pragmaIntegrity,
+          fkViolations: ic.pragmaFkCheck.length,
+        });
+      }
+    } catch (err) {
+      console.error('Integrity check startup error:', err);
     }
   }, 2000);
 
@@ -311,6 +329,42 @@ function startBackgroundServices() {
     }
   }, 24 * 60 * 60 * 1000);
 
+  // P1.17 — Full integrity check nightly (every 24h). Includes the
+  // expensive orphan-FK scan that we skip at startup. Surfaces issues
+  // to console for now; future enhancement: emit a desktop notification.
+  integrityCheckInterval = setInterval(() => {
+    try {
+      const ic = runIntegrityCheck();
+      if (!ic.ok) {
+        console.warn('[integrity] nightly check found issues:', {
+          schemaDrift: ic.schemaDrift,
+          orphanCount: Object.keys(ic.orphans).length,
+          fkViolations: ic.pragmaFkCheck.length,
+          ms: ic.durationMs,
+        });
+      }
+    } catch (err) {
+      console.error('Integrity check interval error:', err);
+    }
+  }, 24 * 60 * 60 * 1000);
+
+  // P1.17 — VACUUM weekly. Heavier op (rewrites the whole DB file)
+  // so we don't run it daily. Reclaims space and rebalances B-tree
+  // pages after lots of deletes/updates. 7d × 24h = 604800000ms.
+  vacuumInterval = setInterval(() => {
+    try {
+      const r = runVacuum();
+      if (r.ok) {
+        const reclaimed = Math.max(0, r.sizeBefore - r.sizeAfter);
+        console.log(`[vacuum] weekly: ${reclaimed} bytes reclaimed (${r.sizeBefore} → ${r.sizeAfter})`);
+      } else if (r.error) {
+        console.warn('[vacuum] failed:', r.error);
+      }
+    } catch (err) {
+      console.error('Vacuum interval error:', err);
+    }
+  }, 7 * 24 * 60 * 60 * 1000);
+
   // CONCURRENCY: WAL checkpoint every 5 minutes to bound -wal file growth.
   // TRUNCATE mode resets the WAL to zero bytes if no readers are mid-txn.
   walCheckpointInterval = setInterval(() => {
@@ -342,6 +396,14 @@ function stopBackgroundServices() {
   if (trashPurgeInterval) {
     clearInterval(trashPurgeInterval);
     trashPurgeInterval = null;
+  }
+  if (integrityCheckInterval) {
+    clearInterval(integrityCheckInterval);
+    integrityCheckInterval = null;
+  }
+  if (vacuumInterval) {
+    clearInterval(vacuumInterval);
+    vacuumInterval = null;
   }
   if (walCheckpointInterval) {
     clearInterval(walCheckpointInterval);

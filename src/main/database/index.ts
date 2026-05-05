@@ -34,11 +34,59 @@ export function roundCents(value: any): number {
   return Math.round(n * 100) / 100;
 }
 
+// P1.18: schema-version constant. Bump on backwards-INCOMPATIBLE
+// changes (drop column, change CHECK). The DB records the highest
+// version it's been touched by; if that exceeds APP_SCHEMA_VERSION,
+// we refuse to open it rather than corrupt it. Additive migrations
+// (ALTER ADD COLUMN, CREATE INDEX) don't need a bump.
+const APP_SCHEMA_VERSION = 2;
+
+// P2.20: Performance pragmas. WAL allows concurrent reads during
+// writes. synchronous=NORMAL is safe under WAL. 64MB cache + 256MB
+// mmap window covers a typical accounting DB without disk hits on
+// hot tables.
+function applyPerformancePragmas(database: Database.Database): void {
+  try {
+    database.pragma('journal_mode = WAL');
+    database.pragma('synchronous = NORMAL');
+    database.pragma('cache_size = -64000');
+    database.pragma('mmap_size = 268435456');
+    database.pragma('foreign_keys = ON');
+    database.pragma('temp_store = MEMORY');
+  } catch (err) {
+    console.warn('[db] performance pragma application partial:', err);
+  }
+}
+
+// P1.18: refuse to open a DB stamped by a newer app build.
+function checkSchemaVersionOrThrow(database: Database.Database): void {
+  try {
+    const hasMeta = database.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'"
+    ).get();
+    if (!hasMeta) return; // brand new DB
+    const row = database.prepare(
+      'SELECT version FROM schema_meta WHERE id = 1'
+    ).get() as { version?: number } | undefined;
+    const dbVersion = Number(row?.version ?? 1);
+    if (dbVersion > APP_SCHEMA_VERSION) {
+      throw new Error(
+        'Database was last opened by a newer app build (schema v' + dbVersion +
+        '; this app supports v' + APP_SCHEMA_VERSION + '). Refusing to open to prevent data corruption. ' +
+        'Update the desktop app to the latest version, or restore a backup taken with this app version.'
+      );
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('newer app build')) throw err;
+    // schema_meta missing or unreadable — proceed (migrations will create it)
+  }
+}
+
 export function initDatabase(): Database.Database {
   const dbPath = getDbPath();
   db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  applyPerformancePragmas(db);
+  checkSchemaVersionOrThrow(db);
 
   // Load and apply schema
   const schemaPath = path.join(__dirname, 'schema.sql');
@@ -1429,6 +1477,41 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE invoice_settings ADD COLUMN letterhead_data TEXT DEFAULT NULL",
   "ALTER TABLE invoice_settings ADD COLUMN letterhead_position TEXT DEFAULT 'top'",
   "ALTER TABLE invoice_settings ADD COLUMN letterhead_height INTEGER DEFAULT 90",
+
+  // ── P1.18: Schema-version pinning ─────────────────────────────
+  // Records the highest schema version the DB has been exposed to.
+  // On startup, if the DB's stored version is HIGHER than this app
+  // build's max known version, we refuse to open it — preventing a
+  // user who just downgraded the app from corrupting newer data
+  // (e.g. dropping a column they didn't know about).
+  // Single-row table; APP_SCHEMA_VERSION is bumped each time we add
+  // a column or table. The migrations array runs idempotently
+  // regardless of version, so this is purely a safety guard for
+  // backwards-incompatible changes.
+  `CREATE TABLE IF NOT EXISTS schema_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    version INTEGER NOT NULL DEFAULT 1,
+    last_migrated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    app_version TEXT DEFAULT ''
+  )`,
+  `INSERT OR IGNORE INTO schema_meta (id, version) VALUES (1, 1)`,
+
+  // ── P2.20: Composite indices for common filter+sort patterns ────
+  // The list views all filter by company_id and sort by date (or
+  // status). Without composite indices, SQLite scans the table
+  // and re-sorts in memory — fine at 1k rows, painful at 50k+.
+  // These cover the hottest list-view queries.
+  "CREATE INDEX IF NOT EXISTS idx_invoices_co_status_date ON invoices(company_id, status, due_date)",
+  "CREATE INDEX IF NOT EXISTS idx_invoices_co_client_date ON invoices(company_id, client_id, issue_date)",
+  "CREATE INDEX IF NOT EXISTS idx_bills_co_status_date ON bills(company_id, status, due_date)",
+  "CREATE INDEX IF NOT EXISTS idx_bills_co_vendor_date ON bills(company_id, vendor_id, issue_date)",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_co_date ON expenses(company_id, date)",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_co_vendor_date ON expenses(company_id, vendor_id, date)",
+  "CREATE INDEX IF NOT EXISTS idx_journal_entries_co_date ON journal_entries(company_id, date)",
+  "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON invoice_payments(invoice_id, payment_date)",
+  "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
+  "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
   // Client Portal API integration (rmpgutahps.us, 2026-05-05)
   // portal_integration_settings: per-company config for the external
   // client-portal integration. The api_key column stores a base64
@@ -1707,6 +1790,17 @@ export function initDatabase(): Database.Database {
       ).run(id);
     }
   } catch (_) { /* ignore */ }
+
+  // P1.18: stamp the schema version + app version after migrations.
+  // The version-pinning check at startup compares this against
+  // APP_SCHEMA_VERSION; if a newer app wrote here, an older app
+  // refuses to open the DB.
+  try {
+    const appVer = (require('electron').app?.getVersion?.() || '') as string;
+    db.prepare(
+      "UPDATE schema_meta SET version = ?, last_migrated_at = datetime('now'), app_version = ? WHERE id = 1"
+    ).run(APP_SCHEMA_VERSION, appVer);
+  } catch (_) { /* schema_meta may not exist on first-run pre-CREATE */ }
 
   return db;
 }

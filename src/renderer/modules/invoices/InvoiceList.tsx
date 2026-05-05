@@ -3,6 +3,7 @@ import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Set
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -99,6 +100,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     return 'all';
   });
   const [search, setSearch] = useState('');
+  // P2.24: debounce the search-driven filter so we don't re-filter
+  // 1000+ invoices on every keystroke. The input field stays
+  // responsive (controlled by `search`); the filter useMemo depends
+  // on `debouncedSearch` which lags by 200ms — pauses between
+  // words trigger the filter, mid-word typing doesn't.
+  const debouncedSearch = useDebouncedValue(search, 200);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
@@ -247,8 +254,10 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       list = list.filter((inv) => inv.status === activeTab);
     }
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    // P2.24: filter against the debounced value so re-filters don't
+    // fire on every keystroke for large invoice lists.
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       list = list.filter(
         (inv) =>
           inv.invoice_number.toLowerCase().includes(q) ||
@@ -290,7 +299,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     }
 
     return sorted;
-  }, [invoices, activeTab, search, clientMap, agingFilter, amountMin, amountMax, tagFilter, salesRepFilter, sortKey]);
+    // P2.24: depend on debouncedSearch (not search) so the filter
+    // re-runs only after the user pauses typing.
+  }, [invoices, activeTab, debouncedSearch, clientMap, agingFilter, amountMin, amountMax, tagFilter, salesRepFilter, sortKey]);
 
   // Inline KPI stats — computed from filtered list
   const kpiStats = useMemo(() => {

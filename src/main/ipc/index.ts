@@ -1083,6 +1083,43 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── P1.15/P1.16/P1.17: Integrity check + cleanup ─────
+  // These complement data:check-orphans with broader checks
+  // (PRAGMA integrity_check, schema-drift validator, generic
+  // FK-list orphan scanner). One-click cleanup endpoint NULLs
+  // out the FK column on orphaned rows — irreversible, so the
+  // UI confirms before invoking.
+  ipcMain.handle('integrity:check', (_event, opts?: { skipOrphanScan?: boolean }) => {
+    try {
+      const { runIntegrityCheck } = require('../crons/integrity-check');
+      return runIntegrityCheck(opts);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('integrity:cleanup-orphans', (_event, { target }: { target: string }) => {
+    try {
+      const { cleanupOrphans } = require('../crons/integrity-check');
+      const r = cleanupOrphans(target);
+      const cid = db.getCurrentCompanyId();
+      if (cid) db.logAudit(cid, 'integrity', target, 'cleanup_orphans', { cleaned: r.cleaned });
+      return r;
+    } catch (err: any) {
+      return { cleaned: 0, error: err?.message };
+    }
+  });
+  ipcMain.handle('integrity:vacuum', () => {
+    try {
+      const { runVacuum } = require('../crons/integrity-check');
+      const r = runVacuum();
+      const cid = db.getCurrentCompanyId();
+      if (cid) db.logAudit(cid, 'integrity', 'vacuum', 'vacuum', { sizeBefore: r.sizeBefore, sizeAfter: r.sizeAfter });
+      return r;
+    } catch (err: any) {
+      return { ok: false, error: err?.message };
+    }
+  });
+
   // ─── Raw Query (for reports/aggregations) ────────────
   // SECURITY: The renderer can supply arbitrary SQL via this handler — historically a
   // privilege-escalation vector (renderer could DROP TABLE, ATTACH another DB, exfiltrate

@@ -646,6 +646,14 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // P1.15/16/17: Integrity check (schema drift, orphan FKs, PRAGMAs)
+  integrityCheck: (opts?: { skipOrphanScan?: boolean }): Promise<any> =>
+    window.electronAPI.invoke('integrity:check', opts || {}),
+  integrityCleanupOrphans: (target: string): Promise<{ cleaned: number; error?: string }> =>
+    window.electronAPI.invoke('integrity:cleanup-orphans', { target }),
+  integrityVacuum: (): Promise<{ ok: boolean; sizeBefore: number; sizeAfter: number; error?: string }> =>
+    window.electronAPI.invoke('integrity:vacuum'),
+
   // P1.13: Trash (soft-delete recovery) ────────────────────
   // listTrash returns records grouped by table; restore undoes a
   // soft-delete; purge physically removes ONE record; empty purges

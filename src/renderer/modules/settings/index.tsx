@@ -19,6 +19,7 @@ import EmailTemplatesSettings from './EmailTemplatesSettings';
 import StatusBuilderSettings from './StatusBuilderSettings';
 import PortalIntegrationSettings from './PortalIntegrationSettings';
 import TrashSettings from './TrashSettings';
+import IntegritySettings from './IntegritySettings';
 import MacroRecorder from '../../components/MacroRecorder';
 
 // ─── Types ──────────────────────────────────────────────
@@ -1110,6 +1111,9 @@ export default function SettingsModule() {
 
       {/* ── Trash (soft-delete recovery) ─────────────────── */}
       <TrashSettings />
+
+      {/* ── Database Integrity (P1.15/16/17) ─────────────── */}
+      <IntegritySettings />
 
       {/* ── Cloud Backup (VPS) ──────────────────────────── */}
       <VpsBackup />
