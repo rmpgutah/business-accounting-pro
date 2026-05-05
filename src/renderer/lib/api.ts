@@ -646,8 +646,12 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
-  batchExportPDF: (invoiceIds: string[]): Promise<{ path?: string; count?: number; cancelled?: boolean; error?: string }> =>
-    window.electronAPI.invoke('invoice:batch-pdf', { invoiceIds }),
+  // mode: 'combined' (single PDF, page-broken) | 'separate' (folder of PDFs) | 'zip' (all in one ZIP archive)
+  batchExportPDF: (
+    invoiceIds: string[],
+    mode: 'combined' | 'separate' | 'zip' = 'combined',
+  ): Promise<{ path?: string; dir?: string; files?: string[]; count?: number; skipped?: number; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('invoice:batch-pdf', { invoiceIds, mode }),
 
   // ─── Invoice Automation ───────────────────────────
   applyLateFees: (): Promise<{ applied: number }> =>

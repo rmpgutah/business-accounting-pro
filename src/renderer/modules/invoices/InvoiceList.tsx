@@ -413,6 +413,32 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     finally { setBatchLoading(false); setShowDeleteConfirm(false); }
   }, [selectedIds, reload]);
 
+  // P1.8 — Bulk export selected invoices to a ZIP archive (one PDF
+  // per invoice, streamed via archiver to avoid holding all PDF
+  // buffers in memory at once for large batches).
+  const handleBatchExportZip = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const result = await api.batchExportPDF(ids, 'zip');
+      if (result.cancelled) return;
+      if (result.error) {
+        alert(`Failed to export ZIP: ${result.error}`);
+        return;
+      }
+      const skippedNote = result.skipped && result.skipped > 0
+        ? ` (${result.skipped} skipped due to render error)`
+        : '';
+      alert(`Exported ${result.count} invoice${result.count === 1 ? '' : 's'} to:\n${result.path}${skippedNote}`);
+    } catch (err: any) {
+      console.error('Batch ZIP export failed:', err);
+      alert('Failed to export ZIP: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [selectedIds]);
+
   const handleConvertToDebt = useCallback(async (invoiceId: string) => {
     if (!activeCompany) return;
     setConverting(prev => new Set(prev).add(invoiceId));
@@ -1133,6 +1159,18 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               </button>
             </div>
           )}
+
+          {/* P1.8 — Bulk export selected invoices to ZIP */}
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold"
+            onClick={handleBatchExportZip}
+            disabled={batchLoading || selectedIds.size === 0}
+            title={`Export ${selectedIds.size} invoice${selectedIds.size === 1 ? '' : 's'} as a ZIP archive (one PDF per invoice)`}
+            style={{ background: 'transparent', border: '1px solid var(--color-accent-blue)', color: 'var(--color-accent-blue)', borderRadius: '6px', padding: '6px 12px', cursor: batchLoading ? 'wait' : 'pointer', opacity: batchLoading ? 0.6 : 1 }}
+          >
+            <Download size={13} />
+            Export ZIP
+          </button>
 
           {!showDeleteConfirm ? (
             <button

@@ -1677,8 +1677,10 @@ export function registerIpcHandlers(): void {
     }: {
       invoiceIds: string[];
       pdfOptions?: PDFOptions;
-      // 'combined' = single PDF with page breaks; 'separate' = one PDF per invoice into a folder.
-      mode?: 'combined' | 'separate';
+      // 'combined' = single PDF with page breaks
+      // 'separate' = one PDF per invoice into a folder
+      // 'zip'      = one PDF per invoice, packaged into a single ZIP archive
+      mode?: 'combined' | 'separate' | 'zip';
     }
   ) => {
     try {
@@ -1725,6 +1727,71 @@ export function registerIpcHandlers(): void {
           catch { /* audit best-effort */ }
         }
         return { dir: outDir, files: written, count: written.length };
+      }
+
+      // ── ZIP mode (P1.8) ──────────────────────────────────
+      // One PDF per invoice, streamed into a single .zip archive
+      // via the `archiver` library. Streaming avoids holding all PDF
+      // buffers in memory at once — critical for batches of 100+
+      // invoices where each PDF could be 100-300KB.
+      if (mode === 'zip') {
+        const archiver = (await import('archiver')).default;
+        const fs = require('fs');
+        const defaultZipName = buildPdfFilename('invoices', String(invoiceIds.length)).replace(/\.pdf$/, '.zip');
+        const { filePath: zipPath, canceled } = await dialog.showSaveDialog({
+          defaultPath: defaultZipName,
+          filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+          properties: ['showOverwriteConfirmation', 'createDirectory'],
+        });
+        if (canceled || !zipPath) return { cancelled: true };
+
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 6 } }); // PDFs compress poorly; level 6 is the speed/ratio sweet spot
+        archive.pipe(output);
+
+        // We need to await the stream finish AFTER all entries are appended.
+        // Track this so the IPC handler resolves only when the file is closed.
+        const closePromise = new Promise<void>((resolve, reject) => {
+          output.on('close', () => resolve());
+          output.on('error', reject);
+          archive.on('error', reject);
+        });
+
+        const written: string[] = [];
+        const skipped: string[] = [];
+
+        for (let i = 0; i < invoiceIds.length; i++) {
+          const invId = invoiceIds[i];
+          const invoice = db.getById('invoices', invId);
+          if (!invoice) {
+            skipped.push(invId);
+            continue;
+          }
+          const client = db.getById('clients', invoice.client_id);
+          const lineItems = dbInstance.prepare(
+            'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
+          ).all(invId) as any[];
+          sendProgress(i + 1, invoiceIds.length, `Invoice ${invoice.invoice_number}`);
+          try {
+            const html = buildInvoiceHTML(company, client, invoice, lineItems);
+            const meta = buildInvoiceMetadata(invoice, company, client);
+            const buf = await htmlToPDFBuffer(html, { ...(pdfOptions || {}), metadata: meta });
+            const entryName = buildPdfFilename('invoice', String(invoice.invoice_number || invId));
+            archive.append(buf, { name: entryName });
+            written.push(entryName);
+            try { db.logAudit(companyId, 'invoices', invId, 'export_pdf', { archive: zipPath, entry: entryName, batch: true }); }
+            catch { /* audit best-effort */ }
+          } catch (renderErr: any) {
+            // Don't abort the whole archive on a single render failure —
+            // log the skip and continue. Caller sees `skipped[]` count.
+            console.warn(`[batch-pdf:zip] render failed for ${invId}:`, renderErr?.message);
+            skipped.push(invId);
+          }
+        }
+
+        await archive.finalize();
+        await closePromise;
+        return { path: zipPath, count: written.length, skipped: skipped.length };
       }
 
       // Combined mode
