@@ -1419,6 +1419,16 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE bill_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
   "ALTER TABLE bill_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
   "ALTER TABLE bill_line_items ADD COLUMN project_id TEXT DEFAULT NULL",
+  // P1.4 — Custom letterhead image (2026-05-05)
+  // letterhead_data: base64-encoded PNG/JPEG (full-width banner) — stored
+  // inline so the image travels with backups and renders without external
+  // assets. Capped at ~2MB after compression in the upload UI.
+  // letterhead_position: 'top' renders above the header, 'replace' uses
+  // the image AS the header (no co-name text). 'bottom' for footer-style.
+  // letterhead_height: pixel height when rendered (defaults to 90px).
+  "ALTER TABLE invoice_settings ADD COLUMN letterhead_data TEXT DEFAULT NULL",
+  "ALTER TABLE invoice_settings ADD COLUMN letterhead_position TEXT DEFAULT 'top'",
+  "ALTER TABLE invoice_settings ADD COLUMN letterhead_height INTEGER DEFAULT 90",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

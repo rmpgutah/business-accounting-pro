@@ -73,6 +73,10 @@ const DEFAULT_SETTINGS: FullSettings = {
   custom_field_2_label: '',
   custom_field_3_label: '',
   custom_field_4_label: '',
+  // P1.4 — Letterhead defaults (data is null until user uploads)
+  letterhead_data: null,
+  letterhead_position: 'top',
+  letterhead_height: 90,
 };
 
 // ─── Column Configurator (inline) ───────────────────────
@@ -174,6 +178,10 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
             custom_field_2_label: data.custom_field_2_label || '',
             custom_field_3_label: data.custom_field_3_label || '',
             custom_field_4_label: data.custom_field_4_label || '',
+            // P1.4 — Letterhead
+            letterhead_data: data.letterhead_data || null,
+            letterhead_position: (data.letterhead_position || 'top') as 'top' | 'replace' | 'bottom',
+            letterhead_height: data.letterhead_height ?? 90,
           });
         }
       } catch (err) {
@@ -221,6 +229,32 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
         setSettings((prev) => ({ ...prev, logo_data: dataUrl }));
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, []);
+
+  // P1.4 — Custom letterhead upload (separate from logo). Letterhead is
+  // a wider banner image (e.g. company-branded header bar) shown above,
+  // replacing, or below the standard header. Larger size budget (2 MB)
+  // since it's the full page-width banner — but we still warn at 1 MB
+  // since that's the practical print quality threshold.
+  const handleLetterheadUpload = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) { alert('Letterhead must be smaller than 2 MB'); return; }
+      if (file.size > 1024 * 1024) {
+        if (!confirm('Letterhead is over 1 MB which may slow PDF generation. Continue?')) return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setSettings((prev) => ({ ...prev, letterhead_data: dataUrl }));
       };
       reader.readAsDataURL(file);
     };
@@ -422,6 +456,59 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   </button>
                   <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>PNG, JPG, SVG · max 500KB</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Letterhead — full-width banner image */}
+            <div className="block-card">
+              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Custom Letterhead</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {settings.letterhead_data ? (
+                  <div style={{ position: 'relative' }}>
+                    <img src={settings.letterhead_data as string} alt="Letterhead banner" style={{ width: '100%', maxHeight: 100, objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--color-border-primary)', background: '#fff' }} />
+                    <button onClick={() => setSettings((p) => ({ ...p, letterhead_data: null }))}
+                      style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 22, height: 22, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove letterhead">
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ width: '100%', height: 80, borderRadius: '6px', border: '1px dashed var(--color-border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>No letterhead — full-width banner shown above the standard header</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <button className="block-btn flex items-center gap-2" onClick={handleLetterheadUpload}>
+                    <Upload size={14} />Upload Letterhead
+                  </button>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>PNG, JPG, WebP · max 2 MB · recommended 1500×200px</span>
+                </div>
+                {settings.letterhead_data && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Position</span>
+                      <select
+                        className="block-input"
+                        value={settings.letterhead_position || 'top'}
+                        onChange={(e) => setSettings((p) => ({ ...p, letterhead_position: e.target.value as 'top' | 'replace' | 'bottom' }))}
+                      >
+                        <option value="top">Top — above standard header</option>
+                        <option value="replace">Replace — banner is the header</option>
+                        <option value="bottom">Bottom — above page footer</option>
+                      </select>
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Height (px)</span>
+                      <input
+                        type="number"
+                        min={40}
+                        max={300}
+                        className="block-input"
+                        value={settings.letterhead_height || 90}
+                        onChange={(e) => setSettings((p) => ({ ...p, letterhead_height: Math.min(300, Math.max(40, parseInt(e.target.value) || 90)) }))}
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 

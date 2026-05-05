@@ -662,6 +662,14 @@ export interface InvoiceSettings {
   payment_qr_url?: string;       // legacy: arbitrary payment URL prefix
   show_payment_qr?: boolean | number;
   portal_base_url?: string;       // overrides default https://accounting.rmpgutah.us
+  // ── P1.4: Custom Letterhead ────────────────────────────
+  // Wider banner image (full page-width, vs logo_data which is constrained).
+  // 'top'     — banner above the existing header (additive)
+  // 'replace' — banner IS the header (no co-name text rendered)
+  // 'bottom'  — banner above the page footer (footer-style)
+  letterhead_data?: string | null;
+  letterhead_position?: 'top' | 'replace' | 'bottom';
+  letterhead_height?: number;     // pixels; default 90
   custom_field_1_label?: string;
   custom_field_2_label?: string;
   custom_field_3_label?: string;
@@ -1122,8 +1130,31 @@ export function generateInvoiceHTML(
     ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}
     ${isQuote && invoice.valid_until ? `<div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:6px;border-top:2px solid ${accent};padding-top:4px;display:inline-block;">Valid until ${fmtDate(invoice.valid_until)}</div>` : ''}`;
 
+  // ── P1.4: Custom Letterhead ───────────────────────────────────
+  // Renders a wider banner image (e.g. company letterhead PDF rasterized
+  // to PNG/JPEG and pasted in). Three positions:
+  //   'top'     — banner spans page-width above the standard header
+  //   'replace' — banner becomes the entire header (no co-name text)
+  //   'bottom'  — banner reserved for the bottom of the last page
+  // Validates the data URI prefix to prevent script-URL injection.
+  const letterheadSrc = settings?.letterhead_data && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(String(settings.letterhead_data))
+    ? String(settings.letterhead_data)
+    : null;
+  const letterheadPos = settings?.letterhead_position || 'top';
+  const letterheadH = Math.min(300, Math.max(40, Number(settings?.letterhead_height) || 90));
+  const letterheadHTML = letterheadSrc
+    ? `<div style="margin:0 0 ${letterheadPos === 'replace' ? '20px' : '14px'} 0;text-align:center;">
+        <img src="${letterheadSrc}" alt="Letterhead" style="display:block;width:100%;max-width:100%;height:${letterheadH}px;object-fit:contain;object-position:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;"/>
+      </div>`
+    : '';
+
   let headerHTML = '';
-  if (style === 'executive') {
+  if (letterheadSrc && letterheadPos === 'replace') {
+    // Banner IS the header — only render the invoice-number block alongside
+    headerHTML = `
+    ${letterheadHTML}
+    <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">${invBlock}</div>`;
+  } else if (style === 'executive') {
     headerHTML = `
     <div class="header-top">
       <div class="company-name">${companyName}</div>
@@ -1391,6 +1422,7 @@ ${style === 'modern' ? `<div class="accent-bar"></div>` : ''}
 ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
 <div class="page">
 <div class="content">
+  ${letterheadSrc && letterheadPos === 'top' ? letterheadHTML : ''}
   ${headerHTML}
 
   ${(() => {
@@ -1487,6 +1519,7 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     ${esc(footerText) || companyName}
     ${invoice.late_fee_pct && invoice.late_fee_pct > 0 && !isQuote && !isCreditNote ? `<p style="font-size:10px;color:#64748b;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
   </div>
+  ${letterheadSrc && letterheadPos === 'bottom' ? letterheadHTML : ''}
 </div>
 </div>
 
