@@ -4,6 +4,8 @@
  * Light theme, professional layout, inline CSS, print-optimized.
  */
 
+import QRCode from 'qrcode';
+
 // ─── HTML escape helper (XSS prevention) ────────────────────
 function esc(s: string | null | undefined): string {
   if (!s) return '';
@@ -657,8 +659,9 @@ export interface InvoiceSettings {
   font_family?: 'system' | 'inter' | 'georgia' | 'mono';
   header_layout?: 'logo-left' | 'logo-center' | 'logo-right';
   column_config?: InvoiceColumnConfig[] | string;
-  payment_qr_url?: string;
+  payment_qr_url?: string;       // legacy: arbitrary payment URL prefix
   show_payment_qr?: boolean | number;
+  portal_base_url?: string;       // overrides default https://accounting.rmpgutah.us
   custom_field_1_label?: string;
   custom_field_2_label?: string;
   custom_field_3_label?: string;
@@ -710,13 +713,50 @@ function watermarkCSS(text: string, opacity: number): string {
   @media print { .watermark { position: fixed; } }`;
 }
 
-// Simple placeholder QR — renders a labeled box. Replace with qrcode-svg for real QR.
-function qrPlaceholder(url: string): string {
+// ─── QR Code Generator (synchronous SVG render from qrcode.create()) ──
+// Uses qrcode's sync .create() to get the raw module matrix, then renders
+// inline SVG ourselves. This avoids making the entire template chain
+// async (qrcode.toString() returns a Promise).
+function generateQRSVG(text: string, sizePx: number = 100): string {
+  if (!text) return '';
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel: 'M' });
+    const moduleCount = qr.modules.size;
+    const data = qr.modules.data;
+    // 4-module quiet zone per QR spec
+    const quietZone = 4;
+    const totalCells = moduleCount + quietZone * 2;
+    const cellSize = sizePx / totalCells;
+    const offset = quietZone * cellSize;
+
+    let rects = '';
+    for (let r = 0; r < moduleCount; r++) {
+      for (let c = 0; c < moduleCount; c++) {
+        if (data[r * moduleCount + c]) {
+          const x = (offset + c * cellSize).toFixed(2);
+          const y = (offset + r * cellSize).toFixed(2);
+          const s = cellSize.toFixed(2);
+          rects += `<rect x="${x}" y="${y}" width="${s}" height="${s}"/>`;
+        }
+      }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${sizePx}" height="${sizePx}" viewBox="0 0 ${sizePx} ${sizePx}" shape-rendering="crispEdges"><rect width="${sizePx}" height="${sizePx}" fill="#ffffff"/><g fill="#0f172a">${rects}</g></svg>`;
+  } catch {
+    return ''; // Graceful degrade — no QR rather than broken PDF
+  }
+}
+
+// Render a complete QR card (svg + caption) for embedding in invoices/POs
+function qrCard(url: string, caption: string = 'Scan to pay online'): string {
   if (!url) return '';
-  return `
-  <div style="display:inline-block;border:2px solid #334155;padding:8px;text-align:center;border-radius:3px;">
-    <div style="width:72px;height:72px;background:repeating-linear-gradient(45deg,#334155 0px,#334155 2px,#fff 2px,#fff 8px);margin-bottom:4px;"></div>
-    <div style="font-size:8px;color:#64748b;max-width:80px;word-break:break-all;">${esc(url)}</div>
+  const svg = generateQRSVG(url, 96);
+  if (!svg) return '';
+  return `<div style="display:inline-flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div style="width:96px;height:96px;flex:0 0 96px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${svg}</div>
+    <div style="font-size:11px;line-height:1.4;color:var(--ink-muted);max-width:160px;">
+      <div style="font-weight:800;color:var(--ink);font-size:11.5px;text-transform:uppercase;letter-spacing:1.1px;margin-bottom:3px;">${esc(caption)}</div>
+      <div style="color:var(--ink-faint);font-size:9.5px;">Scan with your phone camera to view, pay, and download a receipt.</div>
+    </div>
   </div>`;
 }
 
@@ -1152,11 +1192,17 @@ export function generateInvoiceHTML(
     </div>`;
   })();
 
-  const qrSection = showQR && qrUrl
-    ? `<div style="margin-top:20px;display:flex;align-items:center;gap:16px;">
-         ${qrPlaceholder(`${qrUrl}/${invoice.invoice_number || ''}`)}
-         <div style="font-size:11px;color:#64748b;">Scan to pay online</div>
-       </div>`
+  // QR code: prefer the deep-link to the client portal (portal_token)
+  // since it scopes the recipient directly to THIS invoice. Falls back to
+  // a custom payment URL the user configured in settings (legacy path).
+  const portalBase = (settings?.portal_base_url || 'https://accounting.rmpgutah.us').replace(/\/$/, '');
+  const portalDeepLink = invoice.portal_token
+    ? `${portalBase}/portal/${invoice.portal_token}`
+    : (qrUrl ? `${qrUrl.replace(/\/$/, '')}/${invoice.invoice_number || ''}` : '');
+  const showQRResolved = (showQR || !!invoice.portal_token) && !!portalDeepLink && !isQuote;
+  const qrCaption = isCreditNote ? 'View Credit' : (balance > 0.005 ? 'Pay this Invoice' : 'View Receipt');
+  const qrSection = showQRResolved
+    ? `<div style="margin-top:20px;">${qrCard(portalDeepLink, qrCaption)}</div>`
     : '';
 
   // ── Feature #2: payment status progress bar (only for partial payments) ──

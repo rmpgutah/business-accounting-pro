@@ -176,25 +176,43 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
   }, []);
 
-  const buildHTML = () => {
+  // PORTAL: lazy-resolve the invoice's portal token so the printed PDF
+  // can render a scannable QR. Idempotent — the IPC handler returns the
+  // existing token if any, otherwise creates a new one with the
+  // configured expiry. We attach it to a copy of the invoice rather
+  // than mutating state so React doesn't re-render unnecessarily.
+  const buildHTML = async (): Promise<string> => {
     if (!invoice) return '';
-    return generateInvoiceHTML(invoice, activeCompany, client, lines, invoiceSettings || undefined, paymentSchedule);
+    let portalToken: string | null = null;
+    try {
+      const res = await api.generateInvoiceToken(invoice.id);
+      portalToken = (res as any)?.token || null;
+    } catch {
+      portalToken = null; // Graceful: render without QR if token fails
+    }
+    const invoiceWithToken = portalToken
+      ? { ...invoice, portal_token: portalToken }
+      : invoice;
+    const settingsWithBase: any = invoiceSettings
+      ? { ...invoiceSettings, portal_base_url: portalBaseUrl }
+      : { portal_base_url: portalBaseUrl };
+    return generateInvoiceHTML(invoiceWithToken, activeCompany, client, lines, settingsWithBase, paymentSchedule);
   };
 
   const handlePreview = async () => {
-    const html = buildHTML();
+    const html = await buildHTML();
     if (!html) return;
     await api.printPreview(html, `Invoice ${invoice?.invoice_number || ''}`);
   };
 
   const handlePrint = async () => {
-    const html = buildHTML();
+    const html = await buildHTML();
     if (!html) return;
     await api.print(html);
   };
 
   const handleSavePDF = async () => {
-    const html = buildHTML();
+    const html = await buildHTML();
     if (!html) return;
     await api.saveToPDF(html, `Invoice-${invoice?.invoice_number || ''}`);
   };
@@ -293,7 +311,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     setActionError('');
     try {
       // Build the SAME HTML the user saw in preview so the attached PDF matches.
-      const html = buildHTML();
+      const html = await buildHTML();
       const result = await api.sendInvoiceEmail(invoiceId, html || undefined);
       if (result?.error) {
         // VISIBILITY: surface send-invoice errors instead of swallowing
