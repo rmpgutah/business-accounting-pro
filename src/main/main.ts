@@ -7,6 +7,7 @@ import { autoUpdater } from 'electron-updater';
 import { processRecurringTemplates } from './services/recurring-processor';
 import { runNotificationChecks } from './services/notification-engine';
 import { runAlertRules } from './crons/alerts';
+import { runOverdueCheck } from './crons/overdue-checker';
 import { initQueue, connectWebSocket } from './sync';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -196,6 +197,7 @@ function setupAutoUpdater() {
 let recurringInterval: ReturnType<typeof setInterval> | null = null;
 let notificationInterval: ReturnType<typeof setInterval> | null = null;
 let alertRulesInterval: ReturnType<typeof setInterval> | null = null;
+let overdueCheckInterval: ReturnType<typeof setInterval> | null = null;
 // CONCURRENCY: periodic WAL checkpoint — without this the -wal sidecar file
 // can grow unbounded under heavy write load (auto-backup runs every 30s of
 // activity but only checkpoints once on each backup).
@@ -223,6 +225,19 @@ function startBackgroundServices() {
       runAlertRules(getDb());
     } catch (err) {
       console.error('Alert rules startup error:', err);
+    }
+
+    // P1.7 — Auto-flip stale 'sent' invoices/bills to 'overdue' so PDFs
+    // exported afterward render the OVERDUE stamp correctly. Runs at
+    // startup + every 6 hours below.
+    try {
+      const overdueResult = runOverdueCheck();
+      if (overdueResult.invoicesFlipped > 0 || overdueResult.billsFlipped > 0) {
+        console.log(`Overdue checker: flipped ${overdueResult.invoicesFlipped} invoices and ${overdueResult.billsFlipped} bills to overdue across ${overdueResult.companiesScanned} companies`);
+      }
+      if (overdueResult.errors.length) console.warn('Overdue checker errors:', overdueResult.errors);
+    } catch (err) {
+      console.error('Overdue checker startup error:', err);
     }
   }, 2000);
 
@@ -254,6 +269,21 @@ function startBackgroundServices() {
     }
   }, 24 * 60 * 60 * 1000);
 
+  // Auto-overdue checker: every 6 hours. More frequent than the
+  // 24h alert cron because users print PDFs throughout the day —
+  // a 6h cycle ensures the OVERDUE stamp appears by next print
+  // session even if an invoice tipped over due-date midday.
+  overdueCheckInterval = setInterval(() => {
+    try {
+      const r = runOverdueCheck();
+      if (r.invoicesFlipped > 0 || r.billsFlipped > 0) {
+        console.log(`Overdue checker (6h): ${r.invoicesFlipped} invoices, ${r.billsFlipped} bills flipped`);
+      }
+    } catch (err) {
+      console.error('Overdue checker interval error:', err);
+    }
+  }, 6 * 60 * 60 * 1000);
+
   // CONCURRENCY: WAL checkpoint every 5 minutes to bound -wal file growth.
   // TRUNCATE mode resets the WAL to zero bytes if no readers are mid-txn.
   walCheckpointInterval = setInterval(() => {
@@ -277,6 +307,10 @@ function stopBackgroundServices() {
   if (alertRulesInterval) {
     clearInterval(alertRulesInterval);
     alertRulesInterval = null;
+  }
+  if (overdueCheckInterval) {
+    clearInterval(overdueCheckInterval);
+    overdueCheckInterval = null;
   }
   if (walCheckpointInterval) {
     clearInterval(walCheckpointInterval);

@@ -139,6 +139,7 @@ const api = {
     portal_base_url?: string;
     api_endpoint?: string;
     auth_scheme?: 'bearer' | 'apikey-header';
+    health_check_path?: string;
     auto_sync_invoices?: boolean;
     api_key_set?: boolean;
     last_sync_at?: string | null;
@@ -153,6 +154,7 @@ const api = {
     portal_base_url?: string;
     api_endpoint?: string;
     auth_scheme?: 'bearer' | 'apikey-header';
+    health_check_path?: string;
     auto_sync_invoices?: boolean;
     api_key?: string;          // plaintext — encrypted before storage
     clear_api_key?: boolean;

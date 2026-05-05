@@ -2229,6 +2229,7 @@ export function registerIpcHandlers(): void {
         portal_base_url: row?.portal_base_url || 'https://rmpgutahps.us/client/login',
         api_endpoint: row?.api_endpoint || 'https://rmpgutahps.us/api/v1',
         auth_scheme: row?.auth_scheme || 'bearer',
+        health_check_path: row?.health_check_path ?? '/health',
         auto_sync_invoices: !!row?.auto_sync_invoices,
         api_key_set: !!row?.api_key_encrypted,
         last_sync_at: row?.last_sync_at || null,
@@ -2246,6 +2247,7 @@ export function registerIpcHandlers(): void {
     portal_base_url?: string;
     api_endpoint?: string;
     auth_scheme?: 'bearer' | 'apikey-header';
+    health_check_path?: string;
     auto_sync_invoices?: boolean;
     api_key?: string;          // plaintext — encrypted before storage
     clear_api_key?: boolean;   // explicit signal to wipe the stored key
@@ -2260,6 +2262,7 @@ export function registerIpcHandlers(): void {
       if (payload.portal_base_url !== undefined) updates.portal_base_url = payload.portal_base_url;
       if (payload.api_endpoint !== undefined) updates.api_endpoint = payload.api_endpoint;
       if (payload.auth_scheme !== undefined) updates.auth_scheme = payload.auth_scheme;
+      if (payload.health_check_path !== undefined) updates.health_check_path = payload.health_check_path;
       if (payload.auto_sync_invoices !== undefined) updates.auto_sync_invoices = payload.auto_sync_invoices ? 1 : 0;
       if (payload.clear_api_key) {
         updates.api_key_encrypted = null;
@@ -2309,7 +2312,7 @@ export function registerIpcHandlers(): void {
       if (!companyId) return { ok: false, error: 'No active company' };
       ensurePortalIntegrationRow(companyId);
       const row = db.getDb().prepare(
-        `SELECT api_endpoint, auth_scheme FROM portal_integration_settings WHERE company_id = ?`
+        `SELECT api_endpoint, auth_scheme, health_check_path FROM portal_integration_settings WHERE company_id = ?`
       ).get(companyId) as any;
       const apiKey = await getPortalApiKey(companyId);
       if (!apiKey) {
@@ -2328,7 +2331,12 @@ export function registerIpcHandlers(): void {
       } else {
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
-      const url = `${endpoint}/ping`;
+      // Configurable health-check path so users can adapt to whatever
+      // endpoint their portal actually exposes (Laravel /health,
+      // Express /status, REST /api/v1, etc.). Empty string = base URL.
+      const rawPath = (row?.health_check_path ?? '/health').toString().trim();
+      const path = rawPath && !rawPath.startsWith('/') ? `/${rawPath}` : rawPath;
+      const url = `${endpoint}${path}`;
       const start = Date.now();
       const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(10_000) }).catch((err: any) => {
         throw new Error(`Network error: ${err?.message || err}`);

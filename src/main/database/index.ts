@@ -1452,6 +1452,11 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  // Health-check path is appended to api_endpoint for the test
+  // connection. Empty string = ping the base URL itself. Common
+  // Laravel/Express patterns: /health, /status, /api/v1/health.
+  // ALTER added separately so existing rows pick up the default.
+  "ALTER TABLE portal_integration_settings ADD COLUMN health_check_path TEXT DEFAULT '/health'",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

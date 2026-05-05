@@ -30,6 +30,7 @@ const PortalIntegrationSettings: React.FC = () => {
   const [portalBaseUrl, setPortalBaseUrl] = useState('https://rmpgutahps.us/client/login');
   const [apiEndpoint, setApiEndpoint] = useState('https://rmpgutahps.us/api/v1');
   const [authScheme, setAuthScheme] = useState<'bearer' | 'apikey-header'>('bearer');
+  const [healthCheckPath, setHealthCheckPath] = useState('/health');
   const [autoSyncInvoices, setAutoSyncInvoices] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiKeySet, setApiKeySet] = useState(false);
@@ -44,6 +45,7 @@ const PortalIntegrationSettings: React.FC = () => {
       setPortalBaseUrl(res.portal_base_url || 'https://rmpgutahps.us/client/login');
       setApiEndpoint(res.api_endpoint || 'https://rmpgutahps.us/api/v1');
       setAuthScheme(res.auth_scheme || 'bearer');
+      setHealthCheckPath(res.health_check_path ?? '/health');
       setAutoSyncInvoices(!!res.auto_sync_invoices);
       setApiKeySet(!!res.api_key_set);
       setLastTest({
@@ -65,6 +67,7 @@ const PortalIntegrationSettings: React.FC = () => {
         portal_base_url: portalBaseUrl,
         api_endpoint: apiEndpoint,
         auth_scheme: authScheme,
+        health_check_path: healthCheckPath,
         auto_sync_invoices: autoSyncInvoices,
       };
       if (apiKeyInput.trim()) payload.api_key = apiKeyInput.trim();
@@ -164,6 +167,22 @@ const PortalIntegrationSettings: React.FC = () => {
               <option value="bearer">Bearer Token (Authorization: Bearer &lt;key&gt;)</option>
               <option value="apikey-header">X-API-Key Header (X-API-Key: &lt;key&gt;)</option>
             </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Health Check Path <span style={{ textTransform: 'none', color: 'var(--color-text-muted)' }}>(appended to API endpoint when testing)</span>
+            </span>
+            <input
+              className="block-input"
+              value={healthCheckPath}
+              onChange={(e) => setHealthCheckPath(e.target.value)}
+              placeholder="/health"
+              style={{ fontFamily: 'SF Mono, Menlo, Consolas, monospace' }}
+            />
+            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+              Try <code>/health</code>, <code>/status</code>, <code>/api/v1</code>, or leave empty to ping the base URL itself.
+              Test URL: <code>{(apiEndpoint || '').replace(/\/$/, '')}{healthCheckPath && !healthCheckPath.startsWith('/') ? '/' : ''}{healthCheckPath}</code>
+            </span>
           </label>
         </div>
       </div>
