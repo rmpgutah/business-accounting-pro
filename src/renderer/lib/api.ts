@@ -646,6 +646,17 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // P1.12: Duplicate-invoice detector — returns up to 3 recent
+  // invoices for the same client with similar total + due_date.
+  // Caller decides whether to surface a confirm modal.
+  checkDuplicateInvoices: (payload: {
+    client_id: string;
+    total: number;
+    due_date: string | null;
+    excludeId?: string | null;
+  }): Promise<{ duplicates: Array<{ id: string; invoice_number: string; total: number; due_date: string; status: string; created_at: string }> }> =>
+    window.electronAPI.invoke('invoice:check-duplicates', payload),
+
   // mode: 'combined' (single PDF, page-broken) | 'separate' (folder of PDFs) | 'zip' (all in one ZIP archive)
   batchExportPDF: (
     invoiceIds: string[],

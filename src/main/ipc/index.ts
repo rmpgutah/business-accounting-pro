@@ -1056,6 +1056,72 @@ export function registerIpcHandlers(): void {
     return db.runQuery(sql, params);
   });
 
+  // ─── P1.12: Duplicate-Invoice Detector ────────────────────
+  // Returns suspiciously similar invoices for the same client created
+  // in the recent past. Caller (InvoiceForm) decides whether to
+  // surface a confirm modal — this handler is purely a query.
+  //
+  // Match criteria (all required):
+  //   • same client_id
+  //   • total within ±$0.01 of the candidate
+  //   • due_date within ±3 days (or both null)
+  //   • created within last 60 days (avoids matching last year's same-amount invoices)
+  //   • exclude the candidate itself when editing
+  //
+  // Returns up to 3 matches sorted by created_at DESC. Empty array
+  // means no duplicates → caller saves without prompting.
+  ipcMain.handle('invoice:check-duplicates', (_event, payload: {
+    client_id: string;
+    total: number;
+    due_date: string | null;
+    excludeId?: string | null;
+  }) => {
+    try {
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { duplicates: [] };
+      if (!payload.client_id || !Number.isFinite(payload.total)) return { duplicates: [] };
+
+      const dbInstance = db.getDb();
+      // Date window: ±3 days. If candidate has no due_date, only match
+      // against other invoices that also have no due_date.
+      let dueWhereClause = 'AND due_date IS NULL';
+      const params: any[] = [companyId, payload.client_id];
+      if (payload.due_date) {
+        // Anchor at noon LOCAL to dodge timezone day-shifts.
+        const dueTs = new Date(`${payload.due_date}T12:00:00`).getTime();
+        const lo = new Date(dueTs - 3 * 86_400_000);
+        const hi = new Date(dueTs + 3 * 86_400_000);
+        const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        dueWhereClause = 'AND due_date BETWEEN ? AND ?';
+        params.push(fmt(lo), fmt(hi));
+      }
+      // 60-day creation window: matches typical recurring/monthly cadence
+      // without flagging last year's same-amount invoice.
+      params.push(payload.total - 0.01, payload.total + 0.01);
+      if (payload.excludeId) params.push(payload.excludeId);
+
+      const sql = `
+        SELECT id, invoice_number, total, due_date, status, created_at
+        FROM invoices
+        WHERE company_id = ?
+          AND client_id = ?
+          ${dueWhereClause}
+          AND total BETWEEN ? AND ?
+          AND created_at >= datetime('now', '-60 days')
+          ${payload.excludeId ? 'AND id != ?' : ''}
+        ORDER BY created_at DESC
+        LIMIT 3
+      `;
+      const rows = dbInstance.prepare(sql).all(...params) as any[];
+      return { duplicates: rows };
+    } catch (err: any) {
+      // Defensive: never block save on a duplicate-check failure.
+      // Return empty list and log so the caller proceeds normally.
+      console.warn('[invoice:check-duplicates] failed:', err?.message);
+      return { duplicates: [] };
+    }
+  });
+
   // ─── Atomic invoice save (header + line items in one transaction) ─────────
   // Prevents orphaned invoice headers when a line item insert fails.
   ipcMain.handle('invoice:save', async (_event, { invoiceId, invoiceData, lineItems, isEdit }: {

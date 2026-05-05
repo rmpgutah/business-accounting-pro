@@ -333,6 +333,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   const [savingToCatalog, setSavingToCatalog] = useState<number | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [showSchedule, setShowSchedule] = useState(false);
+  // P1.12: Duplicate-invoice detection — populated by checkDuplicates()
+  // when handleSave finds a suspiciously similar recent invoice. Render
+  // path shows a confirm modal; on Continue we set bypassDuplicate=true
+  // and re-call handleSave.
+  const [duplicateCandidates, setDuplicateCandidates] = useState<Array<{ id: string; invoice_number: string; total: number; due_date: string; status: string; created_at: string }>>([]);
+  const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false);
 
   const [form, setForm] = useState<InvoiceFormData>({
     client_id: '',
@@ -850,7 +856,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   );
 
   // ─── Save ────────────────────────────────────────────
-  const handleSave = async (sendAfterSave: boolean) => {
+  const handleSave = async (sendAfterSave: boolean, bypassDuplicate: boolean = false) => {
     if (saving) return;
     const activeLines = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description.trim() || l.unit_price > 0));
 
@@ -894,6 +900,35 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       return;
     }
     setErrors([]);
+
+    // ── P1.12: Duplicate-invoice detection ─────────────────
+    // Run BEFORE setSaving so the user can cancel without leaving
+    // the form in a "saving…" state. Skip when:
+    //   • already user-bypassed in a prior call
+    //   • editing an existing invoice (the old one would self-match)
+    //   • no client selected (can't dedupe across clients)
+    if (!bypassDuplicate && !isEdit && form.client_id) {
+      try {
+        const dupRes = await api.checkDuplicateInvoices({
+          client_id: form.client_id,
+          total: roundCents(total),
+          due_date: form.due_date || null,
+          excludeId: isEdit ? invoiceId : null,
+        });
+        if (dupRes.duplicates && dupRes.duplicates.length > 0) {
+          // Show modal — user clicks Continue to bypass and proceed,
+          // or Cancel to abort. handleSave is re-invoked from the
+          // modal Continue button with bypassDuplicate=true.
+          setDuplicateCandidates(dupRes.duplicates);
+          setPendingSendAfterSave(sendAfterSave);
+          return; // Modal renders; save resumes via continueDuplicate()
+        }
+      } catch (err) {
+        // Best-effort: never block save on detection failure.
+        console.warn('Duplicate detection failed; proceeding with save:', err);
+      }
+    }
+
     setSaving(true);
 
     try {
@@ -1836,6 +1871,86 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           </div>
         )}
       </div>
+
+      {/* P1.12 — Duplicate-invoice confirm modal. Renders when
+          checkDuplicateInvoices returned matches; user picks Continue
+          (re-invokes handleSave with bypassDuplicate=true) or Cancel
+          (clears state, returns control to the form). */}
+      {duplicateCandidates.length > 0 && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+          onClick={() => { setDuplicateCandidates([]); setPendingSendAfterSave(false); }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--color-bg-primary)',
+              border: '1px solid var(--color-border-primary)',
+              borderRadius: 8,
+              maxWidth: 560,
+              width: '100%',
+              padding: 24,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 20 }} aria-hidden>⚠️</span>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Possible duplicate invoice
+              </h3>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 14 }}>
+              The same client has {duplicateCandidates.length === 1 ? 'a recent invoice' : `${duplicateCandidates.length} recent invoices`} with a similar total and due date. This is the most common cause of double-billing — review before continuing.
+            </p>
+            <div style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: 12, marginBottom: 16, maxHeight: 200, overflowY: 'auto' }}>
+              {duplicateCandidates.map((d) => {
+                const ageDays = Math.max(0, Math.floor((Date.now() - new Date(d.created_at).getTime()) / 86_400_000));
+                return (
+                  <div key={d.id} style={{ fontSize: 12, padding: '6px 0', borderBottom: '1px dashed var(--color-border-primary)', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{d.invoice_number}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        {d.status} · saved {ageDays === 0 ? 'today' : `${ageDays} day${ageDays === 1 ? '' : 's'} ago`}
+                        {d.due_date ? ` · due ${d.due_date}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, fontSize: 13, color: 'var(--color-text-primary)' }}>
+                      ${d.total.toFixed(2)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                className="block-btn"
+                onClick={() => { setDuplicateCandidates([]); setPendingSendAfterSave(false); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="block-btn-primary"
+                onClick={() => {
+                  const sendAfter = pendingSendAfterSave;
+                  setDuplicateCandidates([]);
+                  setPendingSendAfterSave(false);
+                  // Re-invoke handleSave with bypass flag set
+                  handleSave(sendAfter, true);
+                }}
+              >
+                Save Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
