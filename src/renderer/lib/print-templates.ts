@@ -47,65 +47,246 @@ const fmtDate = (d: string) => {
 
 // ─── Shared base styles ─────────────────────────────────────
 const baseStyles = `
+  /* ════════════════════════════════════════════════════════════════
+     BAP Print Stylesheet — modernized 2026-05-05
+     Design tokens layered on top so legacy classes keep working.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Design tokens — change these to retheme everything at once */
+  :root {
+    --ink:          #0f172a;
+    --ink-soft:     #1e293b;
+    --ink-muted:    #475569;
+    --ink-faint:    #64748b;
+    --ink-faintest: #94a3b8;
+    --paper:        #ffffff;
+    --paper-soft:   #fafbfc;
+    --paper-tint:   #f8fafc;
+    --rule:         #e2e8f0;
+    --rule-soft:    #f1f5f9;
+    --rule-strong:  #cbd5e1;
+    --accent:       #2563eb;
+    --accent-soft:  #dbeafe;
+    --positive:     #16a34a;
+    --positive-soft:#dcfce7;
+    --negative:     #dc2626;
+    --negative-soft:#fee2e2;
+    --warning:      #d97706;
+    --warning-soft: #fef3c7;
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    color: #1e293b;
+    color: var(--ink-soft);
     font-size: 12px;
     line-height: 1.55;
-    background: #fff;
+    background: var(--paper);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'kern', 'liga', 'calt';
   }
-  @page { size: letter; margin: 0.5in; }
+  /* Page numbers (Chromium printToPDF supports CSS Paged Media counters
+     in modern Electron). Counter resets per @page rule. Falls back gracefully
+     if the engine doesn't render the @bottom-right region. */
+  @page {
+    size: letter;
+    margin: 0.55in 0.5in 0.65in 0.5in;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: 'Inter', sans-serif;
+      font-size: 8.5pt;
+      color: #94a3b8;
+    }
+  }
   table { width: 100%; border-collapse: collapse; table-layout: auto; }
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
-  th, td { padding: 7px 12px; text-align: left; word-wrap: break-word; overflow-wrap: anywhere; }
+  th, td { padding: 9px 14px; text-align: left; word-wrap: break-word; overflow-wrap: anywhere; }
   th {
-    font-size: 8px;
+    font-size: 8.5px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: #64748b;
-    border-bottom: 2px solid #0f172a;
-    background: #f8fafc;
+    letter-spacing: 0.7px;
+    color: var(--ink-faint);
+    border-bottom: 1.5px solid var(--ink);
+    background: linear-gradient(180deg, var(--paper-tint) 0%, var(--paper-soft) 100%);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  td { border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 11px; }
-  tr:nth-child(even) td { background: rgba(248,250,252,0.5); }
+  td { border-bottom: 1px solid var(--rule); color: var(--ink-muted); font-size: 11px; }
+  tr:nth-child(even) td { background: rgba(248,250,252,0.55); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr:hover td { background: rgba(219, 234, 254, 0.25); }
   .text-right { text-align: right; font-variant-numeric: tabular-nums; }
   .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Menlo', Consolas, 'Courier New', monospace; }
   .font-bold { font-weight: 700; }
-  .text-muted { color: #94a3b8; }
-  .text-dark { color: #0f172a; }
-  .text-green { color: #16a34a; }
-  .text-red { color: #dc2626; }
-  .text-blue { color: #2563eb; }
+  .text-muted { color: var(--ink-faintest); }
+  .text-dark { color: var(--ink); }
+  .text-green { color: var(--positive); }
+  .text-red { color: var(--negative); }
+  .text-blue { color: var(--accent); }
   .section-label {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
-    color: #64748b; letter-spacing: 0.8px; margin-bottom: 6px;
+    color: var(--ink-faint); letter-spacing: 0.8px; margin-bottom: 6px;
+  }
+  /* Hero "big number" — for invoice total, balance due, net pay, etc. */
+  .hero-num {
+    font-family: 'Inter', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+  }
+  .hero-num-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  /* Watermark for DRAFT / VOID / PAID / OVERDUE stamps */
+  .stamp-watermark {
+    position: fixed;
+    top: 38%;
+    left: 18%;
+    transform: rotate(-22deg);
+    font-size: 140px;
+    font-weight: 900;
+    letter-spacing: 12px;
+    color: rgba(0,0,0,0.05);
+    pointer-events: none;
+    z-index: 0;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .stamp-watermark.draft   { color: rgba(100, 116, 139, 0.10); }
+  .stamp-watermark.paid    { color: rgba(22, 163, 74, 0.10); }
+  .stamp-watermark.void    { color: rgba(220, 38, 38, 0.10); }
+  .stamp-watermark.overdue { color: rgba(220, 38, 38, 0.10); }
+  /* Accent gradient bar — subtle decorative element for headers */
+  .accent-bar {
+    height: 4px;
+    background: linear-gradient(90deg, var(--ink) 0%, var(--accent) 50%, var(--ink) 100%);
+    margin-bottom: 18px;
+    border-radius: 2px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Status pill — replaces the older .fd-status-badge with cleaner look */
+  .status-pill {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1.5px solid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .status-pill.paid     { color: var(--positive); border-color: var(--positive); background: var(--positive-soft); }
+  .status-pill.draft    { color: var(--ink-faint); border-color: var(--rule-strong); background: var(--paper-tint); }
+  .status-pill.sent     { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .status-pill.overdue  { color: var(--negative); border-color: var(--negative); background: var(--negative-soft); }
+  .status-pill.partial  { color: var(--warning); border-color: var(--warning); background: var(--warning-soft); }
+  .status-pill.cancelled, .status-pill.void { color: var(--ink-faint); border-color: var(--ink-faintest); background: var(--paper-tint); text-decoration: line-through; }
+  /* Subtle card surface for sub-sections inside templates */
+  .card-surface {
+    background: var(--paper-soft);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 14px 16px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .card-surface.elevated {
+    box-shadow: 0 1px 0 rgba(15,23,42,0.04);
   }
   h1, h2, h3, h4, h5, h6 { page-break-after: avoid; break-after: avoid; }
   img { max-width: 100%; height: auto; }
   /* Let totals/footer blocks stay together */
   .totals, .totals-box, .balance-box, .net-pay-box, .signature-block, .sig-block, .footer-co { page-break-inside: avoid; break-inside: avoid; }
-  /* ── Enhanced report utilities ── */
+  /* ── Enhanced report utilities (modernized 2026-05-05) ── */
   .rpt-page { padding: 40px 44px; }
-  .rpt-hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px; }
-  .rpt-co { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
-  .rpt-co-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
-  .rpt-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #0f172a; padding: 5px 14px; border: 2px solid #0f172a; }
-  .rpt-meta { display: flex; gap: 24px; margin-bottom: 20px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; }
-  .rpt-meta-item .rpt-meta-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #94a3b8; display: block; margin-bottom: 1px; }
-  .rpt-meta-item .rpt-meta-val { font-size: 12px; font-weight: 600; color: #0f172a; }
-  .rpt-section { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #fff; padding: 5px 12px; margin-top: 24px; margin-bottom: 0; background: #0f172a; }
-  .rpt-section-alt { background: #334155; }
-  .rpt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-  .rpt-stat { border: 1px solid #e2e8f0; padding: 12px 14px; background: #f8fafc; }
-  .rpt-stat-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #94a3b8; margin-bottom: 3px; }
-  .rpt-stat-val { font-size: 18px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
-  .rpt-stat-sub { font-size: 9px; color: #94a3b8; margin-top: 2px; }
-  .rpt-total td { border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; font-weight: 700; }
-  .rpt-footer { display: flex; justify-content: space-between; margin-top: 28px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; }
+  .rpt-hdr {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid var(--ink); padding-bottom: 18px; margin-bottom: 24px;
+  }
+  .rpt-co { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.4px; }
+  .rpt-co-sub { font-size: 11px; color: var(--ink-faint); margin-top: 4px; font-weight: 500; }
+  .rpt-badge {
+    font-size: 11px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--ink); padding: 7px 16px;
+    border: 2px solid var(--ink); border-radius: 6px;
+    background: linear-gradient(180deg, #ffffff 0%, var(--paper-tint) 100%);
+  }
+  .rpt-meta {
+    display: flex; gap: 28px; margin-bottom: 22px; padding: 14px 18px;
+    background: var(--paper-tint); border: 1px solid var(--rule);
+    border-radius: 6px; border-left: 3px solid var(--accent);
+  }
+  .rpt-meta-item .rpt-meta-label {
+    font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--ink-faint); display: block; margin-bottom: 3px;
+  }
+  .rpt-meta-item .rpt-meta-val {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .rpt-section {
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.6px; color: #fff; padding: 8px 14px;
+    margin-top: 26px; margin-bottom: 0;
+    background: linear-gradient(90deg, var(--ink) 0%, #1e293b 100%);
+    border-radius: 6px 6px 0 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rpt-section-alt { background: linear-gradient(90deg, #334155 0%, #475569 100%); }
+  .rpt-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-bottom: 22px;
+  }
+  .rpt-stat {
+    border: 1px solid var(--rule); padding: 14px 16px;
+    background: linear-gradient(180deg, #ffffff 0%, var(--paper-tint) 100%);
+    border-radius: 8px; position: relative; overflow: hidden;
+    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -4px rgba(15,23,42,0.06);
+  }
+  .rpt-stat::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--ink), var(--accent), var(--ink));
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rpt-stat-label {
+    font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--ink-faint); margin-bottom: 6px;
+  }
+  .rpt-stat-val {
+    font-size: 22px; font-weight: 800; color: var(--ink);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.4px; line-height: 1.05;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+  }
+  .rpt-stat-sub { font-size: 10px; color: var(--ink-faint); margin-top: 3px; font-weight: 500; }
+  .rpt-stat.positive .rpt-stat-val { color: var(--positive); }
+  .rpt-stat.negative .rpt-stat-val { color: var(--negative); }
+  .rpt-stat.warning .rpt-stat-val { color: var(--warning); }
+  .rpt-total td {
+    border-top: 2px solid var(--ink); border-bottom: none;
+    background: var(--paper-tint); font-weight: 800; color: var(--ink);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rpt-footer {
+    display: flex; justify-content: space-between; margin-top: 32px;
+    padding-top: 12px; border-top: 1px solid var(--rule);
+    font-size: 9px; color: var(--ink-faint); font-weight: 500;
+  }
   @media print { .rpt-page { padding: 0; } .no-break { page-break-inside: avoid; } }
 
   /* ── Legal document utilities (demand letters, affidavits, court packets) ── */
@@ -155,34 +336,159 @@ const baseStyles = `
   .legal-bates-page { counter-reset: bates; }
   .legal-bates-mark::after { counter-increment: bates; content: "BAP-" counter(bates, decimal-leading-zero); }
 
-  /* ── Customer-facing financial document utilities ── */
+  /* ── Customer-facing financial document utilities (modernized 2026-05-05) ── */
   .fd-font { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
   .fd-tnum { font-variant-numeric: tabular-nums; }
   .fd-mono { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
-  .fd-letterhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 22px; min-height: 72px; }
+  .fd-letterhead {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 24px; margin-bottom: 24px; padding-bottom: 18px;
+    border-bottom: 2px solid var(--ink);
+    min-height: 76px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
   .fd-letterhead-left { flex: 1 1 auto; min-width: 0; }
-  .fd-letterhead-right { text-align: right; min-width: 200px; flex-shrink: 0; }
-  .fd-co-name { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.2px; }
-  .fd-co-line { font-size: 10.5px; color: #475569; line-height: 1.55; margin-top: 2px; }
-  .fd-doc-type { font-size: 28px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase; line-height: 1; }
-  .fd-doc-num { font-size: 12px; color: #475569; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
-  .fd-doc-date { font-size: 10.5px; color: #64748b; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .fd-meta-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 28px; padding: 10px 14px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px; }
-  .fd-meta-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10.5px; }
-  .fd-meta-row .lbl { color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 9px; }
-  .fd-meta-row .val { color: #0f172a; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .fd-addr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
-  .fd-addr-grid.single { grid-template-columns: 1fr; max-width: 50%; }
-  .fd-addr-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 11px 14px; }
-  .fd-addr-lbl { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #64748b; margin-bottom: 5px; }
-  .fd-addr-name { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
-  .fd-addr-detail { font-size: 10.5px; color: #475569; line-height: 1.55; }
-  .fd-row-chip { display: inline-block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #64748b; background: #f1f5f9; padding: 1px 5px; border-radius: 2px; margin-left: 6px; vertical-align: middle; }
-  .fd-status-badge { display: inline-block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px; vertical-align: middle; margin-left: 8px; }
-  .fd-totals-card { float: right; min-width: 280px; max-width: 320px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .fd-quote-sig { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-  .fd-sig-line { border-bottom: 1px solid #0f172a; height: 32px; }
-  .fd-sig-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-top: 4px; }
+  .fd-letterhead-right { text-align: right; min-width: 220px; flex-shrink: 0; }
+  /* Subtle accent bar above the letterhead (decorative) */
+  .fd-letterhead-accent {
+    height: 4px;
+    background: linear-gradient(90deg, var(--ink) 0%, var(--accent) 60%, var(--ink) 100%);
+    margin-bottom: 20px;
+    border-radius: 2px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-co-name {
+    font-size: 22px; font-weight: 800; color: var(--ink);
+    letter-spacing: -0.4px; line-height: 1.1;
+  }
+  .fd-co-line { font-size: 10.5px; color: var(--ink-muted); line-height: 1.6; margin-top: 4px; }
+  .fd-doc-type {
+    font-size: 34px; font-weight: 900; color: var(--ink);
+    letter-spacing: -0.6px; text-transform: uppercase; line-height: 0.95;
+  }
+  .fd-doc-num {
+    font-size: 13px; color: var(--ink-muted); font-weight: 700;
+    margin-top: 8px; font-variant-numeric: tabular-nums; letter-spacing: 0.5px;
+  }
+  .fd-doc-date {
+    font-size: 10.5px; color: var(--ink-faint); margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .fd-meta-strip {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 32px;
+    padding: 12px 16px; background: var(--paper-tint);
+    border: 1px solid var(--rule); border-radius: 6px;
+    margin-bottom: 22px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-meta-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10.5px; gap: 12px; }
+  .fd-meta-row .lbl {
+    color: var(--ink-faint); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.7px; font-size: 9px;
+  }
+  .fd-meta-row .val {
+    color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .fd-addr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .fd-addr-grid.single { grid-template-columns: 1fr; max-width: 55%; }
+  .fd-addr-card {
+    background: var(--paper-soft);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 13px 16px;
+    border-radius: 4px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-addr-card.from { border-left-color: var(--ink-faint); }
+  .fd-addr-lbl {
+    font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--ink-faint); margin-bottom: 6px;
+  }
+  .fd-addr-name { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 4px; line-height: 1.2; }
+  .fd-addr-detail { font-size: 10.5px; color: var(--ink-muted); line-height: 1.6; }
+  .fd-row-chip {
+    display: inline-block; font-size: 8px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 2px 6px; border-radius: 999px; margin-left: 6px; vertical-align: middle;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-status-badge {
+    display: inline-block; font-size: 9px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1.2px;
+    padding: 4px 10px; border-radius: 999px; border: 1.5px solid;
+    vertical-align: middle; margin-left: 10px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  /* Modern totals card — clearer hierarchy, hero "total" treatment */
+  .fd-totals-card {
+    float: right; min-width: 320px; max-width: 360px;
+    padding: 0; background: var(--paper);
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -2px rgba(15,23,42,0.04);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-totals-card .totals-rows { padding: 14px 18px 6px; }
+  .fd-totals-card .totals-row {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 6px 0; font-size: 11.5px; color: var(--ink-muted);
+  }
+  .fd-totals-card .totals-row .val {
+    font-variant-numeric: tabular-nums;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-weight: 600; color: var(--ink-soft);
+  }
+  .fd-totals-card .totals-row.subtle .val { color: var(--ink-faint); font-weight: 500; }
+  .fd-totals-card .totals-divider {
+    height: 1px; background: var(--rule); margin: 4px 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  /* Hero TOTAL row — gradient accent strip background */
+  .fd-totals-card .totals-grand {
+    margin-top: 4px; padding: 16px 18px;
+    background: linear-gradient(180deg, var(--ink) 0%, #1e293b 100%);
+    color: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-totals-card .totals-grand .lbl {
+    font-size: 10px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1.4px;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 4px;
+  }
+  .fd-totals-card .totals-grand .val {
+    font-size: 24px; font-weight: 800;
+    color: #fff; letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+    font-family: 'Inter', sans-serif;
+  }
+  .fd-totals-card .totals-paid {
+    padding: 10px 18px; background: var(--positive-soft);
+    color: var(--positive); font-size: 11px; font-weight: 700;
+    display: flex; justify-content: space-between;
+    border-top: 1px solid var(--positive);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-totals-card .totals-balance-due {
+    padding: 12px 18px; background: var(--negative-soft);
+    color: var(--negative); font-size: 13px; font-weight: 800;
+    display: flex; justify-content: space-between;
+    border-top: 1px solid var(--negative);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fd-quote-sig {
+    margin-top: 36px; padding-top: 16px;
+    border-top: 1px solid var(--rule-strong);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 36px;
+  }
+  .fd-sig-line { border-bottom: 1px solid var(--ink); height: 36px; }
+  .fd-sig-lbl {
+    font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: var(--ink-faint); margin-top: 6px;
+  }
   @media print {
     .fd-totals-card { background: #f8fafc !important; }
   }
@@ -200,19 +506,25 @@ const baseStyles = `
 `;
 
 // ─── Shared report header builder ──────────────────────────
+// Modernized: gradient accent bar above the header, larger document title
+// chip with subtle accent, and an optional dateRange prefix.
 function reportHeader(companyName: string, docTitle: string, dateRange?: string): string {
-  return `<div class="rpt-hdr">
+  return `<div class="accent-bar"></div>
+  <div class="rpt-hdr" style="border-bottom-color: var(--ink); padding-bottom: 18px; margin-bottom: 24px;">
     <div>
-      <div class="rpt-co">${esc(companyName)}</div>
-      ${dateRange ? `<div class="rpt-co-sub">${esc(dateRange)}</div>` : ''}
+      <div class="rpt-co" style="font-size: 22px; letter-spacing: -0.4px;">${esc(companyName)}</div>
+      ${dateRange ? `<div class="rpt-co-sub" style="font-size: 11px; color: var(--ink-faint); margin-top: 4px; font-weight: 500;">${esc(dateRange)}</div>` : ''}
     </div>
-    <div class="rpt-badge">${esc(docTitle)}</div>
+    <div class="rpt-badge" style="border-color: var(--ink); color: var(--ink); padding: 7px 16px; letter-spacing: 1.4px; font-size: 11px; background: linear-gradient(180deg, #fff, var(--paper-tint)); -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(docTitle)}</div>
   </div>`;
 }
 
 function reportFooter(companyName: string): string {
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  return `<div class="rpt-footer"><span>${esc(companyName)}</span><span>Generated ${date}</span></div>`;
+  return `<div class="rpt-footer" style="border-top-color: var(--rule-strong); padding-top: 12px; margin-top: 32px; font-size: 9px;">
+    <span style="font-weight: 600; color: var(--ink-muted);">${esc(companyName)}</span>
+    <span style="color: var(--ink-faintest);">Generated ${date}</span>
+  </div>`;
 }
 
 // ─── Status stamp helper ─────────────────────────────────────
@@ -883,13 +1195,84 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .meta-row { display: flex; gap: 36px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; margin-bottom: 24px; flex-wrap: wrap; }
 .meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; }
 .meta-value { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px; }
-.totals { display: flex; justify-content: flex-end; margin-top: 10px; }
-.totals-box { width: 280px; }
-.totals-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; color: #475569; }
-.totals-row span:last-child { font-variant-numeric: tabular-nums; }
-.totals-total { border-top: 2px solid ${accent}; font-weight: 800; font-size: 16px; color: #0f172a; padding-top: 10px; margin-top: 4px; }
-.totals-paid { color: #16a34a; }
-.totals-balance { font-weight: 700; font-size: 14px; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 4px; color: ${balance > 0.005 ? '#dc2626' : '#16a34a'}; }
+.totals { display: flex; justify-content: flex-end; margin-top: 14px; }
+.totals-box {
+  width: 320px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 12px -4px rgba(15,23,42,0.06);
+}
+.totals-box > .totals-row,
+.totals-box > [class^="totals-row"] { padding-left: 18px; padding-right: 18px; }
+.totals-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+.totals-row > span:first-child { text-transform: none; }
+.totals-row > span:last-child {
+  font-variant-numeric: tabular-nums;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  color: #1e293b;
+  font-weight: 600;
+}
+.totals-row:first-child { padding-top: 14px; }
+.totals-total {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff !important;
+  padding: 14px 18px !important;
+  margin-top: 6px;
+  border-top: none;
+  font-weight: 800;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+}
+.totals-total > span:first-child {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: rgba(255,255,255,0.72);
+  align-self: center;
+}
+.totals-total > span:last-child {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #ffffff !important;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.totals-paid {
+  background: rgba(22,163,74,0.06);
+  color: #16a34a !important;
+  padding: 10px 18px !important;
+  border-top: 1px solid rgba(22,163,74,0.18);
+  font-size: 11px;
+  font-weight: 600;
+}
+.totals-paid > span:last-child { color: #16a34a !important; }
+.totals-balance {
+  background: ${balance > 0.005 ? 'rgba(220,38,38,0.06)' : 'rgba(22,163,74,0.06)'};
+  color: ${balance > 0.005 ? '#dc2626' : '#16a34a'} !important;
+  padding: 12px 18px !important;
+  border-top: 1px solid ${balance > 0.005 ? 'rgba(220,38,38,0.2)' : 'rgba(22,163,74,0.2)'};
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.totals-balance > span:last-child {
+  color: ${balance > 0.005 ? '#dc2626' : '#16a34a'} !important;
+  font-size: 14px;
+  font-weight: 800;
+}
 .footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e2e8f0; }
 .footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
 .footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; margin-bottom: 4px; }
@@ -1284,58 +1667,74 @@ export function generatePayStubHTML(
   }
   .page { max-width: 680px; margin: 0 auto; padding: 36px 40px; }
 
-  /* ── Header ── */
+  /* ── Header (modernized 2026-05-05) ── */
   .header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding-bottom: 20px;
+    padding-bottom: 22px;
     border-bottom: 3px solid #0f172a;
     margin-bottom: 24px;
+    position: relative;
   }
-  .co-name { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
-  .co-legal { font-size: 10px; color: #94a3b8; margin-top: 1px; }
-  .co-detail { font-size: 10px; color: #64748b; margin-top: 6px; line-height: 1.6; }
+  .header::before {
+    content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, #0f172a 0%, ${psAccent} 50%, #0f172a 100%);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .co-name { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; }
+  .co-legal { font-size: 10px; color: #94a3b8; margin-top: 2px; font-weight: 500; }
+  .co-detail { font-size: 10.5px; color: #64748b; margin-top: 7px; line-height: 1.6; }
   .doc-label {
-    font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.5px; color: #0f172a;
-    padding: 6px 16px;
+    font-size: 12px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.6px; color: #0f172a;
+    padding: 8px 18px;
     border: 2px solid #0f172a;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
-  /* ── Employee Info Grid ── */
+  /* ── Employee Info Grid (modernized) ── */
   .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 0;
     border: 1px solid #cbd5e1;
+    border-radius: 8px;
     margin-bottom: 24px;
+    overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -4px rgba(15,23,42,0.05);
   }
   .info-cell {
-    padding: 10px 14px;
+    padding: 11px 14px;
     border-right: 1px solid #e2e8f0;
     border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
   }
   .info-cell:nth-child(4n) { border-right: none; }
   .info-cell:nth-last-child(-n+4) { border-bottom: none; }
   .info-label {
-    font-size: 8px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 2px;
+    font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.1px; color: #94a3b8; margin-bottom: 3px;
   }
-  .info-value { font-size: 12px; font-weight: 600; color: #0f172a; }
-  .info-value.emp-name { font-size: 14px; font-weight: 800; }
+  .info-value { font-size: 12.5px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .info-value.emp-name { font-size: 14px; font-weight: 800; letter-spacing: -0.2px; }
 
-  /* ── Section Headers ── */
+  /* ── Section Headers (modernized) ── */
   .section {
-    font-size: 9px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.2px; color: #fff;
-    padding: 5px 12px; margin-top: 20px; margin-bottom: 0;
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.6px; color: #fff;
+    padding: 8px 14px; margin-top: 22px; margin-bottom: 0;
+    border-radius: 6px 6px 0 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .section-earn { background: #0f172a; }
-  .section-ded { background: #7f1d1d; }
-  .section-summary { background: #14532d; }
-  .section-employer { background: #475569; }
-  .section-deposit { background: #1e3a8a; }
+  .section-earn    { background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%); }
+  .section-ded     { background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 100%); }
+  .section-summary { background: linear-gradient(90deg, #14532d 0%, #166534 100%); }
+  .section-employer{ background: linear-gradient(90deg, #475569 0%, #64748b 100%); }
+  .section-deposit { background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%); }
 
   /* ── Employee identity block ── */
   .id-block {
@@ -1413,23 +1812,51 @@ export function generatePayStubHTML(
   .total-row td { border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; }
   .sub-row td { font-size: 10px; color: #64748b; padding-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #e2e8f0; }
 
-  /* ── Net Pay Box ── */
+  /* ── Net Pay Box (hero, modernized) ── */
   .net-box {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 24px;
-    padding: 20px 24px;
-    background: #f0fdf4;
+    margin-top: 26px;
+    padding: 22px 26px;
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #f0fdf4 100%);
     border: 2px solid #86efac;
+    border-radius: 10px;
     page-break-inside: avoid;
     break-inside: avoid;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 0 rgba(22,163,74,0.06), 0 8px 16px -6px rgba(22,163,74,0.16);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .net-current { }
-  .net-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #16a34a; }
-  .net-amount { font-size: 32px; font-weight: 800; color: #15803d; font-variant-numeric: tabular-nums; margin-top: 2px; letter-spacing: -0.5px; }
-  .net-ytd-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; text-align: right; }
-  .net-ytd-amount { font-size: 16px; font-weight: 700; color: #334155; text-align: right; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .net-box::before {
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 5px;
+    background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .net-current { padding-left: 8px; }
+  .net-label {
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.4px; color: #16a34a;
+  }
+  .net-amount {
+    font-size: 36px; font-weight: 800; color: #15803d;
+    font-variant-numeric: tabular-nums; margin-top: 4px;
+    letter-spacing: -0.7px;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    line-height: 1.05;
+  }
+  .net-ytd-label {
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.4px; color: #64748b; text-align: right;
+  }
+  .net-ytd-amount {
+    font-size: 18px; font-weight: 800; color: #334155;
+    text-align: right; margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    letter-spacing: -0.3px;
+  }
 
   /* ── Waterfall Summary ── */
   .waterfall { margin-top: 20px; }
@@ -2109,16 +2536,20 @@ export function generateReportHTML(
   }).join('');
 
   const summaryHTML = summary && summary.length > 0 ? `
-    <div class="no-break" style="margin-top:20px;">
+    <div class="no-break" style="margin-top:24px;">
       <div class="rpt-section" style="margin-top:0;">Summary</div>
+      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;background:#ffffff;box-shadow:0 1px 0 rgba(15,23,42,0.04),0 4px 12px -4px rgba(15,23,42,0.06);-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       ${summary.map((s, i) => {
         const color = s.accent === 'green' ? '#16a34a' : s.accent === 'red' ? '#dc2626' : '#0f172a';
-        const bg = i % 2 === 0 ? 'background:#f8fafc;' : '';
-        return `<div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;border-bottom:1px solid #f1f5f9;${bg}">
-          <span style="font-weight:700;color:#0f172a;">${esc(s.label)}</span>
-          <span style="font-weight:800;color:${color};font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${esc(s.value)}</span>
+        const bg = i % 2 === 0 ? 'background:#f8fafc;' : 'background:#ffffff;';
+        const isLast = i === summary.length - 1;
+        const border = isLast ? '' : 'border-bottom:1px solid #f1f5f9;';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;font-size:12px;${bg}${border}-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <span style="font-weight:700;color:#0f172a;letter-spacing:0.1px;">${esc(s.label)}</span>
+          <span style="font-weight:800;color:${color};font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;font-size:13px;letter-spacing:-0.2px;">${esc(s.value)}</span>
         </div>`;
       }).join('')}
+      </div>
     </div>
   ` : '';
 
@@ -3530,17 +3961,16 @@ ${allocationHTML}
 
 <div style="overflow:hidden;margin-top:18px;">
   <div class="fd-totals-card">
-    <div class="fd-meta-row"><span class="lbl">Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-    ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
-    <div class="fd-meta-row" style="border-top:1px solid #cbd5e1;margin-top:4px;padding-top:6px;">
-      <span class="lbl" style="font-size:10px;">Total</span>
-      <span class="val" style="font-size:13px;font-weight:700;">${fmt(total)}</span>
+    <div class="totals-rows">
+      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
+      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
     </div>
-    ${paid > 0 ? `<div class="fd-meta-row"><span class="lbl">Amount Paid</span><span class="val" style="color:#16a34a;">-${fmt(paid)}</span></div>` : ''}
-    <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
-      <span class="lbl" style="font-size:10px;">Balance Due</span>
-      <span class="val" style="font-size:14px;color:${balance > 0 ? '#dc2626' : '#16a34a'};">${fmt(balance)}</span>
+    <div class="totals-grand">
+      <div class="lbl">Total</div>
+      <div class="val">${fmt(total)}</div>
     </div>
+    ${paid > 0 ? `<div class="totals-paid"><span>Amount Paid</span><span style="font-variant-numeric:tabular-nums;">−${fmt(paid)}</span></div>` : ''}
+    ${(paid > 0 || balance !== total) ? `<div class="totals-balance-due"><span>Balance Due</span><span style="font-variant-numeric:tabular-nums;">${fmt(balance)}</span></div>` : ''}
   </div>
 </div>
 
@@ -3718,18 +4148,20 @@ ${deliveryTimelineHTML}
 
 <div style="overflow:hidden;margin-top:18px;">
   <div class="fd-totals-card">
-    <div class="fd-meta-row"><span class="lbl">Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-    ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
-    <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
-      <span class="lbl" style="font-size:10px;">Total</span>
-      <span class="val" style="font-size:14px;">${fmt(total)}</span>
+    <div class="totals-rows">
+      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
+      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
+    </div>
+    <div class="totals-grand">
+      <div class="lbl">Order Total</div>
+      <div class="val">${fmt(total)}</div>
     </div>
   </div>
 </div>
 
 <div style="clear:both;"></div>
 
-${(terms || deliveryTerms || paymentTerms) ? `<div style="margin-top:24px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
+${(terms || deliveryTerms || paymentTerms) ? `<div style="margin-top:24px;padding:14px 16px;background:var(--paper-tint);border:1px solid var(--rule);border-radius:6px;border-left:3px solid var(--accent);">
   <div class="section-label">Terms &amp; Conditions</div>
   ${deliveryTerms ? `<div style="font-size:10.5px;margin-bottom:4px;"><strong>Delivery:</strong> ${esc(deliveryTerms)}</div>` : ''}
   ${paymentTerms ? `<div style="font-size:10.5px;margin-bottom:4px;"><strong>Payment:</strong> ${esc(paymentTerms)}</div>` : ''}
@@ -3825,16 +4257,18 @@ ${linesHTML}
 
 <div style="overflow:hidden;margin-top:14px;">
   <div class="fd-totals-card">
-    <div class="fd-meta-row"><span class="lbl">Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-    ${tax > 0 ? `<div class="fd-meta-row"><span class="lbl">Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
-    <div class="fd-meta-row" style="border-top:2px solid #0f172a;margin-top:4px;padding-top:6px;">
-      <span class="lbl" style="font-size:10px;">Total</span>
-      <span class="val" style="font-size:14px;">${fmt(total)}</span>
+    <div class="totals-rows">
+      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
+      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
+    </div>
+    <div class="totals-grand">
+      <div class="lbl">Total Expense</div>
+      <div class="val">${fmt(total)}</div>
     </div>
   </div>
 </div>
 
-<div style="clear:both;margin-top:18px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
+<div style="clear:both;margin-top:18px;padding:14px 16px;background:var(--paper-tint);border:1px solid var(--rule);border-radius:6px;border-left:3px solid var(--accent);">
   <div class="section-label">Reimbursement</div>
   <div style="font-size:11px;color:#475569;">Status: ${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
 </div>
