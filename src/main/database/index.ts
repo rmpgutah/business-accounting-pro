@@ -1512,6 +1512,26 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON invoice_payments(invoice_id, payment_date)",
   "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
+
+  // ── P6.70: Outbound webhook subscriptions ─────────────────────
+  // Each row is a "fire HTTP POST when event_type happens for this
+  // company" rule. event_type='*' matches all events.
+  // secret is used for HMAC-SHA256 signing in X-BAP-Signature.
+  `CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    target_url TEXT NOT NULL,
+    secret TEXT DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_fired_at TEXT DEFAULT NULL,
+    last_status TEXT DEFAULT '',
+    retries INTEGER NOT NULL DEFAULT 0,
+    description TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_webhook_subs_co_event ON webhook_subscriptions(company_id, event_type) WHERE enabled = 1",
   // Client Portal API integration (rmpgutahps.us, 2026-05-05)
   // portal_integration_settings: per-company config for the external
   // client-portal integration. The api_key column stores a base64

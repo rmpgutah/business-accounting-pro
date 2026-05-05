@@ -1108,6 +1108,79 @@ export function registerIpcHandlers(): void {
       return { cleaned: 0, error: err?.message };
     }
   });
+  // ─── P6.69: iCal export ────────────────────────────────
+  ipcMain.handle('cal:export-invoices-ics', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { exportInvoiceDueDates } = require('../services/ical-export');
+      return { ics: exportInvoiceDueDates(cid) };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('cal:export-payroll-ics', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { exportPayrollSchedule } = require('../services/ical-export');
+      return { ics: exportPayrollSchedule(cid) };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // ─── P6.70: Webhook subscriptions CRUD ─────────────────
+  ipcMain.handle('webhooks:list', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      return db.getDb().prepare(
+        "SELECT id, event_type, target_url, enabled, last_fired_at, last_status, description FROM webhook_subscriptions WHERE company_id = ? ORDER BY created_at DESC"
+      ).all(cid);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('webhooks:save', (_event, payload: { id?: string; event_type: string; target_url: string; secret?: string; enabled?: number; description?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      if (!payload.event_type || !payload.target_url) return { error: 'event_type and target_url required' };
+      // Reject non-https URLs except localhost.
+      try {
+        const u = new URL(payload.target_url);
+        if (u.protocol !== 'https:' && !(u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1'))) {
+          return { error: 'Webhook target must be HTTPS (or http://localhost for testing)' };
+        }
+      } catch {
+        return { error: 'Invalid target_url' };
+      }
+      if (payload.id) {
+        db.update('webhook_subscriptions', payload.id, {
+          event_type: payload.event_type,
+          target_url: payload.target_url,
+          secret: payload.secret ?? '',
+          enabled: payload.enabled ?? 1,
+          description: payload.description ?? '',
+        });
+        return { ok: true, id: payload.id };
+      }
+      const r = db.create('webhook_subscriptions', { ...payload, company_id: cid });
+      return { ok: true, id: r.id };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('webhooks:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.removeHard('webhook_subscriptions', id);
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
   ipcMain.handle('integrity:vacuum', () => {
     try {
       const { runVacuum } = require('../crons/integrity-check');

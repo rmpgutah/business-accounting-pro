@@ -646,6 +646,20 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // P6.69: iCal calendar export
+  exportInvoicesICS: (): Promise<{ ics?: string; error?: string }> =>
+    window.electronAPI.invoke('cal:export-invoices-ics'),
+  exportPayrollICS: (): Promise<{ ics?: string; error?: string }> =>
+    window.electronAPI.invoke('cal:export-payroll-ics'),
+
+  // P6.70: Webhook subscriptions
+  webhooksList: (): Promise<any[]> =>
+    window.electronAPI.invoke('webhooks:list'),
+  webhooksSave: (payload: { id?: string; event_type: string; target_url: string; secret?: string; enabled?: number; description?: string }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('webhooks:save', payload),
+  webhooksDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('webhooks:delete', { id }),
+
   // P1.15/16/17: Integrity check (schema drift, orphan FKs, PRAGMAs)
   integrityCheck: (opts?: { skipOrphanScan?: boolean }): Promise<any> =>
     window.electronAPI.invoke('integrity:check', opts || {}),

@@ -10,6 +10,7 @@ import { runAlertRules } from './crons/alerts';
 import { runOverdueCheck } from './crons/overdue-checker';
 import { runTrashPurge } from './crons/trash-purge';
 import { runIntegrityCheck, runVacuum } from './crons/integrity-check';
+import { initWebhookDispatcher } from './services/webhook-dispatcher';
 import { initQueue, connectWebSocket } from './sync';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -415,6 +416,11 @@ app.whenReady().then(() => {
   try {
     initDatabase();
     registerIpcHandlers();
+    // P6.70: Subscribe outbound webhook dispatcher to the EventBus.
+    // Idempotent. Fires HTTP POSTs when invoice.created /
+    // payment.received / etc. events occur, IF the company has
+    // matching webhook_subscriptions rows.
+    initWebhookDispatcher();
   } catch (err: any) {
     console.error('Failed to initialize:', err);
     dialog.showErrorBox('Startup Error', err.message || String(err));
