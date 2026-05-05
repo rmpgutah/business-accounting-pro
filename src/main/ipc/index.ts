@@ -1512,6 +1512,84 @@ export function registerIpcHandlers(): void {
     return { path: filePath, name: path.basename(filePath), size: stats.size };
   });
 
+  // ─── PDF Metadata Builder (P1.6) ─────────────────────────
+  // Builds a PDFMetadata object that pdf-lib will write into the PDF
+  // Info dictionary. Pop into Finder "Get Info" or Adobe File →
+  // Properties to verify. Spotlight uses these fields for indexing.
+  function buildInvoiceMetadata(invoice: any, company: any, client: any): import('../services/print-preview').PDFMetadata {
+    const num = invoice?.invoice_number || invoice?.id || '';
+    const cur = (invoice?.currency || 'USD').toUpperCase();
+    const total = Number(invoice?.total ?? invoice?.total_amount ?? 0);
+    const totalStr = (() => {
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total); }
+      catch { return `${cur} ${total.toFixed(2)}`; }
+    })();
+    const due = invoice?.due_date || '';
+    const isCredit = invoice?.invoice_type === 'credit_note';
+    const isQuote = invoice?.invoice_type === 'quote';
+    const docType = isCredit ? 'Credit Note' : isQuote ? 'Quote' : 'Invoice';
+    return {
+      title: `${docType} ${num}${client?.name ? ' — ' + client.name : ''}`,
+      author: company?.name || 'Business Accounting Pro',
+      subject: `${docType} #${num} for ${totalStr}${due ? ' — Due ' + due : ''}`,
+      keywords: [
+        docType.toLowerCase(),
+        String(num),
+        client?.name || '',
+        cur,
+        invoice?.status || '',
+        invoice?.po_number ? `po-${invoice.po_number}` : '',
+      ].filter(Boolean),
+      creator: 'Business Accounting Pro',
+    };
+  }
+
+  function buildBillMetadata(bill: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
+    const num = bill?.bill_number || bill?.id || '';
+    const cur = (bill?.currency || 'USD').toUpperCase();
+    const total = Number(bill?.total ?? 0);
+    const totalStr = (() => {
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total); }
+      catch { return `${cur} ${total.toFixed(2)}`; }
+    })();
+    return {
+      title: `Bill ${num}${vendor?.name ? ' — ' + vendor.name : ''}`,
+      author: company?.name || 'Business Accounting Pro',
+      subject: `Bill #${num} from ${vendor?.name || 'vendor'} for ${totalStr}`,
+      keywords: ['bill', 'accounts-payable', String(num), vendor?.name || '', cur].filter(Boolean),
+      creator: 'Business Accounting Pro',
+    };
+  }
+
+  function buildPOMetadata(po: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
+    const num = po?.po_number || po?.id || '';
+    const cur = (po?.currency || 'USD').toUpperCase();
+    return {
+      title: `Purchase Order ${num}${vendor?.name ? ' — ' + vendor.name : ''}`,
+      author: company?.name || 'Business Accounting Pro',
+      subject: `PO #${num} to ${vendor?.name || 'vendor'}`,
+      keywords: ['purchase-order', 'po', String(num), vendor?.name || '', cur].filter(Boolean),
+      creator: 'Business Accounting Pro',
+    };
+  }
+
+  function buildExpenseMetadata(expense: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
+    const ref = expense?.reference || expense?.id || '';
+    const cur = (expense?.currency || 'USD').toUpperCase();
+    const amt = Number(expense?.amount ?? expense?.total ?? 0);
+    const amtStr = (() => {
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(amt); }
+      catch { return `${cur} ${amt.toFixed(2)}`; }
+    })();
+    return {
+      title: `Expense ${ref}${vendor?.name ? ' — ' + vendor.name : ''}`,
+      author: company?.name || 'Business Accounting Pro',
+      subject: `Expense receipt for ${amtStr}${expense?.category ? ' (' + expense.category + ')' : ''}`,
+      keywords: ['expense', 'receipt', String(ref), vendor?.name || '', expense?.category || '', cur].filter(Boolean),
+      creator: 'Business Accounting Pro',
+    };
+  }
+
   // ─── PDF Generate (Invoice) — Download via Save Dialog ──
   // Accepts optional pre-built HTML from the renderer so the saved PDF
   // matches the preview exactly (including settings, payment schedule, etc.)
@@ -1549,17 +1627,23 @@ export function registerIpcHandlers(): void {
     if (canceled || !filePath) return { cancelled: true };
 
     try {
+      // Build PDF metadata once — reused whether HTML is renderer-provided
+      // or generated server-side. Sets Title/Author/Subject/Keywords on
+      // the saved PDF for Spotlight + Adobe File → Properties visibility.
+      const _client = db.getById('clients', invoice.client_id);
+      const _company = db.getById('companies', companyId);
+      const meta = buildInvoiceMetadata(invoice, _company, _client);
+      const optsWithMeta = { ...(pdfOptions || {}), metadata: meta };
+
       let pdfBuffer: Buffer;
       if (providedHTML) {
-        pdfBuffer = await htmlToPDFBuffer(providedHTML, pdfOptions);
+        pdfBuffer = await htmlToPDFBuffer(providedHTML, optsWithMeta);
       } else {
         const dbInstance = db.getDb();
-        const client = db.getById('clients', invoice.client_id);
-        const company = db.getById('companies', companyId);
         const lineItems = dbInstance.prepare(
           'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
         ).all(invoiceId) as any[];
-        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems, pdfOptions);
+        pdfBuffer = await generateInvoicePDF(invoice, _company, _client, lineItems, optsWithMeta);
       }
       // Async write — caller must not see "saved" before bytes are on disk.
       await fsp.writeFile(filePath, pdfBuffer);
@@ -1722,14 +1806,18 @@ export function registerIpcHandlers(): void {
     try {
       // Generate PDF to temp location — prefer renderer-built HTML (uses settings),
       // fall back to the basic server template if none was supplied.
+      // Always populate PDF metadata so the recipient's PDF reader and
+      // their OS Spotlight see meaningful Title/Author/Subject/Keywords.
+      const meta = buildInvoiceMetadata(invoice, company, client);
+      const optsWithMeta = { metadata: meta };
       let pdfBuffer: Buffer;
       if (providedHTML) {
-        pdfBuffer = await htmlToPDFBuffer(providedHTML);
+        pdfBuffer = await htmlToPDFBuffer(providedHTML, optsWithMeta);
       } else {
         const lineItems = dbInstance.prepare(
           'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
         ).all(invoiceId) as any[];
-        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems);
+        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems, optsWithMeta);
       }
 
       // Write temp PDF into an isolated subdir so we can clean it up later

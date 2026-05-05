@@ -264,6 +264,17 @@ const api = {
         landscape?: boolean;
         margins?: { top: number; bottom: number; left: number; right: number };
         printBackground?: boolean;
+        // P1.6: PDF metadata written to the Info dictionary by pdf-lib
+        // post-process. Surfaces in Finder Get Info, Adobe Properties,
+        // and Spotlight search.
+        metadata?: {
+          title?: string;
+          author?: string;
+          subject?: string;
+          keywords?: string[];
+          creator?: string;
+          producer?: string;
+        };
       };
       openAfterSave?: boolean;
       revealAfterSave?: boolean;

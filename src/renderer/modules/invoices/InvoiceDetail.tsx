@@ -213,8 +213,31 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
 
   const handleSavePDF = async () => {
     const html = await buildHTML();
-    if (!html) return;
-    await api.saveToPDF(html, `Invoice-${invoice?.invoice_number || ''}`);
+    if (!html || !invoice) return;
+    // P1.6: thread PDF metadata through so Finder/Spotlight/Adobe see
+    // descriptive Title/Author/Subject/Keywords on the saved PDF.
+    const cur = (invoice.currency || 'USD').toUpperCase();
+    const totalNum = Number((invoice as any).total ?? (invoice as any).total_amount ?? 0);
+    const totalStr = (() => {
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(totalNum); }
+      catch { return `${cur} ${totalNum.toFixed(2)}`; }
+    })();
+    const isCredit = (invoice as any).invoice_type === 'credit_note';
+    const docType = isCredit ? 'Credit Note' : 'Invoice';
+    const num = invoice.invoice_number || invoice.id;
+    await api.saveToPDF(html, `${docType}-${num}`, {
+      doctype: docType.toLowerCase().replace(/\s+/g, '-'),
+      identifier: String(num),
+      pdfOptions: {
+        metadata: {
+          title: `${docType} ${num}${client?.name ? ' — ' + client.name : ''}`,
+          author: activeCompany?.name || 'Business Accounting Pro',
+          subject: `${docType} #${num} for ${totalStr}${invoice.due_date ? ' — Due ' + invoice.due_date : ''}`,
+          keywords: [docType.toLowerCase(), String(num), client?.name || '', cur, invoice.status || ''].filter(Boolean),
+          creator: 'Business Accounting Pro',
+        },
+      },
+    });
   };
 
   const loadData = async () => {

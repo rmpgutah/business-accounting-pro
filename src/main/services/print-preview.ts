@@ -11,21 +11,41 @@ import { promises as fsp } from 'fs';
 // ─── PDF page/margin options ────────────────────────────────
 // Centralised so all call sites emit PDFs with the same defaults.
 // Callers can override per-invocation (e.g. landscape for wide tables).
+//
+// `metadata` (P1.6): post-processed via pdf-lib after Chromium renders
+// the PDF. Sets the Title/Author/Subject/Keywords visible in Finder
+// "Get Info", Adobe File → Properties, and OS Spotlight search.
+// Without this, Chromium's default metadata is the page <title> only;
+// Author defaults to "anonymous" and Subject is empty.
+export type PDFMetadata = {
+  title?: string;
+  author?: string;
+  subject?: string;
+  keywords?: string[];
+  creator?: string;
+  producer?: string;
+};
 export type PDFOptions = {
   pageSize?: 'A4' | 'Letter' | 'Legal' | 'Tabloid';
   landscape?: boolean;
   margins?: { top: number; bottom: number; left: number; right: number };
   printBackground?: boolean;
+  metadata?: PDFMetadata;
 };
 
-const DEFAULT_PDF_OPTIONS: Required<PDFOptions> = {
+// Page-layout defaults — metadata is intentionally NOT here (it's
+// document-specific and gets stripped before being passed to printToPDF
+// which would reject the unknown property).
+type PageLayoutOptions = Required<Omit<PDFOptions, 'metadata'>>;
+
+const DEFAULT_PDF_OPTIONS: PageLayoutOptions = {
   pageSize: 'A4',
   landscape: false,
   margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
   printBackground: true,
 };
 
-function resolvePDFOptions(opts?: PDFOptions): Required<PDFOptions> {
+function resolvePDFOptions(opts?: PDFOptions): PageLayoutOptions {
   return {
     pageSize: opts?.pageSize ?? DEFAULT_PDF_OPTIONS.pageSize,
     landscape: opts?.landscape ?? DEFAULT_PDF_OPTIONS.landscape,
@@ -69,6 +89,37 @@ function createHeadlessWindow(): BrowserWindow {
   return win;
 }
 
+// ─── PDF Metadata Post-Processor ────────────────────────────
+// Electron's webContents.printToPDF() does not expose author/subject/
+// keywords — Chromium only sets the document <title> as the PDF Title.
+// We use pdf-lib to load the rendered PDF and rewrite the Info
+// dictionary. Lazy-import keeps app startup fast (pdf-lib is ~700KB).
+async function applyPDFMetadata(buf: Buffer, meta: PDFMetadata | undefined): Promise<Buffer> {
+  if (!meta || (!meta.title && !meta.author && !meta.subject && !meta.keywords?.length && !meta.creator && !meta.producer)) {
+    return buf;
+  }
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(buf, { updateMetadata: true });
+    if (meta.title)    pdf.setTitle(meta.title);
+    if (meta.author)   pdf.setAuthor(meta.author);
+    if (meta.subject)  pdf.setSubject(meta.subject);
+    if (meta.keywords?.length) pdf.setKeywords(meta.keywords);
+    if (meta.creator)  pdf.setCreator(meta.creator);
+    pdf.setProducer(meta.producer || 'Business Accounting Pro');
+    pdf.setCreationDate(new Date());
+    pdf.setModificationDate(new Date());
+    const out = await pdf.save({ useObjectStreams: false });
+    return Buffer.from(out);
+  } catch (err) {
+    // Best-effort: if metadata write fails, return the original PDF
+    // rather than failing the entire render. Print operations should
+    // succeed even when metadata enrichment fails.
+    console.warn('[pdf] metadata post-process failed, returning bare PDF:', err);
+    return buf;
+  }
+}
+
 async function renderHTMLToPDF(
   htmlContent: string,
   options?: PDFOptions
@@ -78,7 +129,10 @@ async function renderHTMLToPDF(
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
     const resolved = resolvePDFOptions(options);
     const pdfData = await win.webContents.printToPDF(resolved);
-    return Buffer.from(pdfData);
+    const buf = Buffer.from(pdfData);
+    // Apply metadata if provided. The destructured `metadata` field is
+    // dropped from `resolved` since printToPDF rejects unknown options.
+    return applyPDFMetadata(buf, options?.metadata);
   } finally {
     // Guarantee cleanup to prevent renderer-process leak.
     if (!win.isDestroyed()) win.destroy();
