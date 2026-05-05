@@ -1699,10 +1699,15 @@ export function registerIpcHandlers(): void {
   // matches what the user sees in the preview (including logo, accent color,
   // template style, column config, payment schedule, watermark, footer).
   // Falls back to the server-side template only if no HTML is provided.
-  ipcMain.handle('invoice:send-email', async (_event, payload: string | { invoiceId: string; html?: string }) => {
+  ipcMain.handle('invoice:send-email', async (_event, payload: string | { invoiceId: string; html?: string; templateKey?: string }) => {
     // Back-compat: old callers passed the invoiceId as a bare string.
     const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
     const providedHTML = typeof payload === 'string' ? undefined : payload.html;
+    // Template selection: caller can pick invoice_send / payment_reminder_1 /
+    // payment_reminder_2 / overdue_notice. Defaults to invoice_send for the
+    // common "Send invoice" button. Falls back to hardcoded copy if the
+    // template lookup fails (e.g. brand-new company before seeding).
+    const templateKey = (typeof payload === 'string' ? undefined : payload.templateKey) || 'invoice_send';
 
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return { error: 'No company selected' };
@@ -1743,8 +1748,40 @@ export function registerIpcHandlers(): void {
         fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
       }, 10 * 60 * 1000);
 
-      // Open email client with pre-filled content
-      const emailResult = await sendInvoiceEmail(invoice, company, client);
+      // Open email client with pre-filled content. Prefer the customized
+      // email template (Settings → Email Templates) so the user's brand
+      // voice and layout are preserved. If the template lookup fails for
+      // any reason, fall back to the hardcoded copy in email-sender.ts.
+      let emailResult: { success: boolean; error?: string };
+      try {
+        ensureDefaultEmailTemplates(companyId);
+        const tmpl = dbInstance.prepare(
+          `SELECT * FROM email_templates WHERE company_id = ? AND key = ?`
+        ).get(companyId, templateKey) as any;
+        if (tmpl) {
+          const ctx = buildTemplateContext(companyId, 'invoice', invoiceId);
+          const subject = resolveTemplateTokens(tmpl.subject || '', ctx);
+          const body = resolveTemplateTokens(tmpl.body || '', ctx);
+          const to = (tmpl.default_to || '').includes('client.email')
+            ? (client?.email || '')
+            : (tmpl.default_to || client?.email || '');
+          const params = new URLSearchParams();
+          params.set('subject', subject);
+          params.set('body', body);
+          if (tmpl.default_cc) params.set('cc', tmpl.default_cc);
+          if (tmpl.default_bcc) params.set('bcc', tmpl.default_bcc);
+          const mailto = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
+          await shell.openExternal(mailto);
+          emailResult = { success: true };
+        } else {
+          emailResult = await sendInvoiceEmail(invoice, company, client);
+        }
+      } catch (templateErr) {
+        // Template path failed — surface to console but still attempt
+        // hardcoded fallback so the user can send the invoice.
+        console.warn('[email] template path failed, using fallback:', templateErr);
+        emailResult = await sendInvoiceEmail(invoice, company, client);
+      }
 
       if (emailResult.success) {
         const previousStatus = invoice.status;
@@ -9977,19 +10014,53 @@ export function registerIpcHandlers(): void {
     });
   }
 
+  // Format an amount in a specific ISO 4217 currency (mirrors renderer's
+  // formatCurrency) so {{total_due}} reflects the document's currency
+  // rather than always defaulting to USD.
+  function fmtMoney(amount: number, currency?: string | null): string {
+    const code = (currency || 'USD').toString().trim().toUpperCase();
+    const n = Number.isFinite(amount) ? amount : 0;
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(n);
+    } catch {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+    }
+  }
+
+  // Resolve the portal deep-link for an invoice — looks up the token in
+  // invoice_tokens (creating one would require side effects, so we just
+  // look it up). Returns empty string if no token exists yet.
+  function resolvePortalLink(invoiceId: string, fallbackBase: string = 'https://accounting.rmpgutah.us'): string {
+    try {
+      const row = db.getDb().prepare(
+        `SELECT token FROM invoice_tokens WHERE invoice_id = ? AND expires_at > 0 ORDER BY expires_at DESC LIMIT 1`
+      ).get(invoiceId) as any;
+      if (row?.token) return `${fallbackBase}/portal/${row.token}`;
+    } catch { /* ignore */ }
+    return '';
+  }
+
   function buildTemplateContext(companyId: string, entityType: string, entityId: string): Record<string, any> {
     const ctx: Record<string, any> = {};
     try {
       const co = db.getById('companies', companyId) as any;
       ctx.company_name = co?.name || '';
+      ctx.company_email = co?.email || '';
+      ctx.company_phone = co?.phone || '';
     } catch {}
     try {
       if (entityType === 'invoice') {
         const inv = db.getById('invoices', entityId) as any;
         if (inv) {
           ctx.invoice_number = inv.invoice_number || '';
-          ctx.total_due = `$${Number(inv.total_amount || 0).toFixed(2)}`;
+          // Use real `total` field (schema correction) and honor currency
+          const totalNum = Number(inv.total ?? inv.total_amount ?? 0);
+          const paid = Number(inv.amount_paid ?? 0);
+          ctx.total_due = fmtMoney(totalNum, inv.currency);
+          ctx.balance_due = fmtMoney(Math.max(0, totalNum - paid), inv.currency);
+          ctx.amount_paid = fmtMoney(paid, inv.currency);
           ctx.due_date = inv.due_date || '';
+          ctx.issue_date = inv.issue_date || '';
           if (inv.due_date) {
             const days = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000);
             ctx.days_overdue = String(Math.max(0, days));
@@ -9998,15 +10069,20 @@ export function registerIpcHandlers(): void {
             const client = db.getById('clients', inv.client_id) as any;
             ctx.client_name = client?.name || '';
             ctx.client_email = client?.email || '';
+            ctx.client_phone = client?.phone || '';
           }
-          ctx.payment_link = inv.id ? `https://accounting.rmpgutah.us/pay/${inv.id}` : '';
+          // Deep-link to the per-invoice portal page (capability URL)
+          ctx.payment_link = resolvePortalLink(inv.id);
+          ctx.portal_link = ctx.payment_link;
         }
       } else if (entityType === 'quote') {
         const q = db.getById('quotes', entityId) as any;
         if (q) {
           ctx.invoice_number = q.quote_number || '';
-          ctx.total_due = `$${Number(q.total_amount || 0).toFixed(2)}`;
-          ctx.due_date = q.expires_at || '';
+          const totalNum = Number(q.total ?? q.total_amount ?? 0);
+          ctx.total_due = fmtMoney(totalNum, q.currency);
+          ctx.due_date = q.valid_until || q.expires_at || '';
+          ctx.issue_date = q.issue_date || '';
           if (q.client_id) {
             const client = db.getById('clients', q.client_id) as any;
             ctx.client_name = client?.name || '';

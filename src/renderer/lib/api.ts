@@ -108,8 +108,12 @@ const api = {
   // (applies invoice_settings: logo, accent, columns, payment schedule, etc.).
   generateInvoicePDF: (invoiceId: string, html?: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('invoice:generate-pdf', html ? { invoiceId, html } : invoiceId),
-  sendInvoiceEmail: (invoiceId: string, html?: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
-    window.electronAPI.invoke('invoice:send-email', html ? { invoiceId, html } : invoiceId),
+  // templateKey selects which Settings → Email Templates entry to use:
+  //   invoice_send (default), payment_reminder_1, payment_reminder_2,
+  //   overdue_notice. Falls back to hardcoded copy if template lookup fails.
+  sendInvoiceEmail: (invoiceId: string, html?: string, templateKey?: string): Promise<{ success?: boolean; error?: string; pdfPath?: string; newStatus?: string }> =>
+    window.electronAPI.invoke('invoice:send-email',
+      (html || templateKey) ? { invoiceId, html, templateKey } : invoiceId),
   generateInvoiceToken: (invoiceId: string): Promise<{ token: string }> =>
     window.electronAPI.invoke('invoice:generate-token', invoiceId),
   // PORTAL: extra surface for the share modal
