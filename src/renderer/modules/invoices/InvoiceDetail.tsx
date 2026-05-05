@@ -172,9 +172,28 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   // PORTAL: share modal + cached base URL (resolved from main via `portal:base-url`).
   const [showShareModal, setShowShareModal] = useState(false);
   const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://rmpgutahps.us/client/login');
+  // P1.9 — Inline print preview pane (live updates as fields change,
+  // no round-trip through the OS print system). Toggled via the Eye
+  // button alongside the existing "Preview" button (which still opens
+  // the system preview window for full-screen scrutiny).
+  const [showInlinePreview, setShowInlinePreview] = useState(false);
   useEffect(() => {
     api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
   }, []);
+
+  // Memoized HTML for the inline preview iframe. Skips portal-token
+  // resolution (it's async and would require effect+state) — the QR
+  // section gracefully degrades to nothing when no token is present.
+  // Trade-off: the inline preview lacks a live QR, but updates
+  // synchronously as fields change. The full Preview/Print buttons
+  // still go through buildHTML() which DOES fetch the token.
+  const inlinePreviewHTML = useMemo(() => {
+    if (!showInlinePreview || !invoice) return '';
+    const settingsWithBase: any = invoiceSettings
+      ? { ...invoiceSettings, portal_base_url: portalBaseUrl }
+      : { portal_base_url: portalBaseUrl };
+    return generateInvoiceHTML(invoice, activeCompany, client, lines, settingsWithBase, paymentSchedule);
+  }, [showInlinePreview, invoice, client, lines, invoiceSettings, paymentSchedule, activeCompany, portalBaseUrl]);
 
   // PORTAL: lazy-resolve the invoice's portal token so the printed PDF
   // can render a scannable QR. Idempotent — the IPC handler returns the
@@ -515,7 +534,8 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const badge = formatStatus(invoice.status);
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+      <div className="p-6 space-y-6 overflow-y-auto" style={{ flex: showInlinePreview ? '1 1 55%' : '1 1 100%', minWidth: 0 }}>
       {actionError && (
         <ErrorBanner
           message={actionError}
@@ -552,6 +572,19 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           )}
         </div>
         <div className="module-actions">
+          {/* P1.9 — Toggle inline preview pane. The existing Preview
+              button still opens the system preview window for full-page
+              scrutiny; this toggle gives a quick side-by-side check
+              without leaving the detail view. */}
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => setShowInlinePreview(v => !v)}
+            title={showInlinePreview ? 'Hide inline preview' : 'Show inline preview alongside the form'}
+            style={showInlinePreview ? { background: 'var(--color-accent-blue)', color: '#fff', borderColor: 'var(--color-accent-blue)' } : undefined}
+          >
+            <Eye size={14} />
+            {showInlinePreview ? 'Hide Inline' : 'Inline Preview'}
+          </button>
           <button
             className="block-btn flex items-center gap-2"
             onClick={handlePreview}
@@ -1278,6 +1311,45 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         <RelatedPanel entityType="invoice" entityId={invoiceId} hide={['lines', 'payments']} />
         <EntityTimeline entityType="invoices" entityId={invoiceId} />
       </div>
+      </div>
+
+      {/* P1.9 — Inline Preview Pane (right-hand 45% when toggled) */}
+      {showInlinePreview && (
+        <div style={{
+          flex: '1 1 45%',
+          minWidth: 0,
+          borderLeft: '1px solid var(--color-border-primary)',
+          background: 'var(--color-bg-secondary)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <div style={{
+            padding: '8px 14px',
+            borderBottom: '1px solid var(--color-border-primary)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'var(--color-bg-primary)',
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              Live Preview
+            </span>
+            <button
+              onClick={() => setShowInlinePreview(false)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 14, padding: 4 }}
+              title="Close inline preview"
+            >
+              ×
+            </button>
+          </div>
+          <iframe
+            srcDoc={inlinePreviewHTML}
+            title="Invoice live preview"
+            style={{ flex: 1, width: '100%', border: 'none', background: '#fff' }}
+            sandbox="allow-same-origin"
+          />
+        </div>
+      )}
     </div>
   );
 };
