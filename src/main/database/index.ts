@@ -1513,6 +1513,126 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
 
+  // ── LOAN TRACKING SYSTEM (4 tables) ───────────────────────────
+  //
+  // Source of truth for any debt the company carries: mortgages,
+  // auto loans, business loans, lines of credit, equipment financing.
+  // Decoupled from the GL — postings to interest-expense / loan-
+  // payable accounts happen via the existing JE system; this module
+  // owns the amortization math + payment lifecycle.
+  //
+  // Design decisions:
+  //   • Amortization schedule is PRE-COMPUTED on save (or recalc),
+  //     not derived on-the-fly. Stored rows = single source of truth
+  //     and supports rate changes (rebuild from change date forward).
+  //   • Actual payments are separate from scheduled payments; they
+  //     reference scheduled rows but can be partial / over /
+  //     ahead-of-schedule. The current_balance is computed from
+  //     actuals, never from schedule alone.
+  //   • Loan events table is append-only audit (rate change,
+  //     refinance, extension, lump-sum payment).
+  //   • All amounts in the loan's currency (defaults USD).
+  `CREATE TABLE IF NOT EXISTS loans (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,                              -- "BMO Mortgage 2024", "SBA Loan #12345"
+    loan_type TEXT NOT NULL DEFAULT 'term_loan',     -- mortgage | auto | business | personal | line_of_credit | equipment | sba | other
+    lender_name TEXT DEFAULT '',
+    lender_contact TEXT DEFAULT '',
+    account_number TEXT DEFAULT '',                  -- last4 only — full # in encrypted notes
+    principal REAL NOT NULL,                         -- original loan amount
+    interest_rate REAL NOT NULL,                     -- annual rate as decimal: 0.065 = 6.5%
+    rate_type TEXT NOT NULL DEFAULT 'fixed',         -- fixed | variable | arm
+    term_months INTEGER NOT NULL,                    -- 360 for 30-yr mortgage
+    payment_frequency TEXT NOT NULL DEFAULT 'monthly', -- monthly | biweekly | weekly | quarterly | annual
+    amortization_type TEXT NOT NULL DEFAULT 'standard', -- standard | interest_only | balloon | custom
+    balloon_amount REAL DEFAULT 0,                   -- final balloon payment if applicable
+    origination_date TEXT NOT NULL,                  -- YYYY-MM-DD when loan was originated
+    first_payment_date TEXT NOT NULL,                -- YYYY-MM-DD of first scheduled payment
+    payment_amount REAL DEFAULT 0,                   -- computed monthly payment (escrow excluded)
+    escrow_per_payment REAL DEFAULT 0,               -- property tax + insurance per payment
+    current_balance REAL DEFAULT 0,                  -- maintained as payments are recorded
+    total_paid_to_date REAL DEFAULT 0,
+    total_interest_paid REAL DEFAULT 0,
+    total_principal_paid REAL DEFAULT 0,
+    next_payment_due TEXT DEFAULT NULL,              -- denormalized: next unpaid scheduled date
+    status TEXT NOT NULL DEFAULT 'active',           -- active | paid_off | refinanced | defaulted | closed
+    currency TEXT NOT NULL DEFAULT 'USD',
+    -- GL integration: which accounts to post to. nullable so module
+    -- works standalone; bookkeeping users can wire later.
+    liability_account_id TEXT DEFAULT NULL,          -- credit on origination, debit on principal payment
+    interest_expense_account_id TEXT DEFAULT NULL,   -- debit on interest portion of each payment
+    payment_source_account_id TEXT DEFAULT NULL,     -- bank account payments come FROM
+    notes TEXT DEFAULT '',
+    custom_fields TEXT DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at TEXT DEFAULT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_loans_co_status ON loans(company_id, status) WHERE deleted_at IS NULL",
+  "CREATE INDEX IF NOT EXISTS idx_loans_next_due ON loans(company_id, next_payment_due) WHERE deleted_at IS NULL AND status = 'active'",
+
+  // Pre-computed amortization rows. One row per scheduled payment.
+  // Recreated when the loan's term/rate/principal changes.
+  `CREATE TABLE IF NOT EXISTS loan_payment_schedule (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+    payment_number INTEGER NOT NULL,                 -- 1, 2, 3, ... term_months
+    due_date TEXT NOT NULL,                          -- YYYY-MM-DD
+    scheduled_payment REAL NOT NULL,                 -- principal + interest (excludes escrow)
+    principal_amount REAL NOT NULL,
+    interest_amount REAL NOT NULL,
+    escrow_amount REAL DEFAULT 0,
+    remaining_balance REAL NOT NULL,                 -- after this payment
+    paid_status TEXT NOT NULL DEFAULT 'pending',     -- pending | paid | partial | skipped
+    paid_amount REAL DEFAULT 0,                      -- summed from loan_payments matched to this row
+    paid_date TEXT DEFAULT NULL,                     -- when fully paid
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_loan_sched_loan_due ON loan_payment_schedule(loan_id, due_date)",
+  "CREATE INDEX IF NOT EXISTS idx_loan_sched_pending ON loan_payment_schedule(loan_id, paid_status) WHERE paid_status != 'paid'",
+
+  // Actual payments made — can be partial, over, or extra-principal.
+  // Linked to a scheduled row for normal payments, NULL for one-off
+  // principal-only payments.
+  `CREATE TABLE IF NOT EXISTS loan_payments (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+    schedule_id TEXT REFERENCES loan_payment_schedule(id) ON DELETE SET NULL,
+    payment_date TEXT NOT NULL,                      -- YYYY-MM-DD
+    amount REAL NOT NULL,                            -- total paid this transaction
+    principal_amount REAL NOT NULL DEFAULT 0,        -- portion applied to principal
+    interest_amount REAL NOT NULL DEFAULT 0,         -- portion applied to interest
+    escrow_amount REAL DEFAULT 0,
+    fees REAL DEFAULT 0,                             -- late fee, NSF, etc.
+    payment_method TEXT DEFAULT 'ach',               -- ach | check | wire | cash | card
+    reference TEXT DEFAULT '',                       -- check #, confirmation #
+    is_extra_principal INTEGER NOT NULL DEFAULT 0,   -- one-off bonus principal payment
+    bank_transaction_id TEXT DEFAULT NULL,           -- linked imported bank line
+    journal_entry_id TEXT DEFAULT NULL,              -- linked GL posting
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, payment_date DESC)",
+
+  // Append-only audit / event log. Rate changes, refinances,
+  // extensions, lump payoffs — anything that changes the loan's
+  // terms.
+  `CREATE TABLE IF NOT EXISTS loan_events (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,                        -- rate_change | refinance | extension | partial_payoff | full_payoff | note
+    event_date TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    -- Snapshot of changed values
+    old_value TEXT DEFAULT '',
+    new_value TEXT DEFAULT '',
+    metadata_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_loan_events_loan ON loan_events(loan_id, event_date DESC)",
+
   // ── A7: Line-item snippets / field templates ─────────────────
   // Reusable line-item presets users can drop onto invoices/quotes
   // /bills with one click. Saves "Standard hourly consulting" once,

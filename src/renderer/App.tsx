@@ -45,6 +45,7 @@ const MobileModule = lazy(() => import('./modules/mobile'));
 const SettingsModule = lazy(() => import('./modules/settings'));
 const BillsModule = lazy(() => import('./modules/bills'));
 const MileageModule = lazy(() => import('./modules/mileage'));
+const LoansModule = lazy(() => import('./modules/loans'));
 const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
 const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
@@ -82,6 +83,7 @@ const MODULE_NAMES: Record<string, string> = {
   mobile: 'Mobile',
   settings: 'Settings',
   mileage: 'Mileage Log',
+  loans: 'Loans & Debt',
   bills: 'Bills & Accounts Payable',
   'purchase-orders': 'Purchase Orders',
   'fixed-assets': 'Fixed Assets',
@@ -133,6 +135,7 @@ const ModuleView: React.FC = () => {
       case 'settings': return <SettingsModule />;
       case 'bills': return <BillsModule />;
       case 'mileage': return <MileageModule />;
+      case 'loans': return <LoansModule />;
       case 'purchase-orders': return <PurchaseOrdersModule />;
       case 'fixed-assets': return <FixedAssetsModule />;
       case 'automations': return <AutomationsModule />;

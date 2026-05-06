@@ -1108,6 +1108,262 @@ export function registerIpcHandlers(): void {
       return { cleaned: 0, error: err?.message };
     }
   });
+  // ─── LOAN TRACKING ─────────────────────────────────────
+  // The Loan Calculator service owns the math; IPC handlers own
+  // CRUD + cross-table operations (regenerate schedule on save,
+  // record payment + update running totals atomically, etc.)
+
+  ipcMain.handle('loans:list', (_event, opts?: { status?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const sql = "SELECT * FROM loans WHERE company_id = ? AND deleted_at IS NULL " +
+                  (opts?.status ? "AND status = ? " : "") +
+                  "ORDER BY created_at DESC";
+      const params: any[] = [cid];
+      if (opts?.status) params.push(opts.status);
+      return db.getDb().prepare(sql).all(...params);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  ipcMain.handle('loans:get', (_event, { id }: { id: string }) => {
+    try {
+      const loan = db.getById('loans', id);
+      if (!loan) return { error: 'Not found' };
+      const schedule = db.getDb().prepare(
+        "SELECT * FROM loan_payment_schedule WHERE loan_id = ? ORDER BY payment_number"
+      ).all(id);
+      const payments = db.getDb().prepare(
+        "SELECT * FROM loan_payments WHERE loan_id = ? ORDER BY payment_date DESC"
+      ).all(id);
+      const events = db.getDb().prepare(
+        "SELECT * FROM loan_events WHERE loan_id = ? ORDER BY event_date DESC"
+      ).all(id);
+      return { loan, schedule, payments, events };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // Save (create or update). Always regenerates the schedule from
+  // scratch — the scheduled rows are derived data, not user-edited.
+  // For UPDATE: existing scheduled rows are deleted, new ones
+  // generated; existing actual payments are preserved and re-linked
+  // to the new schedule rows by payment_number where possible.
+  ipcMain.handle('loans:save', (_event, payload: any) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const dbi = db.getDb();
+      const { generateSchedule, periodicPayment } = require('../services/loan-calculator');
+
+      // Compute the level payment for storage on the loan row.
+      const r = (payload.interest_rate || 0) / 12; // monthly proxy for display
+      const n = payload.term_months || 1;
+      const computed = periodicPayment(payload.principal || 0, r, n);
+
+      const loanData = {
+        ...payload,
+        company_id: cid,
+        payment_amount: Math.round(computed * 100) / 100,
+        // Initialize totals on create; preserve on update.
+        current_balance: payload.id ? undefined : payload.principal,
+        total_paid_to_date: payload.id ? undefined : 0,
+        total_interest_paid: payload.id ? undefined : 0,
+        total_principal_paid: payload.id ? undefined : 0,
+      };
+      // Strip undefined keys so PRAGMA-aware update doesn't barf.
+      Object.keys(loanData).forEach((k) => loanData[k] === undefined && delete loanData[k]);
+
+      const tx = dbi.transaction(() => {
+        let loanId: string;
+        if (payload.id) {
+          db.update('loans', payload.id, loanData);
+          loanId = payload.id;
+          // Wipe and regen schedule
+          dbi.prepare("DELETE FROM loan_payment_schedule WHERE loan_id = ?").run(loanId);
+        } else {
+          const created = db.create('loans', loanData);
+          loanId = created.id;
+        }
+
+        // Generate the new amortization schedule.
+        const rows = generateSchedule({
+          principal: loanData.principal,
+          annual_rate: loanData.interest_rate,
+          term_months: loanData.term_months,
+          first_payment_date: loanData.first_payment_date,
+          payment_frequency: loanData.payment_frequency || 'monthly',
+          amortization_type: loanData.amortization_type || 'standard',
+          balloon_amount: loanData.balloon_amount || 0,
+          escrow_per_payment: loanData.escrow_per_payment || 0,
+        });
+
+        const insertSched = dbi.prepare(
+          "INSERT INTO loan_payment_schedule (id, loan_id, payment_number, due_date, scheduled_payment, principal_amount, interest_amount, escrow_amount, remaining_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        for (const row of rows) {
+          insertSched.run(uuid(), loanId, row.payment_number, row.due_date, row.scheduled_payment,
+            row.principal_amount, row.interest_amount, row.escrow_amount, row.remaining_balance);
+        }
+
+        // Update next_payment_due to first unpaid scheduled date.
+        const nextDue = rows[0]?.due_date || null;
+        dbi.prepare("UPDATE loans SET next_payment_due = ? WHERE id = ?").run(nextDue, loanId);
+
+        return loanId;
+      });
+      const id = tx();
+      return db.getById('loans', id);
+    } catch (err: any) {
+      return { error: err?.message || 'Save failed' };
+    }
+  });
+
+  // Record an actual payment. Splits into principal/interest, links
+  // to the next pending scheduled row, updates loan running totals.
+  ipcMain.handle('loans:record-payment', (_event, payload: {
+    loan_id: string;
+    payment_date: string;
+    amount: number;
+    is_extra_principal?: boolean;
+    payment_method?: string;
+    reference?: string;
+    notes?: string;
+  }) => {
+    try {
+      const dbi = db.getDb();
+      const loan = db.getById('loans', payload.loan_id) as any;
+      if (!loan) return { error: 'Loan not found' };
+
+      const { splitPayment } = require('../services/loan-calculator');
+      const split = payload.is_extra_principal
+        // Extra principal: 100% to principal, no interest portion.
+        ? { principal: payload.amount, interest: 0, escrow: 0, new_balance: Math.max(0, loan.current_balance - payload.amount) }
+        : splitPayment(loan.current_balance, payload.amount, loan.interest_rate, loan.payment_frequency, loan.escrow_per_payment || 0);
+
+      // Find the next pending scheduled row to link to (skipped for
+      // extra-principal payments — those don't fulfill a scheduled
+      // installment).
+      let scheduleId: string | null = null;
+      if (!payload.is_extra_principal) {
+        const next = dbi.prepare(
+          "SELECT id, paid_amount, scheduled_payment FROM loan_payment_schedule WHERE loan_id = ? AND paid_status != 'paid' ORDER BY payment_number LIMIT 1"
+        ).get(payload.loan_id) as any;
+        if (next) {
+          scheduleId = next.id;
+          const newPaid = (Number(next.paid_amount) || 0) + payload.amount;
+          const newStatus = newPaid + 0.005 >= Number(next.scheduled_payment) ? 'paid' : 'partial';
+          dbi.prepare(
+            "UPDATE loan_payment_schedule SET paid_amount = ?, paid_status = ?, paid_date = ? WHERE id = ?"
+          ).run(newPaid, newStatus, newStatus === 'paid' ? payload.payment_date : null, next.id);
+        }
+      }
+
+      const pid = uuid();
+      dbi.prepare(
+        "INSERT INTO loan_payments (id, loan_id, schedule_id, payment_date, amount, principal_amount, interest_amount, escrow_amount, payment_method, reference, is_extra_principal, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        pid, payload.loan_id, scheduleId, payload.payment_date,
+        payload.amount, split.principal, split.interest, split.escrow,
+        payload.payment_method || 'ach', payload.reference || '',
+        payload.is_extra_principal ? 1 : 0, payload.notes || ''
+      );
+
+      // Update loan totals.
+      const newTotalPaid = (Number(loan.total_paid_to_date) || 0) + payload.amount;
+      const newTotalInterest = (Number(loan.total_interest_paid) || 0) + split.interest;
+      const newTotalPrincipal = (Number(loan.total_principal_paid) || 0) + split.principal;
+      const newStatus = split.new_balance < 0.005 ? 'paid_off' : loan.status;
+      // Compute new next_payment_due.
+      const nextRow = dbi.prepare(
+        "SELECT due_date FROM loan_payment_schedule WHERE loan_id = ? AND paid_status != 'paid' ORDER BY payment_number LIMIT 1"
+      ).get(payload.loan_id) as any;
+
+      dbi.prepare(
+        "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_interest_paid = ?, total_principal_paid = ?, status = ?, next_payment_due = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(
+        split.new_balance, newTotalPaid, newTotalInterest, newTotalPrincipal,
+        newStatus, nextRow?.due_date || null, payload.loan_id
+      );
+
+      return { ok: true, payment_id: pid, split };
+    } catch (err: any) {
+      return { error: err?.message || 'Payment recording failed' };
+    }
+  });
+
+  // Compute payoff scenario for a loan (what if I pay $X extra/period).
+  ipcMain.handle('loans:payoff-scenario', (_event, { loan_id, extra_per_payment }: { loan_id: string; extra_per_payment: number }) => {
+    try {
+      const loan = db.getById('loans', loan_id) as any;
+      if (!loan) return { error: 'Loan not found' };
+      const { payoffScenario } = require('../services/loan-calculator');
+      // Use current_balance as the principal — caller is asking
+      // "from here, what happens?" — not "from origination".
+      return payoffScenario({
+        principal: loan.current_balance,
+        annual_rate: loan.interest_rate,
+        term_months: loan.term_months, // best estimate of remaining
+        first_payment_date: loan.next_payment_due || loan.first_payment_date,
+        payment_frequency: loan.payment_frequency,
+        amortization_type: 'standard',
+      }, extra_per_payment);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // Aggregate stats across all active loans for the Debt Dashboard.
+  ipcMain.handle('loans:aggregate', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return null;
+      const dbi = db.getDb();
+      const stats = dbi.prepare(`
+        SELECT
+          COUNT(*) AS loan_count,
+          COALESCE(SUM(principal), 0) AS total_principal,
+          COALESCE(SUM(current_balance), 0) AS total_outstanding,
+          COALESCE(SUM(total_paid_to_date), 0) AS total_paid,
+          COALESCE(SUM(total_interest_paid), 0) AS total_interest_paid,
+          COALESCE(SUM(payment_amount), 0) AS total_monthly_payment
+        FROM loans
+        WHERE company_id = ? AND deleted_at IS NULL AND status = 'active'
+      `).get(cid) as any;
+
+      // Next 30 days of scheduled payments across all loans
+      const upcoming = dbi.prepare(`
+        SELECT s.due_date, s.scheduled_payment, l.name AS loan_name
+        FROM loan_payment_schedule s
+        JOIN loans l ON l.id = s.loan_id
+        WHERE l.company_id = ? AND l.deleted_at IS NULL AND l.status = 'active'
+          AND s.paid_status != 'paid'
+          AND s.due_date <= date('now', '+30 days')
+        ORDER BY s.due_date
+        LIMIT 50
+      `).all(cid);
+
+      return { stats, upcoming };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // Delete a loan (soft delete via the existing deleted_at flow).
+  ipcMain.handle('loans:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare(
+        "UPDATE loans SET deleted_at = datetime('now') WHERE id = ?"
+      ).run(id);
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
   // ─── A7: Line-item snippets (reusable templates) ──────
   ipcMain.handle('snippets:list', (_event, opts?: { category?: string }) => {
     try {
@@ -4722,6 +4978,29 @@ export function registerIpcHandlers(): void {
         AND (total - amount_paid) > 0
         AND COALESCE(deleted_at, '') = ''
     `).all(companyId, today, horizonDate) as any[];
+
+    // Scheduled loan payments due in the horizon (P3.25 loan
+    // tracking integration). These are firm scheduled outflows
+    // even though they don't have a bill record.
+    let loanOutflows: any[] = [];
+    try {
+      loanOutflows = dbInstance.prepare(`
+        SELECT s.due_date AS date,
+               (s.scheduled_payment + COALESCE(s.escrow_amount, 0)) AS amount,
+               l.name AS reference,
+               'loan' AS source
+        FROM loan_payment_schedule s
+        JOIN loans l ON l.id = s.loan_id
+        WHERE l.company_id = ?
+          AND l.status = 'active'
+          AND COALESCE(l.deleted_at, '') = ''
+          AND s.paid_status != 'paid'
+          AND s.due_date BETWEEN ? AND ?
+      `).all(companyId, today, horizonDate) as any[];
+    } catch {
+      // Loan tables may not exist in pre-migration DBs
+    }
+    outflows.push(...loanOutflows);
 
     // Build daily projection: inflow/outflow per day + running balance.
     const dayMap = new Map<string, { inflow: number; outflow: number; entries: any[] }>();
