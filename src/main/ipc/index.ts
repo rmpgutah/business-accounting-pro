@@ -1725,6 +1725,119 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
+  // ─── D3: Period Close + Lockdown ─────────────────────
+  //
+  // Period close is enforced at the IPC layer rather than via SQLite
+  // triggers — triggers can't easily route audit messages to the user
+  // and the per-row date check is cheap. Pattern: any handler that
+  // creates/updates/deletes a dated record (invoice, bill, expense,
+  // journal_entry, payment) calls assertNotInClosedPeriod() with the
+  // record's date. Throws an Error which the handler catches and
+  // returns as { error: ... } — UI shows a clear "Period is closed"
+  // message.
+  //
+  // The renderer can also pre-check via period:is-closed before
+  // attempting the mutation, but the server-side gate is the source
+  // of truth.
+
+  // Returns the active closed period covering the given date, or null.
+  function findClosedPeriod(companyId: string, date: string): { id: string; period_start: string; period_end: string; close_reason: string } | null {
+    if (!companyId || !date) return null;
+    try {
+      return db.getDb().prepare(
+        "SELECT id, period_start, period_end, close_reason FROM closed_periods " +
+        "WHERE company_id = ? AND is_active = 1 AND period_start <= ? AND period_end >= ? LIMIT 1"
+      ).get(companyId, date, date) as any;
+    } catch { return null; }
+  }
+
+  ipcMain.handle('period:list', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      return db.getDb().prepare(
+        "SELECT * FROM closed_periods WHERE company_id = ? ORDER BY period_end DESC"
+      ).all(cid);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+
+  ipcMain.handle('period:is-closed', (_event, { date }: { date: string }) => {
+    const cid = db.getCurrentCompanyId();
+    if (!cid || !date) return { is_closed: false };
+    const period = findClosedPeriod(cid, date);
+    return { is_closed: !!period, period };
+  });
+
+  ipcMain.handle('period:close', (_event, payload: { period_start: string; period_end: string; reason?: string; closed_by?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      if (!payload.period_start || !payload.period_end) return { error: 'period_start and period_end are required' };
+      if (payload.period_start > payload.period_end) return { error: 'period_start must be on or before period_end' };
+
+      // Detect overlap with existing active periods.
+      const overlap = db.getDb().prepare(
+        "SELECT id FROM closed_periods WHERE company_id = ? AND is_active = 1 " +
+        "AND NOT (period_end < ? OR period_start > ?) LIMIT 1"
+      ).get(cid, payload.period_start, payload.period_end) as any;
+      if (overlap) return { error: 'Overlaps with an existing closed period' };
+
+      const r = db.create('closed_periods', {
+        company_id: cid,
+        period_start: payload.period_start,
+        period_end: payload.period_end,
+        closed_by: payload.closed_by || '',
+        close_reason: payload.reason || '',
+      });
+      db.logAudit(cid, 'closed_periods', r.id, 'period_close', {
+        period_start: payload.period_start,
+        period_end: payload.period_end,
+        reason: payload.reason || '',
+      });
+      scheduleAutoBackup();
+      return { ok: true, id: r.id };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  ipcMain.handle('period:reopen', (_event, payload: { id: string; reason?: string; reopened_by?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const period = db.getById('closed_periods', payload.id) as any;
+      if (!period || period.company_id !== cid) return { error: 'Period not found' };
+      if (!period.is_active) return { error: 'Period is already reopened' };
+      db.update('closed_periods', payload.id, {
+        is_active: 0,
+        reopened_at: new Date().toISOString(),
+        reopened_by: payload.reopened_by || '',
+        reopen_reason: payload.reason || '',
+      });
+      db.logAudit(cid, 'closed_periods', payload.id, 'period_reopen', {
+        reason: payload.reason || '',
+      });
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // Internal helper exposed on the registry so other handlers can
+  // route through it. Throws an Error if the date is in a closed
+  // period — caller catches and returns as IPC error.
+  (registerIpcHandlers as any).__assertNotInClosedPeriod = (companyId: string, date: string) => {
+    const period = findClosedPeriod(companyId, date);
+    if (period) {
+      throw new Error(
+        'This action is blocked: ' + date + ' falls in a closed accounting period (' +
+        period.period_start + ' to ' + period.period_end + (period.close_reason ? ' · ' + period.close_reason : '') +
+        '). Reopen the period in Settings to make changes.'
+      );
+    }
+  };
+
   // ─── B7: Client risk scoring ─────────────────────────
   ipcMain.handle('clients:risk-score', (_event, opts?: { client_id?: string }) => {
     try {
@@ -2105,6 +2218,30 @@ export function registerIpcHandlers(): void {
       // audit log. Only matters on edit (creates have no prior state).
       const oldInvoice: any = (isEdit && invoiceId) ? db.getById('invoices', invoiceId) : null;
 
+      // D3: Period close gate — refuse to mutate any record dated
+      // within an active closed period. Both new + existing date are
+      // checked so you can't move a record OUT of a closed period
+      // either.
+      const cid_ = db.getCurrentCompanyId();
+      if (cid_) {
+        const period = findClosedPeriod(cid_, invoiceData.issue_date || '');
+        if (period) {
+          throw new Error(
+            'Cannot save: ' + (invoiceData.issue_date) + ' falls in a closed accounting period (' +
+            period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings to make changes.'
+          );
+        }
+        if (oldInvoice?.issue_date && oldInvoice.issue_date !== invoiceData.issue_date) {
+          const oldPeriod = findClosedPeriod(cid_, oldInvoice.issue_date);
+          if (oldPeriod) {
+            throw new Error(
+              'Cannot save: original date ' + oldInvoice.issue_date + ' falls in a closed accounting period (' +
+              oldPeriod.period_start + ' to ' + oldPeriod.period_end + ').'
+            );
+          }
+        }
+      }
+
       const saveFn = rawDb.transaction(() => {
         let savedId: string;
 
@@ -2251,6 +2388,24 @@ export function registerIpcHandlers(): void {
 
       // P1.14: pre-update snapshot for field-level diff audit
       const oldExpense: any = (isEdit && expenseId) ? db.getById('expenses', expenseId) : null;
+
+      // D3: Period close gate — same logic as invoice:save.
+      const _cid = db.getCurrentCompanyId();
+      if (_cid) {
+        const period = findClosedPeriod(_cid, expenseData.date || '');
+        if (period) {
+          throw new Error(
+            'Cannot save: ' + expenseData.date + ' falls in a closed accounting period (' +
+            period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings to make changes.'
+          );
+        }
+        if (oldExpense?.date && oldExpense.date !== expenseData.date) {
+          const oldPeriod = findClosedPeriod(_cid, oldExpense.date);
+          if (oldPeriod) {
+            throw new Error('Cannot save: original date ' + oldExpense.date + ' is in a closed period.');
+          }
+        }
+      }
 
       const saveFn = rawDb.transaction(() => {
         let savedId: string;

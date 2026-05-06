@@ -684,6 +684,16 @@ const api = {
   snippetTrackUse: (id: string): Promise<{ ok?: boolean }> =>
     window.electronAPI.invoke('snippets:track-use', { id }),
 
+  // D3: Period close + lockdown
+  periodList: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('period:list'),
+  periodIsClosed: (date: string): Promise<{ is_closed: boolean; period?: any }> =>
+    window.electronAPI.invoke('period:is-closed', { date }),
+  periodClose: (payload: { period_start: string; period_end: string; reason?: string; closed_by?: string }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('period:close', payload),
+  periodReopen: (payload: { id: string; reason?: string; reopened_by?: string }): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('period:reopen', payload),
+
   // B7: Client risk scoring
   clientsRiskScore: (clientId?: string): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('clients:risk-score', clientId ? { client_id: clientId } : {}),

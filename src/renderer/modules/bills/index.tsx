@@ -29,6 +29,7 @@ import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/
 import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
+import { SnippetPicker } from '../../components/SnippetPicker';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import { useNavigation } from '../../lib/navigation';
@@ -1715,6 +1716,33 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               <Plus size={14} />
               Subtotal
             </button>
+            {/* A7 — Snippet picker (same as InvoiceForm) */}
+            <SnippetPicker
+              onPick={(s) => {
+                setLines((prev) => [...prev, {
+                  ...newLineDraft('item'),
+                  description: s.description || '',
+                  quantity: s.quantity || 1,
+                  unit_price: s.unit_price || 0,
+                  tax_rate: s.tax_rate || 0,
+                  unit_label: s.unit_label || '',
+                  item_code: s.item_code || '',
+                } as any]);
+              }}
+              onSaveAsSnippet={() => {
+                const items = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description?.trim() || l.unit_price > 0));
+                const last = items[items.length - 1];
+                if (!last) return null;
+                return {
+                  description: last.description,
+                  quantity: last.quantity,
+                  unit_label: (last as any).unit_label || '',
+                  unit_price: last.unit_price,
+                  tax_rate: last.tax_rate || 0,
+                  item_code: (last as any).item_code || '',
+                };
+              }}
+            />
           </div>
         </div>
 

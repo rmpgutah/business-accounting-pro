@@ -1633,6 +1633,36 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_loan_events_loan ON loan_events(loan_id, event_date DESC)",
 
+  // ── D3: Period Close + Lockdown ───────────────────────────────
+  //
+  // Records each closed accounting period. Once a period is closed,
+  // any record dated within that period (invoices, bills, expenses,
+  // journal entries, payments) becomes immutable — IPC handlers
+  // check the closed_periods table before allowing INSERT / UPDATE
+  // / DELETE on rows whose date falls in a closed range.
+  //
+  // Reopening a closed period requires a reason and writes an audit
+  // entry — auditors love seeing this trail.
+  //
+  // Currently scoped per-company; future: per-fiscal-year so a Q1
+  // close doesn't reopen when Q2 closes.
+  `CREATE TABLE IF NOT EXISTS closed_periods (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,           -- YYYY-MM-DD inclusive
+    period_end TEXT NOT NULL,             -- YYYY-MM-DD inclusive
+    closed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    closed_by TEXT DEFAULT '',
+    close_reason TEXT DEFAULT '',         -- "Year-end close 2025"
+    reopened_at TEXT DEFAULT NULL,        -- nullable; non-null = was reopened
+    reopened_by TEXT DEFAULT '',
+    reopen_reason TEXT DEFAULT '',
+    is_active INTEGER NOT NULL DEFAULT 1, -- 0 = currently reopened
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_closed_periods_co_active ON closed_periods(company_id, is_active) WHERE is_active = 1",
+
   // ── A7: Line-item snippets / field templates ─────────────────
   // Reusable line-item presets users can drop onto invoices/quotes
   // /bills with one click. Saves "Standard hourly consulting" once,

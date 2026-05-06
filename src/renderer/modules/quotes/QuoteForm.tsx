@@ -5,6 +5,7 @@ import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { FieldLabel } from '../../components/FieldLabel';
+import { SnippetPicker } from '../../components/SnippetPicker';
 import { formatCurrency, roundCents } from '../../lib/format';
 import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
@@ -993,6 +994,31 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               <Plus size={14} />
               Add Line
             </button>
+            {/* A7 — Snippet picker */}
+            <SnippetPicker
+              onPick={(s) => {
+                setLines((prev) => [...prev, {
+                  ...emptyLine(),
+                  sort_order: prev.length,
+                  description: s.description || '',
+                  quantity: s.quantity || 1,
+                  unit_price: s.unit_price || 0,
+                  tax_rate: s.tax_rate || 0,
+                } as any]);
+              }}
+              onSaveAsSnippet={() => {
+                const items = lines.filter((l) => (l.description as string)?.trim() || Number(l.unit_price) > 0);
+                const last = items[items.length - 1];
+                if (!last) return null;
+                return {
+                  description: String(last.description || ''),
+                  quantity: Number(last.quantity) || 1,
+                  unit_label: '',
+                  unit_price: Number(last.unit_price) || 0,
+                  tax_rate: Number(last.tax_rate) || 0,
+                };
+              }}
+            />
           </div>
 
           <div className="block-card p-0 overflow-hidden" style={{ background: 'rgba(14,15,20,0.40)' }}>

@@ -12,19 +12,21 @@ import {
   AlertTriangle,
   Clock,
   Zap,
+  Wand2,
 } from 'lucide-react';
 import BankAccountList, { type BankAccount } from './BankAccountList';
 import BankAccountForm from './BankAccountForm';
 import ImportTransactions from './ImportTransactions';
 import ReconcileView from './ReconcileView';
 import BankRules from './BankRules';
+import SmartMatchView from './SmartMatchView';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Tab Types ──────────────────────────────────────────
-type TabId = 'dashboard' | 'accounts' | 'import' | 'reconcile' | 'rules';
+type TabId = 'dashboard' | 'accounts' | 'import' | 'reconcile' | 'smart-match' | 'rules';
 
 interface Tab {
   id: TabId;
@@ -37,6 +39,7 @@ const TABS: Tab[] = [
   { id: 'accounts', label: 'Accounts', icon: <Building size={14} /> },
   { id: 'import', label: 'Import', icon: <Upload size={14} /> },
   { id: 'reconcile', label: 'Reconcile', icon: <GitMerge size={14} /> },
+  { id: 'smart-match', label: 'Smart Match', icon: <Wand2 size={14} /> },
   { id: 'rules', label: 'Bank Rules', icon: <Shield size={14} /> },
 ];
 
@@ -523,6 +526,10 @@ const BankReconModule: React.FC = () => {
 
     if (activeTab === 'reconcile') {
       return <ReconcileView />;
+    }
+
+    if (activeTab === 'smart-match') {
+      return <SmartMatchView />;
     }
 
     if (activeTab === 'rules') {

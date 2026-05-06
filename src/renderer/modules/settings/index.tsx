@@ -20,6 +20,7 @@ import StatusBuilderSettings from './StatusBuilderSettings';
 import PortalIntegrationSettings from './PortalIntegrationSettings';
 import TrashSettings from './TrashSettings';
 import IntegritySettings from './IntegritySettings';
+import PeriodCloseSettings from './PeriodCloseSettings';
 import MacroRecorder from '../../components/MacroRecorder';
 
 // ─── Types ──────────────────────────────────────────────
@@ -1114,6 +1115,9 @@ export default function SettingsModule() {
 
       {/* ── Database Integrity (P1.15/16/17) ─────────────── */}
       <IntegritySettings />
+
+      {/* ── Period Close + Lockdown (D3) ─────────────────── */}
+      <PeriodCloseSettings />
 
       {/* ── Cloud Backup (VPS) ──────────────────────────── */}
       <VpsBackup />
