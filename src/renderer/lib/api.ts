@@ -716,6 +716,14 @@ const api = {
   suggestPaymentMatches: (opts: { amount: number; date: string; description: string }): Promise<any[]> =>
     window.electronAPI.invoke('payment:suggest-matches', opts),
 
+  // B14: Auto-reconciliation — bulk-applies high-confidence matches
+  autoReconcile: (opts?: { threshold?: number; dryRun?: boolean }): Promise<{
+    ok?: boolean; dry_run?: boolean; threshold?: number;
+    scanned?: number; applied?: number; skipped?: number; ambiguous?: number;
+    applied_detail?: any[]; skipped_detail?: any[]; error?: string;
+  }> =>
+    window.electronAPI.invoke('payment:auto-reconcile', opts || {}),
+
   // P4.49: Mileage log
   mileageList: (opts?: { year?: number; limit?: number }): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('mileage:list', opts || {}),

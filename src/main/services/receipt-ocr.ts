@@ -205,14 +205,56 @@ function parseReceiptText(text: string, confidence: number): ParsedReceipt {
 
 /**
  * Main entry point — runs OCR on a file path and returns the parsed receipt.
- * Supported: PNG, JPG, JPEG, BMP, PBM, WEBP, GIF, TIFF (per tesseract).
- * For PDFs, the renderer should rasterize to PNG first (Electron's
- * webContents.printToPDF can do the inverse but rasterization needs
- * a PDF-renderer; deferred for a follow-up).
+ * Supported:
+ *   • Images: PNG, JPG, JPEG, BMP, PBM, WEBP, GIF, TIFF (via tesseract)
+ *   • PDFs: text-based PDFs have their text layer extracted directly
+ *           via pdf-parse (much faster + more accurate than OCR);
+ *           scanned/image-only PDFs fall back to no text (would need
+ *           rasterization — deferred).
  */
 export async function scanReceipt(filePath: string): Promise<ParsedReceipt> {
-  // Read the file into memory; tesseract.js accepts a Buffer.
   const buf = await fsp.readFile(filePath);
+  const lower = filePath.toLowerCase();
+
+  // ── PDF path ──────────────────────────────────────────
+  if (lower.endsWith('.pdf') || (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)) {
+    try {
+      // Lazy import — pdf-parse is ~5MB, only needed when scanning a PDF
+      const pdfParseMod: any = await import('pdf-parse');
+      const pdfParse = pdfParseMod.default || pdfParseMod;
+      const result = await pdfParse(buf);
+      const text = (result?.text || '').trim();
+      if (text.length > 20) {
+        // Text-based PDF — confidence is 100 since we extracted from
+        // the actual text layer rather than character-recognizing
+        // pixels. Caveat: confidence is "did we extract text", not
+        // "did we extract the RIGHT text" — the parser still has to
+        // do its work on the result.
+        return parseReceiptText(text, 100);
+      }
+      // PDF had no extractable text (scanned image only). Returns
+      // empty result with a warning. The user can convert to PNG/JPG
+      // and re-scan via the image path.
+      return {
+        raw_text: '',
+        vendor_name: null,
+        vendor_address: null,
+        receipt_date: null,
+        receipt_number: null,
+        subtotal: null,
+        tax: null,
+        total: null,
+        currency: 'USD',
+        line_items: [],
+        confidence: 0,
+        warnings: ['PDF appears to be a scanned image with no text layer. Convert to PNG/JPG and re-scan, or paste a text-based PDF.'],
+      };
+    } catch (err: any) {
+      throw new Error('PDF parse failed: ' + (err?.message || 'unknown'));
+    }
+  }
+
+  // ── Image path ────────────────────────────────────────
   const worker = await getWorker();
   const result = await worker.recognize(buf);
   const text = result.data.text || '';

@@ -1238,6 +1238,16 @@ export function registerIpcHandlers(): void {
       const loan = db.getById('loans', payload.loan_id) as any;
       if (!loan) return { error: 'Loan not found' };
 
+      // D3: refuse to record a payment whose date falls in a closed period
+      const _cidLoan = db.getCurrentCompanyId();
+      if (_cidLoan) {
+        const period = findClosedPeriod(_cidLoan, payload.payment_date);
+        if (period) {
+          return { error: 'Cannot record payment: ' + payload.payment_date + ' falls in a closed accounting period (' +
+            period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings.' };
+        }
+      }
+
       const { splitPayment } = require('../services/loan-calculator');
       const split = payload.is_extra_principal
         // Extra principal: 100% to principal, no interest portion.
@@ -1887,7 +1897,7 @@ export function registerIpcHandlers(): void {
       const { filePaths, canceled } = await dialog.showOpenDialog({
         properties: ['openFile'],
         filters: [
-          { name: 'Receipts', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'] },
+          { name: 'Receipts', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'] },
           { name: 'All Files', extensions: ['*'] },
         ],
       });
@@ -1909,6 +1919,116 @@ export function registerIpcHandlers(): void {
       return suggestCategory({ ...opts, company_id: cid });
     } catch (err: any) {
       return { error: err?.message };
+    }
+  });
+
+  // ─── B14: Auto-reconciliation ─────────────────────────
+  // Bulk-applies smart-match candidates above a confidence
+  // threshold (default 90/100 — basically "amount + date both
+  // exact"). Returns a summary of matches applied and skipped.
+  // Runs synchronously inside a transaction so it's all-or-
+  // nothing per call (caller can re-run with a lower threshold
+  // if they want to apply riskier matches).
+  ipcMain.handle('payment:auto-reconcile', (_event, opts?: { threshold?: number; dryRun?: boolean }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const dbi = db.getDb();
+      const threshold = Math.max(60, Math.min(100, opts?.threshold || 90));
+      const dryRun = !!opts?.dryRun;
+
+      const { suggestMatches } = require('../services/payment-matcher');
+
+      // Pull every unmatched positive bank deposit
+      const txns = dbi.prepare(
+        "SELECT id, date, description, amount FROM bank_transactions " +
+        "WHERE company_id = ? AND amount > 0 AND matched_entry_id IS NULL"
+      ).all(cid) as Array<{ id: string; date: string; description: string; amount: number }>;
+
+      const applied: Array<{ txn_id: string; invoice_id: string; invoice_number: string; amount: number; score: number }> = [];
+      const skipped: Array<{ txn_id: string; reason: string }> = [];
+      let conflictCount = 0; // multiple high-confidence candidates → ambiguous
+
+      const tx = dbi.transaction(() => {
+        for (const t of txns) {
+          const candidates = suggestMatches({
+            amount: t.amount,
+            date: t.date,
+            description: t.description || '',
+            company_id: cid,
+          }) as Array<any>;
+          if (candidates.length === 0) {
+            skipped.push({ txn_id: t.id, reason: 'no candidates' });
+            continue;
+          }
+          const top = candidates[0];
+          if (top.score < threshold) {
+            skipped.push({ txn_id: t.id, reason: 'top score ' + top.score + ' below threshold ' + threshold });
+            continue;
+          }
+          // Ambiguity guard: if the second-best is within 10 points,
+          // skip — could be the wrong invoice. Hand off to human.
+          if (candidates.length > 1 && (top.score - candidates[1].score) < 10) {
+            conflictCount++;
+            skipped.push({ txn_id: t.id, reason: 'ambiguous (top=' + top.score + ', 2nd=' + candidates[1].score + ')' });
+            continue;
+          }
+          // Period-close gate
+          const period = findClosedPeriod(cid, t.date);
+          if (period) {
+            skipped.push({ txn_id: t.id, reason: 'date in closed period ' + period.period_start + '..' + period.period_end });
+            continue;
+          }
+
+          if (!dryRun) {
+            // Record payment
+            const pid = uuid();
+            dbi.prepare(
+              "INSERT INTO invoice_payments (id, invoice_id, payment_date, amount, method, reference, bank_transaction_id) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ).run(pid, top.invoice_id, t.date, t.amount, 'bank_transfer', (t.description || '').slice(0, 60), t.id);
+
+            // Update invoice
+            const newPaid = Number(top.amount_paid) + t.amount;
+            const newStatus = newPaid + 0.005 >= top.total ? 'paid' : 'partial';
+            dbi.prepare(
+              "UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
+            ).run(newPaid, newStatus, top.invoice_id);
+
+            // Mark bank transaction as matched
+            dbi.prepare(
+              "UPDATE bank_transactions SET matched_entry_id = ?, updated_at = datetime('now') WHERE id = ?"
+            ).run(pid, t.id);
+
+            db.logAudit(cid, 'invoices', top.invoice_id, 'auto_reconcile_match', {
+              bank_txn_id: t.id, score: top.score, amount: t.amount,
+            });
+          }
+
+          applied.push({
+            txn_id: t.id,
+            invoice_id: top.invoice_id,
+            invoice_number: top.invoice_number,
+            amount: t.amount,
+            score: top.score,
+          });
+        }
+      });
+      tx();
+      if (!dryRun) scheduleAutoBackup();
+      return {
+        ok: true,
+        dry_run: dryRun,
+        threshold,
+        scanned: txns.length,
+        applied: applied.length,
+        skipped: skipped.length,
+        ambiguous: conflictCount,
+        applied_detail: applied,
+        skipped_detail: skipped.slice(0, 20),
+      };
+    } catch (err: any) {
+      return { error: err?.message || 'Auto-reconcile failed' };
     }
   });
 
@@ -4576,6 +4696,15 @@ export function registerIpcHandlers(): void {
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
 
+    // D3: period close gate
+    {
+      const period = findClosedPeriod(companyId, date);
+      if (period) {
+        return { error: 'Cannot record payment: ' + date + ' falls in a closed accounting period (' +
+          period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings.' };
+      }
+    }
+
     const tx = (dbInstance as any).transaction(() => {
       const paymentId = uuid();
       (dbInstance as any).prepare(`
@@ -5702,6 +5831,15 @@ export function registerIpcHandlers(): void {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
+
+    // D3: refuse to record a payment whose date falls in a closed period
+    {
+      const period = findClosedPeriod(companyId, date);
+      if (period) {
+        return { error: 'Cannot record payment: ' + date + ' falls in a closed accounting period (' +
+          period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings.' };
+      }
+    }
 
     const payTx = dbInstance.transaction(() => {
       const paymentId = uuid();

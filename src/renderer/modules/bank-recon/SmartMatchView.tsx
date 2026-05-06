@@ -9,7 +9,7 @@
 // partial) and links the bank transaction.
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Wand2, Check, X, RefreshCw } from 'lucide-react';
+import { Wand2, Check, X, RefreshCw, Zap } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -115,6 +115,25 @@ const SmartMatchView: React.FC = () => {
     setItems((prev) => prev.filter((i) => i.id !== txnId));
   };
 
+  // B14 — bulk-apply matches above the chosen confidence threshold
+  const [autoReconcileBusy, setAutoReconcileBusy] = useState(false);
+  const handleAutoReconcile = async (threshold: number) => {
+    if (!confirm('Auto-reconcile every match scoring ' + threshold + '+? This applies high-confidence matches in bulk. Cannot be undone in one click — each match is independently undoable.')) return;
+    setAutoReconcileBusy(true);
+    try {
+      const r = await api.autoReconcile({ threshold });
+      if (r?.error) {
+        toast.error('Auto-reconcile failed: ' + r.error);
+        return;
+      }
+      const summary = `Auto-reconciled ${r.applied} of ${r.scanned} unmatched deposits` +
+        (r.ambiguous && r.ambiguous > 0 ? ` · ${r.ambiguous} ambiguous (skipped)` : '') +
+        (r.skipped && r.skipped > 0 ? ` · ${r.skipped} below threshold` : '');
+      toast.success(summary);
+      await load();
+    } finally { setAutoReconcileBusy(false); }
+  };
+
   return (
     <div style={{ padding: 24, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -124,9 +143,32 @@ const SmartMatchView: React.FC = () => {
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
           Suggests open invoices for unmatched bank deposits
         </span>
-        <button onClick={load} className="block-btn flex items-center gap-1.5 text-xs" style={{ marginLeft: 'auto' }}>
-          <RefreshCw size={12} /> Refresh
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {/* B14 — Auto-reconcile dropdown */}
+          {items.length > 0 && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={() => handleAutoReconcile(95)}
+                disabled={autoReconcileBusy}
+                className="block-btn-primary flex items-center gap-1.5 text-xs"
+                title="Apply only matches scoring 95+ — typically exact amount + date matches"
+              >
+                <Zap size={12} /> Auto (≥95)
+              </button>
+              <button
+                onClick={() => handleAutoReconcile(80)}
+                disabled={autoReconcileBusy}
+                className="block-btn flex items-center gap-1.5 text-xs"
+                title="Apply matches scoring 80+ — looser threshold, more ambiguous matches included"
+              >
+                Auto (≥80)
+              </button>
+            </div>
+          )}
+          <button onClick={load} className="block-btn flex items-center gap-1.5 text-xs">
+            <RefreshCw size={12} /> Refresh
+          </button>
+        </div>
       </div>
 
       {loading && <div style={{ padding: 24, color: 'var(--color-text-muted)' }}>Scanning…</div>}
