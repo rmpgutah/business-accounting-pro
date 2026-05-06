@@ -8,7 +8,7 @@
 //   • Payment history list
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
@@ -78,6 +78,17 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         </div>
         <button onClick={() => setShowPayment(true)} className="block-btn-primary flex items-center gap-2">
           <DollarSign size={14} /> Record Payment
+        </button>
+        <button
+          onClick={async () => {
+            const r = await api.loanExportPDF(loanId);
+            if (r?.error) toast.error('PDF export failed: ' + r.error);
+            else if (r?.path) toast.success('PDF saved to ' + r.path);
+          }}
+          className="block-btn flex items-center gap-1.5 text-xs"
+          title="Export full amortization schedule as PDF"
+        >
+          <Download size={12} /> Export PDF
         </button>
         <button onClick={onEdit} className="block-btn flex items-center gap-1.5 text-xs">
           <Edit size={12} /> Edit

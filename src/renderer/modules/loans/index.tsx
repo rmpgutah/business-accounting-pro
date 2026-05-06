@@ -5,11 +5,12 @@
 // active loans on the list view.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Landmark, TrendingDown, ChevronRight, Wallet } from 'lucide-react';
+import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import LoanForm from './LoanForm';
 import LoanDetail from './LoanDetail';
+import AggregateDebtChart from './AggregateDebtChart';
 
 type View = 'list' | 'form' | 'detail';
 
@@ -25,6 +26,8 @@ const LoansModule: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loans, setLoans] = useState<any[]>([]);
   const [aggregate, setAggregate] = useState<any>(null);
+  const [aggregateSchedule, setAggregateSchedule] = useState<any[]>([]);
+  const [overdue, setOverdue] = useState<{ overdue_count: number; by_loan: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -34,6 +37,10 @@ const LoansModule: React.FC = () => {
       if (Array.isArray(list)) setLoans(list);
       const agg = await api.loansAggregate();
       if (agg && !('error' in agg)) setAggregate(agg);
+      const sched = await api.loansAggregateSchedule(60);
+      if (Array.isArray(sched)) setAggregateSchedule(sched);
+      const od = await api.loansCheckOverdue();
+      if (od && !od.error) setOverdue(od);
     } finally { setLoading(false); }
   }, []);
 
@@ -75,6 +82,49 @@ const LoansModule: React.FC = () => {
         </button>
       </div>
 
+      {/* Overdue alert banner — top of dashboard if any active loan
+          has scheduled payments past their due date with no payment
+          recorded. Hard to miss; links to the offending loans. */}
+      {overdue && overdue.overdue_count > 0 && (
+        <div style={{
+          padding: 14,
+          marginBottom: 12,
+          border: '1px solid var(--color-accent-expense)',
+          borderLeft: '4px solid var(--color-accent-expense)',
+          background: 'rgba(220, 38, 38, 0.08)',
+          borderRadius: 6,
+        }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <AlertTriangle size={18} style={{ color: 'var(--color-accent-expense)', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {overdue.overdue_count} overdue payment{overdue.overdue_count === 1 ? '' : 's'} across {overdue.by_loan.length} loan{overdue.by_loan.length === 1 ? '' : 's'}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                {overdue.by_loan.slice(0, 5).map((l: any) => (
+                  <button
+                    key={l.loan_id}
+                    onClick={() => { setSelectedId(l.loan_id); setView('detail'); }}
+                    style={{
+                      fontSize: 10,
+                      padding: '4px 10px',
+                      background: 'var(--color-bg-primary)',
+                      border: '1px solid var(--color-accent-expense)',
+                      borderRadius: 4,
+                      color: 'var(--color-accent-expense)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {l.loan_name} · {l.count} late · {l.max_days}d max
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Aggregate stats */}
       {aggregate?.stats && (
         <div className="block-card" style={{ padding: 16, marginBottom: 12 }}>
@@ -107,6 +157,21 @@ const LoansModule: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Aggregate cross-loan amortization projection */}
+      {aggregateSchedule.length > 0 && (
+        <div className="block-card" style={{ padding: 16, marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)' }}>
+              Total Debt Projection · Next {aggregateSchedule.length} months
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+              Combined principal + interest across all active loans
+            </div>
+          </div>
+          <AggregateDebtChart data={aggregateSchedule} height={200} />
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ClientContext } from '../../components/ContextPanel';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
+import { SnippetPicker } from '../../components/SnippetPicker';
 import RowTypeToolbar from './RowTypeToolbar';
 import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
 import type { LineRowType } from '../../../shared/types';
@@ -1648,8 +1649,38 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         </table>
         </div>{/* /overflow-x-auto */}
 
-        <div className="px-4 py-3 border-t border-border-primary">
+        <div className="px-4 py-3 border-t border-border-primary" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <RowTypeToolbar onAdd={addLine} />
+          {/* A7 — Snippet picker. Inserts a saved line-item template
+              with one click. The "Save Current" affordance lets
+              users capture the LAST item line as a snippet. */}
+          <SnippetPicker
+            onPick={(s) => {
+              setLines((prev) => [...prev, {
+                ...newLineItem('item', s.unit_label || ''),
+                description: s.description || '',
+                quantity: s.quantity || 1,
+                unit_price: s.unit_price || 0,
+                tax_rate: s.tax_rate || 0,
+                unit_label: s.unit_label || '',
+                item_code: s.item_code || '',
+              } as any]);
+            }}
+            onSaveAsSnippet={() => {
+              // Capture the LAST item-type line as the snippet template
+              const items = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description?.trim() || l.unit_price > 0));
+              const last = items[items.length - 1];
+              if (!last) return null;
+              return {
+                description: last.description,
+                quantity: last.quantity,
+                unit_label: last.unit_label || '',
+                unit_price: last.unit_price,
+                tax_rate: last.tax_rate || 0,
+                item_code: last.item_code || '',
+              };
+            }}
+          />
         </div>
       </div>
 

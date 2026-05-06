@@ -1316,6 +1316,101 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // Aggregate amortization across ALL active loans — used by the
+  // debt dashboard to show "if I make every payment as scheduled,
+  // how does my total debt decline over time?"
+  ipcMain.handle('loans:aggregate-schedule', (_event, opts?: { months?: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const dbi = db.getDb();
+      const months = Math.max(12, Math.min(360, opts?.months || 60));
+
+      // Sum scheduled rows by year-month across all active loans.
+      const rows = dbi.prepare(`
+        SELECT
+          substr(s.due_date, 1, 7) AS month,
+          COALESCE(SUM(s.principal_amount), 0) AS total_principal,
+          COALESCE(SUM(s.interest_amount), 0) AS total_interest,
+          COALESCE(SUM(s.scheduled_payment), 0) AS total_payment
+        FROM loan_payment_schedule s
+        JOIN loans l ON l.id = s.loan_id
+        WHERE l.company_id = ?
+          AND l.status = 'active'
+          AND COALESCE(l.deleted_at, '') = ''
+          AND s.due_date >= date('now')
+        GROUP BY substr(s.due_date, 1, 7)
+        ORDER BY month
+        LIMIT ?
+      `).all(cid, months) as any[];
+
+      // Compute total outstanding at each point — start from current
+      // balance, subtract cumulative principal scheduled.
+      const totalCurrent = (dbi.prepare(
+        "SELECT COALESCE(SUM(current_balance), 0) AS bal FROM loans WHERE company_id = ? AND status = 'active' AND COALESCE(deleted_at, '') = ''"
+      ).get(cid) as any)?.bal || 0;
+
+      let runningBalance = totalCurrent;
+      const projection = rows.map((r) => {
+        runningBalance -= r.total_principal;
+        return {
+          month: r.month,
+          principal: Math.round(r.total_principal * 100) / 100,
+          interest: Math.round(r.total_interest * 100) / 100,
+          payment: Math.round(r.total_payment * 100) / 100,
+          balance: Math.round(Math.max(0, runningBalance) * 100) / 100,
+        };
+      });
+
+      return projection;
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // Mark scheduled payments as overdue when due_date passed without
+  // a 'paid' or 'partial' status. Returns count flipped + per-loan
+  // detail for the dashboard banner. Idempotent — re-running has
+  // no effect on already-flagged rows.
+  ipcMain.handle('loans:check-overdue', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { overdue_count: 0, by_loan: [] };
+      const dbi = db.getDb();
+      const today = new Date().toISOString().slice(0, 10);
+
+      // Find pending scheduled rows past due
+      const overdueRows = dbi.prepare(`
+        SELECT s.id, s.loan_id, s.due_date, s.scheduled_payment, l.name AS loan_name,
+          CAST(julianday(?) - julianday(s.due_date) AS INTEGER) AS days_late
+        FROM loan_payment_schedule s
+        JOIN loans l ON l.id = s.loan_id
+        WHERE l.company_id = ?
+          AND l.status = 'active'
+          AND COALESCE(l.deleted_at, '') = ''
+          AND s.paid_status IN ('pending', 'partial')
+          AND s.due_date < ?
+      `).all(today, cid, today) as any[];
+
+      // Aggregate by loan
+      const byLoan: Record<string, { loan_id: string; loan_name: string; count: number; total: number; max_days: number }> = {};
+      for (const r of overdueRows) {
+        const key = r.loan_id;
+        if (!byLoan[key]) byLoan[key] = { loan_id: r.loan_id, loan_name: r.loan_name, count: 0, total: 0, max_days: 0 };
+        byLoan[key].count++;
+        byLoan[key].total += Number(r.scheduled_payment) || 0;
+        byLoan[key].max_days = Math.max(byLoan[key].max_days, r.days_late || 0);
+      }
+
+      return {
+        overdue_count: overdueRows.length,
+        by_loan: Object.values(byLoan),
+      };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
   // Aggregate stats across all active loans for the Debt Dashboard.
   ipcMain.handle('loans:aggregate', () => {
     try {
@@ -1349,6 +1444,123 @@ export function registerIpcHandlers(): void {
       return { stats, upcoming };
     } catch (err: any) {
       return { error: err?.message };
+    }
+  });
+
+  // Generate a printable amortization-schedule PDF for one loan.
+  // Returns the path of the saved PDF so the caller can offer
+  // open-in-Finder or revealing the file.
+  ipcMain.handle('loans:export-pdf', async (_event, { loan_id }: { loan_id: string }) => {
+    try {
+      const dbi = db.getDb();
+      const loan = db.getById('loans', loan_id) as any;
+      if (!loan) return { error: 'Loan not found' };
+      const company = db.getById('companies', loan.company_id) as any;
+      const schedule = dbi.prepare(
+        "SELECT * FROM loan_payment_schedule WHERE loan_id = ? ORDER BY payment_number"
+      ).all(loan_id) as any[];
+
+      // Build HTML for the schedule. Reuses the print-templates
+      // baseStyles via a generic shell so the styling matches other
+      // printed documents.
+      const fmt = (n: number) => '$' + (Number(n) || 0).toFixed(2);
+      const fmtNum = (n: number) => (Number(n) || 0).toLocaleString('en-US');
+      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const totalInterest = schedule.reduce((s: number, r: any) => s + Number(r.interest_amount), 0);
+      const totalPrincipal = schedule.reduce((s: number, r: any) => s + Number(r.principal_amount), 0);
+      const totalPayments = schedule.reduce((s: number, r: any) => s + Number(r.scheduled_payment), 0);
+
+      const escapeHtml = (s: string) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Amortization Schedule — ${escapeHtml(loan.name)}</title>
+<style>
+  @page { size: letter; margin: 0.55in 0.5in 0.65in 0.5in; @bottom-right { content: "Page " counter(page) " of " counter(pages); font-family: 'Inter', sans-serif; font-size: 8.5pt; color: #94a3b8; } }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #0f172a; font-size: 11px; line-height: 1.5; }
+  .header { border-bottom: 3px solid #0f172a; padding-bottom: 14px; margin-bottom: 18px; }
+  .co-name { font-size: 22px; font-weight: 800; }
+  .doc-title { font-size: 16px; font-weight: 700; color: #475569; margin-top: 6px; }
+  .doc-meta { font-size: 11px; color: #64748b; margin-top: 8px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0 18px; }
+  .stat { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+  .stat-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 4px; }
+  .stat-value { font-size: 14px; font-weight: 800; font-family: 'SF Mono', Menlo, monospace; }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 6px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #64748b; border-bottom: 2px solid #0f172a; background: #f8fafc; text-align: right; }
+  th:first-child, th:nth-child(2) { text-align: left; }
+  td { padding: 5px 8px; font-size: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: 'SF Mono', Menlo, monospace; }
+  td:first-child { text-align: right; color: #94a3b8; width: 40px; }
+  td:nth-child(2) { text-align: left; font-family: 'SF Mono', Menlo, monospace; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .totals-row td { font-weight: 800; border-top: 2px solid #0f172a; background: #f1f5f9; }
+  tfoot { display: table-footer-group; }
+  thead { display: table-header-group; }
+</style></head>
+<body>
+<div class="header">
+  <div class="co-name">${escapeHtml(company?.name || 'Company')}</div>
+  <div class="doc-title">Loan Amortization Schedule</div>
+  <div class="doc-meta">
+    <strong>${escapeHtml(loan.name)}</strong>
+    ${loan.lender_name ? ' · ' + escapeHtml(loan.lender_name) : ''}
+    ${loan.account_number ? ' · ••••' + escapeHtml(loan.account_number.slice(-4)) : ''}
+    · Generated ${today}
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">Principal</div><div class="stat-value">${fmt(loan.principal)}</div></div>
+  <div class="stat"><div class="stat-label">Rate</div><div class="stat-value">${(loan.interest_rate * 100).toFixed(3)}%</div></div>
+  <div class="stat"><div class="stat-label">Term</div><div class="stat-value">${fmtNum(loan.term_months)} mo</div></div>
+  <div class="stat"><div class="stat-label">Payment</div><div class="stat-value">${fmt(loan.payment_amount)}</div></div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">Total Payments</div><div class="stat-value">${fmt(totalPayments)}</div></div>
+  <div class="stat"><div class="stat-label">Total Principal</div><div class="stat-value" style="color:#16a34a">${fmt(totalPrincipal)}</div></div>
+  <div class="stat"><div class="stat-label">Total Interest</div><div class="stat-value" style="color:#dc2626">${fmt(totalInterest)}</div></div>
+  <div class="stat"><div class="stat-label">Schedule Rows</div><div class="stat-value">${schedule.length}</div></div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Due Date</th>
+      <th>Payment</th>
+      <th>Principal</th>
+      <th>Interest</th>
+      <th>Balance</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${schedule.map((r: any) => `
+      <tr>
+        <td>${r.payment_number}</td>
+        <td>${r.due_date}</td>
+        <td>${fmt(r.scheduled_payment)}</td>
+        <td style="color:#16a34a">${fmt(r.principal_amount)}</td>
+        <td style="color:#dc2626">${fmt(r.interest_amount)}</td>
+        <td>${fmt(r.remaining_balance)}</td>
+      </tr>
+    `).join('')}
+    <tr class="totals-row">
+      <td></td><td>Totals</td>
+      <td>${fmt(totalPayments)}</td>
+      <td style="color:#16a34a">${fmt(totalPrincipal)}</td>
+      <td style="color:#dc2626">${fmt(totalInterest)}</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</body></html>`;
+
+      const filename = (loan.name || 'loan').replace(/[^a-zA-Z0-9-]/g, '-') + '-amortization.pdf';
+      const result = await saveHTMLAsPDF(html, 'Amortization Schedule', { defaultFilename: filename });
+      return result;
+    } catch (err: any) {
+      return { error: err?.message || 'PDF export failed' };
     }
   });
 

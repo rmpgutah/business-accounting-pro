@@ -667,6 +667,12 @@ const api = {
     window.electronAPI.invoke('loans:payoff-scenario', { loan_id, extra_per_payment }),
   loansAggregate: (): Promise<{ stats: any; upcoming: any[] } | { error?: string }> =>
     window.electronAPI.invoke('loans:aggregate'),
+  loansAggregateSchedule: (months?: number): Promise<Array<{ month: string; principal: number; interest: number; payment: number; balance: number }> | { error?: string }> =>
+    window.electronAPI.invoke('loans:aggregate-schedule', { months: months || 60 }),
+  loansCheckOverdue: (): Promise<{ overdue_count: number; by_loan: any[]; error?: string }> =>
+    window.electronAPI.invoke('loans:check-overdue'),
+  loanExportPDF: (loan_id: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('loans:export-pdf', { loan_id }),
 
   // A7: Line-item snippet library
   snippetsList: (opts?: { category?: string }): Promise<any[] | { error?: string }> =>
