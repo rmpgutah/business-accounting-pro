@@ -684,6 +684,14 @@ const api = {
   snippetTrackUse: (id: string): Promise<{ ok?: boolean }> =>
     window.electronAPI.invoke('snippets:track-use', { id }),
 
+  // B7: Client risk scoring
+  clientsRiskScore: (clientId?: string): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('clients:risk-score', clientId ? { client_id: clientId } : {}),
+
+  // B13: Tax deduction finder
+  taxDeductionScan: (year?: number): Promise<any> =>
+    window.electronAPI.invoke('tax:deduction-scan', { year }),
+
   // B5: Receipt OCR + parsing (offline via tesseract.js)
   ocrScanReceiptPick: (): Promise<{ ok?: boolean; cancelled?: boolean; parsed?: any; filePath?: string; error?: string }> =>
     window.electronAPI.invoke('ocr:scan-receipt-pick'),

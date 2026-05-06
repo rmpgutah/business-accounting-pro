@@ -41,6 +41,8 @@ export type ReportType =
   | 'vendor-spend'
   | 'project-profitability'
   | 'customer-profitability' // P4.37
+  | 'tax-deduction-finder'   // B13
+  | 'client-risk-scoring'    // B7
   | 'income-by-month'
   | 'debt-collection'
   | 'inventory-valuation'
@@ -99,6 +101,22 @@ const REPORTS: ReportCard[] = [
       'Per-client revenue, direct expenses, profit, and margin %. Identifies which clients actually drive profit.',
     icon: Users,
     accentClass: 'border-l-accent-blue',
+  },
+  {
+    id: 'client-risk-scoring',
+    title: 'Client Risk Scoring',
+    description:
+      'AI-driven 0-100 risk score per client based on payment behavior — DSO trend, aging severity, late-pay frequency, volume change.',
+    icon: UserCircle,
+    accentClass: 'border-l-accent-warning',
+  },
+  {
+    id: 'tax-deduction-finder',
+    title: 'Tax Deduction Finder',
+    description:
+      'Scans expense history for overlooked deductions: home office, vehicle, meals, education, software, phone, travel, health insurance, fees.',
+    icon: Calculator,
+    accentClass: 'border-l-accent-positive',
   },
   {
     id: 'ar-aging',

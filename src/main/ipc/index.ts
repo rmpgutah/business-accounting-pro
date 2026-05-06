@@ -1289,7 +1289,111 @@ export function registerIpcHandlers(): void {
         newStatus, nextRow?.due_date || null, payload.loan_id
       );
 
-      return { ok: true, payment_id: pid, split };
+      // ─── GL auto-posting ─────────────────────────────────
+      // If the loan has GL accounts configured, post a JE:
+      //   DR  Loan Liability       (principal portion)
+      //   DR  Interest Expense     (interest portion)
+      //   DR  Escrow Asset         (escrow portion, if any)
+      //   CR  Cash / Bank          (full payment amount)
+      // Falls back to name-hints if specific account IDs aren't set
+      // — same hints other modules use ("Loans Payable", "Interest
+      // Expense", "Cash"). Skips entirely if no Cash/Bank account
+      // can be resolved (caller hasn't set up COA yet).
+      const cid = db.getCurrentCompanyId();
+      let journalEntryId: string | null = null;
+      if (cid && payload.amount > 0) {
+        try {
+          // Build resolved-or-hinted lines. The DR side and the CR side
+          // must balance to the penny — use the actual split values.
+          const lines: Array<{ accountId?: string; nameHint: string; debit: number; credit: number; note?: string }> = [];
+
+          // Principal: DR loan liability (or "Loans Payable" by hint)
+          if (split.principal > 0) {
+            lines.push({
+              accountId: loan.liability_account_id || undefined,
+              nameHint: 'Loans Payable',
+              debit: split.principal,
+              credit: 0,
+              note: `Loan ${loan.name} principal payment`,
+            });
+          }
+          // Interest: DR interest expense (or "Interest Expense" by hint)
+          if (split.interest > 0) {
+            lines.push({
+              accountId: loan.interest_expense_account_id || undefined,
+              nameHint: 'Interest Expense',
+              debit: split.interest,
+              credit: 0,
+              note: `Loan ${loan.name} interest`,
+            });
+          }
+          // Escrow: DR escrow asset (or fall back to liability account)
+          if (split.escrow > 0) {
+            lines.push({
+              nameHint: 'Escrow',
+              debit: split.escrow,
+              credit: 0,
+              note: `Loan ${loan.name} escrow`,
+            });
+          }
+          // Cash: CR payment source account (or "Cash" by hint)
+          lines.push({
+            accountId: loan.payment_source_account_id || undefined,
+            nameHint: 'Cash',
+            debit: 0,
+            credit: payload.amount,
+            note: `Loan ${loan.name} payment`,
+          });
+
+          // Use the existing postJournalEntry helper. We need to map
+          // the explicit accountIds through the same path — easiest
+          // approach: if accountId is set, fetch its name and use as
+          // the hint (since postJournalEntry resolves by hint).
+          const resolvedLines = lines.map((l) => {
+            if (l.accountId) {
+              const acc = dbi.prepare("SELECT name FROM accounts WHERE id = ?").get(l.accountId) as any;
+              if (acc?.name) return { ...l, nameHint: acc.name };
+            }
+            return l;
+          });
+
+          // Snapshot the highest entry_number BEFORE posting so we
+          // can capture the JE id for back-linking.
+          const before = dbi.prepare(
+            "SELECT id FROM journal_entries WHERE company_id = ? ORDER BY created_at DESC LIMIT 1"
+          ).get(cid) as any;
+
+          postJournalEntry(dbi, cid, payload.payment_date,
+            `Loan payment · ${loan.name}`,
+            resolvedLines.map((l) => ({
+              nameHint: l.nameHint,
+              debit: l.debit,
+              credit: l.credit,
+              note: l.note,
+            }))
+          );
+
+          // Find the newly-created JE (the one created after our snapshot).
+          const after = dbi.prepare(
+            "SELECT id FROM journal_entries WHERE company_id = ? ORDER BY created_at DESC LIMIT 1"
+          ).get(cid) as any;
+          if (after?.id && after.id !== before?.id) {
+            journalEntryId = after.id;
+            // Back-link the loan_payment to the JE
+            dbi.prepare(
+              "UPDATE loan_payments SET journal_entry_id = ? WHERE id = ?"
+            ).run(journalEntryId, pid);
+          }
+        } catch (err) {
+          // GL posting is best-effort — payment was recorded
+          // successfully; if posting fails the user can rebuild GL
+          // later via the existing Rebuild GL feature.
+          console.warn('[loan payment] GL auto-post failed:', err);
+        }
+      }
+
+      scheduleAutoBackup();
+      return { ok: true, payment_id: pid, split, journal_entry_id: journalEntryId };
     } catch (err: any) {
       return { error: err?.message || 'Payment recording failed' };
     }
@@ -1619,6 +1723,34 @@ export function registerIpcHandlers(): void {
       ).run(id);
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
+  });
+
+  // ─── B7: Client risk scoring ─────────────────────────
+  ipcMain.handle('clients:risk-score', (_event, opts?: { client_id?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const { scoreOneClient, scoreAllClients } = require('../services/client-risk-scorer');
+      if (opts?.client_id) {
+        const r = scoreOneClient(cid, opts.client_id);
+        return r ? [r] : [];
+      }
+      return scoreAllClients(cid);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+
+  // ─── B13: Tax deduction finder ─────────────────────────
+  ipcMain.handle('tax:deduction-scan', (_event, opts?: { year?: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return null;
+      const { scanDeductions } = require('../services/tax-deduction-finder');
+      return scanDeductions(cid, opts?.year);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
   });
 
   // ─── B5: PDF/image receipt OCR + parsing ───────────────
