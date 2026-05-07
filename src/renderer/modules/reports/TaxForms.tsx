@@ -22,7 +22,8 @@ type FormType =
   | 'w2c' | '1096'
   | 'schedule-1' | 'schedule-2' | 'schedule-3'
   | 'schedule-a' | 'schedule-b' | 'schedule-d'
-  | '1040-es';
+  | '1040-es'
+  | '8995' | '4562' | '8829' | '4797' | '7004' | '4868';
 
 interface Props { onBack?: () => void }
 
@@ -83,6 +84,12 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       else if (activeForm === 'schedule-b') r = await api.taxScheduleB(year);
       else if (activeForm === 'schedule-d') r = await api.taxScheduleD(year);
       else if (activeForm === '1040-es') r = await api.taxForm1040ES(year);
+      else if (activeForm === '8995') r = await api.taxForm8995(year);
+      else if (activeForm === '4562') r = await api.taxForm4562(year);
+      else if (activeForm === '8829') r = await api.taxForm8829(year);
+      else if (activeForm === '4797') r = await api.taxForm4797(year);
+      else if (activeForm === '7004') r = await api.taxForm7004({ form_code: '23', tax_year_end: year + '-12-31' });
+      else if (activeForm === '4868') r = await api.taxForm4868(year, { auto_estimate: true });
       setData(r);
     } finally { setLoading(false); }
   }, [activeForm, year, quarter, salesPeriodStart, salesPeriodEnd, w2OtherWages, futaMultiState, futaCreditReduction, futaTotalDeposits]);
@@ -153,6 +160,12 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
           { id: 'schedule-b' as FormType, label: 'Sch B' },
           { id: 'schedule-d' as FormType, label: 'Sch D' },
           { id: '1040-es' as FormType, label: '1040-ES' },
+          { id: '8995' as FormType, label: '8995 (QBI)' },
+          { id: '4562' as FormType, label: '4562 (Depreciation)' },
+          { id: '8829' as FormType, label: '8829 (Home Office)' },
+          { id: '4797' as FormType, label: '4797 (Asset Sales)' },
+          { id: '7004' as FormType, label: '7004 (Biz Ext)' },
+          { id: '4868' as FormType, label: '4868 (Ind Ext)' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -273,6 +286,12 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {!loading && data && activeForm === 'schedule-b' && <ScheduleBView data={data} />}
       {!loading && data && activeForm === 'schedule-d' && <ScheduleDView data={data} />}
       {!loading && data && activeForm === '1040-es' && <Form1040ESView data={data} />}
+      {!loading && data && activeForm === '8995' && <Form8995View data={data} />}
+      {!loading && data && activeForm === '4562' && <Form4562View data={data} />}
+      {!loading && data && activeForm === '8829' && <Form8829View data={data} />}
+      {!loading && data && activeForm === '4797' && <Form4797View data={data} />}
+      {!loading && data && activeForm === '7004' && <Form7004View data={data} />}
+      {!loading && data && activeForm === '4868' && <Form4868View data={data} />}
 
       {/* Disclaimer */}
       <div style={{
@@ -1652,6 +1671,207 @@ const Form1040ESView: React.FC<{ data: any }> = ({ data }) => {
           ))}
         </div>
       </div>
+    </div>
+  );
+};
+
+// ── Form 8995 view (QBI Simplified) ────────────────────────────
+
+const Form8995View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="QBI (Schedule C)" value={fmt$(data.line2_total_qbi)} />
+          <Stat label="QBI Component (× 20%)" value={fmt$(data.line5_qbi_component)} color="#16a34a" />
+          <Stat label="Income Limit" value={fmt$(data.line14_income_limitation)} />
+          <Stat label="QBI DEDUCTION (Line 15)" value={fmt$(data.line15_qbi_deduction)} highlight color="#16a34a" />
+        </div>
+      </div>
+      <ScheduleSection title="Computation" rows={[
+        ['2', 'Total QBI from line 1', data.line2_total_qbi, 'bold'],
+        ['3', 'QBI loss carryforward', data.line3_qbi_loss_carryforward],
+        ['4', 'Total QBI after carryforward', data.line4_total_qbi_after_carryforward],
+        ['5', 'QBI component (line 4 × 20%)', data.line5_qbi_component, 'bold'],
+        ['6', 'REIT/PTP income', data.line6_reit_ptp_income],
+        ['9', 'REIT/PTP component (line 8 × 20%)', data.line9_reit_ptp_component],
+        ['10', 'Tentative deduction (5 + 9)', data.line10_qbi_before_income_limit, 'bold'],
+        ['11', 'Taxable income before QBI deduction', data.line11_taxable_income_before_qbi],
+        ['12', 'Net capital gain + qualified dividends', data.line12_net_capital_gain],
+        ['13', 'Taxable income minus capital gain', data.line13_taxable_income_minus_cg],
+        ['14', 'Income limit (line 13 × 20%)', data.line14_income_limitation, 'bold'],
+        ['15', 'QBI DEDUCTION (smaller of 10 or 14)', data.line15_qbi_deduction, 'green'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 4562 view (Depreciation) ──────────────────────────────
+
+const Form4562View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Assets" value={String(data.asset_count)} />
+          <Stat label="Section 179" value={fmt$(data.line12_section_179_deduction)} color="#16a34a" />
+          <Stat label="Bonus Depreciation" value={fmt$(data.line15_bonus_depreciation)} color="#16a34a" />
+          <Stat label="TOTAL Depreciation (Line 22)" value={fmt$(data.line22_total_depreciation)} highlight color="#16a34a" />
+        </div>
+      </div>
+      <ScheduleSection title="Part I — Section 179 Election" rows={[
+        ['1', 'Maximum amount allowed', data.line1_max_section_179],
+        ['5', 'Dollar limit after phase-out', data.line5_dollar_limit],
+        ['8', 'Total elected', data.line8_total_elected],
+        ['11', 'Business income limit', data.line11_business_income_limit],
+        ['12', 'SECTION 179 DEDUCTION', data.line12_section_179_deduction, 'green'],
+        ['13', 'Carryover to next year', data.line13_carryover_to_next_year],
+      ]} />
+      <ScheduleSection title="Part II — Bonus Depreciation (40% for 2025)" rows={[
+        ['14', 'Eligible basis', data.line14_bonus_property_basis],
+        ['15', 'Bonus depreciation', data.line15_bonus_depreciation, 'green'],
+      ]} />
+      <ScheduleSection title="Part III — MACRS (placed in service this year)" rows={[
+        ['19a', '3-year property', data.line19a_3yr_property],
+        ['19b', '5-year property (autos, computers)', data.line19b_5yr_property],
+        ['19c', '7-year property (furniture)', data.line19c_7yr_property],
+        ['19h', 'Residential rental (27.5 yr)', data.line19h_residential_rental],
+        ['19i', 'Nonresidential real (39 yr)', data.line19i_nonresidential_real],
+        ['17', 'Pre-year MACRS property', data.line17_macrs_pre_year_property],
+      ]} />
+      <ScheduleSection title="Summary" rows={[
+        ['21', 'Listed property amount', data.line21_listed_property_amount],
+        ['22', 'TOTAL DEPRECIATION', data.line22_total_depreciation, 'bold'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 8829 view (Home Office) ───────────────────────────────
+
+const Form8829View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Business sq ft" value={String(data.line1_business_sq_ft)} />
+          <Stat label="Total sq ft" value={String(data.line2_total_sq_ft)} />
+          <Stat label="Business %" value={data.line3_business_pct.toFixed(2) + '%'} />
+          <Stat label="Home Office Deduction (Line 35)" value={fmt$(data.line35_total_home_office_deduction)} highlight color="#16a34a" />
+        </div>
+      </div>
+      <ScheduleSection title="Part I — Square Footage" rows={[
+        ['1', 'Business sq ft', data.line1_business_sq_ft],
+        ['2', 'Total sq ft', data.line2_total_sq_ft],
+        ['3', 'Business %', data.line3_business_pct.toFixed(4) + '%'],
+      ]} />
+      <ScheduleSection title="Part II — Allowable Deduction (income-limited)" rows={[
+        ['8', 'Tentative profit (Sch C income limit)', data.line8_gross_income_from_home_use],
+        ['10', 'Mortgage interest (full)', data.line10_deductible_mortgage_interest],
+        ['11', 'Real estate taxes (full)', data.line11_real_estate_taxes],
+        ['18', 'Insurance × business %', data.line18_insurance_indirect],
+        ['19', 'Rent × business %', data.line19_rent_indirect],
+        ['21', 'Utilities × business %', data.line21_utilities_indirect],
+        ['25', 'Total operating × business %', data.line25_multiply_line_24_by_business_pct],
+        ['28', 'Allowable operating expenses', data.line28_allowable_operating_expenses, 'bold'],
+        ['31', 'Depreciation of home', data.line31_depreciation_of_home],
+        ['34', 'Allowable depreciation', data.line34_allowable_depreciation, 'bold'],
+        ['35', 'TOTAL HOME OFFICE DEDUCTION', data.line35_total_home_office_deduction, 'green'],
+      ]} />
+      <ScheduleSection title="Part IV — Carryover to Next Year" rows={[
+        ['42', 'Operating expenses carryover', data.line42_operating_expenses_carryover],
+        ['44', 'Depreciation carryover', data.line44_depreciation_carryover],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 4797 view (Sale of Business Property) ─────────────────
+
+const Form4797View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <Stat label="Section 1231 Net (Line 9)" value={fmt$(data.line9_subtract_line_8)} color={data.line9_subtract_line_8 >= 0 ? '#16a34a' : '#dc2626'} />
+          <Stat label="Ordinary Net (Line 17)" value={fmt$(data.line17_combine_lines_10_16)} color={data.line17_combine_lines_10_16 >= 0 ? '#16a34a' : '#dc2626'} />
+          <Stat label="Section 1245 Recapture (Line 22)" value={fmt$(data.line22_total_section_1245_recapture)} color="#dc2626" />
+        </div>
+      </div>
+      <ScheduleSection title="Part I — Section 1231 Property" rows={[
+        ['7', 'Net Section 1231 gain/loss', data.line7_combine_lines_6, 'bold'],
+        ['8', 'Nonrecaptured Section 1231 losses (prior 5 yr)', data.line8_nonrecaptured_section_1231_losses],
+        ['9', 'NET (gain → LTCG, loss → ordinary)', data.line9_subtract_line_8, 'bold'],
+      ]} />
+      <ScheduleSection title="Part II — Ordinary Gains/Losses" rows={[
+        ['13', 'Section 1245 recapture (from Part III)', data.line13_gain_ordinary_2],
+        ['15', 'Section 179/280F recapture', data.line15_recapture_section_179_280f],
+        ['17', 'Net ordinary gain/loss', data.line17_combine_lines_10_16, 'bold'],
+      ]} />
+      <ScheduleSection title="Part III — Recapture (Depreciation Recapture)" rows={[
+        ['22', 'Section 1245 recapture (→ Part II line 13)', data.line22_total_section_1245_recapture, 'bold'],
+        ['26', 'Section 1250 gain (real property)', data.line26_total_gain_section_1250],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 7004 view (Business Extension) ────────────────────────
+
+const Form7004View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          Form 7004 · {data.form_code_description} · {data.taxpayer_name}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <Stat label="Original Due" value={data.original_due_date} color="#94a3b8" />
+          <Stat label="Extended Due" value={data.extended_due_date} highlight color="#16a34a" />
+          <Stat label="Balance Due" value={fmt$(data.line8_balance_due)} color={data.line8_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+        </div>
+      </div>
+      <ScheduleSection title="Part II — Tax Computation" rows={[
+        ['Form Code', data.form_code_description, ''],
+        ['Tax Year', data.tax_year_start + ' → ' + data.tax_year_end, ''],
+        ['6', 'Tentative total tax for the year (estimate)', data.line6_tentative_total_tax],
+        ['7', 'Total payments and credits', data.line7_total_payments_credits],
+        ['8', 'BALANCE DUE — pay with this form', data.line8_balance_due, 'red'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 4868 view (Individual Extension) ──────────────────────
+
+const Form4868View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <Stat label="Original Due" value={data.original_due_date} color="#94a3b8" />
+          <Stat label="Extended Due" value={data.extended_due_date} highlight color="#16a34a" />
+          <Stat label="Balance Due" value={fmt$(data.line6_balance_due)} color={data.line6_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+        </div>
+      </div>
+      <ScheduleSection title="Tax Computation" rows={[
+        ['4', 'Estimated total tax for the year', data.line4_estimated_total_tax],
+        ['5', 'Total payments (withholding + estimated)', data.line5_total_payments_2024],
+        ['6', 'BALANCE DUE', data.line6_balance_due, 'red'],
+        ['7', 'Amount paying with extension', data.line7_amount_paying_with_extension],
+      ]} />
     </div>
   );
 };

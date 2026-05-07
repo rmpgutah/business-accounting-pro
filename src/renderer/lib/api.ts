@@ -755,6 +755,18 @@ const api = {
     window.electronAPI.invoke('tax:schedule-d', { year, opts }),
   taxForm1040ES: (year: number, opts?: { prior_year_total_tax?: number; withholding_credits?: number; projected_other_income?: number; filing_status?: 'single' | 'mfj' | 'hoh'; ytd_months?: number }): Promise<any> =>
     window.electronAPI.invoke('tax:form-1040-es', { year, opts }),
+  taxForm8995: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-8995', { year, opts }),
+  taxForm4562: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-4562', { year, opts }),
+  taxForm8829: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-8829', { year, opts }),
+  taxForm4797: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-4797', { year, opts }),
+  taxForm7004: (opts: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-7004', { opts }),
+  taxForm4868: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-4868', { year, opts }),
 
   // ─── Compliance documents (W-4 / W-9 / I-9) ───
   complianceList: (filters?: { person_type?: 'employee' | 'vendor' | 'client'; form_type?: string; status?: string }): Promise<any[]> =>
@@ -783,7 +795,8 @@ const api = {
       | 'w2c' | '1096'
       | 'schedule-1' | 'schedule-2' | 'schedule-3'
       | 'schedule-a' | 'schedule-b' | 'schedule-d'
-      | '1040-es',
+      | '1040-es'
+      | '8995' | '4562' | '8829' | '4797' | '7004' | '4868',
     year: number,
     opts?: {
       quarter?: 1 | 2 | 3 | 4;
@@ -799,6 +812,12 @@ const api = {
       w2c_form_index?: number;
       schedule_opts?: any;
       es_opts?: any;
+      form_8995_opts?: any;
+      form_4562_opts?: any;
+      form_8829_opts?: any;
+      form_4797_opts?: any;
+      form_7004_opts?: any;
+      form_4868_opts?: any;
     },
   ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),

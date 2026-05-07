@@ -39,6 +39,12 @@ import type { ScheduleAData } from './schedule-a';
 import type { ScheduleBData } from './schedule-b';
 import type { ScheduleDData } from './schedule-d';
 import type { Form1040ESData } from './form-1040-es';
+import type { Form8995Data } from './form-8995';
+import type { Form4562Data } from './form-4562';
+import type { Form8829Data } from './form-8829';
+import type { Form4797Data } from './form-4797';
+import type { Form7004Data } from './form-7004';
+import type { Form4868Data } from './form-4868';
 
 type DailyLiability = Schedule941BDailyLiability;
 
@@ -1543,5 +1549,275 @@ ${scheduleLines([
 <div class="section-header">Quarterly Vouchers</div>
 ${data.vouchers.map(renderVoucher).join('')}
 <div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Pay any of the safe-harbor amounts to avoid the underpayment penalty: 100% of prior year's tax (110% if AGI > $150K) OR 90% of current year's projected tax. The lower amount is recommended. Recompute in Q2/Q3 if your YTD income changes significantly. Pay online at irs.gov/payments instead of mailing the voucher when possible.</div>
+</body></html>`;
+}
+
+// ── Form 8995 (QBI Simplified) ────────────────────────────────
+
+export function form8995HTML(data: Form8995Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 8995 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 8995 — QBI Deduction (Simplified)', `Tax Year ${data.year} · Eligible if taxable income ≤ ${fmtMoney(data.threshold_single)} single / ${fmtMoney(data.threshold_mfj)} MFJ`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Line 1 — Qualified Trades / Businesses</div>
+<table class="lines">
+  <thead><tr><th>Row</th><th>(a) Name</th><th>(b) TIN</th><th style="text-align:right">(c) QBI</th></tr></thead>
+  <tbody>
+    ${data.line1_trades_businesses.map((t, i) => `<tr>
+      <td class="line-num">${['i','ii','iii','iv','v'][i]}</td>
+      <td>${escape(t.name) || '<span style="color:#94a3b8">—</span>'}</td>
+      <td style="font-family:'SF Mono',Menlo,monospace;color:#64748b">${escape(t.tin)}</td>
+      <td class="line-amt">${t.qbi !== 0 ? fmtMoney(t.qbi) : '—'}</td>
+    </tr>`).join('')}
+  </tbody>
+</table>
+${scheduleLines([
+  ['2', 'Total QBI (sum of line 1 column c)', data.line2_total_qbi],
+  ['3', 'QBI loss carryforward from prior year (negative)', data.line3_qbi_loss_carryforward],
+  ['4', 'Total QBI after carryforward (≥ 0)', data.line4_total_qbi_after_carryforward],
+  ['5', 'QBI component (line 4 × 20%)', data.line5_qbi_component],
+  ['6', 'REIT dividends + PTP income', data.line6_reit_ptp_income],
+  ['7', 'REIT/PTP loss carryforward (negative)', data.line7_reit_ptp_loss_carryforward],
+  ['8', 'Total REIT/PTP (≥ 0)', data.line8_total_reit_ptp],
+  ['9', 'REIT/PTP component (line 8 × 20%)', data.line9_reit_ptp_component],
+  ['10', 'QBI deduction before income limit (5 + 9)', data.line10_qbi_before_income_limit],
+  ['11', 'Taxable income before QBI deduction', data.line11_taxable_income_before_qbi],
+  ['12', 'Net capital gain + qualified dividends', data.line12_net_capital_gain],
+  ['13', 'Subtract (11 − 12, ≥ 0)', data.line13_taxable_income_minus_cg],
+  ['14', 'Income limitation (line 13 × 20%)', data.line14_income_limitation],
+  ['15', 'QBI DEDUCTION (smaller of 10 or 14)', data.line15_qbi_deduction],
+  ['16', 'QBI loss carryforward to next year', data.line16_qbi_loss_carryforward_to_next_year],
+  ['17', 'REIT/PTP loss carryforward to next year', data.line17_reit_ptp_loss_carryforward_to_next_year],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 15 carries to Form 1040 line 13. The QBI deduction is the most-missed deduction for pass-through entity owners — it's 20% of qualified business income, capped at 20% of taxable income excluding net capital gains.</div>
+</body></html>`;
+}
+
+// ── Form 4562 (Depreciation) ──────────────────────────────────
+
+export function form4562HTML(data: Form4562Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 4562 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 4562 — Depreciation and Amortization', `Tax Year ${data.year} · ${data.asset_count} fixed asset(s) · Total depreciation ${fmtMoney(data.line22_total_depreciation)}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Section 179 (Immediate Expensing)</div>
+${scheduleLines([
+  ['1', 'Maximum amount allowed', data.line1_max_section_179],
+  ['2', 'Total cost of Section 179 property', data.line2_total_property_cost_section_179],
+  ['3', 'Threshold (begins phase-out)', data.line3_threshold_phase_out],
+  ['4', 'Reduction in limit (line 2 − line 3, ≥ 0)', data.line4_reduction_in_limit],
+  ['5', 'Dollar limit (line 1 − line 4, ≥ 0)', data.line5_dollar_limit],
+  ['8', 'Total elected', data.line8_total_elected],
+  ['9', 'Tentative deduction (smaller of 5 or 8)', data.line9_tentative_deduction],
+  ['10', 'Carryover from prior year', data.line10_carryover_prior_year],
+  ['11', 'Business income limit', data.line11_business_income_limit],
+  ['12', 'SECTION 179 DEDUCTION', data.line12_section_179_deduction],
+  ['13', 'Carryover to next year', data.line13_carryover_to_next_year],
+])}
+
+<div class="section-header">Part II — Bonus Depreciation</div>
+${scheduleLines([
+  ['14', 'Property eligible for bonus depreciation (basis)', data.line14_bonus_property_basis],
+  ['15', 'Bonus depreciation (40% for 2025)', data.line15_bonus_depreciation],
+])}
+
+<div class="section-header">Part III — MACRS Depreciation (placed in service this year)</div>
+${scheduleLines([
+  ['17', 'Pre-year MACRS property', data.line17_macrs_pre_year_property],
+  ['19a', '3-year property', data.line19a_3yr_property],
+  ['19b', '5-year property (autos, computers)', data.line19b_5yr_property],
+  ['19c', '7-year property (office furniture)', data.line19c_7yr_property],
+  ['19d', '10-year property', data.line19d_10yr_property],
+  ['19e', '15-year property (land improvements)', data.line19e_15yr_property],
+  ['19f', '20-year property', data.line19f_20yr_property],
+  ['19h', 'Residential rental (27.5 yr)', data.line19h_residential_rental],
+  ['19i', 'Nonresidential real (39 yr)', data.line19i_nonresidential_real],
+])}
+
+<div class="section-header">Part IV — Summary</div>
+${scheduleLines([
+  ['21', 'Listed property amount (from Part V)', data.line21_listed_property_amount],
+  ['22', 'TOTAL DEPRECIATION (sum of 12, 15, 17, 19, 21)', data.line22_total_depreciation],
+])}
+
+${data.listed_property.length > 0 ? `<div class="section-header">Part V — Listed Property (Vehicles, Computers)</div>
+<table class="lines">
+  <thead><tr><th>Description</th><th>In Service</th><th style="text-align:right">Cost</th><th style="text-align:right">Bus %</th><th style="text-align:right">Depreciation</th></tr></thead>
+  <tbody>
+    ${data.listed_property.map((l) => `<tr>
+      <td>${escape(l.description)}</td>
+      <td style="font-size:10px;color:#64748b">${escape(l.date_placed_in_service)}</td>
+      <td class="line-amt">${fmtMoney(l.cost)}</td>
+      <td class="line-amt">${l.business_use_percentage.toFixed(1)}%</td>
+      <td class="line-amt">${fmtMoney(l.current_year_depreciation)}</td>
+    </tr>`).join('')}
+  </tbody>
+</table>` : ''}
+
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Total depreciation (line 22) carries to Schedule C line 13. Section 179 has an annual cap of $1.25M (2025) phasing out above $3.13M total purchases. Bonus depreciation rate declines: 60% (2024) → 40% (2025) → 20% (2026) → 0% (2027+) unless Congress acts.</div>
+</body></html>`;
+}
+
+// ── Form 8829 (Home Office) ───────────────────────────────────
+
+export function form8829HTML(data: Form8829Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 8829 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 8829 — Expenses for Business Use of Your Home', `Tax Year ${data.year} · Business use ${data.line3_business_pct.toFixed(2)}% · Deduction ${fmtMoney(data.line35_total_home_office_deduction)}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Part of Your Home Used for Business</div>
+${scheduleLines([
+  ['1', 'Area used regularly and exclusively for business (sq ft)', data.line1_business_sq_ft],
+  ['2', 'Total area of home (sq ft)', data.line2_total_sq_ft],
+  ['3', 'Business percentage (line 1 / line 2 × 100)', data.line3_business_pct.toFixed(4) + '%'],
+  ['7', 'Business use percentage', data.line7_business_use_pct.toFixed(4) + '%'],
+])}
+<div class="section-header">Part II — Allowable Deduction</div>
+${scheduleLines([
+  ['8', 'Gross income from home use (Sch C tentative profit)', data.line8_gross_income_from_home_use],
+  ['10', 'Deductible mortgage interest (full)', data.line10_deductible_mortgage_interest],
+  ['11', 'Real estate taxes (full)', data.line11_real_estate_taxes],
+  ['13', 'Multiply line 12 by business %', data.line13_multiply_line_12_by_business_pct],
+  ['15', 'Income limit before other expenses', data.line15_subtract_line_14_from_line_8],
+  ['18', 'Insurance × business %', data.line18_insurance_indirect],
+  ['19', 'Rent × business %', data.line19_rent_indirect],
+  ['20', 'Repairs/maintenance × business %', data.line20_repairs_maintenance_indirect],
+  ['21', 'Utilities × business %', data.line21_utilities_indirect],
+  ['25', 'Total operating expenses × business %', data.line25_multiply_line_24_by_business_pct],
+  ['26', 'Add direct expenses', data.line26_add_line_23],
+  ['27', 'Carryover from prior year', data.line27_carryover_prior_year],
+  ['28', 'ALLOWABLE operating expenses (income-limited)', data.line28_allowable_operating_expenses],
+  ['29', 'Remaining income for depreciation', data.line29_remaining_income],
+  ['31', 'Depreciation of home', data.line31_depreciation_of_home],
+  ['33', 'Total depreciation + carryover', data.line33_total_lines_30_31_32],
+  ['34', 'ALLOWABLE depreciation (income-limited)', data.line34_allowable_depreciation],
+  ['35', 'TOTAL HOME OFFICE DEDUCTION (→ Sch C line 30)', data.line35_total_home_office_deduction],
+])}
+<div class="section-header">Part III — Depreciation Worksheet</div>
+${scheduleLines([
+  ['36', 'Smaller of basis or FMV', data.line36_smaller_of_basis_or_fmv],
+  ['37', 'Value of land (does not depreciate)', data.line37_value_of_land],
+  ['38', 'Basis of building', data.line38_basis_of_building],
+  ['39', 'Business basis of building (line 38 × business %)', data.line39_business_basis_of_building],
+  ['40', 'Depreciation rate (39-yr SL nonresidential)', (data.line40_depreciation_pct * 100).toFixed(3) + '%'],
+  ['41', 'Annual depreciation', data.line41_depreciation_for_year],
+])}
+<div class="section-header">Part IV — Carryover to Next Year</div>
+${scheduleLines([
+  ['42', 'Operating expenses carryover', data.line42_operating_expenses_carryover],
+  ['44', 'Depreciation carryover', data.line44_depreciation_carryover],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 35 carries to Schedule C line 30. The home-office deduction CANNOT create a loss — operating expenses (line 28) and depreciation (line 34) are each income-limited and excess carries forward. Renters skip Part III. Tip: simplified method ($5 × business sq ft, capped at 300 sq ft = $1,500) skips this whole form.</div>
+</body></html>`;
+}
+
+// ── Form 4797 (Sale of Business Property) ─────────────────────
+
+export function form4797HTML(data: Form4797Data): string {
+  const renderTxns = (txns: any[]) => {
+    if (txns.length === 0) return `<div style="padding:8px 12px;color:#94a3b8;font-size:11px">No transactions.</div>`;
+    return `<table class="lines"><thead><tr><th>Description</th><th>Acquired</th><th>Sold</th><th style="text-align:right">Proceeds</th><th style="text-align:right">Basis</th><th style="text-align:right">Gain/Loss</th></tr></thead><tbody>${txns.map((t: any) => `<tr>
+      <td>${escape(t.description)}</td>
+      <td style="font-size:10px;color:#64748b">${escape(t.date_acquired)}</td>
+      <td style="font-size:10px;color:#64748b">${escape(t.date_sold)}</td>
+      <td class="line-amt">${fmtMoney(t.gross_sales_price)}</td>
+      <td class="line-amt">${fmtMoney(Math.max(0, (Number(t.cost_or_basis) || 0) - (Number(t.depreciation_allowed) || 0)))}</td>
+      <td class="line-amt" style="color:${t.gain_loss >= 0 ? '#16a34a' : '#dc2626'}">${fmtMoney(t.gain_loss)}</td>
+    </tr>`).join('')}</tbody></table>`;
+  };
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 4797 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 4797 — Sales of Business Property', `Tax Year ${data.year} · ${data.line2_section_1231_transactions.length + data.line10_ordinary_transactions.length} transaction(s)`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Section 1231 Property (held > 1 year)</div>
+${renderTxns(data.line2_section_1231_transactions)}
+${scheduleLines([
+  ['7', 'Net Section 1231 gain/loss', data.line7_combine_lines_6],
+  ['8', 'Nonrecaptured Section 1231 losses (prior 5 years)', data.line8_nonrecaptured_section_1231_losses],
+  ['9', 'NET (gain → long-term capital gain; loss → ordinary)', data.line9_subtract_line_8],
+])}
+<div class="section-header">Part II — Ordinary Gains/Losses</div>
+${renderTxns(data.line10_ordinary_transactions)}
+${scheduleLines([
+  ['13', 'Section 1245 recapture (from Part III)', data.line13_gain_ordinary_2],
+  ['15', 'Section 179/280F recapture', data.line15_recapture_section_179_280f],
+  ['17', 'Net ordinary gain/loss', data.line17_combine_lines_10_16],
+])}
+<div class="section-header">Part III — Section 1245 Recapture (Depreciation Recapture)</div>
+${renderTxns(data.line19_section_1245_property)}
+${scheduleLines([
+  ['22', 'TOTAL Section 1245 recapture (carries to Part II line 13)', data.line22_total_section_1245_recapture],
+  ['26', 'Section 1250 gain (real property)', data.line26_total_gain_section_1250],
+])}
+<div class="section-header">Part IV — Section 179 / 280F Recapture</div>
+${scheduleLines([
+  ['33', 'Section 179 recapture', data.line33_section_179_recapture],
+  ['34', 'Section 280F(b)(2) recapture', data.line34_section_280f_recapture],
+  ['35', 'TOTAL recapture (carries to Part II line 15)', data.line35_total_recapture],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Section 1231 net gain → long-term capital gain (Sch D). Section 1231 net loss → ordinary deduction. Section 1245 recapture (depreciation taken on equipment) comes back as ORDINARY income, not capital gain — that's the IRS clawing back the depreciation deduction at ordinary rates.</div>
+</body></html>`;
+}
+
+// ── Form 7004 (Business Extension) ────────────────────────────
+
+export function form7004HTML(data: Form7004Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 7004 — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 7004 — Application for Automatic Extension', `For ${escape(data.form_code_description)} · 6-month extension`, data.taxpayer_name, parseInt(data.tax_year_end.slice(0, 4)))}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Filer</div>
+    <div class="value">${escape(data.taxpayer_name)}</div>
+    ${data.trade_name && data.trade_name !== data.taxpayer_name ? `<div class="value">DBA: ${escape(data.trade_name)}</div>` : ''}
+    <div class="value">${escape(data.address)}</div>
+    <div class="value">${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Extension Details</div>
+    <div class="value">Form code: ${escape(data.form_code)}</div>
+    <div class="value">Original due: ${escape(data.original_due_date)}</div>
+    <div class="value">Extended due: <strong>${escape(data.extended_due_date)}</strong></div>
+    <div class="value">Tax year: ${escape(data.tax_year_start)} → ${escape(data.tax_year_end)}</div>
+  </div>
+</div>
+<div class="section-header">Part I — Form for Which Extension Is Filed</div>
+<div style="padding:10px 12px;background:#f8fafc;border-radius:4px;font-size:11px"><strong>Code ${escape(data.form_code)}:</strong> ${escape(data.form_code_description)}</div>
+<div class="section-header">Part II — Tax Computation</div>
+${scheduleLines([
+  ['6', 'Tentative total tax for the year (estimate)', data.line6_tentative_total_tax],
+  ['7', 'Total payments and credits', data.line7_total_payments_credits],
+  ['8', 'BALANCE DUE (line 6 − line 7) — pay with this form', data.line8_balance_due],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> File Form 7004 BY the original due date (${escape(data.original_due_date)}) to get the automatic 6-month extension to ${escape(data.extended_due_date)}. Pay the balance due (line 8) with this form via EFTPS, IRS Direct Pay, or check — an extension to FILE is not an extension to PAY. Failure-to-pay penalty (0.5%/month) applies on unpaid balances.</div>
+</body></html>`;
+}
+
+// ── Form 4868 (Individual Extension) ──────────────────────────
+
+export function form4868HTML(data: Form4868Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 4868 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 4868 — Application for Automatic Extension (Individual)', `Tax Year ${data.year} · Extends 1040 deadline 6 months`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Filer</div>
+    <div class="value">${escape(data.taxpayer_name)}</div>
+    ${data.spouse_name ? `<div class="value">Spouse: ${escape(data.spouse_name)}</div>` : ''}
+    <div class="value">${escape(data.address)}</div>
+    <div class="value">${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Extension Details</div>
+    <div class="value">Original due: ${escape(data.original_due_date)}</div>
+    <div class="value">Extended due: <strong>${escape(data.extended_due_date)}</strong></div>
+    ${data.is_out_of_country ? '<div class="value" style="color:#dc2626">Out-of-country filer (auto 2-mo + 4-mo)</div>' : ''}
+  </div>
+</div>
+<div class="section-header">Tax Computation</div>
+${scheduleLines([
+  ['4', 'Estimated total tax for the year', data.line4_estimated_total_tax],
+  ['5', 'Total payments (withholding + estimated)', data.line5_total_payments_2024],
+  ['6', 'BALANCE DUE (line 4 − line 5)', data.line6_balance_due],
+  ['7', 'Amount paying with this extension', data.line7_amount_paying_with_extension],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> File Form 4868 BY April 15 to get the automatic 6-month extension to October 15. Pay the balance due (line 6) with this form via EFTPS, IRS Direct Pay, or check — an extension to FILE is not an extension to PAY. Failure-to-pay penalty (0.5%/month) applies on unpaid balances.</div>
 </body></html>`;
 }
