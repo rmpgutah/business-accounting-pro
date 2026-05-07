@@ -21,6 +21,12 @@ import type { SalesTaxData } from './sales-tax';
 import type { FormW3Data } from './form-w3';
 import type { Form940Data } from './form-940';
 import type { Form1099MISCData } from './form-1099-misc';
+import type { Form944Data } from './form-944';
+import type { Form945Data } from './form-945';
+import type { Schedule941BData, DailyLiability as Schedule941BDailyLiability } from './form-941-schedule-b';
+import type { Form945AData } from './form-945-a';
+
+type DailyLiability = Schedule941BDailyLiability;
 
 const SHARED_HEAD = `<style>
   @page { size: letter; margin: 0.5in; @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #94a3b8; } }
@@ -717,6 +723,259 @@ ${forms.map((f) => `
 <div class="disclaimer">
   <strong>This is a worksheet, not the official IRS form.</strong>
   1099-MISC is filed by February 28 (paper) or March 31 (electronic) with the IRS, and recipients must receive Copy B by January 31. <strong>Box 10 (gross proceeds to attorney) is for SETTLEMENTS only — legal fees go on 1099-NEC.</strong> The $600 threshold applies to most boxes; royalties (Box 2) start at $10.
+</div>
+</body></html>`;
+}
+
+// ── Form 944 (Annual variant of 941) ───────────────────────────
+
+export function form944HTML(data: Form944Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form 944 ${data.year} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 944 — Employer's ANNUAL Federal Tax Return</div>
+  <div class="form-subtitle">Tax Year ${data.year} · ${data.employee_count} employee(s) · ${data.payroll_run_count} pay run(s)</div>
+  <div class="form-meta">${escape(data.business_name)} · EIN ${escape(data.ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Warnings:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Employer</div>
+    <div class="value">${escape(data.business_name)}</div>
+    ${data.trade_name && data.trade_name !== data.business_name ? `<div class="value">DBA: ${escape(data.trade_name)}</div>` : ''}
+    <div class="value">${escape(data.address)}</div>
+    <div class="value">${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Filing</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+    <div class="value">Tax Year: ${data.year}</div>
+    <div class="value">Filed: Annually (by Jan 31)</div>
+    ${data.business_closed ? `<div class="value" style="color:#dc2626">Business closed ${escape(data.business_closed_date)}</div>` : ''}
+  </div>
+</div>
+
+<div class="section-header">Part 1 — Annual Wages and Taxes</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">1</td><td>Wages, tips, and other compensation</td><td class="line-amt">${fmtMoney(data.line1_wages_tips)}</td></tr>
+    <tr><td class="line-num">2</td><td>Federal income tax withheld</td><td class="line-amt">${fmtMoney(data.line2_fed_income_tax)}</td></tr>
+    <tr><td class="line-num">3</td><td>${data.line3_no_fica ? '☒' : '☐'} No SS/Medicare wages — skip to line 5</td><td class="line-amt">—</td></tr>
+    <tr><td class="line-num">4a</td><td>Taxable SS wages × 12.4%</td><td class="line-amt">${fmtMoney(data.line4a_taxable_ss_wages)} → ${fmtMoney(data.line4a_ss_tax)}</td></tr>
+    <tr><td class="line-num">4b</td><td>Taxable SS tips × 12.4%</td><td class="line-amt">${fmtMoney(data.line4b_taxable_ss_tips)} → ${fmtMoney(data.line4b_ss_tax)}</td></tr>
+    <tr><td class="line-num">4c</td><td>Taxable Medicare wages × 2.9%</td><td class="line-amt">${fmtMoney(data.line4c_taxable_medicare_wages)} → ${fmtMoney(data.line4c_medicare_tax)}</td></tr>
+    <tr><td class="line-num">4d</td><td>Addtl Medicare wages > $200K × 0.9%</td><td class="line-amt">${fmtMoney(data.line4d_addtl_medicare_wages)} → ${fmtMoney(data.line4d_addtl_medicare_tax)}</td></tr>
+    <tr><td class="line-num">4e</td><td>Total SS + Medicare taxes (4a+4b+4c+4d)</td><td class="line-amt totals">${fmtMoney(data.line4e_total)}</td></tr>
+    <tr><td class="line-num">5</td><td>Total taxes before adjustments (line 2 + 4e)</td><td class="line-amt totals">${fmtMoney(data.line5_total_before_adj)}</td></tr>
+    <tr><td class="line-num">6</td><td>Current year's adjustments</td><td class="line-amt">${fmtMoney(data.line6_adjustments)}</td></tr>
+    <tr><td class="line-num">7</td><td>Total taxes after adjustments (5 + 6)</td><td class="line-amt totals">${fmtMoney(data.line7_total_after_adj)}</td></tr>
+    <tr><td class="line-num">8</td><td>Qualified small business R&D credit (Form 8974)</td><td class="line-amt" style="color:#16a34a">${fmtMoney(data.line8_qual_small_biz_credit)}</td></tr>
+    <tr><td class="line-num">9</td><td>Total taxes after credits (7 − 8)</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.line9_total_after_credits)}</td></tr>
+    <tr><td class="line-num">10</td><td>Total deposits for the year</td><td class="line-amt" style="color:#16a34a">${fmtMoney(data.line10_total_deposits)}</td></tr>
+    <tr><td class="line-num">11</td><td>Balance due (9 − 10 if positive)</td><td class="line-amt" style="color:${data.line11_balance_due > 0 ? '#dc2626' : '#94a3b8'}">${fmtMoney(data.line11_balance_due)}</td></tr>
+    <tr><td class="line-num">12a</td><td>Overpayment (10 − 9 if positive)</td><td class="line-amt" style="color:${data.line12a_overpayment > 0 ? '#16a34a' : '#94a3b8'}">${fmtMoney(data.line12a_overpayment)}</td></tr>
+  </tbody>
+</table>
+
+${data.line13_monthly_required ? `
+<div class="section-header">Part 2 — Monthly Tax Liability (line 9 ≥ $2,500)</div>
+<table class="lines">
+  <thead><tr><th>Month</th><th style="text-align:right">Liability</th></tr></thead>
+  <tbody>
+    <tr><td class="line-num">13a Jan</td><td class="line-amt">${fmtMoney(data.line13a_jan)}</td></tr>
+    <tr><td class="line-num">13b Feb</td><td class="line-amt">${fmtMoney(data.line13b_feb)}</td></tr>
+    <tr><td class="line-num">13c Mar</td><td class="line-amt">${fmtMoney(data.line13c_mar)}</td></tr>
+    <tr><td class="line-num">13d Apr</td><td class="line-amt">${fmtMoney(data.line13d_apr)}</td></tr>
+    <tr><td class="line-num">13e May</td><td class="line-amt">${fmtMoney(data.line13e_may)}</td></tr>
+    <tr><td class="line-num">13f Jun</td><td class="line-amt">${fmtMoney(data.line13f_jun)}</td></tr>
+    <tr><td class="line-num">13g Jul</td><td class="line-amt">${fmtMoney(data.line13g_jul)}</td></tr>
+    <tr><td class="line-num">13h Aug</td><td class="line-amt">${fmtMoney(data.line13h_aug)}</td></tr>
+    <tr><td class="line-num">13i Sep</td><td class="line-amt">${fmtMoney(data.line13i_sep)}</td></tr>
+    <tr><td class="line-num">13j Oct</td><td class="line-amt">${fmtMoney(data.line13j_oct)}</td></tr>
+    <tr><td class="line-num">13k Nov</td><td class="line-amt">${fmtMoney(data.line13k_nov)}</td></tr>
+    <tr><td class="line-num">13l Dec</td><td class="line-amt">${fmtMoney(data.line13l_dec)}</td></tr>
+    <tr><td class="line-num">13m</td><td class="line-amt totals">Total — must equal line 9 → ${fmtMoney(data.line13m_total)}</td></tr>
+  </tbody>
+</table>` : `
+<div class="disclaimer" style="background:#f0f9ff;color:#075985;border-color:#bae6fd">
+  <strong>Monthly schedule not required.</strong> Annual liability (${fmtMoney(data.line9_total_after_credits)}) is below the $2,500 threshold. Pay the full amount with this return by January 31.
+</div>`}
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  Form 944 is for small employers under $1,000 annual liability — and only if the IRS notified you in writing to file 944 instead of quarterly 941s. If your annual liability exceeded $1,000 in ${data.year}, contact the IRS to switch back to Form 941. Due January 31 of the following year.
+</div>
+</body></html>`;
+}
+
+// ── Form 945 (Annual backup withholding) ───────────────────────
+
+export function form945HTML(data: Form945Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form 945 ${data.year} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 945 — Annual Return of Withheld Federal Income Tax</div>
+  <div class="form-subtitle">Tax Year ${data.year} · Non-payroll withholding (1099 backup, pensions, gambling)</div>
+  <div class="form-meta">${escape(data.business_name)} · EIN ${escape(data.ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Warnings:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Filer</div>
+    <div class="value">${escape(data.business_name)}</div>
+    <div class="value">${escape(data.address)}</div>
+    <div class="value">${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Filing</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+    <div class="value">Tax Year: ${data.year}</div>
+    <div class="value">Filed: Annually (by Jan 31)</div>
+    ${data.is_final_return ? `<div class="value" style="color:#dc2626">Final return ${escape(data.final_payment_date)}</div>` : ''}
+  </div>
+</div>
+
+<div class="section-header">Withholding Totals</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">1</td><td>Federal tax withheld from pensions, annuities, IRAs, gambling</td><td class="line-amt">${fmtMoney(data.line1_fed_withheld)}</td></tr>
+    <tr><td class="line-num">2</td><td>Backup withholding (24% on payments to vendors without TIN)</td><td class="line-amt">${fmtMoney(data.line2_backup_withholding)}</td></tr>
+    <tr><td class="line-num">3</td><td>Total taxes (line 1 + line 2)</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.line3_total_taxes)}</td></tr>
+    <tr><td class="line-num">4</td><td>Total deposits for the year</td><td class="line-amt" style="color:#16a34a">${fmtMoney(data.line4_total_deposits)}</td></tr>
+    <tr><td class="line-num">5</td><td>Balance due (3 − 4 if positive)</td><td class="line-amt" style="color:${data.line5_balance_due > 0 ? '#dc2626' : '#94a3b8'}">${fmtMoney(data.line5_balance_due)}</td></tr>
+    <tr><td class="line-num">6a</td><td>Overpayment (4 − 3 if positive)</td><td class="line-amt" style="color:${data.line6a_overpayment > 0 ? '#16a34a' : '#94a3b8'}">${fmtMoney(data.line6a_overpayment)}</td></tr>
+  </tbody>
+</table>
+
+${data.line7_monthly_required ? `
+<div class="section-header">Line 7 — Monthly Summary of Federal Tax Liability (line 3 ≥ $2,500)</div>
+<table class="lines">
+  <thead><tr><th>Month</th><th style="text-align:right">Liability</th></tr></thead>
+  <tbody>
+    <tr><td class="line-num">7a Jan</td><td class="line-amt">${fmtMoney(data.line7a_jan)}</td></tr>
+    <tr><td class="line-num">7b Feb</td><td class="line-amt">${fmtMoney(data.line7b_feb)}</td></tr>
+    <tr><td class="line-num">7c Mar</td><td class="line-amt">${fmtMoney(data.line7c_mar)}</td></tr>
+    <tr><td class="line-num">7d Apr</td><td class="line-amt">${fmtMoney(data.line7d_apr)}</td></tr>
+    <tr><td class="line-num">7e May</td><td class="line-amt">${fmtMoney(data.line7e_may)}</td></tr>
+    <tr><td class="line-num">7f Jun</td><td class="line-amt">${fmtMoney(data.line7f_jun)}</td></tr>
+    <tr><td class="line-num">7g Jul</td><td class="line-amt">${fmtMoney(data.line7g_jul)}</td></tr>
+    <tr><td class="line-num">7h Aug</td><td class="line-amt">${fmtMoney(data.line7h_aug)}</td></tr>
+    <tr><td class="line-num">7i Sep</td><td class="line-amt">${fmtMoney(data.line7i_sep)}</td></tr>
+    <tr><td class="line-num">7j Oct</td><td class="line-amt">${fmtMoney(data.line7j_oct)}</td></tr>
+    <tr><td class="line-num">7k Nov</td><td class="line-amt">${fmtMoney(data.line7k_nov)}</td></tr>
+    <tr><td class="line-num">7l Dec</td><td class="line-amt">${fmtMoney(data.line7l_dec)}</td></tr>
+    <tr><td class="line-num">7m</td><td class="line-amt totals">Total — must equal line 3 → ${fmtMoney(data.line7m_total)}</td></tr>
+  </tbody>
+</table>` : `
+<div class="disclaimer" style="background:#f0f9ff;color:#075985;border-color:#bae6fd">
+  <strong>Monthly schedule not required.</strong> Total taxes (${fmtMoney(data.line3_total_taxes)}) ${data.line3_total_taxes < 2500 ? 'are below the $2,500 threshold' : 'qualify for semiweekly Form 945-A'}.
+</div>`}
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  Form 945 is filed by January 31 for federal income tax withheld from non-payroll sources during the prior year. The most common source for accounting users is backup withholding (Box 4 on 1099 forms) — 24% on payments to vendors who failed to provide a valid W-9. ${data.source_count} qualifying source row(s) found in our records.
+</div>
+</body></html>`;
+}
+
+// ── 941 Schedule B (Semiweekly daily liability — quarterly) ────
+
+export function schedule941BHTML(data: Schedule941BData): string {
+  const renderMonth = (name: string, daily: DailyLiability[], total: number) => {
+    if (daily.length === 0) {
+      return `<div style="margin-bottom:14px"><div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#64748b;margin-bottom:4px">${escape(name)}</div><div style="font-size:11px;color:#94a3b8;padding:6px 10px;background:#f8fafc;border-radius:4px">No tax liability dates in this month.</div></div>`;
+    }
+    return `<div style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#64748b;margin-bottom:4px">${escape(name)} — Total ${fmtMoney(total)}</div>
+      <table class="lines">
+        <thead><tr><th>Day</th><th style="text-align:right">Liability</th></tr></thead>
+        <tbody>
+          ${daily.map((d) => `<tr><td class="line-num">${d.day}</td><td class="line-amt">${fmtMoney(d.amount)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  };
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form 941 Schedule B Q${data.quarter} ${data.year} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 941 Schedule B — Report of Tax Liability for Semiweekly Schedule Depositors</div>
+  <div class="form-subtitle">Q${data.quarter} ${data.year} · ${data.pay_dates_count} pay date(s) · Total ${fmtMoney(data.total_quarter_liability)}</div>
+  <div class="form-meta">${escape(data.business_name)} · EIN ${escape(data.ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Warnings:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="section-header">Daily Tax Liability by Month</div>
+${renderMonth(data.month1_name, data.month1_liability, data.month1_total)}
+${renderMonth(data.month2_name, data.month2_liability, data.month2_total)}
+${renderMonth(data.month3_name, data.month3_liability, data.month3_total)}
+
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">Q${data.quarter} TOTAL</td><td>Sum of all daily liabilities — MUST equal Form 941 line 12</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.total_quarter_liability)}</td></tr>
+  </tbody>
+</table>
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  Schedule B is required for semiweekly depositors and for any employer who accumulated $100,000+ of liability on any single day during a deposit period. Each day's liability = federal income tax + employee SS + employer SS + employee Medicare + employer Medicare from all checks issued that day. The IRS rejects 941 + Schedule B filings where the totals do not agree to the penny.
+</div>
+</body></html>`;
+}
+
+// ── Form 945-A (Annual semiweekly daily liability) ─────────────
+
+export function form945AHTML(data: Form945AData): string {
+  const renderMonth = (m: { month_name: string; daily: DailyLiability[]; month_total: number }) => {
+    if (m.daily.length === 0) return '';
+    return `<div style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#64748b;margin-bottom:4px">${escape(m.month_name)} — Total ${fmtMoney(m.month_total)}</div>
+      <table class="lines">
+        <thead><tr><th>Day</th><th style="text-align:right">Liability</th></tr></thead>
+        <tbody>
+          ${m.daily.map((d) => `<tr><td class="line-num">${d.day}</td><td class="line-amt">${fmtMoney(d.amount)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  };
+
+  const parentFormLabel = ({
+    'form-941': 'Form 941 (quarterly payroll)',
+    'form-944': 'Form 944 (annual payroll)',
+    'form-945': 'Form 945 (annual non-payroll withholding)',
+  })[data.parent_form];
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form 945-A ${data.year} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 945-A — Annual Record of Federal Tax Liability</div>
+  <div class="form-subtitle">${data.year} · Attached to ${escape(parentFormLabel)} · ${data.liability_dates_count} liability date(s) · Total ${fmtMoney(data.total_year_liability)}</div>
+  <div class="form-meta">${escape(data.business_name)} · EIN ${escape(data.ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Warnings:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="section-header">Daily Tax Liability by Month</div>
+${data.months.map(renderMonth).filter(Boolean).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No tax liability dates found for ${data.year}.</div>`}
+
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">${data.year} TOTAL</td><td>Sum of all daily liabilities — MUST equal parent form's total</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.total_year_liability)}</td></tr>
+  </tbody>
+</table>
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  Form 945-A is required for semiweekly depositors filing Form 944 / 945 / 941 and for any filer who accumulated $100,000+ of liability on any single day. The total here MUST agree with the parent form's tax liability line — the IRS rejects mismatched filings.
 </div>
 </body></html>`;
 }

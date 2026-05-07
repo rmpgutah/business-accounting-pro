@@ -1921,12 +1921,44 @@ export function registerIpcHandlers(): void {
       return compute1099MISCs(cid, year);
     } catch (err: any) { return { error: err?.message }; }
   });
-  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number }) => {
+  ipcMain.handle('tax:form-944', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeForm944 } = require('../services/tax-forms/form-944');
+      return computeForm944(cid, year);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:form-945', (_event, { year, opts }: { year: number; opts?: any }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeForm945 } = require('../services/tax-forms/form-945');
+      return computeForm945(cid, year, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:schedule-941b', (_event, { year, quarter }: { year: number; quarter: 1 | 2 | 3 | 4 }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeSchedule941B } = require('../services/tax-forms/form-941-schedule-b');
+      return computeSchedule941B(cid, year, quarter);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:form-945-a', (_event, { year, parent_form }: { year: number; parent_form?: 'form-944' | 'form-945' | 'form-941' }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeForm945A } = require('../services/tax-forms/form-945-a');
+      return computeForm945A(cid, year, parent_form || 'form-945');
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941' }) => {
     try {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
       const company = db.getById('companies', cid) as any || {};
-      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML } = require('../services/tax-forms/pdf-templates');
+      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML, form944HTML, form945HTML, schedule941BHTML, form945AHTML } = require('../services/tax-forms/pdf-templates');
       let html = '';
       let filename = 'tax-form.pdf';
 
@@ -1979,6 +2011,26 @@ export function registerIpcHandlers(): void {
         const data = compute1099MISCs(cid, payload.year);
         html = misc1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
         filename = '1099-MISC-' + payload.year + '.pdf';
+      } else if (payload.form === '944') {
+        const { computeForm944 } = require('../services/tax-forms/form-944');
+        const data = computeForm944(cid, payload.year);
+        html = form944HTML(data);
+        filename = 'form-944-' + payload.year + '.pdf';
+      } else if (payload.form === '945') {
+        const { computeForm945 } = require('../services/tax-forms/form-945');
+        const data = computeForm945(cid, payload.year, payload.form_945_opts || {});
+        html = form945HTML(data);
+        filename = 'form-945-' + payload.year + '.pdf';
+      } else if (payload.form === 'schedule-941b') {
+        const { computeSchedule941B } = require('../services/tax-forms/form-941-schedule-b');
+        const data = computeSchedule941B(cid, payload.year, payload.quarter || 1);
+        html = schedule941BHTML(data);
+        filename = 'form-941-schedule-b-Q' + (payload.quarter || 1) + '-' + payload.year + '.pdf';
+      } else if (payload.form === '945-a') {
+        const { computeForm945A } = require('../services/tax-forms/form-945-a');
+        const data = computeForm945A(cid, payload.year, payload.parent_form || 'form-945');
+        html = form945AHTML(data);
+        filename = 'form-945-a-' + payload.year + '.pdf';
       } else {
         return { error: 'Unknown form: ' + payload.form };
       }

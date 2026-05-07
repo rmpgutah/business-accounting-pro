@@ -13,7 +13,10 @@ import { FileText, Download, AlertTriangle, ChevronLeft } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 
-type FormType = '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc';
+type FormType =
+  | '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'
+  | 'w3' | '940' | '1099-misc'
+  | '944' | '945' | 'schedule-941b' | '945-a';
 
 interface Props { onBack?: () => void }
 
@@ -53,6 +56,10 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       else if (activeForm === 'w3') r = await api.taxW3(year);
       else if (activeForm === '940') r = await api.taxForm940(year, { multi_state: futaMultiState, credit_reduction_state: futaCreditReduction, total_deposits: futaTotalDeposits });
       else if (activeForm === '1099-misc') r = await api.tax1099MISC(year);
+      else if (activeForm === '944') r = await api.taxForm944(year);
+      else if (activeForm === '945') r = await api.taxForm945(year);
+      else if (activeForm === 'schedule-941b') r = await api.taxSchedule941B(year, quarter);
+      else if (activeForm === '945-a') r = await api.taxForm945A(year, 'form-945');
       setData(r);
     } finally { setLoading(false); }
   }, [activeForm, year, quarter, salesPeriodStart, salesPeriodEnd, w2OtherWages, futaMultiState, futaCreditReduction, futaTotalDeposits]);
@@ -94,7 +101,11 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--color-border-primary)', flexWrap: 'wrap' }}>
         {([
           { id: '941' as FormType, label: 'Form 941' },
+          { id: '944' as FormType, label: 'Form 944' },
+          { id: '945' as FormType, label: 'Form 945' },
           { id: '940' as FormType, label: 'Form 940 (FUTA)' },
+          { id: 'schedule-941b' as FormType, label: '941 Sch B' },
+          { id: '945-a' as FormType, label: 'Form 945-A' },
           { id: 'schedule-c' as FormType, label: 'Schedule C' },
           { id: 'schedule-se' as FormType, label: 'Schedule SE' },
           { id: 'w2' as FormType, label: 'W-2' },
@@ -129,7 +140,7 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
             {[currentYear - 2, currentYear - 1, currentYear].map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         )}
-        {activeForm === '941' && (
+        {(activeForm === '941' || activeForm === 'schedule-941b') && (
           <select className="block-input" value={quarter} onChange={(e) => setQuarter(parseInt(e.target.value) as any)} style={{ width: 100 }}>
             <option value={1}>Q1</option>
             <option value={2}>Q2</option>
@@ -201,6 +212,10 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {!loading && data && activeForm === 'w3' && <W3View data={data} />}
       {!loading && data && activeForm === '940' && <Form940View data={data} />}
       {!loading && data && activeForm === '1099-misc' && <Misc1099View forms={Array.isArray(data) ? data : []} />}
+      {!loading && data && activeForm === '944' && <Form944View data={data} />}
+      {!loading && data && activeForm === '945' && <Form945View data={data} />}
+      {!loading && data && activeForm === 'schedule-941b' && <Schedule941BView data={data} />}
+      {!loading && data && activeForm === '945-a' && <Form945AView data={data} />}
 
       {/* Disclaimer */}
       <div style={{
@@ -950,6 +965,211 @@ const Misc1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+};
+
+// ── Form 944 view ──────────────────────────────────────────────
+
+const Form944View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  const Line = ({ n, label, value, tone }: { n: string; label: string; value: any; tone?: 'red' | 'green' | 'bold' }) => (
+    <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
+      <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
+      <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+        {typeof value === 'number' ? fmt$(value) : value}
+      </td>
+    </tr>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          Form 944 Annual · {data.year} · {data.business_name} · EIN {data.ein || '__-_______'}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Employees" value={String(data.employee_count)} />
+          <Stat label="Wages (line 1)" value={fmt$(data.line1_wages_tips)} />
+          <Stat label="Total Tax (line 9)" value={fmt$(data.line9_total_after_credits)} highlight color="#dc2626" />
+          <Stat label={data.line11_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line11_balance_due > 0 ? data.line11_balance_due : data.line12a_overpayment)} color={data.line11_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+        </div>
+        {data.warnings.length > 0 && (
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+            <strong>⚠ Notes:</strong>
+            <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
+          </div>
+        )}
+      </div>
+
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          Part 1 — Annual Wages and Taxes
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            <Line n="1" label="Wages, tips, other compensation" value={data.line1_wages_tips} />
+            <Line n="2" label="Federal income tax withheld" value={data.line2_fed_income_tax} />
+            <Line n="4a" label={`Taxable SS wages (${fmt$(data.line4a_taxable_ss_wages)}) × 12.4%`} value={data.line4a_ss_tax} />
+            <Line n="4c" label={`Taxable Medicare wages (${fmt$(data.line4c_taxable_medicare_wages)}) × 2.9%`} value={data.line4c_medicare_tax} />
+            <Line n="4d" label={`Addtl Medicare > $200k (${fmt$(data.line4d_addtl_medicare_wages)}) × 0.9%`} value={data.line4d_addtl_medicare_tax} />
+            <Line n="4e" label="Total SS+Medicare (4a+4b+4c+4d)" value={data.line4e_total} tone="bold" />
+            <Line n="5" label="Total taxes before adjustments (2 + 4e)" value={data.line5_total_before_adj} tone="bold" />
+            <Line n="9" label="Total taxes after credits" value={data.line9_total_after_credits} tone="red" />
+            <Line n="10" label="Total deposits for the year" value={data.line10_total_deposits} tone="green" />
+            <Line n="11" label="Balance due" value={data.line11_balance_due} tone={data.line11_balance_due > 0 ? 'red' : undefined} />
+            <Line n="12a" label="Overpayment" value={data.line12a_overpayment} tone={data.line12a_overpayment > 0 ? 'green' : undefined} />
+          </tbody>
+        </table>
+      </div>
+
+      {data.line13_monthly_required && (
+        <div className="block-card" style={{ padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            Part 2 — Monthly Tax Liability (line 9 ≥ $2,500)
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {[
+                ['13a Jan', data.line13a_jan], ['13b Feb', data.line13b_feb], ['13c Mar', data.line13c_mar],
+                ['13d Apr', data.line13d_apr], ['13e May', data.line13e_may], ['13f Jun', data.line13f_jun],
+                ['13g Jul', data.line13g_jul], ['13h Aug', data.line13h_aug], ['13i Sep', data.line13i_sep],
+                ['13j Oct', data.line13j_oct], ['13k Nov', data.line13k_nov], ['13l Dec', data.line13l_dec],
+              ].map(([label, val]: any) => (
+                <Line key={label} n={label.split(' ')[0]} label={label.split(' ').slice(1).join(' ')} value={val} />
+              ))}
+              <Line n="13m" label="Total — must equal line 9" value={data.line13m_total} tone="bold" />
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Form 945 view ──────────────────────────────────────────────
+
+const Form945View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  const Line = ({ n, label, value, tone }: { n: string; label: string; value: any; tone?: 'red' | 'green' | 'bold' }) => (
+    <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
+      <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
+      <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+        {typeof value === 'number' ? fmt$(value) : value}
+      </td>
+    </tr>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          Form 945 Annual · {data.year} · {data.business_name} · EIN {data.ein || '__-_______'}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Source Rows" value={String(data.source_count)} />
+          <Stat label="Backup W/H (line 2)" value={fmt$(data.line2_backup_withholding)} />
+          <Stat label="Total Tax (line 3)" value={fmt$(data.line3_total_taxes)} highlight color="#dc2626" />
+          <Stat label={data.line5_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line5_balance_due > 0 ? data.line5_balance_due : data.line6a_overpayment)} color={data.line5_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+        </div>
+        {data.warnings.length > 0 && (
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+            <strong>⚠ Notes:</strong>
+            <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
+          </div>
+        )}
+      </div>
+      <div className="block-card" style={{ padding: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            <Line n="1" label="Federal tax withheld from pensions/annuities/IRAs/gambling" value={data.line1_fed_withheld} />
+            <Line n="2" label="Backup withholding (24% on no-TIN vendor payments)" value={data.line2_backup_withholding} />
+            <Line n="3" label="Total taxes (1 + 2)" value={data.line3_total_taxes} tone="red" />
+            <Line n="4" label="Total deposits for the year" value={data.line4_total_deposits} tone="green" />
+            <Line n="5" label="Balance due" value={data.line5_balance_due} tone={data.line5_balance_due > 0 ? 'red' : undefined} />
+            <Line n="6a" label="Overpayment" value={data.line6a_overpayment} tone={data.line6a_overpayment > 0 ? 'green' : undefined} />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ── 941 Schedule B view ────────────────────────────────────────
+
+const Schedule941BView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  const renderMonth = (name: string, daily: any[], total: number) => (
+    <div className="block-card" style={{ padding: 14 }} key={name}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+        {name} — Total {fmt$(total)}
+      </div>
+      {daily.length === 0 ? (
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', padding: '6px 10px' }}>No tax liability dates this month.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            {daily.map((d: any) => (
+              <tr key={d.day}>
+                <td style={{ padding: '4px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 60 }}>Day {d.day}</td>
+                <td style={{ padding: '4px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(d.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          941 Schedule B · Q{data.quarter} {data.year} · {data.business_name}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          <Stat label="Pay Dates" value={String(data.pay_dates_count)} />
+          <Stat label="Quarter Total" value={fmt$(data.total_quarter_liability)} highlight color="#dc2626" />
+        </div>
+      </div>
+      {renderMonth(data.month1_name, data.month1_liability, data.month1_total)}
+      {renderMonth(data.month2_name, data.month2_liability, data.month2_total)}
+      {renderMonth(data.month3_name, data.month3_liability, data.month3_total)}
+    </div>
+  );
+};
+
+// ── Form 945-A view ────────────────────────────────────────────
+
+const Form945AView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          Form 945-A · {data.year} · {data.business_name} · Attached to {String(data.parent_form).replace('form-', 'Form ').toUpperCase()}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          <Stat label="Liability Dates" value={String(data.liability_dates_count)} />
+          <Stat label="Year Total" value={fmt$(data.total_year_liability)} highlight color="#dc2626" />
+        </div>
+      </div>
+      {data.months.filter((m: any) => m.daily.length > 0).map((m: any) => (
+        <div className="block-card" style={{ padding: 14 }} key={m.month_number}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            {m.month_name} — Total {fmt$(m.month_total)}
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {m.daily.map((d: any) => (
+                <tr key={d.day}>
+                  <td style={{ padding: '4px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 60 }}>Day {d.day}</td>
+                  <td style={{ padding: '4px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(d.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 };

@@ -713,8 +713,19 @@ const api = {
     window.electronAPI.invoke('tax:form-940', { year, opts }),
   tax1099MISC: (year: number): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('tax:1099-misc', { year }),
+  taxForm944: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:form-944', { year }),
+  taxForm945: (year: number, opts?: { line1_override?: number; line4_override?: number; is_final_return?: boolean; final_payment_date?: string; is_semiweekly_depositor?: boolean }): Promise<any> =>
+    window.electronAPI.invoke('tax:form-945', { year, opts }),
+  taxSchedule941B: (year: number, quarter: 1 | 2 | 3 | 4): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-941b', { year, quarter }),
+  taxForm945A: (year: number, parent_form: 'form-944' | 'form-945' | 'form-941' = 'form-945'): Promise<any> =>
+    window.electronAPI.invoke('tax:form-945-a', { year, parent_form }),
   taxExportFormPDF: (
-    form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc',
+    form:
+      | '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'
+      | 'w3' | '940' | '1099-misc'
+      | '944' | '945' | 'schedule-941b' | '945-a',
     year: number,
     opts?: {
       quarter?: 1 | 2 | 3 | 4;
@@ -724,6 +735,8 @@ const api = {
       multi_state?: boolean;
       credit_reduction_state?: boolean;
       total_deposits?: number;
+      form_945_opts?: any;
+      parent_form?: 'form-944' | 'form-945' | 'form-941';
     },
   ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),
