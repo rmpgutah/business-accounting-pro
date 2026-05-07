@@ -2055,6 +2055,109 @@ export function registerIpcHandlers(): void {
       return computeForm1040ES(cid, year, opts);
     } catch (err: any) { return { error: err?.message }; }
   });
+
+  // ─── Wave 4: Compliance documents (W-4 / W-9 / I-9) ─────────
+  ipcMain.handle('compliance:list', (_event, filters?: any) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return [];
+      const { listForCompany } = require('../services/compliance-documents');
+      return listForCompany(cid, filters);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:list-for-person', (_event, { person_type, person_id }: any) => {
+    try {
+      const { listForPerson } = require('../services/compliance-documents');
+      return listForPerson(person_type, person_id);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:upsert', (_event, record: any) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
+      const { upsertDocument } = require('../services/compliance-documents');
+      return upsertDocument({ ...record, company_id: cid });
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:delete', (_event, { id }: { id: string }) => {
+    try {
+      const { deleteDocument } = require('../services/compliance-documents');
+      return { ok: deleteDocument(id) };
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:get-missing', () => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return [];
+      const { getMissing } = require('../services/compliance-documents');
+      return getMissing(cid);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:get-expiring', (_event, { days_ahead }: { days_ahead?: number } = {}) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return [];
+      const { getExpiring } = require('../services/compliance-documents');
+      return getExpiring(cid, days_ahead || 60);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:auto-expire', () => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return 0;
+      const { autoExpire } = require('../services/compliance-documents');
+      return autoExpire(cid);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('compliance:generate-blank-pdf', async (_event, { form_type, person_type, person_id }: { form_type: 'W-4' | 'W-9' | 'I-9'; person_type?: string; person_id?: string }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const company = db.getById('companies', cid) as any || {};
+      const { blankW4HTML, blankW9HTML, blankI9HTML } = require('../services/tax-forms/blank-templates');
+
+      const employerAddress = [company.address_line1, company.address_line2, company.city, company.state, company.zip].filter(Boolean).join(', ');
+      const employerName = company.legal_name || company.name || '';
+      const employerEin = company.ein || company.tax_id || '';
+
+      // Optionally pre-fill the recipient's name if they exist
+      let recipientName = '';
+      let recipientBusinessName = '';
+      if (person_type && person_id) {
+        const table = person_type === 'employee' ? 'employees' : person_type === 'vendor' ? 'vendors' : 'clients';
+        try {
+          const row = db.getById(table, person_id) as any || {};
+          recipientName = row.name || '';
+          recipientBusinessName = row.business_name || row.dba || '';
+        } catch { /* not found */ }
+      }
+
+      let html = '';
+      let filename = '';
+      if (form_type === 'W-4') {
+        html = blankW4HTML({
+          employer_name: employerName,
+          employer_ein: employerEin,
+          employer_address: employerAddress,
+          employee_name: recipientName,
+          year: new Date().getFullYear(),
+        });
+        filename = 'W-4-blank-' + (recipientName || 'new-hire').replace(/\s+/g, '_') + '.pdf';
+      } else if (form_type === 'W-9') {
+        html = blankW9HTML({
+          requester_name: employerName,
+          requester_address: employerAddress,
+          vendor_name: recipientName,
+          vendor_business_name: recipientBusinessName,
+        });
+        filename = 'W-9-blank-' + (recipientName || 'new-vendor').replace(/\s+/g, '_') + '.pdf';
+      } else if (form_type === 'I-9') {
+        html = blankI9HTML({
+          employer_name: employerName,
+          employer_address: employerAddress,
+          employer_ein: employerEin,
+          employee_name: recipientName,
+        });
+        filename = 'I-9-blank-' + (recipientName || 'new-hire').replace(/\s+/g, '_') + '.pdf';
+      } else {
+        return { error: 'Unknown form_type: ' + form_type };
+      }
+
+      return await saveHTMLAsPDF(html, form_type, { defaultFilename: filename });
+    } catch (err: any) {
+      return { error: err?.message || 'PDF generation failed' };
+    }
+  });
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();

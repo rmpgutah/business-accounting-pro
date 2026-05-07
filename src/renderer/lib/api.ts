@@ -755,6 +755,24 @@ const api = {
     window.electronAPI.invoke('tax:schedule-d', { year, opts }),
   taxForm1040ES: (year: number, opts?: { prior_year_total_tax?: number; withholding_credits?: number; projected_other_income?: number; filing_status?: 'single' | 'mfj' | 'hoh'; ytd_months?: number }): Promise<any> =>
     window.electronAPI.invoke('tax:form-1040-es', { year, opts }),
+
+  // ─── Compliance documents (W-4 / W-9 / I-9) ───
+  complianceList: (filters?: { person_type?: 'employee' | 'vendor' | 'client'; form_type?: string; status?: string }): Promise<any[]> =>
+    window.electronAPI.invoke('compliance:list', filters),
+  complianceListForPerson: (person_type: 'employee' | 'vendor' | 'client', person_id: string): Promise<any[]> =>
+    window.electronAPI.invoke('compliance:list-for-person', { person_type, person_id }),
+  complianceUpsert: (record: any): Promise<any> =>
+    window.electronAPI.invoke('compliance:upsert', record),
+  complianceDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('compliance:delete', { id }),
+  complianceGetMissing: (): Promise<any[]> =>
+    window.electronAPI.invoke('compliance:get-missing'),
+  complianceGetExpiring: (days_ahead?: number): Promise<any[]> =>
+    window.electronAPI.invoke('compliance:get-expiring', { days_ahead }),
+  complianceAutoExpire: (): Promise<number> =>
+    window.electronAPI.invoke('compliance:auto-expire'),
+  complianceGenerateBlankPDF: (form_type: 'W-4' | 'W-9' | 'I-9', person_type?: 'employee' | 'vendor' | 'client', person_id?: string): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('compliance:generate-blank-pdf', { form_type, person_type, person_id }),
   taxExportFormPDF: (
     form:
       | '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'

@@ -44,6 +44,7 @@ export type ReportType =
   | 'tax-deduction-finder'   // B13
   | 'client-risk-scoring'    // B7
   | 'tax-forms'              // P4.46/47/50
+  | 'compliance-docs'        // Wave 4: W-4 / W-9 / I-9 storage
   | 'income-by-month'
   | 'debt-collection'
   | 'inventory-valuation'
@@ -123,7 +124,15 @@ const REPORTS: ReportCard[] = [
     id: 'tax-forms',
     title: 'IRS Tax Forms',
     description:
-      'Generate worksheets for Form 941 (quarterly payroll), Schedule C (sole-prop P&L), and 1099-NEC (contractor compensation). Auto-pulls from your books.',
+      'Generate worksheets for 30+ IRS forms: 941, 944, 945, 940 (FUTA), W-2, W-3, 1099 family (NEC/MISC/INT/DIV/R/K/B/G/C/SA), 1096, W-2c, Schedule C/SE, 1040 Schedules 1/2/3/A/B/D, 1040-ES, sales tax. Auto-pulls from your books.',
+    icon: FileSpreadsheet,
+    accentClass: 'border-l-accent-warning',
+  },
+  {
+    id: 'compliance-docs',
+    title: 'Compliance Docs (W-4 / W-9 / I-9)',
+    description:
+      'Track and generate forms received from employees and vendors. Pre-fills employer info on blank PDFs; flags missing or expiring forms; enforces I-9 retention rules and W-9 annual re-verification.',
     icon: FileSpreadsheet,
     accentClass: 'border-l-accent-warning',
   },

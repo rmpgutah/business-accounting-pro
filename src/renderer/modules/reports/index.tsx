@@ -14,6 +14,7 @@ const CustomerProfitability = React.lazy(() => import('./CustomerProfitability')
 const TaxDeductionFinder = React.lazy(() => import('./TaxDeductionFinder'));
 const ClientRiskDashboard = React.lazy(() => import('./ClientRiskDashboard'));
 const TaxForms = React.lazy(() => import('./TaxForms'));
+const ComplianceDocs = React.lazy(() => import('./ComplianceDocs'));
 const ARAgingReport = React.lazy(() => import('./ARAgingReport'));
 const TaxSummary = React.lazy(() => import('./TaxSummary'));
 const TrialBalance = React.lazy(() => import('./TrialBalance'));
@@ -41,6 +42,7 @@ const REPORT_TITLES: Record<ReportType, string> = {
   'tax-deduction-finder': 'Tax Deduction Finder',
   'client-risk-scoring': 'Client Risk Scoring',
   'tax-forms': 'IRS Tax Forms',
+  'compliance-docs': 'Compliance Docs (W-4 / W-9 / I-9)',
   'ar-aging': 'Accounts Receivable Aging',
   'ap-aging': 'Accounts Payable Aging',
   'trial-balance': 'Trial Balance',
@@ -215,6 +217,8 @@ const ReportsModule: React.FC = () => {
         return <Suspense fallback={<LazyFallback />}><ClientRiskDashboard /></Suspense>;
       case 'tax-forms':
         return <Suspense fallback={<LazyFallback />}><TaxForms /></Suspense>;
+      case 'compliance-docs':
+        return <Suspense fallback={<LazyFallback />}><ComplianceDocs /></Suspense>;
       case 'ar-aging':
         return <Suspense fallback={<LazyFallback />}><ARAgingReport /></Suspense>;
       case 'ap-aging':

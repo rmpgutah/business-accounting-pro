@@ -1867,6 +1867,34 @@ export function initDatabase(): Database.Database {
        THEN RAISE(ABORT, 'Cannot post journal entry: total debits must equal total credits')
      END;
    END`,
+  // ─── Wave 4: Compliance documents (W-4 / W-9 / I-9) ─────────
+  // Stores forms RECEIVED from employees/vendors (paradigm-flip from
+  // forms ISSUED by the business). Tracks expiration for W-9 annual
+  // re-verification and I-9 retention rules.
+  `CREATE TABLE IF NOT EXISTS compliance_documents (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    person_type TEXT NOT NULL CHECK(person_type IN ('employee','vendor','client')),
+    person_id TEXT NOT NULL,
+    form_type TEXT NOT NULL CHECK(form_type IN ('W-4','W-9','I-9','W-8BEN','W-8BEN-E','state-W-4')),
+    document_id TEXT REFERENCES documents(id),
+    document_filename TEXT DEFAULT '',
+    effective_date TEXT,
+    expires_at TEXT,
+    section_1_complete INTEGER DEFAULT 0,
+    section_2_complete INTEGER DEFAULT 0,
+    section_3_complete INTEGER DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'current' CHECK(status IN ('current','expired','pending','rejected','superseded')),
+    notes TEXT DEFAULT '',
+    metadata TEXT DEFAULT '{}',
+    uploaded_at TEXT DEFAULT (datetime('now')),
+    uploaded_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_compliance_docs_company ON compliance_documents(company_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_compliance_docs_person ON compliance_documents(person_type, person_id, form_type)`,
+  `CREATE INDEX IF NOT EXISTS idx_compliance_docs_expires ON compliance_documents(expires_at, status)`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
