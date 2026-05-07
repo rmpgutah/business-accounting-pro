@@ -6,9 +6,9 @@ import ErrorBanner from '../../components/ErrorBanner';
 import { roundCents } from '../../lib/format';
 import {
   calcFederalTaxAnnual,
-  STANDARD_DEDUCTION_2025,
+  getStandardDeduction,
+  getSSWageBase,
   SS_RATE,
-  SS_WAGE_BASE_2025,
   MEDICARE_RATE,
   ADDL_MEDICARE_RATE,
   ADDL_MEDICARE_THRESHOLD,
@@ -242,20 +242,45 @@ function calcPayStub(
   // Annualized regular taxable gross for bracket calc.
   const annualTaxableRegular = taxableRegular * periods;
 
-  // MATH: IRS Pub 15-T Percentage Method requires subtracting the standard
-  // deduction (and per-allowance adjustment for legacy W-4) BEFORE applying
-  // the bracket table. Previously we passed gross-after-pretax directly,
-  // over-stating federal withholding (or under-stating once engine override
-  // ran with proper deduction handling — causing reconciliation issues).
+  // MATH: IRS Pub 15-T Percentage Method. We use the algebraically equivalent
+  // "subtract std deduction, apply 1040 brackets" form. When W-4 Step 2 box
+  // is checked (two-earner household) the IRS halves both the std deduction
+  // and the bracket boundaries to over-withhold — that's what `step2Halve`
+  // does. When the legacy pre-2020 W-4 is in use, `federal_allowances` adds
+  // a per-allowance $4,300 reduction.
   const filingStatus = mapFilingStatus(emp.filing_status || emp.w4_filing_status);
-  const stdDeduction = STANDARD_DEDUCTION_2025[filingStatus];
-  // Legacy per-allowance amount per IRS pre-2020 method ($4,300 in 2025).
+  // Tax year derived from the pay period end (close enough for bracket selection;
+  // the actual IRS rule is "year of the pay date" but periodEnd ≈ payDate within
+  // a few days for any normal pay schedule).
+  const taxYear = parseInt((periodEnd || new Date().toISOString()).slice(0, 4)) || new Date().getFullYear();
+  const step2Halve = !!emp.w4_step2_checkbox;
+  const stdDeduction = getStandardDeduction(filingStatus, taxYear, step2Halve);
+  // Legacy per-allowance amount per IRS pre-2020 method.
   const allowanceAmt = (emp.federal_allowances || 0) * 4300;
-  const annualTaxableAfterDed = Math.max(0, annualTaxableRegular - stdDeduction - allowanceAmt);
+  // W-4 Step 4(b) — additional pre-tax deductions claimed on the form
+  const w4Deductions = emp.w4_step4b_deductions || 0;
+  // W-4 Step 4(a) — other income to add to annualized wage
+  const w4OtherIncome = emp.w4_step4a_other_income || 0;
+  const annualTaxableAfterDed = Math.max(
+    0,
+    annualTaxableRegular + w4OtherIncome - stdDeduction - allowanceAmt - w4Deductions,
+  );
 
   // Federal tax: brackets on the post-deduction income + flat 22% on supplemental.
-  const federalAnnualRegular = calcFederalTaxAnnual(annualTaxableAfterDed, filingStatus);
-  const federal_tax = (federalAnnualRegular / periods) + (taxableBonus * 0.22);
+  const federalAnnualRegular = calcFederalTaxAnnual(
+    annualTaxableAfterDed,
+    filingStatus,
+    taxYear,
+    step2Halve,
+  );
+  // W-4 Step 3 — non-refundable dependent credit (annualized → per-period)
+  const dependentCreditPerPeriod = (emp.w4_step3_dependent_credit || 0) / periods;
+  // W-4 Step 4(c) — extra fixed-dollar withholding the employee requested
+  const extraWithholdingPerPeriod = emp.w4_step4c_extra_withholding || 0;
+  const federal_tax = Math.max(
+    0,
+    (federalAnnualRegular / periods) - dependentCreditPerPeriod + extraWithholdingPerPeriod + (taxableBonus * 0.22),
+  );
 
   // State tax: use engine result if provided, else flat fallback on taxable gross
   const state_tax = stateTaxOverride !== undefined
@@ -270,7 +295,7 @@ function calcPayStub(
   // supplemental/bonus portion above the cap) is not.
   // Source: IRC §3121(a)(1), 2025 OASDI max $176,100.
   const ytdSs = ytd?.ytdSsWages ?? 0;
-  const ssRemainingCap = Math.max(0, SS_WAGE_BASE_2025 - ytdSs);
+  const ssRemainingCap = Math.max(0, getSSWageBase(taxYear) - ytdSs);
   const ssTaxableThisRun = Math.min(taxableGross, ssRemainingCap);
   const social_security = ssTaxableThisRun * SS_RATE;
 
@@ -1086,7 +1111,25 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                         </td>
                       )}
                       <td className="text-right font-mono text-xs">{fmt.format(calc.gross_pay)}</td>
-                      <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.federal_tax)}</td>
+                      <td className="text-right font-mono text-xs text-accent-expense">
+                        {calc.federal_tax === 0 && calc.gross_pay > 0 ? (
+                          <span
+                            title={
+                              `Federal withholding is $0 because the annualized wage ` +
+                              `($${(calc.gross_pay * (PAY_PERIODS_MAP[calc.employee.pay_schedule] ?? 26)).toLocaleString('en-US', { maximumFractionDigits: 0 })}) ` +
+                              `is at or below the standard deduction for ` +
+                              `${calc.employee.w4_filing_status || calc.employee.filing_status || 'single'} filing status. ` +
+                              `This matches IRS Pub 15-T methodology and the IRS Withholding Estimator. ` +
+                              `If the employee wants additional withholding, set W-4 Step 4(c) on their profile.`
+                            }
+                            style={{ borderBottom: '1px dotted currentColor', cursor: 'help' }}
+                          >
+                            {fmt.format(calc.federal_tax)}
+                          </span>
+                        ) : (
+                          fmt.format(calc.federal_tax)
+                        )}
+                      </td>
                       <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.state_tax)}</td>
                       <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.social_security)}</td>
                       <td className="text-right font-mono text-xs text-accent-expense">{fmt.format(calc.medicare)}</td>

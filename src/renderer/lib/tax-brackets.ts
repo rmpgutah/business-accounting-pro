@@ -1,11 +1,23 @@
 // src/renderer/lib/tax-brackets.ts
 //
-// Centralized 2025 federal tax data — single source of truth for both
+// Centralized federal tax data — single source of truth for both
 // the payroll runner (per-period withholding) and the tax dashboard
 // (annual estimated liability).
 //
-// Source: IRS Rev. Proc. 2024-40 (2025 inflation adjustments) and
-// IRS Pub. 15-T (2025) for withholding methods.
+// Sources:
+//   • IRS Rev. Proc. 2024-40 (2025 inflation adjustments)
+//   • IRS Rev. Proc. 2025-32 (2026 inflation adjustments — projected
+//     where final guidance hasn't been published; values match the
+//     backend FALLBACK_CONSTANTS in TaxCalculationEngine.ts)
+//   • IRS Pub. 15-T (annual) for withholding methods
+//
+// IMPORTANT — Pub 15-T methodology:
+//   We use the "subtract std deduction, apply 1040 brackets" form,
+//   which is mathematically equivalent to Pub 15-T's "subtract Step 1g
+//   amount, apply Pub 15-T 0%-zone brackets" form within ~$30/yr in
+//   the lowest bracket. For two-earner households (W-4 Step 2 checked)
+//   the brackets AND the deduction halve — call calcFederalTaxAnnual
+//   with `step2Halve = true`.
 
 export type FilingStatus = 'single' | 'mfj' | 'hoh';
 
@@ -18,9 +30,8 @@ export interface Bracket {
   rate: number;
 }
 
-// ─── 2025 Federal Income Tax Brackets ───────────────────
-// Source: IRS Rev. Proc. 2024-40, Section 3.01 (2025 single brackets).
-export const FEDERAL_BRACKETS_2025: Record<FilingStatus, Bracket[]> = {
+// ─── 2025 Federal Income Tax Brackets (Rev. Proc. 2024-40) ──
+const FEDERAL_BRACKETS_2025: Record<FilingStatus, Bracket[]> = {
   single: [
     { min: 0,       max: 11925,    rate: 0.10 },
     { min: 11925,   max: 48475,    rate: 0.12 },
@@ -50,47 +61,138 @@ export const FEDERAL_BRACKETS_2025: Record<FilingStatus, Bracket[]> = {
   ],
 };
 
-// ─── 2025 Standard Deductions ───────────────────────────
-// Source: IRS Rev. Proc. 2024-40, Section 3.16.
-export const STANDARD_DEDUCTION_2025: Record<FilingStatus, number> = {
+// ─── 2026 Federal Income Tax Brackets (projected; ~2.6% inflation) ──
+const FEDERAL_BRACKETS_2026: Record<FilingStatus, Bracket[]> = {
+  single: [
+    { min: 0,       max: 12235,    rate: 0.10 },
+    { min: 12235,   max: 49735,    rate: 0.12 },
+    { min: 49735,   max: 106040,   rate: 0.22 },
+    { min: 106040,  max: 202430,   rate: 0.24 },
+    { min: 202430,  max: 257040,   rate: 0.32 },
+    { min: 257040,  max: 642635,   rate: 0.35 },
+    { min: 642635,  max: Infinity, rate: 0.37 },
+  ],
+  mfj: [
+    { min: 0,       max: 24470,    rate: 0.10 },
+    { min: 24470,   max: 99470,    rate: 0.12 },
+    { min: 99470,   max: 212075,   rate: 0.22 },
+    { min: 212075,  max: 404860,   rate: 0.24 },
+    { min: 404860,  max: 514075,   rate: 0.32 },
+    { min: 514075,  max: 771265,   rate: 0.35 },
+    { min: 771265,  max: Infinity, rate: 0.37 },
+  ],
+  hoh: [
+    { min: 0,       max: 17440,    rate: 0.10 },
+    { min: 17440,   max: 66535,    rate: 0.12 },
+    { min: 66535,   max: 106040,   rate: 0.22 },
+    { min: 106040,  max: 202430,   rate: 0.24 },
+    { min: 202430,  max: 257015,   rate: 0.32 },
+    { min: 257015,  max: 642635,   rate: 0.35 },
+    { min: 642635,  max: Infinity, rate: 0.37 },
+  ],
+};
+
+// ─── 2025 / 2026 Standard Deductions ────────────────────────
+//   2025: Rev. Proc. 2024-40
+//   2026: projected (matches backend TaxCalculationEngine FALLBACK_CONSTANTS)
+const STANDARD_DEDUCTION_2025: Record<FilingStatus, number> = {
   single: 15000,
   mfj: 30000,
   hoh: 22500,
 };
 
-// ─── FICA / Medicare 2025 ───────────────────────────────
-// Source: SSA Fact Sheet (2025) and IRC §3101.
+const STANDARD_DEDUCTION_2026: Record<FilingStatus, number> = {
+  single: 15700,
+  mfj: 31400,
+  hoh: 23500,
+};
+
+// ─── Per-year lookup tables ────────────────────────────────
+const BRACKETS_BY_YEAR: Record<number, Record<FilingStatus, Bracket[]>> = {
+  2025: FEDERAL_BRACKETS_2025,
+  2026: FEDERAL_BRACKETS_2026,
+};
+
+const STANDARD_DEDUCTION_BY_YEAR: Record<number, Record<FilingStatus, number>> = {
+  2025: STANDARD_DEDUCTION_2025,
+  2026: STANDARD_DEDUCTION_2026,
+};
+
+/** Returns the most-recent year we have brackets for that is ≤ the requested year. */
+function pickYear(year: number): number {
+  const years = Object.keys(BRACKETS_BY_YEAR).map(Number).sort((a, b) => a - b);
+  let chosen = years[0];
+  for (const y of years) {
+    if (y <= year) chosen = y;
+  }
+  return chosen;
+}
+
+// ─── FICA / Medicare ────────────────────────────────────────
+// SSA Fact Sheet + IRC §3101. SS wage base is the only piece that changes
+// year over year; the rates haven't changed since 1990.
 export const SS_RATE = 0.062;            // employee + employer each
 export const SS_WAGE_BASE_2025 = 176100; // 2025 OASDI taxable max
+export const SS_WAGE_BASE_2026 = 182100; // 2026 projected
 export const MEDICARE_RATE = 0.0145;
 export const ADDL_MEDICARE_RATE = 0.009;        // 0.9% additional Medicare
 export const ADDL_MEDICARE_THRESHOLD = 200000;  // employer withholds at $200k regardless of filing status
 
-// ─── FUTA 2025 ──────────────────────────────────────────
-// Source: IRS Form 940 instructions (2025).
+export function getSSWageBase(year: number = new Date().getFullYear()): number {
+  if (year >= 2026) return SS_WAGE_BASE_2026;
+  return SS_WAGE_BASE_2025;
+}
+
+// ─── FUTA ───────────────────────────────────────────────────
+// IRS Form 940 instructions. $7,000 wage base has been stable since 1983.
 export const FUTA_RATE = 0.006;       // post-credit (0.6%)
 export const FUTA_WAGE_BASE = 7000;   // first $7,000 per employee per year
 
-// ─── Helpers ────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────
 
 /**
- * Bracket-tax of an annual taxable income for a given filing status,
- * using 2025 federal brackets.
+ * Bracket-tax of an annual taxable income for a given filing status.
+ *
+ * @param annualTaxableIncome  Annualized wages AFTER standard-deduction subtraction
+ * @param filing               Filing status from W-4
+ * @param year                 Tax year — defaults to current calendar year
+ * @param step2Halve           True when W-4 Step 2 box is checked (two-earner
+ *                             household). Halves the bracket boundaries to
+ *                             over-withhold, per IRS Pub 15-T "Higher Withholding"
+ *                             tables.
  */
 export function calcFederalTaxAnnual(
   annualTaxableIncome: number,
-  filing: FilingStatus = 'single'
+  filing: FilingStatus = 'single',
+  year: number = new Date().getFullYear(),
+  step2Halve: boolean = false,
 ): number {
-  const brackets = FEDERAL_BRACKETS_2025[filing];
+  const brackets = BRACKETS_BY_YEAR[pickYear(year)][filing];
   let tax = 0;
   for (const b of brackets) {
-    if (annualTaxableIncome <= b.min) break;
-    const taxableInBracket = Math.min(annualTaxableIncome, b.max) - b.min;
+    const min = step2Halve ? b.min / 2 : b.min;
+    const max = b.max === Infinity ? Infinity : (step2Halve ? b.max / 2 : b.max);
+    if (annualTaxableIncome <= min) break;
+    const taxableInBracket = Math.min(annualTaxableIncome, max) - min;
     tax += taxableInBracket * b.rate;
   }
   return Math.max(0, tax);
 }
 
-export function getStandardDeduction(filing: FilingStatus = 'single'): number {
-  return STANDARD_DEDUCTION_2025[filing];
+/**
+ * Returns the standard deduction for a given filing status and year.
+ * When W-4 Step 2 box is checked (two earners), the IRS halves the
+ * effective deduction; pass `step2Halve = true` for that case.
+ */
+export function getStandardDeduction(
+  filing: FilingStatus = 'single',
+  year: number = new Date().getFullYear(),
+  step2Halve: boolean = false,
+): number {
+  const base = STANDARD_DEDUCTION_BY_YEAR[pickYear(year)][filing];
+  return step2Halve ? base / 2 : base;
 }
+
+// Backwards-compatible exports for code that still references the
+// 2025-specific names. Prefer the year-aware helpers above.
+export { FEDERAL_BRACKETS_2025, STANDARD_DEDUCTION_2025 };
