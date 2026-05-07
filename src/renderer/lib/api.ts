@@ -707,7 +707,25 @@ const api = {
     window.electronAPI.invoke('tax:schedule-se', { year, w2_ss_wages }),
   taxSalesTax: (period_start: string, period_end: string, opts?: { filing_frequency?: 'monthly' | 'quarterly' | 'annual'; prepayments?: number; early_filing_discount_pct?: number; state?: string }): Promise<any> =>
     window.electronAPI.invoke('tax:sales-tax', { period_start, period_end, opts }),
-  taxExportFormPDF: (form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax', year: number, opts?: { quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number }): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+  taxW3: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:w3', { year }),
+  taxForm940: (year: number, opts?: { multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number }): Promise<any> =>
+    window.electronAPI.invoke('tax:form-940', { year, opts }),
+  tax1099MISC: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-misc', { year }),
+  taxExportFormPDF: (
+    form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc',
+    year: number,
+    opts?: {
+      quarter?: 1 | 2 | 3 | 4;
+      period_start?: string;
+      period_end?: string;
+      w2_ss_wages?: number;
+      multi_state?: boolean;
+      credit_reduction_state?: boolean;
+      total_deposits?: number;
+    },
+  ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),
 
   // B7: Client risk scoring

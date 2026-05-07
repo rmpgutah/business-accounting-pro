@@ -1897,12 +1897,36 @@ export function registerIpcHandlers(): void {
       return computeSalesTax(cid, period_start, period_end, opts);
     } catch (err: any) { return { error: err?.message }; }
   });
-  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number }) => {
+  ipcMain.handle('tax:w3', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeW3 } = require('../services/tax-forms/form-w3');
+      return computeW3(cid, year);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:form-940', (_event, { year, opts }: { year: number; opts?: { multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number } }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeForm940 } = require('../services/tax-forms/form-940');
+      return computeForm940(cid, year, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:1099-misc', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const { compute1099MISCs } = require('../services/tax-forms/form-1099-misc');
+      return compute1099MISCs(cid, year);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number }) => {
     try {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
       const company = db.getById('companies', cid) as any || {};
-      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML } = require('../services/tax-forms/pdf-templates');
+      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML } = require('../services/tax-forms/pdf-templates');
       let html = '';
       let filename = 'tax-form.pdf';
 
@@ -1936,6 +1960,25 @@ export function registerIpcHandlers(): void {
         const data = computeSalesTax(cid, payload.period_start || '', payload.period_end || '');
         html = salesTaxHTML(data);
         filename = 'sales-tax-' + (payload.period_start || '') + '-' + (payload.period_end || '') + '.pdf';
+      } else if (payload.form === 'w3') {
+        const { computeW3 } = require('../services/tax-forms/form-w3');
+        const data = computeW3(cid, payload.year);
+        html = w3HTML(data);
+        filename = 'W-3-' + payload.year + '.pdf';
+      } else if (payload.form === '940') {
+        const { computeForm940 } = require('../services/tax-forms/form-940');
+        const data = computeForm940(cid, payload.year, {
+          multi_state: payload.multi_state,
+          credit_reduction_state: payload.credit_reduction_state,
+          total_deposits: payload.total_deposits,
+        });
+        html = form940HTML(data);
+        filename = 'form-940-' + payload.year + '.pdf';
+      } else if (payload.form === '1099-misc') {
+        const { compute1099MISCs } = require('../services/tax-forms/form-1099-misc');
+        const data = compute1099MISCs(cid, payload.year);
+        html = misc1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
+        filename = '1099-MISC-' + payload.year + '.pdf';
       } else {
         return { error: 'Unknown form: ' + payload.form };
       }

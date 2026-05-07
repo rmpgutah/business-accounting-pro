@@ -18,6 +18,9 @@ import type { Form1099NECData } from './form-1099-nec';
 import type { FormW2Data } from './form-w2';
 import type { ScheduleSEData } from './schedule-se';
 import type { SalesTaxData } from './sales-tax';
+import type { FormW3Data } from './form-w3';
+import type { Form940Data } from './form-940';
+import type { Form1099MISCData } from './form-1099-misc';
 
 const SHARED_HEAD = `<style>
   @page { size: letter; margin: 0.5in; @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #94a3b8; } }
@@ -460,6 +463,260 @@ ${data.warnings.length > 0 ? `<div class="warnings"><ul>${data.warnings.map((w) 
 <div class="disclaimer">
   <strong>This is a worksheet, not the official state form.</strong>
   Each state has its own form (UT TC-62M, CA BOE-401-A, TX 01-114, etc.). Use these numbers to fill in the state-specific form via your DOR/DRS portal or e-filing service. Multi-jurisdiction tenants (selling into multiple states) need a separate worksheet per state — track with state-specific tax-rate codes on each invoice line.
+</div>
+</body></html>`;
+}
+
+// ── Form W-3 (Transmittal) ───────────────────────────────────
+
+export function w3HTML(data: FormW3Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form W-3 ${data.tax_year} — ${escape(data.employer_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form W-3 — Transmittal of Wage and Tax Statements</div>
+  <div class="form-subtitle">Tax Year ${data.tax_year} · ${data.number_of_w2s} W-2(s) attached · Filed with SSA</div>
+  <div class="form-meta">${escape(data.employer_name)} · EIN ${escape(data.employer_ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Warnings:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Employer (Box e–g)</div>
+    <div class="value">${escape(data.employer_name)}</div>
+    <div class="value">${escape(data.employer_address)}</div>
+    <div class="value">${escape(data.employer_city)}, ${escape(data.employer_state)} ${escape(data.employer_zip)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Filing Type (Box b)</div>
+    <div class="value">Kind of Payer: ${escape(data.kind_of_payer)}</div>
+    <div class="value">Kind of Employer: ${escape(data.kind_of_employer)}</div>
+    <div class="value">3rd-Party Sick Pay: ${data.third_party_sick_pay ? 'Yes' : 'No'}</div>
+    <div class="value">Forms Attached (Box c): ${data.number_of_w2s}</div>
+  </div>
+</div>
+
+<div class="section-header">Box Totals (sum of all attached W-2s)</div>
+<table class="lines">
+  <thead><tr><th>Box</th><th>Description</th><th style="text-align:right">Total</th></tr></thead>
+  <tbody>
+    <tr><td class="line-num">1</td><td>Wages, tips, other comp</td><td class="line-amt totals">${fmtMoney(data.box1_total_wages_tips)}</td></tr>
+    <tr><td class="line-num">2</td><td>Federal income tax withheld</td><td class="line-amt">${fmtMoney(data.box2_total_fed_income_tax)}</td></tr>
+    <tr><td class="line-num">3</td><td>Social Security wages</td><td class="line-amt">${fmtMoney(data.box3_total_ss_wages)}</td></tr>
+    <tr><td class="line-num">4</td><td>Social Security tax withheld</td><td class="line-amt">${fmtMoney(data.box4_total_ss_tax)}</td></tr>
+    <tr><td class="line-num">5</td><td>Medicare wages and tips</td><td class="line-amt">${fmtMoney(data.box5_total_medicare_wages)}</td></tr>
+    <tr><td class="line-num">6</td><td>Medicare tax withheld</td><td class="line-amt">${fmtMoney(data.box6_total_medicare_tax)}</td></tr>
+    <tr><td class="line-num">7</td><td>Social Security tips</td><td class="line-amt">${fmtMoney(data.box7_total_ss_tips)}</td></tr>
+    <tr><td class="line-num">8</td><td>Allocated tips</td><td class="line-amt">${fmtMoney(data.box8_total_allocated_tips)}</td></tr>
+    <tr><td class="line-num">10</td><td>Dependent care benefits</td><td class="line-amt">${fmtMoney(data.box10_total_dependent_care)}</td></tr>
+    <tr><td class="line-num">11</td><td>Nonqualified plans</td><td class="line-amt">${fmtMoney(data.box11_total_nonqualified)}</td></tr>
+    <tr><td class="line-num">12a</td><td>Deferred comp totals (all codes)</td><td class="line-amt">${fmtMoney(data.box12a_total)}</td></tr>
+    <tr><td class="line-num">15</td><td>State (majority)</td><td class="line-amt">${escape(data.box15_state) || '—'}</td></tr>
+    <tr><td class="line-num">16</td><td>State wages, tips, etc.</td><td class="line-amt">${fmtMoney(data.box16_total_state_wages)}</td></tr>
+    <tr><td class="line-num">17</td><td>State income tax</td><td class="line-amt">${fmtMoney(data.box17_total_state_income_tax)}</td></tr>
+    <tr><td class="line-num">18</td><td>Local wages</td><td class="line-amt">${fmtMoney(data.box18_total_local_wages)}</td></tr>
+    <tr><td class="line-num">19</td><td>Local income tax</td><td class="line-amt">${fmtMoney(data.box19_total_local_income_tax)}</td></tr>
+  </tbody>
+</table>
+
+${data.box12_breakdown.length > 0 ? `
+<div class="section-header">Box 12 Breakdown by Code</div>
+<table class="lines">
+  <thead><tr><th>Code</th><th>Description</th><th style="text-align:right">Total</th></tr></thead>
+  <tbody>
+    ${data.box12_breakdown.map((b) => `<tr>
+      <td class="line-num">${escape(b.code)}</td>
+      <td>${escape(b.label)}</td>
+      <td class="line-amt">${fmtMoney(b.total)}</td>
+    </tr>`).join('')}
+  </tbody>
+</table>` : ''}
+
+<div class="section-header">Attached W-2s (${data.w2_forms.length})</div>
+<table class="lines">
+  <thead><tr><th>Employee</th><th style="text-align:right">Box 1 Wages</th><th style="text-align:right">Box 2 Fed Tax</th><th style="text-align:right">Box 3 SS</th><th style="text-align:right">Box 5 Medicare</th></tr></thead>
+  <tbody>
+    ${data.w2_forms.map((w) => `<tr>
+      <td>${escape(w.employee_first_name)} ${escape(w.employee_last_name)}</td>
+      <td class="line-amt">${fmtMoney(w.box1_wages_tips)}</td>
+      <td class="line-amt">${fmtMoney(w.box2_fed_income_tax)}</td>
+      <td class="line-amt">${fmtMoney(w.box3_ss_wages)}</td>
+      <td class="line-amt">${fmtMoney(w.box5_medicare_wages)}</td>
+    </tr>`).join('') || `<tr><td colspan="5" style="padding:14px;text-align:center;color:#94a3b8">No W-2s attached.</td></tr>`}
+  </tbody>
+</table>
+
+<div class="section-header">Contact Information</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">Name</td><td colspan="2">${escape(data.contact_name) || '__________'}</td></tr>
+    <tr><td class="line-num">Phone</td><td colspan="2">${escape(data.contact_phone) || '__________'}</td></tr>
+    <tr><td class="line-num">Email</td><td colspan="2">${escape(data.contact_email) || '__________'}</td></tr>
+  </tbody>
+</table>
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  W-3 must be filed by January 31 with the SSA along with all W-2 Copy A forms.
+  Most filers e-file via SSA Business Services Online (BSO) — paper W-3s require red-ink scannable forms ordered from IRS. The totals above MUST equal the sum of the attached W-2s exactly; if you edit any W-2 box, regenerate this form.
+</div>
+</body></html>`;
+}
+
+// ── Form 940 (FUTA) ───────────────────────────────────────────
+
+export function form940HTML(data: Form940Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form 940 ${data.year} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 940 — Annual Federal Unemployment (FUTA) Tax Return</div>
+  <div class="form-subtitle">Tax Year ${data.year} · ${data.employee_count} employee(s) · Effective rate ${(data.effective_futa_rate * 100).toFixed(1)}%</div>
+  <div class="form-meta">${escape(data.business_name)} · EIN ${escape(data.ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Warnings:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Employer</div>
+    <div class="value">${escape(data.business_name)}</div>
+    ${data.trade_name && data.trade_name !== data.business_name ? `<div class="value">DBA: ${escape(data.trade_name)}</div>` : ''}
+    <div class="value">${escape(data.address)}</div>
+    <div class="value">${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Filing Flags (Part 1)</div>
+    <div class="value">${data.amended ? '☒' : '☐'} 1d Amended</div>
+    <div class="value">${data.successor_employer ? '☒' : '☐'} 1c Successor employer</div>
+    <div class="value">${data.no_payments_to_employees ? '☒' : '☐'} 1a No payments to employees</div>
+    <div class="value">${data.final_return ? '☒' : '☐'} 1b Final return</div>
+    <div class="value">${data.multi_state_employer ? '☒' : '☐'} Multi-state employer</div>
+    <div class="value">${data.credit_reduction_state ? '☒' : '☐'} Credit reduction state (Schedule A)</div>
+  </div>
+</div>
+
+<div class="section-header">Part 2 — FUTA Tax Before Adjustments</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">3</td><td>Total payments to all employees</td><td class="line-amt">${fmtMoney(data.line3_total_payments)}</td></tr>
+    <tr><td class="line-num">4</td><td>Payments exempt from FUTA (fringe, retirement, dep care, other)</td><td class="line-amt">${fmtMoney(data.line4_payments_exempt)}</td></tr>
+    <tr><td class="line-num">5</td><td>Total payments made > $7,000 per employee</td><td class="line-amt">${fmtMoney(data.line5_payments_excess_7k)}</td></tr>
+    <tr><td class="line-num">6</td><td>Subtotal (lines 4 + 5)</td><td class="line-amt">${fmtMoney(data.line6_subtotal)}</td></tr>
+    <tr><td class="line-num">7</td><td>Total taxable FUTA wages (line 3 − line 6)</td><td class="line-amt totals">${fmtMoney(data.line7_total_taxable)}</td></tr>
+    <tr><td class="line-num">8</td><td>FUTA tax before adjustments (line 7 × 0.006)</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.line8_futa_tax)}</td></tr>
+  </tbody>
+</table>
+
+<div class="section-header">Part 3 — Adjustments</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">9</td><td>If ALL FUTA wages were excluded from state UI: line 7 × 0.054</td><td class="line-amt">${fmtMoney(data.line9_no_credit)}</td></tr>
+    <tr><td class="line-num">10</td><td>If SOME wages excluded or paid late: from worksheet</td><td class="line-amt">${fmtMoney(data.line10_some_credit)}</td></tr>
+    <tr><td class="line-num">11</td><td>Credit reduction states (Schedule A)</td><td class="line-amt">${fmtMoney(data.line11_credit_reduction)}</td></tr>
+    <tr><td class="line-num">12</td><td>Total FUTA tax (lines 8 + 9 + 10 + 11)</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.line12_total_futa)}</td></tr>
+  </tbody>
+</table>
+
+<div class="section-header">Part 4 — Balance Due / Overpayment</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">13</td><td>Total deposits made for ${data.year}</td><td class="line-amt" style="color:#16a34a">${fmtMoney(data.line13_total_deposits)}</td></tr>
+    <tr><td class="line-num">14</td><td>Balance due (line 12 − line 13, if positive)</td><td class="line-amt totals" style="color:${data.line14_balance_due > 0 ? '#dc2626' : '#94a3b8'}">${fmtMoney(data.line14_balance_due)}</td></tr>
+    <tr><td class="line-num">15</td><td>Overpayment (line 13 − line 12, if positive)</td><td class="line-amt" style="color:${data.line15_overpayment > 0 ? '#16a34a' : '#94a3b8'}">${fmtMoney(data.line15_overpayment)}</td></tr>
+  </tbody>
+</table>
+
+${data.has_quarterly_deposit_required ? `
+<div class="section-header">Part 5 — Quarterly Liability (required when line 12 > $500)</div>
+<table class="lines">
+  <thead><tr><th>Quarter</th><th>Period</th><th style="text-align:right">FUTA Liability</th></tr></thead>
+  <tbody>
+    <tr><td class="line-num">16a</td><td>Q1 (Jan–Mar)</td><td class="line-amt">${fmtMoney(data.q1_liability)}</td></tr>
+    <tr><td class="line-num">16b</td><td>Q2 (Apr–Jun)</td><td class="line-amt">${fmtMoney(data.q2_liability)}</td></tr>
+    <tr><td class="line-num">16c</td><td>Q3 (Jul–Sep)</td><td class="line-amt">${fmtMoney(data.q3_liability)}</td></tr>
+    <tr><td class="line-num">16d</td><td>Q4 (Oct–Dec)</td><td class="line-amt">${fmtMoney(data.q4_liability)}</td></tr>
+    <tr><td class="line-num">17</td><td>Total quarterly liability (must equal line 12)</td><td class="line-amt totals">${fmtMoney(data.total_quarterly_liability)}</td></tr>
+  </tbody>
+</table>` : `
+<div class="disclaimer" style="background:#f0f9ff;color:#075985;border-color:#bae6fd">
+  <strong>Quarterly deposits not required.</strong>
+  Total FUTA tax (${fmtMoney(data.line12_total_futa)}) is at or below the $500 threshold. You may pay the full amount with your annual Form 940 by January 31. Part 5 is not required.
+</div>`}
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  Form 940 is filed annually by January 31 (or February 10 if you deposited all FUTA tax timely). The 0.6% effective rate assumes you paid state unemployment tax timely; if not, you may owe up to the full 6.0%. Multi-state employers and credit-reduction-state filers must complete Schedule A separately.
+</div>
+</body></html>`;
+}
+
+// ── Form 1099-MISC ────────────────────────────────────────────
+
+export function misc1099HTML(forms: Form1099MISCData[], year: number, payer: { name: string; ein: string }): string {
+  const totalsByBox = forms.reduce((acc, f) => {
+    acc.box1 += f.box1_rents;
+    acc.box2 += f.box2_royalties;
+    acc.box3 += f.box3_other_income;
+    acc.box6 += f.box6_medical_healthcare;
+    acc.box10 += f.box10_gross_proceeds_attorney;
+    return acc;
+  }, { box1: 0, box2: 0, box3: 0, box6: 0, box10: 0 });
+  const grandTotal = forms.reduce((s, f) => s + f.total_paid, 0);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Form 1099-MISC ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 1099-MISC — Miscellaneous Information</div>
+  <div class="form-subtitle">Tax Year ${year} · ${forms.length} recipient(s) · Total paid ${fmtMoney(grandTotal)}</div>
+  <div class="form-meta">${escape(payer.name)} · EIN ${escape(payer.ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+<div class="section-header">Summary by Box</div>
+<table class="lines">
+  <thead><tr><th>Box</th><th>Description</th><th style="text-align:right">Total</th></tr></thead>
+  <tbody>
+    <tr><td class="line-num">1</td><td>Rents</td><td class="line-amt">${fmtMoney(totalsByBox.box1)}</td></tr>
+    <tr><td class="line-num">2</td><td>Royalties (≥ $10 threshold)</td><td class="line-amt">${fmtMoney(totalsByBox.box2)}</td></tr>
+    <tr><td class="line-num">3</td><td>Other income (prizes, awards, taxable damages)</td><td class="line-amt">${fmtMoney(totalsByBox.box3)}</td></tr>
+    <tr><td class="line-num">6</td><td>Medical and health care payments</td><td class="line-amt">${fmtMoney(totalsByBox.box6)}</td></tr>
+    <tr><td class="line-num">10</td><td>Gross proceeds paid to attorney (settlements)</td><td class="line-amt">${fmtMoney(totalsByBox.box10)}</td></tr>
+  </tbody>
+</table>
+
+<div class="section-header">Recipients</div>
+${forms.map((f) => `
+<div style="margin:14px 0; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; ${!f.has_tin || !f.meets_filing_threshold ? 'background:#fffbeb' : ''}">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <div style="font-size:13px; font-weight:700">${escape(f.recipient_name) || '(unnamed)'}</div>
+      <div style="font-size:10px; color:#64748b">TIN: ${escape(f.recipient_tin) || '— missing —'} · ${escape(f.recipient_address)} ${escape(f.recipient_city)}, ${escape(f.recipient_state)} ${escape(f.recipient_zip)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:14px; font-weight:800; font-variant-numeric: tabular-nums">${fmtMoney(f.total_paid)}</div>
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:${f.meets_filing_threshold && f.has_tin ? '#16a34a' : '#dc2626'}; font-weight:700">
+        ${f.meets_filing_threshold && f.has_tin ? '✓ Ready to file' : !f.has_tin ? '⛔ No TIN' : '⏸ Below threshold'}
+      </div>
+    </div>
+  </div>
+  <table class="lines" style="margin-top:8px; border:none">
+    <tbody>
+      ${f.box1_rents > 0  ? `<tr><td class="line-num">Box 1</td><td>Rents</td><td class="line-amt">${fmtMoney(f.box1_rents)}</td></tr>` : ''}
+      ${f.box2_royalties > 0 ? `<tr><td class="line-num">Box 2</td><td>Royalties</td><td class="line-amt">${fmtMoney(f.box2_royalties)}</td></tr>` : ''}
+      ${f.box3_other_income > 0 ? `<tr><td class="line-num">Box 3</td><td>Other income</td><td class="line-amt">${fmtMoney(f.box3_other_income)}</td></tr>` : ''}
+      ${f.box6_medical_healthcare > 0 ? `<tr><td class="line-num">Box 6</td><td>Medical/healthcare</td><td class="line-amt">${fmtMoney(f.box6_medical_healthcare)}</td></tr>` : ''}
+      ${f.box10_gross_proceeds_attorney > 0 ? `<tr><td class="line-num">Box 10</td><td>Gross proceeds to attorney</td><td class="line-amt">${fmtMoney(f.box10_gross_proceeds_attorney)}</td></tr>` : ''}
+    </tbody>
+  </table>
+  ${f.warnings.length > 0 ? `<div style="font-size:10px; color:#92400e; margin-top:6px">${f.warnings.map(escape).join(' · ')}</div>` : ''}
+</div>
+`).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-MISC eligible vendors found for ${year}.</div>`}
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  1099-MISC is filed by February 28 (paper) or March 31 (electronic) with the IRS, and recipients must receive Copy B by January 31. <strong>Box 10 (gross proceeds to attorney) is for SETTLEMENTS only — legal fees go on 1099-NEC.</strong> The $600 threshold applies to most boxes; royalties (Box 2) start at $10.
 </div>
 </body></html>`;
 }
