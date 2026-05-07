@@ -32,6 +32,13 @@ import type { Form1099KData } from './form-1099-k';
 import type { Form1099BData, Form1099GData, Form1099CData, Form1099SAData } from './form-1099-other';
 import type { FormW2CData } from './form-w2c';
 import type { Form1096Data } from './form-1096';
+import type { Schedule1Data } from './schedule-1';
+import type { Schedule2Data } from './schedule-2';
+import type { Schedule3Data } from './schedule-3';
+import type { ScheduleAData } from './schedule-a';
+import type { ScheduleBData } from './schedule-b';
+import type { ScheduleDData } from './schedule-d';
+import type { Form1040ESData } from './form-1040-es';
 
 type DailyLiability = Schedule941BDailyLiability;
 
@@ -1270,5 +1277,271 @@ ${data.warnings.length > 0 ? `<div class="warnings"><strong>Notes:</strong><ul>$
   </tbody>
 </table>
 <div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 1096 is the cover sheet for PAPER filings only — if you e-file via FIRE or IRIS, no 1096 is needed. <strong>File a SEPARATE Form 1096 for each 1099 variant</strong> (one for all 1099-NECs, one for all 1099-MISCs, etc.). Check ONLY ONE box per 1096 in the lower section identifying which variant the cover sheet applies to.</div>
+</body></html>`;
+}
+
+// ── Helper: Schedule line table ────────────────────────────────
+
+function scheduleLines(rows: Array<[string, string, number | string]>): string {
+  return `<table class="lines"><tbody>${rows.map(([n, label, v]) => `<tr><td class="line-num">${escape(n)}</td><td>${escape(label)}</td><td class="line-amt">${typeof v === 'number' ? fmtMoney(v) : escape(String(v))}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function scheduleHeader(title: string, subtitle: string, name: string, year: number): string {
+  return `<div class="form-header">
+    <div class="form-title">${escape(title)}</div>
+    <div class="form-subtitle">${escape(subtitle)}</div>
+    <div class="form-meta">${escape(name)} · Tax year ${year} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+  </div>`;
+}
+
+function scheduleWarnings(warnings: string[]): string {
+  if (warnings.length === 0) return '';
+  return `<div class="warnings"><strong>Notes:</strong><ul>${warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>`;
+}
+
+// ── Schedule 1 (Additional Income / Adjustments) ──────────────
+
+export function schedule1HTML(data: Schedule1Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule 1 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule 1 (Form 1040) — Additional Income and Adjustments to Income', `Tax Year ${data.year}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Additional Income</div>
+${scheduleLines([
+  ['1', 'Taxable refunds of state/local income tax', data.line1_taxable_refunds],
+  ['2a', 'Alimony received', data.line2a_alimony_received],
+  ['3', 'Business income (from Schedule C)', data.line3_business_income],
+  ['4', 'Other gains or losses (Form 4797)', data.line4_other_gains],
+  ['5', 'Rental real estate, royalties (Schedule E)', data.line5_rental_real_estate],
+  ['6', 'Farm income (Schedule F)', data.line6_farm_income],
+  ['7', 'Unemployment compensation', data.line7_unemployment_comp],
+  ['9', 'Total other income', data.line9_total_other_income],
+  ['10', 'Total additional income (sum)', data.line10_total_additional_income],
+])}
+<div class="section-header">Part II — Adjustments to Income</div>
+${scheduleLines([
+  ['11', 'Educator expenses', data.line11_educator_expenses],
+  ['13', 'HSA deduction', data.line13_hsa_deduction],
+  ['15', 'Deductible part of SE tax (½ from Schedule SE)', data.line15_se_tax_deduction],
+  ['16', 'Self-employed health insurance', data.line16_se_health_insurance],
+  ['17', 'Self-employed retirement contributions', data.line17_se_retirement_contributions],
+  ['20', 'IRA deduction', data.line20_ira_deduction],
+  ['21', 'Student loan interest', data.line21_student_loan_interest],
+  ['26', 'Total adjustments (sum)', data.line26_total_adjustments],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 10 carries to Form 1040 line 8. Line 26 carries to Form 1040 line 10. Lines 3 and 15 are autofilled from your Schedule C and Schedule SE worksheets — most other lines are personal and need manual entry.</div>
+</body></html>`;
+}
+
+// ── Schedule 2 (Additional Tax) ───────────────────────────────
+
+export function schedule2HTML(data: Schedule2Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule 2 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule 2 (Form 1040) — Additional Taxes', `Tax Year ${data.year}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Tax</div>
+${scheduleLines([
+  ['1', 'Alternative minimum tax (Form 6251)', data.line1_amt],
+  ['2', 'Excess advance premium tax credit (Form 8962)', data.line2_excess_advance_premium_credit],
+  ['3', 'Total (line 1 + line 2)', data.line3_total_part1],
+])}
+<div class="section-header">Part II — Other Taxes</div>
+${scheduleLines([
+  ['4', 'Self-employment tax (Schedule SE)', data.line4_se_tax],
+  ['7', 'Total addtl SS / Medicare taxes', data.line7_total_addtl_ss_medicare],
+  ['8', 'Additional tax on IRAs (Form 5329)', data.line8_addtl_tax_iras],
+  ['9', 'Household employment taxes (Schedule H)', data.line9_household_employment_taxes],
+  ['11', 'Additional Medicare Tax (Form 8959)', data.line11_addtl_medicare_tax],
+  ['12', 'Net investment income tax (Form 8960)', data.line12_net_investment_income_tax],
+  ['21', 'Total other taxes (sum)', data.line21_total_other_taxes],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 3 carries to Form 1040 line 17. Line 21 carries to Form 1040 line 23. Line 4 (SE tax) is autofilled from your Schedule SE — most other lines are situational and need manual entry.</div>
+</body></html>`;
+}
+
+// ── Schedule 3 (Additional Credits and Payments) ──────────────
+
+export function schedule3HTML(data: Schedule3Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule 3 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule 3 (Form 1040) — Additional Credits and Payments', `Tax Year ${data.year}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Nonrefundable Credits</div>
+${scheduleLines([
+  ['1', 'Foreign tax credit', data.line1_foreign_tax_credit],
+  ['2', 'Credit for child and dependent care', data.line2_dependent_care_credit],
+  ['3', 'Education credits', data.line3_education_credit],
+  ['4', 'Retirement savings contributions credit', data.line4_retirement_savings_credit],
+  ['5a', 'Residential clean energy credit', data.line5a_residential_clean_energy],
+  ['5b', 'Energy efficient home improvement credit', data.line5b_energy_efficient_home],
+  ['7', 'Total other nonrefundable credits', data.line7_total_other_credits],
+  ['8', 'Total nonrefundable credits (sum)', data.line8_total_part1],
+])}
+<div class="section-header">Part II — Refundable Credits and Other Payments</div>
+${scheduleLines([
+  ['9', 'Net premium tax credit (Form 8962)', data.line9_net_premium_tax_credit],
+  ['10', 'Amount paid with extension (Form 4868)', data.line10_amount_paid_with_extension],
+  ['11', 'Excess SS / Tier 1 RRTA tax', data.line11_excess_ss_tier1_rrta_tax],
+  ['12', 'Credit for federal tax on fuels (Form 4136)', data.line12_credit_fed_tax_on_fuels],
+  ['15', 'Total payments (sum)', data.line15_total_part2],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 8 carries to Form 1040 line 20. Line 15 carries to Form 1040 line 31. Most credits on Schedule 3 are personal (children, education, energy) — fill any applicable manually.</div>
+</body></html>`;
+}
+
+// ── Schedule A (Itemized Deductions) ──────────────────────────
+
+export function scheduleAHTML(data: ScheduleAData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule A ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule A (Form 1040) — Itemized Deductions', `Tax Year ${data.year}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Medical and Dental Expenses</div>
+${scheduleLines([
+  ['1', 'Medical and dental expenses', data.line1_medical_dental],
+  ['2', 'AGI (from 1040 line 11)', data.line2_agi],
+  ['3', 'AGI floor (line 2 × 7.5%)', data.line3_agi_floor],
+  ['4', 'Medical deduction (line 1 − line 3, ≥ 0)', data.line4_medical_deduction],
+])}
+<div class="section-header">Taxes You Paid</div>
+${scheduleLines([
+  ['5a', 'State / local income or sales tax', data.line5a_state_local_income_or_sales],
+  ['5b', 'State / local real estate taxes', data.line5b_state_local_real_estate],
+  ['5c', 'State / local personal property taxes', data.line5c_state_local_personal_property],
+  ['5d', 'Sum of 5a + 5b + 5c', data.line5d_total_5a_5b_5c],
+  ['5e', 'Smaller of 5d or $10,000 (SALT cap)', data.line5e_smaller_of_5d_or_10000],
+  ['7', 'Total taxes (5e + 6)', data.line7_total_taxes],
+])}
+<div class="section-header">Interest, Charity, Other</div>
+${scheduleLines([
+  ['8e', 'Total home mortgage interest', data.line8e_total_8a_8b_8c],
+  ['9', 'Investment interest', data.line9_investment_interest],
+  ['10', 'Total interest (8e + 9)', data.line10_total_interest],
+  ['14', 'Total gifts to charity', data.line14_total_charity],
+  ['15', 'Casualty and theft losses (Form 4684)', data.line15_casualty_theft],
+  ['16', 'Total other itemized', data.line16_total_other],
+  ['17', 'TOTAL ITEMIZED DEDUCTIONS', data.line17_total_itemized],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 17 carries to Form 1040 line 12. Compare against your standard deduction (single $15,000 / MFJ $30,000 / HoH $22,500 for 2025) — only itemize if line 17 is greater. SALT (line 5e) is capped at $10,000.</div>
+</body></html>`;
+}
+
+// ── Schedule B (Interest and Ordinary Dividends) ──────────────
+
+export function scheduleBHTML(data: ScheduleBData): string {
+  const renderPayers = (payers: Array<{ name: string; amount: number }>) => payers.length === 0
+    ? `<div style="padding:8px 12px;color:#94a3b8;font-size:11px">No payers entered.</div>`
+    : `<table class="lines"><tbody>${payers.map((p, i) => `<tr><td class="line-num">${i + 1}</td><td>${escape(p.name)}</td><td class="line-amt">${fmtMoney(p.amount)}</td></tr>`).join('')}</tbody></table>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule B ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule B (Form 1040) — Interest and Ordinary Dividends', `Tax Year ${data.year}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Interest</div>
+${renderPayers(data.line1_interest_payers)}
+${scheduleLines([
+  ['2', 'Total interest', data.line2_total_interest],
+  ['3', 'Excludable savings bond interest', data.line3_excluded_interest],
+  ['4', 'Taxable interest (carries to 1040 line 2b)', data.line4_taxable_interest],
+])}
+<div class="section-header">Part II — Ordinary Dividends</div>
+${renderPayers(data.line5_dividend_payers)}
+${scheduleLines([
+  ['6', 'Total ordinary dividends (carries to 1040 line 3b)', data.line6_total_dividends],
+])}
+<div class="section-header">Part III — Foreign Accounts and Trusts</div>
+${scheduleLines([
+  ['7a', 'Financial interest in foreign account (Yes/No)', data.line7a_foreign_account_yes ? 'Yes' : 'No'],
+  ['7a', 'Country (if Yes)', data.line7a_country || '—'],
+  ['7b', 'Required to file FinCEN 114 (FBAR)', data.line7b_required_to_file_fbar ? 'Yes' : 'No'],
+  ['8', 'Distribution from / grantor of foreign trust', data.line8_foreign_trust ? 'Yes' : 'No'],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Schedule B is required when interest > $1,500 OR dividends > $1,500 OR you have a foreign account. Pass interest/dividend payers via opts.interest_payers and opts.dividend_payers — autofill from received 1099-INT/DIV is queued for a future wave.</div>
+</body></html>`;
+}
+
+// ── Schedule D (Capital Gains and Losses) ─────────────────────
+
+export function scheduleDHTML(data: ScheduleDData): string {
+  const renderTxns = (lines: Array<{ description: string; date_acquired: string; date_sold: string; proceeds: number; cost_basis: number; gain_loss: number }>) => {
+    if (lines.length === 0) return `<div style="padding:8px 12px;color:#94a3b8;font-size:11px">No transactions entered.</div>`;
+    return `<table class="lines"><thead><tr><th>Description</th><th>Acquired</th><th>Sold</th><th style="text-align:right">Proceeds</th><th style="text-align:right">Basis</th><th style="text-align:right">Gain/Loss</th></tr></thead><tbody>${lines.map((l) => `<tr>
+      <td>${escape(l.description)}</td>
+      <td style="font-size:10px;color:#64748b">${escape(l.date_acquired)}</td>
+      <td style="font-size:10px;color:#64748b">${escape(l.date_sold)}</td>
+      <td class="line-amt">${fmtMoney(l.proceeds)}</td>
+      <td class="line-amt">${fmtMoney(l.cost_basis)}</td>
+      <td class="line-amt" style="color:${l.gain_loss >= 0 ? '#16a34a' : '#dc2626'}">${fmtMoney(l.gain_loss)}</td>
+    </tr>`).join('')}</tbody></table>`;
+  };
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule D ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule D (Form 1040) — Capital Gains and Losses', `Tax Year ${data.year}`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Part I — Short-Term (Held ≤ 1 year)</div>
+${renderTxns(data.line1a_basis_reported_short)}
+${scheduleLines([
+  ['6', 'Short-term capital loss carryover', data.line6_short_term_carryover],
+  ['7', 'TOTAL short-term gain/loss', data.line7_total_short_term_gain_loss],
+])}
+<div class="section-header">Part II — Long-Term (Held > 1 year)</div>
+${renderTxns(data.line8a_basis_reported_long)}
+${scheduleLines([
+  ['14', 'Long-term capital loss carryover', data.line14_long_term_carryover],
+  ['15', 'TOTAL long-term gain/loss', data.line15_total_long_term_gain_loss],
+])}
+<div class="section-header">Part III — Summary</div>
+${scheduleLines([
+  ['16', 'Combined total (line 7 + line 15)', data.line16_combined_total],
+  ['21', 'Capital loss limitation (max $3,000 deduction this year)', data.line21_capital_loss_limit],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Line 16 carries to Form 1040 line 7. Net capital losses > $3,000 carry forward to next year (line 6 / line 14 on next year's Schedule D). Use Form 8949 to detail individual transactions before summarizing here.</div>
+</body></html>`;
+}
+
+// ── Form 1040-ES (Quarterly Estimated Tax Vouchers) ───────────
+
+export function form1040ESHTML(data: Form1040ESData): string {
+  const renderVoucher = (v: Form1040ESData['vouchers'][number]) => `<div style="border:2px solid #0f172a;border-radius:6px;padding:14px;margin:10px 0;page-break-inside:avoid">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#64748b">Voucher ${v.voucher_number} of 4</div>
+        <div style="font-size:14px;font-weight:700">Form 1040-ES Payment Voucher</div>
+        <div style="font-size:11px;color:#475569">Due ${escape(v.due_date_label)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#64748b">Amount</div>
+        <div style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#dc2626">${fmtMoney(v.amount)}</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#475569;line-height:1.5">
+      Make check payable to <strong>"United States Treasury"</strong>. Write your SSN, "${data.year} Form 1040-ES", and the voucher number on the check. Mail to the address for your state listed in Form 1040-ES instructions, or pay online at <strong>irs.gov/payments</strong>.
+    </div>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1040-ES ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1040-ES — Estimated Tax for Individuals', `Tax Year ${data.year} · 4 Quarterly Vouchers`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="section-header">Estimated Tax Worksheet</div>
+${scheduleLines([
+  ['1', 'Projected business income (Schedule C, annualized)', data.projected_business_income],
+  ['2', 'Other income', data.projected_other_income],
+  ['3', 'Adjustments (½ SE tax, etc.)', data.projected_adjustments],
+  ['4', 'Projected AGI', data.projected_agi],
+  ['5', 'Standard deduction', data.projected_standard_deduction],
+  ['6', 'QBI deduction (20% of business income, simple case)', data.projected_qbi_deduction],
+  ['7', 'Projected taxable income', data.projected_taxable_income],
+  ['8', 'Projected income tax (brackets × line 7)', data.projected_income_tax],
+  ['9', 'Projected SE tax (Schedule SE)', data.projected_se_tax],
+  ['10', 'TOTAL projected tax (8 + 9)', data.projected_total_tax],
+  ['11', 'Withholding credits (W-2 / 1099)', data.withholding_credits],
+  ['12', 'Net estimated tax (10 − 11)', data.net_estimated_tax],
+])}
+<div class="section-header">Safe Harbor Comparison</div>
+${scheduleLines([
+  ['A', 'Prior year total tax (× 110% if AGI > $150K)', data.safe_harbor_prior_year],
+  ['B', 'Current year safe harbor (90% × line 12)', data.safe_harbor_current_year],
+  ['C', 'Recommended total (lower of A and B)', data.recommended_total],
+  ['D', 'Quarterly payment (line C ÷ 4)', data.recommended_quarterly],
+])}
+<div class="section-header">Quarterly Vouchers</div>
+${data.vouchers.map(renderVoucher).join('')}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Pay any of the safe-harbor amounts to avoid the underpayment penalty: 100% of prior year's tax (110% if AGI > $150K) OR 90% of current year's projected tax. The lower amount is recommended. Recompute in Q2/Q3 if your YTD income changes significantly. Pay online at irs.gov/payments instead of mailing the voucher when possible.</div>
 </body></html>`;
 }

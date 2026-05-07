@@ -19,7 +19,10 @@ type FormType =
   | '944' | '945' | 'schedule-941b' | '945-a'
   | '1099-int' | '1099-div' | '1099-r' | '1099-k'
   | '1099-b' | '1099-g' | '1099-c' | '1099-sa'
-  | 'w2c' | '1096';
+  | 'w2c' | '1096'
+  | 'schedule-1' | 'schedule-2' | 'schedule-3'
+  | 'schedule-a' | 'schedule-b' | 'schedule-d'
+  | '1040-es';
 
 interface Props { onBack?: () => void }
 
@@ -73,6 +76,13 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       else if (activeForm === '1099-sa') r = await api.tax1099SA(year);
       else if (activeForm === 'w2c') r = await api.taxW2C(year, []);
       else if (activeForm === '1096') r = await api.taxForm1096(year);
+      else if (activeForm === 'schedule-1') r = await api.taxSchedule1(year, { w2_other_wages: w2OtherWages });
+      else if (activeForm === 'schedule-2') r = await api.taxSchedule2(year, { w2_other_wages: w2OtherWages });
+      else if (activeForm === 'schedule-3') r = await api.taxSchedule3(year);
+      else if (activeForm === 'schedule-a') r = await api.taxScheduleA(year);
+      else if (activeForm === 'schedule-b') r = await api.taxScheduleB(year);
+      else if (activeForm === 'schedule-d') r = await api.taxScheduleD(year);
+      else if (activeForm === '1040-es') r = await api.taxForm1040ES(year);
       setData(r);
     } finally { setLoading(false); }
   }, [activeForm, year, quarter, salesPeriodStart, salesPeriodEnd, w2OtherWages, futaMultiState, futaCreditReduction, futaTotalDeposits]);
@@ -136,6 +146,13 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
           { id: '1096' as FormType, label: '1096' },
           { id: 'w2c' as FormType, label: 'W-2c' },
           { id: 'sales-tax' as FormType, label: 'Sales Tax' },
+          { id: 'schedule-1' as FormType, label: 'Sch 1' },
+          { id: 'schedule-2' as FormType, label: 'Sch 2' },
+          { id: 'schedule-3' as FormType, label: 'Sch 3' },
+          { id: 'schedule-a' as FormType, label: 'Sch A' },
+          { id: 'schedule-b' as FormType, label: 'Sch B' },
+          { id: 'schedule-d' as FormType, label: 'Sch D' },
+          { id: '1040-es' as FormType, label: '1040-ES' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -249,6 +266,13 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {!loading && data && activeForm === '1099-sa' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-SA" amountKey="box1_gross_distribution" amountLabel="HSA/MSA distribution" thresholdAmount={0} />}
       {!loading && data && activeForm === 'w2c' && <W2CView corrections={Array.isArray(data) ? data : []} />}
       {!loading && data && activeForm === '1096' && <Form1096View data={data} />}
+      {!loading && data && activeForm === 'schedule-1' && <Schedule1View data={data} />}
+      {!loading && data && activeForm === 'schedule-2' && <Schedule2View data={data} />}
+      {!loading && data && activeForm === 'schedule-3' && <Schedule3View data={data} />}
+      {!loading && data && activeForm === 'schedule-a' && <ScheduleAView data={data} />}
+      {!loading && data && activeForm === 'schedule-b' && <ScheduleBView data={data} />}
+      {!loading && data && activeForm === 'schedule-d' && <ScheduleDView data={data} />}
+      {!loading && data && activeForm === '1040-es' && <Form1040ESView data={data} />}
 
       {/* Disclaimer */}
       <div style={{
@@ -1355,6 +1379,278 @@ const Form1096View: React.FC<{ data: any }> = ({ data }) => {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+};
+
+// ── Generic schedule line table ────────────────────────────────
+
+const ScheduleLine: React.FC<{ n: string; label: string; value: any; tone?: 'red' | 'green' | 'bold' }> = ({ n, label, value, tone }) => (
+  <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
+    <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
+    <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
+    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      {typeof value === 'number' ? fmt$(value) : (value || '—')}
+    </td>
+  </tr>
+);
+
+const ScheduleSection: React.FC<{ title: string; rows: Array<[string, string, any] | [string, string, any, 'red' | 'green' | 'bold']> }> = ({ title, rows }) => (
+  <div className="block-card" style={{ padding: 14 }}>
+    <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{title}</div>
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <tbody>
+        {rows.map(([n, label, value, tone], i) => (
+          <ScheduleLine key={n + i} n={n} label={label} value={value} tone={tone as any} />
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const ScheduleWarnings: React.FC<{ warnings: string[] }> = ({ warnings }) => {
+  if (!warnings || warnings.length === 0) return null;
+  return (
+    <div style={{ padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+      <strong>⚠ Notes:</strong>
+      <ul style={{ margin: '4px 0 0 18px' }}>{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+    </div>
+  );
+};
+
+// ── Schedule 1 view ────────────────────────────────────────────
+
+const Schedule1View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <Stat label="Schedule C → Line 3" value={fmt$(data.line3_business_income)} />
+          <Stat label="½ SE Tax → Line 15" value={fmt$(data.line15_se_tax_deduction)} />
+          <Stat label="Total Adjustments" value={fmt$(data.line26_total_adjustments)} highlight />
+        </div>
+      </div>
+      <ScheduleSection title="Part I — Additional Income" rows={[
+        ['1', 'Taxable refunds', data.line1_taxable_refunds],
+        ['2a', 'Alimony received', data.line2a_alimony_received],
+        ['3', 'Business income (Schedule C)', data.line3_business_income, 'bold'],
+        ['5', 'Rental real estate (Schedule E)', data.line5_rental_real_estate],
+        ['7', 'Unemployment compensation', data.line7_unemployment_comp],
+        ['10', 'TOTAL additional income', data.line10_total_additional_income, 'bold'],
+      ]} />
+      <ScheduleSection title="Part II — Adjustments to Income" rows={[
+        ['11', 'Educator expenses', data.line11_educator_expenses],
+        ['13', 'HSA deduction', data.line13_hsa_deduction],
+        ['15', 'Deductible part of SE tax', data.line15_se_tax_deduction, 'green'],
+        ['16', 'Self-employed health insurance', data.line16_se_health_insurance],
+        ['17', 'SE retirement contributions', data.line17_se_retirement_contributions],
+        ['20', 'IRA deduction', data.line20_ira_deduction],
+        ['21', 'Student loan interest', data.line21_student_loan_interest],
+        ['26', 'TOTAL adjustments', data.line26_total_adjustments, 'bold'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Schedule 2 view ────────────────────────────────────────────
+
+const Schedule2View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          <Stat label="SE Tax (line 4)" value={fmt$(data.line4_se_tax)} color="#dc2626" />
+          <Stat label="TOTAL Other Taxes (line 21)" value={fmt$(data.line21_total_other_taxes)} highlight color="#dc2626" />
+        </div>
+      </div>
+      <ScheduleSection title="Part I — Tax" rows={[
+        ['1', 'Alternative minimum tax', data.line1_amt],
+        ['2', 'Excess advance premium credit', data.line2_excess_advance_premium_credit],
+        ['3', 'Total Part I', data.line3_total_part1, 'bold'],
+      ]} />
+      <ScheduleSection title="Part II — Other Taxes" rows={[
+        ['4', 'Self-employment tax', data.line4_se_tax, 'red'],
+        ['8', 'Additional tax on IRAs', data.line8_addtl_tax_iras],
+        ['9', 'Household employment taxes', data.line9_household_employment_taxes],
+        ['11', 'Additional Medicare Tax', data.line11_addtl_medicare_tax],
+        ['12', 'Net investment income tax', data.line12_net_investment_income_tax],
+        ['21', 'TOTAL other taxes', data.line21_total_other_taxes, 'bold'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Schedule 3 view ────────────────────────────────────────────
+
+const Schedule3View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <ScheduleSection title="Part I — Nonrefundable Credits" rows={[
+        ['1', 'Foreign tax credit', data.line1_foreign_tax_credit],
+        ['2', 'Dependent care credit', data.line2_dependent_care_credit],
+        ['3', 'Education credit', data.line3_education_credit],
+        ['4', 'Retirement savings credit', data.line4_retirement_savings_credit],
+        ['5a', 'Residential clean energy', data.line5a_residential_clean_energy],
+        ['5b', 'Energy efficient home', data.line5b_energy_efficient_home],
+        ['8', 'TOTAL Part I', data.line8_total_part1, 'bold'],
+      ]} />
+      <ScheduleSection title="Part II — Refundable Credits / Other Payments" rows={[
+        ['9', 'Net premium tax credit', data.line9_net_premium_tax_credit],
+        ['10', 'Amount paid with extension', data.line10_amount_paid_with_extension],
+        ['11', 'Excess SS / Tier 1 RRTA tax', data.line11_excess_ss_tier1_rrta_tax],
+        ['12', 'Credit for federal tax on fuels', data.line12_credit_fed_tax_on_fuels],
+        ['15', 'TOTAL Part II', data.line15_total_part2, 'bold'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Schedule A view ────────────────────────────────────────────
+
+const ScheduleAView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <Stat label="TOTAL Itemized Deductions (Line 17)" value={fmt$(data.line17_total_itemized)} highlight />
+      </div>
+      <ScheduleSection title="Medical and Dental Expenses" rows={[
+        ['1', 'Medical and dental expenses', data.line1_medical_dental],
+        ['2', 'AGI (from 1040 line 11)', data.line2_agi],
+        ['3', 'AGI floor (line 2 × 7.5%)', data.line3_agi_floor],
+        ['4', 'Medical deduction', data.line4_medical_deduction, 'bold'],
+      ]} />
+      <ScheduleSection title="Taxes You Paid (SALT cap $10,000)" rows={[
+        ['5a', 'State / local income or sales tax', data.line5a_state_local_income_or_sales],
+        ['5b', 'State / local real estate', data.line5b_state_local_real_estate],
+        ['5c', 'State / local personal property', data.line5c_state_local_personal_property],
+        ['5d', 'Sum of 5a + 5b + 5c', data.line5d_total_5a_5b_5c],
+        ['5e', 'Smaller of 5d or $10,000', data.line5e_smaller_of_5d_or_10000, 'bold'],
+        ['7', 'Total taxes', data.line7_total_taxes, 'bold'],
+      ]} />
+      <ScheduleSection title="Interest, Charity, Other" rows={[
+        ['8e', 'Total home mortgage interest', data.line8e_total_8a_8b_8c],
+        ['9', 'Investment interest', data.line9_investment_interest],
+        ['10', 'Total interest', data.line10_total_interest],
+        ['14', 'Total charity', data.line14_total_charity],
+        ['15', 'Casualty and theft losses', data.line15_casualty_theft],
+        ['17', 'TOTAL ITEMIZED', data.line17_total_itemized, 'bold'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Schedule B view ────────────────────────────────────────────
+
+const ScheduleBView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          <Stat label="Total Interest" value={fmt$(data.line2_total_interest)} />
+          <Stat label="Total Dividends" value={fmt$(data.line6_total_dividends)} />
+        </div>
+      </div>
+      <ScheduleSection title="Part I — Interest" rows={[
+        ...((data.line1_interest_payers || []).map((p: any, i: number) => [String(i + 1), p.name, p.amount] as [string, string, any])),
+        ['2', 'Total interest', data.line2_total_interest, 'bold'],
+        ['4', 'Taxable interest (→ 1040 line 2b)', data.line4_taxable_interest, 'bold'],
+      ]} />
+      <ScheduleSection title="Part II — Ordinary Dividends" rows={[
+        ...((data.line5_dividend_payers || []).map((p: any, i: number) => [String(i + 1), p.name, p.amount] as [string, string, any])),
+        ['6', 'Total dividends (→ 1040 line 3b)', data.line6_total_dividends, 'bold'],
+      ]} />
+      <ScheduleSection title="Part III — Foreign Accounts" rows={[
+        ['7a', 'Financial interest in foreign account?', data.line7a_foreign_account_yes ? 'Yes' : 'No'],
+        ['7a', 'Country (if Yes)', data.line7a_country],
+        ['8', 'Distribution from foreign trust?', data.line8_foreign_trust ? 'Yes' : 'No'],
+      ]} />
+    </div>
+  );
+};
+
+// ── Schedule D view ────────────────────────────────────────────
+
+const ScheduleDView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <Stat label="Short-Term (Line 7)" value={fmt$(data.line7_total_short_term_gain_loss)} color={data.line7_total_short_term_gain_loss < 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Long-Term (Line 15)" value={fmt$(data.line15_total_long_term_gain_loss)} color={data.line15_total_long_term_gain_loss < 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Combined (Line 16)" value={fmt$(data.line16_combined_total)} highlight color={data.line16_combined_total < 0 ? '#dc2626' : '#16a34a'} />
+        </div>
+      </div>
+      <ScheduleSection title="Summary" rows={[
+        ['7', 'Total short-term gain/loss', data.line7_total_short_term_gain_loss, 'bold'],
+        ['15', 'Total long-term gain/loss', data.line15_total_long_term_gain_loss, 'bold'],
+        ['16', 'COMBINED total (→ 1040 line 7)', data.line16_combined_total, 'bold'],
+        ['21', 'Capital loss limit (max −$3,000 deduction)', data.line21_capital_loss_limit],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 1040-ES view ──────────────────────────────────────────
+
+const Form1040ESView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Projected Total Tax" value={fmt$(data.projected_total_tax)} color="#dc2626" />
+          <Stat label="Net Estimated Tax" value={fmt$(data.net_estimated_tax)} />
+          <Stat label="Recommended Total" value={fmt$(data.recommended_total)} highlight color="#dc2626" />
+          <Stat label="Per Quarter" value={fmt$(data.recommended_quarterly)} highlight />
+        </div>
+      </div>
+      <ScheduleSection title="Estimated Tax Worksheet" rows={[
+        ['1', 'Projected business income', data.projected_business_income],
+        ['2', 'Other income', data.projected_other_income],
+        ['3', 'Adjustments (½ SE tax, etc.)', data.projected_adjustments],
+        ['4', 'Projected AGI', data.projected_agi],
+        ['5', 'Standard deduction', data.projected_standard_deduction],
+        ['6', 'QBI deduction (20%)', data.projected_qbi_deduction],
+        ['7', 'Projected taxable income', data.projected_taxable_income],
+        ['8', 'Projected income tax', data.projected_income_tax],
+        ['9', 'Projected SE tax', data.projected_se_tax],
+        ['10', 'TOTAL projected tax', data.projected_total_tax, 'bold'],
+        ['11', 'Withholding credits', data.withholding_credits],
+        ['12', 'Net estimated tax', data.net_estimated_tax, 'bold'],
+      ]} />
+      <ScheduleSection title="Safe Harbor Comparison" rows={[
+        ['A', 'Prior year (× 110% if AGI > $150K)', data.safe_harbor_prior_year],
+        ['B', 'Current year × 90%', data.safe_harbor_current_year],
+        ['C', 'Recommended (lower of A and B)', data.recommended_total, 'bold'],
+        ['D', 'Quarterly (C ÷ 4)', data.recommended_quarterly, 'bold'],
+      ]} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+          Quarterly Vouchers
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+          {(data.vouchers || []).map((v: any) => (
+            <div key={v.voucher_number} style={{ border: '2px solid var(--color-border-primary)', borderRadius: 6, padding: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)' }}>Voucher {v.voucher_number} of 4</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-primary)', marginTop: 2 }}>Due {v.due_date_label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626', marginTop: 6 }}>{fmt$(v.amount)}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

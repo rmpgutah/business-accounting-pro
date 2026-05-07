@@ -741,6 +741,20 @@ const api = {
     window.electronAPI.invoke('tax:w2c', { year, corrections }),
   taxForm1096: (year: number): Promise<any> =>
     window.electronAPI.invoke('tax:form-1096', { year }),
+  taxSchedule1: (year: number, opts?: { w2_other_wages?: number }): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-1', { year, opts }),
+  taxSchedule2: (year: number, opts?: { w2_other_wages?: number }): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-2', { year, opts }),
+  taxSchedule3: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-3', { year }),
+  taxScheduleA: (year: number, opts?: { agi?: number }): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-a', { year, opts }),
+  taxScheduleB: (year: number, opts?: { interest_payers?: any[]; dividend_payers?: any[]; foreign_account?: boolean; foreign_country?: string }): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-b', { year, opts }),
+  taxScheduleD: (year: number, opts?: { short_term_lines?: any[]; long_term_lines?: any[]; short_term_carryover?: number; long_term_carryover?: number }): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-d', { year, opts }),
+  taxForm1040ES: (year: number, opts?: { prior_year_total_tax?: number; withholding_credits?: number; projected_other_income?: number; filing_status?: 'single' | 'mfj' | 'hoh'; ytd_months?: number }): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1040-es', { year, opts }),
   taxExportFormPDF: (
     form:
       | '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'
@@ -748,7 +762,10 @@ const api = {
       | '944' | '945' | 'schedule-941b' | '945-a'
       | '1099-int' | '1099-div' | '1099-r' | '1099-k'
       | '1099-b' | '1099-g' | '1099-c' | '1099-sa'
-      | 'w2c' | '1096',
+      | 'w2c' | '1096'
+      | 'schedule-1' | 'schedule-2' | 'schedule-3'
+      | 'schedule-a' | 'schedule-b' | 'schedule-d'
+      | '1040-es',
     year: number,
     opts?: {
       quarter?: 1 | 2 | 3 | 4;
@@ -762,6 +779,8 @@ const api = {
       parent_form?: 'form-944' | 'form-945' | 'form-941';
       w2c_corrections?: any[];
       w2c_form_index?: number;
+      schedule_opts?: any;
+      es_opts?: any;
     },
   ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),
