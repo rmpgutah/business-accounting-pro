@@ -24,7 +24,10 @@ type FormType =
   | 'schedule-a' | 'schedule-b' | 'schedule-d'
   | '1040-es'
   | '8995' | '4562' | '8829' | '4797' | '7004' | '4868'
-  | '1065' | '1120' | '1120-s' | 'k-1' | '1041';
+  | '1065' | '1120' | '1120-s' | 'k-1' | '1041'
+  | '1094-c' | '1095-c'
+  | 'ss-4' | '2553' | '8832' | '8822-b'
+  | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941';
 
 interface Props { onBack?: () => void }
 
@@ -95,6 +98,18 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       else if (activeForm === '1120') r = await api.taxForm1120(year);
       else if (activeForm === '1120-s') r = await api.taxForm1120S(year);
       else if (activeForm === '1041') r = await api.taxForm1041(year);
+      else if (activeForm === '1094-c') r = await api.taxForm1094C(year);
+      else if (activeForm === '1095-c') r = await api.taxForm1095C({ employee_id: '' });
+      else if (activeForm === 'ss-4') r = await api.taxFormSS4();
+      else if (activeForm === '2553') r = await api.taxForm2553();
+      else if (activeForm === '8832') r = await api.taxForm8832();
+      else if (activeForm === '8822-b') r = await api.taxForm8822B();
+      else if (activeForm === 'tc-40') r = await api.taxTC40(year);
+      else if (activeForm === 'tc-20') r = await api.taxTC20(year);
+      else if (activeForm === 'tc-20s') r = await api.taxTC20S(year);
+      else if (activeForm === 'tc-65') r = await api.taxTC65(year);
+      else if (activeForm === 'tc-62m') r = await api.taxTC62M(year, year + '-01-01', year + '-12-31');
+      else if (activeForm === 'tc-941') r = await api.taxTC941(year);
       setData(r);
     } finally { setLoading(false); }
   }, [activeForm, year, quarter, salesPeriodStart, salesPeriodEnd, w2OtherWages, futaMultiState, futaCreditReduction, futaTotalDeposits]);
@@ -175,6 +190,18 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
           { id: '1120' as FormType, label: '1120 (C-Corp)' },
           { id: '1120-s' as FormType, label: '1120-S (S-Corp)' },
           { id: '1041' as FormType, label: '1041 (Trust)' },
+          { id: '1094-c' as FormType, label: '1094-C (ACA)' },
+          { id: '1095-c' as FormType, label: '1095-C (ACA)' },
+          { id: 'ss-4' as FormType, label: 'SS-4 (EIN)' },
+          { id: '2553' as FormType, label: '2553 (S-Elect)' },
+          { id: '8832' as FormType, label: '8832 (Class)' },
+          { id: '8822-b' as FormType, label: '8822-B (Addr)' },
+          { id: 'tc-40' as FormType, label: 'UT TC-40' },
+          { id: 'tc-20' as FormType, label: 'UT TC-20' },
+          { id: 'tc-20s' as FormType, label: 'UT TC-20S' },
+          { id: 'tc-65' as FormType, label: 'UT TC-65' },
+          { id: 'tc-62m' as FormType, label: 'UT TC-62M' },
+          { id: 'tc-941' as FormType, label: 'UT TC-941' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -305,6 +332,7 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {!loading && data && activeForm === '1120' && <Form1120View data={data} />}
       {!loading && data && activeForm === '1120-s' && <Form1120SView data={data} />}
       {!loading && data && activeForm === '1041' && <Form1041View data={data} />}
+      {!loading && data && (['1094-c','1095-c','ss-4','2553','8832','8822-b','tc-40','tc-20','tc-20s','tc-65','tc-62m','tc-941'] as FormType[]).includes(activeForm) && <GenericFormView data={data} formType={activeForm} />}
 
       {/* Disclaimer */}
       <div style={{
@@ -2049,6 +2077,78 @@ const Form1041View: React.FC<{ data: any }> = ({ data }) => {
         ['22', 'TAXABLE INCOME', data.line22_taxable_income, 'bold'],
         ['23', 'TOTAL TAX (compressed brackets)', data.line23_total_tax, 'red'],
       ]} />
+    </div>
+  );
+};
+
+// ── Generic form view — flexible JSON-style display for any form ─
+
+const GenericFormView: React.FC<{ data: any; formType: string }> = ({ data, formType }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+
+  // Collect keys with values (ignore arrays / nested objects for now)
+  const fields = Object.entries(data || {})
+    .filter(([k, v]) => k !== 'warnings' && typeof v !== 'object' && v !== null && v !== '')
+    .map(([k, v]) => [k, v] as [string, any]);
+
+  // Group keys by prefix (lineN_, boxN_, etc.)
+  const lineFields = fields.filter(([k]) => /^line\d+/.test(k) || /^box\d+/.test(k) || /^schK_/.test(k) || /^line[a-z]/.test(k));
+  const identityFields = fields.filter(([k]) => !lineFields.includes([k] as any) && !lineFields.find(([n]) => n === k));
+
+  const formatValue = (v: any): string => {
+    if (typeof v === 'number') return fmt$(v);
+    if (typeof v === 'boolean') return v ? '☒' : '☐';
+    return String(v);
+  };
+
+  const formatLabel = (k: string): string => {
+    return k.replace(/_/g, ' ').replace(/^line(\d+)/, 'Line $1:').replace(/^box(\d+)/, 'Box $1:').replace(/^schK /, 'Sch K ');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          {formType.toUpperCase()} · {data.entity_name || data.taxpayer_name || data.employer_name || data.legal_name || data.business_name || 'Form Data'}
+        </div>
+      </div>
+
+      {identityFields.length > 0 && (
+        <div className="block-card" style={{ padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            Identity / Filing Info
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {identityFields.slice(0, 20).map(([k, v]) => (
+                <tr key={k} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                  <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{formatLabel(k)}</td>
+                  <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', textAlign: 'right' }}>{formatValue(v)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {lineFields.length > 0 && (
+        <div className="block-card" style={{ padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            Line Items
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {lineFields.map(([k, v]) => (
+                <tr key={k} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                  <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)' }}>{formatLabel(k)}</td>
+                  <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', textAlign: 'right', fontWeight: 600 }}>{formatValue(v)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

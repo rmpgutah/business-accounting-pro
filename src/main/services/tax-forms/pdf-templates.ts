@@ -50,6 +50,10 @@ import type { Form1120Data } from './form-1120';
 import type { Form1120SData } from './form-1120s';
 import type { K1Data } from './schedule-k1';
 import type { Form1041Data } from './form-1041';
+import type { Form1094CData } from './form-1094c';
+import type { Form1095CData } from './form-1095c';
+import type { FormSS4Data, Form2553Data, Form8832Data, Form8822BData } from './entity-lifecycle';
+import type { TC40Data, TC20Data, TC20SData, TC65Data, TC62MData, TC941Data } from './utah-forms';
 
 type DailyLiability = Schedule941BDailyLiability;
 
@@ -2123,5 +2127,302 @@ ${scheduleLines([
   ['26', 'Overpayment', data.line26_overpayment],
 ])}
 <div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Trust/estate brackets are HIGHLY compressed: 37% applies above $15,650 of taxable income (vs $626K+ for individuals). Strong incentive to distribute to beneficiaries via line 18 — distributed income is taxed at the beneficiary's lower personal rates instead. Simple trusts MUST distribute all income; complex trusts can choose.</div>
+</body></html>`;
+}
+
+// ── Form 1094-C (ACA Transmittal) ─────────────────────────────
+
+export function form1094CHTML(data: Form1094CData): string {
+  const m = data.per_month;
+  const totalsRow = (label: string, key: string) => {
+    const cell = (m as any)[key] || { ft_employee_count: 0, total_employee_count: 0 };
+    return `<tr><td class="line-num">${escape(label)}</td><td class="line-amt">${cell.ft_employee_count}</td><td class="line-amt">${cell.total_employee_count}</td></tr>`;
+  };
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1094-C ${data.year} — ${escape(data.employer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1094-C — ACA Transmittal of 1095-C Returns', `Tax Year ${data.year} · ${data.total_1095c_count} 1095-C(s) attached`, data.employer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Employer (ALE Member)</div>
+    <div class="value">${escape(data.employer_name)}</div>
+    <div class="value">EIN: ${escape(data.employer_ein)}</div>
+    <div class="value">${escape(data.employer_address)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Filing</div>
+    <div class="value">Tax Year: ${data.year}</div>
+    <div class="value">1095-C count: ${data.total_1095c_count}</div>
+    <div class="value">Authoritative: ${data.is_authoritative_transmittal ? 'Yes' : 'No'}</div>
+  </div>
+</div>
+<div class="section-header">Part III — Per-Month Employee Counts</div>
+<table class="lines"><thead><tr><th>Month</th><th style="text-align:right">FT Employees</th><th style="text-align:right">Total Employees</th></tr></thead>
+<tbody>
+${totalsRow('All 12', 'all_12')}
+${totalsRow('January', 'jan')}${totalsRow('February', 'feb')}${totalsRow('March', 'mar')}
+${totalsRow('April', 'apr')}${totalsRow('May', 'may')}${totalsRow('June', 'jun')}
+${totalsRow('July', 'jul')}${totalsRow('August', 'aug')}${totalsRow('September', 'sep')}
+${totalsRow('October', 'oct')}${totalsRow('November', 'nov')}${totalsRow('December', 'dec')}
+</tbody></table>
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 1094-C is required for ALEs (50+ FT employees averaged over the year). Due February 28 (paper) or March 31 (electronic). Filers with 10+ returns must e-file via the AIR system.</div>
+</body></html>`;
+}
+
+// ── Form 1095-C (ACA Per-Employee Coverage) ───────────────────
+
+export function form1095CHTML(data: Form1095CData): string {
+  const monthRow = (label: string, key: any) => `<tr><td class="line-num">${escape(label)}</td><td>${escape(data.line14_codes[key as keyof typeof data.line14_codes] || '')}</td><td class="line-amt">${fmtMoney(data.line15_amounts[key as keyof typeof data.line15_amounts] || 0)}</td><td>${escape(data.line16_codes[key as keyof typeof data.line16_codes] || '')}</td></tr>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1095-C — ${escape(data.employee_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1095-C — ACA Employer-Provided Health Coverage', `Employee: ${escape(data.employee_name)} · Plan start month ${escape(data.plan_start_month)}`, data.employee_name, 0)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Part I — Employee</div>
+    <div class="value">${escape(data.employee_name)}</div>
+    <div class="value">SSN: ${escape(data.employee_ssn)}</div>
+    <div class="value">${escape(data.employee_address)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Part I — Employer</div>
+    <div class="value">${escape(data.employer_name)}</div>
+    <div class="value">EIN: ${escape(data.employer_ein)}</div>
+    <div class="value">${escape(data.employer_address)}</div>
+  </div>
+</div>
+<div class="section-header">Part II — Per-Month Coverage</div>
+<table class="lines"><thead><tr><th>Month</th><th>Line 14 (Offer Code)</th><th style="text-align:right">Line 15 (Employee Share)</th><th>Line 16 (Safe Harbor)</th></tr></thead>
+<tbody>
+${data.line14_codes.all_12_months ? `<tr style="background:#f1f5f9"><td class="line-num">All 12</td><td>${escape(data.line14_codes.all_12_months)}</td><td class="line-amt">${fmtMoney(data.line15_amounts.all_12_months)}</td><td>${escape(data.line16_codes.all_12_months)}</td></tr>` : ''}
+${monthRow('Jan', 'jan')}${monthRow('Feb', 'feb')}${monthRow('Mar', 'mar')}
+${monthRow('Apr', 'apr')}${monthRow('May', 'may')}${monthRow('Jun', 'jun')}
+${monthRow('Jul', 'jul')}${monthRow('Aug', 'aug')}${monthRow('Sep', 'sep')}
+${monthRow('Oct', 'oct')}${monthRow('Nov', 'nov')}${monthRow('Dec', 'dec')}
+</tbody></table>
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Codes 1A-1U on line 14 indicate offer types; 2A-2I on line 16 indicate §4980H safe harbor reasons. Self-insured employers must complete Part III (covered individuals) for each enrolled person.</div>
+</body></html>`;
+}
+
+// ── Form SS-4 (EIN Application) ───────────────────────────────
+
+export function formSS4HTML(data: FormSS4Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form SS-4 — ${escape(data.legal_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form SS-4 — Application for Employer Identification Number (EIN)', 'One-time filing to obtain an EIN', data.legal_name, 0)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['1', 'Legal name', data.legal_name],
+  ['2', 'Trade name (DBA)', data.trade_name],
+  ['3', 'Mailing address', data.mailing_address],
+  ['4a', 'Street address', data.street_address],
+  ['7a', 'Responsible party name', data.responsible_party_name],
+  ['7b', 'Responsible party SSN/ITIN', data.responsible_party_ssn_or_itin],
+  ['8a', 'Is LLC?', data.is_llc ? 'Yes' : 'No'],
+  ['8b', '# of LLC members', data.number_of_members_llc],
+  ['9a', 'Type of entity', data.applicant_type],
+  ['10', 'Reason for applying', data.reason_for_applying],
+  ['11', 'Date business started', data.date_business_started],
+  ['12', 'Closing month of accounting year', data.closing_month_accounting_year],
+  ['13', 'Highest # of employees expected (next 12 mo)', data.highest_employees_expected_first_12mo],
+  ['14', 'First date wages paid', data.first_date_wages_paid],
+  ['15', 'Principal activity', data.principal_activity],
+  ['16', 'Product or service', data.product_or_service],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Apply online at irs.gov/EIN — fastest method (instant EIN). Or fax/mail Form SS-4 to the IRS for a 4-business-day or 4-week response respectively. International applicants call 267-941-1099.</div>
+</body></html>`;
+}
+
+// ── Form 2553 (S-Corp Election) ───────────────────────────────
+
+export function form2553HTML(data: Form2553Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 2553 — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 2553 — Election by a Small Business Corporation (S-Corp Election)', 'Effective date: ' + escape(data.effective_date), data.entity_name, 0)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Name', 'Entity name', data.entity_name],
+  ['EIN', 'Employer ID Number', data.ein],
+  ['Address', 'Mailing address', data.address],
+  ['A', 'Effective date of election', data.effective_date],
+  ['B', 'State of incorporation', data.state_of_incorporation],
+  ['C', 'Date incorporated', data.date_incorporated],
+  ['F', 'Fiscal year end', data.fiscal_year_end],
+])}
+${data.shareholders.length > 0 ? `<div class="section-header">Shareholder Consent (Part I)</div>
+<table class="lines"><thead><tr><th>Name</th><th>SSN</th><th style="text-align:right">Shares</th><th>Acquired</th><th>Consent Date</th></tr></thead><tbody>
+${data.shareholders.map((s) => `<tr><td>${escape(s.name)}</td><td style="font-family:'SF Mono',Menlo,monospace">${escape(s.ssn)}</td><td class="line-amt">${s.shares_owned}</td><td>${escape(s.date_acquired)}</td><td>${escape(s.consent_signature_date)}</td></tr>`).join('')}
+</tbody></table>` : ''}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 2553 must be filed within 2 months and 15 days of the effective date. Late elections require Rev. Proc. 2013-30 relief. Once accepted, the entity is taxed as an S-corp until the election is revoked or terminated.</div>
+</body></html>`;
+}
+
+// ── Form 8832 (Entity Classification) ─────────────────────────
+
+export function form8832HTML(data: Form8832Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 8832 — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 8832 — Entity Classification Election', 'From: ' + escape(data.current_classification) + ' → To: ' + escape(data.desired_classification), data.entity_name, 0)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Name', 'Entity name', data.entity_name],
+  ['EIN', 'Employer ID Number', data.ein],
+  ['Address', 'Mailing address', data.address],
+  ['1', 'Type of election', data.type_of_election],
+  ['6', 'Current classification', data.current_classification],
+  ['6', 'Desired classification', data.desired_classification],
+  ['8', 'Effective date', data.effective_date],
+  ['9', 'Number of owners', data.number_of_owners],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 8832 elects a tax classification (corporation vs partnership vs disregarded entity). Effective date generally cannot be retroactive more than 75 days. To elect S-corp status, file BOTH Form 8832 (corporation election) AND Form 2553 (S-corp election).</div>
+</body></html>`;
+}
+
+// ── Form 8822-B (Address / Responsible Party Change) ──────────
+
+export function form8822BHTML(data: Form8822BData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 8822-B — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 8822-B — Change of Address / Responsible Party (Business)', escape(data.entity_name), data.entity_name, 0)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Name', 'Entity name', data.entity_name],
+  ['EIN', 'Employer ID Number', data.ein],
+])}
+${data.is_address_change ? `<div class="section-header">Address Change</div>
+${scheduleLines([
+  ['Old', 'Current address', data.current_business_address],
+  ['New', 'New address', data.new_business_address],
+])}` : ''}
+${data.is_responsible_party_change ? `<div class="section-header">Responsible Party Change</div>
+${scheduleLines([
+  ['Old name', 'Current responsible party', data.current_responsible_party_name],
+  ['Old SSN', 'Current SSN', data.current_responsible_party_ssn],
+  ['New name', 'New responsible party', data.new_responsible_party_name],
+  ['New SSN', 'New SSN', data.new_responsible_party_ssn],
+])}` : ''}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> File Form 8822-B within 60 days of any change in address or responsible party. The IRS uses this address for all future correspondence — failure to update can result in missed deadlines or notices.</div>
+</body></html>`;
+}
+
+// ── Utah TC-40 (Individual) ───────────────────────────────────
+
+export function tc40HTML(data: TC40Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-40 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Utah TC-40 — Utah Individual Income Tax Return', `Tax Year ${data.year} · Filing status ${escape(data.filing_status).toUpperCase()} · Flat 4.55% rate`, data.taxpayer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['1', 'Filing status code', data.line1_filing_status],
+  ['2', 'Dependents', data.line2_dependents],
+  ['4', 'Federal AGI (from 1040 line 11)', data.line4_federal_agi],
+  ['5', 'Additions to income', data.line5_additions_to_income],
+  ['6', 'Total income', data.line6_total_income],
+  ['7', 'Subtractions', data.line7_subtractions],
+  ['8', 'Utah taxable income', data.line8_state_taxable_income],
+  ['10', 'Tax (line 8 × 4.55%)', data.line10_tax],
+  ['17', 'Taxpayer tax credit (phase-out)', data.line17_taxpayer_tax_credit],
+  ['18', 'Tax after credit', data.line18_tax_after_credit],
+  ['25', 'Total tax', data.line25_total_tax],
+  ['26', 'Use tax (out-of-state purchases × 4.55%)', data.line26_use_tax],
+  ['29', 'Utah withholding (W-2 + 1099)', data.line29_utah_withholding],
+  ['30', 'Estimated payments', data.line30_estimated_payments],
+  ['32', 'Amount owed (positive) or refund (negative)', data.line32_amount_owed_or_refund],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official Utah form.</strong> Utah uses a flat 4.55% income tax rate (2025-2026). The "taxpayer tax credit" phases out 1.3% per dollar of taxable income above $14,879 single / $29,758 MFJ — fully phased out at ~$164K single / ~$329K MFJ. File at tap.utah.gov.</div>
+</body></html>`;
+}
+
+// ── Utah TC-20 (C-Corp) ───────────────────────────────────────
+
+export function tc20HTML(data: TC20Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-20 ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Utah TC-20 — Utah Corporation Franchise & Income Tax Return', `Tax Year ${data.year} · ${(data.line7_utah_apportionment_factor * 100).toFixed(2)}% Utah apportionment`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Name', 'Entity name', data.entity_name],
+  ['EIN', 'Employer ID Number', data.ein],
+  ['UT#', 'Utah account number', data.utah_account_number],
+  ['1', 'Federal taxable income (1120 line 30)', data.line1_federal_taxable_income],
+  ['2', 'Utah additions', data.line2_utah_additions],
+  ['5', 'Utah subtractions', data.line5_utah_subtractions],
+  ['6', 'Apportionable income', data.line6_apportionable_income],
+  ['7', 'Apportionment factor', (data.line7_utah_apportionment_factor * 100).toFixed(4) + '%'],
+  ['8', 'Utah taxable income', data.line8_utah_taxable_income],
+  ['11', 'Utah tax (4.55% × line 8 OR $100 minimum)', data.line11_tax],
+  ['24', 'Total tax payments', data.line24_total_tax_payments],
+  ['25', 'Balance due / refund', data.line25_balance_due_or_refund],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official Utah form.</strong> Utah corporations pay a $100 minimum tax even with no Utah-source income. Utah uses single-sales-factor apportionment for most filers (Schedule J). File at tap.utah.gov.</div>
+</body></html>`;
+}
+
+// ── Utah TC-20S (S-Corp) ──────────────────────────────────────
+
+export function tc20SHTML(data: TC20SData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-20S ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Utah TC-20S — Utah S-Corporation Tax Return', `Tax Year ${data.year} · ${data.number_of_shareholders} shareholder(s)`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Name', 'Entity name', data.entity_name],
+  ['EIN', 'Federal EIN', data.ein],
+  ['UT#', 'Utah account number', data.utah_account_number],
+  ['1', 'Federal ordinary income (1120-S line 21)', data.line1_federal_ordinary_income],
+  ['2', 'Utah additions', data.line2_utah_additions],
+  ['5', 'Utah subtractions', data.line5_utah_subtractions],
+  ['6', 'Pass-through income → Utah Schedule K-1', data.line6_pass_through_income],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official Utah form.</strong> S-corps owe no Utah entity-level income tax. Pass-through income flows to shareholders' personal TC-40 returns via Utah Schedule K-1.</div>
+</body></html>`;
+}
+
+// ── Utah TC-65 (Partnership) ──────────────────────────────────
+
+export function tc65HTML(data: TC65Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-65 ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Utah TC-65 — Utah Partnership Return', `Tax Year ${data.year} · ${data.number_of_partners} partner(s)`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Name', 'Entity name', data.entity_name],
+  ['EIN', 'Federal EIN', data.ein],
+  ['UT#', 'Utah account number', data.utah_account_number],
+  ['1', 'Federal ordinary income (1065 line 23)', data.line1_federal_ordinary_income],
+  ['2', 'Utah additions', data.line2_utah_additions],
+  ['5', 'Utah subtractions', data.line5_utah_subtractions],
+  ['6', 'Pass-through income → Utah Schedule K-1', data.line6_pass_through_income],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official Utah form.</strong> Partnerships owe no Utah entity-level income tax. Pass-through income flows to partners' personal TC-40 returns via Utah Schedule K-1. Non-resident partners may require withholding via TC-250.</div>
+</body></html>`;
+}
+
+// ── Utah TC-62M (Sales Tax) ───────────────────────────────────
+
+export function tc62MHTML(data: TC62MData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-62M ${data.period_start}–${data.period_end} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Utah TC-62M — Utah Sales and Use Tax Return', `Period ${data.period_start} → ${data.period_end}`, data.business_name, parseInt(data.period_start.slice(0, 4)))}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Permit', 'Utah Sales Tax Permit', data.utah_sales_tax_id],
+  ['1', 'Total sales', data.line1_total_sales],
+  ['2', 'Exempt sales', data.line2_exempt_sales],
+  ['3', 'Taxable sales', data.line3_taxable_sales],
+  ['4', 'Tax due (per locality breakdown)', data.line4_tax_due],
+  ['5', 'Seller discount (1.31%)', data.line5_seller_discount],
+  ['6', 'Use tax', data.line6_use_tax],
+  ['7', 'Total tax due', data.line7_total_tax_due],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official Utah form.</strong> Utah requires per-locality breakdown by city/county since rates vary. The 1.31% seller discount is available for filers paying timely. File via Utah TAP at tap.utah.gov — paper filing requires Schedule TC-62M+TC-62A.</div>
+</body></html>`;
+}
+
+// ── Utah TC-941 (Withholding) ─────────────────────────────────
+
+export function tc941HTML(data: TC941Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-941 ${data.year} — ${escape(data.employer_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Utah TC-941 — Utah Withholding Return', `Period: ${escape(String(data.period_quarter))} ${data.year}`, data.employer_name, data.year)}
+${scheduleWarnings(data.warnings)}
+${scheduleLines([
+  ['Permit', 'Utah Withholding Account', data.utah_withholding_id],
+  ['EIN', 'Federal EIN', data.ein],
+  ['1', 'Total Utah wages', data.line1_total_utah_wages],
+  ['2', 'Utah tax withheld (4.55%)', data.line2_utah_tax_withheld],
+  ['3', 'Total due', data.line3_total_due],
+  ['4', 'Total paid', data.line4_total_paid],
+  ['5', 'Balance due / refund', data.line5_balance_due_or_refund],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official Utah form.</strong> Utah withholding rate is 4.55% flat (2025-2026). Most employers file quarterly; small employers may file annually. File via Utah TAP. Annual reconciliation TC-941R is filed by January 31 for the prior year.</div>
 </body></html>`;
 }

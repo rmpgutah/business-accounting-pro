@@ -777,6 +777,33 @@ const api = {
     window.electronAPI.invoke('tax:schedule-k1', { opts }),
   taxForm1041: (year: number, opts?: any): Promise<any> =>
     window.electronAPI.invoke('tax:form-1041', { year, opts }),
+  // Wave 7 — ACA
+  taxForm1094C: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1094c', { year, opts }),
+  taxForm1095C: (opts: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1095c', { opts }),
+  // Wave 8 — Entity lifecycle
+  taxFormSS4: (opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-ss4', { opts }),
+  taxForm2553: (opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-2553', { opts }),
+  taxForm8832: (opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-8832', { opts }),
+  taxForm8822B: (opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-8822b', { opts }),
+  // Wave 9 — Utah
+  taxTC40: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:tc40', { year, opts }),
+  taxTC20: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:tc20', { year, opts }),
+  taxTC20S: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:tc20s', { year, opts }),
+  taxTC65: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:tc65', { year, opts }),
+  taxTC62M: (year: number, periodStart: string, periodEnd: string, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:tc62m', { year, period_start: periodStart, period_end: periodEnd, opts }),
+  taxTC941: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:tc941', { year, opts }),
 
   // ─── Compliance documents (W-4 / W-9 / I-9) ───
   complianceList: (filters?: { person_type?: 'employee' | 'vendor' | 'client'; form_type?: string; status?: string }): Promise<any[]> =>
@@ -807,7 +834,10 @@ const api = {
       | 'schedule-a' | 'schedule-b' | 'schedule-d'
       | '1040-es'
       | '8995' | '4562' | '8829' | '4797' | '7004' | '4868'
-      | '1065' | '1120' | '1120-s' | 'k-1' | '1041',
+      | '1065' | '1120' | '1120-s' | 'k-1' | '1041'
+      | '1094-c' | '1095-c'
+      | 'ss-4' | '2553' | '8832' | '8822-b'
+      | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941',
     year: number,
     opts?: {
       quarter?: 1 | 2 | 3 | 4;
