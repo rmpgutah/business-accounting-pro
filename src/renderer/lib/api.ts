@@ -721,11 +721,34 @@ const api = {
     window.electronAPI.invoke('tax:schedule-941b', { year, quarter }),
   taxForm945A: (year: number, parent_form: 'form-944' | 'form-945' | 'form-941' = 'form-945'): Promise<any> =>
     window.electronAPI.invoke('tax:form-945-a', { year, parent_form }),
+  tax1099INT: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-int', { year }),
+  tax1099DIV: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-div', { year }),
+  tax1099R: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-r', { year }),
+  tax1099K: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-k', { year }),
+  tax1099B: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-b', { year }),
+  tax1099G: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-g', { year }),
+  tax1099C: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-c', { year }),
+  tax1099SA: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-sa', { year }),
+  taxW2C: (year: number, corrections: any[] = []): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:w2c', { year, corrections }),
+  taxForm1096: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1096', { year }),
   taxExportFormPDF: (
     form:
       | '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'
       | 'w3' | '940' | '1099-misc'
-      | '944' | '945' | 'schedule-941b' | '945-a',
+      | '944' | '945' | 'schedule-941b' | '945-a'
+      | '1099-int' | '1099-div' | '1099-r' | '1099-k'
+      | '1099-b' | '1099-g' | '1099-c' | '1099-sa'
+      | 'w2c' | '1096',
     year: number,
     opts?: {
       quarter?: 1 | 2 | 3 | 4;
@@ -737,6 +760,8 @@ const api = {
       total_deposits?: number;
       form_945_opts?: any;
       parent_form?: 'form-944' | 'form-945' | 'form-941';
+      w2c_corrections?: any[];
+      w2c_form_index?: number;
     },
   ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),

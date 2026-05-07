@@ -25,6 +25,13 @@ import type { Form944Data } from './form-944';
 import type { Form945Data } from './form-945';
 import type { Schedule941BData, DailyLiability as Schedule941BDailyLiability } from './form-941-schedule-b';
 import type { Form945AData } from './form-945-a';
+import type { Form1099INTData } from './form-1099-int';
+import type { Form1099DIVData } from './form-1099-div';
+import type { Form1099RData } from './form-1099-r';
+import type { Form1099KData } from './form-1099-k';
+import type { Form1099BData, Form1099GData, Form1099CData, Form1099SAData } from './form-1099-other';
+import type { FormW2CData } from './form-w2c';
+import type { Form1096Data } from './form-1096';
 
 type DailyLiability = Schedule941BDailyLiability;
 
@@ -977,5 +984,291 @@ ${data.months.map(renderMonth).filter(Boolean).join('') || `<div style="padding:
   <strong>This is a worksheet, not the official IRS form.</strong>
   Form 945-A is required for semiweekly depositors filing Form 944 / 945 / 941 and for any filer who accumulated $100,000+ of liability on any single day. The total here MUST agree with the parent form's tax liability line — the IRS rejects mismatched filings.
 </div>
+</body></html>`;
+}
+
+// ── Generic 1099-recipient block helper ───────────────────────
+
+function renderRecipientBlock(f: { recipient_name: string; recipient_tin: string; recipient_address: string; recipient_city: string; recipient_state: string; recipient_zip: string; meets_filing_threshold: boolean; has_tin: boolean; warnings: string[] }, totalLabel: string, totalAmount: number, boxLines: Array<[string, string, number | string]>): string {
+  return `
+<div style="margin:14px 0; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; ${!f.has_tin || !f.meets_filing_threshold ? 'background:#fffbeb' : ''}">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <div style="font-size:13px; font-weight:700">${escape(f.recipient_name) || '(unnamed)'}</div>
+      <div style="font-size:10px; color:#64748b">TIN: ${escape(f.recipient_tin) || '— missing —'} · ${escape(f.recipient_address)} ${escape(f.recipient_city)}, ${escape(f.recipient_state)} ${escape(f.recipient_zip)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px; color:#64748b">${escape(totalLabel)}</div>
+      <div style="font-size:14px; font-weight:800; font-variant-numeric: tabular-nums">${fmtMoney(totalAmount)}</div>
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:${f.meets_filing_threshold && f.has_tin ? '#16a34a' : '#dc2626'}; font-weight:700">
+        ${f.meets_filing_threshold && f.has_tin ? '✓ Ready' : !f.has_tin ? '⛔ No TIN' : '⏸ Below threshold'}
+      </div>
+    </div>
+  </div>
+  ${boxLines.length > 0 ? `<table class="lines" style="margin-top:8px; border:none">
+    <tbody>
+      ${boxLines.filter(([_, __, v]) => typeof v === 'number' ? v > 0 : !!v).map(([n, label, v]) => `<tr><td class="line-num">${escape(n)}</td><td>${escape(label)}</td><td class="line-amt">${typeof v === 'number' ? fmtMoney(v) : escape(String(v))}</td></tr>`).join('')}
+    </tbody>
+  </table>` : ''}
+  ${f.warnings.length > 0 ? `<div style="font-size:10px; color:#92400e; margin-top:6px">${f.warnings.map(escape).join(' · ')}</div>` : ''}
+</div>`;
+}
+
+function form1099Header(title: string, subtitle: string, payerName: string, payerEin: string, year: number): string {
+  return `<div class="form-header">
+    <div class="form-title">${escape(title)}</div>
+    <div class="form-subtitle">${escape(subtitle)}</div>
+    <div class="form-meta">${escape(payerName)} · EIN ${escape(payerEin) || '__-_______'} · Tax year ${year} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+  </div>`;
+}
+
+// ── Form 1099-INT ─────────────────────────────────────────────
+
+export function int1099HTML(forms: Form1099INTData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1_interest_income, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-INT ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-INT — Interest Income', `${forms.length} recipient(s) · Total interest paid ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Recipients</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 1 Interest', f.box1_interest_income, [
+  ['1', 'Interest income', f.box1_interest_income],
+  ['2', 'Early withdrawal penalty', f.box2_early_withdrawal_penalty],
+  ['3', 'US Treasury bond interest', f.box3_us_savings_bond],
+  ['4', 'Federal income tax withheld', f.box4_fed_tax_withheld],
+  ['8', 'Tax-exempt interest', f.box8_tax_exempt_interest],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-INT recipients found for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-INT is filed when business paid $10+ of interest to a recipient. Recipients must receive Copy B by January 31; IRS Copy A by February 28 (paper) or March 31 (electronic).</div>
+</body></html>`;
+}
+
+// ── Form 1099-DIV ─────────────────────────────────────────────
+
+export function div1099HTML(forms: Form1099DIVData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1a_total_ordinary_dividends, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-DIV ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-DIV — Dividends and Distributions', `${forms.length} shareholder(s) · Total ordinary dividends ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Shareholders</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 1a Ordinary', f.box1a_total_ordinary_dividends, [
+  ['1a', 'Total ordinary dividends', f.box1a_total_ordinary_dividends],
+  ['1b', 'Qualified dividends', f.box1b_qualified_dividends],
+  ['2a', 'Total capital gain distribution', f.box2a_total_capital_gain_distr],
+  ['3', 'Nondividend distributions', f.box3_nondividend_distributions],
+  ['4', 'Federal income tax withheld', f.box4_fed_tax_withheld],
+  ['5', 'Section 199A dividends', f.box5_section_199a_dividends],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-DIV recipients flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-DIV is filed by C-corps that paid $10+ of dividends. Most small accounting users (S-corps, partnerships, sole props) do NOT issue 1099-DIVs.</div>
+</body></html>`;
+}
+
+// ── Form 1099-R ───────────────────────────────────────────────
+
+export function r1099HTML(forms: Form1099RData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1_gross_distribution, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-R ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-R — Distributions From Pensions, Annuities, IRAs, Retirement Plans', `${forms.length} recipient(s) · Total gross distributions ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Recipients</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 1 Gross', f.box1_gross_distribution, [
+  ['1', 'Gross distribution', f.box1_gross_distribution],
+  ['2a', 'Taxable amount', f.box2a_taxable_amount],
+  ['4', 'Federal income tax withheld', f.box4_fed_tax_withheld],
+  ['5', 'Employee contributions', f.box5_employee_contributions],
+  ['7', 'Distribution code', f.box7_distribution_code],
+  ['14', 'State tax withheld', f.box14_state_tax_withheld],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-R recipients flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-R is filed by retirement-plan administrators. Box 7 distribution codes: 1=early, 2=early w/ exception, 7=normal, 4=death, G=direct rollover, etc.</div>
+</body></html>`;
+}
+
+// ── Form 1099-K ───────────────────────────────────────────────
+
+export function k1099HTML(forms: Form1099KData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1a_gross_amount, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-K ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-K — Payment Card and Third Party Network Transactions', `${forms.length} recipient(s) · Total gross amount ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Recipients</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 1a Gross', f.box1a_gross_amount, [
+  ['1a', 'Gross amount of payment card / TPN transactions', f.box1a_gross_amount],
+  ['1b', 'Card not present (online/phone/keyed)', f.box1b_card_not_present],
+  ['2', 'Merchant category code', f.box2_merchant_category_code],
+  ['3', 'Number of transactions', f.box3_number_of_transactions],
+  ['4', 'Federal income tax withheld', f.box4_fed_tax_withheld],
+  ['5a', 'January', f.box5a_jan], ['5b', 'February', f.box5b_feb],
+  ['5c', 'March', f.box5c_mar], ['5d', 'April', f.box5d_apr],
+  ['5e', 'May', f.box5e_may], ['5f', 'June', f.box5f_jun],
+  ['5g', 'July', f.box5g_jul], ['5h', 'August', f.box5h_aug],
+  ['5i', 'September', f.box5i_sep], ['5j', 'October', f.box5j_oct],
+  ['5k', 'November', f.box5k_nov], ['5l', 'December', f.box5l_dec],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-K recipients flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-K is filed by payment processors (Stripe, Square, PayPal). 2025-2026 threshold is $5,000 (was $20K + 200 tx pre-2024).</div>
+</body></html>`;
+}
+
+// ── Form 1099-B ───────────────────────────────────────────────
+
+export function b1099HTML(forms: Form1099BData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1d_proceeds, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-B ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-B — Proceeds From Broker and Barter Exchange Transactions', `${forms.length} recipient(s) · Total proceeds ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Transactions</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 1d Proceeds', f.box1d_proceeds, [
+  ['1a', 'Description of property', f.box1a_description],
+  ['1b', 'Date acquired', f.box1b_date_acquired],
+  ['1c', 'Date sold', f.box1c_date_sold],
+  ['1d', 'Proceeds', f.box1d_proceeds],
+  ['1e', 'Cost or other basis', f.box1e_cost_basis],
+  ['2', 'Short or long term', f.box2_short_long_term],
+  ['4', 'Federal income tax withheld', f.box4_fed_tax_withheld],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-B recipients flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-B is filed by brokers and barter exchanges. The recipient uses these on their Schedule D.</div>
+</body></html>`;
+}
+
+// ── Form 1099-G ───────────────────────────────────────────────
+
+export function g1099HTML(forms: Form1099GData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1_unemployment_comp + f.box2_state_local_refund + f.box6_taxable_grants, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-G ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-G — Certain Government Payments', `${forms.length} recipient(s) · Total reported ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Recipients</div>
+${forms.map((f) => renderRecipientBlock(f, 'Total Reported', f.box1_unemployment_comp + f.box2_state_local_refund + f.box6_taxable_grants, [
+  ['1', 'Unemployment compensation', f.box1_unemployment_comp],
+  ['2', 'State/local income tax refund', f.box2_state_local_refund],
+  ['4', 'Federal income tax withheld', f.box4_fed_tax_withheld],
+  ['6', 'Taxable grants', f.box6_taxable_grants],
+  ['7', 'Agriculture payments', f.box7_agriculture_payments],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-G recipients flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-G is filed by government agencies. Most accounting users RECEIVE these (not issue them) and report Box 1/2 on their own Schedule 1.</div>
+</body></html>`;
+}
+
+// ── Form 1099-C ───────────────────────────────────────────────
+
+export function c1099HTML(forms: Form1099CData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box2_amount_debt_canceled, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-C ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-C — Cancellation of Debt', `${forms.length} debtor(s) · Total debt canceled ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Debtors</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 2 Debt Canceled', f.box2_amount_debt_canceled, [
+  ['1', 'Date of identifiable event', f.box1_date_canceled],
+  ['2', 'Amount of debt canceled', f.box2_amount_debt_canceled],
+  ['3', 'Interest, if included in box 2', f.box3_interest_in_box_2],
+  ['4', 'Debt description', f.box4_debt_description],
+  ['6', 'Identifiable event code', f.box6_identifiable_event_code],
+  ['7', 'Fair market value of property', f.box7_fair_market_value_property],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-C debtors flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-C is filed by lenders that canceled $600+ of debt. Box 6 codes: A=bankruptcy, B=insolvency, C=statute of limitations, D=foreclosure, E=other identifiable event, F=settlement, G=decision/policy, H=other.</div>
+</body></html>`;
+}
+
+// ── Form 1099-SA ──────────────────────────────────────────────
+
+export function sa1099HTML(forms: Form1099SAData[], year: number, payer: { name: string; ein: string }): string {
+  const grand = forms.reduce((s, f) => s + f.box1_gross_distribution, 0);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1099-SA ${year} — ${escape(payer.name)}</title>${SHARED_HEAD}</head>
+<body>${form1099Header('Form 1099-SA — Distributions From an HSA, Archer MSA, or MA MSA', `${forms.length} recipient(s) · Total gross distributions ${fmtMoney(grand)}`, payer.name, payer.ein, year)}
+<div class="section-header">Recipients</div>
+${forms.map((f) => renderRecipientBlock(f, 'Box 1 Gross', f.box1_gross_distribution, [
+  ['1', 'Gross distribution', f.box1_gross_distribution],
+  ['2', 'Earnings on excess contributions', f.box2_earnings_on_excess],
+  ['3', 'Distribution code', f.box3_distribution_code],
+  ['4', 'Fair market value on date of death', f.box4_fmv_on_date_of_death],
+  ['5', 'HSA / Archer MSA / MA MSA', f.box5_hsa_archer_msa_ma_msa],
+])).join('') || `<div style="padding:14px;text-align:center;color:#94a3b8">No 1099-SA recipients flagged for ${year}.</div>`}
+<div class="disclaimer"><strong>Worksheet, not official IRS form.</strong> 1099-SA is filed by HSA/MSA trustees (banks, brokerages). Box 3 codes: 1=normal, 2=excess contribution, 3=disability, 4=death, 5=prohibited transaction, 6=death after RBD.</div>
+</body></html>`;
+}
+
+// ── Form W-2c (Corrected W-2) ─────────────────────────────────
+
+export function w2cHTML(form: FormW2CData): string {
+  const fmtPair = (label: string, prev: any, corrected: any, format?: 'money' | 'text') => {
+    const fmt = format === 'text' ? (v: any) => escape(String(v)) : (v: any) => fmtMoney(Number(v) || 0);
+    const changed = format === 'text' ? prev !== corrected : Math.abs((Number(prev) || 0) - (Number(corrected) || 0)) > 0.005;
+    return `<tr style="${changed ? 'background:#fef3c7' : ''}">
+      <td style="padding:6px 10px;font-size:11px">${escape(label)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;font-family:'SF Mono',Menlo,monospace;color:${changed ? '#92400e' : '#94a3b8'}">${fmt(prev)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;font-family:'SF Mono',Menlo,monospace;font-weight:${changed ? 700 : 400};color:${changed ? '#0f172a' : '#94a3b8'}">${fmt(corrected)}</td>
+    </tr>`;
+  };
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form W-2c ${form.tax_year} — ${escape(form.prev.employee_first_name)} ${escape(form.prev.employee_last_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form W-2c — Corrected Wage and Tax Statement</div>
+  <div class="form-subtitle">Tax Year ${form.tax_year} · Employee: ${escape(form.prev.employee_first_name)} ${escape(form.prev.employee_last_name)} · ${form.changed_fields.length} field(s) changed</div>
+  <div class="form-meta">${escape(form.employer_name)} · EIN ${escape(form.employer_ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+${form.warnings.length > 0 ? `<div class="warnings"><strong>Notes:</strong><ul>${form.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+${form.reason ? `<div style="margin-bottom:12px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:11px"><strong>Reason for correction:</strong> ${escape(form.reason)}</div>` : ''}
+<div class="section-header">Side-by-Side Comparison (changed values highlighted)</div>
+<table class="lines">
+  <thead><tr><th>Field</th><th style="text-align:right">Previously Reported</th><th style="text-align:right">Corrected</th></tr></thead>
+  <tbody>
+    ${fmtPair('Employee SSN', form.prev.employee_ssn, form.corrected.employee_ssn, 'text')}
+    ${fmtPair('First name', form.prev.employee_first_name, form.corrected.employee_first_name, 'text')}
+    ${fmtPair('Last name', form.prev.employee_last_name, form.corrected.employee_last_name, 'text')}
+    ${fmtPair('Address', form.prev.employee_address, form.corrected.employee_address, 'text')}
+    ${fmtPair('Box 1 Wages, tips, other comp', form.prev.box1_wages_tips, form.corrected.box1_wages_tips)}
+    ${fmtPair('Box 2 Federal income tax withheld', form.prev.box2_fed_income_tax, form.corrected.box2_fed_income_tax)}
+    ${fmtPair('Box 3 Social Security wages', form.prev.box3_ss_wages, form.corrected.box3_ss_wages)}
+    ${fmtPair('Box 4 Social Security tax', form.prev.box4_ss_tax, form.corrected.box4_ss_tax)}
+    ${fmtPair('Box 5 Medicare wages', form.prev.box5_medicare_wages, form.corrected.box5_medicare_wages)}
+    ${fmtPair('Box 6 Medicare tax', form.prev.box6_medicare_tax, form.corrected.box6_medicare_tax)}
+    ${fmtPair('Box 15 State', form.prev.box15_state, form.corrected.box15_state, 'text')}
+    ${fmtPair('Box 16 State wages', form.prev.box16_state_wages, form.corrected.box16_state_wages)}
+    ${fmtPair('Box 17 State income tax', form.prev.box17_state_income_tax, form.corrected.box17_state_income_tax)}
+  </tbody>
+</table>
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> W-2c is filed with the SSA along with Form W-3c (corrected transmittal). Provide Copy B and Copy C to the employee. If only the SSN was wrong, special instructions apply — see IRS General Instructions for Forms W-2 and W-3.</div>
+</body></html>`;
+}
+
+// ── Form 1096 (Transmittal cover) ─────────────────────────────
+
+export function form1096HTML(data: Form1096Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1096 ${data.year} — ${escape(data.filer_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Form 1096 — Annual Summary and Transmittal of U.S. Information Returns</div>
+  <div class="form-subtitle">Tax Year ${data.year} · ${data.total_forms} form(s) · ${fmtMoney(data.total_reported)} total reported</div>
+  <div class="form-meta">${escape(data.filer_name)} · EIN ${escape(data.filer_ein) || '__-_______'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+${data.warnings.length > 0 ? `<div class="warnings"><strong>Notes:</strong><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Filer</div>
+    <div class="value">${escape(data.filer_name)}</div>
+    <div class="value">${escape(data.filer_address)}</div>
+    <div class="value">${escape(data.filer_city)}, ${escape(data.filer_state)} ${escape(data.filer_zip)}</div>
+    ${data.contact_name ? `<div class="value">Contact: ${escape(data.contact_name)}</div>` : ''}
+  </div>
+  <div class="filer-card">
+    <div class="label">Filing</div>
+    <div class="value">EIN: ${escape(data.filer_ein)}</div>
+    <div class="value">Phone: ${escape(data.filer_phone)}</div>
+    <div class="value">Email: ${escape(data.filer_email)}</div>
+  </div>
+</div>
+<div class="section-header">Box 3 — Forms by Variant</div>
+<table class="lines">
+  <thead><tr><th>Form</th><th>1096 Box</th><th style="text-align:right">Forms Count</th><th style="text-align:right">Ready to File</th><th style="text-align:right">Total Amount</th></tr></thead>
+  <tbody>
+    ${data.rows.length === 0 ? `<tr><td colspan="5" style="padding:14px;text-align:center;color:#94a3b8">No 1099 forms found for ${data.year}.</td></tr>` :
+      data.rows.map((r) => `<tr>
+        <td class="line-num">${escape(r.variant)}</td>
+        <td>Check box ${escape(r.irs_box)}</td>
+        <td class="line-amt">${r.forms_count}</td>
+        <td class="line-amt" style="color:${r.ready_to_file_count === r.forms_count ? '#16a34a' : '#d97706'}">${r.ready_to_file_count} / ${r.forms_count}</td>
+        <td class="line-amt">${fmtMoney(r.total_amount)}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>
+<div class="section-header">Totals</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">3</td><td>Total number of forms (across all variants)</td><td class="line-amt totals">${data.total_forms}</td></tr>
+    <tr><td class="line-num">4</td><td>Federal income tax withheld</td><td class="line-amt">${fmtMoney(data.total_fed_withheld)}</td></tr>
+    <tr><td class="line-num">5</td><td>Total amount reported</td><td class="line-amt totals">${fmtMoney(data.total_reported)}</td></tr>
+  </tbody>
+</table>
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 1096 is the cover sheet for PAPER filings only — if you e-file via FIRE or IRIS, no 1096 is needed. <strong>File a SEPARATE Form 1096 for each 1099 variant</strong> (one for all 1099-NECs, one for all 1099-MISCs, etc.). Check ONLY ONE box per 1096 in the lower section identifying which variant the cover sheet applies to.</div>
 </body></html>`;
 }

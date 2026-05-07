@@ -16,7 +16,10 @@ import { useToast } from '../../components/ToastProvider';
 type FormType =
   | '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'
   | 'w3' | '940' | '1099-misc'
-  | '944' | '945' | 'schedule-941b' | '945-a';
+  | '944' | '945' | 'schedule-941b' | '945-a'
+  | '1099-int' | '1099-div' | '1099-r' | '1099-k'
+  | '1099-b' | '1099-g' | '1099-c' | '1099-sa'
+  | 'w2c' | '1096';
 
 interface Props { onBack?: () => void }
 
@@ -60,6 +63,16 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       else if (activeForm === '945') r = await api.taxForm945(year);
       else if (activeForm === 'schedule-941b') r = await api.taxSchedule941B(year, quarter);
       else if (activeForm === '945-a') r = await api.taxForm945A(year, 'form-945');
+      else if (activeForm === '1099-int') r = await api.tax1099INT(year);
+      else if (activeForm === '1099-div') r = await api.tax1099DIV(year);
+      else if (activeForm === '1099-r') r = await api.tax1099R(year);
+      else if (activeForm === '1099-k') r = await api.tax1099K(year);
+      else if (activeForm === '1099-b') r = await api.tax1099B(year);
+      else if (activeForm === '1099-g') r = await api.tax1099G(year);
+      else if (activeForm === '1099-c') r = await api.tax1099C(year);
+      else if (activeForm === '1099-sa') r = await api.tax1099SA(year);
+      else if (activeForm === 'w2c') r = await api.taxW2C(year, []);
+      else if (activeForm === '1096') r = await api.taxForm1096(year);
       setData(r);
     } finally { setLoading(false); }
   }, [activeForm, year, quarter, salesPeriodStart, salesPeriodEnd, w2OtherWages, futaMultiState, futaCreditReduction, futaTotalDeposits]);
@@ -112,6 +125,16 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
           { id: 'w3' as FormType, label: 'W-3' },
           { id: '1099-nec' as FormType, label: '1099-NEC' },
           { id: '1099-misc' as FormType, label: '1099-MISC' },
+          { id: '1099-int' as FormType, label: '1099-INT' },
+          { id: '1099-div' as FormType, label: '1099-DIV' },
+          { id: '1099-r' as FormType, label: '1099-R' },
+          { id: '1099-k' as FormType, label: '1099-K' },
+          { id: '1099-b' as FormType, label: '1099-B' },
+          { id: '1099-g' as FormType, label: '1099-G' },
+          { id: '1099-c' as FormType, label: '1099-C' },
+          { id: '1099-sa' as FormType, label: '1099-SA' },
+          { id: '1096' as FormType, label: '1096' },
+          { id: 'w2c' as FormType, label: 'W-2c' },
           { id: 'sales-tax' as FormType, label: 'Sales Tax' },
         ]).map((tab) => (
           <button
@@ -216,6 +239,16 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {!loading && data && activeForm === '945' && <Form945View data={data} />}
       {!loading && data && activeForm === 'schedule-941b' && <Schedule941BView data={data} />}
       {!loading && data && activeForm === '945-a' && <Form945AView data={data} />}
+      {!loading && data && activeForm === '1099-int' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-INT" amountKey="box1_interest_income" amountLabel="Interest paid" thresholdAmount={10} />}
+      {!loading && data && activeForm === '1099-div' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-DIV" amountKey="box1a_total_ordinary_dividends" amountLabel="Ordinary dividends" thresholdAmount={10} />}
+      {!loading && data && activeForm === '1099-r' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-R" amountKey="box1_gross_distribution" amountLabel="Gross distribution" thresholdAmount={10} />}
+      {!loading && data && activeForm === '1099-k' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-K" amountKey="box1a_gross_amount" amountLabel="Gross amount" thresholdAmount={5000} />}
+      {!loading && data && activeForm === '1099-b' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-B" amountKey="box1d_proceeds" amountLabel="Proceeds" thresholdAmount={0} />}
+      {!loading && data && activeForm === '1099-g' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-G" amountKey="box1_unemployment_comp" amountLabel="Unemployment / refund" thresholdAmount={10} />}
+      {!loading && data && activeForm === '1099-c' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-C" amountKey="box2_amount_debt_canceled" amountLabel="Debt canceled" thresholdAmount={600} />}
+      {!loading && data && activeForm === '1099-sa' && <Generic1099View forms={Array.isArray(data) ? data : []} variant="1099-SA" amountKey="box1_gross_distribution" amountLabel="HSA/MSA distribution" thresholdAmount={0} />}
+      {!loading && data && activeForm === 'w2c' && <W2CView corrections={Array.isArray(data) ? data : []} />}
+      {!loading && data && activeForm === '1096' && <Form1096View data={data} />}
 
       {/* Disclaimer */}
       <div style={{
@@ -1170,6 +1203,159 @@ const Form945AView: React.FC<{ data: any }> = ({ data }) => {
           </table>
         </div>
       ))}
+    </div>
+  );
+};
+
+// ── Generic 1099 view (works for INT/DIV/R/K/B/G/C/SA) ─────────
+
+const Generic1099View: React.FC<{ forms: any[]; variant: string; amountKey: string; amountLabel: string; thresholdAmount: number }> = ({ forms, variant, amountKey, amountLabel, thresholdAmount }) => {
+  if (!forms || forms.length === 0) {
+    return <div className="block-card" style={{ padding: 18, color: 'var(--color-text-muted)', fontSize: 12 }}>
+      No {variant} recipients. Mark eligible vendors/clients in their respective modules to see them here.
+    </div>;
+  }
+  const grand = forms.reduce((s: number, f: any) => s + (Number(f[amountKey]) || 0), 0);
+  const ready = forms.filter((f: any) => f.meets_filing_threshold && f.has_tin).length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Recipients" value={String(forms.length)} />
+          <Stat label="Ready to File" value={String(ready)} color="#16a34a" />
+          <Stat label={`Total ${amountLabel}`} value={fmt$(grand)} highlight />
+          <Stat label="Threshold" value={thresholdAmount > 0 ? '≥ ' + fmt$(thresholdAmount) : 'Any'} />
+        </div>
+      </div>
+
+      <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+          {variant} Recipients ({forms.length})
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border-primary)' }}>
+              {['Recipient', 'TIN', 'Address', amountLabel, 'Status'].map((h, i) => (
+                <th key={h} style={{ padding: '8px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800, color: 'var(--color-text-muted)', textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {forms.map((f: any, i: number) => (
+              <tr key={f.recipient_id || i} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                <td style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600 }}>{f.recipient_name || '(unnamed)'}</td>
+                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : '#dc2626' }}>
+                  {f.has_tin ? '•••' + (f.recipient_tin || '').slice(-4) : '⛔ missing'}
+                </td>
+                <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>
+                  {[f.recipient_city, f.recipient_state].filter(Boolean).join(', ') || '—'}
+                </td>
+                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>
+                  {fmt$(Number(f[amountKey]) || 0)}
+                </td>
+                <td style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700 }}>
+                  {f.meets_filing_threshold && f.has_tin ? <span style={{ color: '#16a34a' }}>✓ READY</span> :
+                    !f.has_tin ? <span style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> NO TIN</span> :
+                    <span style={{ color: '#94a3b8' }}>⏸ pending</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ── W-2c view ──────────────────────────────────────────────────
+
+const W2CView: React.FC<{ corrections: any[] }> = ({ corrections }) => {
+  if (!corrections || corrections.length === 0) {
+    return <div className="block-card" style={{ padding: 18, color: 'var(--color-text-muted)', fontSize: 12 }}>
+      No W-2c corrections specified. To create a W-2c:
+      <ol style={{ margin: '8px 0 0 18px', fontSize: 12 }}>
+        <li>Identify the employee whose W-2 needs correction</li>
+        <li>Note the original (incorrect) values and the new (correct) values</li>
+        <li>Submit corrections via api.taxW2C(year, [{`{employee_id, box1_wages_tips, ...}`}])</li>
+      </ol>
+      <div style={{ marginTop: 12, padding: 10, background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 6, fontSize: 11 }}>
+        <strong>Note:</strong> A dedicated W-2c correction UI is queued for a future wave. For now this is API-only access.
+      </div>
+    </div>;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {corrections.map((c: any, i: number) => (
+        <div key={c.employee_id || i} className="block-card" style={{ padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+            {c.prev?.employee_first_name} {c.prev?.employee_last_name} — Tax Year {c.tax_year}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+            {c.changed_fields?.length || 0} field(s) changed
+          </div>
+          {c.warnings?.length > 0 && (
+            <div style={{ padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, marginBottom: 8 }}>
+              {c.warnings.map((w: string, j: number) => <div key={j}>⚠ {w}</div>)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Form 1096 view ─────────────────────────────────────────────
+
+const Form1096View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          Form 1096 Transmittal · {data.year} · {data.filer_name}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <Stat label="Total Forms (Box 3)" value={String(data.total_forms)} highlight />
+          <Stat label="Federal Withheld (Box 4)" value={fmt$(data.total_fed_withheld)} />
+          <Stat label="Total Reported (Box 5)" value={fmt$(data.total_reported)} color="#dc2626" />
+        </div>
+        {data.warnings.length > 0 && (
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+            <strong>⚠ Notes:</strong>
+            <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
+          </div>
+        )}
+      </div>
+      <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+          1099 Forms Summary
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border-primary)' }}>
+              {['Form', '1096 Box', 'Forms Count', 'Ready / Total', 'Total Amount'].map((h, i) => (
+                <th key={h} style={{ padding: '8px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800, color: 'var(--color-text-muted)', textAlign: i >= 2 ? 'right' : 'left' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 12 }}>No 1099 forms found for {data.year}.</td></tr>
+            ) : data.rows.map((r: any, i: number) => (
+              <tr key={r.variant || i} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                <td style={{ padding: '6px 10px', fontSize: 12, fontWeight: 700 }}>{r.variant}</td>
+                <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>Box {r.irs_box}</td>
+                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{r.forms_count}</td>
+                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.ready_to_file_count === r.forms_count ? '#16a34a' : '#d97706' }}>
+                  {r.ready_to_file_count} / {r.forms_count}
+                </td>
+                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{fmt$(r.total_amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
