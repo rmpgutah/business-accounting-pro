@@ -45,6 +45,11 @@ import type { Form8829Data } from './form-8829';
 import type { Form4797Data } from './form-4797';
 import type { Form7004Data } from './form-7004';
 import type { Form4868Data } from './form-4868';
+import type { Form1065Data } from './form-1065';
+import type { Form1120Data } from './form-1120';
+import type { Form1120SData } from './form-1120s';
+import type { K1Data } from './schedule-k1';
+import type { Form1041Data } from './form-1041';
 
 type DailyLiability = Schedule941BDailyLiability;
 
@@ -1819,5 +1824,304 @@ ${scheduleLines([
   ['7', 'Amount paying with this extension', data.line7_amount_paying_with_extension],
 ])}
 <div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> File Form 4868 BY April 15 to get the automatic 6-month extension to October 15. Pay the balance due (line 6) with this form via EFTPS, IRS Direct Pay, or check — an extension to FILE is not an extension to PAY. Failure-to-pay penalty (0.5%/month) applies on unpaid balances.</div>
+</body></html>`;
+}
+
+// ── Form 1065 (Partnership Return) ─────────────────────────────
+
+export function form1065HTML(data: Form1065Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1065 ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1065 — U.S. Return of Partnership Income', `Tax Year ${data.year} · ${data.number_of_partners} partner(s) · Net income ${fmtMoney(data.line23_ordinary_business_income)}`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Partnership</div>
+    <div class="value">${escape(data.entity_name)}</div>
+    <div class="value">${escape(data.address)}, ${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Activity</div>
+    <div class="value">Business: ${escape(data.business_activity)}</div>
+    <div class="value">Product/Service: ${escape(data.product_or_service)}</div>
+    <div class="value">Code: ${escape(data.business_code)}</div>
+  </div>
+</div>
+<div class="section-header">Income (lines 1-8)</div>
+${scheduleLines([
+  ['1a', 'Gross receipts or sales', data.line1a_gross_receipts],
+  ['1b', 'Returns and allowances', data.line1b_returns_allowances],
+  ['1c', 'Balance', data.line1c_balance],
+  ['2', 'Cost of goods sold', data.line2_cost_of_goods_sold],
+  ['3', 'Gross profit', data.line3_gross_profit],
+  ['8', 'TOTAL income', data.line8_total_income],
+])}
+<div class="section-header">Deductions (lines 9-22)</div>
+${scheduleLines([
+  ['9', 'Salaries and wages', data.line9_salaries_wages],
+  ['10', 'Guaranteed payments to partners', data.line10_guaranteed_payments_partners],
+  ['11', 'Repairs and maintenance', data.line11_repairs_maintenance],
+  ['13', 'Rent', data.line13_rent],
+  ['14', 'Taxes and licenses', data.line14_taxes_licenses],
+  ['15', 'Interest', data.line15_interest_paid],
+  ['16c', 'Depreciation (net)', data.line16c_balance_depreciation],
+  ['18', 'Retirement plans', data.line18_retirement_plans],
+  ['19', 'Employee benefits', data.line19_employee_benefit_programs],
+  ['21', 'Other deductions', data.line21_other_deductions],
+  ['22', 'TOTAL deductions', data.line22_total_deductions],
+  ['23', 'ORDINARY BUSINESS INCOME / LOSS (8 − 22)', data.line23_ordinary_business_income],
+])}
+<div class="section-header">Schedule K — Total Distributive Shares</div>
+${scheduleLines([
+  ['1', 'Ordinary business income (→ K-1 box 1)', data.schK_ordinary_business_income],
+  ['4', 'Guaranteed payments (→ K-1 box 4)', data.schK_guaranteed_payments],
+  ['5', 'Interest income (→ K-1 box 5)', data.schK_interest_income],
+  ['6a', 'Ordinary dividends (→ K-1 box 6a)', data.schK_dividend_income],
+  ['7', 'Royalties (→ K-1 box 7)', data.schK_royalties],
+  ['9a', 'Net long-term capital gain (→ K-1 box 9a)', data.schK_net_long_term_cap_gain],
+  ['10', 'Section 1231 gain (→ K-1 box 10)', data.schK_section_1231_gain],
+  ['12', 'Section 179 deduction (→ K-1 box 12)', data.schK_section_179_deduction],
+  ['14a', 'Self-employment earnings (→ K-1 box 14)', data.schK_self_employment_earnings],
+])}
+${data.partners.length > 0 ? `<div class="section-header">Partners (${data.partners.length})</div>
+<table class="lines"><thead><tr><th>Name</th><th>TIN</th><th style="text-align:right">Ownership %</th></tr></thead><tbody>${data.partners.map((p) => `<tr><td>${escape(p.name)}</td><td style="font-family:'SF Mono',Menlo,monospace">${escape(p.ssn_or_ein)}</td><td class="line-amt">${(p.ownership_pct || 0).toFixed(2)}%</td></tr>`).join('')}</tbody></table>` : ''}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 1065 is due March 15 (or 6-mo extension to Sep 15 via Form 7004). Each partner gets a K-1 showing their proportional share — partners report on their personal returns. Schedule L (Balance Sheet) and Schedule M-1 (Book/Tax Reconciliation) required for partnerships with > $250K gross receipts or assets.</div>
+</body></html>`;
+}
+
+// ── Form 1120 (C-Corp Return) ──────────────────────────────────
+
+export function form1120HTML(data: Form1120Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1120 ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1120 — U.S. Corporation Income Tax Return', `Tax Year ${data.year} · Total income ${fmtMoney(data.line11_total_income)} · Tax ${fmtMoney(data.line31_total_tax)}`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Corporation</div>
+    <div class="value">${escape(data.entity_name)}</div>
+    <div class="value">${escape(data.address)}, ${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+    <div class="value">Incorporated: ${escape(data.date_incorporated)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Tax Year</div>
+    <div class="value">Year: ${data.year}</div>
+    <div class="value">Total assets: ${fmtMoney(data.total_assets)}</div>
+    <div class="value">Tax rate: ${(data.schJ_tax_rate * 100).toFixed(0)}% flat (TCJA)</div>
+  </div>
+</div>
+<div class="section-header">Income (lines 1-11)</div>
+${scheduleLines([
+  ['1c', 'Gross profit (sales − returns − COGS)', data.line1c_balance],
+  ['3', 'Gross profit subtotal', data.line3_gross_profit],
+  ['4', 'Dividends', data.line4_dividends_special_deductions],
+  ['5', 'Interest', data.line5_interest],
+  ['6', 'Gross rents', data.line6_gross_rents],
+  ['7', 'Gross royalties', data.line7_gross_royalties],
+  ['8', 'Capital gain net income', data.line8_capital_gain_net_income],
+  ['10', 'Other income', data.line10_other_income],
+  ['11', 'TOTAL income', data.line11_total_income],
+])}
+<div class="section-header">Deductions (lines 12-27)</div>
+${scheduleLines([
+  ['12', 'Compensation of officers', data.line12_compensation_officers],
+  ['13', 'Salaries and wages', data.line13_salaries_wages],
+  ['14', 'Repairs and maintenance', data.line14_repairs_maintenance],
+  ['16', 'Rents', data.line16_rents],
+  ['17', 'Taxes and licenses', data.line17_taxes_licenses],
+  ['18', 'Interest', data.line18_interest],
+  ['19', 'Charitable contributions', data.line19_charitable_contributions],
+  ['20', 'Depreciation', data.line20_depreciation],
+  ['22', 'Advertising', data.line22_advertising],
+  ['23', 'Pension / profit sharing', data.line23_pension_profit_sharing],
+  ['24', 'Employee benefit programs', data.line24_employee_benefit_programs],
+  ['26', 'Other deductions', data.line26_other_deductions],
+  ['27', 'TOTAL deductions', data.line27_total_deductions],
+])}
+<div class="section-header">Tax Computation</div>
+${scheduleLines([
+  ['28', 'Taxable income before NOL & special deductions', data.line28_taxable_income_before_nol_dividends_received],
+  ['29a', 'Net operating loss deduction', data.line29a_net_operating_loss_deduction],
+  ['29b', 'Special deductions', data.line29b_special_deductions],
+  ['29c', 'Total NOL + special deductions', data.line29c_total_29a_29b],
+  ['30', 'TAXABLE INCOME (line 28 − line 29c)', data.line30_taxable_income],
+  ['31', 'TOTAL TAX (line 30 × 21%)', data.line31_total_tax],
+  ['32', 'Estimated tax payments', data.line32_estimated_tax_payments],
+  ['33', 'BALANCE DUE', data.line33_balance_due],
+  ['34', 'Overpayment', data.line34_overpayment],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 1120 is due April 15 (or 6-mo extension via Form 7004). C-corp income is taxed at flat 21% (TCJA), then dividends to shareholders are taxed AGAIN on personal returns ("double taxation"). NOLs from 2018+ can be carried forward indefinitely, limited to 80% of taxable income each year.</div>
+</body></html>`;
+}
+
+// ── Form 1120-S (S-Corp Return) ────────────────────────────────
+
+export function form1120SHTML(data: Form1120SData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1120-S ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1120-S — U.S. Income Tax Return for an S Corporation', `Tax Year ${data.year} · ${data.number_of_shareholders} shareholder(s) · Ordinary income ${fmtMoney(data.line21_ordinary_business_income_loss)}`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">S Corporation</div>
+    <div class="value">${escape(data.entity_name)}</div>
+    <div class="value">${escape(data.address)}, ${escape(data.city)}, ${escape(data.state)} ${escape(data.zip)}</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">S Election</div>
+    <div class="value">Incorporated: ${escape(data.date_incorporated)}</div>
+    <div class="value">S Election: ${escape(data.date_s_election) || '— missing —'}</div>
+    <div class="value">Activity: ${escape(data.business_activity)}</div>
+  </div>
+</div>
+<div class="section-header">Income (lines 1-6)</div>
+${scheduleLines([
+  ['1c', 'Gross profit balance', data.line1c_balance],
+  ['2', 'Cost of goods sold', data.line2_cost_of_goods_sold],
+  ['3', 'Gross profit', data.line3_gross_profit],
+  ['5', 'Other income', data.line5_other_income],
+  ['6', 'TOTAL income', data.line6_total_income],
+])}
+<div class="section-header">Deductions (lines 7-20)</div>
+${scheduleLines([
+  ['7', 'Compensation of officers (W-2 wages to owners)', data.line7_compensation_officers],
+  ['8', 'Salaries and wages (other employees)', data.line8_salaries_wages],
+  ['9', 'Repairs and maintenance', data.line9_repairs_maintenance],
+  ['11', 'Rents', data.line11_rents],
+  ['12', 'Taxes and licenses', data.line12_taxes_licenses],
+  ['13', 'Interest', data.line13_interest],
+  ['14', 'Depreciation', data.line14_depreciation],
+  ['16', 'Advertising', data.line16_advertising],
+  ['17', 'Pension / profit sharing', data.line17_pension_profit_sharing],
+  ['18', 'Employee benefits', data.line18_employee_benefit_programs],
+  ['19', 'Other deductions', data.line19_other_deductions],
+  ['20', 'TOTAL deductions', data.line20_total_deductions],
+  ['21', 'ORDINARY BUSINESS INCOME / LOSS (6 − 20)', data.line21_ordinary_business_income_loss],
+])}
+<div class="section-header">Schedule K — Total Distributive Shares</div>
+${scheduleLines([
+  ['1', 'Ordinary business income (→ K-1 box 1)', data.schK_ordinary_business_income],
+  ['4', 'Interest income (→ K-1 box 4)', data.schK_interest_income],
+  ['5a', 'Ordinary dividends (→ K-1 box 5a)', data.schK_dividend_income],
+  ['8a', 'Net long-term capital gain (→ K-1 box 8a)', data.schK_net_long_term_cap_gain],
+  ['9', 'Section 1231 gain (→ K-1 box 9)', data.schK_section_1231_gain],
+  ['11', 'Section 179 deduction (→ K-1 box 11)', data.schK_section_179_deduction],
+  ['16d', 'Distributions to shareholders (→ K-1 box 16)', data.schK_distributions],
+])}
+${data.shareholders.length > 0 ? `<div class="section-header">Shareholders (${data.shareholders.length})</div>
+<table class="lines"><thead><tr><th>Name</th><th>SSN</th><th style="text-align:right">Ownership %</th></tr></thead><tbody>${data.shareholders.map((s) => `<tr><td>${escape(s.name)}</td><td style="font-family:'SF Mono',Menlo,monospace">${escape(s.ssn_or_ein)}</td><td class="line-amt">${(s.ownership_pct || 0).toFixed(2)}%</td></tr>`).join('')}</tbody></table>` : ''}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Form 1120-S is due March 15 (or 6-mo extension via Form 7004). S-corps don't pay federal income tax — income passes to shareholders via K-1. <strong>S-corp owners working in the business MUST take W-2 wages</strong> ("reasonable compensation") — taking only K-1 distributions to avoid SE tax is an IRS audit trigger.</div>
+</body></html>`;
+}
+
+// ── Schedule K-1 (1065 / 1120-S) ──────────────────────────────
+
+export function scheduleK1HTML(data: K1Data): string {
+  const isPartnership = data.variant === '1065';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule K-1 (${escape(data.variant)}) — ${escape(data.recipient_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Schedule K-1 (Form ' + data.variant + ')', isPartnership ? 'Partner\'s Share of Income, Deductions, Credits, etc.' : 'Shareholder\'s Share of Income, Deductions, Credits, etc.', data.recipient_name, 0)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Part I — ${isPartnership ? 'Partnership' : 'Corporation'}</div>
+    <div class="value">${escape(data.entity_name)}</div>
+    <div class="value">EIN: ${escape(data.entity_ein)}</div>
+    <div class="value">${escape(data.entity_address)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Part II — ${isPartnership ? 'Partner' : 'Shareholder'}</div>
+    <div class="value">${escape(data.recipient_name)}</div>
+    <div class="value">TIN: ${escape(data.recipient_tin)}</div>
+    <div class="value">${escape(data.recipient_address)}</div>
+    <div class="value">Ownership: ${data.share_profit_pct_end.toFixed(2)}%</div>
+    ${isPartnership ? `<div class="value">${data.is_general_partner ? 'General Partner' : 'Limited Partner'}</div>` : ''}
+  </div>
+</div>
+${isPartnership ? `<div class="section-header">Part II Item L — Capital Account</div>
+${scheduleLines([
+  ['Begin', 'Beginning capital', data.capital_beginning],
+  ['Cont', 'Capital contributed', data.capital_contributed],
+  ['Inc', 'Current year increase', data.capital_current_year_increase],
+  ['W/D', 'Withdrawals & distributions', data.capital_withdrawals_distributions],
+  ['End', 'Ending capital', data.capital_ending],
+])}` : ''}
+<div class="section-header">Part III — Distributive Share Items</div>
+${scheduleLines((() => {
+  const rows: Array<[string, string, number | string]> = [
+    ['1', 'Ordinary business income (loss)', data.box1_ordinary_business_income],
+    ['2', 'Net rental real estate income', data.box2_net_rental_real_estate],
+    ['3', 'Other net rental income', data.box3_other_net_rental],
+  ];
+  if (isPartnership) rows.push(['4a', 'Guaranteed payments for services', data.box4a_guaranteed_payments_services]);
+  rows.push(['5', 'Interest income', data.box5_interest_income]);
+  rows.push(['6a', 'Ordinary dividends', data.box6a_ordinary_dividends]);
+  rows.push(['7', 'Royalties', data.box7_royalties]);
+  rows.push(['8', 'Net short-term capital gain', data.box8_net_short_term_capital_gain]);
+  rows.push(['9a', 'Net long-term capital gain', data.box9a_net_long_term_capital_gain]);
+  rows.push(['10', 'Section 1231 gain', data.box10_net_section_1231_gain]);
+  rows.push(['12', 'Section 179 deduction', data.box12_section_179_deduction]);
+  rows.push(['13', 'Other deductions (charitable, etc.)', data.box13_other_deductions]);
+  if (isPartnership) {
+    rows.push(['14', 'Self-employment earnings (→ Sch SE)', data.box14_self_employment_earnings]);
+    rows.push(['19', 'Distributions of money', data.box19_distributions_money]);
+  } else {
+    rows.push(['16d', 'Distributions', data.box16_distributions]);
+  }
+  return rows;
+})())}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> The recipient uses these box values on their personal Form 1040. Box 1 ordinary income flows to Schedule E (or Schedule SE for partnerships, which reports SE tax on box 14 — S-corp K-1s do NOT trigger SE tax because owners already take W-2 wages). The IRS receives a copy of every K-1; recipient names and TINs must match.</div>
+</body></html>`;
+}
+
+// ── Form 1041 (Estate / Trust) ────────────────────────────────
+
+export function form1041HTML(data: Form1041Data): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Form 1041 ${data.year} — ${escape(data.entity_name)}</title>${SHARED_HEAD}</head>
+<body>${scheduleHeader('Form 1041 — U.S. Income Tax Return for Estates and Trusts', `Tax Year ${data.year} · ${escape(data.entity_type)} · Taxable income ${fmtMoney(data.line22_taxable_income)} · Tax ${fmtMoney(data.line23_total_tax)}`, data.entity_name, data.year)}
+${scheduleWarnings(data.warnings)}
+<div class="filer-block">
+  <div class="filer-card">
+    <div class="label">Estate / Trust</div>
+    <div class="value">${escape(data.entity_name)}</div>
+    <div class="value">EIN: ${escape(data.ein)}</div>
+    <div class="value">Type: ${escape(data.entity_type)}</div>
+    <div class="value">Created: ${escape(data.date_entity_created)}</div>
+  </div>
+  <div class="filer-card">
+    <div class="label">Fiduciary</div>
+    <div class="value">${escape(data.fiduciary_name)}</div>
+    <div class="value">${escape(data.fiduciary_address)}</div>
+    <div class="value">Exemption: ${fmtMoney(data.line21_exemption)}</div>
+  </div>
+</div>
+<div class="section-header">Income</div>
+${scheduleLines([
+  ['1', 'Interest income', data.line1_interest_income],
+  ['2a', 'Ordinary dividends', data.line2a_ordinary_dividends],
+  ['3', 'Business income', data.line3_business_income],
+  ['4', 'Capital gain or loss', data.line4_capital_gains],
+  ['5', 'Rents, royalties, partnerships', data.line5_rents_royalties_partnerships],
+  ['8', 'Other income', data.line8_other_income],
+  ['9', 'TOTAL income', data.line9_total_income],
+])}
+<div class="section-header">Deductions</div>
+${scheduleLines([
+  ['10', 'Interest', data.line10_interest],
+  ['11', 'Taxes', data.line11_taxes],
+  ['12', 'Fiduciary fees', data.line12_fiduciary_fees],
+  ['13', 'Charitable contributions', data.line13_charitable_contributions],
+  ['14', 'Attorney/accountant fees', data.line14_attorney_accountant_fees],
+  ['15a', 'Other deductions', data.line15a_other_deductions],
+  ['16', 'TOTAL deductions', data.line16_total_deductions],
+  ['17', 'Adjusted total income', data.line17_adjusted_total_income],
+  ['18', 'Income distribution deduction (to beneficiaries)', data.line18_income_distribution_deduction],
+  ['21', 'Exemption', data.line21_exemption],
+  ['22', 'TAXABLE INCOME', data.line22_taxable_income],
+  ['23', 'TOTAL TAX (compressed bracket: 37% ≥ $15,650)', data.line23_total_tax],
+  ['24', 'Total payments', data.line24_total_payments],
+  ['25', 'Balance due', data.line25_balance_due],
+  ['26', 'Overpayment', data.line26_overpayment],
+])}
+<div class="disclaimer"><strong>Worksheet, not the official IRS form.</strong> Trust/estate brackets are HIGHLY compressed: 37% applies above $15,650 of taxable income (vs $626K+ for individuals). Strong incentive to distribute to beneficiaries via line 18 — distributed income is taxed at the beneficiary's lower personal rates instead. Simple trusts MUST distribute all income; complex trusts can choose.</div>
 </body></html>`;
 }

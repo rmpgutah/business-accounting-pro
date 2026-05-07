@@ -23,7 +23,8 @@ type FormType =
   | 'schedule-1' | 'schedule-2' | 'schedule-3'
   | 'schedule-a' | 'schedule-b' | 'schedule-d'
   | '1040-es'
-  | '8995' | '4562' | '8829' | '4797' | '7004' | '4868';
+  | '8995' | '4562' | '8829' | '4797' | '7004' | '4868'
+  | '1065' | '1120' | '1120-s' | 'k-1' | '1041';
 
 interface Props { onBack?: () => void }
 
@@ -90,6 +91,10 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       else if (activeForm === '4797') r = await api.taxForm4797(year);
       else if (activeForm === '7004') r = await api.taxForm7004({ form_code: '23', tax_year_end: year + '-12-31' });
       else if (activeForm === '4868') r = await api.taxForm4868(year, { auto_estimate: true });
+      else if (activeForm === '1065') r = await api.taxForm1065(year);
+      else if (activeForm === '1120') r = await api.taxForm1120(year);
+      else if (activeForm === '1120-s') r = await api.taxForm1120S(year);
+      else if (activeForm === '1041') r = await api.taxForm1041(year);
       setData(r);
     } finally { setLoading(false); }
   }, [activeForm, year, quarter, salesPeriodStart, salesPeriodEnd, w2OtherWages, futaMultiState, futaCreditReduction, futaTotalDeposits]);
@@ -166,6 +171,10 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
           { id: '4797' as FormType, label: '4797 (Asset Sales)' },
           { id: '7004' as FormType, label: '7004 (Biz Ext)' },
           { id: '4868' as FormType, label: '4868 (Ind Ext)' },
+          { id: '1065' as FormType, label: '1065 (Partnership)' },
+          { id: '1120' as FormType, label: '1120 (C-Corp)' },
+          { id: '1120-s' as FormType, label: '1120-S (S-Corp)' },
+          { id: '1041' as FormType, label: '1041 (Trust)' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -292,6 +301,10 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {!loading && data && activeForm === '4797' && <Form4797View data={data} />}
       {!loading && data && activeForm === '7004' && <Form7004View data={data} />}
       {!loading && data && activeForm === '4868' && <Form4868View data={data} />}
+      {!loading && data && activeForm === '1065' && <Form1065View data={data} />}
+      {!loading && data && activeForm === '1120' && <Form1120View data={data} />}
+      {!loading && data && activeForm === '1120-s' && <Form1120SView data={data} />}
+      {!loading && data && activeForm === '1041' && <Form1041View data={data} />}
 
       {/* Disclaimer */}
       <div style={{
@@ -1871,6 +1884,170 @@ const Form4868View: React.FC<{ data: any }> = ({ data }) => {
         ['5', 'Total payments (withholding + estimated)', data.line5_total_payments_2024],
         ['6', 'BALANCE DUE', data.line6_balance_due, 'red'],
         ['7', 'Amount paying with extension', data.line7_amount_paying_with_extension],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 1065 view (Partnership) ───────────────────────────────
+
+const Form1065View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Partners" value={String(data.number_of_partners)} />
+          <Stat label="Gross Receipts" value={fmt$(data.line1a_gross_receipts)} />
+          <Stat label="Total Income" value={fmt$(data.line8_total_income)} />
+          <Stat label="Ordinary Income (Line 23)" value={fmt$(data.line23_ordinary_business_income)} highlight color={data.line23_ordinary_business_income >= 0 ? '#16a34a' : '#dc2626'} />
+        </div>
+      </div>
+      <ScheduleSection title="Income (lines 1-8)" rows={[
+        ['1a', 'Gross receipts', data.line1a_gross_receipts],
+        ['1c', 'Balance after returns', data.line1c_balance],
+        ['2', 'Cost of goods sold', data.line2_cost_of_goods_sold],
+        ['3', 'Gross profit', data.line3_gross_profit, 'bold'],
+        ['8', 'TOTAL income', data.line8_total_income, 'bold'],
+      ]} />
+      <ScheduleSection title="Deductions (lines 9-22)" rows={[
+        ['9', 'Salaries and wages', data.line9_salaries_wages],
+        ['10', 'Guaranteed payments', data.line10_guaranteed_payments_partners],
+        ['13', 'Rent', data.line13_rent],
+        ['14', 'Taxes and licenses', data.line14_taxes_licenses],
+        ['16c', 'Depreciation', data.line16c_balance_depreciation],
+        ['21', 'Other deductions', data.line21_other_deductions],
+        ['22', 'TOTAL deductions', data.line22_total_deductions, 'bold'],
+        ['23', 'ORDINARY BUSINESS INCOME (8 − 22)', data.line23_ordinary_business_income, data.line23_ordinary_business_income >= 0 ? 'green' : 'red'],
+      ]} />
+      <ScheduleSection title="Schedule K — Distributive Shares" rows={[
+        ['1', 'Ordinary income → K-1 box 1', data.schK_ordinary_business_income, 'bold'],
+        ['4', 'Guaranteed payments → K-1 box 4', data.schK_guaranteed_payments],
+        ['5', 'Interest → K-1 box 5', data.schK_interest_income],
+        ['9a', 'Long-term capital gain → K-1 box 9a', data.schK_net_long_term_cap_gain],
+        ['14a', 'SE earnings → K-1 box 14', data.schK_self_employment_earnings],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 1120 view (C-Corp) ────────────────────────────────────
+
+const Form1120View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Total Income" value={fmt$(data.line11_total_income)} />
+          <Stat label="Total Deductions" value={fmt$(data.line27_total_deductions)} />
+          <Stat label="Taxable Income" value={fmt$(data.line30_taxable_income)} />
+          <Stat label="Total Tax (21%)" value={fmt$(data.line31_total_tax)} highlight color="#dc2626" />
+        </div>
+      </div>
+      <ScheduleSection title="Income (lines 1-11)" rows={[
+        ['1c', 'Gross profit balance', data.line1c_balance],
+        ['3', 'Gross profit', data.line3_gross_profit],
+        ['4', 'Dividends', data.line4_dividends_special_deductions],
+        ['5', 'Interest', data.line5_interest],
+        ['8', 'Capital gain', data.line8_capital_gain_net_income],
+        ['11', 'TOTAL income', data.line11_total_income, 'bold'],
+      ]} />
+      <ScheduleSection title="Deductions (lines 12-27)" rows={[
+        ['12', 'Officer compensation', data.line12_compensation_officers],
+        ['13', 'Salaries / wages', data.line13_salaries_wages],
+        ['16', 'Rents', data.line16_rents],
+        ['17', 'Taxes / licenses', data.line17_taxes_licenses],
+        ['19', 'Charitable contributions', data.line19_charitable_contributions],
+        ['20', 'Depreciation', data.line20_depreciation],
+        ['26', 'Other deductions', data.line26_other_deductions],
+        ['27', 'TOTAL deductions', data.line27_total_deductions, 'bold'],
+      ]} />
+      <ScheduleSection title="Tax Computation" rows={[
+        ['28', 'Taxable income before NOL/special', data.line28_taxable_income_before_nol_dividends_received],
+        ['29c', 'NOL + special deductions', data.line29c_total_29a_29b],
+        ['30', 'TAXABLE INCOME', data.line30_taxable_income, 'bold'],
+        ['31', 'TOTAL TAX (line 30 × 21%)', data.line31_total_tax, 'red'],
+        ['32', 'Estimated tax payments', data.line32_estimated_tax_payments],
+        ['33', 'Balance due', data.line33_balance_due, data.line33_balance_due > 0 ? 'red' : undefined],
+        ['34', 'Overpayment', data.line34_overpayment, data.line34_overpayment > 0 ? 'green' : undefined],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 1120-S view (S-Corp) ──────────────────────────────────
+
+const Form1120SView: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Shareholders" value={String(data.number_of_shareholders)} />
+          <Stat label="Officer Comp" value={fmt$(data.line7_compensation_officers)} />
+          <Stat label="Total Income" value={fmt$(data.line6_total_income)} />
+          <Stat label="Ordinary Income (Line 21)" value={fmt$(data.line21_ordinary_business_income_loss)} highlight color={data.line21_ordinary_business_income_loss >= 0 ? '#16a34a' : '#dc2626'} />
+        </div>
+      </div>
+      <ScheduleSection title="Income (lines 1-6)" rows={[
+        ['1c', 'Gross profit balance', data.line1c_balance],
+        ['2', 'Cost of goods sold', data.line2_cost_of_goods_sold],
+        ['3', 'Gross profit', data.line3_gross_profit, 'bold'],
+        ['6', 'TOTAL income', data.line6_total_income, 'bold'],
+      ]} />
+      <ScheduleSection title="Deductions (lines 7-20)" rows={[
+        ['7', 'Officer compensation (W-2 to owners)', data.line7_compensation_officers],
+        ['8', 'Salaries / wages (other employees)', data.line8_salaries_wages],
+        ['11', 'Rents', data.line11_rents],
+        ['12', 'Taxes / licenses', data.line12_taxes_licenses],
+        ['14', 'Depreciation', data.line14_depreciation],
+        ['19', 'Other deductions', data.line19_other_deductions],
+        ['20', 'TOTAL deductions', data.line20_total_deductions, 'bold'],
+        ['21', 'ORDINARY BUSINESS INCOME', data.line21_ordinary_business_income_loss, data.line21_ordinary_business_income_loss >= 0 ? 'green' : 'red'],
+      ]} />
+      <ScheduleSection title="Schedule K — Distributive Shares" rows={[
+        ['1', 'Ordinary income → K-1 box 1', data.schK_ordinary_business_income, 'bold'],
+        ['8a', 'Long-term capital gain → K-1', data.schK_net_long_term_cap_gain],
+        ['16d', 'Distributions to shareholders', data.schK_distributions],
+      ]} />
+    </div>
+  );
+};
+
+// ── Form 1041 view (Estate / Trust) ────────────────────────────
+
+const Form1041View: React.FC<{ data: any }> = ({ data }) => {
+  if (data?.error) return <div style={{ color: 'var(--color-accent-expense)' }}>{data.error}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ScheduleWarnings warnings={data.warnings || []} />
+      <div className="block-card" style={{ padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <Stat label="Type" value={data.entity_type} />
+          <Stat label="Total Income" value={fmt$(data.line9_total_income)} />
+          <Stat label="Taxable Income" value={fmt$(data.line22_taxable_income)} />
+          <Stat label="Total Tax" value={fmt$(data.line23_total_tax)} highlight color="#dc2626" />
+        </div>
+      </div>
+      <ScheduleSection title="Income" rows={[
+        ['1', 'Interest income', data.line1_interest_income],
+        ['2a', 'Ordinary dividends', data.line2a_ordinary_dividends],
+        ['3', 'Business income', data.line3_business_income],
+        ['4', 'Capital gain', data.line4_capital_gains],
+        ['5', 'Rents / royalties / partnerships', data.line5_rents_royalties_partnerships],
+        ['9', 'TOTAL income', data.line9_total_income, 'bold'],
+      ]} />
+      <ScheduleSection title="Deductions and Tax" rows={[
+        ['16', 'Total deductions', data.line16_total_deductions],
+        ['17', 'Adjusted total income', data.line17_adjusted_total_income],
+        ['18', 'Income distribution deduction', data.line18_income_distribution_deduction],
+        ['21', 'Exemption', data.line21_exemption],
+        ['22', 'TAXABLE INCOME', data.line22_taxable_income, 'bold'],
+        ['23', 'TOTAL TAX (compressed brackets)', data.line23_total_tax, 'red'],
       ]} />
     </div>
   );

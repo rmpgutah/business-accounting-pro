@@ -2091,6 +2091,36 @@ export function registerIpcHandlers(): void {
       return computeForm4868(cid, year, opts);
     } catch (err: any) { return { error: err?.message }; }
   });
+  ipcMain.handle('tax:form-1065', (_event, { year, opts }: { year: number; opts?: any }) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
+      const { computeForm1065 } = require('../services/tax-forms/form-1065');
+      return computeForm1065(cid, year, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:form-1120', (_event, { year, opts }: { year: number; opts?: any }) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
+      const { computeForm1120 } = require('../services/tax-forms/form-1120');
+      return computeForm1120(cid, year, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:form-1120s', (_event, { year, opts }: { year: number; opts?: any }) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
+      const { computeForm1120S } = require('../services/tax-forms/form-1120s');
+      return computeForm1120S(cid, year, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:schedule-k1', (_event, { opts }: { opts: any }) => {
+    try {
+      const { computeScheduleK1 } = require('../services/tax-forms/schedule-k1');
+      return computeScheduleK1(opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:form-1041', (_event, { year, opts }: { year: number; opts?: any }) => {
+    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
+      const { computeForm1041 } = require('../services/tax-forms/form-1041');
+      return computeForm1041(cid, year, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
 
   // ─── Wave 4: Compliance documents (W-4 / W-9 / I-9) ─────────
   ipcMain.handle('compliance:list', (_event, filters?: any) => {
@@ -2194,12 +2224,12 @@ export function registerIpcHandlers(): void {
       return { error: err?.message || 'PDF generation failed' };
     }
   });
-  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any }) => {
+  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
       const company = db.getById('companies', cid) as any || {};
-      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML, form944HTML, form945HTML, schedule941BHTML, form945AHTML, int1099HTML, div1099HTML, r1099HTML, k1099HTML, b1099HTML, g1099HTML, c1099HTML, sa1099HTML, w2cHTML, form1096HTML, schedule1HTML, schedule2HTML, schedule3HTML, scheduleAHTML, scheduleBHTML, scheduleDHTML, form1040ESHTML, form8995HTML, form4562HTML, form8829HTML, form4797HTML, form7004HTML, form4868HTML } = require('../services/tax-forms/pdf-templates');
+      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML, form944HTML, form945HTML, schedule941BHTML, form945AHTML, int1099HTML, div1099HTML, r1099HTML, k1099HTML, b1099HTML, g1099HTML, c1099HTML, sa1099HTML, w2cHTML, form1096HTML, schedule1HTML, schedule2HTML, schedule3HTML, scheduleAHTML, scheduleBHTML, scheduleDHTML, form1040ESHTML, form8995HTML, form4562HTML, form8829HTML, form4797HTML, form7004HTML, form4868HTML, form1065HTML, form1120HTML, form1120SHTML, scheduleK1HTML, form1041HTML } = require('../services/tax-forms/pdf-templates');
       let html = '';
       let filename = 'tax-form.pdf';
 
@@ -2389,6 +2419,31 @@ export function registerIpcHandlers(): void {
         const data = computeForm4868(cid, payload.year, payload.form_4868_opts || {});
         html = form4868HTML(data);
         filename = 'form-4868-' + payload.year + '.pdf';
+      } else if (payload.form === '1065') {
+        const { computeForm1065 } = require('../services/tax-forms/form-1065');
+        const data = computeForm1065(cid, payload.year, payload.form_1065_opts || {});
+        html = form1065HTML(data);
+        filename = 'form-1065-' + payload.year + '.pdf';
+      } else if (payload.form === '1120') {
+        const { computeForm1120 } = require('../services/tax-forms/form-1120');
+        const data = computeForm1120(cid, payload.year, payload.form_1120_opts || {});
+        html = form1120HTML(data);
+        filename = 'form-1120-' + payload.year + '.pdf';
+      } else if (payload.form === '1120-s') {
+        const { computeForm1120S } = require('../services/tax-forms/form-1120s');
+        const data = computeForm1120S(cid, payload.year, payload.form_1120s_opts || {});
+        html = form1120SHTML(data);
+        filename = 'form-1120s-' + payload.year + '.pdf';
+      } else if (payload.form === 'k-1') {
+        const { computeScheduleK1 } = require('../services/tax-forms/schedule-k1');
+        const data = computeScheduleK1(payload.k1_opts);
+        html = scheduleK1HTML(data);
+        filename = 'k-1-' + (payload.k1_opts?.recipient?.name || 'recipient').replace(/\s+/g, '_') + '.pdf';
+      } else if (payload.form === '1041') {
+        const { computeForm1041 } = require('../services/tax-forms/form-1041');
+        const data = computeForm1041(cid, payload.year, payload.form_1041_opts || {});
+        html = form1041HTML(data);
+        filename = 'form-1041-' + payload.year + '.pdf';
       } else {
         return { error: 'Unknown form: ' + payload.form };
       }

@@ -767,6 +767,16 @@ const api = {
     window.electronAPI.invoke('tax:form-7004', { opts }),
   taxForm4868: (year: number, opts?: any): Promise<any> =>
     window.electronAPI.invoke('tax:form-4868', { year, opts }),
+  taxForm1065: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1065', { year, opts }),
+  taxForm1120: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1120', { year, opts }),
+  taxForm1120S: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1120s', { year, opts }),
+  taxScheduleK1: (opts: any): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-k1', { opts }),
+  taxForm1041: (year: number, opts?: any): Promise<any> =>
+    window.electronAPI.invoke('tax:form-1041', { year, opts }),
 
   // ─── Compliance documents (W-4 / W-9 / I-9) ───
   complianceList: (filters?: { person_type?: 'employee' | 'vendor' | 'client'; form_type?: string; status?: string }): Promise<any[]> =>
@@ -796,7 +806,8 @@ const api = {
       | 'schedule-1' | 'schedule-2' | 'schedule-3'
       | 'schedule-a' | 'schedule-b' | 'schedule-d'
       | '1040-es'
-      | '8995' | '4562' | '8829' | '4797' | '7004' | '4868',
+      | '8995' | '4562' | '8829' | '4797' | '7004' | '4868'
+      | '1065' | '1120' | '1120-s' | 'k-1' | '1041',
     year: number,
     opts?: {
       quarter?: 1 | 2 | 3 | 4;
@@ -818,6 +829,11 @@ const api = {
       form_4797_opts?: any;
       form_7004_opts?: any;
       form_4868_opts?: any;
+      form_1065_opts?: any;
+      form_1120_opts?: any;
+      form_1120s_opts?: any;
+      form_1041_opts?: any;
+      k1_opts?: any;
     },
   ): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
     window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),
