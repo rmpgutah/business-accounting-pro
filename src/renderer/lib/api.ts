@@ -701,8 +701,14 @@ const api = {
     window.electronAPI.invoke('tax:schedule-c', { year }),
   tax1099NEC: (year: number): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('tax:1099-nec', { year }),
-  taxExportFormPDF: (form: '941' | 'schedule-c' | '1099-nec', year: number, quarter?: 1 | 2 | 3 | 4): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
-    window.electronAPI.invoke('tax:export-form-pdf', { form, year, quarter }),
+  taxW2: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:w2', { year }),
+  taxScheduleSE: (year: number, w2_ss_wages?: number): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-se', { year, w2_ss_wages }),
+  taxSalesTax: (period_start: string, period_end: string, opts?: { filing_frequency?: 'monthly' | 'quarterly' | 'annual'; prepayments?: number; early_filing_discount_pct?: number; state?: string }): Promise<any> =>
+    window.electronAPI.invoke('tax:sales-tax', { period_start, period_end, opts }),
+  taxExportFormPDF: (form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax', year: number, opts?: { quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number }): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('tax:export-form-pdf', { form, year, ...(opts || {}) }),
 
   // B7: Client risk scoring
   clientsRiskScore: (clientId?: string): Promise<any[] | { error?: string }> =>

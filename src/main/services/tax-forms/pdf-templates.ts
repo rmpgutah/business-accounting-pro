@@ -15,6 +15,9 @@
 import type { Form941Data } from './form-941';
 import type { ScheduleCData } from './schedule-c';
 import type { Form1099NECData } from './form-1099-nec';
+import type { FormW2Data } from './form-w2';
+import type { ScheduleSEData } from './schedule-se';
+import type { SalesTaxData } from './sales-tax';
 
 const SHARED_HEAD = `<style>
   @page { size: letter; margin: 0.5in; @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #94a3b8; } }
@@ -278,6 +281,185 @@ ${forms.map((f, i) => recipientCard(f, i)).join('')}
 <div class="disclaimer">
   <strong>This is a worksheet, not the official IRS form.</strong>
   File Form 1099-NEC with the IRS by January 31 (paper or electronic). Each recipient also gets Copy B by January 31. Forms with missing TINs cannot be filed — request a W-9 from those recipients first. Filing electronically is required if you have 10+ information returns.
+</div>
+</body></html>`;
+}
+
+// ── W-2 (one document with multiple employee pages) ───────────
+
+export function w2HTML(forms: FormW2Data[], year: number, employer: { name: string; ein: string }): string {
+  if (forms.length === 0) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>W-2 Summary ${year}</title>${SHARED_HEAD}</head>
+<body><div class="form-header"><div class="form-title">Form W-2 — Wage and Tax Statement</div><div class="form-subtitle">Tax Year ${year}</div></div>
+<div class="warnings">No employees with pay stubs in ${year}.</div></body></html>`;
+  }
+
+  const employeePage = (f: FormW2Data, idx: number) => `
+    <div style="${idx > 0 ? 'page-break-before: always;' : ''}">
+      <div class="form-header">
+        <div class="form-title">Form W-2 · ${escape(f.employee_first_name)} ${escape(f.employee_last_name)}</div>
+        <div class="form-subtitle">Tax Year ${year} · Copy B (Filed With Employee Federal Tax Return)</div>
+      </div>
+      ${f.warnings.length > 0 ? `<div class="warnings"><strong>Filing warnings:</strong><ul>${f.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+      <div class="filer-block">
+        <div class="filer-card">
+          <div class="label">Box b — Employer EIN</div>
+          <div class="value">${escape(f.employer_ein) || '__-_______'}</div>
+          <div class="label" style="margin-top:8px">Box c — Employer name &amp; address</div>
+          <div style="font-size: 11px;">
+            ${escape(f.employer_name)}<br>
+            ${escape(f.employer_address)}<br>
+            ${escape(f.employer_city)}, ${escape(f.employer_state)} ${escape(f.employer_zip)}
+          </div>
+        </div>
+        <div class="filer-card">
+          <div class="label">Box a — Employee SSN</div>
+          <div class="value">${escape(f.employee_ssn) || '<em style="color:#dc2626">MISSING</em>'}</div>
+          <div class="label" style="margin-top:8px">Box e/f — Employee name &amp; address</div>
+          <div style="font-size: 11px;">
+            ${escape(f.employee_first_name)} ${escape(f.employee_last_name)}<br>
+            ${escape(f.employee_address)}<br>
+            ${escape(f.employee_city)}, ${escape(f.employee_state)} ${escape(f.employee_zip)}
+          </div>
+        </div>
+      </div>
+      <table class="lines">
+        <tbody>
+          <tr><td class="line-num">1</td><td>Wages, tips, other compensation</td><td class="line-amt totals">${fmtMoney(f.box1_wages_tips)}</td></tr>
+          <tr><td class="line-num">2</td><td>Federal income tax withheld</td><td class="line-amt">${fmtMoney(f.box2_fed_income_tax)}</td></tr>
+          <tr><td class="line-num">3</td><td>Social security wages</td><td class="line-amt">${fmtMoney(f.box3_ss_wages)}</td></tr>
+          <tr><td class="line-num">4</td><td>Social security tax withheld</td><td class="line-amt">${fmtMoney(f.box4_ss_tax)}</td></tr>
+          <tr><td class="line-num">5</td><td>Medicare wages and tips</td><td class="line-amt">${fmtMoney(f.box5_medicare_wages)}</td></tr>
+          <tr><td class="line-num">6</td><td>Medicare tax withheld</td><td class="line-amt">${fmtMoney(f.box6_medicare_tax)}</td></tr>
+          <tr><td class="line-num">7</td><td>Social security tips</td><td class="line-amt">${fmtMoney(f.box7_ss_tips)}</td></tr>
+          <tr><td class="line-num">10</td><td>Dependent care benefits</td><td class="line-amt">${fmtMoney(f.box10_dependent_care)}</td></tr>
+          <tr><td class="line-num">11</td><td>Nonqualified plans</td><td class="line-amt">${fmtMoney(f.box11_nonqualified_plans)}</td></tr>
+          ${f.box12_codes.map((c) => `<tr><td class="line-num">12${c.code}</td><td>${escape(c.label)}</td><td class="line-amt">${fmtMoney(c.amount)}</td></tr>`).join('')}
+          <tr><td class="line-num">13</td><td>Statutory employee · Retirement plan · Third-party sick pay</td><td class="line-amt">${f.box13_statutory_employee ? '☑' : '☐'} ${f.box13_retirement_plan ? '☑' : '☐'} ${f.box13_third_party_sick_pay ? '☑' : '☐'}</td></tr>
+          <tr><td class="line-num">15</td><td>State / Employer's state ID</td><td class="line-amt">${escape(f.box15_state)} / ${escape(f.state_employer_id)}</td></tr>
+          <tr><td class="line-num">16</td><td>State wages, tips, etc.</td><td class="line-amt">${fmtMoney(f.box16_state_wages)}</td></tr>
+          <tr><td class="line-num">17</td><td>State income tax</td><td class="line-amt">${fmtMoney(f.box17_state_income_tax)}</td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:10px;color:#64748b;margin-top:8px;">${f.pay_stub_count} pay stub${f.pay_stub_count === 1 ? '' : 's'} · YTD gross: ${fmtMoney(f.ytd_gross)}</div>
+    </div>
+  `;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>W-2 ${year} — ${escape(employer.name)}</title>${SHARED_HEAD}</head>
+<body>
+${forms.map((f, i) => employeePage(f, i)).join('')}
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  File W-2 + W-3 transmittal with the SSA by January 31. Each employee gets Copy B + Copy C by January 31. Filing electronically is required if you have 10+ W-2s. Pre-tax deduction handling is simplified; if employees have HSA, 401(k), or Section 125 cafeteria plan deductions, verify Box 1/3/5 separation with your CPA.
+</div>
+</body></html>`;
+}
+
+// ── Schedule SE (Self-Employment Tax) ─────────────────────────
+
+export function scheduleSEHTML(data: ScheduleSEData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Schedule SE ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Schedule SE — Self-Employment Tax</div>
+  <div class="form-subtitle">Form 1040 · Tax Year ${data.year}</div>
+  <div class="form-meta">${escape(data.taxpayer_name) || '<em style="color:#94a3b8">Enter on filing</em>'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.is_negative_profit ? `<div class="warnings"><strong>No SE tax owed.</strong> Schedule C net profit is negative — no self-employment tax due. Schedule SE is not required to be filed.</div>` : ''}
+${data.line2_other_se_income > 0 && data.line2_other_se_income < 400 ? `<div class="warnings"><strong>Below $400 threshold.</strong> Net SE earnings of ${fmtMoney(data.line2_other_se_income)} are below the $400 minimum that triggers SE tax filing. No Schedule SE required.</div>` : ''}
+
+<div class="section-header">Part I — Self-Employment Income</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">1a</td><td>Net farm SE income (Schedule F)</td><td class="line-amt">${fmtMoney(data.line1a_farm_se_income)}</td></tr>
+    <tr><td class="line-num">2</td><td>Net profit from Schedule C, line 31</td><td class="line-amt">${fmtMoney(data.line2_other_se_income)}</td></tr>
+    <tr><td class="line-num">3</td><td>Combine lines 1a, 1b, 2</td><td class="line-amt">${fmtMoney(data.line3_total)}</td></tr>
+    <tr><td class="line-num">4a</td><td>Multiply line 3 by 92.35% (0.9235)</td><td class="line-amt">${fmtMoney(data.line4a_se_income_x_92pct)}</td></tr>
+    <tr><td class="line-num">4c</td><td>Combine lines 4a + 4b</td><td class="line-amt">${fmtMoney(data.line4c_total)}</td></tr>
+    <tr><td class="line-num">6</td><td>Total self-employment income subject to SE tax</td><td class="line-amt totals">${fmtMoney(data.line6_total_se_income)}</td></tr>
+  </tbody>
+</table>
+
+<div class="section-header">Part II — Self-Employment Tax</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">7</td><td>Maximum amount subject to social security tax (2026 wage base)</td><td class="line-amt">${fmtMoney(data.line7_max_ss_earnings)}</td></tr>
+    <tr><td class="line-num">8a</td><td>Total SS wages from W-2 jobs</td><td class="line-amt">${fmtMoney(data.line8a_ss_wages_w2)}</td></tr>
+    <tr><td class="line-num">8d</td><td>Add 8a, 8b, 8c</td><td class="line-amt">${fmtMoney(data.line8d_total_ss_already_subject)}</td></tr>
+    <tr><td class="line-num">9</td><td>Subtract line 8d from line 7</td><td class="line-amt">${fmtMoney(data.line9_remaining_ss_cap)}</td></tr>
+    <tr><td class="line-num">10</td><td>Multiply min(line 6, line 9) × 12.4% — Social Security tax</td><td class="line-amt">${fmtMoney(data.line10_ss_tax)}</td></tr>
+    <tr><td class="line-num">11</td><td>Multiply line 6 × 2.9% — Medicare tax</td><td class="line-amt">${fmtMoney(data.line11_medicare_tax)}</td></tr>
+    <tr><td class="line-num">12</td><td>Total self-employment tax (line 10 + line 11) — carries to Schedule 2</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.line12_total_se_tax)}</td></tr>
+    <tr><td class="line-num">13</td><td>Deductible part of SE tax (line 12 × 50%) — above-the-line deduction</td><td class="line-amt totals" style="color:#16a34a">${fmtMoney(data.line13_deductible_half)}</td></tr>
+  </tbody>
+</table>
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official IRS form.</strong>
+  Line 12 carries to Form 1040 Schedule 2 line 4. <strong>Line 13 is one of the most-missed deductions in DIY filing</strong> — it's an above-the-line deduction on Form 1040 Schedule 1 line 15, reducing AGI even if you don't itemize. Line 8a should be filled in if you also have W-2 wages from an employer (we default to $0 — edit if applicable).
+</div>
+</body></html>`;
+}
+
+// ── Sales Tax Remittance ──────────────────────────────────────
+
+export function salesTaxHTML(data: SalesTaxData): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Sales Tax Remittance ${data.period_start} to ${data.period_end} — ${escape(data.business_name)}</title>${SHARED_HEAD}</head>
+<body>
+<div class="form-header">
+  <div class="form-title">Sales Tax Remittance Worksheet</div>
+  <div class="form-subtitle">${escape(data.state) || 'State'} · Period ${data.period_start} → ${data.period_end} · ${data.filing_frequency}</div>
+  <div class="form-meta">${escape(data.business_name)} · Permit ${escape(data.state_tax_id) || '__________'} · Generated ${new Date().toLocaleDateString('en-US')}</div>
+</div>
+
+${data.warnings.length > 0 ? `<div class="warnings"><ul>${data.warnings.map((w) => `<li>${escape(w)}</li>`).join('')}</ul></div>` : ''}
+
+<div class="section-header">Period Summary</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">A</td><td>Total gross sales (all invoices)</td><td class="line-amt">${fmtMoney(data.total_gross_sales)}</td></tr>
+    <tr><td class="line-num">B</td><td>Non-taxable sales (services, exempt items)</td><td class="line-amt">${fmtMoney(data.total_nontaxable_sales)}</td></tr>
+    <tr><td class="line-num">C</td><td>Taxable sales (A − B)</td><td class="line-amt totals">${fmtMoney(data.total_taxable_sales)}</td></tr>
+    <tr><td class="line-num">D</td><td>Tax collected from customers</td><td class="line-amt">${fmtMoney(data.total_tax_collected)}</td></tr>
+    <tr><td class="line-num">E</td><td>Tax due (computed from rates × taxable sales)</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.total_tax_due)}</td></tr>
+    <tr><td class="line-num">F</td><td>Variance (D − E, should be near zero)</td><td class="line-amt" style="color:${Math.abs(data.total_variance) < 1 ? '#16a34a' : '#d97706'}">${fmtMoney(data.total_variance)}</td></tr>
+  </tbody>
+</table>
+
+<div class="section-header">By Tax Rate</div>
+<table class="lines">
+  <thead><tr><th>Rate</th><th style="text-align:right">Taxable Sales</th><th style="text-align:right">Tax Due</th><th style="text-align:right">Tax Collected</th><th style="text-align:right">Variance</th><th style="text-align:right">Invoices</th></tr></thead>
+  <tbody>
+    ${data.rate_lines.map((l) => `
+      <tr>
+        <td class="line-num">${escape(l.rate_label)}</td>
+        <td class="line-amt">${fmtMoney(l.taxable_sales)}</td>
+        <td class="line-amt">${fmtMoney(l.tax_due)}</td>
+        <td class="line-amt">${fmtMoney(l.tax_collected)}</td>
+        <td class="line-amt" style="color:${Math.abs(l.variance) < 0.5 ? '#16a34a' : '#d97706'}">${fmtMoney(l.variance)}</td>
+        <td class="line-amt">${l.invoice_count}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="6" style="padding:14px;text-align:center;color:#94a3b8">No taxable sales in this period.</td></tr>`}
+  </tbody>
+</table>
+
+<div class="section-header">Remittance Calculation</div>
+<table class="lines">
+  <tbody>
+    <tr><td class="line-num">1</td><td>Total tax due (from line E above)</td><td class="line-amt">${fmtMoney(data.total_tax_due)}</td></tr>
+    <tr><td class="line-num">2</td><td>Less: prepayments / credits applied</td><td class="line-amt" style="color:#16a34a">${fmtMoney(-data.prepayments)}</td></tr>
+    <tr><td class="line-num">3</td><td>Less: early-filing discount (${data.early_filing_discount_pct}%)</td><td class="line-amt" style="color:#16a34a">${fmtMoney(-data.early_filing_discount)}</td></tr>
+    <tr><td class="line-num">4</td><td>Net amount to remit to ${escape(data.state)}</td><td class="line-amt totals" style="color:#dc2626">${fmtMoney(data.net_remittance)}</td></tr>
+  </tbody>
+</table>
+
+<div class="disclaimer">
+  <strong>This is a worksheet, not the official state form.</strong>
+  Each state has its own form (UT TC-62M, CA BOE-401-A, TX 01-114, etc.). Use these numbers to fill in the state-specific form via your DOR/DRS portal or e-filing service. Multi-jurisdiction tenants (selling into multiple states) need a separate worksheet per state — track with state-specific tax-rate codes on each invoice line.
 </div>
 </body></html>`;
 }

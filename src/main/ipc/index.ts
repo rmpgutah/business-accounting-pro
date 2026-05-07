@@ -1873,12 +1873,36 @@ export function registerIpcHandlers(): void {
       return compute1099NECs(cid, year);
     } catch (err: any) { return { error: err?.message }; }
   });
-  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec'; year: number; quarter?: 1 | 2 | 3 | 4 }) => {
+  ipcMain.handle('tax:w2', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const { computeW2sForYear } = require('../services/tax-forms/form-w2');
+      return computeW2sForYear(cid, year);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:schedule-se', (_event, { year, w2_ss_wages }: { year: number; w2_ss_wages?: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeScheduleSE } = require('../services/tax-forms/schedule-se');
+      return computeScheduleSE(cid, year, { w2_ss_wages });
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:sales-tax', (_event, { period_start, period_end, opts }: { period_start: string; period_end: string; opts?: any }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeSalesTax } = require('../services/tax-forms/sales-tax');
+      return computeSalesTax(cid, period_start, period_end, opts);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number }) => {
     try {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
       const company = db.getById('companies', cid) as any || {};
-      const { form941HTML, scheduleCHTML, nec1099HTML } = require('../services/tax-forms/pdf-templates');
+      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML } = require('../services/tax-forms/pdf-templates');
       let html = '';
       let filename = 'tax-form.pdf';
 
@@ -1897,6 +1921,21 @@ export function registerIpcHandlers(): void {
         const data = compute1099NECs(cid, payload.year);
         html = nec1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
         filename = '1099-NEC-' + payload.year + '.pdf';
+      } else if (payload.form === 'w2') {
+        const { computeW2sForYear } = require('../services/tax-forms/form-w2');
+        const data = computeW2sForYear(cid, payload.year);
+        html = w2HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
+        filename = 'W-2-' + payload.year + '.pdf';
+      } else if (payload.form === 'schedule-se') {
+        const { computeScheduleSE } = require('../services/tax-forms/schedule-se');
+        const data = computeScheduleSE(cid, payload.year, { w2_ss_wages: payload.w2_ss_wages });
+        html = scheduleSEHTML(data);
+        filename = 'schedule-se-' + payload.year + '.pdf';
+      } else if (payload.form === 'sales-tax') {
+        const { computeSalesTax } = require('../services/tax-forms/sales-tax');
+        const data = computeSalesTax(cid, payload.period_start || '', payload.period_end || '');
+        html = salesTaxHTML(data);
+        filename = 'sales-tax-' + (payload.period_start || '') + '-' + (payload.period_end || '') + '.pdf';
       } else {
         return { error: 'Unknown form: ' + payload.form };
       }
