@@ -1848,6 +1848,64 @@ export function registerIpcHandlers(): void {
     }
   };
 
+  // ─── Tax Forms (P4.46/47/50) ─────────────────────────
+  ipcMain.handle('tax:form-941', (_event, { year, quarter }: { year: number; quarter: 1 | 2 | 3 | 4 }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeForm941 } = require('../services/tax-forms/form-941');
+      return computeForm941(cid, year, quarter);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:schedule-c', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const { computeScheduleC } = require('../services/tax-forms/schedule-c');
+      return computeScheduleC(cid, year);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:1099-nec', (_event, { year }: { year: number }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      const { compute1099NECs } = require('../services/tax-forms/form-1099-nec');
+      return compute1099NECs(cid, year);
+    } catch (err: any) { return { error: err?.message }; }
+  });
+  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec'; year: number; quarter?: 1 | 2 | 3 | 4 }) => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return { error: 'No active company' };
+      const company = db.getById('companies', cid) as any || {};
+      const { form941HTML, scheduleCHTML, nec1099HTML } = require('../services/tax-forms/pdf-templates');
+      let html = '';
+      let filename = 'tax-form.pdf';
+
+      if (payload.form === '941') {
+        const { computeForm941 } = require('../services/tax-forms/form-941');
+        const data = computeForm941(cid, payload.year, payload.quarter || 1);
+        html = form941HTML(data);
+        filename = 'form-941-Q' + (payload.quarter || 1) + '-' + payload.year + '.pdf';
+      } else if (payload.form === 'schedule-c') {
+        const { computeScheduleC } = require('../services/tax-forms/schedule-c');
+        const data = computeScheduleC(cid, payload.year);
+        html = scheduleCHTML(data);
+        filename = 'schedule-c-' + payload.year + '.pdf';
+      } else if (payload.form === '1099-nec') {
+        const { compute1099NECs } = require('../services/tax-forms/form-1099-nec');
+        const data = compute1099NECs(cid, payload.year);
+        html = nec1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
+        filename = '1099-NEC-' + payload.year + '.pdf';
+      } else {
+        return { error: 'Unknown form: ' + payload.form };
+      }
+      return await saveHTMLAsPDF(html, payload.form.toUpperCase(), { defaultFilename: filename });
+    } catch (err: any) {
+      return { error: err?.message || 'PDF export failed' };
+    }
+  });
+
   // ─── B7: Client risk scoring ─────────────────────────
   ipcMain.handle('clients:risk-score', (_event, opts?: { client_id?: string }) => {
     try {

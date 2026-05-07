@@ -43,6 +43,7 @@ export type ReportType =
   | 'customer-profitability' // P4.37
   | 'tax-deduction-finder'   // B13
   | 'client-risk-scoring'    // B7
+  | 'tax-forms'              // P4.46/47/50
   | 'income-by-month'
   | 'debt-collection'
   | 'inventory-valuation'
@@ -117,6 +118,14 @@ const REPORTS: ReportCard[] = [
       'Scans expense history for overlooked deductions: home office, vehicle, meals, education, software, phone, travel, health insurance, fees.',
     icon: Calculator,
     accentClass: 'border-l-accent-positive',
+  },
+  {
+    id: 'tax-forms',
+    title: 'IRS Tax Forms',
+    description:
+      'Generate worksheets for Form 941 (quarterly payroll), Schedule C (sole-prop P&L), and 1099-NEC (contractor compensation). Auto-pulls from your books.',
+    icon: FileSpreadsheet,
+    accentClass: 'border-l-accent-warning',
   },
   {
     id: 'ar-aging',

@@ -694,6 +694,16 @@ const api = {
   periodReopen: (payload: { id: string; reason?: string; reopened_by?: string }): Promise<{ ok?: boolean; error?: string }> =>
     window.electronAPI.invoke('period:reopen', payload),
 
+  // Tax Forms (P4.46/47/50)
+  taxForm941: (year: number, quarter: 1 | 2 | 3 | 4): Promise<any> =>
+    window.electronAPI.invoke('tax:form-941', { year, quarter }),
+  taxScheduleC: (year: number): Promise<any> =>
+    window.electronAPI.invoke('tax:schedule-c', { year }),
+  tax1099NEC: (year: number): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('tax:1099-nec', { year }),
+  taxExportFormPDF: (form: '941' | 'schedule-c' | '1099-nec', year: number, quarter?: 1 | 2 | 3 | 4): Promise<{ path?: string; cancelled?: boolean; error?: string }> =>
+    window.electronAPI.invoke('tax:export-form-pdf', { form, year, quarter }),
+
   // B7: Client risk scoring
   clientsRiskScore: (clientId?: string): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('clients:risk-score', clientId ? { client_id: clientId } : {}),
