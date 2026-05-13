@@ -1000,7 +1000,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       onSaved(result.id!);
     } catch (err) {
       console.error('Failed to save invoice:', err);
-      alert('Failed to save invoice. Please try again.');
+      const detail = err instanceof Error ? err.message : String(err);
+      setErrors([`Failed to save invoice: ${detail}`]);
     } finally {
       setSaving(false);
     }

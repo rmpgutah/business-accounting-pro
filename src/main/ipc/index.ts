@@ -3072,6 +3072,9 @@ export function registerIpcHandlers(): void {
     const _invoiceNumberForError = invoiceData?.invoice_number;
     try {
       const companyId = db.getCurrentCompanyId();
+      if (!companyId) {
+        return { error: 'No active company selected. Please select a company and try again.' };
+      }
       const rawDb = db.getDb();
 
       // P1.14: capture pre-update snapshot for field-level diff in
@@ -3082,9 +3085,8 @@ export function registerIpcHandlers(): void {
       // within an active closed period. Both new + existing date are
       // checked so you can't move a record OUT of a closed period
       // either.
-      const cid_ = db.getCurrentCompanyId();
-      if (cid_) {
-        const period = findClosedPeriod(cid_, invoiceData.issue_date || '');
+      if (companyId) {
+        const period = findClosedPeriod(companyId, invoiceData.issue_date || '');
         if (period) {
           throw new Error(
             'Cannot save: ' + (invoiceData.issue_date) + ' falls in a closed accounting period (' +
@@ -3092,7 +3094,7 @@ export function registerIpcHandlers(): void {
           );
         }
         if (oldInvoice?.issue_date && oldInvoice.issue_date !== invoiceData.issue_date) {
-          const oldPeriod = findClosedPeriod(cid_, oldInvoice.issue_date);
+          const oldPeriod = findClosedPeriod(companyId, oldInvoice.issue_date);
           if (oldPeriod) {
             throw new Error(
               'Cannot save: original date ' + oldInvoice.issue_date + ' falls in a closed accounting period (' +
@@ -3153,24 +3155,26 @@ export function registerIpcHandlers(): void {
       });
 
       const savedId = saveFn();
-      // P1.14: emit field-level diff to audit_log on edit. Same shape
-      // as the generic db:update handler so the entity-timeline summary
-      // renders both kinds uniformly. Tracked fields are restricted to
-      // those the form actually sends (invoiceData keys), so we don't
-      // accidentally surface auto-managed columns like updated_at.
-      if (companyId) {
-        if (isEdit && oldInvoice) {
-          const newInvoice = db.getById('invoices', savedId) as any;
-          const changes: Record<string, { old: any; new: any }> = {};
-          for (const key of Object.keys(invoiceData)) {
-            if (oldInvoice[key] !== newInvoice?.[key]) {
-              changes[key] = { old: oldInvoice[key], new: newInvoice?.[key] };
+      // P1.14: emit field-level diff to audit_log on edit. Wrapped in
+      // try/catch so an audit-log failure never surfaces as "Failed to
+      // save invoice" — the invoice is already committed at this point.
+      try {
+        if (companyId) {
+          if (isEdit && oldInvoice) {
+            const newInvoice = db.getById('invoices', savedId) as any;
+            const changes: Record<string, { old: any; new: any }> = {};
+            for (const key of Object.keys(invoiceData)) {
+              if (oldInvoice[key] !== newInvoice?.[key]) {
+                changes[key] = { old: oldInvoice[key], new: newInvoice?.[key] };
+              }
             }
+            db.logAudit(companyId, 'invoices', savedId, 'update', changes);
+          } else {
+            db.logAudit(companyId, 'invoices', savedId, 'create');
           }
-          db.logAudit(companyId, 'invoices', savedId, 'update', changes);
-        } else {
-          db.logAudit(companyId, 'invoices', savedId, 'create');
         }
+      } catch (auditErr) {
+        console.warn('invoice:save audit logging failed (invoice was saved):', (auditErr as Error)?.message);
       }
 
       // Record ad-hoc entity relations (advisory — never blocks the save).
@@ -3221,13 +3225,19 @@ export function registerIpcHandlers(): void {
       return { id: savedId };
     } catch (err) {
       console.error('invoice:save failed:', err);
-      // INTEGRITY: translate the raw SQLite UNIQUE-constraint message into a
-      // human-readable error citing the offending invoice number, so the user
-      // sees "Invoice number INV-0042 already exists" instead of
-      // "UNIQUE constraint failed: invoices.company_id, invoices.invoice_number".
       const msg = err instanceof Error ? err.message : String(err);
+      // Translate raw SQLite constraint messages into user-friendly errors.
       if (/UNIQUE constraint failed:.*invoices\.invoice_number/i.test(msg)) {
         return { error: `Invoice number${_invoiceNumberForError ? ` ${_invoiceNumberForError}` : ''} already exists in this company. Pick a different number.` };
+      }
+      if (/UNIQUE constraint failed:.*journal_entries/i.test(msg)) {
+        return { error: 'A journal entry numbering conflict occurred. Please try saving again.' };
+      }
+      if (/FOREIGN KEY constraint failed/i.test(msg)) {
+        return { error: 'The selected client or account no longer exists. Please refresh and try again.' };
+      }
+      if (/NOT NULL constraint failed/i.test(msg)) {
+        return { error: 'A required field is missing. Please fill in all required fields and try again.' };
       }
       return { error: msg };
     }
@@ -3353,20 +3363,26 @@ export function registerIpcHandlers(): void {
       });
 
       const savedId = saveFn();
-      // P1.14: emit field-level diff to audit_log on edit
-      if (companyId) {
-        if (isEdit && oldExpense) {
-          const newExpense = db.getById('expenses', savedId) as any;
-          const changes: Record<string, { old: any; new: any }> = {};
-          for (const key of Object.keys(expenseData)) {
-            if (oldExpense[key] !== newExpense?.[key]) {
-              changes[key] = { old: oldExpense[key], new: newExpense?.[key] };
+      // P1.14: emit field-level diff to audit_log on edit.
+      // Wrapped in try/catch so an audit-log failure never surfaces as
+      // "Failed to save expense" — the expense is already committed.
+      try {
+        if (companyId) {
+          if (isEdit && oldExpense) {
+            const newExpense = db.getById('expenses', savedId) as any;
+            const changes: Record<string, { old: any; new: any }> = {};
+            for (const key of Object.keys(expenseData)) {
+              if (oldExpense[key] !== newExpense?.[key]) {
+                changes[key] = { old: oldExpense[key], new: newExpense?.[key] };
+              }
             }
+            db.logAudit(companyId, 'expenses', savedId, 'update', changes);
+          } else {
+            db.logAudit(companyId, 'expenses', savedId, 'create');
           }
-          db.logAudit(companyId, 'expenses', savedId, 'update', changes);
-        } else {
-          db.logAudit(companyId, 'expenses', savedId, 'create');
         }
+      } catch (auditErr) {
+        console.warn('expense:save audit logging failed (expense was saved):', (auditErr as Error)?.message);
       }
 
       scheduleAutoBackup();
