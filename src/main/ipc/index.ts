@@ -3084,23 +3084,21 @@ export function registerIpcHandlers(): void {
       // D3: Period close gate — refuse to mutate any record dated
       // within an active closed period. Both new + existing date are
       // checked so you can't move a record OUT of a closed period
-      // either.
-      if (companyId) {
-        const period = findClosedPeriod(companyId, invoiceData.issue_date || '');
-        if (period) {
+      // either. (companyId is guaranteed non-null by the early check above.)
+      const period = findClosedPeriod(companyId, invoiceData.issue_date || '');
+      if (period) {
+        throw new Error(
+          'Cannot save: ' + (invoiceData.issue_date) + ' falls in a closed accounting period (' +
+          period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings to make changes.'
+        );
+      }
+      if (oldInvoice?.issue_date && oldInvoice.issue_date !== invoiceData.issue_date) {
+        const oldPeriod = findClosedPeriod(companyId, oldInvoice.issue_date);
+        if (oldPeriod) {
           throw new Error(
-            'Cannot save: ' + (invoiceData.issue_date) + ' falls in a closed accounting period (' +
-            period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings to make changes.'
+            'Cannot save: original date ' + oldInvoice.issue_date + ' falls in a closed accounting period (' +
+            oldPeriod.period_start + ' to ' + oldPeriod.period_end + ').'
           );
-        }
-        if (oldInvoice?.issue_date && oldInvoice.issue_date !== invoiceData.issue_date) {
-          const oldPeriod = findClosedPeriod(companyId, oldInvoice.issue_date);
-          if (oldPeriod) {
-            throw new Error(
-              'Cannot save: original date ' + oldInvoice.issue_date + ' falls in a closed accounting period (' +
-              oldPeriod.period_start + ' to ' + oldPeriod.period_end + ').'
-            );
-          }
         }
       }
 
