@@ -86,9 +86,10 @@ const PAY_PERIODS_MAP: Record<PayFrequency, number> = {
 
 const DEFAULT_YEAR = 2026;
 
-// Hardcoded 2026 projected federal constants (fallback when DB is empty)
+// Hardcoded 2026 federal constants (fallback when DB is empty).
+// 2026 Social Security wage base is $184,500 per SSA.
 const FALLBACK_CONSTANTS: FederalConstants = {
-  ss_wage_base: 182100,
+  ss_wage_base: 184500,
   ss_rate: 0.062,
   medicare_rate: 0.0145,
   medicare_additional_rate: 0.009,
@@ -240,8 +241,10 @@ export function calculateFederalWithholding(
   const constants = getConstants(year);
   const brackets = getBrackets(year, w4.w4_filing_status);
 
+  const safeGross = Number.isFinite(Number(grossPerPeriod)) ? Math.max(0, Number(grossPerPeriod)) : 0;
+
   // Step 1: Annualize
-  const annualGross = grossPerPeriod * periods;
+  const annualGross = safeGross * periods;
 
   // Step 2: Standard deduction (adjusted by Step 4b)
   let standardDeduction: number;
@@ -319,35 +322,38 @@ export function calculateFICA(
   // Only wages up to the SS wage base are subject to SS tax.
   // If employee already earned past the base, no SS on this period.
   const ssWagesThisPeriod = Math.max(0,
-    Math.min(grossPerPeriod, constants.ss_wage_base - ytdGross)
+    Math.min(safeGross, constants.ss_wage_base - safeYtd)
   );
   const ss_employee = db.roundCents(ssWagesThisPeriod * constants.ss_rate);
   const ss_employer = db.roundCents(ssWagesThisPeriod * constants.ss_rate);
 
   // ── Medicare ─────────────────────────────────────────────
-  const medicare_employee = db.roundCents(grossPerPeriod * constants.medicare_rate);
-  const medicare_employer = db.roundCents(grossPerPeriod * constants.medicare_rate);
+  const safeGross = Number.isFinite(Number(grossPerPeriod)) ? Math.max(0, Number(grossPerPeriod)) : 0;
+  const safeYtd = Number.isFinite(Number(ytdGross)) ? Math.max(0, Number(ytdGross)) : 0;
+
+  const medicare_employee = db.roundCents(safeGross * constants.medicare_rate);
+  const medicare_employer = db.roundCents(safeGross * constants.medicare_rate);
 
   // ── Additional Medicare (employee only) ──────────────────
   // 0.9% on wages above $200k YTD (using single threshold; married threshold
   // is used on the annual return, not payroll withholding per IRS rules)
   const threshold = constants.medicare_additional_threshold_single;
   let additionalMedicareWages = 0;
-  if (ytdGross + grossPerPeriod > threshold) {
+  if (safeYtd + safeGross > threshold) {
     // Wages in this period that exceed the threshold
     additionalMedicareWages = Math.max(0,
-      Math.min(grossPerPeriod, ytdGross + grossPerPeriod - threshold)
+      Math.min(safeGross, safeYtd + safeGross - threshold)
     );
     // If YTD was already past threshold, all of this period's wages are subject
-    if (ytdGross >= threshold) {
-      additionalMedicareWages = grossPerPeriod;
+    if (safeYtd >= threshold) {
+      additionalMedicareWages = safeGross;
     }
   }
   const additional_medicare = db.roundCents(additionalMedicareWages * constants.medicare_additional_rate);
 
   // ── FUTA (employer only) ─────────────────────────────────
   const futaWagesThisPeriod = Math.max(0,
-    Math.min(grossPerPeriod, constants.futa_wage_base - ytdGross)
+    Math.min(safeGross, constants.futa_wage_base - safeYtd)
   );
   const futa = db.roundCents(futaWagesThisPeriod * constants.futa_rate);
 

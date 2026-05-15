@@ -524,9 +524,37 @@ function postJournalEntry(
   description: string,
   lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>
 ): void {
+  const cents = (n: unknown): number => {
+    const v = Number(n);
+    return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
+  };
+
+  // Normalize every amount to cents before SQLite trigger/balance checks.
+  // This prevents float drift such as 30.69682 vs 30.70 from breaking posted JEs.
+  const normalized = lines.map((l) => ({
+    ...l,
+    debit: cents(l.debit),
+    credit: cents(l.credit),
+  }));
+
   // Skip lines with zero amounts
-  const nonZero = lines.filter(l => l.debit > 0 || l.credit > 0);
+  const nonZero = normalized.filter(l => l.debit > 0 || l.credit > 0);
   if (nonZero.length === 0) return;
+
+  const totalDebit = cents(nonZero.reduce((s, l) => s + l.debit, 0));
+  const totalCredit = cents(nonZero.reduce((s, l) => s + l.credit, 0));
+  const diff = cents(totalDebit - totalCredit);
+
+  if (Math.abs(diff) > 0.009) {
+    console.warn('[postJournalEntry] Unbalanced journal entry skipped:', {
+      description,
+      totalDebit,
+      totalCredit,
+      diff,
+      lines: nonZero,
+    });
+    return;
+  }
 
   const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
   for (const line of nonZero) {
@@ -5459,27 +5487,30 @@ export function registerIpcHandlers(): void {
       }
     }
 
+    const paymentAmount = db.roundCents(Number(amount));
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) return { error: 'Amount must be greater than zero' };
+
     const tx = (dbInstance as any).transaction(() => {
       const paymentId = uuid();
       (dbInstance as any).prepare(`
         INSERT INTO payments (id, company_id, invoice_id, amount, date, payment_method, reference)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(paymentId, companyId, invoiceId, amount, date, method || 'transfer', reference || '');
+      `).run(paymentId, companyId, invoiceId, paymentAmount, date, method || 'transfer', reference || '');
 
       const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
       if (!invoice) throw new Error('Invoice not found');
 
       // INTEGRITY: roundCents prevents float-drift in amount_paid across
       // repeated partial payments (e.g. 100 + 0.1 + 0.2 = 100.30000000000001).
-      const newAmountPaid = db.roundCents((invoice.amount_paid || 0) + Number(amount));
+      const newAmountPaid = db.roundCents((invoice.amount_paid || 0) + paymentAmount);
       const newStatus = newAmountPaid >= db.roundCents(invoice.total) ? 'paid' : 'partial';
 
       (dbInstance as any).prepare(`UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(newAmountPaid, newStatus, invoiceId);
 
       postJournalEntry(dbInstance, companyId, date, `Payment received - ${invoice.invoice_number}`, [
-        { nameHint: 'Cash', debit: amount, credit: 0, note: `Cash received for ${invoice.invoice_number}` },
-        { nameHint: 'Receivable', debit: 0, credit: amount, note: `Clear AR for ${invoice.invoice_number}` },
+        { nameHint: 'Cash', debit: paymentAmount, credit: 0, note: `Cash received for ${invoice.invoice_number}` },
+        { nameHint: 'Receivable', debit: 0, credit: paymentAmount, note: `Clear AR for ${invoice.invoice_number}` },
       ]);
 
       return { paymentId, newStatus, newAmountPaid };
@@ -5507,7 +5538,7 @@ export function registerIpcHandlers(): void {
           companyId,
           entityType: 'invoice',
           entityId: invoiceId,
-          data: { total: amount },
+          data: { total: paymentAmount },
         }).catch(() => {});
       }
     } catch { /* fire-and-forget */ }
@@ -5615,19 +5646,29 @@ export function registerIpcHandlers(): void {
         `).run(uuid(), runId, s.employeeId, s.hours, s.hoursOvertime || 0, s.grossPay, s.federalTax, s.stateTax, s.ss, s.medicare, s.netPay, s.ytdGross, s.ytdTaxes, s.ytdNet, s.preTaxDeductions || 0, s.postTaxDeductions || 0, s.deductionDetail || '{}', checkNumber, ytdFederal, ytdState, ytdSS, ytdMedicare);
       }
 
-      // BUG 4: Break out taxes into separate GL lines instead of single lumped "Tax" line
-      const totalFederalTax = stubs.reduce((sum: number, s: any) => sum + (s.federalTax || 0), 0);
-      const totalStateTax = stubs.reduce((sum: number, s: any) => sum + (s.stateTax || 0), 0);
-      const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
-      const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+      // Payroll JE must balance to the cent:
+      // DR Gross wages
+      // CR Net wages payable + employee tax withholdings + employee deductions
+      const totalFederalTax = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.federalTax) || 0), 0));
+      const totalStateTax = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.stateTax) || 0), 0));
+      const totalSS = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.ss) || 0), 0));
+      const totalMedicare = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.medicare) || 0), 0));
+      const totalPretaxDeductions = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.preTaxDeductions) || 0), 0));
+      const totalPosttaxDeductions = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.postTaxDeductions) || 0), 0));
+      const totalEmployeeDeductions = db.roundCents(totalPretaxDeductions + totalPosttaxDeductions);
+      const grossForJe = db.roundCents(Number(totalGross) || 0);
+      const netPayForJe = db.roundCents(
+        grossForJe - totalFederalTax - totalStateTax - totalSS - totalMedicare - totalEmployeeDeductions
+      );
 
       postJournalEntry(dbInstance, companyId, payDate, `Payroll - ${periodStart} to ${periodEnd}`, [
-        { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages' },
-        { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable' },
+        { nameHint: 'Wages Expense', debit: grossForJe, credit: 0, note: 'Gross wages' },
+        { nameHint: 'Wages Payable', debit: 0, credit: netPayForJe, note: 'Net wages payable' },
         { nameHint: 'Federal Withholding', debit: 0, credit: totalFederalTax, note: 'Federal income tax withheld' },
         { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+        { nameHint: 'Payable', debit: 0, credit: totalEmployeeDeductions, note: 'Employee deductions payable' },
       ]);
 
       // ── PTO Auto-Accrual ──
@@ -5780,18 +5821,26 @@ export function registerIpcHandlers(): void {
       }
 
       // 5. Re-post journal entry with updated totals
-      const totalFederalTax = stubs.reduce((sum: number, s: any) => sum + (s.federalTax || 0), 0);
-      const totalStateTax = stubs.reduce((sum: number, s: any) => sum + (s.stateTax || 0), 0);
-      const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
-      const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+      const totalFederalTax = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.federalTax) || 0), 0));
+      const totalStateTax = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.stateTax) || 0), 0));
+      const totalSS = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.ss) || 0), 0));
+      const totalMedicare = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.medicare) || 0), 0));
+      const totalPretaxDeductions = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.preTaxDeductions) || 0), 0));
+      const totalPosttaxDeductions = db.roundCents(stubs.reduce((sum: number, s: any) => sum + (Number(s.postTaxDeductions) || 0), 0));
+      const totalEmployeeDeductions = db.roundCents(totalPretaxDeductions + totalPosttaxDeductions);
+      const grossForJe = db.roundCents(Number(totalGross) || 0);
+      const netPayForJe = db.roundCents(
+        grossForJe - totalFederalTax - totalStateTax - totalSS - totalMedicare - totalEmployeeDeductions
+      );
 
       postJournalEntry(dbInstance, companyId, payDate, `Payroll - ${periodStart} to ${periodEnd}`, [
-        { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages (edited)' },
-        { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable' },
+        { nameHint: 'Wages Expense', debit: grossForJe, credit: 0, note: 'Gross wages (edited)' },
+        { nameHint: 'Wages Payable', debit: 0, credit: netPayForJe, note: 'Net wages payable' },
         { nameHint: 'Federal Withholding', debit: 0, credit: totalFederalTax, note: 'Federal income tax withheld' },
         { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+        { nameHint: 'Payable', debit: 0, credit: totalEmployeeDeductions, note: 'Employee deductions payable' },
       ]);
     });
     tx();
