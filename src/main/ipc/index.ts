@@ -578,18 +578,51 @@ function postJournalEntry(
     }
   }
 
+  const cents = (n: unknown): number => {
+    const v = Number(n);
+    return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
+  };
+
+  const totalDebit = cents(resolved.reduce((sum, line) => sum + cents(line.debit), 0));
+  const totalCredit = cents(resolved.reduce((sum, line) => sum + cents(line.credit), 0));
+
+  if (Math.abs(totalDebit - totalCredit) > 0.009) {
+    console.warn('[postJournalEntry] skipped unbalanced entry', {
+      description,
+      totalDebit,
+      totalCredit,
+      resolved,
+    });
+    return;
+  }
+
   const jeId = uuid();
+
+  // Critical fix:
+  // Insert as unposted first. Some SQLite triggers reject a posted journal entry
+  // as soon as the first line is inserted, because one line alone is unbalanced.
+  // We insert the header as draft/unposted, insert all balanced lines, then mark posted.
   (dbInstance as any).prepare(`
     INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted)
-    VALUES (?, ?, ?, ?, ?, 1)
+    VALUES (?, ?, ?, ?, ?, 0)
   `).run(jeId, companyId, nextNum, date, description);
 
   for (const line of resolved) {
+    const debit = cents(line.debit);
+    const credit = cents(line.credit);
+    if (debit <= 0 && credit <= 0) continue;
+
     (dbInstance as any).prepare(`
       INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(uuid(), jeId, line.accountId, line.debit, line.credit, line.note);
+    `).run(uuid(), jeId, line.accountId, debit, credit, line.note);
   }
+
+  (dbInstance as any).prepare(`
+    UPDATE journal_entries
+    SET is_posted = 1, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(jeId);
 }
 
 // CONCURRENCY: ipcMain.handle throws if the same channel is registered twice.
