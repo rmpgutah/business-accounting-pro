@@ -72,6 +72,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
   const handleSave = async () => {
     if (!form.name?.trim()) { toast.error('Loan name required'); return; }
     if (!form.principal || form.principal <= 0) { toast.error('Principal must be > 0'); return; }
+    if (!form.term_months || form.term_months <= 0) { toast.error('Term must be > 0 months'); return; }
     if (!form.first_payment_date) { toast.error('First payment date required'); return; }
     setSaving(true);
     try {

@@ -1176,7 +1176,16 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                             await api.remove('payments', p.id);
                             const remainingPayments = await api.query('payments', { invoice_id: invoiceId });
                             const newPaid = (remainingPayments || []).reduce((s: number, pay: any) => s + (pay.amount || 0), 0);
-                            const newStatus = newPaid >= (invoice?.total || 0) ? 'paid' : newPaid > 0 ? 'partial' : 'sent';
+                            let newStatus: string;
+                            if (newPaid >= (invoice?.total || 0)) {
+                              newStatus = 'paid';
+                            } else if (newPaid > 0) {
+                              newStatus = 'partial';
+                            } else if (invoice?.due_date && new Date() > new Date(invoice.due_date)) {
+                              newStatus = 'overdue';
+                            } else {
+                              newStatus = 'sent';
+                            }
                             await api.update('invoices', invoiceId, { amount_paid: newPaid, status: newStatus });
                             loadData();
                           } catch (err: any) {
@@ -1275,6 +1284,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           invoiceId={invoiceId}
           invoiceTotal={invoice.total}
           amountPaid={invoice.amount_paid}
+          currency={invoice.currency || 'USD'}
           editPaymentId={editPaymentId}
           onClose={() => { setShowPaymentModal(false); setEditPaymentId(null); }}
           onSaved={handlePaymentSaved}

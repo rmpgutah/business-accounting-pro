@@ -275,13 +275,15 @@ const ReconcileView: React.FC = () => {
   const printReport = async () => {
     const acct = bankAccounts.find((b) => b.id === selectedBankId);
     const totalBank = bankTxns.reduce((s, t) => s + t.amount, 0);
+    // XSS: escape HTML in user-provided text fields
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const matchedRows = savedMatches
       .map(
         (m: any) => `<tr>
         <td>${formatDate(m.bank_date)}</td>
-        <td>${m.bank_desc || ''}</td>
+        <td>${esc(m.bank_desc || '')}</td>
         <td style="text-align:right">${(m.bank_amount ?? 0).toFixed(2)}</td>
-        <td>${m.book_memo || ''}</td>
+        <td>${esc(m.book_memo || '')}</td>
         <td style="text-align:right">${(m.book_amount ?? 0).toFixed(2)}</td>
       </tr>`
       )
@@ -290,9 +292,9 @@ const ReconcileView: React.FC = () => {
       .map(
         (t) => `<tr>
         <td>${formatDate(t.date)}</td>
-        <td>${t.description || ''}</td>
-        <td style="text-align:right">${t.amount.toFixed(2)}</td>
-        <td>${t.status}</td>
+        <td>${esc(t.description || '')}</td>
+        <td style="text-align:right">${(t.amount ?? 0).toFixed(2)}</td>
+        <td>${esc(t.status)}</td>
       </tr>`
       )
       .join('');
@@ -336,18 +338,23 @@ const ReconcileView: React.FC = () => {
     }
   };
 
-  // ─── Manual match ─────────────────────────────────────
+  // ─── Manual match (called from click handlers, not useEffect) ──
+  const commitMatch = (bankId: string, bookId: string) => {
+    const bank = bankTxns.find((t) => t.id === bankId);
+    const book = bookEntries.find((e) => e.id === bookId);
+    if (bank && book) {
+      setMatchedPairs((prev) => [...prev, { bank, book }]);
+    }
+  };
+
+  // Commit match when both selections are made (one-shot effect)
   useEffect(() => {
     if (selectedBank && selectedBook) {
-      const bank = bankTxns.find((t) => t.id === selectedBank);
-      const book = bookEntries.find((e) => e.id === selectedBook);
-      if (bank && book) {
-        setMatchedPairs((prev) => [...prev, { bank, book }]);
-      }
+      commitMatch(selectedBank, selectedBook);
       setSelectedBank(null);
       setSelectedBook(null);
     }
-  }, [selectedBank, selectedBook, bankTxns, bookEntries]);
+  }, [selectedBank, selectedBook]);
 
   // ─── Auto-match by amount ─────────────────────────────
   const autoMatch = () => {

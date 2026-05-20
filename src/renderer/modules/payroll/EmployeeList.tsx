@@ -240,13 +240,28 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
   // ─── Bulk Delete ────────────────────────────────────
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Delete ${selectedIds.size} employee${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${selectedIds.size} employee${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
     try {
+      const deletedIds = new Set<string>();
       for (const id of selectedIds) {
-        await api.remove('employees', id);
+        try {
+          await api.remove('employees', id);
+          deletedIds.add(id);
+        } catch (err: any) {
+          console.warn(`Failed to delete employee ${id}:`, err?.message);
+        }
       }
-      setEmployees(prev => prev.filter(e => !selectedIds.has(e.id)));
-      setSelectedIds(new Set());
+      if (deletedIds.size > 0) {
+        setEmployees(prev => prev.filter(e => !deletedIds.has(e.id)));
+      }
+      setSelectedIds(prev => {
+        const remaining = new Set(prev);
+        for (const id of deletedIds) remaining.delete(id);
+        return remaining;
+      });
+      if (deletedIds.size < selectedIds.size) {
+        setError(`Deleted ${deletedIds.size} of ${selectedIds.size} employees. Some deletions failed.`);
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to delete employees');
     }

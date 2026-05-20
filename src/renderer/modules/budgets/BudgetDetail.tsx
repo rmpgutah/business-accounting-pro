@@ -87,11 +87,11 @@ function MiniBarChart({ months }: { months: MonthBucket[] }) {
             <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 72 }}>
               <div
                 title={`Budgeted: ${formatCurrency(m.budgeted)}`}
-                style={{ width: 8, height: bH, background: 'var(--color-accent-blue)', borderRadius: '2px 2px 0 0', opacity: 0.5 }}
+                style={{ width: 8, height: bH, background: 'var(--color-accent-blue)', borderRadius: '6px 6px 0 0', opacity: 0.5 }}
               />
               <div
                 title={`Actual: ${formatCurrency(m.actual)}`}
-                style={{ width: 8, height: aH, background: over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)', borderRadius: '2px 2px 0 0' }}
+                style={{ width: 8, height: aH, background: over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)', borderRadius: '6px 6px 0 0' }}
               />
             </div>
             <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 32 }}>

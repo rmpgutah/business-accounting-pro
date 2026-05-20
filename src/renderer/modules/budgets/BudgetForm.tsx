@@ -7,6 +7,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 interface BudgetLineInput {
   category: string;
   amount: string;
+  account_id?: string;
 }
 
 interface Account {
@@ -75,7 +76,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
         }
         const existingLines = await api.query('budget_lines', { budget_id: editBudgetId });
         if (Array.isArray(existingLines) && existingLines.length > 0) {
-          setLines(existingLines.map((l: any) => ({ category: l.category || '', amount: String(l.amount || '') })));
+          setLines(existingLines.map((l: any) => ({ category: l.category || '', amount: String(l.amount || ''), account_id: l.account_id || '' })));
         }
       } catch (err) {
         console.error('Failed to load budget for editing:', err);
@@ -179,6 +180,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated
           budget_id: budgetId,
           category: line.category.trim(),
           amount: parseFloat(line.amount),
+          account_id: line.account_id || null,
         });
       }
       onCreated(budgetId);

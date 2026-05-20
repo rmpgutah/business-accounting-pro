@@ -335,7 +335,10 @@ const TaxDashboard: React.FC = () => {
     const avgState = completed.reduce((s, q) => s + q.state, 0) / completed.length;
     const avgFica = completed.reduce((s, q) => s + q.fica, 0) / completed.length;
 
-    // Cumulative 941 tax determines deposit schedule: < $50k lookback = Monthly
+    // IRS deposit schedule is based on the PRIOR year's lookback period total
+    // (Form 941 taxes from 4 quarters prior). We approximate with current-year
+    // cumulative since we don't have prior-year data readily available.
+    // < $50,000 lookback = Monthly; >= $50,000 = Semi-Weekly.
     const cumulative = completed.reduce((s, q) => s + q.federal + q.fica, 0);
     const schedule = cumulative < 50000 ? 'Monthly' : 'Semi-Weekly';
 
@@ -375,9 +378,11 @@ const TaxDashboard: React.FC = () => {
   }, [ytdTotalTax, pyTaxes, ytdPayroll, data]);
 
   // Employer tax cost: employer pays matching FICA (SS 6.2% + Medicare 1.45%) + FUTA
+  // ytdFica includes BOTH employee + employer halves, so we use ~half for employer cost.
   const employerTaxCost = useMemo(() => {
-    // Approximate employer cost = matching FICA + FUTA
-    return ytdFica + wageBaseEmployees.reduce((s, e) => s + Math.min(e.ytd_gross, FUTA_CAP) * 0.006, 0);
+    const employerFica = ytdFica / 2; // employer matches employee FICA
+    const futa = wageBaseEmployees.reduce((s, e) => s + Math.min(e.ytd_gross, FUTA_CAP) * 0.006, 0);
+    return employerFica + futa;
   }, [ytdFica, wageBaseEmployees]);
 
   const avgTaxPerEmployee = activeEmployeeCount > 0 ? ytdTotalTax / activeEmployeeCount : 0;

@@ -389,13 +389,18 @@ const TaxFiling: React.FC = () => {
 
   const handleRecordPayment = async () => {
     if (!paymentForm || !paymentAmount) return;
+    const amt = parseFloat(paymentAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setError('Payment amount must be a positive number.');
+      return;
+    }
     setSaving(true);
     try {
       await api.taxRecordFiling({
         form_type: paymentForm.formType,
         year,
         quarter: paymentForm.quarter,
-        amount_paid: parseFloat(paymentAmount),
+        amount_paid: amt,
         payment_date: paymentDate || new Date().toISOString().slice(0, 10),
         confirmation_number: paymentConfirm || undefined,
         notes: paymentNotes || undefined,

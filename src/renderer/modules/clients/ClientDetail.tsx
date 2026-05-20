@@ -156,6 +156,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('invoices');
   const [stats, setStats] = useState<SummaryStats>({ totalInvoiced: 0, totalPaid: 0, outstanding: 0 });
   const [tabData, setTabData] = useState<any[]>([]);
@@ -260,6 +261,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         } catch { /* table may not exist */ }
       } catch (err) {
         console.error('Failed to load client:', err);
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load client');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -538,10 +540,21 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
     { key: 'debts', label: 'Debts', icon: <Scale size={14} /> },
   ];
 
-  if (loading || !client) {
+  if (loading) {
     return (
       <div className="p-6 flex items-center justify-center h-full">
         <span className="text-sm text-text-muted font-mono">Loading client...</span>
+      </div>
+    );
+  }
+
+  if (loadError || !client) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-full gap-3">
+        <span className="text-sm text-accent-expense font-mono">{loadError || 'Client not found'}</span>
+        <button onClick={() => { setLoadError(null); setLoading(true); }} className="block-btn text-xs">
+          Retry
+        </button>
       </div>
     );
   }
@@ -880,7 +893,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         {/* Cross-entity integration: everything touching this client */}
         <div className="grid grid-cols-2 gap-4 mt-6">
           <RelatedPanel entityType="client" entityId={clientId} />
-          <EntityTimeline entityType="clients" entityId={clientId} />
+          <EntityTimeline entityType="client" entityId={clientId} />
         </div>
       </div>
     </div>

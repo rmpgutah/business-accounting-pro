@@ -679,6 +679,12 @@ export function registerIpcHandlers(): void {
     'command_history',
     'workflow_executions',
     'workflow_event_log',
+    // Loan system child tables — company_id lives on parent loans table
+    'loan_payment_schedule',
+    'loan_payments',
+    'loan_events',
+    // IRS mileage rates — global reference table, no company_id
+    'mileage_rates',
   ]);
 
   // SECURITY: Tables that hold credentials/secrets must not be writable via the

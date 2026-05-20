@@ -1,10 +1,24 @@
 declare global {
   interface Window {
     electronAPI: {
-      invoke: (channel: string, ...args: any[]) => Promise<any>;
-      on: (channel: string, callback: (...args: any[]) => void) => () => void;
+      invoke: <T = any>(channel: string, ...args: unknown[]) => Promise<T>;
+      on: (channel: string, callback: (...args: unknown[]) => void) => () => void;
     };
   }
+}
+
+interface SaveResult {
+  id?: string;
+  error?: string;
+}
+
+interface SavePayload {
+  invoiceId?: string | null;
+  expenseId?: string | null;
+  invoiceData?: Record<string, unknown>;
+  expenseData?: Record<string, unknown>;
+  lineItems?: Array<Record<string, unknown>>;
+  isEdit?: boolean;
 }
 
 const api = {
@@ -79,22 +93,12 @@ const api = {
     window.electronAPI.invoke('debt:portfolio-report-data', { companyId }),
 
   // Invoice atomic save (header + line items in one DB transaction)
-  saveInvoice: (payload: {
-    invoiceId: string | null;
-    invoiceData: Record<string, any>;
-    lineItems: Array<Record<string, any>>;
-    isEdit: boolean;
-  }): Promise<{ id?: string; error?: string }> =>
-    window.electronAPI.invoke('invoice:save', payload),
+  saveInvoice: (payload: SavePayload): Promise<SaveResult> =>
+    window.electronAPI.invoke<SaveResult>('invoice:save', payload),
 
   // Expense atomic save (header + line items in one DB transaction)
-  saveExpense: (payload: {
-    expenseId: string | null;
-    expenseData: Record<string, any>;
-    lineItems: Array<Record<string, any>>;
-    isEdit: boolean;
-  }): Promise<{ id?: string; error?: string }> =>
-    window.electronAPI.invoke('expense:save', payload),
+  saveExpense: (payload: SavePayload): Promise<SaveResult> =>
+    window.electronAPI.invoke<SaveResult>('expense:save', payload),
 
   // Export
   // Bug fix #3: export:invoice-pdf handler was removed in v1.1.1 dedup cleanup;

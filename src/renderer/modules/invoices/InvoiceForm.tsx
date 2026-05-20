@@ -993,11 +993,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
       const result = await api.saveInvoice({ invoiceId: isEdit ? invoiceId : null, invoiceData, lineItems, isEdit });
       if (result?.error) throw new Error(result.error);
+      if (!result?.id) throw new Error('Invoice saved but no ID was returned.');
+      const savedId = result.id;
       // Save payment schedule if active
       if (showSchedule && milestones.length > 0) {
-        await api.savePaymentSchedule(result.id!, milestones).catch(console.error);
+        await api.savePaymentSchedule(savedId, milestones).catch(console.error);
       }
-      onSaved(result.id!);
+      onSaved(savedId);
     } catch (err) {
       console.error('Failed to save invoice:', err);
       const detail = err instanceof Error ? err.message : String(err);

@@ -155,7 +155,7 @@ const VendorDetail: React.FC<VendorDetailProps> = ({ vendorId, onBack, onEdit })
       {/* Cross-integration panels */}
       <div className="grid grid-cols-2 gap-4 mt-6">
         <RelatedPanel entityType="vendor" entityId={vendorId} hide={['expenses', 'bills']} />
-        <EntityTimeline entityType="vendors" entityId={vendorId} />
+        <EntityTimeline entityType="vendor" entityId={vendorId} />
       </div>
     </div>
   );

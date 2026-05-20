@@ -402,7 +402,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     setBatchLoading(true);
     try {
       const ids = Array.from(selectedIds);
-      // Update in parallel for speed; preserve any existing overpayment via Math.max
+      // NOTE: This updates invoice totals directly without creating payment
+      // records or activity log entries. For full audit trail, use the
+      // PaymentRecorder modal on individual invoices instead.
       await Promise.all(
         ids.map((id) => {
           const inv = invoices.find((i) => i.id === id);

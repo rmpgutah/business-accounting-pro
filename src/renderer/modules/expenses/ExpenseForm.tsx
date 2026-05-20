@@ -952,7 +952,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             is_active: 1,
             template_data: payload,
           });
-        } catch (e) { console.error('Recurring template create failed', e); }
+        } catch (e) {
+          console.error('Recurring template create failed', e);
+          // Warn user but don't fail the expense save
+          setErrors(prev => [...prev, 'Expense saved but recurring template creation failed.']);
+        }
       }
 
       onSaved();

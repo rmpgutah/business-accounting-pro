@@ -1560,7 +1560,7 @@ const Dashboard: React.FC = () => {
                           width: 8,
                           height: 8,
                           backgroundColor: color,
-                          borderRadius: '2px',
+                          borderRadius: '6px',
                           flexShrink: 0,
                         }}
                       />

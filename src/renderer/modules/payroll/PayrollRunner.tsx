@@ -150,7 +150,17 @@ function calcPayStub(
   const hours = emp.pay_type === 'hourly' ? (hoursOverride ?? defaultHours) : 0;
 
   // Feature 4: Overtime calculation for hourly employees
-  const overtimeThreshold = emp.pay_schedule === 'weekly' ? 40 : 80;
+  // Overtime is per FLSA: >40 hours per workweek. Approximate threshold
+  // based on pay period length (weekly=40, biweekly=80, semimonthly≈86.67, monthly≈173.33).
+  const overtimeThreshold = (() => {
+    switch (emp.pay_schedule) {
+      case 'weekly': return 40;
+      case 'biweekly': return 80;
+      case 'semimonthly': return 86.67;
+      case 'monthly': return 173.33;
+      default: return 80; // fallback to biweekly
+    }
+  })();
   let hours_regular = hours;
   let hours_overtime = 0;
   let regular_pay = 0;
@@ -717,8 +727,8 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
     // Feature 15: Period overlap validation
     try {
       const existing = await api.rawQuery(
-        `SELECT pay_period_start, pay_period_end FROM payroll_runs WHERE company_id = (SELECT id FROM companies LIMIT 1) AND pay_period_start <= ? AND pay_period_end >= ?`,
-        [periodEnd, periodStart]
+        `SELECT pay_period_start, pay_period_end FROM payroll_runs WHERE company_id = ? AND pay_period_start <= ? AND pay_period_end >= ?`,
+        [activeCompany?.id, periodEnd, periodStart]
       );
       if (Array.isArray(existing) && existing.length > 0) {
         setPeriodWarning(`Warning: This period overlaps with ${existing.length} existing payroll run(s).`);
@@ -795,9 +805,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
             ss: calc.social_security,
             medicare: calc.medicare,
             netPay: calc.net_pay,
-            ytdGross: ytd.ytd_gross + calc.gross_pay,
-            ytdTaxes: ytd.ytd_taxes + totalWithholding,
-            ytdNet: ytd.ytd_net + calc.net_pay,
+            ytdGross: Number(ytd.ytd_gross || 0) + calc.gross_pay,
+            ytdTaxes: Number(ytd.ytd_taxes || 0) + totalWithholding,
+            ytdNet: Number(ytd.ytd_net || 0) + calc.net_pay,
             preTaxDeductions: calc.pre_tax_deductions,
             postTaxDeductions: calc.post_tax_deductions,
             deductionDetail: '{}',

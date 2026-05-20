@@ -181,8 +181,8 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
           <div
             className="flex items-center justify-between px-3 py-2 mb-1"
             style={{
-              backgroundColor: isToday(group.date) ? 'rgba(59,130,246,0.06)' : '#1e1e1e',
-              border: '1px solid #2e2e2e',
+              backgroundColor: isToday(group.date) ? 'var(--color-accent-blue/10)' : 'var(--color-bg-tertiary)',
+              border: '1px solid var(--color-border-primary)',
               borderRadius: '6px',
             }}
           >

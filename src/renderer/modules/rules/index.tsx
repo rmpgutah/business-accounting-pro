@@ -40,19 +40,31 @@ const RulesModule: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this rule?')) return;
-    await api.deleteRule(id);
-    load();
+    if (!window.confirm('Delete this rule?')) return;
+    try {
+      await api.deleteRule(id);
+      load();
+    } catch (err) {
+      console.error('Failed to delete rule:', err);
+    }
   };
 
   const handleToggle = async (id: string, is_active: boolean) => {
-    await api.updateRule(id, { is_active: is_active ? 1 : 0 });
-    load();
+    try {
+      await api.updateRule(id, { is_active: is_active ? 1 : 0 });
+      load();
+    } catch (err) {
+      console.error('Failed to toggle rule:', err);
+    }
   };
 
   const handleResolve = async (id: string, status: 'approved' | 'rejected') => {
-    await api.resolveApproval(id, status);
-    setApprovals(prev => prev.filter(a => a.id !== id));
+    try {
+      await api.resolveApproval(id, status);
+      setApprovals(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error('Failed to resolve approval:', err);
+    }
   };
 
   return (

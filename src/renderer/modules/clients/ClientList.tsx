@@ -671,17 +671,29 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     <td>
                       {client.tags ? (
                         <div className="flex flex-wrap gap-1">
-                          {client.tags.split(',').map((tag) => {
-                            const t = tag.trim();
-                            return (
-                              <span
-                                key={`${client.id}:${t}`}
-                                className="block-badge block-badge-purple text-[10px]"
-                              >
-                                {t}
-                              </span>
-                            );
-                          })}
+                          {(() => {
+                            // Tags stored as JSON array string in DB
+                            let tagList: string[] = [];
+                            try {
+                              const parsed = JSON.parse(client.tags);
+                              tagList = Array.isArray(parsed) ? parsed : [client.tags];
+                            } catch {
+                              // Legacy: comma-separated string
+                              tagList = client.tags.split(',');
+                            }
+                            return tagList.map((tag) => {
+                              const t = tag.trim();
+                              if (!t) return null;
+                              return (
+                                <span
+                                  key={`${client.id}:${t}`}
+                                  className="block-badge block-badge-purple text-[10px]"
+                                >
+                                  {t}
+                                </span>
+                              );
+                            });
+                          })()}
                         </div>
                       ) : (
                         <span className="text-text-muted">--</span>

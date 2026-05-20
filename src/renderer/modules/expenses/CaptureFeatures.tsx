@@ -555,8 +555,14 @@ export const QuickAddBar: React.FC<{ companyId: string; onCreated: (id: string) 
         description: vendor, status: 'draft',
         tags: JSON.stringify([]),
       });
+      if (r?.error) {
+        console.error('Quick add expense failed:', r.error);
+        return;
+      }
       setVendor(''); setAmount('');
       if (r?.id) onCreated(r.id);
+    } catch (err) {
+      console.error('Quick add expense failed:', err);
     } finally { setBusy(false); }
   };
   return (

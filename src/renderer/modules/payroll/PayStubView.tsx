@@ -265,8 +265,8 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     );
   }
 
-  const totalDeductions = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
-  const ytdTotalDeductions = ytd.federal_tax + ytd.state_tax + ytd.social_security + ytd.medicare;
+  const totalDeductions = (stub.federal_tax ?? 0) + (stub.state_tax ?? 0) + (stub.social_security ?? 0) + (stub.medicare ?? 0);
+  const ytdTotalDeductions = (ytd.federal_tax ?? 0) + (ytd.state_tax ?? 0) + (ytd.social_security ?? 0) + (ytd.medicare ?? 0);
   const isDirectDeposit = !!(employee?.routing_number);
 
   // Feature 2: Print check handler — merge per-tax YTD into stub data

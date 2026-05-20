@@ -102,6 +102,8 @@ const StripeExplorer: React.FC = () => {
     api.stripe.resources().then(({ byGroup, all }) => {
       setGroups(byGroup);
       setResources(all as Record<string, ResourceMeta>);
+    }).catch((err) => {
+      console.warn('Failed to load Stripe resources:', err);
     });
   }, []);
 

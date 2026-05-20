@@ -470,13 +470,13 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
 
     setSaving(true);
     try {
-      const poData = {
+      const poData: Record<string, unknown> = {
         company_id: activeCompany!.id,
         po_number: poNumber.trim(),
         vendor_id: vendorId,
         issue_date: orderDate,
         expected_date: expectedDate || null,
-        status: 'draft' as POStatus,
+        status: isEdit ? undefined : ('draft' as POStatus),
         subtotal,
         tax_amount: taxAmount,
         total,

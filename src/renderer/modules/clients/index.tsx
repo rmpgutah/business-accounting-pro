@@ -523,15 +523,15 @@ const ClientsModule: React.FC = () => {
                         {/* Legend */}
                         <div className="flex gap-5">
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-income)', borderRadius: '2px' }} />
+                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-income)', borderRadius: '6px' }} />
                             <span className="text-xs text-text-secondary">Active ({active})</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-expense)', borderRadius: '2px' }} />
+                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-expense)', borderRadius: '6px' }} />
                             <span className="text-xs text-text-secondary">Inactive ({inactive})</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-blue)', borderRadius: '2px' }} />
+                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-blue)', borderRadius: '6px' }} />
                             <span className="text-xs text-text-secondary">Prospect ({prospects})</span>
                           </div>
                         </div>

@@ -238,29 +238,25 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
     const endTime = new Date();
     const startTime = originalStartRef.current ?? new Date(endTime.getTime() - totalSeconds * 1000);
 
-    // Reset timer state AFTER capturing values
+    // Capture timer data BEFORE resetting, so we can restore on failure
+    const timerData = {
+      date: toLocalDateString(startTime),
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      duration_minutes: durationMinutes,
+      client_id: clientId || null,
+      project_id: projectId || null,
+      description: description || null,
+      is_billable: billable,
+    };
+
     setTimerState('idle');
     savePersistedTimer(null);
     setError('');
     setSaving(true);
 
     try {
-      const result = await api.create('time_entries', {
-        // DATE: Item #16 — local-date string of the START time, not UTC. A
-        // timer started at 23:55 MST and stopped at 00:10 the next day is still
-        // logged on the start date. UTC slice would advance the day boundary.
-        // duration_minutes is computed from real elapsed wall-clock (Date.now
-        // diff) so it survives midnight rollover AND DST transitions
-        // (Item #17): springForward/fallBack don't change Date.now monotonics.
-        date: toLocalDateString(startTime),
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        duration_minutes: durationMinutes,
-        client_id: clientId || null,
-        project_id: projectId || null,
-        description: description || null,
-        is_billable: billable,
-      });
+      const result = await api.create('time_entries', timerData);
 
       // IPC handler returns { error } on failure instead of throwing
       if (result && typeof result === 'object' && 'error' in result) {
@@ -282,8 +278,20 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
       const msg = err?.message || 'Failed to save time entry';
       console.error('Failed to create time entry:', msg, err);
       setError(msg);
-      // Backup alert so the user never misses the error
-      alert('Time entry failed to save: ' + msg);
+      // Restore timer state so user can retry
+      setTimerState('paused');
+      setElapsed(timerData.duration_minutes * 60);
+      const restoredTimer: PersistedTimer = {
+        timerState: 'paused',
+        originalStartISO: timerData.start_time,
+        accumulatedSeconds: timerData.duration_minutes * 60,
+        segmentStartMs: Date.now(),
+        clientId: timerData.client_id || '',
+        projectId: timerData.project_id || '',
+        description: timerData.description || '',
+        billable: timerData.is_billable,
+      };
+      savePersistedTimer(restoredTimer);
     } finally {
       setSaving(false);
     }

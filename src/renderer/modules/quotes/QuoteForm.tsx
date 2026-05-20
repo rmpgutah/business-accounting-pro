@@ -1001,10 +1001,10 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                   ...emptyLine(),
                   sort_order: prev.length,
                   description: s.description || '',
-                  quantity: s.quantity || 1,
-                  unit_price: s.unit_price || 0,
-                  tax_rate: s.tax_rate || 0,
-                } as any]);
+                  quantity: String(s.quantity || 1),
+                  unit_price: String(s.unit_price || 0),
+                  tax_rate: String(s.tax_rate || 0),
+                }]);
               }}
               onSaveAsSnippet={() => {
                 const items = lines.filter((l) => (l.description as string)?.trim() || Number(l.unit_price) > 0);

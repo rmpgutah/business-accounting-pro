@@ -4,14 +4,6 @@ import api from '../../lib/api';
 import { todayLocal } from '../../lib/date-helpers';
 import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 // ─── Payment Methods ────────────────────────────────────
 const PAYMENT_METHODS = [
   { value: 'transfer', label: 'Bank Transfer' },
@@ -26,6 +18,7 @@ interface PaymentRecorderProps {
   invoiceId: string;
   invoiceTotal: number;
   amountPaid: number;
+  currency?: string;
   editPaymentId?: string | null;
   onClose: () => void;
   onSaved: () => void;
@@ -35,11 +28,18 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   invoiceId,
   invoiceTotal,
   amountPaid,
+  currency = 'USD',
   editPaymentId,
   onClose,
   onSaved,
 }) => {
   const isEditing = !!editPaymentId;
+  const fmt = useMemo(() => new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }), [currency]);
 
   const [amount, setAmount] = useState<string>('');
   const [date, setDate] = useState<string>(todayLocal());

@@ -310,9 +310,10 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
         }
         await api.remove('budgets', id);
       }
+      const count = selectedIds.size;
       setSelectedIds(new Set());
       await loadBudgets();
-      setOpSuccess(`Deleted ${selectedIds.size} budget${selectedIds.size !== 1 ? 's' : ''}`);
+      setOpSuccess(`Deleted ${count} budget${count !== 1 ? 's' : ''}`);
       setTimeout(() => setOpSuccess(''), 3000);
     } catch (err: any) {
       console.error('Failed to batch delete budgets:', err);
@@ -332,10 +333,11 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
       for (const id of selectedIds) {
         await api.update('budgets', id, { status: target });
       }
+      const count = selectedIds.size;
       setSelectedIds(new Set());
       await loadBudgets();
       setOpSuccess(
-        `${target === 'active' ? 'Activated' : 'Deactivated'} ${selectedIds.size} budget${selectedIds.size !== 1 ? 's' : ''}`
+        `${target === 'active' ? 'Activated' : 'Deactivated'} ${count} budget${count !== 1 ? 's' : ''}`
       );
       setTimeout(() => setOpSuccess(''), 3000);
     } catch (err: any) {

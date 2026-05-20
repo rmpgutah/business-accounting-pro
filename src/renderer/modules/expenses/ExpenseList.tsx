@@ -148,13 +148,18 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   const [groupBy, setGroupBy] = useState<GroupKey>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [showColMenu, setShowColMenu] = useState(false);
-  const [visibleCols, setVisibleCols] = useState<ColKey[]>(() => {
+  const [visibleCols, setVisibleCols] = useState<ColKey[]>(DEFAULT_VISIBLE_COLS);
+
+  // Load column preferences using userId (not hardcoded 'anon')
+  useEffect(() => {
     try {
-      const raw = localStorage.getItem(COLS_KEY('anon'));
-      if (raw) return JSON.parse(raw);
+      const raw = localStorage.getItem(COLS_KEY(userId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setVisibleCols(parsed);
+      }
     } catch {}
-    return DEFAULT_VISIBLE_COLS;
-  });
+  }, [userId]);
   const [pinnedVendors, setPinnedVendors] = useState<Set<string>>(new Set());
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [showViewsMenu, setShowViewsMenu] = useState(false);

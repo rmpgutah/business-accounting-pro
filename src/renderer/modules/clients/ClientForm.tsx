@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 import ClientContacts, { ClientContact } from './ClientContacts';
 import {
   CLIENT_TIER, CLIENT_INDUSTRY, CLIENT_SEGMENT, CLIENT_LIFECYCLE, CLIENT_RISK,
@@ -107,6 +108,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   const isEditing = Boolean(clientId);
 
@@ -257,13 +259,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       // Auto-classify on save (only when user hasn't picked one)
       if (isEditing && clientId) {
         try {
+          const companyId = activeCompany?.id;
           // Risk rating from avg days late on invoices
-          if (!payload.risk_rating) {
+          if (!payload.risk_rating && companyId) {
             const r = await api.rawQuery(
               `SELECT AVG(CASE WHEN paid_date IS NOT NULL AND due_date IS NOT NULL
                  THEN julianday(paid_date) - julianday(due_date) ELSE 0 END) AS avg_late
-               FROM invoices WHERE client_id = ?`,
-              [clientId]
+               FROM invoices WHERE client_id = ? AND company_id = ?`,
+              [clientId, companyId]
             );
             const row = Array.isArray(r) ? r[0] : r;
             if (row && Number.isFinite(row.avg_late)) {
@@ -271,10 +274,10 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             }
           }
           // VIP auto-set when total paid > VIP threshold (default $50k)
-          if (!payload.lifecycle_stage || payload.lifecycle_stage === 'active') {
+          if ((!payload.lifecycle_stage || payload.lifecycle_stage === 'active') && companyId) {
             const r2 = await api.rawQuery(
-              `SELECT COALESCE(SUM(amount_paid), 0) AS paid FROM invoices WHERE client_id = ?`,
-              [clientId]
+              `SELECT COALESCE(SUM(amount_paid), 0) AS paid FROM invoices WHERE client_id = ? AND company_id = ?`,
+              [clientId, companyId]
             );
             const row2 = Array.isArray(r2) ? r2[0] : r2;
             const paid = Number(row2?.paid || 0);
@@ -290,10 +293,16 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
         savedId = clientId;
       } else {
         const created = await api.create('clients', payload);
+        if (!created?.id) throw new Error('Client created but no ID returned');
         savedId = created.id;
       }
 
-      await api.saveClientContacts(savedId, contacts.map(c => ({ ...c, client_id: savedId })));
+      try {
+        await api.saveClientContacts(savedId, contacts.map(c => ({ ...c, client_id: savedId })));
+      } catch (contactErr) {
+        console.warn('Client saved but contacts failed to save:', contactErr);
+        // Don't throw — the client was saved successfully
+      }
 
       onSaved();
     } catch (err: any) {

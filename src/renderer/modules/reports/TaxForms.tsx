@@ -1999,8 +1999,12 @@ const Form1120View: React.FC<{ data: any }> = ({ data }) => {
         ['30', 'TAXABLE INCOME', data.line30_taxable_income, 'bold'],
         ['31', 'TOTAL TAX (line 30 × 21%)', data.line31_total_tax, 'red'],
         ['32', 'Estimated tax payments', data.line32_estimated_tax_payments],
-        ['33', 'Balance due', data.line33_balance_due, data.line33_balance_due > 0 ? 'red' : undefined],
-        ['34', 'Overpayment', data.line34_overpayment, data.line34_overpayment > 0 ? 'green' : undefined],
+        data.line33_balance_due > 0
+          ? ['33', 'Balance due', data.line33_balance_due, 'red' as const]
+          : ['33', 'Balance due', data.line33_balance_due],
+        data.line34_overpayment > 0
+          ? ['34', 'Overpayment', data.line34_overpayment, 'green' as const]
+          : ['34', 'Overpayment', data.line34_overpayment],
       ]} />
     </div>
   );

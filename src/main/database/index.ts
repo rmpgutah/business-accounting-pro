@@ -2322,6 +2322,11 @@ const tablesWithoutUpdatedAt = new Set([
   'workflow_event_log',
   'predictions',
   'anomaly_log',
+  // Loan system child tables — created_at only
+  'loan_payment_schedule',
+  'loan_events',
+  // IRS mileage rates — global reference table, no updated_at
+  'mileage_rates',
 ]);
 
 // SCHEMA: tables with a `deleted_at` column. queryAll() auto-filters these

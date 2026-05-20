@@ -257,7 +257,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       try {
         // Perf: cap bill list at 2000 most-recent; aggregate stats come from billsStats().
         const [billData, vendorData] = await Promise.all([
-          api.query('bills', { company_id: activeCompany.id }, { field: 'bill_date', dir: 'desc' }, 2000),
+          api.query('bills', { company_id: activeCompany.id }, { field: 'created_at', dir: 'desc' }, 2000),
           api.query('vendors', { company_id: activeCompany.id }),
         ]);
         if (cancelled) return;
@@ -410,7 +410,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       const billData = await api.query(
         'bills',
         { company_id: activeCompany!.id },
-        { field: 'bill_date', dir: 'desc' },
+        { field: 'created_at', dir: 'desc' },
         2000
       );
       setBills(Array.isArray(billData) ? billData : []);
@@ -446,7 +446,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       const billData = await api.query(
         'bills',
         { company_id: activeCompany!.id },
-        { field: 'bill_date', dir: 'desc' },
+        { field: 'created_at', dir: 'desc' },
         2000
       );
       setBills(Array.isArray(billData) ? billData : []);
@@ -1351,6 +1351,11 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         billData.amount_paid = 0;
         const result = await api.create('bills', billData);
         savedId = result?.id ?? result;
+      }
+
+      if (!savedId) {
+        setErrors(['Failed to create bill — no ID was returned.']);
+        return;
       }
 
       // Create new line items with all invoice-parity fields.
@@ -2597,7 +2602,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
           api.query(
             'bills',
             { company_id: activeCompany.id },
-            { field: 'bill_date', dir: 'desc' },
+            { field: 'created_at', dir: 'desc' },
             5000
           ),
           api.query('vendors', { company_id: activeCompany.id }),

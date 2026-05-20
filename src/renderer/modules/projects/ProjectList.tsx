@@ -71,14 +71,14 @@ const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget 
       </div>
       <div
         className="w-full h-1.5 bg-bg-tertiary overflow-hidden"
-        style={{ borderRadius: '1px' }}
+        style={{ borderRadius: '6px' }}
       >
         <div
           className="h-full transition-all duration-300"
           style={{
             width: `${pct}%`,
             backgroundColor: barColor,
-            borderRadius: '1px',
+            borderRadius: '6px',
           }}
         />
       </div>
