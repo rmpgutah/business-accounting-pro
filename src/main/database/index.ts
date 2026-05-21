@@ -1966,6 +1966,16 @@ export function initDatabase(): Database.Database {
   `CREATE INDEX IF NOT EXISTS idx_esign_permissions_doc ON esign_permissions(document_id)`,
   `CREATE INDEX IF NOT EXISTS idx_esign_audit_doc ON esign_audit_log(document_id)`,
   `CREATE INDEX IF NOT EXISTS idx_esign_audit_created ON esign_audit_log(created_at)`,
+  // Soft-delete column additions for tables missing deleted_at (2026-05-21)
+  "ALTER TABLE employees ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE clients ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE vendors ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE projects ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE quotes ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE loans ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE tags ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE custom_field_definitions ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  "ALTER TABLE inventory_items ADD COLUMN deleted_at TEXT DEFAULT NULL",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
