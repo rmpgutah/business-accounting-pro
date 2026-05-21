@@ -558,9 +558,13 @@ function postJournalEntry(
   }
 
   const jeId = uuid();
+  // BUG FIX: insert as draft (is_posted=0) so line-level balance triggers
+  // don't fire on the first line insert (which would see an unbalanced
+  // single-sided entry). All lines are inserted first, then is_posted is
+  // flipped to 1, which triggers trg_je_balanced_on_post to validate balance.
   (dbInstance as any).prepare(`
     INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted)
-    VALUES (?, ?, ?, ?, ?, 1)
+    VALUES (?, ?, ?, ?, ?, 0)
   `).run(jeId, companyId, nextNum, date, description);
 
   for (const line of resolved) {
@@ -569,6 +573,10 @@ function postJournalEntry(
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(uuid(), jeId, line.accountId, line.debit, line.credit, line.note);
   }
+
+  (dbInstance as any).prepare(`
+    UPDATE journal_entries SET is_posted = 1 WHERE id = ?
+  `).run(jeId);
 }
 
 // CONCURRENCY: ipcMain.handle throws if the same channel is registered twice.
@@ -10677,13 +10685,15 @@ export function registerIpcHandlers(): void {
       const obeDebit = isDebitNormal ? 0 : amount;
       const obeCredit = isDebitNormal ? amount : 0;
       const entryNumber = `OB-${Date.now()}`;
-      const je = db.create('journal_entries', {
-        company_id: companyId, entry_number: entryNumber, date,
-        description: `Opening balance: ${acct.name}`, is_posted: 1, is_adjusting: 1,
-      });
-      db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: accountId, debit: acctDebit, credit: acctCredit, description: 'Opening balance' });
-      db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: obe.id, debit: obeDebit, credit: obeCredit, description: 'Opening balance offset' });
-      return { success: true, entry_id: je.id };
+      const jeId = uuid();
+      db.getDb().prepare(`
+        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
+        VALUES (?, ?, ?, ?, ?, 0, 1)
+      `).run(jeId, companyId, entryNumber, date, `Opening balance: ${acct.name}`);
+      db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: accountId, debit: acctDebit, credit: acctCredit, description: 'Opening balance' });
+      db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: obe.id, debit: obeDebit, credit: obeCredit, description: 'Opening balance offset' });
+      db.getDb().prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      return { success: true, entry_id: jeId };
     } catch (err: any) { return { error: err?.message }; }
   });
 
@@ -10701,26 +10711,28 @@ export function registerIpcHandlers(): void {
           FROM accounts a WHERE a.company_id = ? AND a.type IN ('revenue','expense')`
       ).all(companyId, periodEndDate, companyId) as any[];
       const entryNumber = `CLOSE-${periodEndDate}`;
-      const je = db.create('journal_entries', {
-        company_id: companyId, entry_number: entryNumber, date: periodEndDate,
-        description: `Year-end closing entries — ${periodEndDate}`, is_posted: 1, is_adjusting: 1,
-      });
+      const jeId = uuid();
+      db.getDb().prepare(`
+        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
+        VALUES (?, ?, ?, ?, ?, 0, 1)
+      `).run(jeId, companyId, entryNumber, periodEndDate, `Year-end closing entries — ${periodEndDate}`);
       let reDr = 0, reCr = 0;
       for (const a of accts) {
         const net = Number(a.net_dr) || 0;
         if (Math.abs(net) < 0.005) continue;
         if (net > 0) {
-          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: 0, credit: net, description: `Close ${a.name}` });
+          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: 0, credit: net, description: `Close ${a.name}` });
           reDr += net;
         } else {
-          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: -net, credit: 0, description: `Close ${a.name}` });
+          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: -net, credit: 0, description: `Close ${a.name}` });
           reCr += -net;
         }
       }
       const reNet = reCr - reDr;
-      if (reNet > 0) db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: re.id, debit: 0, credit: reNet, description: 'Net income to RE' });
-      else if (reNet < 0) db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: re.id, debit: -reNet, credit: 0, description: 'Net loss to RE' });
-      return { success: true, entry_id: je.id, accounts_closed: accts.length };
+      if (reNet > 0) db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: re.id, debit: 0, credit: reNet, description: 'Net income to RE' });
+      else if (reNet < 0) db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: re.id, debit: -reNet, credit: 0, description: 'Net loss to RE' });
+      db.getDb().prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      return { success: true, entry_id: jeId, accounts_closed: accts.length };
     } catch (err: any) { return { error: err?.message }; }
   });
 
@@ -10955,7 +10967,7 @@ export function registerIpcHandlers(): void {
       const closeTx = dbInstance.transaction(() => {
         dbInstance.prepare(
           `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by)
-           VALUES (?,?,?,?,?,1,1,?)`
+           VALUES (?,?,?,?,?,0,1,?)`
         ).run(jeId, companyId, entryNumber, periodEnd, `Year-end closing entries (${periodStart} to ${periodEnd})`, closedBy || '');
 
         let lineNo = 0;
@@ -10971,6 +10983,7 @@ export function registerIpcHandlers(): void {
           `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
            VALUES (?,?,?,?,?,?,?)`
         ).run(uuid(), jeId, preview.retainedEarnings.id, reDebit, reCredit, 'To Retained Earnings', lineNo++);
+        dbInstance.prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(jeId);
 
         dbInstance.prepare(
           `INSERT INTO period_close_log (id, company_id, period_start, period_end, closed_at, closed_by, closing_je_id, net_income)
@@ -11259,10 +11272,11 @@ export function registerIpcHandlers(): void {
       };
       const gainId = findOrCreate('Unrealized FX Gain', '4910');
       const lossId = findOrCreate('Unrealized FX Loss', '7910');
-      const je = db.create('journal_entries', {
-        company_id: companyId, entry_number: `FX-${date}`, date,
-        description: `FX revaluation as of ${date}`, is_posted: 1, is_adjusting: 1,
-      });
+      const jeId = uuid();
+      dbi.prepare(`
+        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
+        VALUES (?, ?, ?, ?, ?, 0, 1)
+      `).run(jeId, companyId, `FX-${date}`, date, `FX revaluation as of ${date}`);
       let lines = 0;
       for (const a of fxAccts) {
         const rate = rates[a.currency] || 1;
@@ -11277,16 +11291,17 @@ export function registerIpcHandlers(): void {
         if (Math.abs(diff) < 0.005) continue;
         const isDebitNormal = ['asset', 'expense'].includes(a.type);
         if (diff > 0) {
-          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: isDebitNormal ? diff : 0, credit: isDebitNormal ? 0 : diff, description: `FX adj ${a.code}` });
-          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: gainId, debit: 0, credit: diff, description: `FX gain ${a.code}` });
+          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: isDebitNormal ? diff : 0, credit: isDebitNormal ? 0 : diff, description: `FX adj ${a.code}` });
+          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: gainId, debit: 0, credit: diff, description: `FX gain ${a.code}` });
         } else {
           const d = -diff;
-          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: isDebitNormal ? 0 : d, credit: isDebitNormal ? d : 0, description: `FX adj ${a.code}` });
-          db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: lossId, debit: d, credit: 0, description: `FX loss ${a.code}` });
+          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: isDebitNormal ? 0 : d, credit: isDebitNormal ? d : 0, description: `FX adj ${a.code}` });
+          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: lossId, debit: d, credit: 0, description: `FX loss ${a.code}` });
         }
         lines++;
       }
-      return { success: true, entry_id: je.id, accounts_revalued: lines };
+      if (lines > 0) dbi.prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      return { success: true, entry_id: jeId, accounts_revalued: lines };
     } catch (err: any) { return { error: err?.message }; }
   });
 
@@ -11464,10 +11479,11 @@ export function registerIpcHandlers(): void {
       if (!obe) {
         obe = db.create('accounts', { company_id: companyId, code: '3900', name: 'Opening Balance Equity', type: 'equity', subtype: "Owner's Equity" });
       }
-      const je = db.create('journal_entries', {
-        company_id: companyId, entry_number: `OB-TB-${date}`, date,
-        description: `Opening trial balance import`, is_posted: 1, is_adjusting: 1,
-      });
+      const jeId = uuid();
+      dbi.prepare(`
+        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
+        VALUES (?, ?, ?, ?, ?, 0, 1)
+      `).run(jeId, companyId, `OB-TB-${date}`, date, `Opening trial balance import`);
       let totalDr = 0, totalCr = 0, applied = 0, skipped = 0;
       for (const r of rows) {
         const a = dbi.prepare('SELECT * FROM accounts WHERE company_id = ? AND code = ?').get(companyId, r.code) as any;
@@ -11477,14 +11493,15 @@ export function registerIpcHandlers(): void {
         const isDebitNormal = ['asset', 'expense'].includes(a.type);
         const dr = (isDebitNormal && amt > 0) || (!isDebitNormal && amt < 0) ? Math.abs(amt) : 0;
         const cr = dr > 0 ? 0 : Math.abs(amt);
-        db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: a.id, debit: dr, credit: cr, description: 'Opening TB' });
+        db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: dr, credit: cr, description: 'Opening TB' });
         totalDr += dr; totalCr += cr; applied++;
       }
       const offset = totalDr - totalCr;
       if (Math.abs(offset) > 0.005) {
-        db.create('journal_entry_lines', { journal_entry_id: je.id, account_id: obe.id, debit: offset < 0 ? -offset : 0, credit: offset > 0 ? offset : 0, description: 'OBE offset' });
+        db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: obe.id, debit: offset < 0 ? -offset : 0, credit: offset > 0 ? offset : 0, description: 'OBE offset' });
       }
-      return { success: true, entry_id: je.id, applied, skipped };
+      dbi.prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      return { success: true, entry_id: jeId, applied, skipped };
     } catch (err: any) { return { error: err?.message }; }
   });
 
@@ -11607,7 +11624,7 @@ export function registerIpcHandlers(): void {
         }
         dbInstance.prepare(
           `INSERT INTO journal_entries (id, company_id, entry_number, date, description, reference, is_posted, reversed_from_id)
-           VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
         ).run(newId, companyId, nextNum, today, `Undo of ${je.entry_number}: ${(je.description || '').slice(0, 200)}`, je.reference || '', je.id);
         for (let i = 0; i < lines.length; i++) {
           const l = lines[i];
@@ -11616,6 +11633,7 @@ export function registerIpcHandlers(): void {
              VALUES (?, ?, ?, ?, ?, ?, ?)`
           ).run(uuid(), newId, l.account_id, l.credit || 0, l.debit || 0, l.description || '', i);
         }
+        dbInstance.prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(newId);
         count++;
       }
       return { count };
@@ -11872,7 +11890,7 @@ export function registerIpcHandlers(): void {
           const newId = uuid();
           db.getDb().prepare(
             `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by, reversed_from_id)
-             VALUES (?,?,?,?,?,1,1,?,?)`
+             VALUES (?,?,?,?,?,0,1,?,?)`
           ).run(newId, log.company_id, `REOPEN-${log.period_end}`, log.period_end,
                 `Reverse closing entry (period reopen: ${reason || ''})`, reopenedBy || '', log.closing_je_id);
           let lineNo = 0;
@@ -11882,6 +11900,7 @@ export function registerIpcHandlers(): void {
                VALUES (?,?,?,?,?,?,?)`
             ).run(uuid(), newId, l.account_id, l.credit || 0, l.debit || 0, `Reverse: ${l.description || ''}`, lineNo++);
           }
+          db.getDb().prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(newId);
         }
       }
       db.getDb().prepare(
