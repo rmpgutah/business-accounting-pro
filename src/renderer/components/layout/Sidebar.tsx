@@ -36,6 +36,7 @@ import {
   Boxes,
   Scale,
   FileCheck,
+  PenTool,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -99,6 +100,7 @@ const sections: NavSection[] = [
   {
     title: 'PLATFORM',
     items: [
+      { id: 'esign', label: 'E-Sign', icon: PenTool },
       { id: 'documents', label: 'Documents', icon: Paperclip },
       { id: 'recurring', label: 'Recurring', icon: Repeat },
       { id: 'email', label: 'Email', icon: Mail },

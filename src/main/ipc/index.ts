@@ -13727,6 +13727,593 @@ export function registerIpcHandlers(): void {
       `SELECT * FROM anomaly_log WHERE company_id = ? AND resolved = 0 ORDER BY detected_at DESC LIMIT 100`
     ).all(companyId);
   });
+
+  // ─── Employee Document Generation ─────────────────────────
+  ipcMain.handle('employee:generate-equipment-agreement', (_event, { employeeId }: { employeeId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { html: '' };
+
+      const employee = dbInstance.prepare('SELECT * FROM employees WHERE id = ? AND company_id = ?').get(employeeId, companyId) as any;
+      if (!employee) return { html: '' };
+
+      const company = dbInstance.prepare('SELECT * FROM companies WHERE id = ?').get(companyId) as any;
+      const equipment = dbInstance.prepare('SELECT * FROM employee_equipment WHERE employee_id = ? AND return_date IS NULL ORDER BY item_name').all(employeeId) as any[];
+
+      const esc = (s: any) => {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      };
+      const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+      const fmtCurrency = (n: any) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n) || 0);
+
+      const companyName = esc(company?.name || '');
+      const companyAddr = company ? [company.address_line1, company.address_line2, `${company.city || ''} ${company.state || ''} ${company.zip || ''}`].filter(Boolean).join(', ') : '';
+
+      const empName = esc(employee.name || '');
+      const empTitle = esc(employee.job_title || '');
+      const empAddr = [employee.address_line1, employee.address_line2, `${employee.city || ''} ${employee.state || ''} ${employee.zip || ''}`].filter(Boolean).join(', ');
+      const empStart = fmtDate(employee.start_date);
+      const today = fmtDate(new Date().toISOString());
+
+      // Equipment table rows
+      let equipmentRows = '';
+      if (equipment.length === 0) {
+        equipmentRows = '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
+      } else {
+        let totalValue = 0;
+        equipment.forEach((item: any, i: number) => {
+          const val = Number(item.value) || 0;
+          totalValue += val;
+          equipmentRows += `<tr>
+            <td style="padding:8px;border:1px solid #d1d5db;">${i + 1}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.item_name)}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.serial_number || '—')}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.model || '—')}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;text-transform:capitalize;">${esc(item.condition || 'good')}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${fmtDate(item.assigned_date)}</td>
+          </tr>`;
+        });
+      }
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Employer Provided Equipment Agreement - ${empName}</title>
+<style>
+  @page { margin: 0.75in; size: Letter; }
+  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1f2937; margin: 0; padding: 0; }
+  .container { max-width: 700px; margin: 0 auto; }
+  h1 { font-size: 16pt; text-align: center; margin-bottom: 4px; color: #111827; }
+  h2 { font-size: 13pt; margin-top: 20px; margin-bottom: 8px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+  .subtitle { text-align: center; font-size: 10pt; color: #6b7280; margin-bottom: 24px; }
+  .field-row { margin-bottom: 4px; }
+  .field-label { font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+  th { background: #f3f4f6; padding: 8px; border: 1px solid #d1d5db; text-align: left; font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  .signature-section { margin-top: 32px; }
+  .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
+  .signature-field { flex: 1; }
+  .signature-line { border-top: 1px solid #374151; margin-top: 32px; padding-top: 4px; font-size: 10pt; }
+  .terms { margin: 16px 0; }
+  .terms p { margin: 6px 0; text-align: justify; }
+  .footer { margin-top: 32px; text-align: center; font-size: 9pt; color: #9ca3af; }
+  .penalty-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
+  .penalty-table th { background: #1f2937; color: #ffffff; padding: 8px; border: 1px solid #374151; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  .penalty-table td { padding: 8px; border: 1px solid #d1d5db; vertical-align: top; font-size: 9pt; line-height: 1.4; }
+  .penalty-high { background: #fef2f2; }
+  .penalty-medium { background: #fffbeb; }
+</style></head>
+<body>
+<div class="container">
+  <h1>Employer Provided Equipment Agreement</h1>
+  <p class="subtitle">This Agreement is made and entered into as of ${today}</p>
+
+  <h2>Parties</h2>
+  <div class="field-row"><span class="field-label">Employer:</span> ${companyName}</div>
+  ${companyAddr ? `<div class="field-row"><span class="field-label">Address:</span> ${esc(companyAddr)}</div>` : ''}
+  <div style="margin-top:8px;" class="field-row"><span class="field-label">Employee:</span> ${empName}</div>
+  ${empTitle ? `<div class="field-row"><span class="field-label">Title:</span> ${esc(empTitle)}</div>` : ''}
+  ${empAddr ? `<div class="field-row"><span class="field-label">Address:</span> ${esc(empAddr)}</div>` : ''}
+  <div class="field-row"><span class="field-label">Start Date:</span> ${empStart}</div>
+
+  <h2>Equipment Issued</h2>
+  <p>The Employer has issued the following equipment to the Employee for business use. The Employee acknowledges receipt of the items listed below and agrees to the terms set forth in this Agreement.</p>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th>Item</th>
+        <th>Serial #</th>
+        <th>Model</th>
+        <th>Condition</th>
+        <th>Date Issued</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${equipmentRows}
+    </tbody>
+  </table>
+
+  <h2>Terms &amp; Conditions</h2>
+  <p style="font-size:10pt;color:#6b7280;margin-bottom:12px;">The Employee acknowledges and expressly agrees to the following terms and conditions governing the use of Employer-issued equipment. Any violation of these terms may result in disciplinary action, up to and including termination of employment and legal action.</p>
+  <div class="terms">
+    <p><strong>1. Ownership &amp; Property Rights.</strong> All equipment provided under this Agreement, including but not limited to computers, monitors, peripherals, telephones, mobile devices, software licenses, and accessories (collectively, "Equipment"), remains the sole and exclusive property of the Employer. The Employee acquires no ownership interest, equitable title, or leasehold rights in any Equipment. The Employee shall not sell, transfer, pledge, encumber, dispose of, or otherwise grant any interest in the Equipment to any third party. The Employee shall not remove or deface any identification labels, asset tags, or property markings affixed to any Equipment.</p>
+
+    <p><strong>2. Care, Maintenance &amp; Prohibited Modifications.</strong> The Employee shall exercise the highest degree of care in the handling, operation, and storage of all Equipment. The Employee shall (a) maintain the Equipment in good working order and promptly report any malfunction, defect, or degradation in performance; (b) keep the Equipment in a clean, safe, and secure environment when not in use; (c) protect the Equipment from extreme temperatures, moisture, dust, physical shock, and electrical surges; (d) use only manufacturer-approved chargers, cables, and accessories. The Employee is strictly prohibited from: (i) repairing, disassembling, modifying, or attempting to service any Equipment; (ii) installing, removing, or replacing any hardware components, including memory, storage drives, batteries, or network cards; (iii) altering the operating system, firmware, BIOS/UEFI settings, or security configurations; (iv) jailbreaking, rooting, or otherwise circumventing built-in security protections; (v) relabeling or cosmetically altering the Equipment in any manner. All repairs and maintenance must be performed exclusively by the Employer's authorized IT personnel or designated service providers.</p>
+
+    <p><strong>3. Authorized Use &amp; Restrictions.</strong> Equipment shall be used exclusively for legitimate business purposes on behalf of the Employer. Limited personal use is permitted only if it (a) does not interfere with the Employee's job duties or productivity; (b) does not violate any applicable law, regulation, or Employer policy; (c) does not involve the storage, transmission, or access of illegal, obscene, harassing, discriminatory, or otherwise inappropriate material; (d) does not result in additional costs to the Employer, including but not limited to data overage charges, licensing fees, or repair expenses; (e) does not compromise the security, integrity, or confidentiality of Employer data or systems; and (f) does not diminish the useful life or residual value of the Equipment. The Employee shall not use the Equipment for any competitive activity, side business, freelance work, or any purpose that conflicts with the Employer's interests. Software installation is strictly prohibited without prior written authorization from the Employer's IT department. The Employee shall not access, download, or stream content that consumes excessive bandwidth or violates copyright laws.</p>
+
+    <p><strong>4. Return Obligations &amp; Timeline.</strong> Upon termination of employment for any reason, whether voluntary or involuntary, with or without cause, or immediately upon demand by the Employer, the Employee shall return ALL Equipment within twenty-four (24) hours. The return shall include: (a) the Equipment itself and all component parts; (b) all power adapters, cables, docking stations, cases, and peripherals originally issued; (c) all software license keys, installation media, and documentation; (d) any Employer data, files, or records stored on the Equipment, which must first be transferred to the Employer as directed. The Equipment must be returned in person to the Employer's designated representative during regular business hours. The Employee shall receive a written receipt acknowledging the return. If the Employee fails to return Equipment within the required timeframe, the Employer reserves the right to: (i) assess a Non-Return Penalty as specified in the Monetary Penalty Schedule below; (ii) deduct the full replacement value of unreturned Equipment from the Employee's final paycheck to the fullest extent permitted by applicable law; (iii) report the Equipment as stolen property to law enforcement authorities; and (iv) pursue all available civil and criminal remedies.</p>
+
+    <p><strong>5. Monetary Penalty Schedule.</strong> The Employee acknowledges and expressly agrees to the following specific monetary penalties for violations of this Agreement. These penalties are in addition to, and not in lieu of, the Employee's obligation to pay the full replacement cost of Equipment under Section 6 below. Each penalty amount is assessed per item of Equipment involved and per occurrence. All penalties shall be deducted directly from the Employee's wages, salary, commissions, bonuses, or any other compensation payable to the Employee, without further notice or consent, to the fullest extent permitted by applicable law.</p>
+    <table class="penalty-table">
+      <thead>
+        <tr>
+          <th style="width:40px;">Tier</th>
+          <th>Violation / Occurrence</th>
+          <th style="width:100px;">Definition</th>
+          <th style="width:140px;">Penalty Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="penalty-high">
+          <td style="text-align:center;font-weight:700;color:#dc2626;">H</td>
+          <td><strong>Theft or Conversion</strong></td>
+          <td>Knowingly taking, selling, pawning, or permanently depriving the Employer of Equipment with intent to deprive; fraudulent misrepresentation of loss; destruction of Equipment to conceal prior violation</td>
+          <td style="font-weight:700;color:#dc2626;"><strong>$500.00 per item + full replacement cost + referral for criminal prosecution</strong></td>
+        </tr>
+        <tr class="penalty-high">
+          <td style="text-align:center;font-weight:700;color:#dc2626;">H</td>
+          <td><strong>Non-Return of Equipment</strong></td>
+          <td>Failure to return all Equipment within the 24-hour return period under Section 4, or returning Equipment in a deliberately damaged or inoperable state</td>
+          <td style="font-weight:700;color:#dc2626;"><strong>$250.00 per item + $50.00 per additional day beyond the return deadline + full replacement cost for any item not returned</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Loss of Equipment</strong></td>
+          <td>Equipment lost due to negligence, including but not limited to leaving Equipment unattended in public places, in unlocked vehicles, or in locations accessible to unauthorized persons; loss while traveling without appropriate security measures</td>
+          <td style="font-weight:700;color:#d97706;"><strong>Replacement cost × 1.5 (150% of replacement value) or $250.00 minimum, whichever is greater</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Willful or Negligent Damage</strong></td>
+          <td>Damage caused by gross negligence, reckless behavior, unauthorized modifications, failure to exercise required degree of care, or intentional destruction. Includes liquid damage, crushing, dropping from height, and electrical damage from unauthorized chargers</td>
+          <td style="font-weight:700;color:#d97706;"><strong>$150.00 + full cost of repair; or $250.00 + full replacement cost if damaged beyond economical repair</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Repair Fee</strong></td>
+          <td>Any repair, service, or restoration performed on Equipment necessitated by the Employee's use, whether due to wear beyond normal expectations, accidental damage not covered above, software or firmware restoration, screen or battery replacement, port repair, or any other servicing required to return the Equipment to good working order</td>
+          <td style="font-weight:700;color:#d97706;"><strong>Full cost of all parts, labor, and shipping for each repair event + $50.00 administrative processing fee per repair</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Loss of Use Fee</strong></td>
+          <td>Period during which Equipment is unavailable, inoperable, or out of service due to loss, theft, damage, repair, unauthorized modification, or any other occurrence attributable to the Employee's acts or omissions. Assessed from the date of the incident until the date the Equipment is returned, replaced, or restored to full working order. This fee compensates the Employer for lost productivity, temporary replacement costs, and administrative overhead</td>
+          <td style="font-weight:700;color:#d97706;"><strong>$25.00 per calendar day per item of Equipment, beginning on the date of the incident and continuing until the item is returned, replaced, or fully repaired. No maximum cap. Assessed concurrently with all other applicable penalties and replacement costs. This fee is in addition to, and not in lieu of, any Repair Fee, replacement cost, or other penalty</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Misuse of Equipment</strong></td>
+          <td>Use of Equipment for unauthorized purposes including but not limited to: illegal activities, side business operations, cryptocurrency mining, unauthorized commercial use, operation of servers or network services, excessive bandwidth consumption, or use that violates any Employer policy</td>
+          <td style="font-weight:700;color:#d97706;"><strong>$100.00 per occurrence + cost of any resulting data recovery, forensic examination, or remediation</strong></td>
+        </tr>
+        <tr class="penalty-high">
+          <td style="text-align:center;font-weight:700;color:#dc2626;">H</td>
+          <td><strong>Data Breach or Security Incident</strong></td>
+          <td>Loss, exposure, or compromise of Employer confidential data due to the Employee's failure to maintain security measures, including but not limited to: failure to encrypt, sharing of passwords, installation of unauthorized software, disabling of security features, or failure to report a known security vulnerability</td>
+          <td style="font-weight:700;color:#dc2626;"><strong>$1,000.00 + all costs associated with breach notification, forensic investigation, credit monitoring, legal fees, regulatory fines, and any third-party claims</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Unauthorized Modifications</strong></td>
+          <td>Repairing, disassembling, modifying, jailbreaking, rooting, or attempting to service Equipment; altering operating system, firmware, or security configurations; installing unauthorized hardware or software; removing or defacing asset tags</td>
+          <td style="font-weight:700;color:#d97706;"><strong>$100.00 + full cost to restore Equipment to factory authorized configuration + cost of any replacement components needed</strong></td>
+        </tr>
+        <tr class="penalty-medium">
+          <td style="text-align:center;font-weight:700;color:#d97706;">M</td>
+          <td><strong>Late or Non-Reporting of Incident</strong></td>
+          <td>Failure to report loss, theft, damage, or security incident within the timeframes specified in this Agreement (2 hours for loss/theft, 1 hour for damage or security incidents)</td>
+          <td style="font-weight:700;color:#d97706;"><strong>$75.00 per day, per unreported incident, not to exceed $500.00 per incident</strong></td>
+        </tr>
+        <tr style="background:#fafaf9;">
+          <td style="text-align:center;font-weight:700;color:#6b7280;">L</td>
+          <td><strong>Administrative Processing Fee</strong></td>
+          <td>Cost of processing, inspecting, testing, documenting, and administering the return, replacement, or repair of any Equipment item, assessed on each occurrence</td>
+          <td style="font-weight:700;color:#6b7280;"><strong>$25.00 per item per occurrence</strong></td>
+        </tr>
+        <tr style="background:#fafaf9;">
+          <td style="text-align:center;font-weight:700;color:#6b7280;">L</td>
+          <td><strong>Data Recovery Fee</strong></td>
+          <td>If Equipment is returned, damaged, or inoperable and contains Employer data that must be recovered, transferred, or forensically imaged</td>
+          <td style="font-weight:700;color:#6b7280;"><strong>$150.00 flat fee + $75.00 per hour of IT labor for data recovery efforts</strong></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:10pt;color:#6b7280;"><strong>Penalty Tiers:</strong> H = High Severity &mdash; may also result in immediate termination, civil litigation, and/or criminal referral. M = Medium Severity &mdash; subject to escalating disciplinary action. L = Low Severity &mdash; administrative fees applied automatically. The Employer reserves the right to assess penalties at its sole discretion based on the circumstances of each violation. All penalties are cumulative and may be applied concurrently for multiple violations. The Employer may waive or reduce any penalty in writing at its sole discretion, but no such waiver shall create a precedent or obligation to waive future penalties.</p>
+
+    <p><strong>6. Full Replacement Cost Liability &amp; Payroll Deduction Authorization.</strong> In addition to any penalties assessed under the Monetary Penalty Schedule above, the Employee acknowledges and expressly agrees that they shall be held financially responsible for the full replacement cost of any Equipment that is lost, stolen, damaged beyond reasonable repair, destroyed, or not returned as required. "Full replacement cost" means the actual retail cost to purchase an equivalent new item of Equipment at the time of replacement, including all applicable taxes, shipping, and setup costs. The Employee authorizes the Employer to deduct the full replacement cost, together with any applicable penalties, directly from the Employee's wages, salary, commissions, bonuses, or any other compensation payable to the Employee, without further notice or consent, to the fullest extent permitted by applicable law. Additionally, the Employee understands and agrees that the Employer may require full or partial payment up front before the Employee is issued replacement or upgraded Equipment. This deduction authorization is separate and independent from any other claims or remedies the Employer may have.</p>
+
+    <p><strong>7. Data Security, Confidentiality &amp; Privacy.</strong> The Employee acknowledges that all data, information, communications, and materials stored on, transmitted through, or accessed via the Equipment are the sole property of the Employer and may contain confidential, proprietary, and trade secret information. The Employee shall: (a) maintain the confidentiality of all Employer data in accordance with the Employer's data security and confidentiality policies; (b) use only Employer-approved encryption, VPN, and remote access solutions when accessing Employer systems or data; (c) enable and maintain all security features on the Equipment, including full-disk encryption, screen locks, antivirus software, and automatic security updates as directed by the Employer; (d) report any suspected security breach, unauthorized access, malware infection, or data loss within one (1) hour of discovery; (e) not store Employer data on any personal devices, cloud services, or unapproved storage media; (f) not share passwords, authentication tokens, or access credentials with any person for any reason; (g) allow the Employer to remotely wipe, lock, or disable the Equipment in the event of loss, theft, or termination of employment. The Employee has no expectation of privacy regarding any data stored on or transmitted through the Equipment. The Employer reserves the right to monitor, access, inspect, copy, delete, or preserve any data on the Equipment at any time, with or without notice, for any lawful purpose. Any violation of this Section 7 shall subject the Employee to the Data Breach penalties set forth in the Monetary Penalty Schedule (Section 5).</p>
+
+    <p><strong>8. Inspection, Monitoring &amp; Auditing.</strong> The Employer, through its authorized representatives, retains the unrestricted right to inspect, audit, and monitor the Equipment and its contents at any time, with or without prior notice, and with or without the Employee's presence or consent. Inspections may include, but are not limited to: (a) physical examination of the Equipment for damage, unauthorized modifications, or wear; (b) review of installed software, applications, and configurations; (c) forensic analysis of data, files, browsing history, communications, and system logs; (d) remote access and diagnostic scanning; and (e) inventory verification against asset records. The Employee shall cooperate fully with any inspection or audit, including providing passwords and access credentials upon request (which may be changed immediately following the inspection). Refusal to cooperate with an inspection or audit constitutes a material breach of this Agreement and grounds for immediate disciplinary action, including termination, and shall subject the Employee to a penalty of $100.00 per instance under the Monetary Penalty Schedule.</p>
+
+    <p><strong>9. Loss, Theft &amp; Damage Reporting.</strong> The Employee shall immediately report any loss, theft, damage, or suspected compromise of Equipment. Reporting requirements are as follows: (a) in the event of loss or theft, the Employee must notify both the Employer and local law enforcement within two (2) hours of discovery, and provide the Employer with the police report case number and investigating officer's contact information within 24 hours; (b) in the event of accidental damage, spill, or drop, the Employee must report the incident within one (1) hour, regardless of whether the Equipment appears functional; (c) in the event of suspected malware, virus, or unauthorized access, the Employee must immediately disconnect the Equipment from all networks and report the incident within one (1) hour. Failure to timely report any such incident shall subject the Employee to the Late or Non-Reporting penalties set forth in the Monetary Penalty Schedule (Section 5), in addition to any penalties for the underlying loss, theft, damage, or security incident.</p>
+
+    <p><strong>10. Compliance with Policies &amp; Acceptable Use.</strong> The Employee shall at all times comply with all Employer policies, procedures, handbooks, codes of conduct, and directives, as they may be amended from time to time in the Employer's sole discretion, including without limitation: (a) the Employer's Information Technology Acceptable Use Policy; (b) the Employer's Data Security and Privacy Policy; (c) the Employer's Code of Business Conduct and Ethics; (d) the Employer's Records Retention and Disposal Policy; (e) all applicable industry regulations and legal requirements. The Employee acknowledges that they have received, read, and understand all applicable policies, or have been given the opportunity to request copies. The Employee shall not use the Equipment to violate any federal, state, or local law, regulation, or ordinance. Any violation of this Section 10 shall subject the Employee to the Misuse penalties set forth in the Monetary Penalty Schedule (Section 5).</p>
+
+    <p><strong>11. Insurance &amp; Indemnification.</strong> The Employee acknowledges that the Equipment is not insured under any personal insurance policy held by the Employee for loss, theft, or damage. The Employee shall maintain, at their own expense, appropriate renters or homeowners insurance that covers the full replacement value of the Equipment, or shall waive any claim against their personal insurance if not so maintained. To the fullest extent permitted by law, the Employee agrees to indemnify, defend, and hold harmless the Employer, its officers, directors, employees, and agents from and against any and all claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising out of or related to: (a) the Employee's use, misuse, or unauthorized use of the Equipment; (b) the Employee's breach of any term of this Agreement; (c) any loss, theft, or damage to the Equipment caused by the Employee's negligence, willful misconduct, or violation of law; (d) any data breach, data loss, or security incident caused or contributed to by the Employee's acts or omissions. The Employee's indemnification obligations are cumulative and in addition to any penalties assessed under the Monetary Penalty Schedule (Section 5).</p>
+
+    <p><strong>12. Termination &amp; Survival.</strong> This Agreement shall commence on the date first set forth above and shall continue until terminated by either party. This Agreement shall automatically terminate upon the termination of the Employee's employment for any reason. Obligations under Sections 4 (Return of Equipment), 5 (Monetary Penalty Schedule), 6 (Full Replacement Cost Liability), 7 (Data Security), 9 (Loss Reporting), and 11 (Indemnification) shall survive the termination of this Agreement and the termination of employment. The Employee's obligations under this Agreement are in addition to, and not in lieu of, any obligations set forth in any separate employment agreement, confidentiality agreement, invention assignment agreement, or restrictive covenant agreement between the Employee and the Employer.</p>
+
+    <p><strong>13. Acknowledgment of Receipt &amp; Condition.</strong> BY SIGNING BELOW, THE EMPLOYEE ACKNOWLEDGES THAT THEY HAVE RECEIVED THE EQUIPMENT LISTED IN THE SCHEDULE ABOVE AND CONFIRMS THAT SUCH EQUIPMENT IS IN THE CONDITION INDICATED. THE EMPLOYEE FURTHER ACKNOWLEDGES THAT THEY HAVE PERSONALLY INSPECTED EACH ITEM AND VERIFIED ITS FUNCTIONALITY, INCLUDING BUT NOT LIMITED TO: POWER-ON OPERATION, SCREEN INTEGRITY, KEYBOARD/INPUT FUNCTIONALITY, PORT FUNCTIONALITY, AND BATTERY CONDITION. ANY DISCREPANCIES OR DEFECTS MUST BE REPORTED IN WRITING WITHIN THREE (3) BUSINESS DAYS OF RECEIPT; FAILURE TO DO SO CONSTITUTES THE EMPLOYEE'S UNQUALIFIED ACCEPTANCE OF THE EQUIPMENT IN THE CONDITION DESCRIBED. THE EMPLOYEE FURTHER ACKNOWLEDGES HAVING READ AND UNDERSTOOD THE MONETARY PENALTY SCHEDULE IN SECTION 5 AND AGREES TO ALL PENALTIES DESCRIBED THEREIN.</p>
+
+    <p><strong>14. Governing Law &amp; Jurisdiction.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the state in which the Employer\'s principal place of business is located')}, without regard to its conflict of laws principles. The parties hereby submit to the exclusive personal jurisdiction and venue of the state and federal courts located in that state for any dispute arising out of or relating to this Agreement, and the Employee waives any objection to such jurisdiction or venue based on forum non conveniens or lack of personal jurisdiction. The Employee specifically consents to the jurisdiction of small claims court for recovery of any unpaid penalties or replacement costs not to exceed that court's jurisdictional limit.</p>
+
+    <p><strong>15. Entire Agreement &amp; Amendments.</strong> This Agreement, together with the Equipment Schedule above and any referenced Employer policies, constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous understandings, agreements, representations, and communications, whether written or oral. This Agreement may not be amended, modified, or supplemented except by a written instrument signed by both parties. The Employee acknowledges that no representation or promise not expressly set forth in this Agreement has been made by the Employer.</p>
+
+    <p><strong>16. Severability &amp; Waiver.</strong> If any provision of this Agreement is held to be invalid, illegal, or unenforceable by a court of competent jurisdiction, such provision shall be enforced to the maximum extent permitted by law, and the remaining provisions shall continue in full force and effect. The failure of either party to enforce any provision of this Agreement shall not be construed as a waiver of such provision or the right to enforce it in the future. No waiver shall be effective unless made in writing and signed by the party against whom enforcement is sought. Any waiver of a penalty under Section 5 shall not constitute a waiver of any future penalty or of the Employer's right to enforce the penalty schedule.</p>
+
+    <p><strong>17. Acknowledgment of Penalties.</strong> THE EMPLOYEE ACKNOWLEDGES THAT THEY HAVE READ THE MONETARY PENALTY SCHEDULE IN SECTION 5 OF THIS AGREEMENT AND UNDERSTAND THE SPECIFIC PENALTY AMOUNTS THAT MAY BE ASSESSED FOR VIOLATIONS. THE EMPLOYEE AGREES THAT THE PENALTIES SET FORTH THEREIN ARE REASONABLE AND PROPORTIONATE TO THE POTENTIAL HARM CAUSED BY EACH TYPE OF VIOLATION. THE EMPLOYEE FURTHER AGREES THAT THE EMPLOYER MAY DEDUCT ANY UNPAID PENALTIES AND REPLACEMENT COSTS FROM THE EMPLOYEE'S FINAL COMPENSATION AND MAY REPORT ANY UNPAID OBLIGATIONS TO CREDIT BUREAUS OR COLLECTION AGENCIES.</p>
+  </div>
+
+  <h2>Equipment Schedule &mdash; Detailed Itemization</h2>
+  <p>The following equipment has been issued to the Employee. The Employee acknowledges receipt and confirms the condition of each item as indicated at the time of issuance.</p>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th>Item Description</th>
+        <th>Serial Number</th>
+        <th>Model / SKU</th>
+        <th>Condition at Issuance</th>
+        <th>Date Issued</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${equipmentRows}
+    </tbody>
+  </table>
+
+  <p style="font-size:10pt;color:#6b7280;margin-top:8px;"><em>Note: Any items not listed above that were previously issued must be disclosed to the Employer immediately. Failure to disclose previously issued equipment may result in additional liability.</em></p>
+
+  <div class="signature-section">
+    <h2>Signatures</h2>
+    <p>By signing below, the parties acknowledge and agree to the terms of this Agreement.</p>
+    <div class="signature-row">
+      <div class="signature-field">
+        <div class="signature-line">Employee Signature</div>
+        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${empName}</p>
+        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
+      </div>
+      <div class="signature-field" style="margin-left:40px;">
+        <div class="signature-line">Employer Signature</div>
+        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${companyName}</p>
+        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>${companyName} &mdash; Employer Provided Equipment Agreement</p>
+    <p>Generated on ${today}</p>
+  </div>
+</div>
+</body>
+</html>`;
+
+      return { html };
+    } catch (err: any) {
+      console.error('Failed to generate equipment agreement:', err);
+      return { html: '' };
+    }
+  });
+
+  ipcMain.handle('employee:generate-employee-agreement', (_event, { employeeId }: { employeeId: string }) => {
+    try {
+      const dbInstance = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId) return { html: '' };
+
+      const employee = dbInstance.prepare('SELECT * FROM employees WHERE id = ? AND company_id = ?').get(employeeId, companyId) as any;
+      if (!employee) return { html: '' };
+
+      const company = dbInstance.prepare('SELECT * FROM companies WHERE id = ?').get(companyId) as any;
+
+      const esc = (s: any) => {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      };
+      const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+      const fmtCurrency = (n: any) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n) || 0);
+
+      const companyName = esc(company?.name || '');
+      const companyAddr = company ? [company.address_line1, company.address_line2, `${company.city || ''} ${company.state || ''} ${company.zip || ''}`].filter(Boolean).join(', ') : '';
+
+      const empName = esc(employee.name || '');
+      const empTitle = esc(employee.job_title || '');
+      const empAddr = [employee.address_line1, employee.address_line2, `${employee.city || ''} ${employee.state || ''} ${employee.zip || ''}`].filter(Boolean).join(', ');
+      const empStart = fmtDate(employee.start_date);
+      const empEmail = esc(employee.email || '');
+      const empPhone = esc(employee.phone || '');
+      const empType = employee.type === 'employee' ? 'Employee' : 'Contractor';
+      const payType = employee.pay_type === 'salary' ? 'Salary' : 'Hourly';
+      const payLabel = employee.pay_type === 'salary' ? 'Annual Salary' : 'Hourly Rate';
+      const empPay = fmtCurrency(employee.pay_rate);
+      const empSchedule = employee.pay_schedule?.charAt(0).toUpperCase() + employee.pay_schedule?.slice(1) || '';
+      const empDept = esc(employee.department || '');
+      const empLoc = esc(employee.work_location || '');
+      const today = fmtDate(new Date().toISOString());
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Employee Agreement - ${empName}</title>
+<style>
+  @page { margin: 0.75in; size: Letter; }
+  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1f2937; margin: 0; padding: 0; }
+  .container { max-width: 700px; margin: 0 auto; }
+  h1 { font-size: 16pt; text-align: center; margin-bottom: 4px; color: #111827; }
+  h2 { font-size: 13pt; margin-top: 20px; margin-bottom: 8px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+  .subtitle { text-align: center; font-size: 10pt; color: #6b7280; margin-bottom: 24px; }
+  .field-row { margin-bottom: 4px; }
+  .field-label { font-weight: 600; }
+  .section { margin: 8px 0; padding-left: 8px; }
+  .section p { margin: 6px 0; text-align: justify; }
+  .signature-section { margin-top: 32px; }
+  .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
+  .signature-field { flex: 1; }
+  .signature-line { border-top: 1px solid #374151; margin-top: 32px; padding-top: 4px; font-size: 10pt; }
+  .footer { margin-top: 32px; text-align: center; font-size: 9pt; color: #9ca3af; }
+  .info-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .info-table td { padding: 4px 8px; font-size: 10pt; }
+  .info-table td:first-child { font-weight: 600; width: 180px; color: #6b7280; }
+</style></head>
+<body>
+<div class="container">
+  <h1>Employee Agreement</h1>
+  <p class="subtitle">This Agreement is made and entered into as of ${today}</p>
+
+  <h2>Parties</h2>
+  <table class="info-table">
+    <tr><td>Employer:</td><td>${companyName}</td></tr>
+    ${companyAddr ? `<tr><td>Address:</td><td>${esc(companyAddr)}</td></tr>` : ''}
+    <tr><td>Employee:</td><td>${empName}</td></tr>
+    ${empAddr ? `<tr><td>Address:</td><td>${esc(empAddr)}</td></tr>` : ''}
+    ${empEmail ? `<tr><td>Email:</td><td>${empEmail}</td></tr>` : ''}
+    ${empPhone ? `<tr><td>Phone:</td><td>${empPhone}</td></tr>` : ''}
+  </table>
+
+  <h2>Terms of Employment</h2>
+  <table class="info-table">
+    <tr><td>Position:</td><td>${empTitle || '—'}</td></tr>
+    ${empDept ? `<tr><td>Department:</td><td>${empDept}</td></tr>` : ''}
+    ${empLoc ? `<tr><td>Work Location:</td><td>${empLoc}</td></tr>` : ''}
+    <tr><td>Employment Type:</td><td>${esc(empType)}</td></tr>
+    <tr><td>Start Date:</td><td>${empStart}</td></tr>
+    <tr><td>Compensation:</td><td>${payLabel}: ${empPay} (${esc(payType)})</td></tr>
+    <tr><td>Pay Schedule:</td><td>${esc(empSchedule)}</td></tr>
+  </table>
+
+  <h2>Agreement Terms</h2>
+  <div class="section">
+    <p><strong>1. Position and Duties.</strong> The Employee agrees to perform the duties of the position described above and any other reasonable duties assigned by the Employer. The Employee shall devote their full business time and best efforts to the performance of their duties.</p>
+    <p><strong>2. Compensation.</strong> The Employer agrees to pay the Employee at the rate specified above, subject to applicable withholdings and deductions. Compensation may be adjusted at the Employer's discretion with appropriate notice.</p>
+    <p><strong>3. At-Will Employment.</strong> Employment with the Company is at-will. This means either the Employee or the Employer may terminate the employment relationship at any time, with or without cause or advance notice.</p>
+    <p><strong>4. Benefits.</strong> The Employee may be eligible to participate in the Employer's benefit plans as they may exist from time to time, subject to plan terms and eligibility requirements.</p>
+    <p><strong>5. Confidentiality.</strong> The Employee agrees to maintain the confidentiality of all proprietary and confidential information of the Employer and its clients, both during and after employment.</p>
+    <p><strong>6. Company Property.</strong> The Employee agrees to return all company property, documents, data, and equipment upon termination of employment.</p>
+    <p><strong>7. Compliance with Policies.</strong> The Employee agrees to comply with all Employer policies, procedures, and rules as may be adopted or modified from time to time.</p>
+    <p><strong>8. Governing Law.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the applicable jurisdiction')}.</p>
+  </div>
+
+  <div class="signature-section">
+    <h2>Signatures</h2>
+    <p>By signing below, the parties acknowledge and agree to the terms of this Agreement.</p>
+    <div class="signature-row">
+      <div class="signature-field">
+        <div class="signature-line">Employee Signature</div>
+        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${empName}</p>
+        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
+      </div>
+      <div class="signature-field" style="margin-left:40px;">
+        <div class="signature-line">Employer Signature</div>
+        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${companyName}</p>
+        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>${companyName} &mdash; Employee Agreement</p>
+    <p>Generated on ${today}</p>
+  </div>
+</div>
+</body>
+</html>`;
+
+      return { html };
+    } catch (err: any) {
+      console.error('Failed to generate employee agreement:', err);
+      return { html: '' };
+    }
+  });
+
+  // ─── E-Sign ───────────────────────────────────────────────
+  const computeHash = (content: string): string => {
+    return crypto.createHash('sha256').update(content || '').digest('hex');
+  };
+
+  ipcMain.handle('esign:list', (_event, filters?: any) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    let sql = 'SELECT * FROM esign_documents WHERE company_id = ?';
+    const params: any[] = [companyId];
+    if (filters?.status) { sql += ' AND status = ?'; params.push(filters.status); }
+    sql += ' ORDER BY created_at DESC';
+    return db.getDb().prepare(sql).all(...params);
+  });
+
+  ipcMain.handle('esign:get', (_event, { id }: { id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const doc = db.getDb().prepare('SELECT * FROM esign_documents WHERE id = ? AND company_id = ?').get(id, companyId) as any;
+    if (!doc) return null;
+    const signatures = db.getDb().prepare('SELECT * FROM esign_signatures WHERE document_id = ? ORDER BY signed_at').all(id);
+    const permissions = db.getDb().prepare('SELECT * FROM esign_permissions WHERE document_id = ?').all(id);
+    const auditLog = db.getDb().prepare('SELECT * FROM esign_audit_log WHERE document_id = ? ORDER BY created_at DESC').all(id);
+    const currentHash = computeHash(doc.content);
+    const verified = currentHash === doc.content_hash;
+    const signedCount = signatures.length;
+    return { ...doc, signatures, permissions, auditLog, verified, signedCount };
+  });
+
+  ipcMain.handle('esign:create', (_event, { title, description, content }: { title: string; description: string; content: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const id = uuid();
+    const contentHash = computeHash(content);
+    const userEmail = getLastLoginEmail() || 'unknown';
+    db.getDb().prepare(`
+      INSERT INTO esign_documents (id, company_id, title, description, content, content_hash, status, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, datetime('now'), datetime('now'))
+    `).run(id, companyId, title, description, content, contentHash, userEmail);
+    db.getDb().prepare(`
+      INSERT INTO esign_audit_log (id, document_id, action, performed_by, new_hash, details, created_at)
+      VALUES (?, ?, 'created', ?, ?, 'Document created', datetime('now'))
+    `).run(uuid(), id, userEmail, contentHash);
+    scheduleAutoBackup();
+    return { id };
+  });
+
+  ipcMain.handle('esign:update', (_event, { id, title, description, content }: { id: string; title: string; description: string; content: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const existing = db.getDb().prepare('SELECT * FROM esign_documents WHERE id = ? AND company_id = ?').get(id, companyId) as any;
+    if (!existing) return null;
+    const previousHash = existing.content_hash;
+    const newHash = computeHash(content);
+    const userEmail = getLastLoginEmail() || 'unknown';
+    db.getDb().prepare(`
+      UPDATE esign_documents SET title = ?, description = ?, content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?
+    `).run(title, description, content, newHash, id);
+    const hashChanged = previousHash !== newHash;
+    if (hashChanged) {
+      db.getDb().prepare(`
+        INSERT INTO esign_audit_log (id, document_id, action, performed_by, previous_hash, new_hash, details, created_at)
+        VALUES (?, ?, 'edited', ?, ?, ?, 'Content modified — signatures invalidated', datetime('now'))
+      `).run(uuid(), id, userEmail, previousHash, newHash);
+      if (existing.status === 'signed') {
+        db.getDb().prepare(`
+          UPDATE esign_documents SET status = 'pending' WHERE id = ?
+        `).run(id);
+        db.getDb().prepare(`
+          INSERT INTO esign_audit_log (id, document_id, action, performed_by, details, created_at)
+          VALUES (?, ?, 'status_changed', ?, 'Status changed to pending after content edit', datetime('now'))
+        `).run(uuid(), id, userEmail);
+      }
+    }
+    scheduleAutoBackup();
+    return { success: true };
+  });
+
+  ipcMain.handle('esign:delete', (_event, { id }: { id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const result = db.getDb().prepare('DELETE FROM esign_documents WHERE id = ? AND company_id = ?').run(id, companyId);
+    scheduleAutoBackup();
+    return { changes: result.changes };
+  });
+
+  ipcMain.handle('esign:sign', (_event, { documentId, typedName, signerType, signerId, signerName }: {
+    documentId: string; typedName: string; signerType: string; signerId: string; signerName: string;
+  }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const doc = db.getDb().prepare('SELECT * FROM esign_documents WHERE id = ? AND company_id = ?').get(documentId, companyId) as any;
+    if (!doc) return { error: 'Document not found' };
+    const userEmail = getLastLoginEmail() || 'unknown';
+    const hashInput = `${typedName}:${documentId}:${doc.content_hash}:${new Date().toISOString()}`;
+    const signatureHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+    const sigId = uuid();
+    db.getDb().prepare(`
+      INSERT INTO esign_signatures (id, document_id, signer_type, signer_id, signer_name, typed_name, signature_hash, signed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).run(sigId, documentId, signerType || 'user', signerId || '', signerName || userEmail, typedName, signatureHash);
+    const allSignatures = db.getDb().prepare('SELECT COUNT(*) as cnt FROM esign_signatures WHERE document_id = ?').get(documentId) as any;
+    db.getDb().prepare(`
+      INSERT INTO esign_audit_log (id, document_id, action, performed_by, details, created_at)
+      VALUES (?, ?, 'signed', ?, ?, datetime('now'))
+    `).run(uuid(), documentId, userEmail, `${signerName || userEmail} signed as "${typedName}"`);
+    db.getDb().prepare(`
+      UPDATE esign_documents SET status = CASE WHEN ? > 0 THEN 'signed' ELSE status END, updated_at = datetime('now') WHERE id = ?
+    `).run(1, documentId);
+    scheduleAutoBackup();
+    return { id: sigId, signatureHash, status: 'signed' };
+  });
+
+  ipcMain.handle('esign:revoke', (_event, { id, reason }: { id: string; reason?: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const userEmail = getLastLoginEmail() || 'unknown';
+    db.getDb().prepare("UPDATE esign_documents SET status = 'revoked', updated_at = datetime('now') WHERE id = ? AND company_id = ?").run(id, companyId);
+    db.getDb().prepare(`
+      INSERT INTO esign_audit_log (id, document_id, action, performed_by, details, created_at)
+      VALUES (?, ?, 'revoked', ?, ?, datetime('now'))
+    `).run(uuid(), id, userEmail, reason || 'Document revoked');
+    scheduleAutoBackup();
+    return { success: true };
+  });
+
+  ipcMain.handle('esign:verify', (_event, { id }: { id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { verified: false, error: 'No company' };
+    const doc = db.getDb().prepare('SELECT * FROM esign_documents WHERE id = ? AND company_id = ?').get(id, companyId) as any;
+    if (!doc) return { verified: false, error: 'Document not found' };
+    const currentHash = computeHash(doc.content);
+    const hashMatch = currentHash === doc.content_hash;
+    const signatures = db.getDb().prepare('SELECT * FROM esign_signatures WHERE document_id = ? ORDER BY signed_at').all(id) as any[];
+    const signatureValid = signatures.length > 0;
+    return {
+      verified: hashMatch && signatureValid,
+      hashMatch,
+      signatureValid,
+      signedCount: signatures.length,
+      status: doc.status,
+      contentHash: doc.content_hash,
+      currentHash,
+    };
+  });
+
+  ipcMain.handle('esign:set-permissions', (_event, { documentId, permissions }: { documentId: string; permissions: Array<{ userId: string; level: string }> }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const userEmail = getLastLoginEmail() || 'unknown';
+    const tx = db.getDb().transaction(() => {
+      db.getDb().prepare('DELETE FROM esign_permissions WHERE document_id = ?').run(documentId);
+      for (const perm of permissions) {
+        db.getDb().prepare(`
+          INSERT INTO esign_permissions (id, document_id, user_id, permission_level, created_at)
+          VALUES (?, ?, ?, ?, datetime('now'))
+        `).run(uuid(), documentId, perm.userId, perm.level);
+      }
+    });
+    tx();
+    db.getDb().prepare(`
+      INSERT INTO esign_audit_log (id, document_id, action, performed_by, details, created_at)
+      VALUES (?, ?, 'permission_changed', ?, 'Permissions updated', datetime('now'))
+    `).run(uuid(), documentId, userEmail);
+    scheduleAutoBackup();
+    return { success: true };
+  });
+
+  ipcMain.handle('esign:get-permissions', (_event, { documentId }: { documentId: string }) => {
+    return db.getDb().prepare('SELECT * FROM esign_permissions WHERE document_id = ?').all(documentId);
+  });
+
+  ipcMain.handle('esign:get-audit-log', (_event, { documentId }: { documentId: string }) => {
+    return db.getDb().prepare('SELECT * FROM esign_audit_log WHERE document_id = ? ORDER BY created_at DESC').all(documentId);
+  });
 }
 
 // ── Helpers for tag rules + custom fields ──

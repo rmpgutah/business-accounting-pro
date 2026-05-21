@@ -133,6 +133,9 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'pto_policies',
   'employee_deductions',
   'employee_equipment',
+  'esign_signatures',
+  'esign_permissions',
+  'esign_audit_log',
   'payroll_runs',
 ]);
 
@@ -408,6 +411,10 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   // Employee
   'employee_deductions',
   'employee_equipment',
+  // E-Sign
+  'esign_signatures',
+  'esign_audit_log',
+  'esign_permissions',
   // Payroll
   'payroll_runs',
   // Bank

@@ -89,6 +89,13 @@ export function formatDate(
   return _relFmt.format(Math.round(diffDays / 365), 'year');
 }
 
+export function formatDateTime(isoString: string | null | undefined): string {
+  if (!isoString) return '—';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '—';
+  return _cachedMedium.format(d) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function resetDateCache() { _resetCache(); }
 
 // ─── Status ──────────────────────────────────────────────

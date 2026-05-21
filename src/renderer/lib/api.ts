@@ -982,6 +982,47 @@ const api = {
   employeeSummary: (employeeId: string): Promise<any> =>
     window.electronAPI.invoke('payroll:employee-summary', { employeeId }),
 
+  // ─── Employee Document Generation ────────────────
+  generateEquipmentAgreement: (employeeId: string): Promise<{ html: string }> =>
+    window.electronAPI.invoke('employee:generate-equipment-agreement', { employeeId }),
+
+  generateEmployeeAgreement: (employeeId: string): Promise<{ html: string }> =>
+    window.electronAPI.invoke('employee:generate-employee-agreement', { employeeId }),
+
+  // ─── E-Sign ───────────────────────────────────────
+  esignList: (filters?: any): Promise<any[]> =>
+    window.electronAPI.invoke('esign:list', filters),
+
+  esignGet: (id: string): Promise<any> =>
+    window.electronAPI.invoke('esign:get', { id }),
+
+  esignCreate: (title: string, description: string, content: string): Promise<{ id: string }> =>
+    window.electronAPI.invoke('esign:create', { title, description, content }),
+
+  esignUpdate: (id: string, title: string, description: string, content: string): Promise<any> =>
+    window.electronAPI.invoke('esign:update', { id, title, description, content }),
+
+  esignDelete: (id: string): Promise<any> =>
+    window.electronAPI.invoke('esign:delete', { id }),
+
+  esignSign: (documentId: string, typedName: string, signerType: string, signerId: string, signerName: string): Promise<any> =>
+    window.electronAPI.invoke('esign:sign', { documentId, typedName, signerType, signerId, signerName }),
+
+  esignRevoke: (id: string, reason?: string): Promise<any> =>
+    window.electronAPI.invoke('esign:revoke', { id, reason }),
+
+  esignVerify: (id: string): Promise<{ verified: boolean; hashMatch?: boolean; signatureValid?: boolean; signedCount?: number; status?: string; contentHash?: string; currentHash?: string; error?: string }> =>
+    window.electronAPI.invoke('esign:verify', { id }),
+
+  esignSetPermissions: (documentId: string, permissions: Array<{ userId: string; level: string }>): Promise<any> =>
+    window.electronAPI.invoke('esign:set-permissions', { documentId, permissions }),
+
+  esignGetPermissions: (documentId: string): Promise<any[]> =>
+    window.electronAPI.invoke('esign:get-permissions', { documentId }),
+
+  esignGetAuditLog: (documentId: string): Promise<any[]> =>
+    window.electronAPI.invoke('esign:get-audit-log', { documentId }),
+
   // ─── Reports ─────────────────────────────────────
   budgetVsActual: (budgetId: string): Promise<any> =>
     window.electronAPI.invoke('reports:budget-vs-actual', { budgetId }),

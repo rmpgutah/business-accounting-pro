@@ -1921,6 +1921,51 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_employee_equipment_employee ON employee_equipment(employee_id)`,
+  // E-Sign documents (2026-05-21)
+  `CREATE TABLE IF NOT EXISTS esign_documents (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    content TEXT DEFAULT '',
+    content_hash TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','pending','signed','revoked')),
+    created_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS esign_signatures (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES esign_documents(id) ON DELETE CASCADE,
+    signer_type TEXT NOT NULL CHECK(signer_type IN ('admin','employee','user')),
+    signer_id TEXT NOT NULL DEFAULT '',
+    signer_name TEXT NOT NULL DEFAULT '',
+    typed_name TEXT NOT NULL DEFAULT '',
+    signature_hash TEXT NOT NULL DEFAULT '',
+    signed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS esign_permissions (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES esign_documents(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL DEFAULT '',
+    permission_level TEXT NOT NULL DEFAULT 'view' CHECK(permission_level IN ('view','edit','sign','admin')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS esign_audit_log (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES esign_documents(id) ON DELETE CASCADE,
+    action TEXT NOT NULL DEFAULT '',
+    performed_by TEXT NOT NULL DEFAULT '',
+    previous_hash TEXT DEFAULT '',
+    new_hash TEXT DEFAULT '',
+    details TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_esign_docs_company ON esign_documents(company_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_esign_signatures_doc ON esign_signatures(document_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_esign_permissions_doc ON esign_permissions(document_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_esign_audit_doc ON esign_audit_log(document_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_esign_audit_created ON esign_audit_log(created_at)`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

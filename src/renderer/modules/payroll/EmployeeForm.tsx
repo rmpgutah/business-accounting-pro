@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText, Laptop, ShieldCheck } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -334,13 +334,303 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   );
 };
 
+// ─── Equipment Panel ─────────────────────────────────────
+const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    item_name: '', description: '', serial_number: '', model: '',
+    condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    const rows = await api.query('employee_equipment', { employee_id: employeeId });
+    setItems(Array.isArray(rows) ? rows : []);
+  };
+
+  useEffect(() => { load(); }, [employeeId]);
+
+  const resetForm = () => {
+    setForm({
+      item_name: '', description: '', serial_number: '', model: '',
+      condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '',
+    });
+  };
+
+  const handleSave = async () => {
+    if (!form.item_name.trim()) return;
+    setSaving(true);
+    try {
+      const payload = {
+        employee_id: employeeId,
+        item_name: form.item_name.trim(),
+        description: form.description.trim(),
+        serial_number: form.serial_number.trim(),
+        model: form.model.trim(),
+        condition: form.condition,
+        assigned_date: form.assigned_date || null,
+        return_date: form.return_date || null,
+        notes: form.notes.trim(),
+      };
+      if (editingId) {
+        await api.update('employee_equipment', editingId, payload);
+      } else {
+        await api.create('employee_equipment', payload);
+      }
+      setShowForm(false);
+      setEditingId(null);
+      resetForm();
+      await load();
+    } catch (err: any) {
+      alert('Failed to save equipment: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingId(item.id);
+    setForm({
+      item_name: item.item_name || '',
+      description: item.description || '',
+      serial_number: item.serial_number || '',
+      model: item.model || '',
+      condition: item.condition || 'good',
+      assigned_date: item.assigned_date || '',
+      return_date: item.return_date || '',
+      notes: item.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this equipment item?')) return;
+    await api.remove('employee_equipment', id);
+    await load();
+  };
+
+  const conditionBadge = (cond: string) => {
+    const colors: Record<string, string> = {
+      new: 'block-badge-income', excellent: 'block-badge-income',
+      good: 'block-badge', fair: 'block-badge block-badge-warning',
+      poor: 'block-badge block-badge-expense',
+    };
+    return <span className={colors[cond] || 'block-badge'} style={{ textTransform: 'capitalize', fontSize: '10px' }}>{cond}</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">Issued Equipment</h3>
+        <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { setEditingId(null); resetForm(); setShowForm(!showForm); }}>
+          <Plus size={12} /> {showForm ? 'Cancel' : 'Add Equipment'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Item Name *</label>
+              <input className="block-input" placeholder="e.g. MacBook Pro 16-inch, Dell Monitor" value={form.item_name} onChange={(e) => setForm(f => ({...f, item_name: e.target.value}))} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Description</label>
+              <input className="block-input" placeholder="Optional description" value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Serial Number</label>
+              <input className="block-input font-mono" placeholder="SN-..." value={form.serial_number} onChange={(e) => setForm(f => ({...f, serial_number: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Model</label>
+              <input className="block-input" placeholder="e.g. A2442" value={form.model} onChange={(e) => setForm(f => ({...f, model: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Condition</label>
+              <select className="block-select" value={form.condition} onChange={(e) => setForm(f => ({...f, condition: e.target.value}))}>
+                <option value="new">New</option>
+                <option value="excellent">Excellent</option>
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="poor">Poor</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Assigned Date</label>
+              <input type="date" className="block-input" value={form.assigned_date} onChange={(e) => setForm(f => ({...f, assigned_date: e.target.value}))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Return Date</label>
+              <input type="date" className="block-input" value={form.return_date} onChange={(e) => setForm(f => ({...f, return_date: e.target.value}))} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Notes</label>
+              <input className="block-input" placeholder="Optional notes" value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
+            </div>
+          </div>
+          <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving || !form.item_name.trim()}>
+            {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      {items.length === 0 && !showForm ? (
+        <p className="text-sm text-text-muted">No equipment issued. Add laptops, monitors, phones, and other company property.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Serial #</th>
+                <th>Model</th>
+                <th>Condition</th>
+                <th>Date Issued</th>
+                <th>Returned</th>
+                <th style={{width: 80}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item: any) => (
+                <tr key={item.id}>
+                  <td className="text-text-primary font-medium">{item.item_name}</td>
+                  <td className="font-mono text-xs">{item.serial_number || '—'}</td>
+                  <td className="text-xs text-text-muted">{item.model || '—'}</td>
+                  <td>{conditionBadge(item.condition)}</td>
+                  <td className="font-mono text-xs">{formatDate(item.assigned_date)}</td>
+                  <td className="font-mono text-xs">{item.return_date ? formatDate(item.return_date) : <span className="text-accent-income text-xs">In Use</span>}</td>
+                  <td>
+                    <div className="flex gap-1">
+                      <button className="text-text-muted hover:text-accent-blue transition-colors p-0.5" onClick={() => handleEdit(item)} title="Edit"><Pencil size={12} /></button>
+                      <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDelete(item.id)} title="Delete"><Trash2 size={12} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Agreements Panel ─────────────────────────────────────
+const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = ({ employeeId }) => {
+  const [generatingEquip, setGeneratingEquip] = useState(false);
+  const [generatingEmp, setGeneratingEmp] = useState(false);
+
+  const handleGenerate = async (type: 'equipment' | 'employee') => {
+    const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
+    setLoading(true);
+    try {
+      const { html } = type === 'equipment'
+        ? await api.generateEquipmentAgreement(employeeId)
+        : await api.generateEmployeeAgreement(employeeId);
+      if (html) {
+        const title = type === 'equipment' ? 'Employer Provided Equipment Agreement' : 'Employee Agreement';
+        await api.printPreview(html, title);
+      }
+    } catch (err: any) {
+      alert('Failed to generate document: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSavePDF = async (type: 'equipment' | 'employee') => {
+    const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
+    setLoading(true);
+    try {
+      const { html } = type === 'equipment'
+        ? await api.generateEquipmentAgreement(employeeId)
+        : await api.generateEmployeeAgreement(employeeId);
+      if (html) {
+        const title = type === 'equipment' ? 'Employer Provided Equipment Agreement' : 'Employee Agreement';
+        await api.saveToPDF(html, title, {
+          doctype: type === 'equipment' ? 'EquipAgreement' : 'EmployeeAgreement',
+          identifier: employeeId,
+          pdfOptions: { pageSize: 'Letter', printBackground: true },
+          openAfterSave: true,
+        });
+      }
+    } catch (err: any) {
+      alert('Failed to save document: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-bold text-text-primary">Employment Documents</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2">
+            <Laptop size={18} className="text-accent-blue" />
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Employer Provided Equipment Agreement</p>
+              <p className="text-xs text-text-muted">Itemizes all equipment issued to this employee with terms of use.</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="block-btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
+              onClick={() => handleGenerate('equipment')}
+              disabled={generatingEquip}
+            >
+              <FileText size={12} /> {generatingEquip ? 'Generating...' : 'Preview'}
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5"
+              onClick={() => handleSavePDF('equipment')}
+              disabled={generatingEquip}
+            >
+              Save PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={18} className="text-accent-income" />
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Employee Agreement</p>
+              <p className="text-xs text-text-muted">Employment contract with position details, compensation, and terms.</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="block-btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
+              onClick={() => handleGenerate('employee')}
+              disabled={generatingEmp}
+            >
+              <FileText size={12} /> {generatingEmp ? 'Generating...' : 'Preview'}
+            </button>
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5"
+              onClick={() => handleSavePDF('employee')}
+              disabled={generatingEmp}
+            >
+              Save PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Component ──────────────────────────────────────────
 const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved }) => {
   const [form, setForm] = useState<EmployeeFormData>({ ...EMPTY_FORM });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking' | 'deductions'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking' | 'deductions' | 'equipment'>('general');
   const [ytdSummary, setYtdSummary] = useState<any>(null);
 
   const isEditing = Boolean(employeeId);
@@ -577,7 +867,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       <div className="block-card p-6" style={{ borderRadius: '6px' }}>
         {/* Tab bar */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-border-primary)', marginBottom: 20 }}>
-          {(['general', 'hr', 'banking', 'deductions'] as const).map((tab) => (
+          {(['general', 'hr', 'banking', 'deductions', 'equipment'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -590,7 +880,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                 color: activeTab === tab ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
               }}
             >
-              {tab === 'general' ? 'General' : tab === 'hr' ? 'HR & Profile' : tab === 'banking' ? 'Banking & Emergency' : 'Deductions'}
+              {tab === 'general' ? 'General' : tab === 'hr' ? 'HR & Profile' : tab === 'banking' ? 'Banking & Emergency' : tab === 'deductions' ? 'Deductions' : 'Equipment & Agreements'}
             </button>
           ))}
         </div>
@@ -1012,6 +1302,18 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         )}
         {activeTab === 'deductions' && !employeeId && (
           <p className="text-sm text-text-muted">Save the employee first to manage deductions.</p>
+        )}
+
+        {/* Equipment & Agreements tab */}
+        {activeTab === 'equipment' && employeeId && (
+          <div className="space-y-6">
+            <EquipmentPanel employeeId={employeeId} />
+            <div className="border-t border-border-primary" />
+            <AgreementsPanel employeeId={employeeId} employeeName={form.name} />
+          </div>
+        )}
+        {activeTab === 'equipment' && !employeeId && (
+          <p className="text-sm text-text-muted">Save the employee first to manage equipment and generate agreements.</p>
         )}
       </div>
 

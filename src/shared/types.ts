@@ -258,6 +258,64 @@ export interface PayStub {
   created_at: string;
 }
 
+export interface EmployeeEquipment {
+  id: string;
+  employee_id: string;
+  item_name: string;
+  description: string;
+  serial_number: string;
+  model: string;
+  condition: 'new' | 'excellent' | 'good' | 'fair' | 'poor';
+  assigned_date: string;
+  return_date: string | null;
+  notes: string;
+  created_at: string;
+}
+
+// ─── E-Sign ──────────────────────────────────────────────
+export interface EsignDocument {
+  id: string;
+  company_id: string;
+  title: string;
+  description: string;
+  content: string;
+  content_hash: string;
+  status: 'draft' | 'pending' | 'signed' | 'revoked';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EsignSignature {
+  id: string;
+  document_id: string;
+  signer_type: 'admin' | 'employee' | 'user';
+  signer_id: string;
+  signer_name: string;
+  typed_name: string;
+  signature_hash: string;
+  signed_at: string;
+}
+
+export interface EsignPermission {
+  id: string;
+  document_id: string;
+  user_id: string;
+  permission_level: 'view' | 'edit' | 'sign' | 'admin';
+  created_at: string;
+}
+
+export interface EsignAuditLog {
+  id: string;
+  document_id: string;
+  action: string;
+  performed_by: string;
+  previous_hash: string;
+  new_hash: string;
+  details: string;
+  created_at: string;
+}
+
 // ─── Time Tracking ───────────────────────────────────────
 export interface TimeEntry {
   id: string;
