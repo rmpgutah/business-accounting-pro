@@ -464,6 +464,11 @@ const api = {
     year: number;
     ytdGross: number;
   }) => window.electronAPI.invoke('tax:calculate-withholding', params),
+  // FIX #10/#11: Single source of truth for SS wage base, FICA rates, FUTA
+  // rates, and standard deductions. Replaces hardcoded constants in
+  // tax-brackets.ts and TaxCalculationEngine.ts that drifted apart.
+  taxGetPayrollConstants: (year: number): Promise<{ ss_wage_base: number; ss_rate: number; medicare_rate: number; futa_rate: number; futa_wage_base: number; standard_deduction_single: number; standard_deduction_married: number; standard_deduction_hoh: number; error?: string }> =>
+    window.electronAPI.invoke('tax:get-payroll-constants', { year }),
   taxAvailableYears: (): Promise<number[]> =>
     window.electronAPI.invoke('tax:available-years'),
   taxAutoSeedCurrentYear: () =>

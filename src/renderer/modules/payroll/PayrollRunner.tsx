@@ -8,12 +8,13 @@ import {
   calcFederalTaxAnnual,
   getStandardDeduction,
   getSSWageBase,
+  getFutaRate,
+  getFutaWageBase,
+  fetchPayrollConstantsFromDb,
   SS_RATE,
   MEDICARE_RATE,
   ADDL_MEDICARE_RATE,
   ADDL_MEDICARE_THRESHOLD,
-  FUTA_RATE,
-  FUTA_WAGE_BASE,
   type FilingStatus,
 } from '../../lib/tax-brackets';
 
@@ -326,9 +327,9 @@ function calcPayStub(
 
   // FUTA: per-employee per-year on first $7,000. Track YTD and stop at cap.
   const ytdFuta = ytd?.ytdFutaWages ?? 0;
-  const futaRemaining = Math.max(0, FUTA_WAGE_BASE - ytdFuta);
+  const futaRemaining = Math.max(0, getFutaWageBase() - ytdFuta);
   const futaTaxableThisRun = Math.min(gross_pay, futaRemaining);
-  const employer_futa = futaTaxableThisRun * FUTA_RATE;
+  const employer_futa = futaTaxableThisRun * getFutaRate();
 
   // Post-tax deductions (garnishments + non-pretax deductions)
   const post_tax_deductions = deductions
@@ -747,6 +748,14 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
       }
     });
     setHoursMap(defaults);
+
+    // FIX #10/#11: Fetch DB-backed federal payroll constants for this year
+    // as the single source of truth for SS wage base, FICA rates, FUTA rates.
+    // Falls back to hardcoded values in tax-brackets.ts if DB not available.
+    try {
+      const year = new Date(payDate + 'T12:00:00').getFullYear();
+      fetchPayrollConstantsFromDb(year).catch(() => {});
+    } catch { /* ignore */ }
 
     // Fetch YTD wages per employee for the pay-date's calendar year.
     // Used to enforce per-employee SS wage cap, FUTA cap, and Medicare

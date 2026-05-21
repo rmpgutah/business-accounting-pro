@@ -39,11 +39,29 @@ export function percentChange(current: number, prior: number): number | null {
 }
 
 // ─── Date ────────────────────────────────────────────────
-// All dates formatted in Mountain Time (America/Denver → MST/MDT, UTC-0600/0700)
-const TZ = 'America/Denver';
-const _mediumFmt  = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: TZ });
-const _shortFmt   = new Intl.DateTimeFormat('en-US', { month: '2-digit', day: '2-digit', year: '2-digit', timeZone: TZ });
-const _relFmt     = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+// Timezone used for date formatting. Default Mountain Time (America/Denver).
+// Override by importing and calling setTz() or by setting
+// localStorage 'bap-timezone'. Per-company override possible via
+// personalizationStore.cloudLoad().
+let _tz = (typeof localStorage !== 'undefined' && localStorage.getItem('bap-timezone'))
+  || 'America/Denver';
+export function setTz(tz: string) {
+  _tz = tz;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('bap-timezone', tz);
+}
+export function getTz(): string { return _tz; }
+function _fmt(style: 'short' | 'medium') {
+  return new Intl.DateTimeFormat('en-US', {
+    month: style === 'medium' ? 'short' : '2-digit',
+    day: 'numeric',
+    year: style === 'medium' ? 'numeric' : '2-digit',
+    timeZone: _tz,
+  });
+}
+let _cachedMedium = _fmt('medium');
+let _cachedShort = _fmt('short');
+function _resetCache() { _cachedMedium = _fmt('medium'); _cachedShort = _fmt('short'); }
+const _relFmt = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
 
 export function formatDate(
   isoString: string | null | undefined,
@@ -60,8 +78,8 @@ export function formatDate(
     : new Date(isoString);
   if (isNaN(d.getTime())) return '—';
   const style = opts?.style ?? 'medium';
-  if (style === 'short')  return _shortFmt.format(d);
-  if (style === 'medium') return _mediumFmt.format(d);
+  if (style === 'short')  return _cachedShort.format(d);
+  if (style === 'medium') return _cachedMedium.format(d);
   // relative
   const diffMs  = d.getTime() - Date.now();
   const diffDays = Math.round(diffMs / 86_400_000);
@@ -70,6 +88,8 @@ export function formatDate(
   if (Math.abs(diffDays) < 365) return _relFmt.format(Math.round(diffDays / 30), 'month');
   return _relFmt.format(Math.round(diffDays / 365), 'year');
 }
+
+export function resetDateCache() { _resetCache(); }
 
 // ─── Status ──────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; className: string }> = {

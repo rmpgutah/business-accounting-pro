@@ -2519,6 +2519,8 @@ export function seedDefaultAccounts(companyId: string): void {
     { code: '2000', name: 'Accounts Payable', type: 'liability', subtype: 'current' },
     { code: '2100', name: 'Credit Card', type: 'liability', subtype: 'current' },
     { code: '2200', name: 'Payroll Liabilities', type: 'liability', subtype: 'current' },
+    { code: '2210', name: 'FUTA Payable', type: 'liability', subtype: 'current' },        // FIX #1: employer FUTA
+    { code: '2220', name: 'SUI Payable', type: 'liability', subtype: 'current' },         // FIX #1: employer SUI
     { code: '2300', name: 'Sales Tax Payable', type: 'liability', subtype: 'current' },
     { code: '2400', name: 'Federal Tax Payable', type: 'liability', subtype: 'current' },
     { code: '2410', name: 'State Tax Payable', type: 'liability', subtype: 'current' },

@@ -138,9 +138,71 @@ export const MEDICARE_RATE = 0.0145;
 export const ADDL_MEDICARE_RATE = 0.009;        // 0.9% additional Medicare
 export const ADDL_MEDICARE_THRESHOLD = 200000;  // employer withholds at $200k regardless of filing status
 
+// ─── Runtime-overridable cache for DB-backed constants ─────
+// FIX #10/#11: When these are populated from the DB (via setDbConstants),
+// the sync getter functions below prefer DB values over hardcoded.
+// The PayrollRunner calls setDbConstants at init time.
+let _dbConstants: {
+  ss_wage_base: number;
+  ss_rate: number;
+  medicare_rate: number;
+  futa_rate: number;
+  futa_wage_base: number;
+  standard_deduction_single: number;
+  standard_deduction_married: number;
+  standard_deduction_hoh: number;
+} | null = null;
+
+/**
+ * Override the hardcoded constants with values from the federal_payroll_constants
+ * DB table. Call this at PayrollRunner init time. Pass null to restore defaults.
+ */
+export function setDbConstants(consts: typeof _dbConstants): void {
+  _dbConstants = consts;
+}
+
 export function getSSWageBase(year: number = new Date().getFullYear()): number {
+  if (_dbConstants?.ss_wage_base) return _dbConstants.ss_wage_base;
   if (year >= 2026) return SS_WAGE_BASE_2026;
   return SS_WAGE_BASE_2025;
+}
+
+export function getFutaRate(): number {
+  return _dbConstants?.futa_rate ?? FUTA_RATE;
+}
+
+export function getFutaWageBase(): number {
+  return _dbConstants?.futa_wage_base ?? FUTA_WAGE_BASE;
+}
+
+/**
+ * Fetch SS wage base and other federal payroll constants from the database
+ * (single source of truth). Falls back to hardcoded constants if the DB
+ * isn't available (e.g. app startup or offline).
+ *
+ * FIX #10/#11: Prefer DB-backed constants over hardcoded values.
+ * The DB is seeded via tax:seed-year which pulls actual IRS data.
+ */
+export async function fetchPayrollConstantsFromDb(year: number): Promise<typeof _dbConstants> {
+  try {
+    const { default: api } = await import('./api');
+    const result = await api.taxGetPayrollConstants(year);
+    if (result && !('error' in result)) {
+      const c = result as any;
+      _dbConstants = {
+        ss_wage_base: c.ss_wage_base,
+        ss_rate: c.ss_rate,
+        medicare_rate: c.medicare_rate,
+        futa_rate: c.futa_rate,
+        futa_wage_base: c.futa_wage_base,
+        standard_deduction_single: c.standard_deduction_single,
+        standard_deduction_married: c.standard_deduction_married,
+        standard_deduction_hoh: c.standard_deduction_hoh,
+      };
+      return _dbConstants;
+    }
+  } catch { /* ignore — fall back to hardcoded */ }
+  return null;
 }
 
 // ─── FUTA ───────────────────────────────────────────────────

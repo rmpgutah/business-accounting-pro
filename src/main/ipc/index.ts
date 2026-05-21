@@ -376,6 +376,8 @@ const ACCOUNT_ALIASES: Record<string, string[]> = {
   'State Withholding':     ['State Tax Payable', 'State Withholding', 'State Income Tax Payable'],
   'Social Security Payable': ['Payroll Liabilities', 'Social Security Payable', 'FICA Payable', 'Payroll Tax Expense — FICA'],
   'Medicare Payable':      ['Payroll Liabilities', 'Medicare Payable', 'FICA Payable', 'Payroll Tax Expense — FICA'],
+  'FUTA Payable':          ['Payroll Liabilities', 'FUTA Payable', 'Payroll Tax Expense — FUTA', 'Federal Unemployment Payable'],
+  'SUI Payable':           ['Payroll Liabilities', 'SUI Payable', 'SUTA Payable', 'State Unemployment Payable', 'Payroll Tax Expense — SUTA'],
   'Revenue':               ['Service Revenue', 'Sales Revenue', 'Revenue', 'Consulting Revenue', 'Project Revenue', 'Income'],
   'Expense':               ['Cost of Services', 'Cost of Goods Sold', 'Office Supplies', 'Miscellaneous Expense', 'General Expense', 'Operating Expense'],
   'Advertising':           ['Advertising & Marketing', 'Marketing', 'Advertising'],
@@ -411,6 +413,8 @@ const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> 
   'State Withholding':     { type: 'liability', subtype: 'current' },
   'Social Security Payable': { type: 'liability', subtype: 'current' },
   'Medicare Payable':      { type: 'liability', subtype: 'current' },
+  'FUTA Payable':          { type: 'liability', subtype: 'current' },
+  'SUI Payable':           { type: 'liability', subtype: 'current' },
   'Revenue':               { type: 'revenue' },
   'Expense':               { type: 'expense', subtype: 'operating' },
   'Advertising':           { type: 'expense', subtype: 'operating' },
@@ -685,6 +689,13 @@ export function registerIpcHandlers(): void {
     'loan_events',
     // IRS mileage rates — global reference table, no company_id
     'mileage_rates',
+    // Reference/global tables — no company_id column, would crash if generic CRUD injected one
+    'state_tax_brackets',
+    'federal_tax_brackets',
+    'state_tax_rates',
+    'exchange_rates',
+    // Automation child tables — company_id lives on parent automation_rules table
+    'automation_run_log',
   ]);
 
   // SECURITY: Tables that hold credentials/secrets must not be writable via the
@@ -5627,6 +5638,23 @@ export function registerIpcHandlers(): void {
       const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
       const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
 
+      // FIX #1: Post employer-side payroll taxes. Employer FICA matches
+      // employee FICA (6.2% SS + 1.45% Medicare on same wage base). Also
+      // compute FUTA (6.0% on first $7,000 per employee per year) — uses
+      // simplified per-stub gross since we don't have aggregate YTD per
+      // employee from the stubs array alone.
+      const totalEmployerSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
+      const totalEmployerMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+      let totalFUTA = 0;
+      for (const s of stubs) {
+        const gross = s.grossPay || 0;
+        // FUTA applies only to first $7,000 of annual wages per employee.
+        // Without access to full YTD gross per employee in the stubs payload,
+        // we approximate by checking the per-stub gross directly. This
+        // understates FUTA when an employee crosses $7k mid-period.
+        totalFUTA += Math.min(gross, 7000) * 0.006;
+      }
+
       postJournalEntry(dbInstance, companyId, payDate, `Payroll - ${periodStart} to ${periodEnd}`, [
         { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages' },
         { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable' },
@@ -5634,6 +5662,13 @@ export function registerIpcHandlers(): void {
         { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+        // Employer-side payroll tax expenses and liabilities — FIX #1
+        { nameHint: 'Payroll Tax Expense — FICA', debit: totalEmployerSS + totalEmployerMedicare, credit: 0, note: 'Employer FICA tax' },
+        { nameHint: 'Social Security Payable', debit: 0, credit: totalEmployerSS, note: 'Employer SS matching' },
+        { nameHint: 'Medicare Payable', debit: 0, credit: totalEmployerMedicare, note: 'Employer Medicare matching' },
+        // FUTA — employer-only federal unemployment tax
+        { nameHint: 'Payroll Tax Expense — FUTA', debit: totalFUTA, credit: 0, note: 'FUTA expense' },
+        { nameHint: 'FUTA Payable', debit: 0, credit: totalFUTA, note: 'FUTA liability' },
       ]);
 
       // ── PTO Auto-Accrual ──
@@ -5791,13 +5826,28 @@ export function registerIpcHandlers(): void {
       const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
       const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
 
+      // FIX #1: Employer-side payroll taxes
+      const totalEmployerSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
+      const totalEmployerMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+      let totalFUTA = 0;
+      for (const s of stubs) {
+        const gross = s.grossPay || 0;
+        totalFUTA += Math.min(gross, 7000) * 0.006;
+      }
+
       postJournalEntry(dbInstance, companyId, payDate, `Payroll - ${periodStart} to ${periodEnd}`, [
-        { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages (edited)' },
+        { nameHint: 'Wages Expense', debit: totalGross, credit: 0, note: 'Gross wages' },
         { nameHint: 'Wages Payable', debit: 0, credit: totalNet, note: 'Net wages payable' },
         { nameHint: 'Federal Withholding', debit: 0, credit: totalFederalTax, note: 'Federal income tax withheld' },
         { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+        // Employer-side payroll tax expenses and liabilities — FIX #1
+        { nameHint: 'Payroll Tax Expense — FICA', debit: totalEmployerSS + totalEmployerMedicare, credit: 0, note: 'Employer FICA tax' },
+        { nameHint: 'Social Security Payable', debit: 0, credit: totalEmployerSS, note: 'Employer SS matching' },
+        { nameHint: 'Medicare Payable', debit: 0, credit: totalEmployerMedicare, note: 'Employer Medicare matching' },
+        { nameHint: 'Payroll Tax Expense — FUTA', debit: totalFUTA, credit: 0, note: 'FUTA expense' },
+        { nameHint: 'FUTA Payable', debit: 0, credit: totalFUTA, note: 'FUTA liability' },
       ]);
     });
     tx();
@@ -7150,6 +7200,29 @@ export function registerIpcHandlers(): void {
     };
   });
 
+  // FIX #10/#11: Single source of truth for federal payroll constants.
+  // Returns SS wage base, FICA rates, FUTA rate/wage base, and standard
+  // deductions for a given tax year. Both frontend (PayrollRunner) and
+  // backend (TaxCalculationEngine) call this instead of using hardcoded
+  // values that drift between files and across years.
+  ipcMain.handle('tax:get-payroll-constants', (_event, { year }: { year: number }) => {
+    try {
+      const dbInstance = db.getDb();
+      const constants = dbInstance.prepare('SELECT * FROM federal_payroll_constants WHERE tax_year = ?').get(year) as any;
+      if (!constants) {
+        // Attempt to auto-seed if missing
+        const { seedTaxYear } = require('../services/tax-forms/seed-tax-year');
+        try { seedTaxYear(year); } catch { /* ignore */ }
+        const retry = dbInstance.prepare('SELECT * FROM federal_payroll_constants WHERE tax_year = ?').get(year) as any;
+        if (!retry) return { error: `No constants available for tax year ${year}` };
+        return retry;
+      }
+      return constants;
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to fetch payroll constants' };
+    }
+  });
+
   ipcMain.handle('tax:available-years', () => {
     const dbInstance = db.getDb();
     const years = dbInstance.prepare('SELECT DISTINCT tax_year FROM federal_payroll_constants ORDER BY tax_year DESC').all() as any[];
@@ -7908,16 +7981,16 @@ export function registerIpcHandlers(): void {
       SELECT SUM(total) as amount, due_date
       FROM invoices
       WHERE company_id = ? AND status NOT IN ('paid','void','draft')
-        AND due_date BETWEEN date('now') AND date('now', '+${d} days')
+        AND due_date BETWEEN date('now') AND date('now', '+' || ? || ' days')
       GROUP BY due_date ORDER BY due_date
-    `).all(companyId);
+    `).all(companyId, d);
     const outflow = dbInstance.prepare(`
       SELECT SUM(total_amount) as amount, due_date
       FROM bills
       WHERE company_id = ? AND status NOT IN ('paid','void','draft')
-        AND due_date BETWEEN date('now') AND date('now', '+${d} days')
+        AND due_date BETWEEN date('now') AND date('now', '+' || ? || ' days')
       GROUP BY due_date ORDER BY due_date
-    `).all(companyId);
+    `).all(companyId, d);
     return { inflow, outflow };
   });
 
@@ -7931,24 +8004,48 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('rules:create', (_event, data: Record<string, unknown>) => {
-    const id = uuid();
-    const row = { id, ...data, created_at: new Date().toISOString() };
-    db.getDb().prepare(`
-      INSERT INTO rules (id, company_id, category, name, priority, is_active, trigger, conditions, actions, created_at)
-      VALUES (@id, @company_id, @category, @name, @priority, @is_active, @trigger, @conditions, @actions, @created_at)
-    `).run(row);
-    return { id };
+    try {
+      const id = uuid();
+      const row = { id, ...data, created_at: new Date().toISOString() };
+      db.getDb().prepare(`
+        INSERT INTO rules (id, company_id, category, name, priority, is_active, trigger, conditions, actions, created_at)
+        VALUES (@id, @company_id, @category, @name, @priority, @is_active, @trigger, @conditions, @actions, @created_at)
+      `).run(row);
+      scheduleAutoBackup();
+      return { id };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to create rule' };
+    }
   });
 
   ipcMain.handle('rules:update', (_event, { id, data }: { id: string; data: Record<string, unknown> }) => {
-    const sets = Object.keys(data).map(k => `${k} = @${k}`).join(', ');
-    db.getDb().prepare(`UPDATE rules SET ${sets} WHERE id = @id`).run({ ...data, id });
-    return { ok: true };
+    try {
+      // Validate column names to prevent SQL injection
+      const allowedColumns = new Set([
+        'category', 'name', 'priority', 'is_active', 'trigger',
+        'conditions', 'actions', 'company_id', 'description', 'updated_at'
+      ]);
+      const safeKeys = Object.keys(data).filter(k => allowedColumns.has(k));
+      if (safeKeys.length === 0) return { error: 'No valid fields to update' };
+      const sets = safeKeys.map(k => `${k} = @${k}`).join(', ');
+      const updateData: Record<string, unknown> = {};
+      for (const k of safeKeys) updateData[k] = data[k];
+      db.getDb().prepare(`UPDATE rules SET ${sets} WHERE id = @id`).run({ ...updateData, id });
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to update rule' };
+    }
   });
 
   ipcMain.handle('rules:delete', (_event, id: string) => {
-    db.getDb().prepare(`DELETE FROM rules WHERE id = ?`).run(id);
-    return { ok: true };
+    try {
+      db.getDb().prepare(`DELETE FROM rules WHERE id = ?`).run(id);
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to delete rule' };
+    }
   });
 
   ipcMain.handle('approval:list', (_event, { company_id, status }: { company_id: string; status?: string }) => {
@@ -7960,8 +8057,13 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('approval:resolve', (_event, { id, status, notes }: { id: string; status: 'approved' | 'rejected'; notes?: string }) => {
-    db.getDb().prepare(`UPDATE approval_queue SET status = ?, notes = ?, resolved_at = datetime('now') WHERE id = ?`).run(status, notes ?? null, id);
-    return { ok: true };
+    try {
+      db.getDb().prepare(`UPDATE approval_queue SET status = ?, notes = ?, resolved_at = datetime('now') WHERE id = ?`).run(status, notes ?? null, id);
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to resolve approval' };
+    }
   });
 
   ipcMain.handle('approval:pending-count', (_event, company_id: string) => {
