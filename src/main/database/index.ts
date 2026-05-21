@@ -3,6 +3,17 @@ import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
 import { v4 as uuid } from 'uuid';
+import {
+  TABLES_WITHOUT_UPDATED_AT,
+  TABLES_WITH_DELETED_AT,
+  SOFT_DELETE_TABLES,
+} from './tableConfig';
+
+// Aliases for backward compatibility with local references
+const tablesWithoutUpdatedAt = TABLES_WITHOUT_UPDATED_AT;
+const tablesWithDeletedAt = TABLES_WITH_DELETED_AT;
+// Re-export for consumers like ipc/index.ts
+export { SOFT_DELETE_TABLES } from './tableConfig';
 
 let db: Database.Database | null = null;
 let currentCompanyId: string | null = null;
@@ -1895,6 +1906,21 @@ export function initDatabase(): Database.Database {
   `CREATE INDEX IF NOT EXISTS idx_compliance_docs_company ON compliance_documents(company_id, status)`,
   `CREATE INDEX IF NOT EXISTS idx_compliance_docs_person ON compliance_documents(person_type, person_id, form_type)`,
   `CREATE INDEX IF NOT EXISTS idx_compliance_docs_expires ON compliance_documents(expires_at, status)`,
+  // Employee equipment (2026-05-21)
+  `CREATE TABLE IF NOT EXISTS employee_equipment (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    item_name TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    serial_number TEXT DEFAULT '',
+    model TEXT DEFAULT '',
+    condition TEXT DEFAULT 'good' CHECK(condition IN ('new','excellent','good','fair','poor')),
+    assigned_date TEXT DEFAULT (date('now')),
+    return_date TEXT DEFAULT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_equipment_employee ON employee_equipment(employee_id)`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
@@ -2154,14 +2180,8 @@ export function queryAll(
 // Tables in this set get the soft-delete treatment: remove() sets
 // deleted_at instead of physically removing the row; read helpers
 // filter out soft-deleted records. Other tables behave as before
-// (physical delete, no filter). To opt in another table, also add
-// the deleted_at column via a migration.
-export const SOFT_DELETE_TABLES = new Set([
-  'invoices',
-  'bills',
-  'expenses',
-  'journal_entries',
-]);
+// (physical delete, no filter).
+// SCHEMA: imported from tableConfig.ts as single source of truth.
 
 export function getById(table: string, id: string): any {
   if (SOFT_DELETE_TABLES.has(table)) {
@@ -2238,112 +2258,14 @@ export function create(table: string, data: Record<string, any>): any {
 // ", updated_at = datetime('now')" unless the table is in this set, so any
 // table missing here AND missing the column will crash with
 // "no such column: updated_at" on its first update.
-const tablesWithoutUpdatedAt = new Set([
-  // Child / junction tables (original)
-  'invoice_line_items',
-  'journal_entry_lines',
-  'pay_stubs',
-  'budget_lines',
-  'bank_reconciliation_matches',
-  // Financial record tables (append-only by design)
-  'payments',          // has created_at only
-  'tax_payments',      // has created_at only
-  'tax_categories',    // has created_at only
-  // Transaction / log tables (immutable after insert)
-  'bank_transactions', // has imported_at only
-  'audit_log',         // has timestamp only
-  'email_log',         // has sent_at only
-  'stripe_transactions', // has synced_at only
-  // Metadata / reference tables
-  'documents',         // has uploaded_at only
-  'notifications',     // has created_at only
-  'custom_field_defs', // has created_at only
-  'saved_views',       // has created_at only
-  'user_companies',    // has created_at only
-  // Debt collection child tables — created_at only
-  'debt_contacts', 'debt_communications', 'debt_payments',
-  'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
-  'debt_automation_rules', 'debt_templates',
-  'quote_line_items',
-  // Invoice reminders — created_at only
-  'invoice_reminders',
-  // Invoice payment schedule — created_at only
-  'invoice_payment_schedule',
-  // Track 1 child tables — created_at only
-  'client_contacts', 'debt_promises',
-  // Track 2 child tables — created_at only
-  'state_tax_brackets', 'pto_transactions',
-  // Debt & Invoice Enhancement child tables — created_at only
-  'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
-  'debt_compliance_log', 'invoice_debt_links',
-  'expense_line_items', 'debt_disputes', 'debt_notes',
-  // DC Immersive Workspace — created_at only
-  'debt_audit_log', 'debt_payment_matches',
-  // Advanced debt collection — created_at only
-  'debt_skip_traces', 'debt_campaigns',
-  // Expense workflow — created_at only
-  'expense_approval_steps', 'expense_comments', 'reimbursement_batches', 'period_locks',
-  // Period close + reconciliation + compliance
-  'period_close_checklist', 'period_close_log', 'account_reconciliations',
-  'recon_schedule', 'recon_imports',
-  'sox_controls', 'sox_control_tests', 'je_approvals',
-  // CoA round 2 — created_at only
-  'account_group_members', 'account_permissions', 'account_watches',
-  'account_aliases', 'account_comments', 'account_classify_rules',
-  'account_balance_history',
-  // Workflow + email templates child tables — created_at only
-  'custom_statuses', 'status_transitions', 'entity_status_history',
-  'email_template_history', 'email_schedules',
-  // SCHEMA: round-3 audit (2026-04-27) — recently-added tables that have
-  // created_at only. Without these, db.update() crashes with
-  // "no such column: updated_at" on the first edit.
-  'inventory_movements',           // child of inventory_items
-  'entity_relations',              // graph edge table — created_at only
-  'tb_elimination_entries',        // append-mostly intercompany TB
-  'je_history',                    // immutable JE snapshots
-  'tag_groups', 'tags', 'entity_tags', 'tag_rules',
-  'custom_field_definitions',
-  // SCHEMA: schema.sql tables that lack updated_at and were never declared here
-  'bill_line_items', 'bill_payments', 'po_line_items',
-  'asset_depreciation_entries', 'credit_note_items',
-  'federal_tax_brackets', 'state_tax_rates',
-  'exchange_rates', 'sync_queue', 'invoice_tokens',
-  'automation_rules', 'automation_run_log', 'financial_anomalies',
-  'rules', 'rule_logs', 'approval_queue',
-  // Quote system child tables — created_at only
-  'quote_activity_log',
-  // Invoice activity log — created_at only
-  'invoice_activity_log',
-  // Expense activity log — created_at only
-  'expense_activity_log',
-  // Advanced System (2026-04-28) — append-only / no updated_at
-  'command_history',
-  'workflow_executions',
-  'workflow_event_log',
-  'predictions',
-  'anomaly_log',
-  // Loan system child tables — created_at only
-  'loan_payment_schedule',
-  'loan_events',
-  // IRS mileage rates — global reference table, no updated_at
-  'mileage_rates',
-]);
+// SCHEMA: tablesWithoutUpdatedAt imported from tableConfig.ts for single source of truth.
+// Tables that do NOT have an updated_at column cause db.update() to append
+// ", updated_at = datetime('now')" unless listed here, so missing a table
+// from this set means an SQLite crash on first update.
 
-// SCHEMA: tables with a `deleted_at` column. queryAll() auto-filters these
-// to exclude soft-deleted rows unless the caller passes `include_deleted: true`.
-// Keep this in sync with any new soft-deletable table — adding the column
-// alone is not enough.
-const tablesWithDeletedAt = new Set([
-  'accounts',
-  'tags',
-  'custom_field_definitions',
-  // P1.13: Trash + 30-day recovery — extend SOFT_DELETE_TABLES too
-  // when adding here so remove() does the right thing.
-  'invoices',
-  'bills',
-  'expenses',
-  'journal_entries',
-]);
+// SCHEMA: tablesWithDeletedAt imported from tableConfig.ts for single source of truth.
+// queryAll() auto-filters these to exclude soft-deleted rows unless the caller
+// passes `include_deleted: true`.
 
 export function update(table: string, id: string, data: Record<string, any>): any {
   // INTEGRITY: drop `id` and `created_at` defensively — these must never be

@@ -1239,3 +1239,20 @@ CREATE TABLE IF NOT EXISTS invoice_reminders (
 
 CREATE INDEX IF NOT EXISTS idx_invoice_reminders_invoice ON invoice_reminders(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_invoice_reminders_status ON invoice_reminders(status, scheduled_date);
+
+-- Employee Equipment
+CREATE TABLE IF NOT EXISTS employee_equipment (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  item_name TEXT NOT NULL DEFAULT '',
+  description TEXT DEFAULT '',
+  serial_number TEXT DEFAULT '',
+  model TEXT DEFAULT '',
+  condition TEXT DEFAULT 'good' CHECK(condition IN ('new','excellent','good','fair','poor')),
+  assigned_date TEXT DEFAULT (date('now')),
+  return_date TEXT DEFAULT NULL,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_equipment_employee ON employee_equipment(employee_id);

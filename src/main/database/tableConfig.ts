@@ -14,6 +14,14 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'state_tax_brackets',
   'state_tax_rates',
   'exchange_rates',
+  'federal_payroll_constants',
+  'invoice_settings',
+  'invoice_catalog_items',
+  'companies',
+  // User-scoped tables — no company_id
+  'custom_shortcuts',
+  'command_history',
+  'macros',
   // Child/junction tables (company_id on parent)
   'invoice_line_items',
   'journal_entry_lines',
@@ -124,6 +132,7 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'pto_balances',
   'pto_policies',
   'employee_deductions',
+  'employee_equipment',
   'payroll_runs',
 ]);
 
@@ -217,6 +226,12 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'loan_payments',
   // IRS mileage rates — global reference table
   'mileage_rates',
+  // Stripe cache tables — created_at / synced_at only
+  'stripe_cache',
+  'stripe_offline_queue',
+  'stripe_sync_state',
+  // Federal payroll constants — created_at only
+  'federal_payroll_constants',
   // Schema tracking
   'schema_meta',
   'schema_migrations',
@@ -242,7 +257,6 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'debt_payments',
   'debt_pipeline_stages',
   'debt_evidence',
-  'debt_legal_actions',
   'debt_automation_rules',
   'debt_templates',
   'debt_plan_installments',
@@ -393,6 +407,7 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'pto_transactions',
   // Employee
   'employee_deductions',
+  'employee_equipment',
   // Payroll
   'payroll_runs',
   // Bank

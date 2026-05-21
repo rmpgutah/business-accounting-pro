@@ -48,6 +48,7 @@ import {
   addMonths,
 } from 'date-fns';
 import api from '../../lib/api';
+import { logger } from '../../lib/logger';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -486,15 +487,15 @@ const Dashboard: React.FC = () => {
             outstandingChange: statsData.outstandingChange ?? 0,
           });
         }
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       api.dashboardCashflow(start, end).then(r => {
         if (!cancelled && Array.isArray(r)) setCashflow(r);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       api.dashboardActivity('all', 15).then(r => {
         if (!cancelled && Array.isArray(r)) setRecentActivity(r);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       api.rawQuery(
         `SELECT i.*, c.name as client_name FROM invoices i
@@ -504,7 +505,7 @@ const Dashboard: React.FC = () => {
         [cid]
       ).then(r => {
         if (!cancelled && Array.isArray(r)) setUpcomingDue(r);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       api.rawQuery(
         `SELECT c.id, c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
@@ -518,7 +519,7 @@ const Dashboard: React.FC = () => {
         [cid]
       ).then(r => {
         if (!cancelled && Array.isArray(r)) setTopClients(r);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Revenue by client (top 5 + Other) for PieChart
       api.rawQuery(
@@ -542,7 +543,7 @@ const Dashboard: React.FC = () => {
         }));
         if (otherTotal > 0) pieData.push({ name: 'Other', value: otherTotal });
         setClientRevenue(pieData);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Expenses by category for Treemap
       api.rawQuery(
@@ -568,7 +569,7 @@ const Dashboard: React.FC = () => {
           })
         );
         setExpenseCategories(treemapData);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Last 12 months revenue + expenses for AreaChart and forecast
       Promise.all([
@@ -649,7 +650,7 @@ const Dashboard: React.FC = () => {
             setCashForecast(forecast);
           }
         }
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Quick metrics
       Promise.all([
@@ -712,12 +713,12 @@ const Dashboard: React.FC = () => {
           topClientName: (topClient as any)?.name || '--',
           topClientRevenue: (topClient as any)?.total || 0,
         });
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Anomalies
       api.listAnomalies().then(r => {
         if (!cancelled) setAnomalies(r || []);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Debt collection summary
       api.rawQuery(
@@ -728,7 +729,7 @@ const Dashboard: React.FC = () => {
           const row = Array.isArray(r) ? r[0] : r;
           setDebtStats(row ? { count: row.count ?? 0, total: row.total ?? 0 } : null);
         }
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Bills / AP summary
       api.rawQuery(
@@ -742,7 +743,7 @@ const Dashboard: React.FC = () => {
           const row = Array.isArray(r) ? r[0] : r;
           setBillsStats(row ? { unpaid_total: row.unpaid_total ?? 0, overdue_count: row.overdue_count ?? 0 } : null);
         }
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Payroll summary
       api.rawQuery(
@@ -761,7 +762,7 @@ const Dashboard: React.FC = () => {
             ytd_payroll: row.ytd_payroll ?? 0,
           } : null);
         }
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
       // Rules activity & approvals
       Promise.all([
@@ -778,7 +779,7 @@ const Dashboard: React.FC = () => {
         setPendingApprovals(approvalCount ?? 0);
         const rowData = Array.isArray(activityRow) ? activityRow[0] : activityRow;
         setRulesActivity(rowData ?? null);
-      }).catch(() => {});
+      }).catch((_err) => logger.warn('Dashboard', _err));
     };
 
     load();

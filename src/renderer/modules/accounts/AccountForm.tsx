@@ -337,7 +337,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             {previewMd ? (
               <div className="px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary min-h-[60px]"
                 style={{ borderRadius: '6px' }}
-                dangerouslySetInnerHTML={renderMarkdown(description)} />
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(description) }} />
             ) : (
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Optional description..."
                 className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue resize-none"

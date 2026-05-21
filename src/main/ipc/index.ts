@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import { v4 as uuid } from 'uuid';
 import * as db from '../database';
+import { TABLES_WITHOUT_COMPANY_ID } from '../database/tableConfig';
 import crypto from 'crypto';
 import { syncPush } from '../sync';
 import fs from 'fs';
@@ -415,6 +416,8 @@ const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> 
   'Medicare Payable':      { type: 'liability', subtype: 'current' },
   'FUTA Payable':          { type: 'liability', subtype: 'current' },
   'SUI Payable':           { type: 'liability', subtype: 'current' },
+  'Pre-tax Deductions Payable': { type: 'liability', subtype: 'current' },
+  'Post-tax Deductions Payable': { type: 'liability', subtype: 'current' },
   'Revenue':               { type: 'revenue' },
   'Expense':               { type: 'expense', subtype: 'operating' },
   'Advertising':           { type: 'expense', subtype: 'operating' },
@@ -645,58 +648,8 @@ export function registerIpcHandlers(): void {
   // Tables that do NOT have a company_id column (child/junction tables)
   // WARNING: only list tables whose schema truly has no company_id column.
   // payments and categories both have company_id NOT NULL — never put them here.
-  const tablesWithoutCompanyId = new Set([
-    'invoice_line_items', 'journal_entry_lines', 'pay_stubs',
-    'budget_lines', 'bank_transactions', 'bank_reconciliation_matches',
-    'users', 'user_companies',
-    // Enterprise v2 child tables — no company_id column in schema
-    // NOTE: bill_payments DOES have company_id, so it is NOT listed here
-    'bill_line_items', 'po_line_items',
-    'asset_depreciation_entries', 'credit_note_items',
-    // Debt collection child tables — company_id lives on parent `debts` table
-    'debt_contacts', 'debt_communications', 'debt_payments',
-    'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions', 'debt_notes',
-    'quote_line_items',
-    // Invoice reminders — company_id lives on parent `invoices` table
-    'invoice_reminders',
-    // Invoice settings & catalog — company_id injected by their own handlers
-    'invoice_settings', 'invoice_catalog_items',
-    // Invoice payment schedule — company_id lives on parent `invoices` table
-    'invoice_payment_schedule',
-    // Track 1 child tables — company_id lives on parent table
-    'client_contacts', 'debt_promises',
-    // Debt & Invoice Enhancement child tables — company_id lives on parent table
-    'debt_payment_plans', 'debt_plan_installments', 'debt_settlements',
-    'debt_compliance_log', 'invoice_debt_links',
-    'expense_line_items', 'debt_disputes',
-    'debt_audit_log', 'debt_payment_matches',
-    // Advanced debt collection child tables — company_id lives on parent
-    'debt_skip_traces',
-    // Quote system child tables — company_id lives on parent quotes table
-    'quote_activity_log',
-    // Invoice activity log — company_id lives on parent invoices table
-    'invoice_activity_log',
-    // Expense activity log — company_id lives on parent expenses table
-    'expense_activity_log',
-    // Advanced System (2026-04-28) — user-scoped or company_id absent
-    'custom_shortcuts',
-    'command_history',
-    'workflow_executions',
-    'workflow_event_log',
-    // Loan system child tables — company_id lives on parent loans table
-    'loan_payment_schedule',
-    'loan_payments',
-    'loan_events',
-    // IRS mileage rates — global reference table, no company_id
-    'mileage_rates',
-    // Reference/global tables — no company_id column, would crash if generic CRUD injected one
-    'state_tax_brackets',
-    'federal_tax_brackets',
-    'state_tax_rates',
-    'exchange_rates',
-    // Automation child tables — company_id lives on parent automation_rules table
-    'automation_run_log',
-  ]);
+  // SCHEMA: imported from tableConfig.ts for single source of truth.
+  const tablesWithoutCompanyId = TABLES_WITHOUT_COMPANY_ID;
 
   // SECURITY: Tables that hold credentials/secrets must not be writable via the
   // generic CRUD IPC — those mutations have to go through dedicated handlers
@@ -5591,10 +5544,13 @@ export function registerIpcHandlers(): void {
 
     const tx = (dbInstance as any).transaction(() => {
       const runId = uuid();
+      // Compute totals before INSERT so total_deductions is accurate
+      const totalPreTax = stubs.reduce((sum: number, s: any) => sum + (s.preTaxDeductions || 0), 0);
+      const totalPostTax = stubs.reduce((sum: number, s: any) => sum + (s.postTaxDeductions || 0), 0);
       (dbInstance as any).prepare(`
         INSERT INTO payroll_runs (id, company_id, pay_period_start, pay_period_end, pay_date, status, total_gross, total_taxes, total_deductions, total_net, run_type, notes, employee_count)
-        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, 0, ?, ?, ?, ?)
-      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalNet, runType || 'regular', notes || '', employeeCount || stubs.length);
+        VALUES (?, ?, ?, ?, ?, 'processed', ?, ?, ?, ?, ?, ?, ?)
+      `).run(runId, companyId, periodStart, periodEnd, payDate, totalGross, totalTaxes, totalPreTax + totalPostTax, totalNet, runType || 'regular', notes || '', employeeCount || stubs.length);
 
       // Feature 20: Auto-generate sequential check numbers
       let lastCheckNum = 1000;
@@ -5662,6 +5618,9 @@ export function registerIpcHandlers(): void {
         { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+        // Pre-tax and post-tax deductions (401k, garnishments, etc.) — prevent JE imbalance
+        { nameHint: totalPreTax > 0 ? 'Pre-tax Deductions Payable' : '_skip', debit: 0, credit: totalPreTax, note: 'Pre-tax deductions withheld' },
+        { nameHint: totalPostTax > 0 ? 'Post-tax Deductions Payable' : '_skip', debit: 0, credit: totalPostTax, note: 'Post-tax deductions withheld' },
         // Employer-side payroll tax expenses and liabilities — FIX #1
         { nameHint: 'Payroll Tax Expense — FICA', debit: totalEmployerSS + totalEmployerMedicare, credit: 0, note: 'Employer FICA tax' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalEmployerSS, note: 'Employer SS matching' },
@@ -5825,6 +5784,8 @@ export function registerIpcHandlers(): void {
       const totalStateTax = stubs.reduce((sum: number, s: any) => sum + (s.stateTax || 0), 0);
       const totalSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
       const totalMedicare = stubs.reduce((sum: number, s: any) => sum + (s.medicare || 0), 0);
+      const totalPreTax = stubs.reduce((sum: number, s: any) => sum + (s.preTaxDeductions || 0), 0);
+      const totalPostTax = stubs.reduce((sum: number, s: any) => sum + (s.postTaxDeductions || 0), 0);
 
       // FIX #1: Employer-side payroll taxes
       const totalEmployerSS = stubs.reduce((sum: number, s: any) => sum + (s.ss || 0), 0);
@@ -5842,6 +5803,9 @@ export function registerIpcHandlers(): void {
         { nameHint: 'State Withholding', debit: 0, credit: totalStateTax, note: 'State income tax withheld' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalSS, note: 'Employee SS withholding' },
         { nameHint: 'Medicare Payable', debit: 0, credit: totalMedicare, note: 'Employee Medicare withholding' },
+        // Pre-tax and post-tax deductions (401k, garnishments, etc.) — prevent JE imbalance
+        { nameHint: totalPreTax > 0 ? 'Pre-tax Deductions Payable' : '_skip', debit: 0, credit: totalPreTax, note: 'Pre-tax deductions withheld' },
+        { nameHint: totalPostTax > 0 ? 'Post-tax Deductions Payable' : '_skip', debit: 0, credit: totalPostTax, note: 'Post-tax deductions withheld' },
         // Employer-side payroll tax expenses and liabilities — FIX #1
         { nameHint: 'Payroll Tax Expense — FICA', debit: totalEmployerSS + totalEmployerMedicare, credit: 0, note: 'Employer FICA tax' },
         { nameHint: 'Social Security Payable', debit: 0, credit: totalEmployerSS, note: 'Employer SS matching' },

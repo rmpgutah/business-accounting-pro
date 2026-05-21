@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
+import { logger } from '../../lib/logger';
 import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -178,10 +179,10 @@ const DangerZone: React.FC = () => {
         'employee_deductions',
       ];
       for (const table of tables) {
-        await api.rawQuery(`DELETE FROM ${table} WHERE company_id = ?`, [activeCompany.id]).catch(() => {});
+        await api.rawQuery(`DELETE FROM ${table} WHERE company_id = ?`, [activeCompany.id]).catch(e => logger.warn('CompanyDelete', e));
       }
       // Remove user-company link
-      await api.rawQuery('DELETE FROM user_companies WHERE company_id = ?', [activeCompany.id]).catch(() => {});
+      await api.rawQuery('DELETE FROM user_companies WHERE company_id = ?', [activeCompany.id]).catch(e => logger.warn('CompanyDelete', e));
       // Delete the company record
       await api.remove('companies', activeCompany.id);
       // Refresh companies list
