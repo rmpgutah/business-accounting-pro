@@ -1976,6 +1976,521 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE tags ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE custom_field_definitions ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE inventory_items ADD COLUMN deleted_at TEXT DEFAULT NULL",
+
+  // ─── Batch 1: 15 admin/settings features ────────────────────
+
+  // F1-F3: Custom fields system (clients, vendors, invoices)
+  `CREATE TABLE IF NOT EXISTS custom_field_definitions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('client','vendor','invoice','expense','employee','project')),
+    field_key TEXT NOT NULL,
+    field_label TEXT NOT NULL,
+    field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','boolean','select','multiselect')),
+    options_json TEXT DEFAULT '[]',
+    required INTEGER DEFAULT 0,
+    display_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, entity_type, field_key)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, is_active)`,
+
+  // F4: Role permissions matrix (extends users table)
+  "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'",
+  "ALTER TABLE users ADD COLUMN permissions_json TEXT DEFAULT '{}'",
+  `CREATE TABLE IF NOT EXISTS user_role_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    role_name TEXT NOT NULL,
+    permissions_json TEXT NOT NULL DEFAULT '{}',
+    is_system INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // F5: 2FA TOTP setup
+  "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
+  "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN totp_backup_codes TEXT DEFAULT '[]'",
+
+  // F6: Session timeout config (per company)
+  "ALTER TABLE companies ADD COLUMN session_timeout_minutes INTEGER DEFAULT 480",
+
+  // F7: Auto-backup schedule customization
+  "ALTER TABLE companies ADD COLUMN backup_schedule TEXT DEFAULT 'on_change'",
+  "ALTER TABLE companies ADD COLUMN backup_retain_count INTEGER DEFAULT 30",
+
+  // F8: Theme customization (per user)
+  "ALTER TABLE users ADD COLUMN theme_accent_color TEXT DEFAULT '#2563eb'",
+  "ALTER TABLE users ADD COLUMN theme_font_size TEXT DEFAULT 'medium'",
+  "ALTER TABLE users ADD COLUMN theme_density TEXT DEFAULT 'comfortable'",
+  "ALTER TABLE users ADD COLUMN theme_mode TEXT DEFAULT 'dark'",
+
+  // F9: Multi-fiscal-year support
+  "ALTER TABLE companies ADD COLUMN fiscal_year_start_month INTEGER DEFAULT 1",
+  "ALTER TABLE companies ADD COLUMN fiscal_year_start_day INTEGER DEFAULT 1",
+
+  // F10-F11: Activity feed + audit log viewer
+  // (audit_log table already exists — adding indices for the viewer)
+  "CREATE INDEX IF NOT EXISTS idx_audit_log_company_ts ON audit_log(company_id, timestamp DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(performed_by, timestamp DESC)",
+
+  // F12: Notification preferences per user
+  `CREATE TABLE IF NOT EXISTS notification_preferences (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    notification_type TEXT NOT NULL,
+    channel_email INTEGER DEFAULT 1,
+    channel_in_app INTEGER DEFAULT 1,
+    channel_desktop INTEGER DEFAULT 0,
+    quiet_hours_start TEXT DEFAULT NULL,
+    quiet_hours_end TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, company_id, notification_type)
+  )`,
+
+  // F13: Currency settings (functional + reporting + display)
+  "ALTER TABLE companies ADD COLUMN functional_currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE companies ADD COLUMN reporting_currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE companies ADD COLUMN currency_display_format TEXT DEFAULT 'symbol_prefix'",
+
+  // F14: Password complexity policy
+  "ALTER TABLE companies ADD COLUMN password_min_length INTEGER DEFAULT 12",
+  "ALTER TABLE companies ADD COLUMN password_require_special INTEGER DEFAULT 1",
+  "ALTER TABLE companies ADD COLUMN password_require_number INTEGER DEFAULT 1",
+  "ALTER TABLE companies ADD COLUMN password_require_mixed_case INTEGER DEFAULT 1",
+  "ALTER TABLE companies ADD COLUMN password_rotation_days INTEGER DEFAULT 0",
+
+  // F15: User invitation flow
+  `CREATE TABLE IF NOT EXISTS user_invitations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    email TEXT NOT NULL,
+    role TEXT DEFAULT 'staff',
+    invited_by TEXT NOT NULL,
+    invitation_token TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    accepted_at TEXT DEFAULT NULL,
+    accepted_by_user_id TEXT DEFAULT NULL,
+    revoked_at TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_invitations_email ON user_invitations(email, accepted_at)",
+  "CREATE INDEX IF NOT EXISTS idx_invitations_token ON user_invitations(invitation_token)",
+
+  // ─── Batch 2: 20 invoicing & expense features ────────────────
+
+  // F16: Invoice late-fee auto-calc
+  "ALTER TABLE invoices ADD COLUMN late_fee_applied REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN late_fee_rate_pct REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
+  "ALTER TABLE companies ADD COLUMN default_late_fee_rate_pct REAL DEFAULT 1.5",
+  "ALTER TABLE companies ADD COLUMN default_late_fee_grace_days INTEGER DEFAULT 7",
+
+  // F17: Scheduled invoice reminders
+  `CREATE TABLE IF NOT EXISTS invoice_reminder_schedules (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL REFERENCES invoices(id),
+    days_after_due INTEGER NOT NULL,
+    template_id TEXT DEFAULT NULL,
+    scheduled_at TEXT NOT NULL,
+    sent_at TEXT DEFAULT NULL,
+    cancelled_at TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_invoice_reminders_scheduled ON invoice_reminder_schedules(scheduled_at, sent_at, cancelled_at)",
+
+  // F18: Partial payment tracking (existing payments table is fine; add summary cols on invoice)
+  "ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN balance_due REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN last_payment_date TEXT DEFAULT NULL",
+
+  // F19: Credit memos / refunds
+  `CREATE TABLE IF NOT EXISTS credit_memos (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    client_id TEXT NOT NULL REFERENCES clients(id),
+    invoice_id TEXT REFERENCES invoices(id),
+    memo_number TEXT NOT NULL,
+    issue_date TEXT NOT NULL,
+    reason TEXT DEFAULT '',
+    amount REAL NOT NULL,
+    amount_applied REAL DEFAULT 0,
+    status TEXT DEFAULT 'open' CHECK(status IN ('open','partially_applied','fully_applied','voided')),
+    refund_method TEXT DEFAULT '',
+    refunded_at TEXT DEFAULT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_credit_memos_client ON credit_memos(client_id, status)",
+
+  // F20: Invoice batch send (no new schema — IPC handler)
+  // F21: Invoice template library
+  `CREATE TABLE IF NOT EXISTS invoice_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    template_name TEXT NOT NULL,
+    template_data TEXT NOT NULL DEFAULT '{}',
+    number_prefix TEXT DEFAULT '',
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // F22: Invoice number prefix per template — already in invoice_templates
+  // F23: Invoice currency conversion display
+  "ALTER TABLE invoices ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+  "ALTER TABLE invoices ADD COLUMN reporting_currency_total REAL DEFAULT 0",
+
+  // F24: Invoice deposit/down-payment tracking
+  "ALTER TABLE invoices ADD COLUMN deposit_required REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN deposit_paid REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN deposit_due_date TEXT DEFAULT NULL",
+
+  // F25: Invoice line-item snippets — uses existing line_item_snippets table
+
+  // F26: Expense receipt thumbnail (existing receipts/files; add cache col)
+  "ALTER TABLE expenses ADD COLUMN receipt_thumbnail_path TEXT DEFAULT NULL",
+
+  // F27: Expense category budget alerts
+  `CREATE TABLE IF NOT EXISTS category_budget_alerts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    category_id TEXT NOT NULL,
+    period TEXT NOT NULL CHECK(period IN ('monthly','quarterly','annual')),
+    budget_amount REAL NOT NULL,
+    alert_threshold_pct REAL DEFAULT 80,
+    last_alerted_at TEXT DEFAULT NULL,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // F28: Expense vendor auto-suggest — uses frequency from existing data (no schema)
+
+  // F29: Expense splitting across categories
+  `CREATE TABLE IF NOT EXISTS expense_splits (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL REFERENCES expenses(id),
+    category_id TEXT,
+    description TEXT DEFAULT '',
+    amount REAL NOT NULL,
+    pct REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_expense_splits_parent ON expense_splits(expense_id)",
+
+  // F30: Expense mileage rates library — uses existing mileage_rates table
+
+  // F31: Expense reimbursement workflow
+  `CREATE TABLE IF NOT EXISTS expense_reimbursements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    employee_id TEXT NOT NULL,
+    submitted_at TEXT DEFAULT (datetime('now')),
+    submitted_by TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','paid')),
+    approved_by TEXT DEFAULT NULL,
+    approved_at TEXT DEFAULT NULL,
+    rejected_reason TEXT DEFAULT '',
+    paid_at TEXT DEFAULT NULL,
+    payment_method TEXT DEFAULT '',
+    total_amount REAL NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_reimbursement_items (
+    id TEXT PRIMARY KEY,
+    reimbursement_id TEXT NOT NULL REFERENCES expense_reimbursements(id),
+    expense_id TEXT NOT NULL REFERENCES expenses(id),
+    amount REAL NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_reimbursements_employee ON expense_reimbursements(employee_id, status)",
+
+  // F32: Per-diem rate lookup
+  `CREATE TABLE IF NOT EXISTS per_diem_rates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    effective_year INTEGER NOT NULL,
+    lodging_rate REAL NOT NULL,
+    meals_rate REAL NOT NULL,
+    incidentals_rate REAL DEFAULT 5,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, city, state, effective_year)
+  )`,
+
+  // F33: Bulk re-categorize (no schema — IPC handler)
+  // F34: Expense report builder (no schema — uses reports infra)
+
+  // F35: Expense duplicate detection (no schema — runtime check)
+
+  // ─── Batch 3: 15 banking / reconciliation / payroll features ────
+
+  // F36: Bank rule engine (if memo contains X → categorize as Y)
+  `CREATE TABLE IF NOT EXISTS bank_categorization_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    rule_name TEXT NOT NULL,
+    match_field TEXT NOT NULL CHECK(match_field IN ('description','memo','payee','amount')),
+    match_type TEXT NOT NULL CHECK(match_type IN ('contains','equals','starts_with','ends_with','regex','between')),
+    match_value TEXT NOT NULL,
+    match_value_2 TEXT DEFAULT NULL,
+    apply_category_id TEXT,
+    apply_vendor_id TEXT,
+    apply_tags TEXT DEFAULT '[]',
+    priority INTEGER DEFAULT 100,
+    is_active INTEGER DEFAULT 1,
+    times_matched INTEGER DEFAULT 0,
+    last_matched_at TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_bank_rules_company ON bank_categorization_rules(company_id, is_active, priority)",
+
+  // F37: Auto-match reconciliation (no schema — algorithm in service)
+  // F38: Duplicate transaction warnings
+  "ALTER TABLE bank_transactions ADD COLUMN is_duplicate_of TEXT DEFAULT NULL",
+  "ALTER TABLE bank_transactions ADD COLUMN duplicate_confidence REAL DEFAULT 0",
+
+  // F39: Multi-bank transfer detection
+  "ALTER TABLE bank_transactions ADD COLUMN transfer_match_id TEXT DEFAULT NULL",
+  "CREATE INDEX IF NOT EXISTS idx_bank_tx_transfer ON bank_transactions(transfer_match_id)",
+
+  // F40: Bank balance projection (no schema — computed from scheduled inflows/outflows)
+  // F41: Statement CSV mapper
+  `CREATE TABLE IF NOT EXISTS bank_csv_mappings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    bank_name TEXT NOT NULL,
+    mapping_json TEXT NOT NULL DEFAULT '{}',
+    date_format TEXT DEFAULT 'YYYY-MM-DD',
+    date_column TEXT NOT NULL,
+    description_column TEXT NOT NULL,
+    amount_column TEXT NOT NULL,
+    debit_column TEXT DEFAULT NULL,
+    credit_column TEXT DEFAULT NULL,
+    skip_rows INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // F42: Reconciliation history viewer
+  "ALTER TABLE bank_reconciliation_matches ADD COLUMN reconciled_at TEXT DEFAULT NULL",
+  "ALTER TABLE bank_reconciliation_matches ADD COLUMN reconciled_by TEXT DEFAULT ''",
+
+  // F43: Outstanding deposit tracker (deposited but not cleared)
+  "ALTER TABLE bank_transactions ADD COLUMN deposited_at TEXT DEFAULT NULL",
+  "ALTER TABLE bank_transactions ADD COLUMN cleared_at TEXT DEFAULT NULL",
+
+  // F44: Salary annual review tracker
+  `CREATE TABLE IF NOT EXISTS employee_salary_reviews (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    employee_id TEXT NOT NULL,
+    review_date TEXT NOT NULL,
+    review_period_start TEXT,
+    review_period_end TEXT,
+    prior_salary REAL,
+    new_salary REAL,
+    pct_change REAL,
+    reviewer_id TEXT,
+    rating TEXT,
+    notes TEXT DEFAULT '',
+    effective_date TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_salary_reviews_employee ON employee_salary_reviews(employee_id, review_date DESC)",
+
+  // F45: Pay stub bulk ZIP download (no schema — service handler)
+
+  // F46: Time-off balance tracker
+  `CREATE TABLE IF NOT EXISTS employee_time_off_balances (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    employee_id TEXT NOT NULL,
+    time_off_type TEXT NOT NULL CHECK(time_off_type IN ('pto','sick','personal','bereavement','jury','other')),
+    accrual_rate_hours_per_period REAL DEFAULT 0,
+    accrual_period TEXT DEFAULT 'pay_period' CHECK(accrual_period IN ('pay_period','monthly','annual')),
+    max_carryover_hours REAL DEFAULT 0,
+    current_balance_hours REAL DEFAULT 0,
+    ytd_used_hours REAL DEFAULT 0,
+    ytd_accrued_hours REAL DEFAULT 0,
+    last_accrual_at TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, employee_id, time_off_type)
+  )`,
+  `CREATE TABLE IF NOT EXISTS time_off_requests (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    employee_id TEXT NOT NULL,
+    time_off_type TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    hours_requested REAL NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','denied','cancelled')),
+    requested_at TEXT DEFAULT (datetime('now')),
+    approved_by TEXT DEFAULT NULL,
+    approved_at TEXT DEFAULT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_time_off_employee ON time_off_requests(employee_id, status, start_date)",
+
+  // F47: Bonus calculator (no schema — service computation)
+  // F48: State tax rate viewer (uses existing utah_withholding_config etc.)
+  // F49: Payroll cost forecast (no schema — derived from existing payroll data)
+
+  // F50: New-hire onboarding checklist
+  `CREATE TABLE IF NOT EXISTS onboarding_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    template_name TEXT NOT NULL,
+    items_json TEXT NOT NULL DEFAULT '[]',
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS onboarding_assignments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    employee_id TEXT NOT NULL,
+    template_id TEXT,
+    item_key TEXT NOT NULL,
+    item_label TEXT NOT NULL,
+    due_date TEXT,
+    completed INTEGER DEFAULT 0,
+    completed_at TEXT DEFAULT NULL,
+    completed_by TEXT DEFAULT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_onboarding_employee ON onboarding_assignments(employee_id, completed)",
+
+  // ─── Batch 4: 10 reports/analytics features ──────────────────
+
+  // F60: Custom dashboard widgets
+  `CREATE TABLE IF NOT EXISTS dashboard_widgets (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    widget_type TEXT NOT NULL,
+    widget_config TEXT DEFAULT '{}',
+    position_x INTEGER DEFAULT 0,
+    position_y INTEGER DEFAULT 0,
+    width INTEGER DEFAULT 4,
+    height INTEGER DEFAULT 2,
+    is_visible INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_user ON dashboard_widgets(user_id, company_id, is_visible)",
+
+  // F58: AR aging email blast templates
+  `CREATE TABLE IF NOT EXISTS ar_collection_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    template_name TEXT NOT NULL,
+    aging_bucket TEXT NOT NULL CHECK(aging_bucket IN ('1-30','31-60','61-90','90+')),
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    tone TEXT DEFAULT 'friendly' CHECK(tone IN ('friendly','firm','final','legal')),
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch 5: 10 client/vendor/document/compliance features ───
+
+  // F61: Client merge (no schema — service handler)
+
+  // F62: Client tag/label system
+  `CREATE TABLE IF NOT EXISTS entity_tags (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    color TEXT DEFAULT '#6b7280',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, entity_type, entity_id, tag)
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_tags_search ON entity_tags(tag)",
+
+  // F63: Client communication history log
+  `CREATE TABLE IF NOT EXISTS client_communications (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    client_id TEXT NOT NULL REFERENCES clients(id),
+    communication_type TEXT NOT NULL CHECK(communication_type IN ('email','call','meeting','note','sms','letter','other')),
+    direction TEXT DEFAULT 'outbound' CHECK(direction IN ('inbound','outbound','internal')),
+    subject TEXT DEFAULT '',
+    body TEXT DEFAULT '',
+    contact_name TEXT DEFAULT '',
+    occurred_at TEXT DEFAULT (datetime('now')),
+    recorded_by TEXT DEFAULT '',
+    related_invoice_id TEXT REFERENCES invoices(id),
+    related_quote_id TEXT,
+    follow_up_date TEXT,
+    follow_up_completed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_client_comms_client ON client_communications(client_id, occurred_at DESC)",
+
+  // F64: Vendor 1099 status auto-check (no schema — service computation)
+  // F65: Vendor performance scorecard
+  "ALTER TABLE vendors ADD COLUMN on_time_payment_count INTEGER DEFAULT 0",
+  "ALTER TABLE vendors ADD COLUMN late_payment_count INTEGER DEFAULT 0",
+  "ALTER TABLE vendors ADD COLUMN quality_rating REAL DEFAULT 0",
+  "ALTER TABLE vendors ADD COLUMN dispute_count INTEGER DEFAULT 0",
+  "ALTER TABLE vendors ADD COLUMN avg_days_to_pay REAL DEFAULT 0",
+
+  // F66: Vendor contract / agreement storage (uses existing documents table with entity_type='vendor_contract')
+  "ALTER TABLE vendors ADD COLUMN contract_start_date TEXT DEFAULT NULL",
+  "ALTER TABLE vendors ADD COLUMN contract_end_date TEXT DEFAULT NULL",
+  "ALTER TABLE vendors ADD COLUMN contract_auto_renew INTEGER DEFAULT 0",
+  "ALTER TABLE vendors ADD COLUMN contract_renewal_notice_days INTEGER DEFAULT 30",
+
+  // F67: Document expiration reminders
+  "ALTER TABLE documents ADD COLUMN expires_at TEXT DEFAULT NULL",
+  "ALTER TABLE documents ADD COLUMN reminder_days_before INTEGER DEFAULT 30",
+  "ALTER TABLE documents ADD COLUMN last_reminded_at TEXT DEFAULT NULL",
+
+  // F68: Document version history
+  `CREATE TABLE IF NOT EXISTS document_versions (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id),
+    version_number INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER DEFAULT 0,
+    file_hash TEXT DEFAULT '',
+    uploaded_at TEXT DEFAULT (datetime('now')),
+    uploaded_by TEXT DEFAULT '',
+    comment TEXT DEFAULT '',
+    UNIQUE(document_id, version_number)
+  )`,
+  "ALTER TABLE documents ADD COLUMN current_version INTEGER DEFAULT 1",
+
+  // F69: Document tag system (reuses entity_tags table from F62)
+
+  // F70: Document encrypted storage flag
+  "ALTER TABLE documents ADD COLUMN is_encrypted INTEGER DEFAULT 0",
+  "ALTER TABLE documents ADD COLUMN encryption_key_id TEXT DEFAULT NULL",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
