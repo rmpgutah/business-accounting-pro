@@ -219,11 +219,34 @@ export async function scanReceipt(filePath: string): Promise<ParsedReceipt> {
   // ── PDF path ──────────────────────────────────────────
   if (lower.endsWith('.pdf') || (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)) {
     try {
-      // Lazy import — pdf-parse is ~5MB, only needed when scanning a PDF
+      // Lazy import — pdf-parse is ~5MB, only needed when scanning a PDF.
+      // PDF-PARSE V2 API: package was upgraded from v1.x (function call)
+      // to v2.x (class-based). Old code tried `pdfParseMod.default(buf)`
+      // which fails because `default` is the module object, not callable.
+      // v2 API: `new PDFParse({ data }).getText() → { text, ... }`.
+      // Try v2 first, fall back to v1 in case the bundled version differs.
       const pdfParseMod: any = await import('pdf-parse');
-      const pdfParse = pdfParseMod.default || pdfParseMod;
-      const result = await pdfParse(buf);
-      const text = (result?.text || '').trim();
+      let text = '';
+      const PDFParseClass = pdfParseMod.PDFParse || pdfParseMod.default?.PDFParse;
+      if (PDFParseClass) {
+        // v2 path — class-based, must destroy() after use
+        const parser = new PDFParseClass({ data: buf });
+        try {
+          const r = await parser.getText();
+          text = (r?.text || '').trim();
+        } finally {
+          try { await parser.destroy?.(); } catch {}
+        }
+      } else {
+        // v1 fallback — single function call
+        const pdfParseFn = typeof pdfParseMod.default === 'function' ? pdfParseMod.default
+          : typeof pdfParseMod === 'function' ? pdfParseMod : null;
+        if (!pdfParseFn) {
+          throw new Error('pdf-parse module has neither PDFParse class (v2) nor default function (v1) — check package version');
+        }
+        const r = await pdfParseFn(buf);
+        text = (r?.text || '').trim();
+      }
       if (text.length > 20) {
         // Text-based PDF — confidence is 100 since we extracted from
         // the actual text layer rather than character-recognizing
