@@ -812,16 +812,19 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </div>
         </div>
 
-        {/* Line Items Table */}
-        <table className="block-table mb-6">
+        {/* Line Items Table — wrap in fade-edge container so right-side
+            columns (Tax %, Tax Amount, Amount) don't get visually clipped
+            on narrow viewports without the user noticing. */}
+        <div className="table-wrap-fade mb-6">
+        <table className="block-table">
           <thead>
             <tr>
               <th>Description</th>
-              <th className="text-right">Qty</th>
-              <th className="text-right">Unit Price</th>
-              <th className="text-right">Tax %</th>
-              <th className="text-right">Tax Amount</th>
-              <th className="text-right">Amount</th>
+              <th className="text-right col-nowrap">Qty</th>
+              <th className="text-right col-nowrap">Unit Price</th>
+              <th className="text-right col-nowrap">Tax %</th>
+              <th className="text-right col-nowrap">Tax Amount</th>
+              <th className="text-right col-nowrap">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -857,6 +860,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             })}
           </tbody>
         </table>
+        </div>
 
         {/* Totals */}
         <div className="flex justify-end">

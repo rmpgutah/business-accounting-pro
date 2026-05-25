@@ -386,7 +386,7 @@ const ClientsModule: React.FC = () => {
           ) : (
             <>
               {/* KPI Row 1 */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="kpi-grid-fit">
                 <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Clients</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1">{clientStats?.total ?? 0}</div>
@@ -406,7 +406,7 @@ const ClientsModule: React.FC = () => {
               </div>
 
               {/* KPI Row 2 */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="kpi-grid-fit">
                 <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Revenue / Client</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1">
@@ -542,7 +542,7 @@ const ClientsModule: React.FC = () => {
               </div>
 
               {/* Industry Breakdown + Credit Risk + Payment Behavior + Retention */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="kpi-grid-fit">
                 {/* Retention */}
                 <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Retention Rate</div>
@@ -834,7 +834,7 @@ const ClientsModule: React.FC = () => {
                 {paymentTimeliness.length === 0 ? (
                   <div className="text-xs text-text-muted py-6 text-center">No payment data</div>
                 ) : (
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="kpi-grid-fit">
                     {paymentTimeliness.map((bucket: any, i: number) => {
                       const colorMap: Record<string, string> = {
                         'On Time': 'var(--color-accent-income)',

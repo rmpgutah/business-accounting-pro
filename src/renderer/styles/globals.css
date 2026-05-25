@@ -2260,6 +2260,137 @@ html.theme-transition, html.theme-transition * {
 .tone-settlement { background: var(--tone-good-bg); border-color: rgba(52,211,153,0.30); }
 .tone-confirm    { background: var(--tone-good-bg); border-color: rgba(52,211,153,0.30); }
 
+/* ─── V151-V160: Bugfix utilities for the screenshot issues ──── */
+
+/* V151 — Table horizontal-scroll wrapper with edge fade indicators
+   so users can see content is being truncated on the right. */
+.table-wrap-fade {
+  position: relative;
+  overflow-x: auto;
+}
+.table-wrap-fade::before,
+.table-wrap-fade::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity var(--motion-base);
+}
+.table-wrap-fade::before {
+  left: 0;
+  background: linear-gradient(to right, var(--color-bg-secondary-solid), transparent);
+}
+.table-wrap-fade::after {
+  right: 0;
+  background: linear-gradient(to left, var(--color-bg-secondary-solid), transparent);
+}
+.table-wrap-fade.is-overflow-left::before  { opacity: 1; }
+.table-wrap-fade.is-overflow-right::after  { opacity: 1; }
+/* Fallback: always show right fade until JS detects scroll state */
+.table-wrap-fade:not(.is-overflow-checked)::after { opacity: 0.6; }
+
+/* V152 — Chip row that scrolls horizontally on overflow with edge fade,
+   instead of clipping. Use on filter chips, vendor pills, tag rows. */
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  -webkit-mask-image: linear-gradient(to right, black 0, black calc(100% - 18px), transparent);
+          mask-image: linear-gradient(to right, black 0, black calc(100% - 18px), transparent);
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+.chip-row > * { flex: 0 0 auto; }
+
+/* V153 — Single-line cells (force date / amount / status columns
+   to not wrap, since wrapping them looks broken). */
+.col-nowrap { white-space: nowrap; }
+.col-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 18rem;
+}
+
+/* V154 — Vertically-centered table header content w/uppercase tracking */
+.block-table thead th {
+  white-space: nowrap;
+  vertical-align: middle;
+  letter-spacing: 0.04em;
+}
+
+/* V155 — Centered icon cell (e.g. receipt-attached checkmark);
+   makes the dash/check render with visual weight rather than a lone glyph. */
+.cell-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+}
+.cell-icon.is-yes { background: var(--tone-good-bg); color: #6ee7b7; }
+.cell-icon.is-no  { background: rgba(255,255,255,0.04); color: var(--color-text-muted); }
+
+/* V156 — Numeric cell defaults: tabular nums + right-aligned */
+.block-table td.num,
+.block-table th.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+/* V157 — Sticky page sub-header strip — adds breathing room so KPI
+   labels don't visually collide with the module's top bar. */
+.module-subhead {
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* V158 — Status pill polish: stronger borders for "approved"/"pending"
+   so they read as deliberate UI elements not casual text. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: var(--font-3xs);
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.status-pill.is-approved { background: var(--tone-good-bg); color: #6ee7b7; border-color: rgba(52,211,153,0.30); }
+.status-pill.is-pending  { background: var(--tone-warn-bg); color: #fcd34d; border-color: rgba(251,191,36,0.30); }
+.status-pill.is-rejected { background: var(--tone-bad-bg);  color: #fca5a5; border-color: rgba(248,113,113,0.30); }
+.status-pill.is-paid     { background: var(--tone-good-bg); color: #6ee7b7; border-color: rgba(52,211,153,0.30); }
+.status-pill.is-overdue  { background: var(--tone-bad-bg);  color: #fca5a5; border-color: rgba(248,113,113,0.30); }
+.status-pill.is-draft    { background: rgba(255,255,255,0.04); color: var(--color-text-secondary); border-color: var(--color-glass-border); }
+
+/* V159 — Em-dash placeholder for missing values: muted color so the eye
+   skips past it without it feeling like an error. */
+.placeholder-dash {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+/* V160 — KPI tile grid with auto-fit so labels never get clipped
+   below 160px tile width even on narrow viewports. */
+.kpi-grid-fit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
 /* V150 — Reusable hero header strip */
 .hero-strip {
   padding: 1.25rem 1.5rem;

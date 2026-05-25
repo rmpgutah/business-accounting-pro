@@ -769,7 +769,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         <td onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: '#3b82f6' }} />
         </td>
-        {colVisible('date') && <td className="font-mono text-text-secondary text-xs">{formatDate(exp.date)}</td>}
+        {colVisible('date') && <td className="font-mono text-text-secondary text-xs col-nowrap">{formatDate(exp.date)}</td>}
         {colVisible('description') && (
           <td className="text-text-primary font-medium">
             {isEditingDesc ? (
@@ -885,7 +885,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         )}
         {colVisible('receipt') && (
           <td className="text-center">
-            {exp.receipt_path ? <span title="Receipt attached" className="text-accent-income">&#10003;</span> : <span className="text-text-muted">-</span>}
+            {exp.receipt_path
+              ? <span title="Receipt attached" className="cell-icon is-yes">&#10003;</span>
+              : <span title="No receipt" className="cell-icon is-no">—</span>}
           </td>
         )}
         {colVisible('taxded') && (
@@ -1001,10 +1003,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         </div>
       )}
 
-      {/* Pinned vendors quick-pick (feature 17) */}
+      {/* Pinned vendors quick-pick (feature 17) — scrollable chip-row,
+          uses V152 utility so long vendor names never clip on the right. */}
       {vendors.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <span className="text-text-muted uppercase font-bold">Vendors:</span>
+        <div className="chip-row text-xs">
+          <span className="text-text-muted uppercase font-bold tracking-wide">Vendors:</span>
           {[...vendors]
             .sort((a, b) => {
               const ap = pinnedVendors.has(a.id) ? 0 : 1;
@@ -1012,10 +1015,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               if (ap !== bp) return ap - bp;
               return a.name.localeCompare(b.name);
             })
-            .slice(0, 8)
+            .slice(0, 12)
             .map((v) => (
-              <span key={v.id} className="flex items-center gap-1 px-2 py-1 border border-border-primary" style={{ borderRadius: 4 }}>
-                <button onClick={() => togglePin(v.id)} title={pinnedVendors.has(v.id) ? 'Unpin' : 'Pin'}>
+              <span key={v.id} className="chip is-removable" title={v.name}>
+                <button onClick={() => togglePin(v.id)} title={pinnedVendors.has(v.id) ? 'Unpin' : 'Pin'} className="inline-flex">
                   <Star size={11} className={pinnedVendors.has(v.id) ? 'text-accent-blue' : 'text-text-muted'} fill={pinnedVendors.has(v.id) ? 'currentColor' : 'none'} />
                 </button>
                 <button onClick={() => setSearch(v.name)} className="text-text-secondary hover:text-text-primary">{v.name}</button>
@@ -1259,7 +1262,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         />
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-wrap-fade">
           <table className="block-table">
             <thead>
               <tr>
