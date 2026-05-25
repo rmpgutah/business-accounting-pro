@@ -2505,6 +2505,51 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:document:add-version', (_e, record: any) => { try { return cvd().addDocumentVersion(record); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:document:list-versions', (_e, { document_id }: any) => { try { return cvd().listDocumentVersions(document_id); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:document:set-encrypted', (_e, { document_id, is_encrypted }: any) => { try { return cvd().setDocumentEncrypted(document_id, is_encrypted); } catch (e: any) { return { error: e?.message }; } });
+
+  // ─── Batch 6: Automation & Workflow Engine (20) ───────────
+  const am = () => require('../services/automation-features');
+  // Workflows
+  ipcMain.handle('feat:workflow:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertWorkflow({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:workflow:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listWorkflows(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:workflow:trigger', (_e, { trigger_type, payload }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().triggerWorkflows(cid, trigger_type, payload || {}); } catch (e: any) { return { error: e?.message }; } });
+  // Scheduled tasks
+  ipcMain.handle('feat:scheduled-task:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertScheduledTask({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:scheduled-task:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listScheduledTasks(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:scheduled-task:due', () => { try { return am().dueScheduledTasks(); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:scheduled-task:mark-run', (_e, { id, status, next_run_at }: any) => { try { return { ok: am().markScheduledTaskRun(id, status, next_run_at) }; } catch (e: any) { return { error: e?.message }; } });
+  // Approval chains
+  ipcMain.handle('feat:approval-chain:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertApprovalChain({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:approval:start', (_e, { chain_id, entity_type, entity_id, submitted_by }: any) => { try { return am().startApprovalInstance(chain_id, entity_type, entity_id, submitted_by); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:approval:act', (_e, { instance_id, action, actor_id, comment }: any) => { try { return am().actOnApproval(instance_id, action, actor_id, comment); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:approval:pending', (_e, { approver_user_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().pendingApprovals(cid, approver_user_id); } catch (e: any) { return { error: e?.message }; } });
+  // Email templates
+  ipcMain.handle('feat:email-template:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertEmailTemplate({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:email-template:list', (_e, { category }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listEmailTemplates(cid, category); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:email-template:render', (_e, { template_id, data }: any) => { try { return am().renderEmailTemplate(template_id, data || {}); } catch (e: any) { return { error: e?.message }; } });
+  // Webhooks
+  ipcMain.handle('feat:webhook:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertWebhookSubscription({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:webhook:record-delivery', (_e, { subscription_id, event_type, payload, response_status, response_body, duration_ms }: any) => { try { am().recordWebhookDelivery(subscription_id, event_type, payload, response_status, response_body, duration_ms); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
+  // Auto-categorize
+  ipcMain.handle('feat:auto-categorize:learn', (_e, { description_pattern, vendor_id, category_id }: any) => { try { const cid = db.getCurrentCompanyId(); am().recordAutoCategorizeAccept(cid, description_pattern, vendor_id || null, category_id); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:auto-categorize:suggest', (_e, { description, vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return am().getAutoCategorizeSuggestion(cid, description, vendor_id); } catch (e: any) { return { error: e?.message }; } });
+  // Auto-archive
+  ipcMain.handle('feat:auto-archive:run', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return { invoices_archived: 0, bills_archived: 0 }; return am().runAutoArchive(cid); } catch (e: any) { return { error: e?.message }; } });
+  // Triggered actions log
+  ipcMain.handle('feat:triggered-action:log', (_e, { trigger_source, entity_type, entity_id, action_type, action_result }: any) => { try { const cid = db.getCurrentCompanyId(); am().logTriggeredAction(cid, trigger_source, entity_type, entity_id, action_type, action_result); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:triggered-action:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listTriggeredActions(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // SLAs
+  ipcMain.handle('feat:sla:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertSLA({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sla:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listSLAs(cid); } catch (e: any) { return { error: e?.message }; } });
+  // Saved searches
+  ipcMain.handle('feat:saved-search:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertSavedSearch({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:saved-search:list', (_e, { user_id, module }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listSavedSearches(user_id, cid, module); } catch (e: any) { return { error: e?.message }; } });
+  // Bulk ops audit
+  ipcMain.handle('feat:bulk-op:log', (_e, op: any) => { try { const cid = db.getCurrentCompanyId(); return am().logBulkOperation(cid, op); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:bulk-op:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listBulkOperations(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // Quick actions (dashboard shortcuts)
+  ipcMain.handle('feat:quick-action:upsert', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertQuickAction({ ...a, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:quick-action:list', (_e, { user_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listQuickActions(user_id, cid); } catch (e: any) { return { error: e?.message }; } });
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();

@@ -2491,6 +2491,209 @@ export function initDatabase(): Database.Database {
   // F70: Document encrypted storage flag
   "ALTER TABLE documents ADD COLUMN is_encrypted INTEGER DEFAULT 0",
   "ALTER TABLE documents ADD COLUMN encryption_key_id TEXT DEFAULT NULL",
+
+  // ─── Batch 6: 20 automation & workflow features ──────────────
+
+  // F71-F75: Workflow framework — triggers, conditions, actions
+  `CREATE TABLE IF NOT EXISTS workflows (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    trigger_type TEXT NOT NULL,
+    trigger_config TEXT DEFAULT '{}',
+    conditions_json TEXT DEFAULT '[]',
+    actions_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    last_run_at TEXT DEFAULT NULL,
+    run_count INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    failure_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS workflow_runs (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL REFERENCES workflows(id),
+    triggered_at TEXT DEFAULT (datetime('now')),
+    trigger_payload TEXT DEFAULT '{}',
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','running','success','failed','skipped')),
+    error_message TEXT DEFAULT '',
+    actions_executed INTEGER DEFAULT 0,
+    duration_ms INTEGER DEFAULT 0,
+    completed_at TEXT DEFAULT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_workflows_company_active ON workflows(company_id, is_active)",
+  "CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow ON workflow_runs(workflow_id, triggered_at DESC)",
+
+  // F76: Scheduled tasks (cron-style)
+  `CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    task_name TEXT NOT NULL,
+    cron_expression TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    action_config TEXT DEFAULT '{}',
+    is_active INTEGER DEFAULT 1,
+    next_run_at TEXT NOT NULL,
+    last_run_at TEXT DEFAULT NULL,
+    last_run_status TEXT DEFAULT '',
+    run_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(is_active, next_run_at)",
+
+  // F77-F79: Approval chains (multi-step)
+  `CREATE TABLE IF NOT EXISTS approval_chains (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    chain_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('invoice','expense','bill','purchase_order','time_entry','reimbursement')),
+    trigger_threshold REAL DEFAULT 0,
+    steps_json TEXT NOT NULL DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS approval_instances (
+    id TEXT PRIMARY KEY,
+    chain_id TEXT NOT NULL REFERENCES approval_chains(id),
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    current_step INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','cancelled','expired')),
+    submitted_by TEXT NOT NULL,
+    submitted_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT DEFAULT NULL,
+    steps_log TEXT DEFAULT '[]'
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_approval_inst_entity ON approval_instances(entity_type, entity_id, status)",
+
+  // F80: Email templates library
+  `CREATE TABLE IF NOT EXISTS email_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    template_name TEXT NOT NULL,
+    template_key TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body_html TEXT NOT NULL,
+    body_text TEXT DEFAULT '',
+    category TEXT DEFAULT '',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, template_key)
+  )`,
+
+  // F81-F82: Outbound webhook subscriptions
+  // webhook_subscriptions already exists from earlier waves — add stats columns
+  "ALTER TABLE webhook_subscriptions ADD COLUMN secret_key TEXT DEFAULT ''",
+  "ALTER TABLE webhook_subscriptions ADD COLUMN last_delivered_at TEXT DEFAULT NULL",
+  "ALTER TABLE webhook_subscriptions ADD COLUMN last_status_code INTEGER DEFAULT 0",
+  "ALTER TABLE webhook_subscriptions ADD COLUMN consecutive_failures INTEGER DEFAULT 0",
+  "ALTER TABLE webhook_subscriptions ADD COLUMN delivery_count INTEGER DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id TEXT PRIMARY KEY,
+    subscription_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    response_status INTEGER DEFAULT 0,
+    response_body TEXT DEFAULT '',
+    attempted_at TEXT DEFAULT (datetime('now')),
+    duration_ms INTEGER DEFAULT 0,
+    succeeded INTEGER DEFAULT 0
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_sub ON webhook_deliveries(subscription_id, attempted_at DESC)",
+
+  // F83: Auto-categorize learned rules
+  `CREATE TABLE IF NOT EXISTS auto_categorize_learnings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    description_pattern TEXT NOT NULL,
+    vendor_id TEXT,
+    suggested_category_id TEXT,
+    confidence REAL DEFAULT 0,
+    times_matched INTEGER DEFAULT 0,
+    times_accepted INTEGER DEFAULT 0,
+    last_seen_at TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, description_pattern, vendor_id)
+  )`,
+
+  // F84: Auto-archive policies
+  "ALTER TABLE companies ADD COLUMN auto_archive_paid_invoices_days INTEGER DEFAULT 0",
+  "ALTER TABLE companies ADD COLUMN auto_archive_closed_bills_days INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN archived_at TEXT DEFAULT NULL",
+  "ALTER TABLE bills ADD COLUMN archived_at TEXT DEFAULT NULL",
+
+  // F85: Triggered actions log
+  `CREATE TABLE IF NOT EXISTS triggered_actions_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    trigger_source TEXT NOT NULL,
+    trigger_entity_type TEXT,
+    trigger_entity_id TEXT,
+    action_type TEXT NOT NULL,
+    action_result TEXT DEFAULT '',
+    triggered_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_triggered_actions_company ON triggered_actions_log(company_id, triggered_at DESC)",
+
+  // F86: SLA tracking (e.g., invoice payment SLA)
+  `CREATE TABLE IF NOT EXISTS sla_definitions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    sla_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    target_value REAL NOT NULL,
+    target_unit TEXT NOT NULL,
+    severity TEXT DEFAULT 'medium',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // F87-F88: Saved searches + filter presets
+  `CREATE TABLE IF NOT EXISTS saved_searches (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    module TEXT NOT NULL,
+    search_name TEXT NOT NULL,
+    filters_json TEXT NOT NULL DEFAULT '{}',
+    is_shared INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // F89: Bulk operations log (undo)
+  `CREATE TABLE IF NOT EXISTS bulk_operations_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    operation_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_ids_json TEXT NOT NULL,
+    changes_json TEXT NOT NULL,
+    performed_by TEXT NOT NULL,
+    performed_at TEXT DEFAULT (datetime('now')),
+    can_undo INTEGER DEFAULT 1,
+    undone_at TEXT DEFAULT NULL
+  )`,
+
+  // F90: Quick actions / shortcuts
+  `CREATE TABLE IF NOT EXISTS quick_actions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    icon TEXT DEFAULT '',
+    action_type TEXT NOT NULL,
+    action_config TEXT DEFAULT '{}',
+    sort_order INTEGER DEFAULT 0,
+    is_pinned INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
