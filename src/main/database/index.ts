@@ -2694,6 +2694,322 @@ export function initDatabase(): Database.Database {
     is_pinned INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
+  // ─── Batch 7: Banking, Treasury, Multi-Currency (F91-F110) ───
+  // F91 — cash_position_snapshots (roll-up snapshots for trend chart)
+  `CREATE TABLE IF NOT EXISTS cash_position_snapshots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    base_currency TEXT DEFAULT 'USD',
+    total_cash REAL DEFAULT 0,
+    total_ar REAL DEFAULT 0,
+    total_ap REAL DEFAULT 0,
+    accounts_breakdown TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, snapshot_date)
+  )`,
+  // F92 — cash_forecast_lines (daily projected cash by source)
+  `CREATE TABLE IF NOT EXISTS cash_forecast_lines (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    forecast_date TEXT NOT NULL,
+    projection_date TEXT NOT NULL,
+    source_type TEXT,
+    source_id TEXT,
+    amount REAL DEFAULT 0,
+    direction TEXT DEFAULT 'in',
+    confidence REAL DEFAULT 1.0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_cash_forecast_co_date ON cash_forecast_lines(company_id, projection_date)",
+  // F93 — fx_rates (historical FX with multi-source)
+  `CREATE TABLE IF NOT EXISTS fx_rates (
+    id TEXT PRIMARY KEY,
+    rate_date TEXT NOT NULL,
+    from_currency TEXT NOT NULL,
+    to_currency TEXT NOT NULL,
+    rate REAL NOT NULL,
+    source TEXT DEFAULT 'manual',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(rate_date, from_currency, to_currency, source)
+  )`,
+  // F94 — fx_revaluation_runs (unrealized gain/loss on foreign-currency balances)
+  `CREATE TABLE IF NOT EXISTS fx_revaluation_runs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    revaluation_date TEXT NOT NULL,
+    base_currency TEXT DEFAULT 'USD',
+    total_unrealized_gain REAL DEFAULT 0,
+    total_unrealized_loss REAL DEFAULT 0,
+    posted_je_id TEXT,
+    breakdown_json TEXT DEFAULT '[]',
+    is_posted INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  // F95 — additional currency columns on bank accounts (already via accounts.currency)
+  "ALTER TABLE accounts ADD COLUMN account_native_currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE accounts ADD COLUMN last_fx_rate REAL DEFAULT 1.0",
+  // F96 — wire_transfers
+  `CREATE TABLE IF NOT EXISTS wire_transfers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    transfer_date TEXT NOT NULL,
+    from_account_id TEXT,
+    to_beneficiary TEXT,
+    amount REAL DEFAULT 0,
+    currency TEXT DEFAULT 'USD',
+    wire_fee REAL DEFAULT 0,
+    intermediary_bank TEXT,
+    reference_number TEXT,
+    status TEXT DEFAULT 'pending',
+    notes TEXT,
+    posted_je_id TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F97 — ach_batches + ach_batch_items
+  `CREATE TABLE IF NOT EXISTS ach_batches (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    batch_date TEXT NOT NULL,
+    effective_date TEXT NOT NULL,
+    bank_account_id TEXT,
+    sec_code TEXT DEFAULT 'CCD',
+    company_entry_description TEXT,
+    total_debit REAL DEFAULT 0,
+    total_credit REAL DEFAULT 0,
+    item_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'draft',
+    nacha_file_path TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    submitted_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS ach_batch_items (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL REFERENCES ach_batches(id) ON DELETE CASCADE,
+    payee_name TEXT NOT NULL,
+    routing_number TEXT NOT NULL,
+    account_number_last4 TEXT NOT NULL,
+    account_type TEXT DEFAULT 'checking',
+    amount REAL DEFAULT 0,
+    direction TEXT DEFAULT 'credit',
+    addenda TEXT,
+    bill_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F98 — bank_fee_categories (auto-classification rules for service charges)
+  `CREATE TABLE IF NOT EXISTS bank_fee_categories (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    pattern TEXT NOT NULL,
+    category_id TEXT,
+    expense_account_id TEXT,
+    is_active INTEGER DEFAULT 1,
+    match_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F99 — bank_match_attempts (fuzzy matcher audit)
+  `CREATE TABLE IF NOT EXISTS bank_match_attempts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    transaction_id TEXT NOT NULL,
+    candidate_type TEXT,
+    candidate_id TEXT,
+    score REAL DEFAULT 0,
+    accepted INTEGER DEFAULT 0,
+    matched_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F100 — stop_payments
+  `CREATE TABLE IF NOT EXISTS stop_payments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    bank_account_id TEXT,
+    check_number TEXT,
+    amount REAL DEFAULT 0,
+    payee TEXT,
+    requested_date TEXT,
+    effective_date TEXT,
+    expires_at TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'active',
+    fee REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F101 — pending_deposits (float tracker)
+  `CREATE TABLE IF NOT EXISTS pending_deposits (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    deposit_date TEXT,
+    expected_clear_date TEXT,
+    bank_account_id TEXT,
+    amount REAL DEFAULT 0,
+    deposit_type TEXT DEFAULT 'check',
+    reference TEXT,
+    status TEXT DEFAULT 'pending',
+    cleared_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F102 — petty_cash_log
+  `CREATE TABLE IF NOT EXISTS petty_cash_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    log_date TEXT NOT NULL,
+    direction TEXT DEFAULT 'out',
+    amount REAL DEFAULT 0,
+    purpose TEXT,
+    payee TEXT,
+    receipt_path TEXT,
+    custodian TEXT,
+    posted_je_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F103 — treasury_investments
+  `CREATE TABLE IF NOT EXISTS treasury_investments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    instrument_type TEXT NOT NULL,
+    institution TEXT,
+    cusip TEXT,
+    purchase_date TEXT,
+    maturity_date TEXT,
+    face_value REAL DEFAULT 0,
+    purchase_price REAL DEFAULT 0,
+    interest_rate REAL DEFAULT 0,
+    interest_frequency TEXT DEFAULT 'monthly',
+    status TEXT DEFAULT 'active',
+    auto_roll INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F104 — letters_of_credit
+  `CREATE TABLE IF NOT EXISTS letters_of_credit (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    lc_number TEXT,
+    lc_type TEXT DEFAULT 'standby',
+    issuing_bank TEXT,
+    beneficiary TEXT,
+    face_amount REAL DEFAULT 0,
+    currency TEXT DEFAULT 'USD',
+    issue_date TEXT,
+    expiry_date TEXT,
+    status TEXT DEFAULT 'open',
+    fee_accrued REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F105 — loan_covenants
+  `CREATE TABLE IF NOT EXISTS loan_covenants (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT,
+    covenant_name TEXT NOT NULL,
+    metric TEXT,
+    operator TEXT DEFAULT '>=',
+    threshold_value REAL DEFAULT 0,
+    measurement_frequency TEXT DEFAULT 'quarterly',
+    next_measurement_date TEXT,
+    last_measured_value REAL,
+    last_measured_at TEXT,
+    breach_status TEXT DEFAULT 'compliant',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F106 — sweep_rules
+  `CREATE TABLE IF NOT EXISTS sweep_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    source_account_id TEXT,
+    target_account_id TEXT,
+    rule_type TEXT DEFAULT 'threshold',
+    minimum_balance REAL DEFAULT 0,
+    target_balance REAL DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    last_swept_at TEXT,
+    last_swept_amount REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F107 — inter_company_transfers
+  `CREATE TABLE IF NOT EXISTS inter_company_transfers (
+    id TEXT PRIMARY KEY,
+    transfer_date TEXT NOT NULL,
+    from_company_id TEXT NOT NULL,
+    to_company_id TEXT NOT NULL,
+    from_account_id TEXT,
+    to_account_id TEXT,
+    amount REAL DEFAULT 0,
+    currency TEXT DEFAULT 'USD',
+    purpose TEXT,
+    status TEXT DEFAULT 'pending',
+    from_je_id TEXT,
+    to_je_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F108 — credit_card_statements + cc_statement_lines
+  `CREATE TABLE IF NOT EXISTS credit_card_statements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    card_account_id TEXT,
+    statement_date TEXT NOT NULL,
+    closing_date TEXT,
+    due_date TEXT,
+    new_balance REAL DEFAULT 0,
+    minimum_payment REAL DEFAULT 0,
+    is_reconciled INTEGER DEFAULT 0,
+    reconciled_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS cc_statement_lines (
+    id TEXT PRIMARY KEY,
+    statement_id TEXT NOT NULL REFERENCES credit_card_statements(id) ON DELETE CASCADE,
+    transaction_date TEXT NOT NULL,
+    description TEXT,
+    amount REAL DEFAULT 0,
+    matched_expense_id TEXT,
+    is_matched INTEGER DEFAULT 0
+  )`,
+  // F109 — lockbox_imports + lockbox_items
+  `CREATE TABLE IF NOT EXISTS lockbox_imports (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    import_date TEXT NOT NULL,
+    bank_account_id TEXT,
+    file_path TEXT,
+    total_amount REAL DEFAULT 0,
+    item_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'imported',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS lockbox_items (
+    id TEXT PRIMARY KEY,
+    import_id TEXT NOT NULL REFERENCES lockbox_imports(id) ON DELETE CASCADE,
+    customer_id TEXT,
+    invoice_number TEXT,
+    payment_date TEXT,
+    amount REAL DEFAULT 0,
+    match_status TEXT DEFAULT 'unmatched',
+    matched_invoice_id TEXT,
+    notes TEXT
+  )`,
+  // F110 — positive_pay_files
+  `CREATE TABLE IF NOT EXISTS positive_pay_files (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    bank_account_id TEXT,
+    file_date TEXT NOT NULL,
+    file_format TEXT DEFAULT 'csv',
+    check_count INTEGER DEFAULT 0,
+    total_amount REAL DEFAULT 0,
+    file_path TEXT,
+    submitted INTEGER DEFAULT 0,
+    submitted_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

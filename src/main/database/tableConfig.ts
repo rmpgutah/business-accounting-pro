@@ -137,6 +137,16 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'esign_permissions',
   'esign_audit_log',
   'payroll_runs',
+  // Batch 6 child tables (parent has company_id)
+  'workflow_runs',
+  'webhook_deliveries',
+  'approval_instances',
+  // Batch 7 child tables (parent has company_id)
+  'ach_batch_items',
+  'cc_statement_lines',
+  'lockbox_items',
+  'fx_rates',
+  'inter_company_transfers',
 ]);
 
 // Tables that do NOT have an `updated_at` column.
@@ -432,6 +442,35 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'exchange_rates',
   // Stripe cache
   'stripe_cache',
+  // Batch 6: Automation log/audit tables (no updated_at)
+  'workflow_runs',
+  'webhook_deliveries',
+  'triggered_actions_log',
+  'bulk_operations_log',
+  'auto_categorize_learnings',
+  'quick_actions',
+  'cash_position_snapshots',
+  'cash_forecast_lines',
+  // Batch 7: append-only or no-updated_at
+  'fx_rates',
+  'fx_revaluation_runs',
+  'ach_batch_items',
+  'cc_statement_lines',
+  'lockbox_items',
+  'pending_deposits',
+  'petty_cash_log',
+  'positive_pay_files',
+  'bank_match_attempts',
+  'bank_fee_categories',
+  'stop_payments',
+  'sweep_rules',
+  'loan_covenants',
+  'letters_of_credit',
+  'treasury_investments',
+  'inter_company_transfers',
+  'credit_card_statements',
+  'lockbox_imports',
+  'ach_batches',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

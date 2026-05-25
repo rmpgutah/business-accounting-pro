@@ -2550,6 +2550,78 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:quick-action:upsert', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); return am().upsertQuickAction({ ...a, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:quick-action:list', (_e, { user_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listQuickActions(user_id, cid); } catch (e: any) { return { error: e?.message }; } });
 
+  // ─── Batch 7: Banking, Treasury, Multi-Currency (20) ───────────
+  const tr = () => require('../services/treasury-features');
+  // F91 cash position
+  ipcMain.handle('feat:cash-position:capture', (_e, { snapshot_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().captureCashPosition(cid, snapshot_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cash-position:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listCashPositionSnapshots(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F92 cash forecast
+  ipcMain.handle('feat:cash-forecast:rebuild', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().rebuildCashForecast(cid, days_ahead || 90); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cash-forecast:get', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().getCashForecast(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F93 FX rates
+  ipcMain.handle('feat:fx-rate:upsert', (_e, r: any) => { try { return tr().upsertFxRate(r); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:fx-rate:get', (_e, { from, to, as_of_date }: any) => { try { return tr().getFxRate(from, to, as_of_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:fx-rate:list', (_e, opts: any = {}) => { try { return tr().listFxRates(opts); } catch (e: any) { return { error: e?.message }; } });
+  // F94 FX revaluation
+  ipcMain.handle('feat:fx-revaluation:run', (_e, { as_of_date, created_by }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().runFxRevaluation(cid, as_of_date, created_by); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:fx-revaluation:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listFxRevaluationRuns(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F96 wire transfers
+  ipcMain.handle('feat:wire-transfer:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertWireTransfer({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:wire-transfer:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listWireTransfers(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F97 ACH batches
+  ipcMain.handle('feat:ach-batch:create', (_e, b: any) => { try { const cid = db.getCurrentCompanyId(); return tr().createAchBatch({ ...b, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ach-batch:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listAchBatches(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ach-batch:items', (_e, { batch_id }: any) => { try { return tr().getAchBatchItems(batch_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ach-batch:mark-submitted', (_e, { batch_id, nacha_file_path }: any) => { try { return { ok: tr().markAchBatchSubmitted(batch_id, nacha_file_path) }; } catch (e: any) { return { error: e?.message }; } });
+  // F98 bank fee categorization
+  ipcMain.handle('feat:bank-fee-cat:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertBankFeeCategory({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:bank-fee-cat:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listBankFeeCategories(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:bank-fee-cat:suggest', (_e, { description }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().suggestBankFeeCategory(cid, description); } catch (e: any) { return { error: e?.message }; } });
+  // F99 bank match log
+  ipcMain.handle('feat:bank-match:log', (_e, { transaction_id, candidate }: any) => { try { const cid = db.getCurrentCompanyId(); tr().logBankMatchAttempt(cid, transaction_id, candidate); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:bank-match:list', (_e, { transaction_id, limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listBankMatchAttempts(cid, transaction_id, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F100 stop payments
+  ipcMain.handle('feat:stop-payment:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertStopPayment({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:stop-payment:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listStopPayments(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F101 pending deposits
+  ipcMain.handle('feat:pending-deposit:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertPendingDeposit({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pending-deposit:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPendingDeposits(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pending-deposit:float', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return { total_pending: 0, count: 0 }; return tr().totalPendingFloat(cid); } catch (e: any) { return { error: e?.message }; } });
+  // F102 petty cash
+  ipcMain.handle('feat:petty-cash:log', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return tr().logPettyCash({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:petty-cash:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPettyCash(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:petty-cash:balance', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return 0; return tr().pettyCashBalance(cid); } catch (e: any) { return { error: e?.message }; } });
+  // F103 treasury investments
+  ipcMain.handle('feat:treasury:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertTreasuryInvestment({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:treasury:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listTreasuryInvestments(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F104 letters of credit
+  ipcMain.handle('feat:loc:upsert', (_e, lc: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertLetterOfCredit({ ...lc, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:loc:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listLettersOfCredit(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F105 loan covenants
+  ipcMain.handle('feat:covenant:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertLoanCovenant({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:covenant:measure', (_e, { covenant_id, value }: any) => { try { return tr().recordCovenantMeasurement(covenant_id, value); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:covenant:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listLoanCovenants(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F106 sweep rules
+  ipcMain.handle('feat:sweep:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertSweepRule({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sweep:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listSweepRules(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sweep:evaluate', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().evaluateSweepRules(cid); } catch (e: any) { return { error: e?.message }; } });
+  // F107 inter-company transfers
+  ipcMain.handle('feat:inter-co:record', (_e, t: any) => { try { return tr().recordInterCompanyTransfer(t); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inter-co:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); return tr().listInterCompanyTransfers({ company_id: cid, ...opts }); } catch (e: any) { return { error: e?.message }; } });
+  // F108 credit card statements
+  ipcMain.handle('feat:cc-stmt:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return tr().upsertCreditCardStatement({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cc-stmt:add-lines', (_e, { statement_id, lines }: any) => { try { return tr().addStatementLines(statement_id, lines); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cc-stmt:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listCreditCardStatements(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cc-stmt:lines', (_e, { statement_id }: any) => { try { return tr().getStatementLines(statement_id); } catch (e: any) { return { error: e?.message }; } });
+  // F109 lockbox imports
+  ipcMain.handle('feat:lockbox:import', (_e, imp: any) => { try { const cid = db.getCurrentCompanyId(); return tr().importLockbox({ ...imp, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:lockbox:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listLockboxImports(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:lockbox:items', (_e, { import_id }: any) => { try { return tr().getLockboxItems(import_id); } catch (e: any) { return { error: e?.message }; } });
+  // F110 positive pay
+  ipcMain.handle('feat:positive-pay:generate', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().generatePositivePayFile(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:positive-pay:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPositivePayFiles(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:positive-pay:mark-submitted', (_e, { id }: any) => { try { return { ok: tr().markPositivePayFileSubmitted(id) }; } catch (e: any) { return { error: e?.message }; } });
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
