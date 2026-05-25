@@ -700,6 +700,18 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'payroll_journal_links',
   'federal_tax_tables',
   'state_tax_tables',
+  // Reporting Wave (F741-F840) — snapshot/audit/log tables
+  'report_runs',
+  'scheduled_report_history',
+  'kpi_snapshots',
+  'variance_analyses',
+  'report_drill_audit',
+  'period_comparisons',
+  'dashboard_versions',
+  'report_pin_cache',
+  'report_favorites',
+  'report_audit_log',
+  'report_alert_events',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.
