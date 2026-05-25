@@ -343,30 +343,187 @@ const baseStyles = `
   @media print { .rpt-page { padding: 0; } .no-break { page-break-inside: avoid; } }
 
   /* ── Legal document utilities (demand letters, affidavits, court packets) ── */
-  .legal-page { font-family: Georgia, 'Times New Roman', 'Liberation Serif', serif; color: #111; font-size: 12pt; line-height: 1.65; }
-  .legal-page p, .legal-page li { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.7; }
-  .legal-letterhead { border-bottom: 3px double #000; padding-bottom: 14px; margin-bottom: 28px; text-align: center; }
-  .legal-letterhead .lh-name { font-family: Georgia, 'Times New Roman', serif; font-size: 22pt; font-weight: 700; letter-spacing: 3px; color: #000; text-transform: uppercase; }
-  .legal-letterhead .lh-rule { width: 60px; height: 2px; background: #000; margin: 8px auto; }
-  .legal-letterhead .lh-meta { font-size: 10pt; color: #333; line-height: 1.5; font-family: Georgia, serif; font-style: italic; }
-  .legal-date { text-align: right; font-size: 11pt; margin-bottom: 24px; font-family: Georgia, serif; }
-  .legal-recipient { margin-left: 1in; margin-bottom: 24px; font-size: 11pt; line-height: 1.5; font-family: Georgia, serif; }
-  .legal-subject { font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0; font-family: Georgia, serif; font-size: 11pt; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 8px 0; }
-  .legal-body { text-align: justify; }
-  .legal-body p { margin-bottom: 14px; text-indent: 0.4in; }
+  /* MODERN DESIGN (refactored 2026-05-25): mixed sans/serif typography for
+     a polished, professional look. Numbers and labels in sans-serif (Inter),
+     body copy in serif (Source Serif) for legal gravitas. Letterhead is
+     compact (16pt) and stays on one line for typical company names. */
+  .legal-page {
+    font-family: 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+    color: #111; font-size: 11pt; line-height: 1.55;
+  }
+  .legal-page p, .legal-page li {
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 11pt; line-height: 1.6;
+  }
+  .legal-letterhead {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 12px; margin-bottom: 20px;
+    gap: 18px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-letterhead .lh-name {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 16pt; font-weight: 800; letter-spacing: -0.3px;
+    color: #0f172a; line-height: 1.15; text-transform: none;
+  }
+  .legal-letterhead .lh-rule { display: none; }   /* Removed — was decorative */
+  .legal-letterhead .lh-meta {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 8.5pt; color: #64748b; line-height: 1.5;
+    font-style: normal; margin-top: 4px;
+  }
+  .legal-letterhead .lh-doc-id {
+    text-align: right; font-family: 'Inter', sans-serif;
+    font-size: 8pt; color: #64748b; line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .legal-letterhead .lh-doc-id .id-lbl {
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    font-size: 7.5pt; color: #94a3b8;
+  }
+  .legal-letterhead .lh-doc-id .id-val {
+    font-weight: 700; color: #0f172a; font-size: 9pt; letter-spacing: 0.3px;
+  }
+  /* Severity-accent bar (blue/amber/red) above letterhead */
+  .legal-accent-bar {
+    height: 4px;
+    margin-bottom: 16px; border-radius: 2px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-accent-bar.tone-reminder { background: linear-gradient(90deg, #1e40af 0%, #3b82f6 100%); }
+  .legal-accent-bar.tone-warning  { background: linear-gradient(90deg, #b45309 0%, #f59e0b 100%); }
+  .legal-accent-bar.tone-final    { background: linear-gradient(90deg, #991b1b 0%, #dc2626 100%); }
+  .legal-accent-bar.tone-demand   { background: linear-gradient(90deg, #0f172a 0%, #475569 100%); }
+  .legal-accent-bar.tone-settlement { background: linear-gradient(90deg, #155e75 0%, #0891b2 100%); }
+  .legal-accent-bar.tone-confirm  { background: linear-gradient(90deg, #166534 0%, #16a34a 100%); }
+  .legal-date {
+    text-align: right; font-size: 9.5pt; margin-bottom: 18px;
+    font-family: 'Inter', sans-serif; color: #475569;
+    font-variant-numeric: tabular-nums;
+  }
+  .legal-recipient {
+    margin-bottom: 18px; font-size: 10pt; line-height: 1.5;
+    font-family: 'Inter', sans-serif;
+    background: #f8fafc; border-left: 3px solid #0f172a;
+    padding: 10px 14px; border-radius: 3px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-recipient .rcpt-lbl {
+    font-size: 7.5pt; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1.2px; color: #64748b; margin-bottom: 3px;
+  }
+  .legal-recipient .rcpt-name { font-weight: 700; color: #0f172a; font-size: 11pt; }
+  .legal-subject {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;
+    margin: 16px 0; font-size: 11pt;
+    padding: 10px 16px; border-radius: 4px;
+    background: #0f172a; color: #fff;
+    text-align: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-subject.tone-reminder { background: #1e40af; }
+  .legal-subject.tone-warning  { background: #b45309; }
+  .legal-subject.tone-final    { background: #991b1b; }
+  .legal-subject.tone-demand   { background: #0f172a; }
+  .legal-subject.tone-settlement { background: #155e75; }
+  .legal-subject.tone-confirm  { background: #166534; }
+  .legal-body { text-align: left; }   /* Was justify — caused awkward gaps */
+  .legal-body p { margin-bottom: 11px; text-indent: 0; }   /* Removed indent — modern letter style */
   .legal-body p.no-indent { text-indent: 0; }
-  .legal-amount-table { width: 80%; margin: 18px auto; border-collapse: collapse; font-family: Georgia, serif; }
-  .legal-amount-table td { border: 1px solid #000; padding: 8px 14px; font-size: 11pt; }
-  .legal-amount-table td.amt { text-align: right; font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Menlo', Consolas, 'Courier New', monospace; }
-  .legal-amount-table tr.total td { border-top: 2px solid #000; border-bottom: 3px double #000; font-weight: 700; background: #f4f4f0; }
-  .legal-notice { border: 1.5px solid #000; padding: 14px 18px; margin: 22px 0; font-size: 10.5pt; line-height: 1.6; background: #fafaf6; font-family: Georgia, serif; }
-  .legal-notice .ln-heading { font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-size: 10pt; }
-  .legal-mini-miranda { border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 0; margin: 22px 0; font-size: 10.5pt; font-style: italic; text-align: center; font-family: Georgia, serif; }
-  .legal-signature { margin-top: 48px; page-break-inside: avoid; }
-  .legal-sig-line { border-bottom: 1px solid #000; width: 320px; margin-top: 56px; }
-  .legal-sig-name { font-weight: 700; margin-top: 4px; font-family: Georgia, serif; font-size: 11pt; }
-  .legal-sig-title { font-style: italic; color: #333; font-size: 10.5pt; font-family: Georgia, serif; }
-  .legal-confidential-footer { border-top: 1px solid #000; margin-top: 36px; padding-top: 8px; font-size: 9pt; color: #444; text-align: center; font-style: italic; font-family: Georgia, serif; }
+  .legal-body p.lede {
+    font-weight: 700; color: #991b1b; font-size: 11.5pt;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 14px;
+    background: #fef2f2; padding: 10px 14px; border-radius: 4px;
+    border-left: 3px solid #dc2626;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-body p.lede.tone-warning {
+    color: #b45309; background: #fffbeb; border-left-color: #f59e0b;
+  }
+  .legal-body p.lede.tone-reminder {
+    color: #1e40af; background: #eff6ff; border-left-color: #3b82f6;
+  }
+  .legal-body ul { margin: 10px 0 14px; padding-left: 22px; line-height: 1.7; }
+  .legal-body ul li { margin-bottom: 4px; }
+  .legal-amount-table {
+    width: 100%; margin: 16px 0; border-collapse: collapse;
+    font-family: 'Inter', sans-serif;
+    page-break-inside: avoid;
+  }
+  .legal-amount-table td {
+    border-bottom: 1px solid #e2e8f0; padding: 8px 14px; font-size: 10pt;
+  }
+  .legal-amount-table td.amt {
+    text-align: right; font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum'; font-weight: 600;
+  }
+  .legal-amount-table tr:first-child td { border-top: 1px solid #cbd5e1; }
+  .legal-amount-table tr.total td {
+    border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a;
+    font-weight: 800; background: #f8fafc; font-size: 11pt;
+    padding-top: 10px; padding-bottom: 10px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  /* Account-reference key-value strip (replaces the cluttered 6-row table) */
+  .legal-keyval-strip {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 6px 18px;
+    margin: 12px 0 16px;
+    padding: 12px 16px;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-keyval-strip .kv-cell { padding: 2px 0; }
+  .legal-keyval-strip .kv-lbl {
+    font-size: 7.5pt; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.8px; color: #94a3b8; display: block;
+  }
+  .legal-keyval-strip .kv-val {
+    font-size: 10pt; color: #0f172a; font-weight: 600; line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+  .legal-notice {
+    border: 1px solid #e2e8f0; padding: 12px 16px; margin: 16px 0;
+    font-size: 10pt; line-height: 1.55; background: #f8fafc;
+    font-family: 'Inter', sans-serif; border-radius: 4px;
+    border-left: 3px solid #3b82f6;
+    page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-notice .ln-heading {
+    font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 6px; font-size: 9pt; color: #1e40af;
+  }
+  .legal-notice p { margin: 4px 0; font-family: 'Inter', sans-serif; font-size: 10pt; }
+  .legal-mini-miranda {
+    border-top: 1px solid #0f172a; border-bottom: 1px solid #0f172a;
+    padding: 8px 0; margin: 18px 0; font-size: 9pt; font-style: italic;
+    text-align: center; color: #475569;
+    font-family: 'Inter', sans-serif;
+    page-break-inside: avoid;
+  }
+  .legal-signature { margin-top: 28px; page-break-inside: avoid; }
+  .legal-sig-line {
+    border-bottom: 1px solid #0f172a; width: 260px; margin-top: 28px;
+  }
+  .legal-sig-name {
+    font-weight: 700; margin-top: 4px; font-family: 'Inter', sans-serif;
+    font-size: 10pt; color: #0f172a;
+  }
+  .legal-sig-title {
+    color: #64748b; font-size: 9pt; font-family: 'Inter', sans-serif;
+    font-style: normal;
+  }
+  .legal-confidential-footer {
+    border-top: 1px solid #e2e8f0; margin-top: 22px; padding-top: 8px;
+    font-size: 8pt; color: #94a3b8; text-align: center; font-style: italic;
+    font-family: 'Inter', sans-serif;
+  }
   .legal-caption { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.7; margin-bottom: 24px; border-bottom: 3px double #000; padding-bottom: 16px; }
   .legal-caption .cap-state { font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
   .legal-caption .cap-title { font-weight: 700; text-transform: uppercase; letter-spacing: 3px; font-size: 14pt; margin-top: 12px; }
@@ -380,8 +537,49 @@ const baseStyles = `
   .legal-exhibit-cover { text-align: center; padding-top: 2.5in; font-family: Georgia, 'Times New Roman', serif; page-break-after: always; page-break-before: always; }
   .legal-exhibit-cover .ex-tab { display: inline-block; border: 3px solid #000; padding: 24px 48px; font-size: 60pt; font-weight: 700; letter-spacing: 8px; }
   .legal-exhibit-cover .ex-label { font-size: 16pt; text-transform: uppercase; letter-spacing: 4px; margin-top: 24px; }
-  .legal-remit { border: 2px dashed #000; margin-top: 36px; padding: 18px 22px; font-family: Georgia, serif; font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; page-break-inside: avoid; }
-  .legal-remit .remit-tear { text-align: center; font-size: 10pt; color: #555; letter-spacing: 4px; margin-bottom: 14px; }
+  .legal-remit {
+    border: 1.5px dashed #94a3b8;
+    margin-top: 28px; padding: 16px 20px;
+    font-family: 'Inter', sans-serif; font-size: 9.5pt;
+    background: #fafbfc;
+    border-radius: 6px;
+    page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .legal-remit .remit-tear {
+    text-align: center; font-size: 7.5pt; color: #64748b;
+    /* CRITICAL FIX: use CSS letter-spacing on a single string instead of */
+    /* injecting &nbsp; between each character. The &nbsp; approach lets */
+    /* the browser break individual letters into separate "words" and */
+    /* wrap mid-word — that's why "PAYMENT" was breaking as "PAYM / ENT". */
+    letter-spacing: 0.42em;
+    text-transform: uppercase; font-weight: 700;
+    margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px dashed #cbd5e1;
+    white-space: nowrap;             /* belt + suspenders — never wrap */
+    overflow: hidden;                 /* clip if it ever overflows */
+  }
+  .legal-remit .remit-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px;
+    margin-bottom: 10px;
+  }
+  .legal-remit .remit-cell .rc-lbl {
+    display: block; font-size: 7pt; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: #94a3b8; margin-bottom: 2px;
+  }
+  .legal-remit .remit-cell .rc-val {
+    display: block; font-size: 9.5pt; color: #0f172a; line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+  .legal-remit .remit-cell .rc-fill {
+    display: block; border-bottom: 1px solid #475569;
+    margin-top: 4px; min-height: 18px;
+  }
+  .legal-remit .remit-footer {
+    margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1;
+    font-size: 8pt; color: #64748b; font-style: italic; text-align: center;
+  }
   .legal-page p { orphans: 3; widows: 3; }
   .legal-page .legal-subject { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .legal-page .legal-amount-table tr.total td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -3189,12 +3387,17 @@ export function generateCollectionLetterHTML(
   const deadlineDate = new Date(Date.now() + 10 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const thirtyDayDate = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  const summaryTable = `<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:12px;">
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Original Amount</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(originalAmt)}</td></tr>
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Interest</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(interestAmt)}</td></tr>
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Fees</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(feesAmt)}</td></tr>
-  <tr><td style="padding:6px 12px;border:1px solid #ddd;">Payments</td><td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;color:#16a34a;">\u2212${fmtAmt(totalPaid)}</td></tr>
-  <tr style="font-weight:700;"><td style="padding:8px 12px;border:2px solid #111;">Balance Due</td><td style="padding:8px 12px;border:2px solid #111;text-align:right;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,Consolas,monospace;">${fmtAmt(balanceDue)}</td></tr>
+  // Unified summary table using .legal-amount-table (defined in baseStyles).
+  // Both the account-reference and dollar-amounts now share one consistent
+  // visual language, with proper page-break-inside protection.
+  const summaryTable = `<table class="legal-amount-table">
+  <tbody>
+    <tr><td>Original Amount</td><td class="amt">${fmtAmt(originalAmt)}</td></tr>
+    <tr><td>Interest Accrued</td><td class="amt">${fmtAmt(interestAmt)}</td></tr>
+    <tr><td>Fees &amp; Charges</td><td class="amt">${fmtAmt(feesAmt)}</td></tr>
+    <tr><td>Payments Received</td><td class="amt" style="color:#16a34a;">\u2212${fmtAmt(totalPaid)}</td></tr>
+    <tr class="total"><td>BALANCE DUE</td><td class="amt">${fmtAmt(balanceDue)}</td></tr>
+  </tbody>
 </table>`;
 
   // Shared blocks
@@ -3209,14 +3412,17 @@ export function generateCollectionLetterHTML(
   const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(String(debt.delinquent_date).length === 10 ? debt.delinquent_date + 'T12:00:00' : debt.delinquent_date).getTime()) / 86_400_000)) : 0;
   const settlementAmt = Math.round(balanceDue * 0.7 * 100) / 100;
 
-  const accountRefBlock = `<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:11px;background:#f9f9f9;">
-  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;width:35%;">Account Reference</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${accountRef}</td></tr>
-  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Original Due Date</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${dueDate}</td></tr>
-  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Date Delinquent</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${delinquentDate}</td></tr>
-  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Days Past Due</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${daysOverdue} days</td></tr>
-  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Interest Rate</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${interestRate}</td></tr>
-  <tr><td style="padding:5px 12px;border:1px solid #e5e5e5;font-weight:600;">Jurisdiction</td><td style="padding:5px 12px;border:1px solid #e5e5e5;">${jurisdiction}</td></tr>
-</table>`;
+  // Compact 6-cell grid replaces the cluttered 6-row table. Account Reference
+  // is shown in the letterhead (lh-doc-id) so we omit it here to avoid the
+  // duplication that made the old layout look messy.
+  const accountRefBlock = `<div class="legal-keyval-strip">
+  <div class="kv-cell"><span class="kv-lbl">Original Due Date</span><span class="kv-val">${dueDate}</span></div>
+  <div class="kv-cell"><span class="kv-lbl">Date Delinquent</span><span class="kv-val">${delinquentDate}</span></div>
+  <div class="kv-cell"><span class="kv-lbl">Days Past Due</span><span class="kv-val">${daysOverdue} days</span></div>
+  <div class="kv-cell"><span class="kv-lbl">Interest Rate</span><span class="kv-val">${interestRate}</span></div>
+  <div class="kv-cell"><span class="kv-lbl">Jurisdiction</span><span class="kv-val">${jurisdiction}</span></div>
+  <div class="kv-cell"><span class="kv-lbl">Balance Due</span><span class="kv-val" style="color:#991b1b;font-weight:800;">${fmtAmt(balanceDue)}</span></div>
+</div>`;
 
   const paymentInstructions = `<div style="margin:16px 0;padding:14px;border:1px solid #ddd;border-left:3px solid #2563eb;background:#fafafa;">
   <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#333;margin-bottom:6px;">Payment Instructions</p>
@@ -3269,7 +3475,7 @@ ${fdcpaNotice}`,
     final_notice: {
       title: 'Final Notice Before Legal Action',
       accent: '#dc2626',
-      body: `<p style="font-weight:700;color:#dc2626;font-size:14px;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">This is your final notice. Immediate action is required.</p>
+      body: `<p class="lede">This is your final notice. Immediate action is required.</p>
 <p>Multiple attempts have been made to resolve the outstanding balance on your account. As of the date of this letter, no payment or satisfactory response has been received. Your account is now <strong>${daysOverdue} days past due</strong>.</p>
 ${accountRefBlock}
 ${summaryTable}
@@ -3353,17 +3559,41 @@ ${paymentInstructions}
 
   const letter = LETTERS[letterType] || LETTERS.reminder;
 
+  // FIX (2026-05-25): the previous version used `D E T A C H &nbsp; A N D ...`
+  // which made each letter a separate "word" — so "PAYMENT" could wrap as
+  // "PAYM / ENT" mid-letter. Now uses a single string with CSS letter-spacing
+  // on .remit-tear, plus white-space:nowrap so it never wraps regardless.
   const remitSlip = `<div class="legal-remit">
-  <div class="remit-tear">&#9986; &nbsp; D E T A C H &nbsp; A N D &nbsp; R E T U R N &nbsp; W I T H &nbsp; P A Y M E N T &nbsp; &#9986;</div>
-  <table>
-    <tr><td style="width:55%;"><strong>Remit To:</strong><br>${companyName}<br>${companyAddr || ''}</td>
-        <td style="vertical-align:top;"><strong>From:</strong><br>${debtorName}<br>${debtorAddr || ''}</td></tr>
-    <tr><td><strong>Account Reference:</strong> ${accountRef}</td>
-        <td><strong>Amount Enclosed:</strong> $ ____________________</td></tr>
-    <tr><td><strong>Balance Due:</strong> ${fmtAmt(balanceDue)}</td>
-        <td><strong>Date:</strong> ____________________</td></tr>
-  </table>
-  <p style="font-size:9.5pt;color:#444;margin-top:8px;font-style:italic;">Make checks payable to ${companyName}. Write account reference ${accountRef} on the memo line.</p>
+  <div class="remit-tear">&#9986; &nbsp;&nbsp; Detach and return with payment &nbsp;&nbsp; &#9986;</div>
+  <div class="remit-grid">
+    <div class="remit-cell">
+      <span class="rc-lbl">Remit to</span>
+      <span class="rc-val"><strong>${companyName}</strong></span>
+      <span class="rc-val" style="color:#475569;">${companyAddr || ''}</span>
+    </div>
+    <div class="remit-cell">
+      <span class="rc-lbl">From</span>
+      <span class="rc-val"><strong>${debtorName}</strong></span>
+      <span class="rc-val" style="color:#475569;">${debtorAddr || ''}</span>
+    </div>
+    <div class="remit-cell">
+      <span class="rc-lbl">Account reference</span>
+      <span class="rc-val"><strong>${accountRef}</strong></span>
+    </div>
+    <div class="remit-cell">
+      <span class="rc-lbl">Amount enclosed</span>
+      <span class="rc-val">$ <span class="rc-fill"></span></span>
+    </div>
+    <div class="remit-cell">
+      <span class="rc-lbl">Balance due</span>
+      <span class="rc-val" style="color:#991b1b;font-weight:800;">${fmtAmt(balanceDue)}</span>
+    </div>
+    <div class="remit-cell">
+      <span class="rc-lbl">Date</span>
+      <span class="rc-val"><span class="rc-fill"></span></span>
+    </div>
+  </div>
+  <div class="remit-footer">Make checks payable to ${companyName}. Include account reference ${accountRef} on the memo line.</div>
 </div>`;
 
   const paymentOptions = `<div class="legal-notice">
@@ -3373,36 +3603,48 @@ ${paymentInstructions}
   <p style="text-indent:0;margin:4px 0;"><strong>Online:</strong> Visit our payment portal or contact us${companyEmail ? ' at ' + companyEmail : ''} for the secure payment link.</p>
 </div>`;
 
+  // Map letter type to severity tone — drives the accent bar and subject styling
+  const toneMap: Record<string, string> = {
+    reminder: 'reminder',
+    warning: 'warning',
+    final_notice: 'final',
+    demand: 'demand',
+    settlement_offer: 'settlement',
+    payment_confirmation: 'confirm',
+  };
+  const tone = toneMap[letterType] || 'reminder';
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(letter.title)} — ${debtorName}</title><style>
 ${baseStyles}
-@page { size: letter; margin: 1in; }
+@page { size: letter; margin: 0.75in; }   /* Tighter margins = more content per page */
 body { background: #fff; }
-.legal-wrap { max-width: 6.5in; margin: 0 auto; }
-.cl-title { font-family: Georgia, 'Times New Roman', serif; font-size: 13pt; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #000; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px 0; margin: 16px 0 22px; text-align: center; }
-.cl-body { font-family: Georgia, 'Times New Roman', serif; font-size: 11.5pt; line-height: 1.7; color: #111; }
-.cl-body p { margin-bottom: 12px; }
-.cl-body ul { margin: 10px 0 14px; padding-left: 28px; }
-.cl-body ul li { margin-bottom: 4px; }
+.legal-wrap { max-width: 100%; margin: 0; }
 </style></head><body>
 <div class="legal-page legal-wrap">
+  <div class="legal-accent-bar tone-${tone}"></div>
+
   <div class="legal-letterhead">
-    <div class="lh-name">${companyName}</div>
-    <div class="lh-rule"></div>
-    <div class="lh-meta">
-      ${companyAddr || ''}${companyPhone ? ` &middot; Tel: ${companyPhone}` : ''}${companyEmail ? ` &middot; ${companyEmail}` : ''}
+    <div>
+      <div class="lh-name">${companyName}</div>
+      <div class="lh-meta">
+        ${companyAddr || ''}${companyPhone ? ` &middot; Tel: ${companyPhone}` : ''}${companyEmail ? ` &middot; ${companyEmail}` : ''}
+      </div>
+    </div>
+    <div class="lh-doc-id">
+      <div class="id-lbl">${todayLong}</div>
+      <div class="id-val">${accountRef}</div>
     </div>
   </div>
 
-  <div class="legal-date">${todayLong}<br><span style="font-size:10pt;font-style:italic;">Account Reference: ${accountRef}</span></div>
-
   <div class="legal-recipient">
-    <strong>${debtorName}</strong><br>
-    ${debtorAddr || ''}
+    <div class="rcpt-lbl">Addressed to</div>
+    <div class="rcpt-name">${debtorName}</div>
+    ${debtorAddr ? `<div style="color:#475569;margin-top:2px;">${debtorAddr}</div>` : ''}
   </div>
 
-  <div class="cl-title">${esc(letter.title)}</div>
+  <div class="legal-subject tone-${tone}">${esc(letter.title)}</div>
 
-  <div class="cl-body">
+  <div class="legal-body">
     <p>Dear ${debtorName}:</p>
     ${letter.body}
   </div>
@@ -3414,17 +3656,17 @@ body { background: #fff; }
   </div>
 
   <div class="legal-signature">
-    <p style="margin-top:22px;">Sincerely,</p>
+    <p style="margin-bottom:0;">Sincerely,</p>
     <div class="legal-sig-line"></div>
     <div class="legal-sig-name">${companyName}</div>
     <div class="legal-sig-title">Collections Department</div>
   </div>
 
+  ${remitSlip}
+
   <div class="legal-confidential-footer">
     This communication may contain privileged or confidential information intended solely for the addressee.
   </div>
-
-  ${remitSlip}
 </div></body></html>`;
 }
 

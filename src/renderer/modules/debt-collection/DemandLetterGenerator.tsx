@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { FileText, Check, AlertTriangle } from 'lucide-react';
+import { FileText, Check, AlertTriangle, Eye, Printer, Mail, ClipboardCheck } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -76,11 +76,23 @@ function mergeFields(
 }
 
 // ─── Severity badge color ───────────────────────────────
-const SEVERITY_STYLES: Record<string, string> = {
-  low:      'bg-accent-blue/20 text-accent-blue',
-  medium:   'bg-amber-500/20 text-amber-400',
-  high:     'bg-accent-expense/20 text-red-400',
-  critical: 'bg-red-700/20 text-red-300',
+// Mirrors the tone accents used in the PDF letterhead bar — keeps the
+// UI and the resulting PDF visually consistent so the user always knows
+// which severity they're about to send.
+const SEVERITY_STYLES: Record<string, { badge: string; accent: string; icon: string }> = {
+  low:      { badge: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',     accent: '#3b82f6', icon: 'ℹ' },
+  medium:   { badge: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',  accent: '#f59e0b', icon: '⚠' },
+  high:     { badge: 'bg-red-500/15 text-red-400 border border-red-500/30',        accent: '#dc2626', icon: '⚠' },
+  critical: { badge: 'bg-red-700/20 text-red-300 border border-red-700/40',         accent: '#991b1b', icon: '⛔' },
+};
+
+const TEMPLATE_TYPE_HINT: Record<string, string> = {
+  reminder: 'Friendly first-touch reminder. Use within 1-30 days past due.',
+  warning: 'Formal second notice. Use within 31-60 days past due.',
+  final_notice: 'Last warning before legal action. Use 61-90 days past due.',
+  demand: 'Formal legal demand for payment with 10-day deadline. Use 90+ days.',
+  settlement_offer: 'Offer 70% balance settlement to close the account.',
+  payment_confirmation: 'Confirm receipt of a payment and update the account.',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -203,15 +215,58 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
     if (!generatedHtml || savingPdf) return;
     setSavingPdf(true);
     try {
-      await api.saveToPDF(generatedHtml, 'Demand Letter');
+      const filename = `${selectedTemplate?.name?.toLowerCase().replace(/\s+/g, '-') || 'demand'} — ${debt?.debtor_name || 'debt'}.pdf`;
+      await api.saveToPDF(generatedHtml, filename);
     } catch (err: any) {
-      // VISIBILITY: surface save-PDF errors instead of swallowing
       console.error('Failed to save PDF:', err);
       setErrorMsg(`Failed to save PDF: ${err?.message ?? String(err)}`);
     } finally {
       setSavingPdf(false);
     }
-  }, [generatedHtml, savingPdf]);
+  }, [generatedHtml, savingPdf, selectedTemplate, debt]);
+
+  // ── Print directly (Blob URL avoids document.write XSS surface) ──
+  const handlePrint = useCallback(() => {
+    if (!generatedHtml) return;
+    const blob = new Blob([generatedHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank', 'width=900,height=1100');
+    if (!w) {
+      URL.revokeObjectURL(url);
+      setErrorMsg('Could not open print window — check popup blocker.');
+      return;
+    }
+    // Wait for the new window to load before invoking print, then revoke URL.
+    const tryPrint = () => {
+      try { w.focus(); w.print(); } catch {}
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    };
+    w.addEventListener('load', tryPrint, { once: true });
+    // Fallback: if load event doesn't fire within 1.5s, print anyway.
+    setTimeout(tryPrint, 1500);
+  }, [generatedHtml]);
+
+  // ── Copy plain-text body to clipboard (for pasting into email) ──
+  const handleCopyText = useCallback(async () => {
+    if (!previewBody) return;
+    try {
+      await navigator.clipboard.writeText(`Subject: ${previewSubject}\n\n${previewBody}`);
+      setSuccessMsg('Letter copied to clipboard — paste into your email client.');
+    } catch (err: any) {
+      setErrorMsg('Could not copy to clipboard: ' + (err?.message || String(err)));
+    }
+  }, [previewBody, previewSubject]);
+
+  // ── Email the debtor (opens default mail client with prefilled body) ──
+  const handleEmail = useCallback(() => {
+    if (!debt?.debtor_email) {
+      setErrorMsg('Debtor has no email on file. Add one to send via email.');
+      return;
+    }
+    const subject = encodeURIComponent(previewSubject);
+    const body = encodeURIComponent(previewBody);
+    window.location.href = `mailto:${debt.debtor_email}?subject=${subject}&body=${body}`;
+  }, [debt, previewSubject, previewBody]);
 
   if (loading) {
     return (
@@ -242,15 +297,16 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
           onDismiss={() => setErrorMsg('')}
         />
       )}
-      {/* Template Cards */}
+      {/* Template Cards — severity color-coded edge + hint text */}
       <div>
         <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
           Select Template
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {templates.map((tpl) => {
             const isActive = tpl.id === selectedTemplateId;
-            const sevStyle = SEVERITY_STYLES[tpl.severity] || SEVERITY_STYLES.medium;
+            const sev = SEVERITY_STYLES[tpl.severity] || SEVERITY_STYLES.medium;
+            const hint = TEMPLATE_TYPE_HINT[tpl.id] || TEMPLATE_TYPE_HINT[tpl.name?.toLowerCase().replace(/\s+/g, '_')] || '';
             return (
               <button
                 key={tpl.id}
@@ -259,68 +315,133 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                   setGeneratedHtml('');
                   setSuccessMsg('');
                 }}
-                className={`block-card text-left p-4 transition-colors cursor-pointer ${
+                className={`block-card text-left p-4 transition-all cursor-pointer relative overflow-hidden ${
                   isActive
                     ? 'ring-2 ring-accent-blue bg-bg-tertiary'
-                    : 'hover:bg-bg-hover transition-colors'
+                    : 'hover:bg-bg-hover hover:-translate-y-0.5'
                 }`}
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: '8px' }}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText size={14} className="text-text-muted" />
-                  <span className="text-sm font-bold text-text-primary truncate">
-                    {tpl.name}
+                {/* Severity stripe — runs down the left edge */}
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute', left: 0, top: 0, bottom: 0,
+                    width: 3, background: sev.accent,
+                  }}
+                />
+                <div className="flex items-start justify-between gap-2 mb-2 ml-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText size={14} className="text-text-muted shrink-0" />
+                    <span className="text-sm font-bold text-text-primary truncate">
+                      {tpl.name}
+                    </span>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 font-bold uppercase tracking-wider shrink-0 ${sev.badge}`}
+                    style={{ borderRadius: '4px' }}
+                  >
+                    <span aria-hidden>{sev.icon}</span>
+                    {tpl.severity}
                   </span>
                 </div>
-                <span
-                  className={`inline-block text-[10px] px-1.5 py-0.5 font-semibold uppercase ${sevStyle}`}
-                  style={{ borderRadius: '6px' }}
-                >
-                  {tpl.severity}
-                </span>
+                {hint && (
+                  <p className="text-[11px] text-text-muted leading-snug ml-2 mt-1">{hint}</p>
+                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Preview Pane */}
+      {/* Preview Pane — live iframe preview matches the PDF output exactly */}
       {selectedTemplate && debt && (
         <div className="block-card">
-          <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-            Preview
-          </h4>
-          <div
-            className="block-card bg-bg-primary p-4 font-mono text-sm text-text-secondary space-y-3"
-            style={{ borderRadius: '6px' }}
-          >
-            <div>
-              <span className="text-text-muted text-xs uppercase">Subject:</span>
-              <p className="text-text-primary font-semibold">{previewSubject}</p>
-            </div>
-            <div className="border-t border-border-primary pt-3 whitespace-pre-wrap">
-              {previewBody}
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
+              <Eye size={12} />
+              {generatedHtml ? 'Live Preview' : 'Text Preview'}
+            </h4>
+            {generatedHtml && (
+              <span className="text-[10px] text-text-muted uppercase tracking-wider">
+                What the recipient will see
+              </span>
+            )}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 mt-4">
+          {/* When generated, show the actual rendered HTML (matches PDF) */}
+          {generatedHtml ? (
+            <iframe
+              srcDoc={generatedHtml}
+              title="Demand letter preview"
+              sandbox="allow-same-origin"
+              style={{
+                width: '100%', height: 620, border: '1px solid var(--color-border-primary)',
+                background: '#fff', borderRadius: 6,
+              }}
+            />
+          ) : (
+            <div
+              className="block-card bg-bg-primary p-4 text-sm text-text-secondary space-y-3"
+              style={{ borderRadius: '6px', maxHeight: 400, overflowY: 'auto' }}
+            >
+              <div>
+                <span className="text-text-muted text-xs uppercase tracking-wider">Subject</span>
+                <p className="text-text-primary font-semibold mt-1">{previewSubject}</p>
+              </div>
+              <div className="border-t border-border-primary pt-3 whitespace-pre-wrap font-serif leading-relaxed">
+                {previewBody}
+              </div>
+              <div className="border-t border-border-primary pt-3 text-[11px] text-text-muted italic">
+                Click "Generate &amp; Log" to render the full HTML letter with letterhead, accent bar, and remittance slip.
+              </div>
+            </div>
+          )}
+
+          {/* Action bar — primary + secondary actions grouped */}
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
             <button
               className="block-btn-primary flex items-center gap-2"
               onClick={handleGenerate}
               disabled={generating}
             >
               <FileText size={14} />
-              {generating ? 'Generating...' : 'Generate & Log'}
+              {generating ? 'Generating…' : (generatedHtml ? 'Regenerate' : 'Generate & Log')}
             </button>
             {generatedHtml && (
-              <button
-                className="block-btn flex items-center gap-2"
-                onClick={handleSavePdf}
-                disabled={savingPdf}
-              >
-                {savingPdf ? 'Saving...' : 'Save as PDF'}
-              </button>
+              <>
+                <button
+                  className="block-btn flex items-center gap-2"
+                  onClick={handlePrint}
+                  title="Open in a new window and print"
+                >
+                  <Printer size={14} /> Print
+                </button>
+                <button
+                  className="block-btn flex items-center gap-2"
+                  onClick={handleSavePdf}
+                  disabled={savingPdf}
+                  title="Save the letter as a PDF file"
+                >
+                  <FileText size={14} />
+                  {savingPdf ? 'Saving…' : 'Save PDF'}
+                </button>
+                <button
+                  className="block-btn flex items-center gap-2"
+                  onClick={handleEmail}
+                  title={debt?.debtor_email ? `Email to ${debt.debtor_email}` : 'No debtor email on file'}
+                  disabled={!debt?.debtor_email}
+                >
+                  <Mail size={14} /> Email
+                </button>
+                <button
+                  className="block-btn flex items-center gap-2"
+                  onClick={handleCopyText}
+                  title="Copy subject + body to clipboard"
+                >
+                  <ClipboardCheck size={14} /> Copy Text
+                </button>
+              </>
             )}
           </div>
 
