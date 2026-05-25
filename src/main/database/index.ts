@@ -5075,6 +5075,11 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
+  // ─── Data hygiene: remove orphaned invoice_tokens whose invoice_id
+  // no longer exists. Tokens are ephemeral share links — when the
+  // underlying invoice is hard-deleted, the token becomes dangling and
+  // the schema validator flags it as an orphan FK. Idempotent + safe.
+  "DELETE FROM invoice_tokens WHERE invoice_id NOT IN (SELECT id FROM invoices)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
