@@ -3349,6 +3349,368 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, project_id, snapshot_date)
   )`,
+  // ─── Batch 9: CRM, Sales, Quotes (F131-F150) ───
+  // F131 — sales_pipeline_stages
+  `CREATE TABLE IF NOT EXISTS sales_pipeline_stages (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    stage_name TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    probability_percent REAL DEFAULT 0,
+    is_won INTEGER DEFAULT 0,
+    is_lost INTEGER DEFAULT 0,
+    color TEXT DEFAULT '#6366f1',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F132 — deals (opportunities)
+  `CREATE TABLE IF NOT EXISTS deals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    deal_name TEXT NOT NULL,
+    client_id TEXT,
+    contact_name TEXT,
+    contact_email TEXT,
+    stage_id TEXT,
+    estimated_value REAL DEFAULT 0,
+    estimated_close_date TEXT,
+    actual_close_date TEXT,
+    probability_percent REAL DEFAULT 0,
+    weighted_value REAL DEFAULT 0,
+    assigned_to TEXT,
+    source TEXT,
+    territory_id TEXT,
+    status TEXT DEFAULT 'open',
+    won_reason TEXT,
+    lost_reason TEXT,
+    competitor TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_deals_co_stage ON deals(company_id, stage_id, status)",
+  // F133 — deal_activities
+  `CREATE TABLE IF NOT EXISTS deal_activities (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    deal_id TEXT NOT NULL,
+    activity_type TEXT NOT NULL,
+    activity_date TEXT,
+    subject TEXT,
+    description TEXT,
+    duration_minutes INTEGER DEFAULT 0,
+    outcome TEXT,
+    next_action TEXT,
+    next_action_date TEXT,
+    performed_by TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F134 — sales_targets
+  `CREATE TABLE IF NOT EXISTS sales_targets (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rep_id TEXT,
+    target_period TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    target_amount REAL DEFAULT 0,
+    actual_amount REAL DEFAULT 0,
+    deal_count_target INTEGER DEFAULT 0,
+    actual_deal_count INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F135 — sales_performance_snapshots
+  `CREATE TABLE IF NOT EXISTS sales_performance_snapshots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    rep_id TEXT,
+    period_start TEXT,
+    period_end TEXT,
+    deals_won INTEGER DEFAULT 0,
+    deals_lost INTEGER DEFAULT 0,
+    revenue_won REAL DEFAULT 0,
+    pipeline_value REAL DEFAULT 0,
+    average_deal_size REAL DEFAULT 0,
+    win_rate REAL DEFAULT 0,
+    avg_days_to_close REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F136 — lead_forms
+  `CREATE TABLE IF NOT EXISTS lead_forms (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    form_name TEXT NOT NULL,
+    fields_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    submission_count INTEGER DEFAULT 0,
+    redirect_url TEXT,
+    success_message TEXT,
+    notify_emails TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS lead_form_submissions (
+    id TEXT PRIMARY KEY,
+    form_id TEXT NOT NULL REFERENCES lead_forms(id) ON DELETE CASCADE,
+    submitted_at TEXT DEFAULT (datetime('now')),
+    data_json TEXT NOT NULL,
+    converted_to_lead_id TEXT,
+    ip_address TEXT
+  )`,
+  // F137 — lead_scoring_rules
+  `CREATE TABLE IF NOT EXISTS lead_scoring_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rule_name TEXT NOT NULL,
+    criteria_json TEXT NOT NULL,
+    score_value INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F138 — lead_routing_rules
+  `CREATE TABLE IF NOT EXISTS lead_routing_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rule_name TEXT NOT NULL,
+    priority INTEGER DEFAULT 0,
+    criteria_json TEXT NOT NULL,
+    assign_to_user_id TEXT,
+    assign_to_team_id TEXT,
+    territory_id TEXT,
+    is_active INTEGER DEFAULT 1,
+    match_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F139 — sales_territories
+  `CREATE TABLE IF NOT EXISTS sales_territories (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    territory_name TEXT NOT NULL,
+    region TEXT,
+    countries TEXT,
+    states TEXT,
+    zip_prefixes TEXT,
+    industry_focus TEXT,
+    owner_user_id TEXT,
+    notes TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F140 — commission_plans
+  `CREATE TABLE IF NOT EXISTS commission_plans (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    plan_name TEXT NOT NULL,
+    effective_from TEXT,
+    effective_to TEXT,
+    plan_type TEXT DEFAULT 'percent',
+    base_rate REAL DEFAULT 0,
+    tiers_json TEXT DEFAULT '[]',
+    accelerators_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F141 — commission_calculations
+  `CREATE TABLE IF NOT EXISTS commission_calculations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rep_id TEXT NOT NULL,
+    plan_id TEXT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    revenue_basis REAL DEFAULT 0,
+    base_commission REAL DEFAULT 0,
+    accelerator_commission REAL DEFAULT 0,
+    bonus REAL DEFAULT 0,
+    adjustments REAL DEFAULT 0,
+    total_commission REAL DEFAULT 0,
+    paid INTEGER DEFAULT 0,
+    paid_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F142 — discount_rules
+  `CREATE TABLE IF NOT EXISTS discount_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rule_name TEXT NOT NULL,
+    rule_type TEXT DEFAULT 'volume',
+    discount_percent REAL DEFAULT 0,
+    discount_amount REAL DEFAULT 0,
+    minimum_qty REAL DEFAULT 0,
+    minimum_amount REAL DEFAULT 0,
+    applies_to TEXT DEFAULT 'all',
+    item_ids TEXT,
+    customer_tier TEXT,
+    effective_from TEXT,
+    effective_to TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F143 — promo_codes
+  `CREATE TABLE IF NOT EXISTS promo_codes (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    description TEXT,
+    discount_percent REAL DEFAULT 0,
+    discount_amount REAL DEFAULT 0,
+    max_redemptions INTEGER DEFAULT 0,
+    redemption_count INTEGER DEFAULT 0,
+    minimum_order_amount REAL DEFAULT 0,
+    valid_from TEXT,
+    valid_to TEXT,
+    one_per_customer INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, code)
+  )`,
+  `CREATE TABLE IF NOT EXISTS promo_code_redemptions (
+    id TEXT PRIMARY KEY,
+    promo_code_id TEXT NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+    customer_id TEXT,
+    invoice_id TEXT,
+    order_total REAL DEFAULT 0,
+    discount_amount REAL DEFAULT 0,
+    redeemed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F144 — loyalty_tiers + customer_loyalty
+  `CREATE TABLE IF NOT EXISTS loyalty_tiers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tier_name TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    minimum_spend REAL DEFAULT 0,
+    minimum_points INTEGER DEFAULT 0,
+    discount_percent REAL DEFAULT 0,
+    earn_multiplier REAL DEFAULT 1.0,
+    perks TEXT,
+    color TEXT DEFAULT '#6366f1',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS customer_loyalty (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    tier_id TEXT,
+    points_balance INTEGER DEFAULT 0,
+    lifetime_spend REAL DEFAULT 0,
+    lifetime_points INTEGER DEFAULT 0,
+    last_activity_date TEXT,
+    enrolled_date TEXT,
+    expires_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT,
+    UNIQUE(company_id, customer_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS loyalty_transactions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    transaction_date TEXT DEFAULT (datetime('now')),
+    direction TEXT DEFAULT 'earn',
+    points INTEGER DEFAULT 0,
+    reason TEXT,
+    invoice_id TEXT,
+    redemption_id TEXT
+  )`,
+  // F145 — customer_referrals
+  `CREATE TABLE IF NOT EXISTS customer_referrals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    referrer_customer_id TEXT NOT NULL,
+    referee_name TEXT,
+    referee_email TEXT,
+    referee_customer_id TEXT,
+    status TEXT DEFAULT 'pending',
+    reward_amount REAL DEFAULT 0,
+    reward_paid_at TEXT,
+    converted_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F146 — quote_templates_v2 (rich templates with default lines)
+  `CREATE TABLE IF NOT EXISTS quote_template_lines (
+    id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    item_id TEXT,
+    description TEXT,
+    quantity REAL DEFAULT 1,
+    unit_price REAL DEFAULT 0,
+    discount_percent REAL DEFAULT 0,
+    tax_rate REAL DEFAULT 0,
+    notes TEXT
+  )`,
+  // F147 — quote_conversion_log
+  `CREATE TABLE IF NOT EXISTS quote_conversion_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    quote_id TEXT NOT NULL,
+    invoice_id TEXT NOT NULL,
+    conversion_date TEXT DEFAULT (datetime('now')),
+    converted_by TEXT,
+    notes TEXT
+  )`,
+  // F148 — quote_signatures (light e-sign)
+  `CREATE TABLE IF NOT EXISTS quote_signatures (
+    id TEXT PRIMARY KEY,
+    quote_id TEXT NOT NULL,
+    signer_name TEXT NOT NULL,
+    signer_email TEXT,
+    signature_data TEXT,
+    signed_at TEXT DEFAULT (datetime('now')),
+    ip_address TEXT,
+    user_agent TEXT,
+    status TEXT DEFAULT 'signed'
+  )`,
+  // F149 — rfp_tracking
+  `CREATE TABLE IF NOT EXISTS rfp_tracking (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rfp_number TEXT,
+    title TEXT NOT NULL,
+    issued_by TEXT,
+    received_date TEXT,
+    response_due_date TEXT,
+    contract_value_estimate REAL DEFAULT 0,
+    status TEXT DEFAULT 'evaluating',
+    submitted_at TEXT,
+    win_probability REAL DEFAULT 50,
+    assigned_to TEXT,
+    response_doc_url TEXT,
+    decision_date TEXT,
+    outcome TEXT,
+    feedback TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F150 — win_loss_analysis
+  `CREATE TABLE IF NOT EXISTS win_loss_analysis (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    deal_id TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    primary_reason TEXT,
+    secondary_reasons TEXT,
+    competitor TEXT,
+    price_pressure INTEGER DEFAULT 0,
+    feature_gap TEXT,
+    customer_feedback TEXT,
+    lessons_learned TEXT,
+    analyzed_by TEXT,
+    analyzed_at TEXT DEFAULT (datetime('now'))
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

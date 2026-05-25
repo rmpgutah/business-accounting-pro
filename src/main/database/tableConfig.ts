@@ -152,6 +152,11 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'inventory_adjustment_items',
   'stock_take_counts',
   'timesheet_approvals',
+  // Batch 9 child tables
+  'lead_form_submissions',
+  'promo_code_redemptions',
+  'quote_template_lines',
+  'quote_signatures',
 ]);
 
 // Tables that do NOT have an `updated_at` column.
@@ -491,6 +496,19 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'inventory_locations',
   'timesheet_periods',
   'timesheet_approvals',
+  // Batch 9 log/child tables
+  'deal_activities',
+  'sales_targets',
+  'sales_performance_snapshots',
+  'commission_calculations',
+  'lead_form_submissions',
+  'promo_code_redemptions',
+  'loyalty_transactions',
+  'customer_referrals',
+  'quote_template_lines',
+  'quote_conversion_log',
+  'quote_signatures',
+  'win_loss_analysis',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.
