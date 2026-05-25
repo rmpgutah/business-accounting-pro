@@ -5787,6 +5787,11 @@ export function registerIpcHandlers(): void {
     db.execQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
     setLastLoginEmail(email);
 
+    // WHO SYSTEM: set the authenticated user in main-process state so
+    // logAudit() and other who-tracking code can attribute writes to a
+    // real user instead of the placeholder 'user' string.
+    db.setCurrentUser(user.id, user.email);
+
     // Get user's companies
     const companies = db.runQuery(
       'SELECT c.*, uc.role as user_role FROM companies c JOIN user_companies uc ON c.id = uc.company_id WHERE uc.user_id = ?',
@@ -5800,6 +5805,53 @@ export function registerIpcHandlers(): void {
       user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, avatar_color: user.avatar_color },
       companies,
     };
+  });
+
+  // WHO SYSTEM: explicit logout handler so the renderer can signal main
+  // to clear the current-user state. Until this is called the user
+  // remains authenticated for audit purposes (e.g. logout-on-Cmd-Q is
+  // a soft logout — main still attributes writes to them).
+  ipcMain.handle('auth:logout', () => {
+    try {
+      db.clearCurrentUser();
+      setLastLoginEmail('');
+      return { ok: true };
+    } catch (err: any) {
+      console.error('auth:logout failed:', err);
+      return { error: err?.message };
+    }
+  });
+
+  // WHO SYSTEM: lets the renderer ask "who does main think is logged in?"
+  // Useful for the Activity panel showing "current user" header, plus
+  // for debugging when the renderer's authStore drifts from main state.
+  ipcMain.handle('auth:current-user', () => {
+    return {
+      user_id: db.getCurrentUserId(),
+      user_email: db.getCurrentUserEmail(),
+    };
+  });
+
+  // WHO SYSTEM: renderer restored a persisted authStore on Cmd+R / app
+  // launch and needs to re-establish the main-process user state.
+  // Verifies the user_id actually exists in the DB (defense against a
+  // tampered localStorage) before setting state.
+  ipcMain.handle('auth:resume-session', (_event, { userId }: { userId: string }) => {
+    try {
+      if (!userId) return { error: 'userId required' };
+      const rows = db.runQuery('SELECT id, email FROM users WHERE id = ?', [userId]);
+      if (rows.length === 0) {
+        db.clearCurrentUser();
+        return { error: 'User not found — session cleared' };
+      }
+      const u = rows[0];
+      db.setCurrentUser(u.id, u.email);
+      setLastLoginEmail(u.email);
+      return { ok: true, user_id: u.id, user_email: u.email };
+    } catch (err: any) {
+      console.error('auth:resume-session failed:', err);
+      return { error: err?.message };
+    }
   });
 
   ipcMain.handle('auth:has-users', () => {

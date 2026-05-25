@@ -17,6 +17,15 @@ export { SOFT_DELETE_TABLES } from './tableConfig';
 
 let db: Database.Database | null = null;
 let currentCompanyId: string | null = null;
+// "WHO" SYSTEM (added 2026-05-25 during who-system review):
+// Mirror of currentCompanyId for the authenticated user. Set from
+// auth:login and cleared from auth:logout. Used by logAudit() and any
+// other module that needs to record "who did this" without relying on
+// the renderer to pass user_id (which is forgeable). The single-user
+// model matches the current Electron app architecture — only one
+// session can be active per main process at a time.
+let currentUserId: string | null = null;
+let currentUserEmail: string | null = null;
 
 export function getDbPath(): string {
   const userDataPath = app.getPath('userData');
@@ -5529,6 +5538,25 @@ export function switchCompany(companyId: string): void {
   currentCompanyId = companyId;
 }
 
+// ─── "WHO" SYSTEM accessors ──────────────────────────────
+export function setCurrentUser(userId: string | null, userEmail: string | null = null): void {
+  currentUserId = userId;
+  currentUserEmail = userEmail;
+}
+
+export function getCurrentUserId(): string | null {
+  return currentUserId;
+}
+
+export function getCurrentUserEmail(): string | null {
+  return currentUserEmail;
+}
+
+export function clearCurrentUser(): void {
+  currentUserId = null;
+  currentUserEmail = null;
+}
+
 export function getCurrentCompanyId(): string | null {
   return currentCompanyId;
 }
@@ -5806,6 +5834,13 @@ export function logAudit(
   // Legacy CHECK constraint on audit_log.action only allows the original
   // three values; fall back to 'update' while preserving the real action
   // in `changes._action` so downstream UI still sees it.
+  //
+  // WHO: read from the module-level currentUserId/Email set by auth:login.
+  // Falls back to 'system' for cron-triggered writes that run before any
+  // user is logged in (e.g. boot-time migrations, auto-overdue checker).
+  const actor = currentUserId
+    ? (currentUserEmail ? `${currentUserEmail} (${currentUserId})` : currentUserId)
+    : 'system';
   try {
     create('audit_log', {
       company_id: companyId,
@@ -5813,7 +5848,7 @@ export function logAudit(
       entity_id: entityId,
       action,
       changes,
-      performed_by: 'user',
+      performed_by: actor,
     });
   } catch (err: any) {
     if (/CHECK/i.test(err?.message ?? '')) {
@@ -5823,7 +5858,7 @@ export function logAudit(
         entity_id: entityId,
         action: 'update',
         changes: { ...changes, _action: action },
-        performed_by: 'user',
+        performed_by: actor,
       });
     } else {
       throw err;
