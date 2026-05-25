@@ -886,8 +886,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         {colVisible('receipt') && (
           <td className="text-center">
             {exp.receipt_path
-              ? <span title="Receipt attached" className="cell-icon is-yes">&#10003;</span>
-              : <span title="No receipt" className="cell-icon is-no">—</span>}
+              ? <span title="Receipt attached" className="status-dot is-success" />
+              : <span title="No receipt"      className="status-dot is-offline" />}
           </td>
         )}
         {colVisible('taxded') && (
