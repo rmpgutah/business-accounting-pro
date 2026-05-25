@@ -12,6 +12,8 @@ import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download } f
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 interface Props {
   loanId: string;
@@ -263,6 +265,14 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Cross-entity relations & activity timeline — surfaces JE postings,
+          linked payments, and any other modules that recordRelation()'d to
+          this loan (e.g. bank-recon, expenses tagged with the loan). */}
+      <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+        <RelatedPanel entityType="loan" entityId={loanId} />
+        <EntityTimeline entityType="loan" entityId={loanId} />
       </div>
 
       {/* Record payment modal */}
