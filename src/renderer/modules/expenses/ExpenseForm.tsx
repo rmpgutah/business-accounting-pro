@@ -333,6 +333,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [receiptPath, setReceiptPath] = useState<string>('');
   // B5 — OCR scan state
   const [ocrBusy, setOcrBusy] = useState(false);
+  // F25 — Auto-fill from attached receipt: holds the parsed suggestions
+  // so the panel can show real values + offer an "Apply" button instead
+  // of the old placeholder em-dashes. Cleared on receipt change.
+  const [ocrSuggestions, setOcrSuggestions] = useState<any | null>(null);
+  const [ocrSuggestBusy, setOcrSuggestBusy] = useState(false);
+  const [ocrSuggestError, setOcrSuggestError] = useState<string | null>(null);
+  // Invalidate suggestions whenever the underlying receipt changes,
+  // so the user never sees OCR results from an older file.
+  useEffect(() => { setOcrSuggestions(null); setOcrSuggestError(null); }, [receiptPath]);
   const [details, setDetails] = useState<Record<string, any>>({});
   const [useLineItems, setUseLineItems] = useState(false);
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
@@ -1828,7 +1837,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             </div>
           )}
 
-          {/* Feature 25 — receipt OCR placeholder */}
+          {/* F25 — Auto-fill from attached receipt.
+              Two-step UX: (1) "Scan" button reads the already-attached
+              receipt and shows suggestions inline, (2) "Apply" button
+              fills blank form fields with the OCR'd values. The
+              suggestions panel previews values so the user can verify
+              OCR accuracy *before* committing them — safer than the
+              "Scan Receipt (OCR)" button which immediately applies. */}
           {receiptPath && (
             <div className="col-span-3 border border-border-secondary p-3" style={{ borderRadius: '6px', background: 'var(--color-bg-tertiary)' }}>
               <div className="flex items-center justify-between mb-2">
@@ -1836,18 +1851,100 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                   <Sparkles size={12} className="text-accent-blue" />
                   Suggested Values from Receipt
                 </span>
-                <span className="text-[10px] text-text-muted">(coming soon)</span>
+                {ocrSuggestions && (
+                  <span className="text-[10px] text-text-muted">
+                    Confidence: <span className={ocrSuggestions.confidence >= 70 ? 'text-accent-income' : ocrSuggestions.confidence >= 40 ? 'text-accent-warning' : 'text-accent-expense'}>{ocrSuggestions.confidence}%</span>
+                  </span>
+                )}
               </div>
+
+              {/* Suggestion grid — shows OCR'd values or em-dashes */}
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div><span className="text-text-muted">Vendor:</span> <span className="text-text-secondary">—</span></div>
-                <div><span className="text-text-muted">Amount:</span> <span className="text-text-secondary">—</span></div>
-                <div><span className="text-text-muted">Date:</span> <span className="text-text-secondary">—</span></div>
+                <div><span className="text-text-muted">Vendor:</span>{' '}
+                  <span className={ocrSuggestions?.vendor_name ? 'text-text-primary font-medium' : 'text-text-secondary'}>
+                    {ocrSuggestions?.vendor_name || '—'}
+                  </span>
+                </div>
+                <div><span className="text-text-muted">Amount:</span>{' '}
+                  <span className={ocrSuggestions?.total != null ? 'text-accent-expense font-mono font-medium' : 'text-text-secondary'}>
+                    {ocrSuggestions?.total != null ? `${ocrSuggestions.currency || 'USD'} ${Number(ocrSuggestions.total).toFixed(2)}` : '—'}
+                  </span>
+                </div>
+                <div><span className="text-text-muted">Date:</span>{' '}
+                  <span className={ocrSuggestions?.receipt_date ? 'text-text-primary font-medium font-mono' : 'text-text-secondary'}>
+                    {ocrSuggestions?.receipt_date || '—'}
+                  </span>
+                </div>
+                {ocrSuggestions?.tax != null && (
+                  <div className="col-span-3"><span className="text-text-muted">Tax:</span>{' '}
+                    <span className="text-accent-warning font-mono">{ocrSuggestions.currency || 'USD'} {Number(ocrSuggestions.tax).toFixed(2)}</span>
+                  </div>
+                )}
+                {ocrSuggestions?.line_items?.length > 0 && (
+                  <div className="col-span-3"><span className="text-text-muted">Line items:</span>{' '}
+                    <span className="text-text-secondary">{ocrSuggestions.line_items.length} detected</span>
+                  </div>
+                )}
+                {ocrSuggestions?.warnings?.length > 0 && (
+                  <div className="col-span-3 text-accent-warning">⚠ {ocrSuggestions.warnings.join(' · ')}</div>
+                )}
+                {ocrSuggestError && (
+                  <div className="col-span-3 text-accent-expense">⚠ {ocrSuggestError}</div>
+                )}
               </div>
-              <button type="button"
-                className="block-btn flex items-center gap-1 text-xs px-3 py-1.5 mt-2"
-                onClick={() => alert('Auto-fill OCR is coming soon. Values will be parsed from the attached receipt and applied to the form fields.')}>
-                <Sparkles size={11} /> Auto-fill (coming soon)
-              </button>
+
+              {/* Two-button action row */}
+              <div className="flex items-center gap-2 mt-2">
+                <button type="button"
+                  disabled={ocrSuggestBusy}
+                  className="block-btn flex items-center gap-1 text-xs px-3 py-1.5"
+                  onClick={async () => {
+                    setOcrSuggestBusy(true);
+                    setOcrSuggestError(null);
+                    try {
+                      const r = await api.ocrScanReceiptFile(receiptPath);
+                      if (r.ok && r.parsed) setOcrSuggestions(r.parsed);
+                      else { setOcrSuggestError(r.error || 'OCR returned no data'); setOcrSuggestions(null); }
+                    } catch (e: any) {
+                      setOcrSuggestError(e?.message || 'Scan failed');
+                    } finally {
+                      setOcrSuggestBusy(false);
+                    }
+                  }}>
+                  <Sparkles size={11} /> {ocrSuggestBusy ? 'Scanning…' : (ocrSuggestions ? 'Re-scan' : 'Scan Attached Receipt')}
+                </button>
+                {ocrSuggestions && (
+                  <button type="button"
+                    className="block-btn-primary flex items-center gap-1 text-xs px-3 py-1.5"
+                    title="Fill blank form fields — never overwrites values you've already entered"
+                    onClick={() => {
+                      const p = ocrSuggestions;
+                      setForm((f) => ({
+                        ...f,
+                        date: f.date || p.receipt_date || f.date,
+                        amount: f.amount || (p.total != null ? p.total : f.amount),
+                        tax_amount: (f as any).tax_amount || (p.tax != null ? p.tax : (f as any).tax_amount),
+                        description: f.description || p.line_items?.slice(0, 3).map((li: any) => li.description).filter(Boolean).join(', ') || p.vendor_name || f.description,
+                      }));
+                      // Clear the suggestion panel after apply — signals success
+                      // and gives a satisfying "consumed" feel.
+                      setOcrSuggestions(null);
+                    }}>
+                    Apply to Empty Fields
+                  </button>
+                )}
+                {ocrSuggestions && (
+                  <button type="button"
+                    className="block-btn-ghost text-xs px-2 py-1.5"
+                    onClick={() => setOcrSuggestions(null)}
+                    title="Dismiss without applying">
+                    Dismiss
+                  </button>
+                )}
+              </div>
+              <div className="text-[10px] text-text-muted mt-1.5">
+                Apply only fills blank fields — values you've already entered are never overwritten.
+              </div>
             </div>
           )}
 
