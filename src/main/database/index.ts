@@ -4031,6 +4031,1050 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
+
+  // ═══════════════════════════════════════════════════════════════════
+  //   ACCOUNTING DEEP-DIVE: 90 features (F171-F260)
+  //   Batches A-I covering GL, COA, period close, fixed assets advanced,
+  //   revenue recognition, cost accounting, audit, budgeting, financial
+  //   statements + analysis.
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ─── Batch A: GL & JE Operations (F171-F185) ───────────
+  // F171 — recurring journal entries
+  `CREATE TABLE IF NOT EXISTS recurring_je_definitions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    frequency TEXT DEFAULT 'monthly',
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    next_run_date TEXT NOT NULL,
+    last_run_date TEXT,
+    template_lines_json TEXT DEFAULT '[]',
+    auto_post INTEGER DEFAULT 0,
+    is_paused INTEGER DEFAULT 0,
+    run_count INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT,
+    created_by TEXT
+  )`,
+  // F172 — reversing JE link (already-posted JE has a flag + linked reversal JE)
+  "ALTER TABLE journal_entries ADD COLUMN is_reversing INTEGER DEFAULT 0",
+  "ALTER TABLE journal_entries ADD COLUMN reversing_je_id TEXT",
+  "ALTER TABLE journal_entries ADD COLUMN reverse_on_date TEXT",
+  "ALTER TABLE journal_entries ADD COLUMN reversed_at TEXT",
+  // F173 — JE templates
+  `CREATE TABLE IF NOT EXISTS je_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    category TEXT DEFAULT 'general',
+    lines_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    use_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F174 — JE currency support
+  "ALTER TABLE journal_entries ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE journal_entries ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+  "ALTER TABLE journal_entries ADD COLUMN fx_gain_loss_account_id TEXT",
+  // F175 — inter-company JE pairing
+  `CREATE TABLE IF NOT EXISTS inter_company_je_pairs (
+    id TEXT PRIMARY KEY,
+    parent_je_id TEXT NOT NULL,
+    counterparty_je_id TEXT NOT NULL,
+    parent_company_id TEXT NOT NULL,
+    counterparty_company_id TEXT NOT NULL,
+    paired_date TEXT DEFAULT (datetime('now')),
+    notes TEXT
+  )`,
+  // F176 — JE bulk import session
+  `CREATE TABLE IF NOT EXISTS je_import_sessions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    file_name TEXT,
+    row_count INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    error_count INTEGER DEFAULT 0,
+    errors_json TEXT DEFAULT '[]',
+    imported_at TEXT DEFAULT (datetime('now')),
+    imported_by TEXT
+  )`,
+  // F180 — JE allocation rules
+  `CREATE TABLE IF NOT EXISTS je_allocation_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    source_account_id TEXT,
+    allocation_method TEXT DEFAULT 'percent',
+    targets_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F182 — JE narrative templates
+  `CREATE TABLE IF NOT EXISTS je_narratives (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    template_text TEXT NOT NULL,
+    use_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, slug)
+  )`,
+  // F178 — JE attachments
+  `CREATE TABLE IF NOT EXISTS je_attachments (
+    id TEXT PRIMARY KEY,
+    je_id TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_path TEXT,
+    mime_type TEXT,
+    file_size INTEGER DEFAULT 0,
+    uploaded_at TEXT DEFAULT (datetime('now')),
+    uploaded_by TEXT
+  )`,
+
+  // ─── Batch B: Chart of Accounts (F186-F195) ───────────
+  // F186 — account hierarchy (already has parent_id on accounts presumably; ensure)
+  "ALTER TABLE accounts ADD COLUMN parent_account_id TEXT",
+  "ALTER TABLE accounts ADD COLUMN level_depth INTEGER DEFAULT 0",
+  "ALTER TABLE accounts ADD COLUMN roll_up_to_id TEXT",
+  // F188 — account renumber log
+  `CREATE TABLE IF NOT EXISTS account_renumber_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    old_code TEXT,
+    new_code TEXT,
+    renamed_by TEXT,
+    renamed_at TEXT DEFAULT (datetime('now')),
+    notes TEXT
+  )`,
+  // F190 — suspense account designation
+  "ALTER TABLE accounts ADD COLUMN is_suspense INTEGER DEFAULT 0",
+  // F191 — account close (use is_active flag if exists; add closed_at)
+  "ALTER TABLE accounts ADD COLUMN closed_at TEXT",
+  "ALTER TABLE accounts ADD COLUMN closed_reason TEXT",
+  // F192 — account-to-tax-line mapping
+  "ALTER TABLE accounts ADD COLUMN tax_line_code TEXT",
+  "ALTER TABLE accounts ADD COLUMN tax_form TEXT",
+  // F193 — account-to-cash-flow mapping
+  "ALTER TABLE accounts ADD COLUMN cash_flow_section TEXT",
+  "ALTER TABLE accounts ADD COLUMN cash_flow_subsection TEXT",
+  // F195 — opening balances import
+  `CREATE TABLE IF NOT EXISTS opening_balances (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    as_of_date TEXT NOT NULL,
+    debit_balance REAL DEFAULT 0,
+    credit_balance REAL DEFAULT 0,
+    fiscal_year INTEGER,
+    notes TEXT,
+    imported_at TEXT DEFAULT (datetime('now')),
+    posted_je_id TEXT,
+    UNIQUE(company_id, account_id, as_of_date)
+  )`,
+
+  // ─── Batch C: Period Close + Adjustments (F196-F205) ───
+  // F196 — period_close_checklist already exists; extend with template
+  `CREATE TABLE IF NOT EXISTS period_close_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    period_type TEXT DEFAULT 'monthly',
+    tasks_json TEXT DEFAULT '[]',
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F197 — accrual entries (separate workflow)
+  `CREATE TABLE IF NOT EXISTS accrual_entries (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    accrual_type TEXT DEFAULT 'expense',
+    description TEXT NOT NULL,
+    accrual_date TEXT NOT NULL,
+    reverse_date TEXT,
+    amount REAL DEFAULT 0,
+    debit_account_id TEXT,
+    credit_account_id TEXT,
+    posted_je_id TEXT,
+    reversal_je_id TEXT,
+    is_reversed INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'draft',
+    supporting_doc TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  // F199 — prepaid amortization
+  `CREATE TABLE IF NOT EXISTS prepaid_schedules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    vendor_id TEXT,
+    total_amount REAL DEFAULT 0,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    amortization_periods INTEGER DEFAULT 12,
+    period_amount REAL DEFAULT 0,
+    prepaid_account_id TEXT,
+    expense_account_id TEXT,
+    status TEXT DEFAULT 'active',
+    periods_recognized INTEGER DEFAULT 0,
+    next_recognition_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS prepaid_recognitions (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES prepaid_schedules(id) ON DELETE CASCADE,
+    recognition_date TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    posted_je_id TEXT,
+    posted_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F200 — deferred revenue amortization
+  `CREATE TABLE IF NOT EXISTS deferred_revenue_schedules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    client_id TEXT,
+    invoice_id TEXT,
+    total_amount REAL DEFAULT 0,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    recognition_periods INTEGER DEFAULT 12,
+    period_amount REAL DEFAULT 0,
+    deferred_account_id TEXT,
+    revenue_account_id TEXT,
+    status TEXT DEFAULT 'active',
+    periods_recognized INTEGER DEFAULT 0,
+    next_recognition_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS deferred_revenue_recognitions (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES deferred_revenue_schedules(id) ON DELETE CASCADE,
+    recognition_date TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    posted_je_id TEXT,
+    posted_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F205 — year-end closing entries
+  `CREATE TABLE IF NOT EXISTS year_end_close_runs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    fiscal_year INTEGER NOT NULL,
+    closed_at TEXT DEFAULT (datetime('now')),
+    closed_by TEXT,
+    retained_earnings_account_id TEXT,
+    income_summary_account_id TEXT,
+    net_income REAL DEFAULT 0,
+    closing_je_id TEXT,
+    notes TEXT,
+    UNIQUE(company_id, fiscal_year)
+  )`,
+
+  // ─── Batch D: Fixed Assets Advanced (F206-F215) ───────
+  // F206 — disposal log
+  `CREATE TABLE IF NOT EXISTS asset_disposals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    disposal_date TEXT NOT NULL,
+    disposal_method TEXT DEFAULT 'sale',
+    proceeds REAL DEFAULT 0,
+    book_value_at_disposal REAL DEFAULT 0,
+    gain_loss REAL DEFAULT 0,
+    accumulated_depreciation REAL DEFAULT 0,
+    posted_je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  // F207 — transfers
+  `CREATE TABLE IF NOT EXISTS asset_transfers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    transfer_date TEXT NOT NULL,
+    from_location TEXT,
+    to_location TEXT,
+    from_cost_center TEXT,
+    to_cost_center TEXT,
+    transferred_by TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F209 — impairment
+  `CREATE TABLE IF NOT EXISTS asset_impairments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    impairment_date TEXT NOT NULL,
+    pre_impairment_value REAL DEFAULT 0,
+    recoverable_amount REAL DEFAULT 0,
+    impairment_loss REAL DEFAULT 0,
+    reason TEXT,
+    posted_je_id TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  // F210 — revaluation
+  `CREATE TABLE IF NOT EXISTS asset_revaluations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    revaluation_date TEXT NOT NULL,
+    old_value REAL DEFAULT 0,
+    new_value REAL DEFAULT 0,
+    revaluation_surplus REAL DEFAULT 0,
+    method TEXT,
+    appraised_by TEXT,
+    posted_je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F212 — asset retirement obligations
+  `CREATE TABLE IF NOT EXISTS asset_retirement_obligations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    obligation_date TEXT NOT NULL,
+    estimated_cost REAL DEFAULT 0,
+    discount_rate REAL DEFAULT 0,
+    settlement_date TEXT,
+    present_value REAL DEFAULT 0,
+    accretion_expense_to_date REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F213 — asset insurance
+  `CREATE TABLE IF NOT EXISTS asset_insurance (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    policy_number TEXT,
+    carrier TEXT,
+    coverage_amount REAL DEFAULT 0,
+    annual_premium REAL DEFAULT 0,
+    deductible REAL DEFAULT 0,
+    effective_date TEXT,
+    expiry_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F214 — asset warranties
+  `CREATE TABLE IF NOT EXISTS asset_warranties (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    warranty_provider TEXT,
+    warranty_type TEXT DEFAULT 'standard',
+    start_date TEXT,
+    end_date TEXT,
+    coverage_description TEXT,
+    contact_info TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F215 — depreciation convention column
+  "ALTER TABLE fixed_assets ADD COLUMN depreciation_convention TEXT DEFAULT 'full_month'",
+  "ALTER TABLE fixed_assets ADD COLUMN component_parent_id TEXT",
+
+  // ─── Batch E: Revenue Recognition (F216-F225) ─────────
+  // F216 — ASC 606 contracts + performance obligations
+  `CREATE TABLE IF NOT EXISTS revenue_contracts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    client_id TEXT,
+    contract_number TEXT,
+    contract_name TEXT NOT NULL,
+    contract_date TEXT,
+    effective_date TEXT,
+    end_date TEXT,
+    total_contract_value REAL DEFAULT 0,
+    payment_terms TEXT,
+    status TEXT DEFAULT 'active',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS performance_obligations (
+    id TEXT PRIMARY KEY,
+    contract_id TEXT NOT NULL REFERENCES revenue_contracts(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    standalone_selling_price REAL DEFAULT 0,
+    allocated_amount REAL DEFAULT 0,
+    recognition_pattern TEXT DEFAULT 'point_in_time',
+    start_date TEXT,
+    end_date TEXT,
+    status TEXT DEFAULT 'pending',
+    revenue_recognized REAL DEFAULT 0,
+    revenue_account_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F217 — contract modifications log
+  `CREATE TABLE IF NOT EXISTS contract_modifications (
+    id TEXT PRIMARY KEY,
+    contract_id TEXT NOT NULL REFERENCES revenue_contracts(id) ON DELETE CASCADE,
+    modification_date TEXT NOT NULL,
+    modification_type TEXT,
+    value_change REAL DEFAULT 0,
+    scope_change TEXT,
+    accounting_treatment TEXT,
+    notes TEXT,
+    approved_by TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F218 — SSP tracking
+  `CREATE TABLE IF NOT EXISTS standalone_selling_prices (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    product_or_service TEXT NOT NULL,
+    ssp_value REAL DEFAULT 0,
+    ssp_method TEXT DEFAULT 'observable',
+    effective_from TEXT,
+    effective_to TEXT,
+    range_low REAL,
+    range_high REAL,
+    last_validated TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F219 — variable consideration
+  `CREATE TABLE IF NOT EXISTS variable_consideration_adjustments (
+    id TEXT PRIMARY KEY,
+    contract_id TEXT NOT NULL REFERENCES revenue_contracts(id) ON DELETE CASCADE,
+    obligation_id TEXT,
+    adjustment_type TEXT,
+    estimated_amount REAL DEFAULT 0,
+    estimation_method TEXT,
+    constraint_applied INTEGER DEFAULT 0,
+    constraint_amount REAL DEFAULT 0,
+    as_of_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F220 — milestone-based revenue release
+  `CREATE TABLE IF NOT EXISTS revenue_milestones (
+    id TEXT PRIMARY KEY,
+    obligation_id TEXT NOT NULL,
+    milestone_name TEXT NOT NULL,
+    target_date TEXT,
+    completion_date TEXT,
+    amount_to_release REAL DEFAULT 0,
+    status TEXT DEFAULT 'pending',
+    posted_je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F223 — returns reserve
+  `CREATE TABLE IF NOT EXISTS returns_reserves (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    historical_return_rate REAL DEFAULT 0,
+    revenue_in_period REAL DEFAULT 0,
+    reserve_amount REAL DEFAULT 0,
+    posted_je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F224 — rebate accruals
+  `CREATE TABLE IF NOT EXISTS rebate_accruals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    program_name TEXT NOT NULL,
+    customer_id TEXT,
+    accrual_period_start TEXT,
+    accrual_period_end TEXT,
+    sales_basis REAL DEFAULT 0,
+    rebate_rate REAL DEFAULT 0,
+    accrued_amount REAL DEFAULT 0,
+    paid_amount REAL DEFAULT 0,
+    status TEXT DEFAULT 'accruing',
+    posted_je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F225 — sales commissions deferral (ASC 340-40)
+  `CREATE TABLE IF NOT EXISTS commission_deferrals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rep_id TEXT,
+    contract_id TEXT,
+    commission_amount REAL DEFAULT 0,
+    capitalized_amount REAL DEFAULT 0,
+    amortization_period_months INTEGER DEFAULT 36,
+    start_date TEXT,
+    period_amount REAL DEFAULT 0,
+    amortized_to_date REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    deferred_asset_account_id TEXT,
+    expense_account_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch F: Cost Accounting (F226-F235) ─────────────
+  // F226 — cost centers
+  `CREATE TABLE IF NOT EXISTS cost_centers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    parent_id TEXT,
+    manager TEXT,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT,
+    UNIQUE(company_id, code)
+  )`,
+  // F227 — cost center allocation rules
+  `CREATE TABLE IF NOT EXISTS cost_allocation_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rule_name TEXT NOT NULL,
+    source_cost_center_id TEXT,
+    source_account_id TEXT,
+    allocation_method TEXT DEFAULT 'percent',
+    targets_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    run_frequency TEXT DEFAULT 'monthly',
+    last_run_date TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F228 — departments
+  `CREATE TABLE IF NOT EXISTS departments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    manager_id TEXT,
+    parent_id TEXT,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT,
+    UNIQUE(company_id, code)
+  )`,
+  // F229 — ABC pools
+  `CREATE TABLE IF NOT EXISTS activity_cost_pools (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    pool_name TEXT NOT NULL,
+    cost_driver TEXT,
+    total_cost REAL DEFAULT 0,
+    total_driver_units REAL DEFAULT 0,
+    rate REAL DEFAULT 0,
+    period_start TEXT,
+    period_end TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F230 — standard costs
+  `CREATE TABLE IF NOT EXISTS standard_costs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    item_id TEXT,
+    cost_category TEXT,
+    standard_unit_cost REAL DEFAULT 0,
+    effective_from TEXT,
+    effective_to TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F231 — variance analysis
+  `CREATE TABLE IF NOT EXISTS cost_variance_analyses (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    item_id TEXT,
+    standard_quantity REAL DEFAULT 0,
+    actual_quantity REAL DEFAULT 0,
+    standard_price REAL DEFAULT 0,
+    actual_price REAL DEFAULT 0,
+    price_variance REAL DEFAULT 0,
+    quantity_variance REAL DEFAULT 0,
+    total_variance REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F232 — overhead absorption
+  `CREATE TABLE IF NOT EXISTS overhead_rates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rate_name TEXT NOT NULL,
+    cost_pool_id TEXT,
+    basis TEXT DEFAULT 'labor_hours',
+    rate_per_unit REAL DEFAULT 0,
+    effective_from TEXT,
+    effective_to TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F233 — WIP tracking
+  `CREATE TABLE IF NOT EXISTS work_in_process (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    job_number TEXT,
+    project_id TEXT,
+    started_at TEXT,
+    completed_at TEXT,
+    materials_cost REAL DEFAULT 0,
+    labor_cost REAL DEFAULT 0,
+    overhead_cost REAL DEFAULT 0,
+    total_wip REAL DEFAULT 0,
+    status TEXT DEFAULT 'in_process',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F235 — burden rates
+  `CREATE TABLE IF NOT EXISTS burden_rates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_class TEXT,
+    base_hourly_rate REAL DEFAULT 0,
+    burden_rate_percent REAL DEFAULT 0,
+    fully_loaded_rate REAL DEFAULT 0,
+    effective_from TEXT,
+    effective_to TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch G: Audit & Controls (F236-F245) ─────────────
+  // F236 — TB comparison snapshots
+  `CREATE TABLE IF NOT EXISTS tb_comparison_snapshots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    fiscal_year INTEGER,
+    snapshot_data TEXT DEFAULT '[]',
+    total_debit REAL DEFAULT 0,
+    total_credit REAL DEFAULT 0,
+    is_balanced INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, period_end)
+  )`,
+  // F237 — materiality calculations
+  `CREATE TABLE IF NOT EXISTS materiality_calcs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    fiscal_year INTEGER NOT NULL,
+    benchmark_type TEXT DEFAULT 'pretax_income',
+    benchmark_amount REAL DEFAULT 0,
+    materiality_percent REAL DEFAULT 5,
+    overall_materiality REAL DEFAULT 0,
+    performance_materiality REAL DEFAULT 0,
+    trivial_threshold REAL DEFAULT 0,
+    rationale TEXT,
+    determined_by TEXT,
+    determined_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F238 — audit samples
+  `CREATE TABLE IF NOT EXISTS audit_samples (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    population_description TEXT NOT NULL,
+    population_size INTEGER DEFAULT 0,
+    sample_size INTEGER DEFAULT 0,
+    sampling_method TEXT DEFAULT 'random',
+    stratification TEXT,
+    selected_items_json TEXT DEFAULT '[]',
+    auditor TEXT,
+    test_date TEXT,
+    results_summary TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F239 — audit confirmations
+  `CREATE TABLE IF NOT EXISTS audit_confirmations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    confirmation_type TEXT DEFAULT 'ar',
+    third_party_name TEXT NOT NULL,
+    third_party_contact TEXT,
+    balance_per_books REAL DEFAULT 0,
+    balance_confirmed REAL DEFAULT 0,
+    confirmation_date TEXT,
+    sent_date TEXT,
+    response_received_date TEXT,
+    response_method TEXT,
+    discrepancy REAL DEFAULT 0,
+    resolution TEXT,
+    status TEXT DEFAULT 'pending',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F240 — walkthroughs
+  `CREATE TABLE IF NOT EXISTS audit_walkthroughs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    process_name TEXT NOT NULL,
+    walked_by TEXT,
+    walkthrough_date TEXT,
+    process_owner TEXT,
+    inputs TEXT,
+    activities TEXT,
+    outputs TEXT,
+    risks_identified TEXT,
+    controls_identified TEXT,
+    deficiencies_noted TEXT,
+    document_path TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F241 — SoD matrix
+  `CREATE TABLE IF NOT EXISTS sod_conflicts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    conflicting_function_a TEXT NOT NULL,
+    conflicting_function_b TEXT NOT NULL,
+    risk_level TEXT DEFAULT 'medium',
+    mitigation_required TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS sod_user_assignments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    function_code TEXT NOT NULL,
+    granted_at TEXT DEFAULT (datetime('now')),
+    granted_by TEXT
+  )`,
+  // F242 — RCSA
+  `CREATE TABLE IF NOT EXISTS rcsa_assessments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    assessment_name TEXT NOT NULL,
+    process_area TEXT,
+    risk_description TEXT,
+    inherent_likelihood TEXT DEFAULT 'medium',
+    inherent_impact TEXT DEFAULT 'medium',
+    control_description TEXT,
+    residual_likelihood TEXT DEFAULT 'low',
+    residual_impact TEXT DEFAULT 'low',
+    action_plan TEXT,
+    owner TEXT,
+    assessment_date TEXT,
+    next_review_date TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F243 — audit issues
+  `CREATE TABLE IF NOT EXISTS audit_issues (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    issue_number TEXT,
+    title TEXT NOT NULL,
+    severity TEXT DEFAULT 'medium',
+    category TEXT,
+    description TEXT,
+    root_cause TEXT,
+    recommendation TEXT,
+    management_response TEXT,
+    assigned_to TEXT,
+    target_resolution_date TEXT,
+    status TEXT DEFAULT 'open',
+    resolved_at TEXT,
+    resolution_notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F244 — control deficiencies
+  `CREATE TABLE IF NOT EXISTS control_deficiencies (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    control_reference TEXT,
+    deficiency_type TEXT DEFAULT 'design',
+    severity TEXT DEFAULT 'significant',
+    description TEXT NOT NULL,
+    impact TEXT,
+    identified_date TEXT,
+    identified_by TEXT,
+    status TEXT DEFAULT 'open',
+    remediation_plan TEXT,
+    remediated_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F245 — auditor inquiry log
+  `CREATE TABLE IF NOT EXISTS auditor_inquiries (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    auditor_firm TEXT,
+    auditor_contact TEXT,
+    inquiry_date TEXT,
+    inquiry_subject TEXT NOT NULL,
+    inquiry_text TEXT,
+    response_text TEXT,
+    response_date TEXT,
+    response_by TEXT,
+    supporting_docs TEXT,
+    status TEXT DEFAULT 'open',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch H: Budgeting & Forecasting Advanced (F246-F255) ───
+  // F246 — rolling forecasts
+  `CREATE TABLE IF NOT EXISTS rolling_forecasts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    forecast_name TEXT NOT NULL,
+    horizon_months INTEGER DEFAULT 12,
+    base_period TEXT NOT NULL,
+    last_refreshed_at TEXT,
+    refresh_frequency TEXT DEFAULT 'monthly',
+    methodology TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS rolling_forecast_lines (
+    id TEXT PRIMARY KEY,
+    forecast_id TEXT NOT NULL REFERENCES rolling_forecasts(id) ON DELETE CASCADE,
+    account_id TEXT,
+    period_month TEXT NOT NULL,
+    forecasted_amount REAL DEFAULT 0,
+    actual_amount REAL,
+    variance REAL DEFAULT 0,
+    notes TEXT
+  )`,
+  // F247 — what-if scenarios
+  `CREATE TABLE IF NOT EXISTS scenario_models (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    scenario_name TEXT NOT NULL,
+    base_forecast_id TEXT,
+    assumptions_json TEXT DEFAULT '{}',
+    projected_revenue REAL DEFAULT 0,
+    projected_expenses REAL DEFAULT 0,
+    projected_net_income REAL DEFAULT 0,
+    is_baseline INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  // F248 — variance explanations
+  `CREATE TABLE IF NOT EXISTS variance_explanations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_month TEXT NOT NULL,
+    account_id TEXT,
+    budgeted_amount REAL DEFAULT 0,
+    actual_amount REAL DEFAULT 0,
+    variance REAL DEFAULT 0,
+    variance_percent REAL DEFAULT 0,
+    explanation TEXT,
+    explained_by TEXT,
+    explained_at TEXT,
+    is_material INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F249 — driver-based budgets
+  `CREATE TABLE IF NOT EXISTS budget_drivers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    driver_name TEXT NOT NULL,
+    driver_type TEXT DEFAULT 'units',
+    base_value REAL DEFAULT 0,
+    rate_per_unit REAL DEFAULT 0,
+    affected_account_ids TEXT,
+    period_start TEXT,
+    period_end TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F250 — budget consolidation
+  `CREATE TABLE IF NOT EXISTS budget_consolidations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    consolidation_name TEXT NOT NULL,
+    consolidation_type TEXT DEFAULT 'bottom_up',
+    fiscal_year INTEGER,
+    source_budget_ids TEXT,
+    consolidated_total REAL DEFAULT 0,
+    status TEXT DEFAULT 'draft',
+    approved_at TEXT,
+    approved_by TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F251 — budget approval workflow
+  `CREATE TABLE IF NOT EXISTS budget_approvals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    budget_id TEXT NOT NULL,
+    step_number INTEGER DEFAULT 1,
+    approver TEXT,
+    action TEXT,
+    acted_at TEXT,
+    comment TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F252 — forecast accuracy
+  `CREATE TABLE IF NOT EXISTS forecast_accuracy (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    forecast_id TEXT,
+    period_month TEXT NOT NULL,
+    forecasted_amount REAL DEFAULT 0,
+    actual_amount REAL DEFAULT 0,
+    absolute_error REAL DEFAULT 0,
+    percent_error REAL DEFAULT 0,
+    mape REAL DEFAULT 0,
+    bias REAL DEFAULT 0,
+    measured_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F253 — direct method cash forecast
+  `CREATE TABLE IF NOT EXISTS direct_cash_forecasts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    forecast_date TEXT NOT NULL,
+    week_ending TEXT NOT NULL,
+    opening_balance REAL DEFAULT 0,
+    cash_in_collections REAL DEFAULT 0,
+    cash_in_other REAL DEFAULT 0,
+    cash_out_payroll REAL DEFAULT 0,
+    cash_out_payables REAL DEFAULT 0,
+    cash_out_tax REAL DEFAULT 0,
+    cash_out_other REAL DEFAULT 0,
+    closing_balance REAL DEFAULT 0,
+    minimum_balance_buffer REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F254 — headcount budget
+  `CREATE TABLE IF NOT EXISTS headcount_budgets (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    department_id TEXT,
+    fiscal_year INTEGER NOT NULL,
+    period_month TEXT,
+    role TEXT,
+    budgeted_count INTEGER DEFAULT 0,
+    actual_count INTEGER DEFAULT 0,
+    avg_salary REAL DEFAULT 0,
+    benefits_rate REAL DEFAULT 0,
+    total_budget_cost REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F255 — CapEx planning
+  `CREATE TABLE IF NOT EXISTS capex_plans (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_name TEXT NOT NULL,
+    category TEXT DEFAULT 'equipment',
+    department_id TEXT,
+    estimated_cost REAL DEFAULT 0,
+    approved_cost REAL DEFAULT 0,
+    actual_cost REAL DEFAULT 0,
+    requested_date TEXT,
+    target_start_date TEXT,
+    target_completion_date TEXT,
+    actual_completion_date TEXT,
+    approval_status TEXT DEFAULT 'requested',
+    approved_by TEXT,
+    business_justification TEXT,
+    expected_roi REAL,
+    payback_period_months INTEGER,
+    asset_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+
+  // ─── Batch I: Financial Statements + Analysis (F256-F260) ───
+  // F256 — comparative statements config
+  `CREATE TABLE IF NOT EXISTS financial_statement_configs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    config_name TEXT NOT NULL,
+    statement_type TEXT DEFAULT 'balance_sheet',
+    periods_json TEXT DEFAULT '[]',
+    display_options_json TEXT DEFAULT '{}',
+    show_percent_change INTEGER DEFAULT 1,
+    show_common_size INTEGER DEFAULT 0,
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F258 — financial ratios
+  `CREATE TABLE IF NOT EXISTS financial_ratios (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    as_of_date TEXT NOT NULL,
+    current_ratio REAL,
+    quick_ratio REAL,
+    cash_ratio REAL,
+    debt_to_equity REAL,
+    debt_to_assets REAL,
+    times_interest_earned REAL,
+    asset_turnover REAL,
+    inventory_turnover REAL,
+    receivables_turnover REAL,
+    gross_margin REAL,
+    operating_margin REAL,
+    net_margin REAL,
+    return_on_assets REAL,
+    return_on_equity REAL,
+    working_capital REAL,
+    fiscal_year INTEGER,
+    period_label TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, as_of_date)
+  )`,
+  // F259 — KPI scorecard
+  `CREATE TABLE IF NOT EXISTS kpi_scorecard (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    kpi_name TEXT NOT NULL,
+    metric_type TEXT,
+    current_value REAL DEFAULT 0,
+    target_value REAL DEFAULT 0,
+    threshold_red REAL,
+    threshold_green REAL,
+    direction TEXT DEFAULT 'higher_better',
+    last_calculated_at TEXT,
+    calculation_method TEXT,
+    sort_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F260 — statement footnotes
+  `CREATE TABLE IF NOT EXISTS statement_footnotes (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    fiscal_year INTEGER,
+    statement_type TEXT,
+    footnote_number INTEGER DEFAULT 1,
+    title TEXT,
+    content TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    is_published INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
