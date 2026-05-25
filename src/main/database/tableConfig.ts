@@ -20,11 +20,13 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'exchange_rates',
   'federal_payroll_constants',
   'federal_tax_brackets',
+  'federal_tax_tables',
   'mileage_rates',
   'schema_meta',
   'schema_migrations',
   'state_tax_brackets',
   'state_tax_rates',
+  'state_tax_tables',
   'users',
 
   // ── 2. User-scoped tables (no company_id) ───────────────────────
@@ -690,6 +692,14 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'expense_report_templates_v2',
   'expense_year_end_rollups',
   'corporate_cards',
+  // Payroll Wave (F641-F740) — snapshot/audit tables
+  'withholding_records',
+  'workers_comp_premium_calcs',
+  'compensation_history',
+  'gross_to_net_snapshots',
+  'payroll_journal_links',
+  'federal_tax_tables',
+  'state_tax_tables',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.
