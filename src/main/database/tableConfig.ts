@@ -238,6 +238,15 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'calendar_integrations',
   'calendar_event_sync',
 
+  // Expense Advanced Wave (F541-F640) — child tables w/o company_id
+  'trip_itinerary',
+  'trip_per_diem_settings',
+  'mileage_irs_rates',
+  'mileage_state_rates',
+  'mileage_route_stops',
+  'expense_custom_field_values',
+  'expense_voice_memos',
+
   // Finance Wave (F441-F540) — child / log tables (parent has company_id)
   'invoice_approval_steps',
   'invoice_email_log',
@@ -648,6 +657,39 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'payment_terms',
   'dunning_sequences',
   'recurring_invoice_templates',
+
+  // Expense Advanced Wave (F541-F640) log/append-only and child tables
+  'expense_policies',
+  'expense_policy_violations',
+  'travel_policy_caps',
+  'expense_templates_v2',
+  'subscription_detections',
+  'auto_tag_rules',
+  'card_transactions',
+  'card_dispute_records',
+  'card_spend_rules',
+  'trips',
+  'trip_itinerary',
+  'trip_per_diem_settings',
+  'mileage_irs_rates',
+  'mileage_state_rates',
+  'mileage_routes',
+  'mileage_route_stops',
+  'vehicle_depreciation',
+  'vehicle_maintenance',
+  'expense_custom_field_defs',
+  'expense_custom_field_values',
+  'expense_tag_hierarchy',
+  'spend_benchmarks',
+  'cost_save_recommendations',
+  'approval_workflow_defs',
+  'workflow_delegations',
+  'workflow_audit_log',
+  'expense_capture_queue',
+  'expense_voice_memos',
+  'expense_report_templates_v2',
+  'expense_year_end_rollups',
+  'corporate_cards',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

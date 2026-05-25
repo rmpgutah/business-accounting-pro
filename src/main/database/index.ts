@@ -6922,6 +6922,446 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
+
+  // ═══════════════════════════════════════════════════════════════════
+  //   EXPENSE ADVANCED WAVE: 100 features (F541-F640)
+  //   Policy engine, templates, card mgmt, travel, mileage, custom
+  //   fields, spend analytics, workflows, mobile capture, reports.
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ─── Batch AJ: Expense Policy Engine (F541-F550) ───
+  `CREATE TABLE IF NOT EXISTS expense_policies (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    policy_name TEXT NOT NULL,
+    scope TEXT DEFAULT 'global',
+    category_id TEXT,
+    vendor_id TEXT,
+    employee_id TEXT,
+    max_per_expense REAL,
+    max_per_day REAL,
+    max_per_month REAL,
+    requires_receipt INTEGER DEFAULT 1,
+    requires_approval_over REAL DEFAULT 0,
+    enforcement TEXT DEFAULT 'warn',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_policy_violations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT NOT NULL,
+    policy_id TEXT,
+    violation_type TEXT,
+    violation_message TEXT,
+    severity TEXT DEFAULT 'warn',
+    acknowledged INTEGER DEFAULT 0,
+    acknowledged_by TEXT,
+    acknowledged_at TEXT,
+    detected_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS travel_policy_caps (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    destination_pattern TEXT,
+    hotel_max_per_night REAL,
+    meals_max_per_day REAL,
+    incidentals_max_per_day REAL,
+    flight_class_max TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AK: Expense Templates & Auto-Fill (F551-F560) ───
+  `CREATE TABLE IF NOT EXISTS expense_templates_v2 (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    template_name TEXT NOT NULL,
+    vendor_id TEXT,
+    category_id TEXT,
+    project_id TEXT,
+    default_amount REAL,
+    description TEXT,
+    is_tax_deductible INTEGER DEFAULT 1,
+    is_billable INTEGER DEFAULT 0,
+    use_count INTEGER DEFAULT 0,
+    last_used_at TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS subscription_detections (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT,
+    vendor_name_pattern TEXT,
+    avg_amount REAL DEFAULT 0,
+    frequency TEXT DEFAULT 'monthly',
+    last_charge_date TEXT,
+    next_expected_date TEXT,
+    occurrence_count INTEGER DEFAULT 0,
+    annual_cost REAL DEFAULT 0,
+    is_confirmed INTEGER DEFAULT 0,
+    is_cancelled INTEGER DEFAULT 0,
+    notes TEXT,
+    detected_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS auto_tag_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    rule_name TEXT NOT NULL,
+    description_pattern TEXT,
+    vendor_pattern TEXT,
+    amount_min REAL,
+    amount_max REAL,
+    tag_ids TEXT,
+    category_id TEXT,
+    project_id TEXT,
+    priority INTEGER DEFAULT 50,
+    is_active INTEGER DEFAULT 1,
+    match_count INTEGER DEFAULT 0,
+    last_matched_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AL: Corporate Card Management (F561-F570) ───
+  `CREATE TABLE IF NOT EXISTS corporate_cards (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    card_name TEXT NOT NULL,
+    card_holder_user_id TEXT,
+    card_holder_name TEXT,
+    last4 TEXT,
+    brand TEXT,
+    issuing_bank TEXT,
+    credit_limit REAL DEFAULT 0,
+    current_balance REAL DEFAULT 0,
+    available_credit REAL DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    issued_date TEXT,
+    expiration_month INTEGER,
+    expiration_year INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS card_transactions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    card_id TEXT NOT NULL,
+    transaction_date TEXT NOT NULL,
+    posted_date TEXT,
+    amount REAL DEFAULT 0,
+    merchant_name TEXT,
+    merchant_category TEXT,
+    description TEXT,
+    is_credit INTEGER DEFAULT 0,
+    matched_expense_id TEXT,
+    matched_at TEXT,
+    is_disputed INTEGER DEFAULT 0,
+    is_personal INTEGER DEFAULT 0,
+    imported_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_card_tx_match ON card_transactions(company_id, matched_expense_id)",
+  `CREATE TABLE IF NOT EXISTS card_dispute_records (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    card_transaction_id TEXT NOT NULL,
+    dispute_reason TEXT,
+    dispute_amount REAL DEFAULT 0,
+    disputed_at TEXT DEFAULT (datetime('now')),
+    resolution TEXT,
+    resolved_at TEXT,
+    status TEXT DEFAULT 'open'
+  )`,
+  `CREATE TABLE IF NOT EXISTS card_spend_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    card_id TEXT,
+    rule_type TEXT DEFAULT 'block_category',
+    target_value TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AM: Travel Expense Specialized (F571-F580) ───
+  `CREATE TABLE IF NOT EXISTS trips (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    trip_name TEXT NOT NULL,
+    destination TEXT,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    purpose TEXT,
+    total_budget REAL DEFAULT 0,
+    total_actual REAL DEFAULT 0,
+    expense_count INTEGER DEFAULT 0,
+    is_international INTEGER DEFAULT 0,
+    base_currency TEXT DEFAULT 'USD',
+    status TEXT DEFAULT 'planned',
+    pre_approved INTEGER DEFAULT 0,
+    pre_approved_by TEXT,
+    pre_approved_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  "ALTER TABLE expenses ADD COLUMN trip_id TEXT",
+  `CREATE TABLE IF NOT EXISTS trip_itinerary (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    leg_number INTEGER DEFAULT 1,
+    leg_date TEXT,
+    leg_type TEXT,
+    from_location TEXT,
+    to_location TEXT,
+    arrival_time TEXT,
+    departure_time TEXT,
+    confirmation_number TEXT,
+    notes TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS trip_per_diem_settings (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL,
+    location TEXT NOT NULL,
+    days INTEGER DEFAULT 0,
+    lodging_rate REAL DEFAULT 0,
+    meals_rate REAL DEFAULT 0,
+    total_amount REAL DEFAULT 0,
+    applied INTEGER DEFAULT 0
+  )`,
+
+  // ─── Batch AN: Mileage Advanced (F581-F590) ───
+  `CREATE TABLE IF NOT EXISTS mileage_irs_rates (
+    id TEXT PRIMARY KEY,
+    tax_year INTEGER NOT NULL,
+    business_rate REAL DEFAULT 0,
+    medical_rate REAL DEFAULT 0,
+    moving_rate REAL DEFAULT 0,
+    charitable_rate REAL DEFAULT 14,
+    effective_from TEXT NOT NULL,
+    effective_to TEXT,
+    UNIQUE(tax_year)
+  )`,
+  `CREATE TABLE IF NOT EXISTS mileage_state_rates (
+    id TEXT PRIMARY KEY,
+    state_code TEXT NOT NULL,
+    rate_per_mile REAL DEFAULT 0,
+    effective_from TEXT NOT NULL,
+    effective_to TEXT,
+    notes TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS mileage_routes (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT,
+    vehicle_id TEXT,
+    user_id TEXT,
+    route_date TEXT NOT NULL,
+    purpose TEXT,
+    total_miles REAL DEFAULT 0,
+    is_business INTEGER DEFAULT 1,
+    is_commute INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS mileage_route_stops (
+    id TEXT PRIMARY KEY,
+    route_id TEXT NOT NULL REFERENCES mileage_routes(id) ON DELETE CASCADE,
+    stop_order INTEGER DEFAULT 1,
+    location_address TEXT,
+    arrival_time TEXT,
+    miles_from_previous REAL DEFAULT 0,
+    notes TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS vehicle_depreciation (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vehicle_id TEXT NOT NULL,
+    purchase_price REAL DEFAULT 0,
+    purchase_date TEXT,
+    useful_life_years INTEGER DEFAULT 5,
+    method TEXT DEFAULT 'straight_line',
+    business_use_pct REAL DEFAULT 100,
+    annual_depreciation REAL DEFAULT 0,
+    accumulated_depreciation REAL DEFAULT 0,
+    last_calculated_year INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS vehicle_maintenance (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vehicle_id TEXT NOT NULL,
+    service_date TEXT NOT NULL,
+    service_type TEXT,
+    odometer_at_service INTEGER,
+    cost REAL DEFAULT 0,
+    vendor TEXT,
+    expense_id TEXT,
+    next_service_due_date TEXT,
+    next_service_due_miles INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "ALTER TABLE vehicles ADD COLUMN mileage_method TEXT DEFAULT 'standard'",
+
+  // ─── Batch AO: Custom Fields & Tagging (F591-F600) ───
+  `CREATE TABLE IF NOT EXISTS expense_custom_field_defs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    field_name TEXT NOT NULL,
+    field_label TEXT,
+    field_type TEXT DEFAULT 'text',
+    options_json TEXT,
+    formula TEXT,
+    is_required INTEGER DEFAULT 0,
+    required_for_categories TEXT,
+    display_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_custom_field_values (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL,
+    field_def_id TEXT NOT NULL,
+    value_text TEXT,
+    value_number REAL,
+    value_date TEXT,
+    value_json TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_tag_hierarchy (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    parent_tag_id TEXT,
+    color TEXT DEFAULT '#60a5fa',
+    icon TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AP: Spend Analytics Advanced (F601-F610) ───
+  `CREATE TABLE IF NOT EXISTS spend_benchmarks (
+    id TEXT PRIMARY KEY,
+    industry TEXT NOT NULL,
+    category TEXT NOT NULL,
+    avg_pct_of_revenue REAL DEFAULT 0,
+    median_pct_of_revenue REAL DEFAULT 0,
+    benchmark_year INTEGER,
+    sample_size INTEGER,
+    source TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS cost_save_recommendations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    recommendation_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    estimated_annual_savings REAL DEFAULT 0,
+    confidence REAL DEFAULT 0.5,
+    related_vendor_id TEXT,
+    related_category_id TEXT,
+    status TEXT DEFAULT 'open',
+    dismissed_reason TEXT,
+    generated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AQ: Workflow Customization (F611-F620) ───
+  `CREATE TABLE IF NOT EXISTS approval_workflow_defs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    workflow_name TEXT NOT NULL,
+    entity_type TEXT DEFAULT 'expense',
+    trigger_amount_min REAL,
+    trigger_amount_max REAL,
+    trigger_category_ids TEXT,
+    steps_json TEXT NOT NULL,
+    escalation_days INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS workflow_delegations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    delegator_user_id TEXT NOT NULL,
+    delegate_user_id TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    reason TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS workflow_audit_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    workflow_id TEXT,
+    entity_type TEXT,
+    entity_id TEXT,
+    step_number INTEGER,
+    actor_user_id TEXT,
+    action TEXT,
+    notes TEXT,
+    occurred_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AR: Mobile & Capture (F621-F630) ───
+  `CREATE TABLE IF NOT EXISTS expense_capture_queue (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    capture_type TEXT DEFAULT 'photo',
+    payload_path TEXT,
+    metadata_json TEXT DEFAULT '{}',
+    geo_lat REAL,
+    geo_lng REAL,
+    captured_at TEXT DEFAULT (datetime('now')),
+    processed INTEGER DEFAULT 0,
+    processed_at TEXT,
+    created_expense_id TEXT
+  )`,
+  "ALTER TABLE expenses ADD COLUMN geo_lat REAL",
+  "ALTER TABLE expenses ADD COLUMN geo_lng REAL",
+  "ALTER TABLE expenses ADD COLUMN geo_location_name TEXT",
+  `CREATE TABLE IF NOT EXISTS expense_voice_memos (
+    id TEXT PRIMARY KEY,
+    expense_id TEXT NOT NULL,
+    audio_path TEXT,
+    transcript TEXT,
+    duration_seconds REAL,
+    recorded_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AS: Reports & Year-End (F631-F640) ───
+  `CREATE TABLE IF NOT EXISTS expense_report_templates_v2 (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    template_name TEXT NOT NULL,
+    columns_json TEXT DEFAULT '[]',
+    grouping TEXT,
+    sort_by TEXT,
+    filters_json TEXT DEFAULT '{}',
+    layout TEXT DEFAULT 'standard',
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_year_end_rollups (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    total_expenses REAL DEFAULT 0,
+    tax_deductible_total REAL DEFAULT 0,
+    mileage_total REAL DEFAULT 0,
+    by_category_json TEXT DEFAULT '[]',
+    by_schedule_c_json TEXT DEFAULT '[]',
+    generated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, tax_year)
+  )`,
   // ─── Data hygiene: remove orphaned invoice_tokens whose invoice_id
   // no longer exists. Tokens are ephemeral share links — when the
   // underlying invoice is hard-deleted, the token becomes dangling and
