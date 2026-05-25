@@ -157,6 +157,11 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'promo_code_redemptions',
   'quote_template_lines',
   'quote_signatures',
+  // Batch 10 child / global tables
+  'user_session_log',
+  'user_2fa',
+  'webhook_secret_rotations',
+  'api_request_log',
 ]);
 
 // Tables that do NOT have an `updated_at` column.
@@ -509,6 +514,22 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'quote_conversion_log',
   'quote_signatures',
   'win_loss_analysis',
+  // Batch 10 log/audit tables (no updated_at)
+  'data_subject_requests',
+  'anonymization_log',
+  'entity_audit_history',
+  'user_session_log',
+  'ip_access_whitelist',
+  'user_2fa',
+  'api_tokens',
+  'api_request_log',
+  'webhook_secret_rotations',
+  'data_masking_rules',
+  'rtbf_requests',
+  'consent_records',
+  'data_classifications',
+  'encryption_verification_log',
+  'backup_verification_log',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

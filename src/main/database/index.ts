@@ -3711,6 +3711,326 @@ export function initDatabase(): Database.Database {
     analyzed_by TEXT,
     analyzed_at TEXT DEFAULT (datetime('now'))
   )`,
+  // ─── Batch 10: Compliance, Security, API (F151-F170) ───
+  // F151 — data_retention_policies
+  `CREATE TABLE IF NOT EXISTS data_retention_policies (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    policy_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    retention_days INTEGER DEFAULT 2555,
+    action_after_retention TEXT DEFAULT 'archive',
+    legal_basis TEXT,
+    is_active INTEGER DEFAULT 1,
+    last_applied_at TEXT,
+    records_affected_last_run INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F152 — data_subject_requests (DSR / GDPR-style)
+  `CREATE TABLE IF NOT EXISTS data_subject_requests (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    request_type TEXT NOT NULL,
+    subject_type TEXT,
+    subject_id TEXT,
+    subject_email TEXT,
+    requested_at TEXT DEFAULT (datetime('now')),
+    requested_by TEXT,
+    status TEXT DEFAULT 'received',
+    response_due_date TEXT,
+    completed_at TEXT,
+    fulfilled_by TEXT,
+    export_path TEXT,
+    notes TEXT,
+    verification_method TEXT
+  )`,
+  // F153 — anonymization_log (audit of personal-data scrubs)
+  `CREATE TABLE IF NOT EXISTS anonymization_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    subject_type TEXT,
+    subject_id TEXT,
+    fields_anonymized TEXT,
+    performed_by TEXT,
+    performed_at TEXT DEFAULT (datetime('now')),
+    reason TEXT,
+    dsr_id TEXT
+  )`,
+  // F154 — entity_audit_history (per-record change log)
+  `CREATE TABLE IF NOT EXISTS entity_audit_history (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    user_id TEXT,
+    user_email TEXT,
+    changes_json TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    occurred_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_eah_entity ON entity_audit_history(company_id, entity_type, entity_id)",
+  // F155 — user_session_log
+  `CREATE TABLE IF NOT EXISTS user_session_log (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    user_email TEXT,
+    session_token TEXT,
+    login_at TEXT DEFAULT (datetime('now')),
+    logout_at TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    location_country TEXT,
+    location_region TEXT,
+    device_fingerprint TEXT,
+    login_method TEXT,
+    suspicious INTEGER DEFAULT 0,
+    suspicious_reason TEXT,
+    company_id TEXT
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_usl_user ON user_session_log(user_id, login_at)",
+  // F156 — ip_access_whitelist
+  `CREATE TABLE IF NOT EXISTS ip_access_whitelist (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    cidr_or_ip TEXT NOT NULL,
+    label TEXT,
+    added_by TEXT,
+    is_active INTEGER DEFAULT 1,
+    expires_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F157 — user_2fa
+  `CREATE TABLE IF NOT EXISTS user_2fa (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    method TEXT DEFAULT 'totp',
+    secret TEXT,
+    is_enabled INTEGER DEFAULT 0,
+    backup_codes TEXT,
+    enabled_at TEXT,
+    last_verified_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id)
+  )`,
+  // F158 — api_tokens
+  `CREATE TABLE IF NOT EXISTS api_tokens (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    token_prefix TEXT,
+    scopes TEXT DEFAULT '[]',
+    issued_by TEXT,
+    issued_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT,
+    last_used_at TEXT,
+    usage_count INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    revoked_at TEXT
+  )`,
+  // F159 — api_rate_limits
+  `CREATE TABLE IF NOT EXISTS api_rate_limits (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    token_id TEXT,
+    endpoint_pattern TEXT,
+    requests_per_minute INTEGER DEFAULT 60,
+    requests_per_day INTEGER DEFAULT 10000,
+    burst_size INTEGER DEFAULT 10,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS api_request_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT,
+    token_id TEXT,
+    endpoint TEXT,
+    method TEXT,
+    status_code INTEGER,
+    duration_ms INTEGER,
+    ip_address TEXT,
+    requested_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_arl_token_time ON api_request_log(token_id, requested_at)",
+  // F160 — webhook_secret_rotations
+  `CREATE TABLE IF NOT EXISTS webhook_secret_rotations (
+    id TEXT PRIMARY KEY,
+    subscription_id TEXT NOT NULL,
+    rotated_at TEXT DEFAULT (datetime('now')),
+    rotated_by TEXT,
+    old_secret_hash TEXT,
+    new_secret_hash TEXT,
+    reason TEXT
+  )`,
+  // F161 — pci_checklist_items
+  `CREATE TABLE IF NOT EXISTS pci_checklist_items (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    requirement_number TEXT,
+    requirement_text TEXT NOT NULL,
+    sub_requirement TEXT,
+    status TEXT DEFAULT 'not_applicable',
+    evidence_path TEXT,
+    last_assessed_at TEXT,
+    next_assessment_due TEXT,
+    assessor TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F162 — soc2_controls
+  `CREATE TABLE IF NOT EXISTS soc2_controls (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    trust_principle TEXT,
+    control_id TEXT,
+    control_description TEXT NOT NULL,
+    implementation_status TEXT DEFAULT 'planned',
+    owner TEXT,
+    test_frequency TEXT DEFAULT 'annual',
+    last_test_date TEXT,
+    last_test_result TEXT,
+    next_test_due TEXT,
+    evidence_path TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F163 — data_masking_rules
+  `CREATE TABLE IF NOT EXISTS data_masking_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    field_path TEXT NOT NULL,
+    mask_type TEXT DEFAULT 'full',
+    visible_chars INTEGER DEFAULT 4,
+    replacement_char TEXT DEFAULT '*',
+    applies_to_roles TEXT,
+    is_active INTEGER DEFAULT 1,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F164 — rtbf_requests (right-to-be-forgotten)
+  `CREATE TABLE IF NOT EXISTS rtbf_requests (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    subject_email TEXT NOT NULL,
+    subject_id TEXT,
+    requested_at TEXT DEFAULT (datetime('now')),
+    verification_method TEXT,
+    verified_at TEXT,
+    status TEXT DEFAULT 'pending',
+    records_deleted_count INTEGER DEFAULT 0,
+    records_anonymized_count INTEGER DEFAULT 0,
+    records_retained_count INTEGER DEFAULT 0,
+    retention_reason TEXT,
+    completed_at TEXT,
+    fulfilled_by TEXT,
+    notes TEXT
+  )`,
+  // F165 — consent_records
+  `CREATE TABLE IF NOT EXISTS consent_records (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    subject_type TEXT,
+    subject_id TEXT,
+    subject_email TEXT,
+    consent_type TEXT NOT NULL,
+    consent_version TEXT,
+    granted INTEGER DEFAULT 1,
+    granted_at TEXT DEFAULT (datetime('now')),
+    withdrawn_at TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    proof_text TEXT
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_consent_subject ON consent_records(company_id, subject_id, consent_type)",
+  // F166 — sub_processors
+  `CREATE TABLE IF NOT EXISTS sub_processors (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    processor_name TEXT NOT NULL,
+    processor_role TEXT,
+    data_categories TEXT,
+    location TEXT,
+    transfer_mechanism TEXT,
+    contract_url TEXT,
+    dpa_signed_date TEXT,
+    risk_rating TEXT DEFAULT 'low',
+    review_frequency TEXT DEFAULT 'annual',
+    last_review_date TEXT,
+    next_review_due TEXT,
+    is_active INTEGER DEFAULT 1,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F167 — data_classifications
+  `CREATE TABLE IF NOT EXISTS data_classifications (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    column_name TEXT,
+    sensitivity_level TEXT DEFAULT 'internal',
+    is_pii INTEGER DEFAULT 0,
+    is_phi INTEGER DEFAULT 0,
+    is_pci INTEGER DEFAULT 0,
+    encryption_required INTEGER DEFAULT 0,
+    access_restrictions TEXT,
+    retention_class TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F168 — encryption_verification_log
+  `CREATE TABLE IF NOT EXISTS encryption_verification_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    verified_at TEXT DEFAULT (datetime('now')),
+    verified_by TEXT,
+    algorithm TEXT,
+    key_id TEXT,
+    is_compliant INTEGER DEFAULT 1,
+    issues TEXT,
+    notes TEXT
+  )`,
+  // F169 — backup_verification_log
+  `CREATE TABLE IF NOT EXISTS backup_verification_log (
+    id TEXT PRIMARY KEY,
+    company_id TEXT,
+    backup_type TEXT,
+    backup_path TEXT,
+    backup_size_bytes INTEGER DEFAULT 0,
+    backup_date TEXT,
+    verified_at TEXT DEFAULT (datetime('now')),
+    verification_method TEXT,
+    is_valid INTEGER DEFAULT 1,
+    can_restore INTEGER DEFAULT 1,
+    notes TEXT
+  )`,
+  // F170 — vulnerabilities
+  `CREATE TABLE IF NOT EXISTS vulnerabilities (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    cve_id TEXT,
+    title TEXT NOT NULL,
+    severity TEXT DEFAULT 'medium',
+    cvss_score REAL,
+    affected_component TEXT,
+    discovered_date TEXT,
+    discovered_by TEXT,
+    status TEXT DEFAULT 'open',
+    remediation_plan TEXT,
+    assigned_to TEXT,
+    target_remediation_date TEXT,
+    actual_remediation_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

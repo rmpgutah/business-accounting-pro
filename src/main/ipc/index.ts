@@ -2775,6 +2775,85 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:win-loss:summary', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return cs().winLossSummary(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:win-loss:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cs().listWinLossEntries(cid, limit); } catch (e: any) { return { error: e?.message }; } });
 
+  // ─── Batch 10: Compliance, Security, API (20) ───────────
+  const cm = () => require('../services/compliance-security-features');
+  // F151 retention
+  ipcMain.handle('feat:retention:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertRetentionPolicy({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:retention:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listRetentionPolicies(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:retention:apply', (_e, { policy_id }: any) => { try { return cm().applyRetentionPolicy(policy_id); } catch (e: any) { return { error: e?.message }; } });
+  // F152 DSR
+  ipcMain.handle('feat:dsr:create', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return cm().createDataSubjectRequest({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dsr:export', (_e, { subject_email }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return cm().exportSubjectData(cid, subject_email); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dsr:complete', (_e, { id, fulfilled_by, export_path }: any) => { try { return { ok: cm().completeDsr(id, fulfilled_by, export_path) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dsr:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listDsrs(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F153 anonymize
+  ipcMain.handle('feat:anonymize:subject', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return cm().anonymizeSubject(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:anonymize:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listAnonymizations(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F154 audit
+  ipcMain.handle('feat:audit:record', (_e, e: any) => { try { const cid = db.getCurrentCompanyId(); cm().recordAuditEvent({ ...e, company_id: cid }); return { ok: true }; } catch (er: any) { return { error: er?.message }; } });
+  ipcMain.handle('feat:audit:history', (_e, { entity_type, entity_id, limit }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().getEntityAuditHistory(cid, entity_type, entity_id, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F155 sessions
+  ipcMain.handle('feat:session:log', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return cm().logSession({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:session:logout', (_e, { session_id }: any) => { try { return { ok: cm().logLogout(session_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:session:list', (_e, { user_id, limit }: any) => { try { return cm().listSessions(user_id, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F156 whitelist
+  ipcMain.handle('feat:whitelist:add', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return cm().addToWhitelist({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:whitelist:remove', (_e, { id }: any) => { try { return { ok: cm().removeFromWhitelist(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:whitelist:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listWhitelist(cid, active_only !== false); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:whitelist:check', (_e, { ip }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return true; return cm().isIpAllowed(cid, ip); } catch (e: any) { return { error: e?.message }; } });
+  // F157 2FA
+  ipcMain.handle('feat:2fa:setup', (_e, { user_id, method }: any) => { try { return cm().setup2FA(user_id, method); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:2fa:enable', (_e, { user_id }: any) => { try { return { ok: cm().enable2FA(user_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:2fa:disable', (_e, { user_id }: any) => { try { return { ok: cm().disable2FA(user_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:2fa:status', (_e, { user_id }: any) => { try { return cm().get2FAStatus(user_id); } catch (e: any) { return { error: e?.message }; } });
+  // F158 API tokens
+  ipcMain.handle('feat:api-token:create', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return cm().createApiToken(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:api-token:verify', (_e, { plaintext }: any) => { try { return cm().verifyApiToken(plaintext); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:api-token:revoke', (_e, { id }: any) => { try { return { ok: cm().revokeApiToken(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:api-token:list', (_e, { include_revoked }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listApiTokens(cid, !!include_revoked); } catch (e: any) { return { error: e?.message }; } });
+  // F159 rate limits + request log
+  ipcMain.handle('feat:rate-limit:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertRateLimit({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:api-request:log', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); cm().logApiRequest({ ...r, company_id: cid }); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rate-limit:check', (_e, { token_id }: any) => { try { return cm().checkRateLimit(token_id); } catch (e: any) { return { error: e?.message }; } });
+  // F160 webhook rotation
+  ipcMain.handle('feat:webhook:rotate', (_e, { subscription_id, rotated_by, reason }: any) => { try { return cm().rotateWebhookSecret(subscription_id, rotated_by, reason); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:webhook:rotations', (_e, { subscription_id }: any) => { try { return cm().listSecretRotations(subscription_id); } catch (e: any) { return { error: e?.message }; } });
+  // F161 PCI
+  ipcMain.handle('feat:pci:upsert', (_e, i: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertPciItem({ ...i, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pci:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listPciItems(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F162 SOC 2
+  ipcMain.handle('feat:soc2:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertSoc2Control({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:soc2:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listSoc2Controls(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F163 masking
+  ipcMain.handle('feat:mask:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertMaskingRule({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:mask:apply', (_e, { value, mask_type, visible_chars, replacement_char }: any) => { try { return cm().applyMask(value, mask_type, visible_chars, replacement_char); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:mask:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listMaskingRules(cid); } catch (e: any) { return { error: e?.message }; } });
+  // F164 RTBF
+  ipcMain.handle('feat:rtbf:create', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return cm().createRtbfRequest({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rtbf:verify', (_e, { id }: any) => { try { return { ok: cm().verifyRtbfRequest(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rtbf:fulfill', (_e, { id, ...opts }: any) => { try { return { ok: cm().fulfillRtbfRequest(id, opts) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rtbf:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listRtbfRequests(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F165 consent
+  ipcMain.handle('feat:consent:record', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return cm().recordConsent({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:consent:withdraw', (_e, { id }: any) => { try { return { ok: cm().withdrawConsent(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:consent:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().getConsents(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F166 sub-processors
+  ipcMain.handle('feat:sub-processor:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertSubProcessor({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub-processor:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listSubProcessors(cid, active_only !== false); } catch (e: any) { return { error: e?.message }; } });
+  // F167 data classifications
+  ipcMain.handle('feat:classify:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return cm().classifyData({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:classify:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listClassifications(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F168 encryption verification
+  ipcMain.handle('feat:encryption:verify', (_e, v: any) => { try { const cid = db.getCurrentCompanyId(); return cm().recordEncryptionVerification({ ...v, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:encryption:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listEncryptionVerifications(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F169 backup verification
+  ipcMain.handle('feat:backup-verify:record', (_e, v: any) => { try { const cid = db.getCurrentCompanyId(); return cm().recordBackupVerification({ ...v, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:backup-verify:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); return cm().listBackupVerifications(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F170 vulnerabilities
+  ipcMain.handle('feat:vuln:upsert', (_e, v: any) => { try { const cid = db.getCurrentCompanyId(); return cm().upsertVulnerability({ ...v, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vuln:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cm().listVulnerabilities(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vuln:remediated', (_e, { id }: any) => { try { return { ok: cm().markVulnerabilityRemediated(id) }; } catch (e: any) { return { error: e?.message }; } });
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
