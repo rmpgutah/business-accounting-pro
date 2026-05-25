@@ -2395,6 +2395,1120 @@ html.theme-transition, html.theme-transition * {
   gap: 1rem;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   ║  UI UPGRADE WAVE 2 — 95 utilities (V161-V255)                  ║
+   ║  Navigation, layout, forms, tables, cards, money, modals,      ║
+   ║  empty states, charts, print, mobile, accessibility            ║
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── V161-V170: Navigation & sidebar polish ──────────── */
+
+/* V161 — Sidebar nav item */
+.nav-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.5625rem 0.875rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+  position: relative;
+}
+.nav-item:hover { background: var(--hover-tint); color: var(--color-text-primary); }
+.nav-item.is-active {
+  background: rgba(96,165,250,0.12);
+  color: #bfdbfe;
+}
+.nav-item.is-active::before {
+  content: ''; position: absolute; left: -8px; top: 6px; bottom: 6px;
+  width: 3px; background: var(--sev-info); border-radius: 0 2px 2px 0;
+}
+.nav-item > svg { flex: 0 0 auto; }
+
+/* V162 — Collapsed sidebar (icon-only) */
+.sidebar-collapsed .nav-item { justify-content: center; padding: 0.625rem; }
+.sidebar-collapsed .nav-item > span:not(.icon) { display: none; }
+.sidebar-collapsed .nav-section-label { display: none; }
+
+/* V163 — Sidebar section label */
+.nav-section-label {
+  padding: 0.5rem 0.875rem 0.25rem;
+  font-size: var(--font-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+/* V164 — Nav badge (count) */
+.nav-badge {
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  font-size: var(--font-3xs); font-weight: 600;
+  background: rgba(255,255,255,0.10);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-full);
+}
+.nav-badge.is-danger { background: var(--sev-danger); color: white; }
+.nav-badge.is-info   { background: var(--sev-info);   color: white; }
+
+/* V165 — Sidebar search input */
+.sidebar-search {
+  position: relative;
+  margin: 0.75rem 0.5rem;
+}
+.sidebar-search > input {
+  width: 100%;
+  padding: 0.375rem 0.625rem 0.375rem 1.75rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-xs);
+  outline: none;
+}
+.sidebar-search > input:focus { border-color: rgba(96,165,250,0.40); }
+.sidebar-search > svg {
+  position: absolute; left: 0.5rem; top: 50%;
+  transform: translateY(-50%);
+  width: 13px; height: 13px;
+  color: var(--color-text-muted);
+}
+
+/* V166 — Top app bar */
+.app-bar {
+  height: 48px;
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0 1rem;
+  background: rgba(8,9,12,0.65);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(1.6);
+  border-bottom: 1px solid var(--color-glass-border);
+  box-shadow: 0 1px 0 var(--color-glass-shine) inset;
+}
+
+/* V167 — Tab nav (horizontal sub-nav) */
+.tabnav { display: flex; gap: 2px; padding: 4px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); }
+.tabnav > a, .tabnav > button {
+  padding: 0.375rem 0.875rem;
+  font-size: var(--font-xs);
+  color: var(--color-text-secondary);
+  background: transparent; border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.tabnav > a.is-active, .tabnav > button.is-active {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  box-shadow: var(--elev-1);
+}
+
+/* V168 — User menu trigger */
+.user-menu-trigger {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+.user-menu-trigger:hover { background: var(--hover-tint); }
+.user-menu-trigger > .user-meta {
+  display: flex; flex-direction: column; align-items: flex-start;
+  line-height: 1.2;
+}
+.user-menu-trigger > .user-meta > .name { font-size: var(--font-xs); font-weight: 600; }
+.user-menu-trigger > .user-meta > .role { font-size: var(--font-3xs); color: var(--color-text-muted); }
+
+/* V169 — Module crumb (above page title) */
+.module-crumb {
+  display: flex; align-items: center; gap: 0.375rem;
+  font-size: var(--font-2xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* V170 — Page title strip */
+.page-title {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+.page-title > h1 {
+  font-size: var(--font-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+.page-title > .page-title-meta {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* ─── V171-V180: Page templates & layouts ─────────────── */
+
+/* V171 — Two-column split */
+.split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.split-2.is-narrow-left  { grid-template-columns: 280px 1fr; }
+.split-2.is-narrow-right { grid-template-columns: 1fr 280px; }
+
+/* V172 — Three-column split */
+.split-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; }
+
+/* V173 — Master/detail panel layout */
+.master-detail {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1rem;
+  height: calc(100vh - 100px);
+  overflow: hidden;
+}
+.master-detail > .master {
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
+}
+.master-detail > .detail {
+  overflow-y: auto;
+}
+
+/* V174 — Dashboard grid (auto-fit cards) */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.dash-grid.is-tight  { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+.dash-grid.is-spacious { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem; }
+
+/* V175 — Sticky toolbar above table */
+.toolbar-sticky {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.625rem 0.875rem;
+  background: rgba(18, 19, 24, 0.92);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  border-bottom: 1px solid var(--color-glass-border);
+}
+
+/* V176 — Page container with max width */
+.page-container {
+  width: 100%;
+  max-width: var(--content-wide);
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+}
+.page-container.is-narrow { max-width: var(--content-narrow); }
+.page-container.is-base   { max-width: var(--content-base); }
+.page-container.is-full   { max-width: 100%; }
+
+/* V177 — Filter bar (chips + search + sort) */
+.filter-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-glass-border);
+  margin-bottom: 0.75rem;
+}
+.filter-bar > .spacer { flex: 1; }
+
+/* V178 — Side gutter for selected items panel */
+.gutter-right {
+  position: fixed;
+  top: 56px; right: 0; bottom: 0;
+  width: 320px;
+  background: var(--color-bg-elevated);
+  border-left: 1px solid var(--color-glass-border);
+  overflow-y: auto;
+  z-index: var(--z-sticky);
+  transform: translateX(100%);
+  transition: transform var(--motion-base) var(--ease-out-quart);
+}
+.gutter-right.is-open { transform: translateX(0); }
+
+/* V179 — Resize-aware content area */
+.content-area {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: 100vh;
+}
+
+/* V180 — Page footer (totals/actions) */
+.page-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1.125rem;
+  background: rgba(8,9,12,0.92);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  border-top: 1px solid var(--color-glass-border);
+  z-index: var(--z-sticky);
+}
+
+/* ─── V181-V190: Form patterns ─────────────────────────── */
+
+/* V181 — Form-row (label + control inline) */
+.form-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.5rem 0;
+}
+.form-row > label { font-size: var(--font-xs); color: var(--color-text-secondary); font-weight: 500; }
+.form-row.is-stacked { grid-template-columns: 1fr; gap: 0.375rem; }
+
+/* V182 — Fieldset polish */
+fieldset.field-group, .field-group {
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.125rem;
+  margin: 0;
+}
+.field-group > legend {
+  padding: 0 0.5rem;
+  font-size: var(--font-xs);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* V183 — Field with inline help text */
+.field-with-help {
+  display: flex; flex-direction: column; gap: 0.25rem;
+}
+.field-with-help > .field-label {
+  font-size: var(--font-xs); font-weight: 500; color: var(--color-text-secondary);
+}
+.field-with-help > .field-help {
+  font-size: var(--font-3xs); color: var(--color-text-muted); line-height: 1.5;
+}
+
+/* V184 — Save bar (sticky action bar at form bottom) */
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  background: rgba(18,19,24,0.92);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  border-top: 1px solid var(--color-glass-border);
+  margin-top: 1rem;
+  z-index: var(--z-sticky);
+}
+.save-bar > .save-status { margin-right: auto; font-size: var(--font-2xs); color: var(--color-text-muted); }
+
+/* V185 — Dirty-state indicator */
+.dirty-indicator {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--font-3xs);
+  color: var(--sev-warning);
+}
+.dirty-indicator::before {
+  content: ''; width: 6px; height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+/* V186 — Autosave indicator */
+.autosave {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--font-3xs);
+  color: var(--color-text-muted);
+}
+.autosave.is-saving { color: var(--sev-info); }
+.autosave.is-saved  { color: var(--sev-success); }
+.autosave.is-error  { color: var(--sev-danger); }
+
+/* V187 — Inline action group inside a field */
+.field-actions {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+}
+
+/* V188 — Form columns (multi-column form layout) */
+.form-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.875rem 1.25rem;
+}
+
+/* V189 — Required-fields-only filter (visual cue) */
+.field-required > label::after { content: ' *'; color: var(--sev-danger); }
+
+/* V190 — Read-only field (looks like input but no border) */
+.field-readonly {
+  padding: 0.5625rem 0.875rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
+  cursor: not-allowed;
+}
+
+/* ─── V191-V200: Tables advanced ──────────────────────── */
+
+/* V191 — Row groupings (collapsible) */
+.row-group-header td {
+  background: rgba(255,255,255,0.04) !important;
+  font-weight: 600;
+  font-size: var(--font-xs);
+  cursor: pointer;
+  user-select: none;
+}
+.row-group-header td:first-child::before {
+  content: '▾';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform var(--motion-fast);
+}
+.row-group-header.is-collapsed td:first-child::before { transform: rotate(-90deg); }
+
+/* V192 — Subtotal row */
+.row-subtotal td {
+  background: rgba(96,165,250,0.06);
+  font-weight: 600;
+  border-top: 1px solid var(--color-glass-border);
+}
+
+/* V193 — Grand total row */
+.row-grand-total td {
+  background: rgba(96,165,250,0.10);
+  font-weight: 700;
+  border-top: 2px solid var(--color-glass-border-hover);
+  border-bottom: 2px solid var(--color-glass-border-hover);
+  font-size: var(--font-md);
+}
+
+/* V194 — Sticky totals footer row */
+.block-table tfoot tr {
+  position: sticky; bottom: 0;
+  background: var(--color-bg-elevated);
+}
+.block-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--color-border-secondary);
+}
+
+/* V195 — Column resize handle */
+.block-table th { position: relative; }
+.col-resize-handle {
+  position: absolute;
+  right: 0; top: 25%;
+  width: 4px; height: 50%;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--motion-fast);
+}
+.col-resize-handle:hover, .col-resize-handle.is-dragging { background: var(--sev-info); }
+
+/* V196 — Pinned column (uses sticky-col + visible separator) */
+.block-table .col-pinned {
+  position: sticky; left: 0;
+  background: var(--color-bg-secondary-solid);
+  border-right: 2px solid var(--color-border-secondary);
+  z-index: 1;
+}
+
+/* V197 — Row drag handle */
+.row-drag-handle {
+  cursor: grab;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+.row-drag-handle:active { cursor: grabbing; }
+.row-drag-handle::before { content: '⋮⋮'; letter-spacing: -2px; }
+
+/* V198 — Table cell highlight (recently changed) */
+.cell-highlight {
+  background: rgba(96,165,250,0.18);
+  animation: bap-pulse-bg 2s ease-out;
+}
+
+/* V199 — Empty table row (full-width message) */
+.row-empty td {
+  padding: 2.5rem 1rem !important;
+  text-align: center !important;
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+  font-style: italic;
+}
+
+/* V200 — Compact table (denser rows) */
+.block-table.is-compact th,
+.block-table.is-compact td {
+  padding: 0.3125rem 0.5rem !important;
+  font-size: var(--font-2xs);
+}
+
+/* ─── V201-V210: Cards & containers ───────────────────── */
+
+/* V201 — Card with image header */
+.card-with-image > .card-image {
+  margin: -1.25rem -1.25rem 1rem;
+  height: 140px;
+  background-size: cover;
+  background-position: center;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/* V202 — Card actions footer */
+.card-actions {
+  margin: 1rem -1.25rem -1.25rem;
+  padding: 0.75rem 1.125rem;
+  border-top: 1px solid var(--color-glass-border);
+  background: rgba(255,255,255,0.02);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+}
+
+/* V203 — Stat-with-sparkline card */
+.stat-with-spark {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: center;
+}
+.stat-with-spark > .spark-graph { width: 80px; height: 28px; opacity: 0.85; }
+
+/* V204 — Expandable card (collapse/expand) */
+.card-expandable > .card-toggle {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0; border: 0; background: transparent;
+  color: inherit; cursor: pointer;
+  font-weight: 600;
+}
+.card-expandable > .card-content { display: none; padding-top: 0.75rem; }
+.card-expandable.is-open > .card-content { display: block; }
+.card-expandable > .card-toggle > .card-chev { transition: transform var(--motion-fast); }
+.card-expandable.is-open > .card-toggle > .card-chev { transform: rotate(180deg); }
+
+/* V205 — Card with tabs in header */
+.card-tabbed > .card-tabs {
+  display: flex;
+  gap: 0; margin: -1.25rem -1.25rem 1rem; padding: 0 1.25rem;
+  border-bottom: 1px solid var(--color-glass-border);
+}
+.card-tabbed > .card-tabs > button {
+  padding: 0.75rem 0; margin-right: 1.25rem;
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary); font-size: var(--font-sm);
+  cursor: pointer;
+}
+.card-tabbed > .card-tabs > button.is-active {
+  color: var(--sev-info); border-bottom-color: var(--sev-info);
+}
+
+/* V206 — Card with side icon */
+.card-with-icon {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+.card-with-icon > .card-icon {
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(96,165,250,0.12);
+  border-radius: var(--radius-sm);
+  color: var(--sev-info);
+}
+
+/* V207 — Selectable card (radio-style) */
+.card-select {
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background var(--motion-fast);
+}
+.card-select:hover { border-color: var(--color-glass-border-hover); }
+.card-select.is-selected {
+  border-color: var(--sev-info) !important;
+  background: rgba(96,165,250,0.06) !important;
+  box-shadow: 0 0 0 1px var(--sev-info);
+}
+
+/* V208 — Stat card with delta arrow */
+.stat-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+.stat-card > .stat-label {
+  font-size: var(--font-2xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stat-card > .stat-value {
+  font-size: var(--font-2xl); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+.stat-card > .stat-foot {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px;
+  font-size: var(--font-2xs);
+  color: var(--color-text-muted);
+}
+
+/* V209 — List card (no padding, items separated by line) */
+.list-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.list-card > .list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-glass-border);
+  transition: background var(--motion-fast);
+}
+.list-card > .list-item:last-child { border-bottom: 0; }
+.list-card > .list-item:hover { background: var(--hover-tint); }
+
+/* V210 — Tile (square card for nav/launcher) */
+.tile {
+  aspect-ratio: 1 / 1;
+  padding: 1rem;
+  display: flex; flex-direction: column; justify-content: space-between;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform var(--motion-base), border-color var(--motion-base);
+}
+.tile:hover { transform: translateY(-2px); border-color: var(--color-glass-border-hover); }
+.tile > .tile-icon { font-size: 28px; color: var(--sev-info); }
+.tile > .tile-label { font-size: var(--font-sm); font-weight: 600; color: var(--color-text-primary); }
+
+/* ─── V211-V220: Money & numbers ──────────────────────── */
+
+/* V211 — Money: positive (subtle green) */
+.money-pos { color: var(--sev-success); font-variant-numeric: tabular-nums; }
+
+/* V212 — Money: negative (subtle red, parens) */
+.money-neg { color: var(--sev-danger); font-variant-numeric: tabular-nums; }
+.money-neg.in-parens::before { content: '('; }
+.money-neg.in-parens::after  { content: ')'; }
+
+/* V213 — Money: zero (muted) */
+.money-zero { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+
+/* V214 — Money: large display (dashboard hero) */
+.money-display {
+  font-size: var(--font-4xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* V215 — Ledger-style amount column (debit | credit) */
+.ledger-amount {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ledger-amount > .debit  { color: var(--color-text-primary); }
+.ledger-amount > .credit { color: var(--color-text-secondary); }
+
+/* V216 — Money with currency symbol prefix */
+.money-with-symbol {
+  display: inline-flex; align-items: baseline; gap: 2px;
+}
+.money-with-symbol > .sym {
+  font-size: 0.7em; color: var(--color-text-muted); font-weight: 500;
+}
+
+/* V217 — T-account (debit/credit ledger view) */
+.t-account {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.t-account > .t-side {
+  padding: 0.5rem 0.75rem;
+}
+.t-account > .t-side > .t-side-label {
+  font-size: var(--font-3xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 0.375rem;
+  border-bottom: 1px solid var(--color-glass-border);
+  padding-bottom: 0.25rem;
+}
+.t-account > .t-divider { background: var(--color-glass-border); }
+
+/* V218 — Running balance column */
+.running-balance {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  font-size: var(--font-2xs);
+}
+.running-balance.is-positive { color: var(--sev-success); }
+.running-balance.is-negative { color: var(--sev-danger); }
+
+/* V219 — Currency selector chip */
+.currency-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-3xs);
+  color: var(--color-text-secondary);
+}
+
+/* V220 — Number-change emphasis (recently edited) */
+.num-edited {
+  background: rgba(251,191,36,0.08);
+  border-bottom: 1px dashed var(--sev-warning);
+  padding: 0 3px;
+}
+
+/* ─── V221-V228: Modals & dialogs polish ──────────────── */
+
+/* V221 — Wizard modal (with step indicator) */
+.wizard-modal { display: flex; flex-direction: column; }
+.wizard-steps {
+  display: flex;
+  padding: 0.875rem 1.5rem;
+  border-bottom: 1px solid var(--color-glass-border);
+  background: rgba(255,255,255,0.02);
+  gap: 0.875rem;
+}
+.wizard-steps > .step {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+}
+.wizard-steps > .step.is-active { color: var(--color-text-primary); font-weight: 600; }
+.wizard-steps > .step.is-complete { color: var(--sev-success); }
+.wizard-steps > .step + .step::before {
+  content: ''; width: 24px; height: 1px; background: var(--color-glass-border);
+  display: inline-block; margin-right: 4px;
+}
+
+/* V222 — Fullscreen modal */
+.modal-panel.is-fullscreen {
+  width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh;
+  border-radius: 0;
+}
+
+/* V223 — Confirm dialog with checkbox ("don't ask again") */
+.confirm-checkbox {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--color-glass-border);
+  font-size: var(--font-2xs);
+  color: var(--color-text-muted);
+}
+
+/* V224 — Danger-action confirmation (red ring) */
+.alert-dialog.is-destructive {
+  border-top-color: var(--sev-critical);
+  box-shadow: var(--elev-5), 0 0 0 1px rgba(225,29,72,0.30) inset;
+}
+
+/* V225 — Loading-state modal (spinner-only) */
+.modal-loading {
+  padding: 3rem 2rem;
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
+}
+.modal-loading > .loading-message {
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
+}
+
+/* V226 — Confirmation success modal */
+.modal-success-icon {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--tone-good-bg);
+  border: 1px solid rgba(52,211,153,0.30);
+  display: grid; place-items: center;
+  color: var(--sev-success);
+  margin: 0 auto 0.875rem;
+}
+
+/* V227 — Modal-with-sidebar (left navigation column) */
+.modal-with-sidebar {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+}
+.modal-with-sidebar > .modal-side {
+  background: rgba(255,255,255,0.03);
+  padding: 1rem 0.5rem;
+  border-right: 1px solid var(--color-glass-border);
+}
+.modal-with-sidebar > .modal-main { padding: 1.5rem; min-height: 24rem; }
+
+/* V228 — Inline confirm popover (replaces full modal for tiny actions) */
+.inline-confirm {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--elev-3);
+  font-size: var(--font-xs);
+}
+
+/* ─── V229-V233: Empty state variants ─────────────────── */
+
+/* V229 — No-data empty state */
+.empty-no-data > .empty-icon { background: rgba(96,165,250,0.10); color: var(--sev-info); }
+
+/* V230 — No-results empty (search returned 0) */
+.empty-no-results > .empty-icon { background: rgba(192,132,252,0.10); color: var(--sev-info); }
+.empty-no-results > .empty-title::before { content: '🔍 '; opacity: 0.6; }
+
+/* V231 — Error empty state */
+.empty-error > .empty-icon { background: var(--tone-bad-bg); color: var(--sev-danger); }
+.empty-error > .empty-title { color: var(--sev-danger); }
+
+/* V232 — First-time / onboarding empty */
+.empty-onboarding {
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+.empty-onboarding > .empty-illustration {
+  width: 120px; height: 120px; margin: 0 auto 1rem;
+  background: linear-gradient(135deg, rgba(96,165,250,0.12), rgba(192,132,252,0.10));
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--sev-info);
+  border: 2px dashed var(--color-glass-border);
+}
+
+/* V233 — Empty-state CTA group */
+.empty-cta-group {
+  display: inline-flex; gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* ─── V234-V241: Charts more variants ─────────────────── */
+
+/* V234 — Mini line chart wrapper */
+.mini-line {
+  width: 100%; height: 32px;
+  position: relative;
+}
+.mini-line > svg { width: 100%; height: 100%; }
+
+/* V235 — Bar w/value labels above */
+.bar-with-label {
+  position: relative;
+}
+.bar-with-label > .bar-label {
+  position: absolute;
+  top: -16px; left: 0; right: 0;
+  text-align: center;
+  font-size: var(--font-3xs);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* V236 — Comparison chart side-by-side */
+.compare-chart {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.compare-chart > .compare-cell {
+  padding: 0.75rem;
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-sm);
+}
+
+/* V237 — Sparkbar with color-by-value */
+.sparkbar.is-mood-good > i { background: var(--sev-success); }
+.sparkbar.is-mood-bad > i { background: var(--sev-danger); }
+.sparkbar.is-mood-warning > i { background: var(--sev-warning); }
+
+/* V238 — Donut multi-ring (nested) */
+.donut-rings {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+.donut-rings > svg + svg { position: absolute; }
+
+/* V239 — Funnel chart row */
+.funnel-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 4px;
+}
+.funnel-row > .funnel-label { width: 100px; font-size: var(--font-2xs); color: var(--color-text-secondary); }
+.funnel-row > .funnel-bar {
+  flex: 1; height: 18px;
+  background: linear-gradient(to right, var(--sev-info), rgba(96,165,250,0.4));
+  border-radius: 3px;
+  position: relative;
+}
+.funnel-row > .funnel-value {
+  font-size: var(--font-2xs); font-variant-numeric: tabular-nums;
+  width: 56px; text-align: right;
+}
+
+/* V240 — Heat calendar (year-view of activity) */
+.heat-cal {
+  display: grid;
+  grid-template-columns: repeat(53, 9px);
+  grid-auto-rows: 9px;
+  gap: 2px;
+}
+.heat-cal > .heat-day {
+  width: 9px; height: 9px;
+  border-radius: 1px;
+  background: rgba(255,255,255,0.04);
+}
+
+/* V241 — Gauge (semicircle) */
+.gauge {
+  position: relative;
+  width: 120px; aspect-ratio: 2 / 1;
+  overflow: hidden;
+}
+.gauge::before {
+  content: '';
+  position: absolute; inset: 0;
+  border: 12px solid rgba(255,255,255,0.08);
+  border-bottom: 0;
+  border-radius: 120px 120px 0 0;
+}
+.gauge > .gauge-value {
+  position: absolute; inset: 0;
+  display: grid; place-items: end center;
+  font-size: var(--font-xl); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── V242-V246: Print / document polish ──────────────── */
+
+/* V242 — Document frame (formal printed letter) */
+.doc-frame {
+  background: white;
+  color: #1a1b22;
+  padding: 0.75in;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--elev-5);
+  max-width: 8.5in;
+  margin: 1rem auto;
+}
+
+/* V243 — Document letterhead */
+.doc-letterhead {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #1a1b22;
+  margin-bottom: 1.5rem;
+}
+.doc-letterhead > .doc-org-name {
+  font-size: 18pt; font-weight: 700; letter-spacing: -0.02em;
+}
+
+/* V244 — Document signature block */
+.doc-signature-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+.doc-signature-block > .sig-area {
+  border-top: 1px solid #333;
+  padding-top: 6px;
+  font-size: 9pt;
+  color: #444;
+}
+
+/* V245 — Document footer (small print) */
+.doc-footer {
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #ddd;
+  font-size: 8pt;
+  color: #666;
+  display: flex; justify-content: space-between;
+}
+
+/* V246 — Watermark variants */
+.watermark-draft { color: rgba(251,191,36,0.10); }
+.watermark-paid { color: rgba(52,211,153,0.12); }
+.watermark-final { color: rgba(0,0,0,0.08); }
+.watermark-void { color: rgba(248,113,113,0.15); }
+.watermark-confidential { color: rgba(225,29,72,0.10); }
+
+/* ─── V247-V251: Mobile / touch friendly ──────────────── */
+
+/* V247 — Mobile-only / desktop-only utility */
+@media (max-width: 768px) {
+  .desktop-only { display: none !important; }
+  .table-stack {
+    /* Stack table cells vertically on mobile */
+    display: block !important;
+  }
+  .table-stack thead { display: none; }
+  .table-stack tbody tr { display: block; border-bottom: 1px solid var(--color-glass-border); padding: 0.75rem; }
+  .table-stack tbody td { display: block; padding: 4px 0 !important; border: 0 !important; }
+  .table-stack tbody td::before {
+    content: attr(data-label) ': ';
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    font-size: var(--font-3xs);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+}
+@media (min-width: 769px) {
+  .mobile-only { display: none !important; }
+}
+
+/* V248 — Swipe-action row indicator */
+.swipe-actions {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  display: flex; align-items: center;
+  background: var(--color-bg-elevated);
+  padding: 0 0.75rem;
+  transform: translateX(100%);
+  transition: transform var(--motion-base);
+}
+.swipe-actions.is-revealed { transform: translateX(0); }
+
+/* V249 — Pull-to-refresh indicator */
+.pull-to-refresh {
+  display: flex; align-items: center; justify-content: center;
+  height: 56px;
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+}
+
+/* V250 — Bottom nav (mobile) */
+@media (max-width: 768px) {
+  .bottom-nav {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: space-around;
+    background: var(--color-bg-elevated);
+    backdrop-filter: blur(var(--glass-blur-lg));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+    border-top: 1px solid var(--color-glass-border);
+    padding: 0.5rem 0;
+    z-index: var(--z-sticky);
+  }
+  .bottom-nav > a {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 0.25rem 0.75rem;
+    color: var(--color-text-muted);
+    font-size: var(--font-3xs);
+    text-decoration: none;
+  }
+  .bottom-nav > a.is-active { color: var(--sev-info); }
+}
+
+/* V251 — Touch ripple animation */
+.touch-ripple {
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-ripple::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.20) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.touch-ripple:active::after { opacity: 1; transition: none; }
+
+/* ─── V252-V255: Accessibility ────────────────────────── */
+
+/* V252 — Aria-live region (sr-visible-but-styled) */
+.live-region {
+  position: absolute;
+  width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap;
+}
+.live-region.is-visible {
+  position: static;
+  width: auto; height: auto; padding: 0.5rem 0.75rem;
+  clip: auto; white-space: normal;
+  background: var(--tone-info-bg);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-xs);
+}
+
+/* V253 — Error summary banner (after form submit) */
+.error-summary {
+  padding: 0.875rem 1.125rem;
+  background: var(--tone-bad-bg);
+  border: 1px solid rgba(248,113,113,0.30);
+  border-left: 4px solid var(--sev-danger);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+}
+.error-summary > .error-summary-title {
+  color: var(--sev-danger);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.error-summary > ul {
+  list-style: disc;
+  margin-left: 1.25rem;
+  font-size: var(--font-xs);
+  color: var(--color-text-primary);
+}
+.error-summary > ul > li > a {
+  color: var(--sev-info);
+  text-decoration: underline;
+}
+
+/* V254 — Success summary banner */
+.success-summary {
+  padding: 0.875rem 1.125rem;
+  background: var(--tone-good-bg);
+  border: 1px solid rgba(52,211,153,0.30);
+  border-left: 4px solid var(--sev-success);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  color: var(--color-text-primary);
+}
+.success-summary::before {
+  content: '✓ ';
+  color: var(--sev-success);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+/* V255 — Focus-visible enhanced for keyboard users */
+:focus-visible {
+  outline: 2px solid var(--sev-info) !important;
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+.no-focus-ring:focus-visible { outline: none !important; }
+
 /* V150 — Reusable hero header strip */
 .hero-strip {
   padding: 1.25rem 1.5rem;
