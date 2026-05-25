@@ -6169,6 +6169,759 @@ export function initDatabase(): Database.Database {
     received_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
+
+  // ═══════════════════════════════════════════════════════════════════
+  //   FINANCE WAVE: 100 features (F441-F540)
+  //   Invoice + Expense + Payment + Subscriptions + Collections +
+  //   Analytics + Tax + Vendor management upgrades
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ─── Batch AB: Invoice Advanced (F441-F455) ───
+  // F441 — line-item discount already on quote_line_items; ensure on invoice_line_items
+  "ALTER TABLE invoice_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+  "ALTER TABLE invoice_line_items ADD COLUMN discount_reason TEXT",
+  // F443 — recurring templates
+  `CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    template_name TEXT NOT NULL,
+    client_id TEXT,
+    frequency TEXT DEFAULT 'monthly',
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    next_run_date TEXT NOT NULL,
+    line_items_json TEXT DEFAULT '[]',
+    notes TEXT,
+    payment_terms TEXT,
+    is_active INTEGER DEFAULT 1,
+    auto_send INTEGER DEFAULT 0,
+    run_count INTEGER DEFAULT 0,
+    last_run_at TEXT,
+    last_invoice_id TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F444 — invoice approval workflow
+  `CREATE TABLE IF NOT EXISTS invoice_approval_steps (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    step_number INTEGER DEFAULT 1,
+    approver_user_id TEXT,
+    action TEXT,
+    acted_at TEXT,
+    comment TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F445-F446 — invoice email tracking
+  `CREATE TABLE IF NOT EXISTS invoice_email_log (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    recipient_email TEXT NOT NULL,
+    subject TEXT,
+    sent_at TEXT DEFAULT (datetime('now')),
+    sent_by TEXT,
+    opened_at TEXT,
+    opened_count INTEGER DEFAULT 0,
+    clicked_at TEXT,
+    tracking_pixel_id TEXT,
+    delivery_status TEXT DEFAULT 'sent',
+    bounce_reason TEXT
+  )`,
+  // F447 — late fee config
+  `CREATE TABLE IF NOT EXISTS late_fee_policies (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    policy_name TEXT NOT NULL,
+    fee_type TEXT DEFAULT 'percent',
+    percent_rate REAL DEFAULT 0,
+    flat_amount REAL DEFAULT 0,
+    grace_period_days INTEGER DEFAULT 0,
+    compound INTEGER DEFAULT 0,
+    apply_frequency TEXT DEFAULT 'monthly',
+    max_fees_count INTEGER DEFAULT 12,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F448 — early payment discount terms
+  `CREATE TABLE IF NOT EXISTS payment_terms (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    terms_name TEXT NOT NULL,
+    net_days INTEGER DEFAULT 30,
+    discount_percent REAL DEFAULT 0,
+    discount_days INTEGER DEFAULT 0,
+    description TEXT,
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "ALTER TABLE invoices ADD COLUMN payment_terms_id TEXT",
+  "ALTER TABLE invoices ADD COLUMN early_discount_taken INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN early_discount_amount REAL DEFAULT 0",
+  // F450 — progress billing
+  `CREATE TABLE IF NOT EXISTS progress_billing_schedules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT,
+    contract_total REAL DEFAULT 0,
+    billed_to_date REAL DEFAULT 0,
+    remaining_to_bill REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS progress_billing_releases (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES progress_billing_schedules(id) ON DELETE CASCADE,
+    release_date TEXT NOT NULL,
+    percent_complete REAL DEFAULT 0,
+    amount_to_bill REAL DEFAULT 0,
+    invoice_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F451 — retainer invoicing
+  `CREATE TABLE IF NOT EXISTS retainers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    retainer_name TEXT NOT NULL,
+    initial_amount REAL DEFAULT 0,
+    current_balance REAL DEFAULT 0,
+    minimum_balance REAL DEFAULT 0,
+    auto_refill INTEGER DEFAULT 0,
+    refill_amount REAL DEFAULT 0,
+    start_date TEXT,
+    end_date TEXT,
+    status TEXT DEFAULT 'active',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS retainer_drawdowns (
+    id TEXT PRIMARY KEY,
+    retainer_id TEXT NOT NULL REFERENCES retainers(id) ON DELETE CASCADE,
+    drawdown_date TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    reason TEXT,
+    invoice_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F452 — deposits
+  "ALTER TABLE invoices ADD COLUMN deposit_required INTEGER DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN deposit_amount REAL DEFAULT 0",
+  "ALTER TABLE invoices ADD COLUMN deposit_paid_at TEXT",
+  // F453 — scheduled send
+  "ALTER TABLE invoices ADD COLUMN scheduled_send_at TEXT",
+  // F454 — multi-payment plan
+  `CREATE TABLE IF NOT EXISTS invoice_payment_plans (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    plan_name TEXT,
+    total_amount REAL DEFAULT 0,
+    installment_count INTEGER DEFAULT 0,
+    installment_amount REAL DEFAULT 0,
+    frequency TEXT DEFAULT 'monthly',
+    start_date TEXT NOT NULL,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_payment_plan_installments (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL REFERENCES invoice_payment_plans(id) ON DELETE CASCADE,
+    installment_number INTEGER DEFAULT 1,
+    due_date TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    paid_amount REAL DEFAULT 0,
+    paid_at TEXT,
+    status TEXT DEFAULT 'pending'
+  )`,
+  // F455 — invoice attachments
+  `CREATE TABLE IF NOT EXISTS invoice_attachments (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_path TEXT,
+    file_size INTEGER DEFAULT 0,
+    mime_type TEXT,
+    uploaded_at TEXT DEFAULT (datetime('now')),
+    uploaded_by TEXT
+  )`,
+
+  // ─── Batch AC: Payment Processing (F456-F470) ───
+  // F458 — payment links
+  `CREATE TABLE IF NOT EXISTS payment_links (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT,
+    link_url TEXT,
+    short_code TEXT NOT NULL UNIQUE,
+    amount REAL DEFAULT 0,
+    expires_at TEXT,
+    click_count INTEGER DEFAULT 0,
+    used_at TEXT,
+    used_amount REAL,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F459 — reminder cadence per invoice
+  `CREATE TABLE IF NOT EXISTS reminder_cadences (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    cadence_name TEXT NOT NULL,
+    days_offsets TEXT NOT NULL,
+    template_id TEXT,
+    is_default INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F461 — failed payment retries
+  `CREATE TABLE IF NOT EXISTS payment_retry_attempts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT,
+    payment_method_id TEXT,
+    attempt_number INTEGER DEFAULT 1,
+    attempted_at TEXT DEFAULT (datetime('now')),
+    next_attempt_at TEXT,
+    failure_code TEXT,
+    failure_message TEXT,
+    final_status TEXT DEFAULT 'pending'
+  )`,
+  // F463 — credit memo / overpayment
+  `CREATE TABLE IF NOT EXISTS customer_credit_balances (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL UNIQUE,
+    balance REAL DEFAULT 0,
+    last_applied_at TEXT,
+    notes TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS customer_credit_transactions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    source_invoice_id TEXT,
+    applied_to_invoice_id TEXT,
+    notes TEXT,
+    transaction_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F464 — refunds
+  `CREATE TABLE IF NOT EXISTS refunds (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT,
+    payment_id TEXT,
+    refund_amount REAL DEFAULT 0,
+    refund_method TEXT,
+    reason TEXT,
+    refunded_at TEXT DEFAULT (datetime('now')),
+    refunded_by TEXT,
+    external_refund_id TEXT,
+    status TEXT DEFAULT 'completed'
+  )`,
+  // F465 — chargeback log
+  `CREATE TABLE IF NOT EXISTS chargebacks (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT,
+    payment_id TEXT,
+    amount REAL DEFAULT 0,
+    chargeback_date TEXT,
+    reason_code TEXT,
+    status TEXT DEFAULT 'disputed',
+    evidence_submitted_at TEXT,
+    resolution TEXT,
+    resolved_at TEXT,
+    fee REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F466 — customer payment method preferences
+  `CREATE TABLE IF NOT EXISTS customer_payment_methods (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    method_type TEXT NOT NULL,
+    nickname TEXT,
+    last4 TEXT,
+    brand TEXT,
+    is_default INTEGER DEFAULT 0,
+    expires_month INTEGER,
+    expires_year INTEGER,
+    external_token TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F468 — check printing log
+  `CREATE TABLE IF NOT EXISTS check_print_jobs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    bank_account_id TEXT,
+    check_number_start INTEGER,
+    check_number_end INTEGER,
+    check_count INTEGER DEFAULT 0,
+    total_amount REAL DEFAULT 0,
+    pdf_path TEXT,
+    printed_at TEXT DEFAULT (datetime('now')),
+    printed_by TEXT,
+    status TEXT DEFAULT 'printed'
+  )`,
+  // F470 — crypto payments
+  `CREATE TABLE IF NOT EXISTS crypto_payments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT,
+    currency TEXT NOT NULL,
+    amount_crypto REAL DEFAULT 0,
+    amount_usd_at_time REAL DEFAULT 0,
+    wallet_address TEXT,
+    tx_hash TEXT,
+    confirmations INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'pending',
+    received_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AD: Expense Advanced (F471-F485) ───
+  // F471 — expense reports (group of expenses)
+  `CREATE TABLE IF NOT EXISTS expense_reports (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT,
+    report_name TEXT NOT NULL,
+    period_start TEXT,
+    period_end TEXT,
+    total_amount REAL DEFAULT 0,
+    expense_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'draft',
+    submitted_at TEXT,
+    approved_at TEXT,
+    approved_by TEXT,
+    paid_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  "ALTER TABLE expenses ADD COLUMN expense_report_id TEXT",
+  // F473 — per-diem
+  `CREATE TABLE IF NOT EXISTS per_diem_rates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    location TEXT NOT NULL,
+    lodging_rate REAL DEFAULT 0,
+    meals_rate REAL DEFAULT 0,
+    incidentals_rate REAL DEFAULT 0,
+    effective_from TEXT,
+    effective_to TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F474 — mileage with multiple vehicles
+  `CREATE TABLE IF NOT EXISTS vehicles (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    vehicle_name TEXT NOT NULL,
+    make TEXT,
+    model TEXT,
+    year INTEGER,
+    plate_number TEXT,
+    is_default INTEGER DEFAULT 0,
+    business_use_pct REAL DEFAULT 100,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F478 — 1099 thresholds
+  `CREATE TABLE IF NOT EXISTS vendor_1099_thresholds (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    ytd_amount REAL DEFAULT 0,
+    threshold REAL DEFAULT 600,
+    requires_1099 INTEGER DEFAULT 0,
+    form_type TEXT DEFAULT '1099-NEC',
+    last_calculated_at TEXT,
+    UNIQUE(company_id, vendor_id, tax_year)
+  )`,
+  // F479 — expense category budgets
+  `CREATE TABLE IF NOT EXISTS expense_category_budgets (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    category_id TEXT,
+    fiscal_year INTEGER NOT NULL,
+    month INTEGER,
+    budget_amount REAL DEFAULT 0,
+    actual_amount REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F481 — reimbursements (extends expense_reimbursements pattern if exists)
+  `CREATE TABLE IF NOT EXISTS expense_reimbursements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    total_amount REAL DEFAULT 0,
+    period_start TEXT,
+    period_end TEXT,
+    status TEXT DEFAULT 'pending',
+    approved_at TEXT,
+    approved_by TEXT,
+    paid_at TEXT,
+    payment_method TEXT,
+    je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F484 — rebillable expense flag
+  "ALTER TABLE expenses ADD COLUMN rebillable_to_client_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN rebilled_on_invoice_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN markup_pct REAL DEFAULT 0",
+  // F485 — pre-approval gates
+  `CREATE TABLE IF NOT EXISTS expense_pre_approvals (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    estimated_amount REAL DEFAULT 0,
+    category_id TEXT,
+    purpose TEXT,
+    requested_date TEXT,
+    needed_by_date TEXT,
+    status TEXT DEFAULT 'pending',
+    approved_by TEXT,
+    approved_at TEXT,
+    rejected_reason TEXT,
+    actual_expense_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AE: Billing & Subscriptions (F486-F495) ───
+  `CREATE TABLE IF NOT EXISTS subscription_plans (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    plan_name TEXT NOT NULL,
+    description TEXT,
+    base_price REAL DEFAULT 0,
+    billing_frequency TEXT DEFAULT 'monthly',
+    trial_days INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    features_json TEXT DEFAULT '[]',
+    tier INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS subscriptions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    status TEXT DEFAULT 'trial',
+    start_date TEXT NOT NULL,
+    trial_end_date TEXT,
+    current_period_start TEXT,
+    current_period_end TEXT,
+    next_renewal_date TEXT,
+    canceled_at TEXT,
+    cancel_at_period_end INTEGER DEFAULT 0,
+    paused_at TEXT,
+    resume_at TEXT,
+    discount_code_id TEXT,
+    discount_percent REAL DEFAULT 0,
+    quantity INTEGER DEFAULT 1,
+    custom_price REAL,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS subscription_proration_events (
+    id TEXT PRIMARY KEY,
+    subscription_id TEXT NOT NULL,
+    event_type TEXT,
+    old_plan_id TEXT,
+    new_plan_id TEXT,
+    proration_amount REAL DEFAULT 0,
+    days_remaining INTEGER,
+    invoice_id TEXT,
+    event_date TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS usage_records (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    subscription_id TEXT,
+    customer_id TEXT,
+    metric_name TEXT NOT NULL,
+    quantity REAL DEFAULT 0,
+    recorded_at TEXT DEFAULT (datetime('now')),
+    billed INTEGER DEFAULT 0
+  )`,
+  `CREATE TABLE IF NOT EXISTS pricing_tiers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    tier_min REAL DEFAULT 0,
+    tier_max REAL,
+    unit_price REAL DEFAULT 0,
+    flat_fee REAL DEFAULT 0,
+    sort_order INTEGER DEFAULT 0
+  )`,
+  `CREATE TABLE IF NOT EXISTS mrr_arr_snapshots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    mrr REAL DEFAULT 0,
+    arr REAL DEFAULT 0,
+    new_mrr REAL DEFAULT 0,
+    expansion_mrr REAL DEFAULT 0,
+    contraction_mrr REAL DEFAULT 0,
+    churned_mrr REAL DEFAULT 0,
+    customer_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, snapshot_date)
+  )`,
+
+  // ─── Batch AF: Credit & Collections (F496-F505) ───
+  "ALTER TABLE clients ADD COLUMN credit_limit REAL DEFAULT 0",
+  "ALTER TABLE clients ADD COLUMN credit_hold INTEGER DEFAULT 0",
+  "ALTER TABLE clients ADD COLUMN credit_hold_reason TEXT",
+  "ALTER TABLE clients ADD COLUMN credit_score INTEGER",
+  `CREATE TABLE IF NOT EXISTS customer_statements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    statement_date TEXT NOT NULL,
+    period_start TEXT,
+    period_end TEXT,
+    opening_balance REAL DEFAULT 0,
+    invoices_total REAL DEFAULT 0,
+    payments_total REAL DEFAULT 0,
+    credits_total REAL DEFAULT 0,
+    closing_balance REAL DEFAULT 0,
+    pdf_path TEXT,
+    sent_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS dunning_sequences (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    sequence_name TEXT NOT NULL,
+    steps_json TEXT DEFAULT '[]',
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS dunning_events (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT NOT NULL,
+    sequence_id TEXT,
+    step_number INTEGER DEFAULT 1,
+    sent_at TEXT DEFAULT (datetime('now')),
+    method TEXT DEFAULT 'email',
+    template_used TEXT,
+    response_received_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS bad_debt_writeoffs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    customer_id TEXT,
+    invoice_id TEXT,
+    writeoff_amount REAL DEFAULT 0,
+    writeoff_date TEXT NOT NULL,
+    reason TEXT,
+    posted_je_id TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS allowance_for_doubtful_accounts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    method TEXT DEFAULT 'percent_of_sales',
+    base_amount REAL DEFAULT 0,
+    estimate_percent REAL DEFAULT 0,
+    allowance_amount REAL DEFAULT 0,
+    posted_je_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS collection_agency_handoffs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT,
+    customer_id TEXT,
+    agency_name TEXT,
+    handed_off_date TEXT,
+    amount_assigned REAL DEFAULT 0,
+    commission_rate REAL DEFAULT 0,
+    recovered_amount REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    closed_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AG: Financial Analytics (F506-F520) ───
+  `CREATE TABLE IF NOT EXISTS analytics_snapshots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    metric_name TEXT NOT NULL,
+    metric_value REAL DEFAULT 0,
+    metric_unit TEXT,
+    metric_basis TEXT,
+    computed_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, snapshot_date, metric_name)
+  )`,
+  `CREATE TABLE IF NOT EXISTS cohort_analysis (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    cohort_month TEXT NOT NULL,
+    period_offset INTEGER NOT NULL,
+    customers_remaining INTEGER DEFAULT 0,
+    revenue_remaining REAL DEFAULT 0,
+    retention_pct REAL DEFAULT 0,
+    computed_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, cohort_month, period_offset)
+  )`,
+
+  // ─── Batch AH: Tax & Compliance (F521-F530) ───
+  `CREATE TABLE IF NOT EXISTS form_1099_runs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    form_type TEXT DEFAULT '1099-NEC',
+    vendor_count INTEGER DEFAULT 0,
+    total_amount REAL DEFAULT 0,
+    file_path TEXT,
+    submitted_at TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, tax_year, form_type)
+  )`,
+  `CREATE TABLE IF NOT EXISTS withholding_tracking (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT,
+    withholding_type TEXT DEFAULT 'backup',
+    rate REAL DEFAULT 0,
+    ytd_amount REAL DEFAULT 0,
+    tax_year INTEGER NOT NULL,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS quarterly_tax_estimates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    quarter INTEGER NOT NULL,
+    federal_estimate REAL DEFAULT 0,
+    state_estimate REAL DEFAULT 0,
+    due_date TEXT,
+    paid_at TEXT,
+    paid_amount REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, tax_year, quarter)
+  )`,
+  `CREATE TABLE IF NOT EXISTS tax_provision (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    fiscal_year INTEGER NOT NULL,
+    book_income REAL DEFAULT 0,
+    permanent_differences REAL DEFAULT 0,
+    temporary_differences REAL DEFAULT 0,
+    taxable_income REAL DEFAULT 0,
+    federal_rate REAL DEFAULT 21,
+    state_rate REAL DEFAULT 0,
+    current_federal_tax REAL DEFAULT 0,
+    current_state_tax REAL DEFAULT 0,
+    deferred_tax_asset REAL DEFAULT 0,
+    deferred_tax_liability REAL DEFAULT 0,
+    effective_tax_rate REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS rd_tax_credits (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    qualified_research_expense REAL DEFAULT 0,
+    base_amount REAL DEFAULT 0,
+    incremental_qre REAL DEFAULT 0,
+    credit_rate REAL DEFAULT 20,
+    credit_amount REAL DEFAULT 0,
+    payroll_offset_election INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS section_179_elections (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    elected_amount REAL DEFAULT 0,
+    bonus_depreciation INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch AI: Vendor Management Advanced (F531-F540) ───
+  `CREATE TABLE IF NOT EXISTS vendor_onboarding_checklists (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT NOT NULL,
+    checklist_items_json TEXT DEFAULT '[]',
+    items_completed INTEGER DEFAULT 0,
+    items_total INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'in_progress',
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS vendor_w9_records (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT NOT NULL,
+    legal_name TEXT,
+    tin TEXT,
+    tin_type TEXT,
+    business_type TEXT,
+    address TEXT,
+    is_us_person INTEGER DEFAULT 1,
+    backup_withholding_subject INTEGER DEFAULT 0,
+    received_date TEXT,
+    file_path TEXT,
+    signature_present INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS vendor_insurance_policies (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT NOT NULL,
+    policy_type TEXT NOT NULL,
+    carrier TEXT,
+    policy_number TEXT,
+    coverage_amount REAL DEFAULT 0,
+    effective_date TEXT,
+    expiration_date TEXT,
+    certificate_file_path TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS vendor_disputes (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    vendor_id TEXT NOT NULL,
+    bill_id TEXT,
+    dispute_amount REAL DEFAULT 0,
+    reason TEXT,
+    status TEXT DEFAULT 'open',
+    opened_date TEXT,
+    resolved_date TEXT,
+    resolution_amount REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
   // ─── Data hygiene: remove orphaned invoice_tokens whose invoice_id
   // no longer exists. Tokens are ephemeral share links — when the
   // underlying invoice is hard-deleted, the token becomes dangling and

@@ -3341,6 +3341,152 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:webhook-recv:received', (_e, { endpoint_path }: any) => { try { return { ok: ci().recordWebhookReceived(endpoint_path) }; } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:webhook-recv:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ci().listWebhookReceiverEndpoints(cid); } catch (e: any) { return { error: e?.message }; } });
 
+  // ═══════════════════════════════════════════════════════════════
+  // FINANCE WAVE: 100 features (F441-F540) — IPC handlers
+  // ═══════════════════════════════════════════════════════════════
+  const inp = () => require('../services/invoice-payment-features');
+  const ef = () => require('../services/expense-finance-features');
+
+  // Batch AB — Invoice Advanced
+  ipcMain.handle('feat:rec-inv:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return inp().upsertRecurringInvoice({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rec-inv:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listRecurringInvoices(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rec-inv:due', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().dueRecurringInvoices(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rec-inv:advance', (_e, { id, generated_invoice_id }: any) => { try { return inp().advanceRecurringInvoice(id, generated_invoice_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-approval:log', (_e, opts: any) => { try { return inp().logInvoiceApproval(opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-approval:list', (_e, { invoice_id }: any) => { try { return inp().listInvoiceApprovals(invoice_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-email:log', (_e, e: any) => { try { return inp().logInvoiceEmail(e); } catch (er: any) { return { error: er?.message }; } });
+  ipcMain.handle('feat:inv-email:opened', (_e, { tracking_pixel_id }: any) => { try { return { ok: inp().recordEmailOpen(tracking_pixel_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-email:clicked', (_e, { tracking_pixel_id }: any) => { try { return { ok: inp().recordEmailClick(tracking_pixel_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:latefee:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return inp().upsertLateFeePolicy({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:latefee:calc', (_e, opts: any) => { try { return inp().calcLateFee(opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-terms:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return inp().upsertPaymentTerms({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-terms:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listPaymentTerms(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:early-disc:calc', (_e, { invoice_id, payment_date }: any) => { try { return inp().calcEarlyPaymentDiscount(invoice_id, payment_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:prog-bill:create', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return inp().createProgressBilling({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:prog-bill:release', (_e, { schedule_id, ...opts }: any) => { try { return inp().releaseProgressBilling(schedule_id, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:prog-bill:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listProgressBilling(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:retainer:create', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return inp().createRetainer({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:retainer:drawdown', (_e, { retainer_id, amount, reason, invoice_id }: any) => { try { return inp().drawdownRetainer(retainer_id, amount, reason, invoice_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:retainer:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listRetainers(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-plan:create', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return inp().createPaymentPlan({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-plan:pay-installment', (_e, { installment_id, amount }: any) => { try { return { ok: inp().payInstallment(installment_id, amount) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-plan:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listPaymentPlans(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-attach:add', (_e, a: any) => { try { return inp().addInvoiceAttachment(a); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-attach:list', (_e, { invoice_id }: any) => { try { return inp().listInvoiceAttachments(invoice_id); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AC — Payment Processing
+  ipcMain.handle('feat:pay-link:create', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().createPaymentLink({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-link:consume', (_e, { short_code, amount }: any) => { try { return inp().consumePaymentLink(short_code, amount); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:reminder:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return inp().upsertReminderCadence({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:reminder:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listReminderCadences(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay-retry:record', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().recordPaymentRetry({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pay:apply-partial', (_e, { invoice_id, amount }: any) => { try { return inp().applyPartialPayment(invoice_id, amount); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cust-credit:add', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().addCustomerCredit({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cust-credit:apply', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().applyCustomerCredit({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cust-credit:get', (_e, { customer_id }: any) => { try { return inp().getCustomerCredit(customer_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:refund:record', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return inp().recordRefund({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:refund:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listRefunds(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:chargeback:record', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return inp().recordChargeback({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:chargeback:resolve', (_e, { id, resolution, resolved_at }: any) => { try { return { ok: inp().resolveChargeback(id, resolution, resolved_at) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cust-pm:add', (_e, m: any) => { try { const cid = db.getCurrentCompanyId(); return inp().addCustomerPaymentMethod({ ...m, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cust-pm:list', (_e, { customer_id }: any) => { try { return inp().listCustomerPaymentMethods(customer_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:check-print:record', (_e, j: any) => { try { const cid = db.getCurrentCompanyId(); return inp().recordCheckPrintJob({ ...j, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:check-print:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listCheckPrintJobs(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:crypto:record', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return inp().recordCryptoPayment({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AE — Subscriptions
+  ipcMain.handle('feat:sub-plan:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return inp().upsertSubscriptionPlan({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub-plan:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listSubscriptionPlans(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub:create', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return inp().createSubscription({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub:change-plan', (_e, { subscription_id, new_plan_id }: any) => { try { return inp().changePlanWithProration(subscription_id, new_plan_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub:pause', (_e, { id, resume_date }: any) => { try { return { ok: inp().pauseSubscription(id, resume_date) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub:resume', (_e, { id }: any) => { try { return { ok: inp().resumeSubscription(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:sub:cancel', (_e, { id, at_period_end }: any) => { try { return { ok: inp().cancelSubscription(id, at_period_end) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:usage:record', (_e, u: any) => { try { const cid = db.getCurrentCompanyId(); return inp().recordUsage({ ...u, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:usage:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listUsage(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pricing-tier:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return inp().upsertPricingTier({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:pricing-tier:calc', (_e, { plan_id, quantity }: any) => { try { return inp().calcTieredCharge(plan_id, quantity); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:mrr:calc', (_e, { snapshot_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return inp().calculateMRR(cid, snapshot_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:churn:calc', (_e, { period_start, period_end }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return inp().calculateChurn(cid, period_start, period_end); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AF — Credit & Collections
+  ipcMain.handle('feat:credit:set-limit', (_e, { customer_id, limit }: any) => { try { return { ok: inp().setCreditLimit(customer_id, limit) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:credit:check', (_e, { customer_id, additional_charge }: any) => { try { return inp().checkCreditLimit(customer_id, additional_charge); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:credit:set-hold', (_e, { customer_id, hold, reason }: any) => { try { return { ok: inp().setCreditHold(customer_id, hold, reason) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:aging:calc', (_e, { as_of_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return inp().calcAgingBuckets(cid, as_of_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:statement:generate', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().generateStatement({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dunning-seq:create', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return inp().createDunningSequence({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dunning:log', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().logDunningEvent({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:writeoff:bad-debt', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().writeOffBadDebt({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:doubtful:calc', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().calcAllowanceForDoubtful({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:agency:handoff', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return inp().handOffToCollectionAgency({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:agency:record-recovery', (_e, { handoff_id, recovered_amount }: any) => { try { return { ok: inp().recordAgencyRecovery(handoff_id, recovered_amount) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:agency:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return inp().listCollectionHandoffs(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AD — Expense Advanced
+  ipcMain.handle('feat:exp-report:create', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return ef().createExpenseReport({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp-report:add-expenses', (_e, { report_id, expense_ids }: any) => { try { return ef().addExpensesToReport(report_id, expense_ids); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp-report:submit', (_e, { report_id }: any) => { try { return { ok: ef().submitExpenseReport(report_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp-report:approve', (_e, { report_id, approved_by }: any) => { try { return { ok: ef().approveExpenseReport(report_id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp-report:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listExpenseReports(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:perdiem:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return ef().upsertPerDiem({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:perdiem:calc', (_e, { location, days, include_lodging }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcPerDiem(cid, location, days, include_lodging); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vehicle:upsert', (_e, v: any) => { try { const cid = db.getCurrentCompanyId(); return ef().upsertVehicle({ ...v, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vehicle:list', (_e, { user_id }: any) => { try { return ef().listVehicles(user_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:recurring', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listRecurringExpenses(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:forecast', (_e, { months_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().forecastExpenses(cid, months_ahead || 3); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-1099:recalc', (_e, { tax_year, vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().recalcVendor1099(cid, tax_year, vendor_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-1099:required', (_e, { tax_year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listVendors1099Required(cid, tax_year); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cat-budget:upsert', (_e, b: any) => { try { const cid = db.getCurrentCompanyId(); return ef().upsertCategoryBudget({ ...b, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cat-budget:refresh-actuals', (_e, { fiscal_year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().refreshCategoryActuals(cid, fiscal_year); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:reimb:create', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return ef().createReimbursement({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:reimb:paid', (_e, { id, je_id, payment_method }: any) => { try { return { ok: ef().markReimbursementPaid(id, je_id, payment_method) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:rebillable', (_e, { expense_id, client_id, markup_pct }: any) => { try { return { ok: ef().markExpenseRebillable(expense_id, client_id, markup_pct) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:rebillable-list', (_e, { client_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listRebillableExpenses(cid, client_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:rebilled', (_e, { expense_id, invoice_id }: any) => { try { return { ok: ef().markExpenseRebilled(expense_id, invoice_id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:preapproval:request', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return ef().requestPreApproval({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:preapproval:approve', (_e, { id, approved_by }: any) => { try { return { ok: ef().approvePreApproval(id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:preapproval:reject', (_e, { id, reason }: any) => { try { return { ok: ef().rejectPreApproval(id, reason) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:preapproval:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listPreApprovals(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AG — Financial Analytics
+  ipcMain.handle('feat:ar-aging:chart', (_e, { as_of_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().arAgingChart(cid, as_of_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ap-aging:chart', (_e, { as_of_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().apAgingChart(cid, as_of_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dso:calc', (_e, { period_days }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcDSO(cid, period_days || 365); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:dpo:calc', (_e, { period_days }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcDPO(cid, period_days || 365); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ccc:calc', (_e, { period_days }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcCashConversionCycle(cid, period_days || 365); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:working-capital:calc', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcWorkingCapital(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:burn:calc', (_e, { months_history }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcBurnRate(cid, months_history || 3); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:runway:calc', (_e, { months_history }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcRunway(cid, months_history || 3); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ltv:calc', (_e, { customer_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcLTV(cid, customer_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cac:calc', (_e, { period_days }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcCAC(cid, period_days || 365); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:ltv-cac:ratio', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcLTVCACRatio(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:retention:calc', (_e, { period_start, period_end }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcRevenueRetention(cid, period_start, period_end); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:cohort:build', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().buildCohortAnalysis(cid); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AH — Tax & Compliance
+  ipcMain.handle('feat:1099-run:create', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ef().createForm1099Run({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:1099-run:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listForm1099Runs(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:withhold:record', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return ef().recordWithholding({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:qtax:record', (_e, q: any) => { try { const cid = db.getCurrentCompanyId(); return ef().recordQuarterlyEstimate({ ...q, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:qtax:list', (_e, { tax_year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listQuarterlyEstimates(cid, tax_year); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:tax-prov:calc', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ef().calcTaxProvision({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:rd-credit:calc', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ef().calcRDCredit({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:179:elect', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ef().elect179({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:179:list', (_e, { tax_year }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().list179Elections(cid, tax_year); } catch (e: any) { return { error: e?.message }; } });
+
+  // Batch AI — Vendor Management
+  ipcMain.handle('feat:vend-onboard:start', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ef().startVendorOnboarding({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend-onboard:update', (_e, { id, items_completed }: any) => { try { return ef().updateOnboardingProgress(id, items_completed); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:w9:record', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return ef().recordW9({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:w9:missing', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().vendorsMissingW9(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend-ins:record', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ef().recordVendorInsurance({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend-ins:expiring', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().expiringVendorInsurance(cid, days_ahead || 30); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend:score', (_e, { vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ef().calcVendorScore(cid, vendor_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend-disp:open', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); return ef().openVendorDispute({ ...d, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend-disp:resolve', (_e, { id, resolution_amount, notes }: any) => { try { return { ok: ef().resolveVendorDispute(id, resolution_amount, notes) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vend-disp:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ef().listVendorDisputes(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
