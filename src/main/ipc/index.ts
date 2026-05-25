@@ -538,8 +538,32 @@ function postJournalEntry(
   const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
   for (const line of nonZero) {
     const accountId = findAccount(dbInstance as any, companyId, line.nameHint);
-    if (!accountId) return; // skip whole entry if any account is missing
+    if (!accountId) {
+      // SAFETY: a missing account means the entry would be silently dropped,
+      // which surfaces upstream as "saved but no ledger record." Log so we
+      // can spot the missing-account case in the console.
+      console.warn(`[postJournalEntry] Could not resolve account for nameHint="${line.nameHint}". Skipping entire JE.`);
+      return;
+    }
     resolved.push({ accountId, debit: line.debit, credit: line.credit, note: line.note ?? '' });
+  }
+
+  // BALANCE CHECK: validate locally BEFORE the trigger so we surface a
+  // clearer error than the SQL "Posted journal entry must balance" rabbit
+  // hole. The trigger fires from raw line totals — but if we round each
+  // leg to cents BEFORE insert, both sides round identically and we
+  // can't drift.
+  const totalDebit = Math.round(resolved.reduce((s, l) => s + (l.debit || 0), 0) * 100) / 100;
+  const totalCredit = Math.round(resolved.reduce((s, l) => s + (l.credit || 0), 0) * 100) / 100;
+  if (Math.abs(totalDebit - totalCredit) > 0.005) {
+    const lineSummary = resolved.map((l, i) => `  line ${i}: debit=${l.debit.toFixed(2)} credit=${l.credit.toFixed(2)}`).join('\n');
+    console.error(`[postJournalEntry] Unbalanced JE rejected before insert:\n  description="${description}"\n  total_debit=${totalDebit.toFixed(2)} total_credit=${totalCredit.toFixed(2)} diff=${(totalDebit - totalCredit).toFixed(4)}\n${lineSummary}`);
+    throw new Error(`Journal entry unbalanced: debits ${totalDebit.toFixed(2)} ≠ credits ${totalCredit.toFixed(2)} (diff ${(totalDebit - totalCredit).toFixed(2)}). Source: "${description}"`);
+  }
+  // Round each line to cents to match the totals we just validated.
+  for (const l of resolved) {
+    l.debit = Math.round(l.debit * 100) / 100;
+    l.credit = Math.round(l.credit * 100) / 100;
   }
 
   // Find the highest entry number by extracting the numeric suffix.
