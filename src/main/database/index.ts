@@ -3010,6 +3010,345 @@ export function initDatabase(): Database.Database {
     submitted_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
+  // ─── Batch 8: Inventory, Projects, Time (F111-F130) ───
+  // F111 — warehouses
+  `CREATE TABLE IF NOT EXISTS warehouses (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    address TEXT,
+    is_default INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT,
+    UNIQUE(company_id, code)
+  )`,
+  // F112 — inventory_locations (bin/shelf within warehouse)
+  `CREATE TABLE IF NOT EXISTS inventory_locations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    warehouse_id TEXT NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    location_code TEXT NOT NULL,
+    aisle TEXT,
+    rack TEXT,
+    bin TEXT,
+    capacity REAL DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_inv_loc_wh ON inventory_locations(warehouse_id)",
+  // F113 — inventory_lots (lot/batch tracking)
+  `CREATE TABLE IF NOT EXISTS inventory_lots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    lot_number TEXT NOT NULL,
+    warehouse_id TEXT,
+    location_id TEXT,
+    quantity REAL DEFAULT 0,
+    unit_cost REAL DEFAULT 0,
+    received_date TEXT,
+    expiry_date TEXT,
+    supplier_id TEXT,
+    status TEXT DEFAULT 'available',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, item_id, lot_number)
+  )`,
+  // F114 — inventory_serial_numbers
+  `CREATE TABLE IF NOT EXISTS inventory_serial_numbers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    serial_number TEXT NOT NULL,
+    lot_id TEXT,
+    warehouse_id TEXT,
+    location_id TEXT,
+    status TEXT DEFAULT 'available',
+    purchase_date TEXT,
+    sold_date TEXT,
+    customer_id TEXT,
+    warranty_expires_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, item_id, serial_number)
+  )`,
+  // F115 — inventory_transfers
+  `CREATE TABLE IF NOT EXISTS inventory_transfers (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    transfer_number TEXT,
+    transfer_date TEXT NOT NULL,
+    from_warehouse_id TEXT NOT NULL,
+    to_warehouse_id TEXT NOT NULL,
+    status TEXT DEFAULT 'draft',
+    notes TEXT,
+    item_count INTEGER DEFAULT 0,
+    requested_by TEXT,
+    shipped_at TEXT,
+    received_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS inventory_transfer_items (
+    id TEXT PRIMARY KEY,
+    transfer_id TEXT NOT NULL REFERENCES inventory_transfers(id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    lot_id TEXT,
+    quantity REAL DEFAULT 0,
+    unit_cost REAL DEFAULT 0,
+    notes TEXT
+  )`,
+  // F116 — inventory_adjustments
+  `CREATE TABLE IF NOT EXISTS inventory_adjustments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    adjustment_number TEXT,
+    adjustment_date TEXT NOT NULL,
+    warehouse_id TEXT,
+    reason TEXT,
+    reason_code TEXT,
+    total_value_change REAL DEFAULT 0,
+    approved_by TEXT,
+    approved_at TEXT,
+    posted_je_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS inventory_adjustment_items (
+    id TEXT PRIMARY KEY,
+    adjustment_id TEXT NOT NULL REFERENCES inventory_adjustments(id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    lot_id TEXT,
+    quantity_change REAL DEFAULT 0,
+    old_quantity REAL DEFAULT 0,
+    new_quantity REAL DEFAULT 0,
+    unit_cost REAL DEFAULT 0,
+    value_change REAL DEFAULT 0
+  )`,
+  // F117 — stock_take_sessions
+  `CREATE TABLE IF NOT EXISTS stock_take_sessions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    session_name TEXT,
+    warehouse_id TEXT,
+    start_date TEXT NOT NULL,
+    completion_date TEXT,
+    counted_by TEXT,
+    status TEXT DEFAULT 'in_progress',
+    total_items_counted INTEGER DEFAULT 0,
+    variance_count INTEGER DEFAULT 0,
+    adjustment_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS stock_take_counts (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES stock_take_sessions(id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    location_id TEXT,
+    system_quantity REAL DEFAULT 0,
+    counted_quantity REAL DEFAULT 0,
+    variance REAL DEFAULT 0,
+    notes TEXT,
+    counted_at TEXT
+  )`,
+  // F118 — low_stock_alerts
+  `CREATE TABLE IF NOT EXISTS low_stock_alerts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    warehouse_id TEXT,
+    threshold_quantity REAL DEFAULT 0,
+    current_quantity REAL DEFAULT 0,
+    severity TEXT DEFAULT 'warning',
+    alerted_at TEXT,
+    acknowledged_at TEXT,
+    acknowledged_by TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F119 — inventory_valuation_methods (per company default + per item override)
+  "ALTER TABLE companies ADD COLUMN inventory_valuation_method TEXT DEFAULT 'average'",
+  "ALTER TABLE inventory_items ADD COLUMN valuation_method_override TEXT",
+  "ALTER TABLE inventory_items ADD COLUMN minimum_stock REAL DEFAULT 0",
+  "ALTER TABLE inventory_items ADD COLUMN maximum_stock REAL DEFAULT 0",
+  // F120 — inventory_value_history (period-end COGS snapshots)
+  `CREATE TABLE IF NOT EXISTS inventory_value_history (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    method TEXT DEFAULT 'average',
+    total_units REAL DEFAULT 0,
+    total_value REAL DEFAULT 0,
+    by_item_breakdown TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, snapshot_date)
+  )`,
+  // F121 — project_tasks
+  `CREATE TABLE IF NOT EXISTS project_tasks (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    parent_task_id TEXT,
+    task_name TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'todo',
+    priority TEXT DEFAULT 'medium',
+    assigned_to TEXT,
+    start_date TEXT,
+    due_date TEXT,
+    completed_at TEXT,
+    estimated_hours REAL DEFAULT 0,
+    actual_hours REAL DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_project_tasks_proj ON project_tasks(project_id, status)",
+  // F122 — project_milestones
+  `CREATE TABLE IF NOT EXISTS project_milestones (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    milestone_name TEXT NOT NULL,
+    target_date TEXT,
+    achieved_date TEXT,
+    status TEXT DEFAULT 'pending',
+    deliverables TEXT,
+    payment_amount REAL DEFAULT 0,
+    invoiced INTEGER DEFAULT 0,
+    invoice_id TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F123 — project_resources (team allocation)
+  `CREATE TABLE IF NOT EXISTS project_resources (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    resource_type TEXT DEFAULT 'employee',
+    employee_id TEXT,
+    role TEXT,
+    allocation_percent REAL DEFAULT 100,
+    start_date TEXT,
+    end_date TEXT,
+    hourly_rate REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F124 — project_budgets
+  `CREATE TABLE IF NOT EXISTS project_budgets (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    budgeted_amount REAL DEFAULT 0,
+    actual_amount REAL DEFAULT 0,
+    committed_amount REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F125 — project_risks
+  `CREATE TABLE IF NOT EXISTS project_risks (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    risk_description TEXT NOT NULL,
+    likelihood TEXT DEFAULT 'medium',
+    impact TEXT DEFAULT 'medium',
+    mitigation_plan TEXT,
+    owner TEXT,
+    status TEXT DEFAULT 'open',
+    identified_date TEXT,
+    closed_date TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F126 — project_change_orders
+  `CREATE TABLE IF NOT EXISTS project_change_orders (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    co_number TEXT,
+    description TEXT NOT NULL,
+    cost_change REAL DEFAULT 0,
+    schedule_change_days INTEGER DEFAULT 0,
+    requested_by TEXT,
+    approved_by TEXT,
+    approved_at TEXT,
+    status TEXT DEFAULT 'pending',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // F127 — timesheet_periods
+  `CREATE TABLE IF NOT EXISTS timesheet_periods (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    total_hours REAL DEFAULT 0,
+    billable_hours REAL DEFAULT 0,
+    overtime_hours REAL DEFAULT 0,
+    status TEXT DEFAULT 'open',
+    submitted_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, employee_id, period_start)
+  )`,
+  // F128 — timesheet_approvals
+  `CREATE TABLE IF NOT EXISTS timesheet_approvals (
+    id TEXT PRIMARY KEY,
+    period_id TEXT NOT NULL REFERENCES timesheet_periods(id) ON DELETE CASCADE,
+    step_number INTEGER DEFAULT 1,
+    approver_id TEXT,
+    action TEXT,
+    acted_at TEXT,
+    comment TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // F129 — billable_time_summary cache (rebuilt periodically)
+  `CREATE TABLE IF NOT EXISTS billable_time_summary (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    summary_date TEXT NOT NULL,
+    project_id TEXT,
+    client_id TEXT,
+    employee_id TEXT,
+    period_start TEXT,
+    period_end TEXT,
+    billable_hours REAL DEFAULT 0,
+    non_billable_hours REAL DEFAULT 0,
+    billable_amount REAL DEFAULT 0,
+    invoiced_amount REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_bts_co_period ON billable_time_summary(company_id, period_start, period_end)",
+  // F130 — project_profitability snapshots
+  `CREATE TABLE IF NOT EXISTS project_profitability (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    total_revenue REAL DEFAULT 0,
+    total_costs REAL DEFAULT 0,
+    labor_costs REAL DEFAULT 0,
+    material_costs REAL DEFAULT 0,
+    other_costs REAL DEFAULT 0,
+    gross_profit REAL DEFAULT 0,
+    margin_percent REAL DEFAULT 0,
+    budget_variance REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, project_id, snapshot_date)
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

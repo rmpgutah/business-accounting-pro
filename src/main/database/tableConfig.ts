@@ -147,6 +147,11 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'lockbox_items',
   'fx_rates',
   'inter_company_transfers',
+  // Batch 8 child tables
+  'inventory_transfer_items',
+  'inventory_adjustment_items',
+  'stock_take_counts',
+  'timesheet_approvals',
 ]);
 
 // Tables that do NOT have an `updated_at` column.
@@ -471,6 +476,21 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'credit_card_statements',
   'lockbox_imports',
   'ach_batches',
+  // Batch 8: log/audit and child tables (no updated_at)
+  'inventory_transfer_items',
+  'inventory_adjustment_items',
+  'inventory_adjustments',
+  'stock_take_sessions',
+  'stock_take_counts',
+  'low_stock_alerts',
+  'inventory_value_history',
+  'billable_time_summary',
+  'project_profitability',
+  'inventory_lots',
+  'inventory_serial_numbers',
+  'inventory_locations',
+  'timesheet_periods',
+  'timesheet_approvals',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

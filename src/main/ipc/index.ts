@@ -2622,6 +2622,80 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:positive-pay:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPositivePayFiles(cid, limit); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:positive-pay:mark-submitted', (_e, { id }: any) => { try { return { ok: tr().markPositivePayFileSubmitted(id) }; } catch (e: any) { return { error: e?.message }; } });
 
+  // ─── Batch 8: Inventory, Projects, Time (20) ───────────
+  const ip = () => require('../services/inventory-projects-features');
+  // F111 warehouses
+  ipcMain.handle('feat:warehouse:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertWarehouse({ ...w, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:warehouse:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listWarehouses(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
+  // F112 locations
+  ipcMain.handle('feat:location:upsert', (_e, l: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertLocation({ ...l, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:location:list', (_e, { warehouse_id }: any) => { try { return ip().listLocations(warehouse_id); } catch (e: any) { return { error: e?.message }; } });
+  // F113 lots
+  ipcMain.handle('feat:lot:upsert', (_e, l: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertLot({ ...l, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:lot:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listLots(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F114 serials
+  ipcMain.handle('feat:serial:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertSerial({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:serial:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listSerials(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F115 transfers
+  ipcMain.handle('feat:transfer:create', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return ip().createTransfer({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:transfer:ship', (_e, { id }: any) => { try { return { ok: ip().markTransferShipped(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:transfer:receive', (_e, { id }: any) => { try { return { ok: ip().markTransferReceived(id) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:transfer:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listTransfers(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:transfer:items', (_e, { transfer_id }: any) => { try { return ip().getTransferItems(transfer_id); } catch (e: any) { return { error: e?.message }; } });
+  // F116 adjustments
+  ipcMain.handle('feat:adjustment:create', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); return ip().createAdjustment({ ...a, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:adjustment:approve', (_e, { id, approved_by }: any) => { try { return { ok: ip().approveAdjustment(id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:adjustment:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listAdjustments(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F117 stock takes
+  ipcMain.handle('feat:stock-take:start', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); return ip().startStockTake({ ...s, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:stock-take:count', (_e, { session_id, ...count }: any) => { try { return ip().recordCount(session_id, count); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:stock-take:complete', (_e, { session_id }: any) => { try { return ip().completeStockTake(session_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:stock-take:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listStockTakes(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:stock-take:counts', (_e, { session_id }: any) => { try { return ip().getStockTakeCounts(session_id); } catch (e: any) { return { error: e?.message }; } });
+  // F118 low stock alerts
+  ipcMain.handle('feat:low-stock:scan', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ip().scanLowStock(cid); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:low-stock:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listLowStockAlerts(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:low-stock:ack', (_e, { id, acknowledged_by }: any) => { try { return { ok: ip().acknowledgeAlert(id, acknowledged_by) }; } catch (e: any) { return { error: e?.message }; } });
+  // F119 valuation methods
+  ipcMain.handle('feat:valuation:set-method', (_e, { method }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return false; return { ok: ip().setValuationMethod(cid, method) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:valuation:get-method', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return 'average'; return ip().getValuationMethod(cid); } catch (e: any) { return { error: e?.message }; } });
+  // F120 inventory value history
+  ipcMain.handle('feat:inv-value:capture', (_e, { snapshot_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ip().captureInventoryValueSnapshot(cid, snapshot_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:inv-value:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listInventoryValueHistory(cid, limit); } catch (e: any) { return { error: e?.message }; } });
+  // F121 project tasks
+  ipcMain.handle('feat:task:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertTask({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:task:list', (_e, { project_id, ...opts }: any) => { try { return ip().listTasks(project_id, opts); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:task:complete', (_e, { id }: any) => { try { return { ok: ip().completeTask(id) }; } catch (e: any) { return { error: e?.message }; } });
+  // F122 milestones
+  ipcMain.handle('feat:milestone:upsert', (_e, m: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertMilestone({ ...m, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:milestone:list', (_e, { project_id }: any) => { try { return ip().listMilestones(project_id); } catch (e: any) { return { error: e?.message }; } });
+  // F123 resources
+  ipcMain.handle('feat:resource:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertResource({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:resource:list', (_e, { project_id }: any) => { try { return ip().listResources(project_id); } catch (e: any) { return { error: e?.message }; } });
+  // F124 project budgets
+  ipcMain.handle('feat:proj-budget:upsert', (_e, b: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertProjectBudget({ ...b, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:proj-budget:list', (_e, { project_id }: any) => { try { return ip().listProjectBudgets(project_id); } catch (e: any) { return { error: e?.message }; } });
+  // F125 risks
+  ipcMain.handle('feat:risk:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertRisk({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:risk:list', (_e, { project_id, open_only }: any) => { try { return ip().listRisks(project_id, !!open_only); } catch (e: any) { return { error: e?.message }; } });
+  // F126 change orders
+  ipcMain.handle('feat:co:upsert', (_e, co: any) => { try { const cid = db.getCurrentCompanyId(); return ip().upsertChangeOrder({ ...co, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:co:approve', (_e, { id, approved_by }: any) => { try { return { ok: ip().approveChangeOrder(id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:co:list', (_e, { project_id, ...opts }: any) => { try { return ip().listChangeOrders(project_id, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F127 timesheet periods
+  ipcMain.handle('feat:timesheet:open', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); return ip().openTimesheetPeriod({ ...p, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:timesheet:submit', (_e, { period_id }: any) => { try { return ip().submitTimesheet(period_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:timesheet:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listTimesheetPeriods(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F128 timesheet approvals
+  ipcMain.handle('feat:timesheet:approve', (_e, { period_id, approver_id, action, comment }: any) => { try { return ip().approveTimesheet(period_id, approver_id, action, comment); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:timesheet:approvals', (_e, { period_id }: any) => { try { return ip().getTimesheetApprovals(period_id); } catch (e: any) { return { error: e?.message }; } });
+  // F129 billable summary
+  ipcMain.handle('feat:billable-summary:rebuild', (_e, { period_start, period_end }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().rebuildBillableTimeSummary(cid, period_start, period_end); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:billable-summary:get', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().getBillableTimeSummary(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+  // F130 profitability
+  ipcMain.handle('feat:profitability:capture', (_e, { project_id, snapshot_date }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ip().captureProjectProfitability(cid, project_id, snapshot_date); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:profitability:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ip().listProfitabilitySnapshots(cid, opts); } catch (e: any) { return { error: e?.message }; } });
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
