@@ -5075,6 +5075,265 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
+
+  // ═══════════════════════════════════════════════════════════════════
+  //   DYNAMIC WAVE: 90 runtime functions (F261-F350)
+  //   New supporting tables (most batches reuse existing infrastructure).
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ─── Batch J: Global Search (F261-F270) ───────────────
+  `CREATE TABLE IF NOT EXISTS search_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT,
+    query TEXT NOT NULL,
+    result_count INTEGER DEFAULT 0,
+    searched_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_search_hist_user ON search_history(user_id, searched_at DESC)",
+  `CREATE TABLE IF NOT EXISTS recently_viewed_entities (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    entity_label TEXT,
+    viewed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_recent_user ON recently_viewed_entities(user_id, viewed_at DESC)",
+  `CREATE TABLE IF NOT EXISTS pinned_entities (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    entity_label TEXT,
+    pinned_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, entity_type, entity_id)
+  )`,
+
+  // ─── Batch K: Notifications & Alerts (F271-F280) ──────
+  `CREATE TABLE IF NOT EXISTS notification_preferences (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT,
+    notification_type TEXT NOT NULL,
+    channel TEXT DEFAULT 'in_app',
+    is_enabled INTEGER DEFAULT 1,
+    quiet_hours_start TEXT,
+    quiet_hours_end TEXT,
+    UNIQUE(user_id, notification_type, channel)
+  )`,
+  `CREATE TABLE IF NOT EXISTS alert_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    entity_type TEXT,
+    criteria_json TEXT NOT NULL,
+    action_type TEXT DEFAULT 'notify',
+    action_config_json TEXT DEFAULT '{}',
+    is_active INTEGER DEFAULT 1,
+    last_fired_at TEXT,
+    fire_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // notifications table already exists; add snooze + escalation columns
+  "ALTER TABLE notifications ADD COLUMN snoozed_until TEXT",
+  "ALTER TABLE notifications ADD COLUMN escalated_at TEXT",
+  "ALTER TABLE notifications ADD COLUMN escalation_count INTEGER DEFAULT 0",
+
+  // ─── Batch L: Import / Export (F281-F290) ─────────────
+  `CREATE TABLE IF NOT EXISTS import_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    column_mapping_json TEXT NOT NULL,
+    default_values_json TEXT DEFAULT '{}',
+    is_active INTEGER DEFAULT 1,
+    use_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS export_jobs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    job_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    format TEXT DEFAULT 'csv',
+    filters_json TEXT DEFAULT '{}',
+    schedule_cron TEXT,
+    last_run_at TEXT,
+    next_run_at TEXT,
+    output_path TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+
+  // ─── Batch M: Bulk Actions (F291-F300) ────────────────
+  `CREATE TABLE IF NOT EXISTS bulk_undo_snapshots (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    operation_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_ids TEXT NOT NULL,
+    original_data_json TEXT NOT NULL,
+    changed_fields_json TEXT,
+    is_undoable INTEGER DEFAULT 1,
+    undo_expires_at TEXT,
+    undone_at TEXT,
+    performed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_undo_co_perf ON bulk_undo_snapshots(company_id, performed_at DESC)",
+
+  // ─── Batch N: Smart Helpers (F301-F310) ───────────────
+  `CREATE TABLE IF NOT EXISTS smart_detections (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    detection_type TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    score REAL DEFAULT 0,
+    severity TEXT DEFAULT 'info',
+    reasoning_json TEXT DEFAULT '{}',
+    dismissed_at TEXT,
+    detected_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS vendor_canonicalizations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    input_pattern TEXT NOT NULL,
+    canonical_vendor_id TEXT NOT NULL,
+    confidence REAL DEFAULT 1.0,
+    match_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS recommendations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    recommendation_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    action_url TEXT,
+    priority INTEGER DEFAULT 50,
+    dismissed_at TEXT,
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch O: Keyboard & Macros (F311-F320) ───────────
+  `CREATE TABLE IF NOT EXISTS workspace_layouts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT,
+    name TEXT NOT NULL,
+    layout_json TEXT NOT NULL,
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS command_registry (
+    id TEXT PRIMARY KEY,
+    command_id TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL,
+    category TEXT,
+    scope TEXT DEFAULT 'global',
+    default_hotkey TEXT,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── Batch P: Report Engine (F321-F330) ───────────────
+  `CREATE TABLE IF NOT EXISTS custom_reports (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    report_type TEXT DEFAULT 'tabular',
+    definition_json TEXT NOT NULL,
+    is_published INTEGER DEFAULT 0,
+    created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS report_schedules (
+    id TEXT PRIMARY KEY,
+    report_id TEXT NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+    schedule_cron TEXT NOT NULL,
+    recipients_json TEXT DEFAULT '[]',
+    format TEXT DEFAULT 'pdf',
+    is_active INTEGER DEFAULT 1,
+    last_run_at TEXT,
+    next_run_at TEXT,
+    run_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS report_executions (
+    id TEXT PRIMARY KEY,
+    report_id TEXT NOT NULL,
+    executed_at TEXT DEFAULT (datetime('now')),
+    duration_ms INTEGER DEFAULT 0,
+    row_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'success',
+    output_path TEXT,
+    error_message TEXT
+  )`,
+
+  // ─── Batch Q: Webhook Delivery (F331-F340) — reuses
+  //     webhook_subscriptions + webhook_deliveries from F71-F90.
+  //     Adds queue+retry tracking.
+  `CREATE TABLE IF NOT EXISTS webhook_queue (
+    id TEXT PRIMARY KEY,
+    subscription_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    next_attempt_at TEXT DEFAULT (datetime('now')),
+    last_error TEXT,
+    status TEXT DEFAULT 'queued',
+    queued_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_webhook_q_status ON webhook_queue(status, next_attempt_at)",
+
+  // ─── Batch R: Real-time + Activity (F341-F350) ────────
+  `CREATE TABLE IF NOT EXISTS activity_feed (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    user_email TEXT,
+    action TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    entity_label TEXT,
+    metadata_json TEXT DEFAULT '{}',
+    occurred_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_activity_co_time ON activity_feed(company_id, occurred_at DESC)",
+  `CREATE TABLE IF NOT EXISTS entity_locks (
+    id TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_email TEXT,
+    locked_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    UNIQUE(entity_type, entity_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS user_presence (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE,
+    company_id TEXT,
+    current_page TEXT,
+    current_entity_type TEXT,
+    current_entity_id TEXT,
+    last_heartbeat_at TEXT DEFAULT (datetime('now'))
+  )`,
   // ─── Data hygiene: remove orphaned invoice_tokens whose invoice_id
   // no longer exists. Tokens are ephemeral share links — when the
   // underlying invoice is hard-deleted, the token becomes dangling and

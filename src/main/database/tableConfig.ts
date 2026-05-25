@@ -209,6 +209,19 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   // Asset depreciation
   'asset_depreciation_entries',
 
+  // Dynamic Wave (F261-F350) — user-scoped or junction
+  'workspace_layouts',
+  'pinned_entities',
+  'recently_viewed_entities',
+  'search_history',
+  'notification_preferences',
+  'entity_locks',
+  'user_presence',
+  'report_schedules',
+  'report_executions',
+  'webhook_queue',
+  'command_registry',
+
   // ── 4. Append-only log / audit tables (no scoping by design) ────
   'anomaly_log',
   'automation_rules',
@@ -488,6 +501,20 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'wire_transfers',
   'workflow_definitions',
   'workflows',
+  // Dynamic Wave (F261-F350) log/append-only tables
+  'search_history',
+  'recently_viewed_entities',
+  'pinned_entities',
+  'bulk_undo_snapshots',
+  'smart_detections',
+  'vendor_canonicalizations',
+  'recommendations',
+  'report_executions',
+  'webhook_queue',
+  'activity_feed',
+  'entity_locks',
+  'user_presence',
+  'notification_preferences',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.
