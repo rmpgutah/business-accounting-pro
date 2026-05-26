@@ -354,8 +354,17 @@ table{width:100%;border-collapse:collapse;}
       {/* KPI Header Cards (Changes 31-34) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="block-card p-3">
-          <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Amount</div>
-          <div className="text-2xl font-mono font-bold text-accent-expense mt-1">{formatCurrency(expense.amount || 0)}</div>
+          <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total (incl. Tax)</div>
+          {/* FINAL-PRICE: amount + tax. Legacy tax_inclusive=1 rows already stored
+              total in amount, so don't double-count. */}
+          <div className="text-2xl font-mono font-bold text-accent-expense mt-1">
+            {formatCurrency((expense as any).tax_inclusive ? (expense.amount || 0) : (expense.amount || 0) + ((expense as any).tax_amount || 0))}
+          </div>
+          {((expense as any).tax_amount || 0) > 0 && (
+            <div className="text-[10px] text-text-muted mt-1">
+              Subtotal {formatCurrency(expense.amount || 0)} + Tax {formatCurrency((expense as any).tax_amount || 0)}
+            </div>
+          )}
           {(expense.currency && expense.currency !== 'USD') && (
             <div className="text-[10px] text-text-muted mt-1">{expense.currency}</div>
           )}
@@ -405,8 +414,15 @@ table{width:100%;border-collapse:collapse;}
             <p className="text-xs text-text-muted mt-0.5">{formatDate(expense.date)} &middot; <span className={st.className}>{st.label}</span></p>
           </div>
           <div className="text-right">
-            <div className="text-xs uppercase font-bold text-text-muted">Amount</div>
-            <div className="text-2xl font-mono font-bold text-accent-expense">{formatCurrency(expense.amount)}</div>
+            <div className="text-xs uppercase font-bold text-text-muted">Total</div>
+            <div className="text-2xl font-mono font-bold text-accent-expense">
+              {formatCurrency((expense as any).tax_inclusive ? (expense.amount || 0) : (expense.amount || 0) + ((expense as any).tax_amount || 0))}
+            </div>
+            {((expense as any).tax_amount || 0) > 0 && (
+              <div className="text-[10px] text-text-muted mt-0.5">
+                incl. {formatCurrency((expense as any).tax_amount || 0)} tax
+              </div>
+            )}
           </div>
         </div>
 

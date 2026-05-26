@@ -32,6 +32,7 @@ interface Expense {
   vendor_w9_status?: string;
   amount: number;
   tax_amount?: number;
+  tax_inclusive?: number;
   status: 'pending' | 'approved' | 'paid' | 'rejected';
   is_billable: boolean;
   is_reimbursable?: number;
@@ -105,6 +106,16 @@ const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vend
 
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
+
+// FINAL-PRICE rule: every UI surface that shows "what this expense cost" must
+// resolve to amount + tax. Legacy rows saved with tax_inclusive=1 already stored
+// amount=total (latent bug from earlier code), so we don't double-count those.
+// Going forward, amount is always pre-tax and tax_amount is separate.
+function expenseDisplayTotal(e: { amount?: number; tax_amount?: number; tax_inclusive?: number }): number {
+  const a = e.amount || 0;
+  const t = e.tax_amount || 0;
+  return e.tax_inclusive ? a : a + t;
+}
 const COLS_KEY = (uid: string) => `expense_cols_${uid}`;
 
 interface ExpenseListProps {
@@ -862,7 +873,19 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <span onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'amount', exp.amount); }}>{formatCurrency(exp.amount)}</span>
+              <span
+                /* Inline-edit edits the pre-tax amount (legacy semantic) — the
+                   detail form is the right place to edit a total. Tooltip
+                   explains the breakdown. */
+                onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'amount', exp.amount); }}
+                title={(exp.tax_amount || 0) > 0
+                  ? `Total ${formatCurrency(expenseDisplayTotal(exp))} = Subtotal ${formatCurrency(exp.amount || 0)} + Tax ${formatCurrency(exp.tax_amount || 0)}\nDouble-click to edit subtotal only.`
+                  : 'Double-click to edit'}
+              >
+                {/* FINAL-PRICE display: amount + tax. Legacy tax_inclusive rows stored
+                    amount = total already, so don't double-count by adding tax again. */}
+                {formatCurrency(expenseDisplayTotal(exp))}
+              </span>
             )}
           </td>
         )}

@@ -276,7 +276,11 @@ const emptyForm: ExpenseFormData = {
   currency: 'USD',
   lost_receipt_affidavit: '',
   exchange_rate: '1',
-  tax_inclusive: false,
+  // FINAL-PRICE: default tax_inclusive=true so the AMOUNT field's value matches
+  // what the user actually paid (e.g., $71.03), with tax computed/shown as a
+  // breakdown line below. Exclusive mode still available via the radio toggle
+  // for users who prefer entering pre-tax + adding tax on top (US sales-tax style).
+  tax_inclusive: true,
   tax_rate: '',
   entry_mode: 'standard',
   odometer_start: '',
@@ -386,30 +390,33 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
   useEffect(() => {
     if (useLineItems && lineItems.length > 0) {
-      // Form's "Amount" field is the pre-tax subtotal (matches DB convention).
+      // FINAL-PRICE: AMOUNT field shows the all-in TOTAL (subtotal + tax) so it
+      // matches the receipt the user is looking at. The save path stores
+      // expense.amount as the pre-tax subtotal (lineItemTotal in payload).
       setForm(prev => ({
         ...prev,
-        amount: lineItemSubtotal.toFixed(2),
+        amount: lineItemGrandTotal.toFixed(2),
         tax_amount: lineItemTaxTotal.toFixed(2),
       }));
     }
-  }, [lineItemSubtotal, lineItemTaxTotal, useLineItems]);
+  }, [lineItemSubtotal, lineItemTaxTotal, lineItemGrandTotal, useLineItems]);
 
   // ── AUTO-COMPUTE TAX AMOUNT in NON-itemized mode ──────────
-  // The user's complaint "federal taxes not calculating" was rooted in the
-  // single-line expense path having no auto-compute: users would enter
-  // amount + tax_rate but tax_amount stayed at whatever they last typed.
-  // Now: when in NON-itemized mode and tax_rate > 0, derive tax_amount
-  // from amount × rate. We only override if the user hasn't manually
-  // overridden tax_amount (to allow manual entry of unusual tax amounts).
+  // FINAL-PRICE MATH:
+  //   - tax_inclusive=true  → form.amount IS the all-in TOTAL the user paid.
+  //                           tax = total × rate / (100 + rate)   [extracts tax]
+  //                           pre-tax (saved as expense.amount) = total - tax
+  //   - tax_inclusive=false → form.amount is PRE-TAX. tax added on top.
+  //                           tax = amount × rate / 100
+  // Default is tax_inclusive=true so the AMOUNT field matches the receipt total.
   useEffect(() => {
     if (useLineItems) return; // line-items mode handled above
     const amount = parseFloat(form.amount) || 0;
     const rate = parseFloat(form.tax_rate) || 0;
     if (rate <= 0 || amount <= 0) return;
     const computed = form.tax_inclusive
-      ? amount - (amount / (1 + rate / 100))   // tax-inclusive: extract tax
-      : amount * (rate / 100);                  // tax-exclusive: add on top
+      ? amount * rate / (100 + rate)            // tax-inclusive: extract from total
+      : amount * (rate / 100);                  // tax-exclusive: add on top of pre-tax
     const rounded = roundCents(computed).toFixed(2);
     // Only update if different — prevents render loops.
     if (rounded !== form.tax_amount) {
@@ -633,9 +640,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               const cf = typeof existing.custom_fields === 'string' ? JSON.parse(existing.custom_fields) : (existing.custom_fields || {});
               setDetails(cf);
             } catch { setDetails({}); }
+            // FINAL-PRICE: the AMOUNT field UI shows the all-in TOTAL (pre-tax + tax).
+            // DB still stores expense.amount as pre-tax + expense.tax_amount as the
+            // tax portion. Legacy rows saved with tax_inclusive=1 already stored
+            // amount=total, so we don't double-add tax for those.
+            const storedAmount = Number(existing.amount) || 0;
+            const storedTax = Number(existing.tax_amount) || 0;
+            const displayTotal = existing.tax_inclusive ? storedAmount : storedAmount + storedTax;
             setForm({
               date: existing.date || emptyForm.date,
-              amount: existing.amount?.toString() || '',
+              amount: displayTotal ? displayTotal.toFixed(2) : '',
               tax_amount: existing.tax_amount?.toString() || '',
               description: existing.description || '',
               category_id: existing.category_id || '',
@@ -743,10 +757,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       setErrors([]);
       setSaving(true);
       try {
+        // FINAL-PRICE SAVE SPLIT (draft path): see same logic in non-draft save below.
+        const draftEnteredAmount = roundCents(parseFloat(form.amount) || 0);
+        const draftEnteredTax = roundCents(parseFloat(form.tax_amount) || 0);
+        const draftPersistAmount = useLineItems
+          ? lineItemTotal
+          : form.tax_inclusive
+            ? roundCents(draftEnteredAmount - draftEnteredTax)
+            : draftEnteredAmount;
         const draftPayload: Record<string, any> = {
           date: form.date,
-          amount: useLineItems ? lineItemTotal : roundCents(parseFloat(form.amount) || 0),
-          tax_amount: useLineItems ? lineItemTaxTotal : roundCents(parseFloat(form.tax_amount) || 0),
+          amount: draftPersistAmount,
+          tax_amount: useLineItems ? lineItemTaxTotal : draftEnteredTax,
           description: form.description.trim(),
           category_id: form.category_id || null,
           account_id: form.account_id || null,
@@ -867,13 +889,23 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     setSaving(true);
 
     try {
+      // FINAL-PRICE SAVE SPLIT: form.amount holds the all-in TOTAL (matches what
+      // the user typed). Internally we still store amount = PRE-TAX and
+      // tax_amount = the tax portion, so JE postings + tax reports stay correct.
+      // - Itemize ON: lineItemTotal is already pre-tax (sum of line amounts).
+      // - Non-itemize + tax_inclusive=true: subtract computed tax from total.
+      // - Non-itemize + tax_inclusive=false: legacy exclusive — user typed pre-tax already.
+      const enteredAmount = roundCents(parseFloat(form.amount) || 0);
+      const enteredTax = roundCents(parseFloat(form.tax_amount) || 0);
+      const persistAmount = useLineItems
+        ? lineItemTotal
+        : form.tax_inclusive
+          ? roundCents(enteredAmount - enteredTax)
+          : enteredAmount;
       const payload: Record<string, any> = {
         date: form.date,
-        // When itemized, force parent.amount == sum(rounded line amounts) for reconciliation.
-        amount: useLineItems
-          ? lineItemTotal
-          : roundCents(parseFloat(form.amount) || 0),
-        tax_amount: useLineItems ? lineItemTaxTotal : roundCents(parseFloat(form.tax_amount) || 0),
+        amount: persistAmount,
+        tax_amount: useLineItems ? lineItemTaxTotal : enteredTax,
         description: form.description.trim(),
         category_id: form.category_id || null,
         account_id: form.account_id || null,
@@ -1129,18 +1161,25 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             />
           </div>
 
-          {/* Amount */}
+          {/* Amount — shows the all-in TOTAL (matches receipt). Save logic splits
+              it into pre-tax + tax behind the scenes. */}
           <div>
-            <FieldLabel label="Amount" required tooltip={useLineItems ? 'Pre-tax subtotal — auto-calculated from line items (tax is tracked separately)' : 'Pre-tax amount of the expense (tax is entered separately in Tax Amount)'} />
+            <FieldLabel
+              label={form.tax_inclusive ? 'Total Amount (incl. tax)' : 'Pre-tax Amount'}
+              required
+              tooltip={useLineItems
+                ? 'All-in total — auto-calculated from line items (subtotal + tax). The system records the pre-tax portion in the ledger separately.'
+                : form.tax_inclusive
+                  ? 'Enter the final total you paid (including any tax). The Tax Amount below is extracted from this total using the Tax Rate.'
+                  : 'Pre-tax amount of the expense. Tax is added on top using the Tax Rate.'}
+            />
             <div className="relative">
               <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
               <input
                 type="number"
                 name="amount"
                 step="0.01"
-                /* pl-10 (40px) leaves clearance for the $ icon (left-3 + size 14 = ends at ~26px).
-                   Older pl-8 (32px) was too tight on macOS Electron — the leading digit
-                   ("$65.99" → "$5.99") rendered under the icon. */
+                /* pl-10 (40px) leaves clearance for the $ icon. */
                 className={`block-input pl-10 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.amount}
@@ -1149,6 +1188,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 required
               />
             </div>
+            {/* Show the pre-tax breakdown so users see the split is correct. */}
+            {form.tax_inclusive && !useLineItems && parseFloat(form.tax_amount || '0') > 0 && (
+              <div className="text-[10px] text-text-muted mt-1 font-mono">
+                Subtotal: {formatCurrency(Math.max(0, (parseFloat(form.amount) || 0) - (parseFloat(form.tax_amount) || 0)))}
+                {' · '}Tax: {formatCurrency(parseFloat(form.tax_amount) || 0)}
+              </div>
+            )}
           </div>
 
           {/* Tax Amount + Currency */}
