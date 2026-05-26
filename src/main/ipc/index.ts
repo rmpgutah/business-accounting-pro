@@ -3941,6 +3941,57 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('iu:bulk:mark-sent', (_e, { invoice_ids, sent_by }: any) => iu().bulkMarkSent(invoice_ids || [], sent_by));
   ipcMain.handle('iu:bulk:export-manifest', (_e, { invoice_ids }: any) => iu().bulkExportManifest(invoice_ids || []));
 
+  // ─── Invoice Wave II (F923-F962) — `iw:*` namespace ──
+  const iw = () => require('../services/invoice-wave2-features');
+  // Batch IG: Recurring & Subscriptions
+  ipcMain.handle('iw:recurring:run', () => iw().runRecurringInvoicesDue());
+  ipcMain.handle('iw:metrics:mrr', () => iw().computeSubscriptionMetrics());
+  ipcMain.handle('iw:proration', (_e, p: any) => iw().calculateProration(p));
+  ipcMain.handle('iw:trials:expiring', (_e, { days_ahead }: any = {}) => iw().trialsAboutToExpire(days_ahead || 3));
+  ipcMain.handle('iw:sub:auto-renew', (_e, { subscription_id, auto_renew }: any) => iw().setSubscriptionAutoRenewal(subscription_id, !!auto_renew));
+  // Batch IH: PDF & Brand Customization
+  ipcMain.handle('iw:brand:upsert', (_e, p: any) => iw().upsertBrandProfile(p));
+  ipcMain.handle('iw:brand:list', () => iw().listBrandProfiles());
+  ipcMain.handle('iw:brand:default', () => iw().getDefaultBrandProfile());
+  ipcMain.handle('iw:watermark', (_e, { invoice_id }: any) => iw().watermarkForInvoice(invoice_id));
+  ipcMain.handle('iw:preview-html', (_e, { invoice_id, brand_profile_id }: any) => iw().previewInvoiceHtml(invoice_id, brand_profile_id));
+  // Batch II: Quote-to-Invoice
+  ipcMain.handle('iw:quote:convert', (_e, p: any) => iw().convertQuoteToInvoice(p));
+  ipcMain.handle('iw:quote:funnel', (_e, opts: any = {}) => iw().quoteFunnelMetrics(opts));
+  ipcMain.handle('iw:quote:auto-convert', () => iw().autoConvertAcceptedQuotes());
+  ipcMain.handle('iw:quote:revisions', (_e, { quote_id }: any) => iw().quoteRevisionHistory(quote_id));
+  ipcMain.handle('iw:quote:expired', () => iw().expiredQuotesNeedingFollowup());
+  // Batch IJ: Discounts & Promotions
+  ipcMain.handle('iw:coupon:upsert', (_e, p: any) => iw().upsertCoupon(p));
+  ipcMain.handle('iw:coupon:validate', (_e, { code, opts }: any) => iw().validateCoupon(code, opts || {}));
+  ipcMain.handle('iw:coupon:redeem', (_e, p: any) => iw().redeemCoupon(p));
+  ipcMain.handle('iw:coupon:report', () => iw().couponPerformanceReport());
+  ipcMain.handle('iw:volume-discount', (_e, { quantity, tiers }: any) => iw().calculateVolumeDiscount(quantity, tiers || []));
+  // Batch IK: Payment Processing
+  ipcMain.handle('iw:payment-intent:create', (_e, p: any) => iw().createPaymentIntent(p));
+  ipcMain.handle('iw:qr:payload', (_e, { invoice_id, base_url }: any) => iw().generatePaymentQrPayload(invoice_id, base_url));
+  ipcMain.handle('iw:bank-transfer:instructions', (_e, { invoice_id }: any) => iw().bankTransferInstructions(invoice_id));
+  ipcMain.handle('iw:payment:method-ranking', () => iw().paymentMethodSuccessRanking());
+  ipcMain.handle('iw:payment:retry-queue', () => iw().failedPaymentRetryQueue());
+  // Batch IL: International
+  ipcMain.handle('iw:i18n:labels', (_e, { lang }: any) => iw().getInvoiceI18nLabels(lang || 'en'));
+  ipcMain.handle('iw:vat:validate', (_e, { country, vat_number }: any) => iw().validateVatNumber(country || '', vat_number || ''));
+  ipcMain.handle('iw:reverse-charge', (_e, p: any) => iw().shouldApplyReverseCharge(p));
+  ipcMain.handle('iw:tax:country-rules', (_e, { country }: any) => iw().countryTaxRules(country || 'US'));
+  ipcMain.handle('iw:fx:exposure', () => iw().currencyExposureReport());
+  // Batch IM: Workflow Automation
+  ipcMain.handle('iw:workflow:create', (_e, p: any) => iw().createWorkflowRule(p));
+  ipcMain.handle('iw:workflow:evaluate', (_e, p: any) => iw().evaluateWorkflowRules(p));
+  ipcMain.handle('iw:predict:payment-date', (_e, { invoice_id }: any) => iw().predictPaymentDate(invoice_id));
+  ipcMain.handle('iw:suggest:classification', (_e, { client_id }: any) => iw().suggestInvoiceClassification(client_id));
+  ipcMain.handle('iw:approval:required', (_e, { invoice_id }: any) => iw().shouldRequireApproval(invoice_id));
+  // Batch IN: Client Portal & Reporting
+  ipcMain.handle('iw:portal:token', (_e, p: any) => iw().issueClientPortalToken(p));
+  ipcMain.handle('iw:statement', (_e, p: any) => iw().clientStatement(p));
+  ipcMain.handle('iw:forecast:revenue', (_e, { weeks_ahead }: any = {}) => iw().revenueForecast(weeks_ahead || 12));
+  ipcMain.handle('iw:ltv', (_e, { client_id }: any) => iw().computeClientLtv(client_id));
+  ipcMain.handle('iw:churn:predict', (_e, { client_id }: any) => iw().predictClientChurn(client_id));
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();

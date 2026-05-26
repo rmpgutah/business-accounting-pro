@@ -721,6 +721,11 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'invoice_dso_cache',
   'invoice_collection_scores',
   'invoice_payment_matches',
+  // Invoice Wave II (F923-F962) — snapshot/audit/log tables
+  'invoice_coupon_redemptions',
+  'client_portal_tokens',
+  'client_churn_predictions',
+  'client_ltv_snapshots',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

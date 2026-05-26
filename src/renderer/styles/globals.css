@@ -7026,3 +7026,376 @@ td[data-neg="true"]::after,
 }
 .iu-stat-pair .iu-stat-delta.up { color: #22c55e; }
 .iu-stat-pair .iu-stat-delta.down { color: #ef4444; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Invoice Wave II V411-V425 (15 utilities)
+   PDF watermarks, coupon chips, brand profile cards, portal share box,
+   language picker, MRR/ARR card, LTV ladder, churn risk indicator.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* V411: watermark stamp overlay (used in invoice preview iframe) */
+.iw-watermark {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: 120px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  pointer-events: none;
+  z-index: 100;
+}
+.iw-watermark.draft { color: #94a3b8; opacity: 0.15; }
+.iw-watermark.paid { color: #22c55e; opacity: 0.15; }
+.iw-watermark.overdue { color: #ef4444; opacity: 0.15; }
+.iw-watermark.void { color: #ef4444; opacity: 0.20; }
+
+/* V412: coupon chip (in the invoice editor) */
+.iw-coupon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(34,197,94,0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,0.30);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.iw-coupon-chip .iw-coupon-code {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.iw-coupon-chip .iw-coupon-savings {
+  padding: 1px 5px;
+  background: rgba(34,197,94,0.25);
+  border-radius: 8px;
+}
+
+/* V413: brand profile card (in settings) */
+.iw-brand-card {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  cursor: pointer;
+  transition: border-color var(--motion-base);
+}
+.iw-brand-card:hover { border-color: var(--color-accent-blue); }
+.iw-brand-card.is-default { border-color: var(--color-accent-blue); background: rgba(96,165,250,0.05); }
+.iw-brand-card .iw-brand-swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.iw-brand-card .iw-brand-name { font-weight: 700; font-size: 13px; color: var(--color-text-primary); }
+.iw-brand-card .iw-brand-meta { font-size: 10px; color: var(--color-text-muted); margin-top: 2px; }
+.iw-brand-default-badge {
+  padding: 2px 6px;
+  background: var(--color-accent-blue);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+
+/* V414: portal share box (the secure URL + copy button) */
+.iw-portal-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.iw-portal-share .iw-portal-url {
+  flex: 1;
+  background: var(--color-bg-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text-secondary);
+}
+
+/* V415: language picker pill */
+.iw-lang-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.iw-lang-pill.is-active { background: var(--color-accent-blue); color: white; border-color: var(--color-accent-blue); }
+.iw-lang-pill:hover:not(.is-active) { border-color: var(--color-accent-blue); }
+
+/* V416: MRR / ARR card with breakdown */
+.iw-mrr-card {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(59,130,246,0.05));
+}
+.iw-mrr-card .iw-mrr-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+.iw-mrr-card .iw-mrr-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+.iw-mrr-card .iw-mrr-arr {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.iw-mrr-card .iw-mrr-detail {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+/* V417: LTV ladder — list of top-N clients ranked by projected lifetime value */
+.iw-ltv-ladder {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+}
+.iw-ltv-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-primary);
+  font-size: 11px;
+}
+.iw-ltv-row:last-child { border-bottom: none; }
+.iw-ltv-rank {
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.iw-ltv-name { font-weight: 600; color: var(--color-text-primary); }
+.iw-ltv-value { font-family: var(--font-mono, ui-monospace, monospace); font-weight: 700; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.iw-ltv-months { color: var(--color-text-muted); font-size: 9px; }
+
+/* V418: churn risk indicator (per client) */
+.iw-churn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.iw-churn.low { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.30); }
+.iw-churn.medium { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.30); }
+.iw-churn.high { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.30); }
+.iw-churn.critical { background: rgba(239,68,68,0.30); color: #fef2f2; border: 1px solid #ef4444; }
+
+/* V419: QR code container */
+.iw-qr-frame {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border: 2px solid var(--color-border-primary);
+  border-radius: 8px;
+  gap: 6px;
+}
+.iw-qr-frame .iw-qr-caption {
+  font-size: 10px;
+  font-weight: 600;
+  color: #1e293b;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* V420: revenue forecast mini-chart bars (weekly) */
+.iw-forecast-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 60px;
+  padding: 4px 0;
+}
+.iw-forecast-bar {
+  flex: 1;
+  min-width: 6px;
+  background: linear-gradient(180deg, #22c55e, rgba(34,197,94,0.4));
+  border-radius: 2px 2px 0 0;
+  position: relative;
+}
+.iw-forecast-bar.peak { background: linear-gradient(180deg, #facc15, rgba(250,204,21,0.4)); }
+.iw-forecast-bar .iw-forecast-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-bg-elevated, #1e293b);
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-base);
+}
+.iw-forecast-bar:hover .iw-forecast-tooltip { opacity: 1; }
+
+/* V421: workflow rule card */
+.iw-workflow-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  margin-bottom: 6px;
+}
+.iw-workflow-trigger {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(96,165,250,0.15);
+  color: #60a5fa;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.iw-workflow-action {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(168,85,247,0.15);
+  color: #a855f7;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+}
+.iw-workflow-name { font-weight: 600; color: var(--color-text-primary); font-size: 12px; margin-top: 4px; }
+.iw-workflow-fires { font-size: 10px; color: var(--color-text-muted); }
+
+/* V422: tax-regime banner (shows VAT/GST/sales-tax info for current entity) */
+.iw-tax-regime {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.iw-tax-regime-flag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  background: var(--color-accent-blue);
+  color: white;
+  border-radius: 2px;
+  letter-spacing: 0.05em;
+}
+
+/* V423: reverse-charge note */
+.iw-reverse-charge {
+  padding: 6px 10px;
+  background: rgba(168,85,247,0.10);
+  border: 1px solid rgba(168,85,247,0.30);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #a855f7;
+  font-style: italic;
+}
+
+/* V424: predicted-pay date pill (next to due date) */
+.iw-predict-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  background: rgba(168,85,247,0.10);
+  border: 1px solid rgba(168,85,247,0.30);
+  color: #a855f7;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.iw-predict-pill .iw-predict-confidence {
+  padding: 0 3px;
+  background: rgba(168,85,247,0.20);
+  border-radius: 1px;
+  font-size: 8px;
+}
+
+/* V425: quote-funnel mini visualization */
+.iw-funnel {
+  display: flex;
+  height: 32px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.iw-funnel-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.iw-funnel-seg.draft { background: #94a3b8; }
+.iw-funnel-seg.sent { background: #60a5fa; }
+.iw-funnel-seg.viewed { background: #3b82f6; }
+.iw-funnel-seg.accepted { background: #22c55e; }
+.iw-funnel-seg.converted { background: #16a34a; }
+.iw-funnel-seg.declined { background: #ef4444; }
+.iw-funnel-seg.expired { background: #64748b; }

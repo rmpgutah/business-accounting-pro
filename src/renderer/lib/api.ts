@@ -2675,6 +2675,56 @@ const api = {
   iuBulkMarkSent: (invoice_ids: string[], sent_by?: string) => window.electronAPI.invoke('iu:bulk:mark-sent', { invoice_ids, sent_by }),
   iuBulkExportManifest: (invoice_ids: string[]) => window.electronAPI.invoke('iu:bulk:export-manifest', { invoice_ids }),
 
+  // ─── Invoice Wave II (F923-F962) ────────────────────────────────
+  // Batch IG: Recurring & Subscriptions
+  iwRecurringRun: () => window.electronAPI.invoke('iw:recurring:run'),
+  iwMetricsMrr: () => window.electronAPI.invoke('iw:metrics:mrr'),
+  iwProration: (p: { current_amount: number; new_amount: number; cycle_days_remaining: number; total_cycle_days: number }) => window.electronAPI.invoke('iw:proration', p),
+  iwTrialsExpiring: (days_ahead?: number) => window.electronAPI.invoke('iw:trials:expiring', { days_ahead }),
+  iwSubAutoRenew: (subscription_id: string, auto_renew: boolean) => window.electronAPI.invoke('iw:sub:auto-renew', { subscription_id, auto_renew }),
+  // Batch IH: PDF & Brand
+  iwBrandUpsert: (p: any) => window.electronAPI.invoke('iw:brand:upsert', p),
+  iwBrandList: () => window.electronAPI.invoke('iw:brand:list'),
+  iwBrandDefault: () => window.electronAPI.invoke('iw:brand:default'),
+  iwWatermark: (invoice_id: string) => window.electronAPI.invoke('iw:watermark', { invoice_id }),
+  iwPreviewHtml: (invoice_id: string, brand_profile_id?: string) => window.electronAPI.invoke('iw:preview-html', { invoice_id, brand_profile_id }),
+  // Batch II: Quote-to-Invoice
+  iwQuoteConvert: (p: { quote_id: string; line_ids?: string[]; due_in_days?: number }) => window.electronAPI.invoke('iw:quote:convert', p),
+  iwQuoteFunnel: (opts?: { since?: string; until?: string }) => window.electronAPI.invoke('iw:quote:funnel', opts || {}),
+  iwQuoteAutoConvert: () => window.electronAPI.invoke('iw:quote:auto-convert'),
+  iwQuoteRevisions: (quote_id: string) => window.electronAPI.invoke('iw:quote:revisions', { quote_id }),
+  iwQuoteExpired: () => window.electronAPI.invoke('iw:quote:expired'),
+  // Batch IJ: Discounts & Promotions
+  iwCouponUpsert: (p: any) => window.electronAPI.invoke('iw:coupon:upsert', p),
+  iwCouponValidate: (code: string, opts?: { invoice_id?: string; amount?: number; client_id?: string }) => window.electronAPI.invoke('iw:coupon:validate', { code, opts: opts || {} }),
+  iwCouponRedeem: (p: { coupon_id: string; invoice_id: string; discount_applied: number }) => window.electronAPI.invoke('iw:coupon:redeem', p),
+  iwCouponReport: () => window.electronAPI.invoke('iw:coupon:report'),
+  iwVolumeDiscount: (quantity: number, tiers: Array<{ min_qty: number; discount_pct: number }>) => window.electronAPI.invoke('iw:volume-discount', { quantity, tiers }),
+  // Batch IK: Payment Processing
+  iwPaymentIntentCreate: (p: { invoice_id: string; provider: string; amount: number; currency?: string; payment_method_type?: string; external_intent_id?: string }) => window.electronAPI.invoke('iw:payment-intent:create', p),
+  iwQrPayload: (invoice_id: string, base_url?: string) => window.electronAPI.invoke('iw:qr:payload', { invoice_id, base_url }),
+  iwBankTransferInstructions: (invoice_id: string) => window.electronAPI.invoke('iw:bank-transfer:instructions', { invoice_id }),
+  iwPaymentMethodRanking: () => window.electronAPI.invoke('iw:payment:method-ranking'),
+  iwPaymentRetryQueue: () => window.electronAPI.invoke('iw:payment:retry-queue'),
+  // Batch IL: International
+  iwI18nLabels: (lang: string) => window.electronAPI.invoke('iw:i18n:labels', { lang }),
+  iwVatValidate: (country: string, vat_number: string) => window.electronAPI.invoke('iw:vat:validate', { country, vat_number }),
+  iwReverseCharge: (p: { supplier_country: string; customer_country: string; customer_vat?: string; b2b: boolean }) => window.electronAPI.invoke('iw:reverse-charge', p),
+  iwTaxCountryRules: (country: string) => window.electronAPI.invoke('iw:tax:country-rules', { country }),
+  iwFxExposure: () => window.electronAPI.invoke('iw:fx:exposure'),
+  // Batch IM: Workflow
+  iwWorkflowCreate: (p: any) => window.electronAPI.invoke('iw:workflow:create', p),
+  iwWorkflowEvaluate: (p: { trigger_event: string; invoice_id: string }) => window.electronAPI.invoke('iw:workflow:evaluate', p),
+  iwPredictPaymentDate: (invoice_id: string) => window.electronAPI.invoke('iw:predict:payment-date', { invoice_id }),
+  iwSuggestClassification: (client_id: string) => window.electronAPI.invoke('iw:suggest:classification', { client_id }),
+  iwApprovalRequired: (invoice_id: string) => window.electronAPI.invoke('iw:approval:required', { invoice_id }),
+  // Batch IN: Client Portal & Reporting
+  iwPortalToken: (p: { client_id: string; invoice_id?: string; scope?: string; valid_days?: number }) => window.electronAPI.invoke('iw:portal:token', p),
+  iwStatement: (p: { client_id: string; since: string; until?: string }) => window.electronAPI.invoke('iw:statement', p),
+  iwForecastRevenue: (weeks_ahead?: number) => window.electronAPI.invoke('iw:forecast:revenue', { weeks_ahead }),
+  iwLtv: (client_id: string) => window.electronAPI.invoke('iw:ltv', { client_id }),
+  iwChurnPredict: (client_id: string) => window.electronAPI.invoke('iw:churn:predict', { client_id }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };
