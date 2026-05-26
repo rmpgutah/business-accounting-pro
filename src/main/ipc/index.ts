@@ -3902,6 +3902,45 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('eu:draft:get', (_e, { user_id }: any = {}) => eu().getLatestDraft(user_id));
   ipcMain.handle('eu:draft:clear', (_e, { user_id }: any = {}) => eu().clearDraft(user_id));
 
+  // ─── Invoice Upgrades Wave (F893-F922) — `iu:*` namespace ──
+  const iu = () => require('../services/invoice-upgrades-features');
+  // Batch IA: Builder UX
+  ipcMain.handle('iu:tpl:save', (_e, p: any) => iu().saveInvoiceLineTemplate(p));
+  ipcMain.handle('iu:tpl:list', (_e, { user_id }: any = {}) => iu().listInvoiceLineTemplates(user_id));
+  ipcMain.handle('iu:tpl:load', (_e, { id }: any) => iu().loadInvoiceLineTemplate(id));
+  ipcMain.handle('iu:time:pull', (_e, { project_id, rate, merge_by }: any) => iu().pullTimeEntriesAsLines(project_id, { rate, merge_by }));
+  ipcMain.handle('iu:bulk:parse', (_e, { text }: any) => iu().parseInvoiceBulkLines(text || ''));
+  // Batch IB: Smart Inference
+  ipcMain.handle('iu:smart:due-date', (_e, { client_id, fallback_days, issue_date }: any) => iu().predictSmartDueDate(client_id, { fallback_days, issue_date }));
+  ipcMain.handle('iu:fx:preview', (_e, { amount, from, to }: any) => iu().previewCurrencyConversion(amount, from, to));
+  ipcMain.handle('iu:credit:apply', (_e, p: any) => iu().applyCreditToInvoice(p));
+  ipcMain.handle('iu:progress:pct', (_e, { invoice_id }: any) => iu().progressBillingPercentage(invoice_id));
+  ipcMain.handle('iu:late-fee:preview', (_e, { invoice_id }: any) => iu().previewLateFee(invoice_id));
+  // Batch IC: Client Engagement
+  ipcMain.handle('iu:view:log', (_e, p: any) => iu().logInvoiceView(p));
+  ipcMain.handle('iu:view:history', (_e, { invoice_id }: any) => iu().getInvoiceViewHistory(invoice_id));
+  ipcMain.handle('iu:email-tpl:save', (_e, p: any) => iu().saveInvoiceEmailTemplate(p));
+  ipcMain.handle('iu:email-tpl:resolve', (_e, p: any) => iu().resolveEmailTemplate(p));
+  ipcMain.handle('iu:email:thank-you', (_e, { invoice_id }: any) => iu().generateThankYouNote(invoice_id));
+  // Batch ID: Workflow
+  ipcMain.handle('iu:approval:create-rule', (_e, p: any) => iu().createInvoiceApprovalRule(p));
+  ipcMain.handle('iu:approval:route', (_e, { invoice_id }: any) => iu().routeInvoiceApproval(invoice_id));
+  ipcMain.handle('iu:payment:suggest', (_e, p: any) => iu().suggestPaymentMatches(p));
+  ipcMain.handle('iu:credit-memo:issue', (_e, p: any) => iu().issueCreditMemo(p));
+  ipcMain.handle('iu:writeoff', (_e, { invoice_id, reason, actor_user_id }: any) => iu().writeOffInvoice(invoice_id, reason, actor_user_id));
+  // Batch IE: Analytics
+  ipcMain.handle('iu:dso', (_e, opts: any = {}) => iu().computeDsoForClient(opts));
+  ipcMain.handle('iu:top-clients', (_e, opts: any = {}) => iu().topRevenueClients(opts));
+  ipcMain.handle('iu:aging', (_e, { client_id }: any = {}) => iu().arAgingByBucket(client_id));
+  ipcMain.handle('iu:cashflow:projection', (_e, { days_ahead }: any = {}) => iu().cashFlowProjection(days_ahead || 90));
+  ipcMain.handle('iu:collection:score', (_e, { invoice_id }: any) => iu().computeCollectionScore(invoice_id));
+  // Batch IF: Bulk Ops
+  ipcMain.handle('iu:bulk:remind', (_e, { invoice_ids, cadence, actor_user_id }: any) => iu().bulkSendReminders(invoice_ids || [], { cadence, actor_user_id }));
+  ipcMain.handle('iu:bulk:apply-payment', (_e, p: any) => iu().bulkApplyPayment(p));
+  ipcMain.handle('iu:bulk:void', (_e, { invoice_ids, reason, actor_user_id }: any) => iu().bulkVoidInvoices(invoice_ids || [], reason, actor_user_id));
+  ipcMain.handle('iu:bulk:mark-sent', (_e, { invoice_ids, sent_by }: any) => iu().bulkMarkSent(invoice_ids || [], sent_by));
+  ipcMain.handle('iu:bulk:export-manifest', (_e, { invoice_ids }: any) => iu().bulkExportManifest(invoice_ids || []));
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();

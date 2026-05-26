@@ -716,6 +716,11 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'expense_hygiene_scores',
   'expense_approval_history',
   'expense_duplicate_matches',
+  // Invoice Upgrades Wave (F893-F922) — snapshot/audit/log tables
+  'invoice_view_logs',
+  'invoice_dso_cache',
+  'invoice_collection_scores',
+  'invoice_payment_matches',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

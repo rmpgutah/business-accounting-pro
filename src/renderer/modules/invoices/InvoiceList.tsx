@@ -13,6 +13,7 @@ import { useAppStore } from '../../stores/appStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
+import { InvoiceBulkActionBar, OverdueAlertBanner, TopClientsWidget, DSOMiniCard, AgingBucketBar } from './InvoiceUpgradesUI';
 
 // ─── Types ─────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -649,6 +650,21 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           { label: 'Collected This Month', value: formatCurrency(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
         ]} />
       )}
+
+      {/* Invoice Upgrades Wave (F893-F922) — insights row + overdue alert */}
+      <OverdueAlertBanner />
+      <div className="grid grid-cols-3 gap-3" style={{ marginBottom: 8 }}>
+        <DSOMiniCard periodDays={90} />
+        <AgingBucketBar />
+        <TopClientsWidget limit={5} />
+      </div>
+
+      {/* Bulk action bar — only visible when invoice rows are selected. */}
+      <InvoiceBulkActionBar
+        selectedIds={Array.from(selectedIds)}
+        onCleared={() => setSelectedIds(new Set())}
+        onRefresh={() => { setSelectedIds(new Set()); reload(); }}
+      />
 
       {/* Inline KPI row — based on currently filtered list */}
       <div className="grid grid-cols-6 gap-2">

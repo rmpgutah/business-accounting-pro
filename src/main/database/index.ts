@@ -7361,6 +7361,117 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
+  // Invoice Upgrades Wave (F893-F922) — 30 serious upgrades across
+  // builder UX, smart inference, client engagement, workflow,
+  // analytics, bulk ops.
+  `CREATE TABLE IF NOT EXISTS invoice_line_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    lines_json TEXT NOT NULL DEFAULT '[]',
+    times_used INTEGER DEFAULT 0,
+    last_used_at TEXT,
+    owner_user_id TEXT,
+    visibility TEXT DEFAULT 'private',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_view_logs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT NOT NULL,
+    client_id TEXT,
+    event_type TEXT NOT NULL,
+    user_agent TEXT,
+    ip_hash TEXT,
+    referrer TEXT,
+    metadata_json TEXT DEFAULT '{}',
+    logged_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_email_templates_v2 (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    state TEXT,
+    client_id TEXT,
+    subject_template TEXT,
+    body_template TEXT,
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_approval_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    priority INTEGER DEFAULT 100,
+    min_amount REAL,
+    max_amount REAL,
+    client_id TEXT,
+    approver_user_id TEXT,
+    require_n_approvers INTEGER DEFAULT 1,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_payment_matches (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT NOT NULL,
+    bank_transaction_id TEXT,
+    matched_amount REAL NOT NULL,
+    confidence REAL DEFAULT 0,
+    match_reasons_json TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'proposed',
+    resolved_at TEXT,
+    resolved_by TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_credit_memos (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT NOT NULL,
+    client_id TEXT,
+    memo_number TEXT,
+    amount REAL NOT NULL,
+    reason TEXT,
+    issued_date TEXT,
+    applied_to_invoice_id TEXT,
+    status TEXT DEFAULT 'issued',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_dso_cache (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    client_id TEXT,
+    period_days INTEGER NOT NULL,
+    dso_days REAL NOT NULL,
+    sample_invoices INTEGER DEFAULT 0,
+    computed_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, client_id, period_days)
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_collection_scores (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    invoice_id TEXT NOT NULL UNIQUE,
+    score INTEGER NOT NULL,
+    factors_json TEXT DEFAULT '[]',
+    risk_level TEXT,
+    computed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoice_smart_filters (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    name TEXT NOT NULL,
+    filter_json TEXT NOT NULL DEFAULT '{}',
+    is_system INTEGER DEFAULT 0,
+    times_used INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
   // Expense Upgrades Wave (F863-F892) — 30 upgrades across bulk ops,
   // smart filters, hygiene, approval workflow, insights, UX power.
   `CREATE TABLE IF NOT EXISTS expense_drafts (

@@ -2637,6 +2637,44 @@ const api = {
   euDraftGet: (user_id?: string) => window.electronAPI.invoke('eu:draft:get', { user_id }),
   euDraftClear: (user_id?: string) => window.electronAPI.invoke('eu:draft:clear', { user_id }),
 
+  // ─── Invoice Upgrades Wave (F893-F922) ──────────────────────────
+  // Batch IA: Builder UX
+  iuTplSave: (p: { name: string; description?: string; lines: any[]; owner_user_id?: string; visibility?: 'private' | 'team' | 'company' }) => window.electronAPI.invoke('iu:tpl:save', p),
+  iuTplList: (user_id?: string) => window.electronAPI.invoke('iu:tpl:list', { user_id }),
+  iuTplLoad: (id: string) => window.electronAPI.invoke('iu:tpl:load', { id }),
+  iuTimePull: (project_id: string, opts?: { rate?: number; merge_by?: 'employee' | 'task' | 'date' | 'none' }) => window.electronAPI.invoke('iu:time:pull', { project_id, ...(opts || {}) }),
+  iuBulkParse: (text: string) => window.electronAPI.invoke('iu:bulk:parse', { text }),
+  // Batch IB: Smart Inference
+  iuSmartDueDate: (client_id: string, opts?: { fallback_days?: number; issue_date?: string }) => window.electronAPI.invoke('iu:smart:due-date', { client_id, ...(opts || {}) }),
+  iuFxPreview: (amount: number, from: string, to: string) => window.electronAPI.invoke('iu:fx:preview', { amount, from, to }),
+  iuCreditApply: (p: { invoice_id: string; credit_amount: number; credit_source?: string }) => window.electronAPI.invoke('iu:credit:apply', p),
+  iuProgressPct: (invoice_id: string) => window.electronAPI.invoke('iu:progress:pct', { invoice_id }),
+  iuLateFeePreview: (invoice_id: string) => window.electronAPI.invoke('iu:late-fee:preview', { invoice_id }),
+  // Batch IC: Client Engagement
+  iuViewLog: (p: { invoice_id: string; event_type: 'viewed' | 'downloaded' | 'paid_link_clicked'; metadata?: any }) => window.electronAPI.invoke('iu:view:log', p),
+  iuViewHistory: (invoice_id: string) => window.electronAPI.invoke('iu:view:history', { invoice_id }),
+  iuEmailTplSave: (p: { name: string; state?: string; client_id?: string; subject_template: string; body_template: string; is_default?: boolean }) => window.electronAPI.invoke('iu:email-tpl:save', p),
+  iuEmailTplResolve: (p: { invoice_id: string; state?: string }) => window.electronAPI.invoke('iu:email-tpl:resolve', p),
+  iuEmailThankYou: (invoice_id: string) => window.electronAPI.invoke('iu:email:thank-you', { invoice_id }),
+  // Batch ID: Workflow
+  iuApprovalCreateRule: (p: any) => window.electronAPI.invoke('iu:approval:create-rule', p),
+  iuApprovalRoute: (invoice_id: string) => window.electronAPI.invoke('iu:approval:route', { invoice_id }),
+  iuPaymentSuggest: (p: { bank_transaction_id?: string; amount: number; memo?: string; date?: string; client_id?: string }) => window.electronAPI.invoke('iu:payment:suggest', p),
+  iuCreditMemoIssue: (p: { invoice_id: string; amount: number; reason?: string; apply_to_invoice_id?: string }) => window.electronAPI.invoke('iu:credit-memo:issue', p),
+  iuWriteoff: (invoice_id: string, reason: string, actor_user_id?: string) => window.electronAPI.invoke('iu:writeoff', { invoice_id, reason, actor_user_id }),
+  // Batch IE: Analytics
+  iuDso: (opts?: { client_id?: string; period_days?: number; cache?: boolean }) => window.electronAPI.invoke('iu:dso', opts || {}),
+  iuTopClients: (opts?: { since?: string; until?: string; limit?: number }) => window.electronAPI.invoke('iu:top-clients', opts || {}),
+  iuAging: (client_id?: string) => window.electronAPI.invoke('iu:aging', { client_id }),
+  iuCashflowProjection: (days_ahead?: number) => window.electronAPI.invoke('iu:cashflow:projection', { days_ahead }),
+  iuCollectionScore: (invoice_id: string) => window.electronAPI.invoke('iu:collection:score', { invoice_id }),
+  // Batch IF: Bulk Ops
+  iuBulkRemind: (invoice_ids: string[], opts?: { cadence?: string; actor_user_id?: string }) => window.electronAPI.invoke('iu:bulk:remind', { invoice_ids, ...(opts || {}) }),
+  iuBulkApplyPayment: (p: { client_id: string; payment_amount: number; payment_date?: string; payment_method?: string }) => window.electronAPI.invoke('iu:bulk:apply-payment', p),
+  iuBulkVoid: (invoice_ids: string[], reason: string, actor_user_id?: string) => window.electronAPI.invoke('iu:bulk:void', { invoice_ids, reason, actor_user_id }),
+  iuBulkMarkSent: (invoice_ids: string[], sent_by?: string) => window.electronAPI.invoke('iu:bulk:mark-sent', { invoice_ids, sent_by }),
+  iuBulkExportManifest: (invoice_ids: string[]) => window.electronAPI.invoke('iu:bulk:export-manifest', { invoice_ids }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

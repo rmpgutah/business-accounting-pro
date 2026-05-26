@@ -6620,3 +6620,409 @@ td[data-neg="true"]::after,
 .eu-sla-badge.normal { background: var(--color-bg-secondary); color: var(--color-text-secondary); }
 .eu-sla-badge.slow { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .eu-sla-badge.overdue { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Invoice Upgrades Wave V396-V410 (15 utilities)
+   Bulk action bar, DSO badge, collection probability gauge, top clients
+   list, aging bar, overdue alert, cash-flow chart.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* V396: invoice bulk action bar (sibling style to eu-bulk-bar) */
+.iu-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(139,92,246,0.10));
+  border: 1px solid rgba(168,85,247,0.40);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  animation: iu-slide-in 0.18s ease-out;
+}
+@keyframes iu-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.iu-bulk-bar .iu-count {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #a855f7;
+  color: white;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.iu-bulk-bar .iu-actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.iu-bulk-bar .iu-act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.iu-bulk-bar .iu-act-btn:hover { background: rgba(168,85,247,0.10); border-color: #a855f7; color: var(--color-text-primary); }
+.iu-bulk-bar .iu-act-btn.danger:hover { background: rgba(239,68,68,0.10); border-color: #ef4444; color: #ef4444; }
+
+/* V397: DSO badge */
+.iu-dso {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.iu-dso.fast { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.30); }
+.iu-dso.normal { background: var(--color-bg-tertiary); color: var(--color-text-secondary); border: 1px solid var(--color-border-primary); }
+.iu-dso.slow { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.30); }
+.iu-dso.bad { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.30); }
+
+/* V398: collection probability gauge (compact horizontal bar with label) */
+.iu-cp-gauge {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+.iu-cp-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+.iu-cp-fill {
+  height: 100%;
+  transition: width var(--motion-base), background-color var(--motion-base);
+}
+.iu-cp-fill.low { background: linear-gradient(90deg, #ef4444, #f59e0b); }
+.iu-cp-fill.medium { background: linear-gradient(90deg, #f59e0b, #facc15); }
+.iu-cp-fill.high { background: linear-gradient(90deg, #facc15, #22c55e); }
+.iu-cp-fill.excellent { background: linear-gradient(90deg, #22c55e, #4ade80); }
+.iu-cp-label {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* V399: top-clients widget — vertical list with revenue + outstanding */
+.iu-tc-widget {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  padding: 10px 12px;
+}
+.iu-tc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+.iu-tc-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--color-border-primary);
+  font-size: 11px;
+}
+.iu-tc-row:first-of-type { border-top: none; }
+.iu-tc-name { font-weight: 600; color: var(--color-text-secondary); }
+.iu-tc-revenue { font-family: var(--font-mono, ui-monospace, monospace); color: var(--color-text-primary); font-variant-numeric: tabular-nums; font-weight: 600; }
+.iu-tc-outstanding {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #f59e0b;
+}
+.iu-tc-outstanding.zero { color: var(--color-text-muted); }
+
+/* V400: aging bucket bar — horizontal stacked bar (Current/30/60/90+) */
+.iu-aging-stack {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
+.iu-aging-seg.current { background: #22c55e; }
+.iu-aging-seg.b30 { background: #facc15; }
+.iu-aging-seg.b60 { background: #f59e0b; }
+.iu-aging-seg.b90 { background: #ef4444; }
+.iu-aging-seg.b90plus { background: #991b1b; }
+.iu-aging-legend {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 9px;
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+.iu-aging-legend .iu-aging-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.iu-aging-legend .iu-aging-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+/* V401: overdue alert banner */
+.iu-banner-overdue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-left: 3px solid #ef4444;
+  background: rgba(239,68,68,0.08);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.iu-banner-overdue strong { color: #ef4444; }
+.iu-banner-overdue > .spacer { flex: 1; }
+.iu-banner-overdue a {
+  color: var(--color-accent-blue);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* V402: cash-flow projection mini-chart container */
+.iu-cf-chart {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  padding: 10px 12px;
+}
+.iu-cf-chart .iu-cf-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+.iu-cf-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 50px;
+}
+.iu-cf-bar {
+  flex: 1;
+  min-width: 4px;
+  background: linear-gradient(180deg, var(--color-accent-blue), rgba(96,165,250,0.4));
+  border-radius: 2px 2px 0 0;
+  transition: opacity var(--motion-base);
+}
+.iu-cf-bar:hover { opacity: 0.7; }
+
+/* V403: smart payment match suggestion card */
+.iu-match-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.iu-match-card .iu-match-conf {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.iu-match-conf .pct {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-accent-blue);
+}
+.iu-match-reasons {
+  margin-top: 4px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.iu-match-reason {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* V404: view-status pill (viewed by client) */
+.iu-view-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  background: rgba(96,165,250,0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(96,165,250,0.30);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.iu-view-pill.unviewed { background: var(--color-bg-secondary); color: var(--color-text-muted); border-color: var(--color-border-primary); }
+
+/* V405: credit memo chip */
+.iu-cm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(34,197,94,0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,0.30);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* V406: due-date status pill (overdue/due-today/upcoming) */
+.iu-due-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.iu-due-pill.overdue { background: rgba(239,68,68,0.15); color: #ef4444; }
+.iu-due-pill.today { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.iu-due-pill.this-week { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.iu-due-pill.future { background: var(--color-bg-secondary); color: var(--color-text-muted); }
+
+/* V407: bulk-apply payment allocation preview */
+.iu-alloc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.iu-alloc-table th, .iu-alloc-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-primary);
+  text-align: left;
+}
+.iu-alloc-table th {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+}
+.iu-alloc-table td.num {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.iu-alloc-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--color-border-primary);
+  border-bottom: none;
+}
+
+/* V408: smart-due-date suggestion chip */
+.iu-suggest-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(96,165,250,0.10);
+  border: 1px solid rgba(96,165,250,0.30);
+  color: var(--color-accent-blue);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.iu-suggest-due:hover { background: rgba(96,165,250,0.20); }
+.iu-suggest-due .iu-confidence {
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 8px;
+  background: rgba(96,165,250,0.20);
+  color: rgba(96,165,250,1);
+  text-transform: uppercase;
+}
+
+/* V409: smart filters dropdown (sibling to eu-filter-presets, purple-accented) */
+.iu-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.iu-filter-trigger:hover { border-color: #a855f7; color: var(--color-text-primary); }
+.iu-filter-trigger.is-active { background: rgba(168,85,247,0.10); border-color: #a855f7; color: #a855f7; }
+
+/* V410: insight pair (revenue stat + delta arrow) */
+.iu-stat-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.iu-stat-pair .iu-stat-num {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.iu-stat-pair .iu-stat-delta {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.iu-stat-pair .iu-stat-delta.up { color: #22c55e; }
+.iu-stat-pair .iu-stat-delta.down { color: #ef4444; }
