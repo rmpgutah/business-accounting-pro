@@ -712,6 +712,10 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'report_favorites',
   'report_audit_log',
   'report_alert_events',
+  // Expense Upgrades Wave (F863-F892) — snapshot/audit tables
+  'expense_hygiene_scores',
+  'expense_approval_history',
+  'expense_duplicate_matches',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.

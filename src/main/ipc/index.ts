@@ -3862,6 +3862,46 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('iz:tpl:top', (_e, { limit }: any = {}) => iz().topTemplatesReport(limit || 10));
   ipcMain.handle('iz:summary', (_e, { lines }: any) => iz().summarizeLineSet(lines || []));
 
+  // ─── Expense Upgrades Wave (F863-F892) — `eu:*` namespace ──
+  const eu = () => require('../services/expense-upgrades-features');
+  // Batch EA: Bulk Operations
+  ipcMain.handle('eu:bulk:approval', (_e, p: any) => eu().bulkSetApprovalStatus(p));
+  ipcMain.handle('eu:bulk:recategorize', (_e, { expense_ids, category_id }: any) => eu().bulkRecategorize(expense_ids || [], category_id));
+  ipcMain.handle('eu:bulk:assign-project', (_e, { expense_ids, project_id }: any) => eu().bulkAssignProject(expense_ids || [], project_id));
+  ipcMain.handle('eu:bulk:reimbursed', (_e, { expense_ids, reimbursed, date }: any) => eu().bulkMarkReimbursed(expense_ids || [], reimbursed, date));
+  ipcMain.handle('eu:bulk:tag', (_e, { expense_ids, add, remove }: any) => eu().bulkTag(expense_ids || [], add || [], remove || []));
+  ipcMain.handle('eu:bulk:delete', (_e, { expense_ids }: any) => eu().bulkDelete(expense_ids || []));
+  // Batch EB: Search & Smart Filters
+  ipcMain.handle('eu:filter:save', (_e, p: any) => eu().saveSmartFilter(p));
+  ipcMain.handle('eu:filter:list', (_e, { user_id }: any = {}) => eu().listSmartFilters(user_id));
+  ipcMain.handle('eu:filter:presets', () => eu().getSystemFilterPresets());
+  ipcMain.handle('eu:vendor:quickfind', (_e, { query, limit }: any) => eu().quickFindVendors(query || '', limit || 10));
+  ipcMain.handle('eu:filter:by-amount', (_e, p: any) => eu().filterByAmount(p));
+  ipcMain.handle('eu:filter:by-attachment', (_e, { has_receipt, limit }: any) => eu().filterByAttachment(!!has_receipt, limit || 200));
+  // Batch EC: Hygiene & Duplicates
+  ipcMain.handle('eu:dupes:scan', (_e, opts: any = {}) => eu().scanDuplicates(opts));
+  ipcMain.handle('eu:receipts:missing', (_e, { days }: any = {}) => eu().expensesMissingReceipts(days || 7));
+  ipcMain.handle('eu:dupes:resolve', (_e, { match_id, resolution }: any) => eu().resolveDuplicateMatch(match_id, resolution));
+  ipcMain.handle('eu:hygiene:compute', (_e, { expense_id }: any) => eu().computeHygieneScore(expense_id));
+  ipcMain.handle('eu:hygiene:report', (_e, opts: any = {}) => eu().bulkHygieneReport(opts));
+  // Batch ED: Approval Workflow
+  ipcMain.handle('eu:approval:create-rule', (_e, p: any) => eu().createApprovalRule(p));
+  ipcMain.handle('eu:approval:route', (_e, { expense_id }: any) => eu().routeApprovalForExpense(expense_id));
+  ipcMain.handle('eu:approval:delegate', (_e, p: any) => eu().createApprovalDelegation(p));
+  ipcMain.handle('eu:approval:history', (_e, { expense_id }: any) => eu().getApprovalHistory(expense_id));
+  ipcMain.handle('eu:approval:sla', (_e, { days }: any = {}) => eu().approvalSlaReport(days || 90));
+  // Batch EE: Insights
+  ipcMain.handle('eu:insights:top-vendors', (_e, opts: any = {}) => eu().topVendorsBySpend(opts));
+  ipcMain.handle('eu:insights:category-rollup', (_e, opts: any = {}) => eu().categorySpendRollup(opts));
+  ipcMain.handle('eu:insights:anomalies', (_e, { threshold }: any = {}) => eu().detectExpenseAnomalies(threshold || 2.5));
+  ipcMain.handle('eu:insights:monthly-trend', (_e, { months_back }: any = {}) => eu().monthlyTrend(months_back || 12));
+  ipcMain.handle('eu:insights:burn-down', (_e, { month }: any = {}) => eu().budgetBurnDown(month));
+  // Batch EF: UX Power
+  ipcMain.handle('eu:recurring:detect', () => eu().detectRecurringCandidates());
+  ipcMain.handle('eu:draft:save', (_e, p: any) => eu().saveExpenseDraft(p));
+  ipcMain.handle('eu:draft:get', (_e, { user_id }: any = {}) => eu().getLatestDraft(user_id));
+  ipcMain.handle('eu:draft:clear', (_e, { user_id }: any = {}) => eu().clearDraft(user_id));
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();

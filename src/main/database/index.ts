@@ -7361,6 +7361,88 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
+  // Expense Upgrades Wave (F863-F892) — 30 upgrades across bulk ops,
+  // smart filters, hygiene, approval workflow, insights, UX power.
+  `CREATE TABLE IF NOT EXISTS expense_drafts (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    draft_json TEXT NOT NULL DEFAULT '{}',
+    last_saved_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_approval_rules (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    priority INTEGER DEFAULT 100,
+    min_amount REAL,
+    max_amount REAL,
+    category_id TEXT,
+    project_id TEXT,
+    vendor_id TEXT,
+    payment_method TEXT,
+    is_billable INTEGER,
+    is_reimbursable INTEGER,
+    approver_user_id TEXT,
+    approver_role TEXT,
+    require_n_approvers INTEGER DEFAULT 1,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_approval_history (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT NOT NULL,
+    actor_user_id TEXT,
+    action TEXT NOT NULL,
+    comment TEXT,
+    metadata_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_hygiene_scores (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT NOT NULL UNIQUE,
+    score INTEGER NOT NULL,
+    issues_json TEXT DEFAULT '[]',
+    computed_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_smart_filters (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    user_id TEXT,
+    name TEXT NOT NULL,
+    filter_json TEXT NOT NULL DEFAULT '{}',
+    is_system INTEGER DEFAULT 0,
+    times_used INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_approval_delegations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    delegator_user_id TEXT NOT NULL,
+    delegate_user_id TEXT NOT NULL,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    reason TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS expense_duplicate_matches (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT NOT NULL,
+    duplicate_of_id TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    match_reasons_json TEXT DEFAULT '[]',
+    resolved TEXT,
+    resolution TEXT,
+    detected_at TEXT DEFAULT (datetime('now'))
+  )`,
   // Itemization Wave (F841-F862) — saved itemization templates so users
   // can reuse common line-item patterns (e.g. "Monthly office supplies",
   // "Travel reimbursement", "Marketing campaign breakdown").

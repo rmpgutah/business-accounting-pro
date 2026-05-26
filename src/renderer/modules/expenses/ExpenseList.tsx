@@ -17,6 +17,7 @@ import EntityChip from '../../components/EntityChip';
 import BulkEditModal from './BulkEditModal';
 import CreditCardImportModal from './CreditCardImportModal';
 import { BulkPasteModal, QuickAddBar, ReceiptThumb } from './CaptureFeatures';
+import { BulkActionBar, SmartFiltersDropdown, TopVendorsWidget, MissingReceiptsBanner } from './ExpenseUpgradesUI';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -1055,6 +1056,22 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         <QuickAddBar companyId={activeCompany.id} onCreated={(id) => { reload(); onEdit(id); }} />
       )}
 
+      {/* Expense Upgrades Wave (F863-F892) — insights row + missing-receipt alert */}
+      {activeCompany && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <MissingReceiptsBanner days={7} />
+          <TopVendorsWidget limit={5} />
+        </div>
+      )}
+
+      {/* Bulk action bar — only visible when rows are selected. */}
+      <BulkActionBar
+        selectedIds={[...selectedIds]}
+        onCleared={() => setSelectedIds(new Set())}
+        onRefresh={() => { setSelectedIds(new Set()); reload(); }}
+        categories={categories.map(c => ({ id: c.id, name: c.name }))}
+      />
+
       {/* Filters (sticky, feature 15)
           STICKY OVERLAP FIX: .block-card uses backdrop-filter: blur — perfect for
           static glass panels, but when sticky-positioned over a scrolling table the
@@ -1130,6 +1147,32 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           >
             Reimbursable
           </button>
+
+          {/* Smart filters dropdown (Expense Upgrades Wave F870) */}
+          <SmartFiltersDropdown onApply={(preset) => {
+            // Best-effort: clear current filters then apply preset hints.
+            // Preset filter keys: has_receipt, min_amount, max_amount, date_preset,
+            // is_reimbursable, max_hygiene_score, approval_status.
+            const f = preset.filter || {};
+            if (f.min_amount != null) setAmountMin(String(f.min_amount));
+            if (f.max_amount != null) setAmountMax(String(f.max_amount));
+            if (f.is_reimbursable === 1) setReimbursableOnly(true);
+            if (f.date_preset === 'mtd') {
+              const today = new Date();
+              setDateFrom(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10));
+              setDateTo(today.toISOString().slice(0, 10));
+            }
+            if (f.date_preset === 'last_quarter') {
+              const today = new Date();
+              const q = Math.floor(today.getMonth() / 3);
+              const prevQuarterMonth = q === 0 ? 9 : (q - 1) * 3;
+              const year = q === 0 ? today.getFullYear() - 1 : today.getFullYear();
+              setDateFrom(new Date(year, prevQuarterMonth, 1).toISOString().slice(0, 10));
+              setDateTo(new Date(year, prevQuarterMonth + 3, 0).toISOString().slice(0, 10));
+            }
+            // search bar acts as a hint label for the user
+            setSearch(`[${preset.name}]`);
+          }} />
 
           {/* Group by (feature 19) */}
           <select className="block-select" style={{ width: 'auto' }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)}>

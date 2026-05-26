@@ -2598,6 +2598,45 @@ const api = {
   izTplTop: (limit?: number) => window.electronAPI.invoke('iz:tpl:top', { limit }),
   izSummary: (lines: any[]) => window.electronAPI.invoke('iz:summary', { lines }),
 
+  // ─── Expense Upgrades Wave (F863-F892) ──────────────────────────
+  // Batch EA: Bulk Operations
+  euBulkApproval: (p: { expense_ids: string[]; status: 'approved' | 'rejected' | 'pending'; comment?: string; actor_user_id?: string }) => window.electronAPI.invoke('eu:bulk:approval', p),
+  euBulkRecategorize: (expense_ids: string[], category_id: string) => window.electronAPI.invoke('eu:bulk:recategorize', { expense_ids, category_id }),
+  euBulkAssignProject: (expense_ids: string[], project_id: string | null) => window.electronAPI.invoke('eu:bulk:assign-project', { expense_ids, project_id }),
+  euBulkReimbursed: (expense_ids: string[], reimbursed: boolean, date?: string) => window.electronAPI.invoke('eu:bulk:reimbursed', { expense_ids, reimbursed, date }),
+  euBulkTag: (expense_ids: string[], add: string[], remove?: string[]) => window.electronAPI.invoke('eu:bulk:tag', { expense_ids, add, remove: remove || [] }),
+  euBulkDelete: (expense_ids: string[]) => window.electronAPI.invoke('eu:bulk:delete', { expense_ids }),
+  // Batch EB: Search & Smart Filters
+  euFilterSave: (p: { name: string; filter: any; user_id?: string }) => window.electronAPI.invoke('eu:filter:save', p),
+  euFilterList: (user_id?: string) => window.electronAPI.invoke('eu:filter:list', { user_id }),
+  euFilterPresets: () => window.electronAPI.invoke('eu:filter:presets'),
+  euVendorQuickfind: (query: string, limit?: number) => window.electronAPI.invoke('eu:vendor:quickfind', { query, limit }),
+  euFilterByAmount: (p: { op: '>' | '<' | '=' | '>=' | '<=' | 'between'; value: number; value2?: number; limit?: number }) => window.electronAPI.invoke('eu:filter:by-amount', p),
+  euFilterByAttachment: (has_receipt: boolean, limit?: number) => window.electronAPI.invoke('eu:filter:by-attachment', { has_receipt, limit }),
+  // Batch EC: Hygiene & Duplicates
+  euDupesScan: (opts?: { date_window_days?: number; amount_tolerance_cents?: number; min_confidence?: number }) => window.electronAPI.invoke('eu:dupes:scan', opts || {}),
+  euReceiptsMissing: (days?: number) => window.electronAPI.invoke('eu:receipts:missing', { days }),
+  euDupesResolve: (match_id: string, resolution: 'kept' | 'merged' | 'not_duplicate') => window.electronAPI.invoke('eu:dupes:resolve', { match_id, resolution }),
+  euHygieneCompute: (expense_id: string) => window.electronAPI.invoke('eu:hygiene:compute', { expense_id }),
+  euHygieneReport: (opts?: { limit?: number; recompute?: boolean }) => window.electronAPI.invoke('eu:hygiene:report', opts || {}),
+  // Batch ED: Approval Workflow
+  euApprovalCreateRule: (p: any) => window.electronAPI.invoke('eu:approval:create-rule', p),
+  euApprovalRoute: (expense_id: string) => window.electronAPI.invoke('eu:approval:route', { expense_id }),
+  euApprovalDelegate: (p: { delegator_user_id: string; delegate_user_id: string; starts_at: string; ends_at: string; reason?: string }) => window.electronAPI.invoke('eu:approval:delegate', p),
+  euApprovalHistory: (expense_id: string) => window.electronAPI.invoke('eu:approval:history', { expense_id }),
+  euApprovalSla: (days?: number) => window.electronAPI.invoke('eu:approval:sla', { days }),
+  // Batch EE: Insights
+  euInsightsTopVendors: (opts?: { since?: string; until?: string; limit?: number }) => window.electronAPI.invoke('eu:insights:top-vendors', opts || {}),
+  euInsightsCategoryRollup: (opts?: { since?: string; until?: string }) => window.electronAPI.invoke('eu:insights:category-rollup', opts || {}),
+  euInsightsAnomalies: (threshold?: number) => window.electronAPI.invoke('eu:insights:anomalies', { threshold }),
+  euInsightsMonthlyTrend: (months_back?: number) => window.electronAPI.invoke('eu:insights:monthly-trend', { months_back }),
+  euInsightsBurnDown: (month?: string) => window.electronAPI.invoke('eu:insights:burn-down', { month }),
+  // Batch EF: UX Power
+  euRecurringDetect: () => window.electronAPI.invoke('eu:recurring:detect'),
+  euDraftSave: (p: { user_id?: string; draft: any }) => window.electronAPI.invoke('eu:draft:save', p),
+  euDraftGet: (user_id?: string) => window.electronAPI.invoke('eu:draft:get', { user_id }),
+  euDraftClear: (user_id?: string) => window.electronAPI.invoke('eu:draft:clear', { user_id }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

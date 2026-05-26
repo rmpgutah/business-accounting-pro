@@ -6270,3 +6270,353 @@ td[data-neg="true"]::after,
   align-items: end;
   padding: 8px 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Expense Upgrades Wave V381-V395 (15 utilities)
+   Bulk action bar, hygiene chip, smart filter dropdown, top vendors
+   widget, anomaly markers, sparklines.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* V381: contextual bulk action bar that appears when rows are selected */
+.eu-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.10));
+  border: 1px solid rgba(96,165,250,0.40);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  animation: eu-slide-in 0.18s ease-out;
+}
+@keyframes eu-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.eu-bulk-bar .eu-count {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--color-accent-blue);
+  color: white;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.eu-bulk-bar .eu-actions { display: flex; gap: 6px; margin-left: auto; }
+.eu-bulk-bar .eu-act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.eu-bulk-bar .eu-act-btn:hover { background: rgba(96,165,250,0.10); border-color: var(--color-accent-blue); color: var(--color-text-primary); }
+.eu-bulk-bar .eu-act-btn.danger:hover { background: rgba(239,68,68,0.10); border-color: #ef4444; color: #ef4444; }
+.eu-bulk-bar .eu-act-btn.success:hover { background: rgba(34,197,94,0.10); border-color: #22c55e; color: #22c55e; }
+
+/* V382: row selection checkbox cell */
+.eu-row-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+.eu-row-check input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--color-accent-blue);
+  transform: scale(1.05);
+}
+
+/* V383: hygiene score chip — coloured by score band */
+.eu-hyg {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.eu-hyg.excellent { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.30); }
+.eu-hyg.good { background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.30); }
+.eu-hyg.fair { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.30); }
+.eu-hyg.poor { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.30); }
+
+/* V384: anomaly badge — when row's amount is ≥ N× the category average */
+.eu-anomaly {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(245,158,11,0.20);
+  color: #f59e0b;
+  border: 1px solid rgba(245,158,11,0.40);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* V385: duplicate-match warning chip */
+.eu-dup {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(168,85,247,0.20);
+  color: #a855f7;
+  border: 1px solid rgba(168,85,247,0.40);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* V386: smart filter presets dropdown trigger */
+.eu-filter-presets {
+  position: relative;
+}
+.eu-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.eu-filter-trigger:hover { border-color: var(--color-accent-blue); color: var(--color-text-primary); }
+.eu-filter-trigger.is-active { background: rgba(96,165,250,0.10); border-color: var(--color-accent-blue); color: var(--color-accent-blue); }
+
+/* V387: filter preset dropdown panel */
+.eu-filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.40);
+  z-index: 100;
+  padding: 4px;
+}
+.eu-filter-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color var(--motion-base);
+}
+.eu-filter-item:hover { background: var(--color-bg-tertiary); }
+.eu-filter-item-name { font-size: 11px; font-weight: 600; color: var(--color-text-primary); }
+.eu-filter-item-desc { font-size: 10px; color: var(--color-text-muted); margin-top: 2px; }
+
+/* V388: top-vendors widget — compact list with sparkline */
+.eu-tv-widget {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.eu-tv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+.eu-tv-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-border-primary);
+}
+.eu-tv-row:first-of-type { border-top: none; }
+.eu-tv-name { font-weight: 600; color: var(--color-text-secondary); }
+.eu-tv-amount { font-family: var(--font-mono, ui-monospace, monospace); color: var(--color-text-primary); font-variant-numeric: tabular-nums; font-weight: 600; }
+.eu-tv-count { color: var(--color-text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+/* V389: SVG sparkline used in trends mini-chart */
+.eu-spark {
+  display: inline-block;
+  vertical-align: middle;
+}
+.eu-spark path.line { fill: none; stroke: var(--color-accent-blue); stroke-width: 1.5; }
+.eu-spark path.area { fill: var(--color-accent-blue); opacity: 0.15; }
+.eu-spark circle.last { fill: var(--color-accent-blue); }
+
+/* V390: insights mini-card (used for top-vendors, anomalies, etc. on dashboard) */
+.eu-insight-card {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  padding: 12px 14px;
+}
+.eu-insight-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.eu-insight-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* V391: receipt-missing alert banner */
+.eu-banner-warn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-left: 3px solid #f59e0b;
+  background: rgba(245,158,11,0.08);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.eu-banner-warn strong { color: #f59e0b; }
+.eu-banner-warn > .eu-banner-spacer { flex: 1; }
+.eu-banner-warn > a { color: var(--color-accent-blue); text-decoration: underline; cursor: pointer; font-weight: 600; }
+
+/* V392: approval-history timeline */
+.eu-timeline { position: relative; padding-left: 20px; }
+.eu-timeline::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--color-border-primary);
+}
+.eu-timeline-row {
+  position: relative;
+  padding: 6px 0;
+  font-size: 11px;
+}
+.eu-timeline-row::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-bg-secondary);
+  border: 2px solid var(--color-text-muted);
+}
+.eu-timeline-row.approved::before { border-color: #22c55e; background: rgba(34,197,94,0.30); }
+.eu-timeline-row.rejected::before { border-color: #ef4444; background: rgba(239,68,68,0.30); }
+.eu-timeline-row.commented::before { border-color: var(--color-accent-blue); background: rgba(96,165,250,0.30); }
+.eu-timeline-actor { font-weight: 600; color: var(--color-text-primary); }
+.eu-timeline-meta { color: var(--color-text-muted); font-size: 10px; margin-left: 6px; }
+.eu-timeline-comment {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--color-bg-tertiary);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  border-left: 2px solid var(--color-border-primary);
+}
+
+/* V393: draft-recovery banner shown at top of expense form on open */
+.eu-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(96,165,250,0.10);
+  border: 1px solid rgba(96,165,250,0.30);
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.eu-draft-banner > .spacer { flex: 1; }
+.eu-draft-banner button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+.eu-draft-banner button.primary { background: var(--color-accent-blue); color: white; border-color: var(--color-accent-blue); }
+
+/* V394: recurring-candidate suggestion chip */
+.eu-recur-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(168,85,247,0.10);
+  color: #a855f7;
+  border: 1px solid rgba(168,85,247,0.30);
+}
+
+/* V395: SLA badge for approval time */
+.eu-sla-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.eu-sla-badge.fast { background: rgba(34,197,94,0.15); color: #22c55e; }
+.eu-sla-badge.normal { background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+.eu-sla-badge.slow { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.eu-sla-badge.overdue { background: rgba(239,68,68,0.15); color: #ef4444; }
