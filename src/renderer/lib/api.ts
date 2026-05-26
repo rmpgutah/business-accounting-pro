@@ -2574,6 +2574,30 @@ const api = {
   rptAuditGet: (f?: { user_id?: string; action?: string; limit?: number }) => window.electronAPI.invoke('rpt:audit:get', f || {}),
   rptPerfCard: (report_id: string) => window.electronAPI.invoke('rpt:perf-card', { report_id }),
 
+  // ─── Itemization Wave (F841-F862) ────────────────────────────────
+  izTplSave: (p: { name: string; description?: string; lines: any[]; owner_user_id?: string; visibility?: 'private' | 'team' | 'company' }) => window.electronAPI.invoke('iz:tpl:save', p),
+  izTplList: (user_id?: string) => window.electronAPI.invoke('iz:tpl:list', { user_id }),
+  izTplLoad: (id: string) => window.electronAPI.invoke('iz:tpl:load', { id }),
+  izTplDelete: (id: string) => window.electronAPI.invoke('iz:tpl:delete', { id }),
+  izTplUpdate: (id: string, patch: { name?: string; description?: string; visibility?: string }) => window.electronAPI.invoke('iz:tpl:update', { id, patch }),
+  izTplShare: (id: string, visibility: 'team' | 'company') => window.electronAPI.invoke('iz:tpl:share', { id, visibility }),
+  izBulkParse: (text: string) => window.electronAPI.invoke('iz:bulk:parse', { text }),
+  izSplitEvenly: (total: number, count: number, base_description?: string) => window.electronAPI.invoke('iz:split-evenly', { total, count, base_description }),
+  izLineDuplicate: (line: any) => window.electronAPI.invoke('iz:line:duplicate', { line }),
+  izAutocompleteDescriptions: (opts?: { limit?: number; days_back?: number }) => window.electronAPI.invoke('iz:autocomplete:descriptions', opts || {}),
+  izAutocompleteInventory: (query: string, limit?: number) => window.electronAPI.invoke('iz:autocomplete:inventory', { query, limit }),
+  izTaxBreakdown: (lines: any[]) => window.electronAPI.invoke('iz:tax-breakdown', { lines }),
+  izLineEffective: (line: any) => window.electronAPI.invoke('iz:line:effective', { line }),
+  izContributions: (lines: any[]) => window.electronAPI.invoke('iz:contributions', { lines }),
+  izBulkApplyTax: (lines: any[], rate: number) => window.electronAPI.invoke('iz:bulk:apply-tax', { lines, rate }),
+  izBulkTaxExempt: (lines: any[], exempt: boolean) => window.electronAPI.invoke('iz:bulk:tax-exempt', { lines, exempt }),
+  izReorder: (lines: any[], from: number, to: number) => window.electronAPI.invoke('iz:reorder', { lines, from, to }),
+  izValidate: (lines: any[]) => window.electronAPI.invoke('iz:validate', { lines }),
+  izRollupCategory: (lines: any[], names: Record<string, string>) => window.electronAPI.invoke('iz:rollup:category', { lines, names }),
+  izRollupProject: (lines: any[], names: Record<string, string>) => window.electronAPI.invoke('iz:rollup:project', { lines, names }),
+  izTplTop: (limit?: number) => window.electronAPI.invoke('iz:tpl:top', { limit }),
+  izSummary: (lines: any[]) => window.electronAPI.invoke('iz:summary', { lines }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

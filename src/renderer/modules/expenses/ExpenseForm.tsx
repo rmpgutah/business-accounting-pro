@@ -22,6 +22,7 @@ import {
   categoryMonthlyUsage, parseJSON, CustomFieldDef,
 } from './expense-helpers';
 import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
+import ItemizationEditor from './ItemizationEditor';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -99,12 +100,28 @@ interface ExpenseLineItem {
   tax_rate: number;
   tax_amount: number;
   tax_jurisdictions: Array<{ jurisdiction: string; rate: number; amount: number }>;
+  // Itemization Wave (F841-F862) — per-line accounting + flags
+  category_id?: string;
+  project_id?: string;
+  client_id?: string;
+  discount_amount?: number;
+  discount_percent?: number;
+  is_tax_deductible?: boolean;
+  is_tax_exempt?: boolean;
+  notes?: string;
+  item_type?: 'item' | 'service' | 'reimbursement';
+  tags?: string[];
 }
 
 function newLineItem(): ExpenseLineItem {
   return {
     id: crypto.randomUUID(), description: '', quantity: 1, unit_price: 0, amount: 0, account_id: '',
     tax_rate: 0, tax_amount: 0, tax_jurisdictions: [],
+    // New per-line defaults: tax-deductible YES (most expenses are), item_type 'item'.
+    category_id: '', project_id: '', client_id: '',
+    discount_amount: 0, discount_percent: 0,
+    is_tax_deductible: true, is_tax_exempt: false,
+    notes: '', item_type: 'item', tags: [],
   };
 }
 
@@ -722,6 +739,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                   ...j,
                   rate: roundCents((j.rate || 0) * 100),
                 })),
+                // Itemization Wave fields — defaults preserve legacy behavior for rows
+                // saved before these columns existed.
+                category_id: l.category_id || '',
+                project_id: l.project_id || '',
+                client_id: l.client_id || '',
+                discount_amount: l.discount_amount || 0,
+                discount_percent: l.discount_percent || 0,
+                is_tax_deductible: l.is_tax_deductible == null ? true : !!l.is_tax_deductible,
+                is_tax_exempt: !!l.is_tax_exempt,
+                notes: l.notes || '',
+                item_type: (l.item_type as any) || 'item',
+                tags: parseJSON<string[]>(l.tags, []),
               })));
               setUseLineItems(true);
             }
@@ -976,6 +1005,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               ...j,
               rate: (j.rate || 0) / 100,
             }))),
+            // Itemization Wave — per-line accounting + flags
+            category_id: li.category_id || null,
+            project_id: li.project_id || null,
+            client_id: li.client_id || null,
+            discount_amount: roundCents(li.discount_amount || 0),
+            discount_percent: li.discount_percent || 0,
+            is_tax_deductible: li.is_tax_deductible === false ? 0 : 1,
+            is_tax_exempt: li.is_tax_exempt ? 1 : 0,
+            notes: li.notes || null,
+            item_type: li.item_type || 'item',
+            tags: JSON.stringify(li.tags || []),
           }))
         : [];
 
@@ -1241,116 +1281,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             </div>
 
             {useLineItems && (
-              <div className="border border-border-primary p-4 space-y-2 mb-2" style={{ borderRadius: '6px', background: 'var(--color-bg-tertiary)' }}>
-                {/* Header row */}
-                <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider px-1">
-                  <div className="col-span-1"></div>
-                  <div className="col-span-4">Description</div>
-                  <div className="col-span-2 text-right">Qty</div>
-                  <div className="col-span-2 text-right">Unit Price</div>
-                  <div className="col-span-2 text-right">Amount</div>
-                  <div className="col-span-1"></div>
-                </div>
-
-                {/* Line item rows */}
-                {lineItems.map((li, idx) => (
-                  <div key={li.id} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-1 flex flex-col items-center gap-0.5">
-                      {idx > 0 && (
-                        <button type="button" onClick={() => moveLineItem(idx, idx - 1)}
-                          className="text-text-muted hover:text-text-primary text-[10px] leading-none transition-colors" title="Move up">&#9650;</button>
-                      )}
-                      {idx < lineItems.length - 1 && (
-                        <button type="button" onClick={() => moveLineItem(idx, idx + 1)}
-                          className="text-text-muted hover:text-text-primary text-[10px] leading-none transition-colors" title="Move down">&#9660;</button>
-                      )}
-                    </div>
-                    <div className="col-span-4">
-                      <input type="text" className="block-input text-sm" placeholder="Item description"
-                        value={li.description}
-                        onChange={(e) => handleLineChange(idx, 'description', e.target.value)} />
-                    </div>
-                    <div className="col-span-2">
-                      <input type="number" className="block-input text-sm text-right font-mono" step="1"
-                        value={li.quantity}
-                        onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)} />
-                    </div>
-                    <div className="col-span-2">
-                      <input type="number" className="block-input text-sm text-right font-mono" step="0.01"
-                        placeholder="0.00"
-                        value={li.unit_price || ''}
-                        onChange={(e) => handleLineChange(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
-                    </div>
-                    <div className="col-span-2 text-right font-mono text-sm text-text-secondary">
-                      {formatCurrency(li.quantity * li.unit_price)}
-                    </div>
-                    <div className="col-span-1 text-center">
-                      {lineItems.length > 1 && (
-                        <button type="button" onClick={() => removeLineItem(idx)}
-                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5" title="Remove item">
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                    {/* Feature 11 / 12 — per-line tax rate + multi-jurisdiction */}
-                    <div className="col-span-1"></div>
-                    <div className="col-span-11 flex items-center gap-3 pb-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Tax rate</label>
-                      <input type="number" step="0.01" min="0" max="100"
-                        className="block-input text-xs font-mono text-right"
-                        style={{ width: 90 }}
-                        value={li.tax_rate || 0}
-                        onChange={(e) => handleLineChange(idx, 'tax_rate', parseFloat(e.target.value) || 0)} />
-                      <span className="text-[10px] text-text-muted">% (e.g. 7.25)</span>
-                      <span className="text-[10px] text-text-muted">tax: {formatCurrency(li.tax_amount || 0)}</span>
-                      <button type="button" className="text-[10px] underline text-accent-blue ml-auto"
-                        onClick={() => {
-                          const label = prompt('Add jurisdiction (e.g. "CA State"):');
-                          if (!label) return;
-                          const rateStr = prompt('Rate as PERCENT (e.g. 7.25):');
-                          const rate = parseFloat(rateStr || '0') || 0;
-                          const next = [...(li.tax_jurisdictions || []), { jurisdiction: label, rate, amount: 0 }];
-                          handleLineChange(idx, 'tax_jurisdictions', next);
-                        }}>+ jurisdiction</button>
-                      {(li.tax_jurisdictions || []).map((j, ji) => (
-                        <span key={ji} className="text-[10px] px-2 py-0.5 border border-border-primary"
-                          style={{ borderRadius: 4 }}>
-                          {j.jurisdiction} {(j.rate || 0).toFixed(2)}%
-                          <button type="button" className="ml-1 text-accent-expense"
-                            onClick={() => {
-                              const next = li.tax_jurisdictions.filter((_, k) => k !== ji);
-                              handleLineChange(idx, 'tax_jurisdictions', next);
-                            }}>×</button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Add line + totals breakdown */}
-                <div className="flex items-start justify-between pt-3 border-t border-border-primary">
-                  <button type="button" onClick={addLineItem}
-                    className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5">
-                    <Plus size={12} /> Add Item
-                  </button>
-                  <div className="text-right space-y-1">
-                    <div className="flex justify-between gap-8 text-xs text-text-muted font-mono">
-                      <span>Subtotal:</span>
-                      <span>{formatCurrency(lineItemSubtotal)}</span>
-                    </div>
-                    {lineItemTaxTotal > 0 && (
-                      <div className="flex justify-between gap-8 text-xs text-text-muted font-mono">
-                        <span>Tax:</span>
-                        <span>{formatCurrency(lineItemTaxTotal)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between gap-8 text-sm font-bold text-text-primary font-mono pt-1 border-t border-border-primary">
-                      <span>Total:</span>
-                      <span>{formatCurrency(lineItemGrandTotal)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              /* Itemization Wave (F841-F862): self-contained editor — see
+                 ItemizationEditor.tsx. The parent owns lineItems state and
+                 the save path; this child renders the UI and calls the
+                 setter on every change. */
+              <ItemizationEditor
+                lineItems={lineItems as any}
+                setLineItems={setLineItems as any}
+                categories={categories.map(c => ({ id: c.id, name: c.name }))}
+                projects={projects.map(p => ({ id: p.id, name: p.name }))}
+                clients={clients.map(c => ({ id: c.id, name: c.name }))}
+                accounts={accounts.map(a => ({ id: a.id, name: a.name }))}
+              />
             )}
           </div>
 

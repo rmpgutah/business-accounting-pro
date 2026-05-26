@@ -615,6 +615,17 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expenses ADD COLUMN expense_class TEXT DEFAULT ''",
   // Tax
   "ALTER TABLE expense_line_items ADD COLUMN tax_rate REAL DEFAULT 0",
+  // Itemization Wave (F841-F862) — per-line accounting + flags
+  "ALTER TABLE expense_line_items ADD COLUMN category_id TEXT",
+  "ALTER TABLE expense_line_items ADD COLUMN project_id TEXT",
+  "ALTER TABLE expense_line_items ADD COLUMN client_id TEXT",
+  "ALTER TABLE expense_line_items ADD COLUMN discount_amount REAL DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN discount_percent REAL DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
+  "ALTER TABLE expense_line_items ADD COLUMN is_tax_exempt INTEGER DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN notes TEXT",
+  "ALTER TABLE expense_line_items ADD COLUMN item_type TEXT DEFAULT 'item'",
+  "ALTER TABLE expense_line_items ADD COLUMN tags TEXT DEFAULT '[]'",
   "ALTER TABLE expense_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
   "ALTER TABLE expense_line_items ADD COLUMN tax_jurisdictions TEXT DEFAULT '[]'",
   "ALTER TABLE expenses ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
@@ -7347,6 +7358,22 @@ export function initDatabase(): Database.Database {
     filters_json TEXT DEFAULT '{}',
     layout TEXT DEFAULT 'standard',
     is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // Itemization Wave (F841-F862) — saved itemization templates so users
+  // can reuse common line-item patterns (e.g. "Monthly office supplies",
+  // "Travel reimbursement", "Marketing campaign breakdown").
+  `CREATE TABLE IF NOT EXISTS expense_itemization_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    lines_json TEXT NOT NULL DEFAULT '[]',
+    times_used INTEGER DEFAULT 0,
+    last_used_at TEXT,
+    owner_user_id TEXT,
+    visibility TEXT DEFAULT 'private',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,

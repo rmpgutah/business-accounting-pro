@@ -3837,6 +3837,31 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('rpt:audit:get', (_e, f?: any) => rpd().getReportAuditLog(f || {}));
   ipcMain.handle('rpt:perf-card', (_e, { report_id }: any) => rpd().reportPerformanceCard(report_id));
 
+  // ─── Itemization Wave (F841-F862) — `iz:*` namespace ──
+  const iz = () => require('../services/itemization-features');
+  ipcMain.handle('iz:tpl:save', (_e, p: any) => iz().saveItemizationTemplate(p));
+  ipcMain.handle('iz:tpl:list', (_e, { user_id }: any = {}) => iz().listItemizationTemplates(user_id));
+  ipcMain.handle('iz:tpl:load', (_e, { id }: any) => iz().loadItemizationTemplate(id));
+  ipcMain.handle('iz:tpl:delete', (_e, { id }: any) => iz().deleteItemizationTemplate(id));
+  ipcMain.handle('iz:tpl:update', (_e, { id, patch }: any) => iz().updateItemizationTemplate(id, patch));
+  ipcMain.handle('iz:tpl:share', (_e, { id, visibility }: any) => iz().shareItemizationTemplate(id, visibility));
+  ipcMain.handle('iz:bulk:parse', (_e, { text }: any) => iz().parseBulkLines(text || ''));
+  ipcMain.handle('iz:split-evenly', (_e, { total, count, base_description }: any) => iz().splitEvenly(total, count, base_description));
+  ipcMain.handle('iz:line:duplicate', (_e, { line }: any) => iz().duplicateLine(line));
+  ipcMain.handle('iz:autocomplete:descriptions', (_e, opts: any = {}) => iz().recentLineDescriptions(opts));
+  ipcMain.handle('iz:autocomplete:inventory', (_e, { query, limit }: any) => iz().searchInventoryForLine(query, limit || 10));
+  ipcMain.handle('iz:tax-breakdown', (_e, { lines }: any) => iz().taxBreakdownByJurisdiction(lines || []));
+  ipcMain.handle('iz:line:effective', (_e, { line }: any) => iz().computeLineEffectiveAmount(line));
+  ipcMain.handle('iz:contributions', (_e, { lines }: any) => iz().lineContributions(lines || []));
+  ipcMain.handle('iz:bulk:apply-tax', (_e, { lines, rate }: any) => iz().applyTaxRateToAll(lines || [], rate));
+  ipcMain.handle('iz:bulk:tax-exempt', (_e, { lines, exempt }: any) => iz().setAllTaxExempt(lines || [], exempt));
+  ipcMain.handle('iz:reorder', (_e, { lines, from, to }: any) => iz().reorderLines(lines || [], from, to));
+  ipcMain.handle('iz:validate', (_e, { lines }: any) => iz().validateLines(lines || []));
+  ipcMain.handle('iz:rollup:category', (_e, { lines, names }: any) => iz().categoryRollupForLines(lines || [], names || {}));
+  ipcMain.handle('iz:rollup:project', (_e, { lines, names }: any) => iz().projectRollupForLines(lines || [], names || {}));
+  ipcMain.handle('iz:tpl:top', (_e, { limit }: any = {}) => iz().topTemplatesReport(limit || 10));
+  ipcMain.handle('iz:summary', (_e, { lines }: any) => iz().summarizeLineSet(lines || []));
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();

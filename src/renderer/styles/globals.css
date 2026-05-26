@@ -5850,3 +5850,423 @@ td[data-neg="true"]::after,
   transition: all var(--motion-base);
 }
 .exp-empty-state > .empty-cta:hover { box-shadow: 0 4px 16px rgba(59,130,246,0.40); transform: translateY(-1px); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Itemization Wave V356-V380 (25 utilities)
+   Visual primitives for the redesigned expense line-item box.
+   All radii use 6px (glass theme); colors use bg-bg-* / text-text-*.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* V356: container for the whole itemization editor */
+.iz-container {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* V357: toolbar at the top of the itemization box */
+.iz-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+  flex-wrap: wrap;
+}
+.iz-toolbar-spacer { flex: 1; }
+
+/* V358: header row above the line items (column labels) */
+.iz-header-row {
+  display: grid;
+  grid-template-columns: 32px 32px 1fr 80px 100px 100px 110px 40px;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+.iz-header-row.iz-compact { grid-template-columns: 24px 24px 1fr 70px 90px 90px 90px 32px; padding: 4px 10px; font-size: 9px; }
+
+/* V359: each line row */
+.iz-line {
+  display: grid;
+  grid-template-columns: 32px 32px 1fr 80px 100px 100px 110px 40px;
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-primary);
+  background: var(--color-bg-tertiary);
+  transition: background-color var(--motion-base);
+}
+.iz-line:hover { background: var(--color-bg-secondary); }
+.iz-line.iz-compact { grid-template-columns: 24px 24px 1fr 70px 90px 90px 90px 32px; padding: 4px 10px; }
+.iz-line.iz-dragging { opacity: 0.5; background: var(--color-accent-blue-soft, rgba(96,165,250,0.10)); }
+.iz-line.iz-drop-target { border-top: 2px solid var(--color-accent-blue); }
+
+/* V360: drag handle (vertical-dots icon area) */
+.iz-handle {
+  cursor: grab;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  border-radius: 4px;
+  transition: color var(--motion-base), background-color var(--motion-base);
+}
+.iz-handle:hover { color: var(--color-text-primary); background: var(--color-bg-secondary); }
+.iz-handle:active { cursor: grabbing; }
+
+/* V361: line number badge */
+.iz-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  width: 22px;
+  border-radius: 50%;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* V362: secondary attributes row (category/project/etc — collapsible) */
+.iz-attr-row {
+  display: grid;
+  grid-template-columns: 32px 32px 1fr;
+  gap: 8px;
+  padding: 4px 12px 10px 12px;
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+.iz-attr-row > .iz-attr-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  font-size: 11px;
+}
+
+/* V363: per-line tax / notes / discount sub-row */
+.iz-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px 10px 76px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border-primary);
+  flex-wrap: wrap;
+}
+
+/* V364: tax-exempt pill */
+.iz-tax-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.iz-tax-flag.exempt { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.30); }
+.iz-tax-flag.deductible { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.30); }
+.iz-tax-flag.nondeductible { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.30); }
+
+/* V365: item type pill (Item/Service/Reimbursement) */
+.iz-type-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-primary);
+}
+.iz-type-pill.svc { background: rgba(59,130,246,0.10); color: #60a5fa; border-color: rgba(59,130,246,0.30); }
+.iz-type-pill.rmb { background: rgba(168,85,247,0.10); color: #a855f7; border-color: rgba(168,85,247,0.30); }
+
+/* V366: contribution bar — mini horizontal bar showing line's % of total */
+.iz-contrib-track {
+  position: relative;
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+.iz-contrib-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent-blue), rgba(96,165,250,0.6));
+  transition: width var(--motion-base);
+}
+
+/* V367: sticky totals area at bottom of itemize box */
+.iz-totals {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--color-bg-secondary);
+  border-top: 2px solid var(--color-border-primary);
+  z-index: 5;
+}
+.iz-totals-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.iz-totals-right { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; min-width: 200px; }
+.iz-totals-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.iz-totals-row.iz-totals-grand {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border-primary);
+}
+
+/* V368: jurisdiction tax-breakdown chips inside totals */
+.iz-tax-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  font-size: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-text-secondary);
+}
+.iz-tax-chip > .label { color: var(--color-text-muted); font-weight: 600; }
+
+/* V369: template selector dropdown trigger */
+.iz-tpl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.iz-tpl-btn:hover { border-color: var(--color-accent-blue); color: var(--color-text-primary); }
+.iz-tpl-btn.is-active { background: rgba(96,165,250,0.10); border-color: var(--color-accent-blue); color: var(--color-accent-blue); }
+
+/* V370: template list dropdown panel */
+.iz-tpl-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.40);
+  z-index: 100;
+  padding: 4px;
+}
+.iz-tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  transition: background-color var(--motion-base);
+}
+.iz-tpl-item:hover { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+.iz-tpl-item-meta { color: var(--color-text-muted); font-size: 9px; margin-left: auto; }
+
+/* V371: autocomplete suggestions list for description input */
+.iz-suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.30);
+  z-index: 50;
+}
+.iz-suggest-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border-primary);
+}
+.iz-suggest-item:last-child { border-bottom: none; }
+.iz-suggest-item:hover, .iz-suggest-item.active { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+.iz-suggest-item-meta { color: var(--color-text-muted); font-size: 9px; font-family: var(--font-mono, ui-monospace, monospace); }
+
+/* V372: bulk-paste modal textarea */
+.iz-paste-area {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--color-text-primary);
+  resize: vertical;
+}
+.iz-paste-area:focus { outline: 2px solid var(--color-accent-blue); outline-offset: -2px; }
+
+/* V373: warning chip (validation issues, exceeded discount, etc) */
+.iz-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(239,68,68,0.10);
+  color: #ef4444;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid rgba(239,68,68,0.30);
+}
+
+/* V374: discount badge — shown when a line has a discount applied */
+.iz-discount-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(168,85,247,0.10);
+  color: #a855f7;
+  font-size: 9px;
+  font-weight: 700;
+  border: 1px solid rgba(168,85,247,0.30);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* V375: action button row inside each line (duplicate, delete, etc) */
+.iz-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.iz-act {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--motion-base), background-color var(--motion-base);
+}
+.iz-act:hover { color: var(--color-text-primary); background: var(--color-bg-secondary); }
+.iz-act.danger:hover { color: #ef4444; background: rgba(239,68,68,0.10); }
+
+/* V376: tabs at top to switch between Lines / Templates / Settings views */
+.iz-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+}
+.iz-tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--motion-base);
+}
+.iz-tab:hover { color: var(--color-text-secondary); }
+.iz-tab.active { color: var(--color-accent-blue); border-bottom-color: var(--color-accent-blue); }
+
+/* V377: empty state placeholder inside the itemization box */
+.iz-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.iz-empty-icon { font-size: 32px; opacity: 0.5; margin-bottom: 8px; display: block; }
+
+/* V378: numeric cell — right-aligned monospace */
+.iz-num-cell {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.iz-num-cell.iz-total { color: var(--color-text-primary); font-weight: 600; }
+
+/* V379: collapsible "more options" toggle per row */
+.iz-more-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color var(--motion-base);
+}
+.iz-more-toggle:hover { color: var(--color-text-primary); }
+.iz-more-toggle.is-open { color: var(--color-accent-blue); }
+
+/* V380: split-evenly modal helper inputs */
+.iz-split-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: 8px;
+  align-items: end;
+  padding: 8px 0;
+}
