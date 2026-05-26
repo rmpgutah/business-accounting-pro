@@ -657,13 +657,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               const cf = typeof existing.custom_fields === 'string' ? JSON.parse(existing.custom_fields) : (existing.custom_fields || {});
               setDetails(cf);
             } catch { setDetails({}); }
-            // FINAL-PRICE: the AMOUNT field UI shows the all-in TOTAL (pre-tax + tax).
-            // DB still stores expense.amount as pre-tax + expense.tax_amount as the
-            // tax portion. Legacy rows saved with tax_inclusive=1 already stored
-            // amount=total, so we don't double-add tax for those.
+            // FINAL-PRICE v2: AMOUNT field shows all-in TOTAL = stored amount + tax.
+            // The earlier inclusive-guard was for legacy rows where amount=total,
+            // but it under-counted new inclusive saves which ALSO store amount=pre-tax.
+            // Dropping the guard makes load consistent with our save semantics.
             const storedAmount = Number(existing.amount) || 0;
             const storedTax = Number(existing.tax_amount) || 0;
-            const displayTotal = existing.tax_inclusive ? storedAmount : storedAmount + storedTax;
+            const displayTotal = storedAmount + storedTax;
             setForm({
               date: existing.date || emptyForm.date,
               amount: displayTotal ? displayTotal.toFixed(2) : '',
@@ -680,7 +680,36 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               reimbursed: !!existing.reimbursed,
               reimbursed_date: existing.reimbursed_date || '',
               reference: existing.reference || '',
-              tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : (existing.tags || ''),
+              // TAGS DOUBLE-ENCODING RECOVERY: prior code stored tags as a JSON
+              // string ('[]'), then re-split on comma into ['[]'], then JSON-
+              // stringified again ('["[]"]'). Every cycle added a wrap layer.
+              // Here we detect JSON-array strings and unwrap them so the form
+              // shows the actual tags, and the next save writes clean values.
+              tags: (() => {
+                const raw = existing.tags;
+                if (Array.isArray(raw)) return raw.filter(Boolean).join(', ');
+                const s = String(raw || '').trim();
+                if (s.startsWith('[')) {
+                  try {
+                    const parsed = JSON.parse(s);
+                    if (Array.isArray(parsed)) {
+                      // Recurse one level — if any element is itself a JSON array string,
+                      // unwrap that too (recovers from N-level nesting in one pass).
+                      const flat = parsed.flatMap((v: any) => {
+                        if (typeof v === 'string' && v.trim().startsWith('[')) {
+                          try {
+                            const inner = JSON.parse(v);
+                            if (Array.isArray(inner)) return inner;
+                          } catch (_) {}
+                        }
+                        return [v];
+                      });
+                      return flat.filter(Boolean).map(String).join(', ');
+                    }
+                  } catch (_) {}
+                }
+                return s;
+              })(),
               status: existing.status || 'pending',
               approved_by: existing.approved_by || '',
               approved_date: existing.approved_date || '',
@@ -1219,8 +1248,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 type="number"
                 name="amount"
                 step="0.01"
-                /* pl-10 (40px) leaves clearance for the $ icon. */
-                className={`block-input pl-10 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
+                /* pl-12 (48px) — bumped from pl-10 because pl-10 still clipped
+                   on narrower screens; macOS Electron's number-input spin buttons
+                   eat ~16px of right space, so we need extra room on the left
+                   for the $ icon. */
+                className={`block-input pl-12 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.amount}
                 onChange={handleChange}
@@ -1249,9 +1281,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 type="number"
                 name="tax_amount"
                 step="0.01"
-                /* Read-only when itemized — useEffect overwrites this from
+                /* pl-12 to match the Amount field above — see note there for why
+                   we need this much left padding for the $ icon clearance.
+                   Read-only when itemized — useEffect overwrites this from
                    lineItemTaxTotal, so allowing edits causes silent data loss. */
-                className={`block-input pl-10 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
+                className={`block-input pl-12 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.tax_amount}
                 onChange={handleChange}

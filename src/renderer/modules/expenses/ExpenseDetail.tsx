@@ -355,10 +355,11 @@ table{width:100%;border-collapse:collapse;}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="block-card p-3">
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total (incl. Tax)</div>
-          {/* FINAL-PRICE: amount + tax. Legacy tax_inclusive=1 rows already stored
-              total in amount, so don't double-count. */}
+          {/* FINAL-PRICE v2: amount + tax. The earlier inclusive-guard was for
+              legacy rows but it under-counted new inclusive saves (which also
+              store amount=pre-tax). Dropping the guard. */}
           <div className="text-2xl font-mono font-bold text-accent-expense mt-1">
-            {formatCurrency((expense as any).tax_inclusive ? (expense.amount || 0) : (expense.amount || 0) + ((expense as any).tax_amount || 0))}
+            {formatCurrency((expense.amount || 0) + ((expense as any).tax_amount || 0))}
           </div>
           {((expense as any).tax_amount || 0) > 0 && (
             <div className="text-[10px] text-text-muted mt-1">
@@ -416,7 +417,8 @@ table{width:100%;border-collapse:collapse;}
           <div className="text-right">
             <div className="text-xs uppercase font-bold text-text-muted">Total</div>
             <div className="text-2xl font-mono font-bold text-accent-expense">
-              {formatCurrency((expense as any).tax_inclusive ? (expense.amount || 0) : (expense.amount || 0) + ((expense as any).tax_amount || 0))}
+              {/* FINAL-PRICE v2: drop inclusive guard, always amount + tax. */}
+              {formatCurrency((expense.amount || 0) + ((expense as any).tax_amount || 0))}
             </div>
             {((expense as any).tax_amount || 0) > 0 && (
               <div className="text-[10px] text-text-muted mt-0.5">

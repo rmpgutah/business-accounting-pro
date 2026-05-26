@@ -108,14 +108,21 @@ const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vend
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
 
-// FINAL-PRICE rule: every UI surface that shows "what this expense cost" must
-// resolve to amount + tax. Legacy rows saved with tax_inclusive=1 already stored
-// amount=total (latent bug from earlier code), so we don't double-count those.
-// Going forward, amount is always pre-tax and tax_amount is separate.
+// FINAL-PRICE rule v2: amount + tax_amount = total, ALWAYS.
+//
+// History of this function:
+//   v1 (Expense Upgrades Wave): branched on tax_inclusive because legacy
+//       inclusive-mode saves stored amount=total (latent bug from older code).
+//   v2 (current): NEW saves always store amount=pre-tax regardless of
+//       tax_inclusive mode (the flag is now just metadata about UI entry
+//       style). So the inclusive guard would UNDER-COUNT new inclusive rows.
+//       Dropping the guard makes display consistent with save semantics.
+//
+// TRUE legacy inclusive rows (rare; created before FINAL-PRICE wave) would
+// now over-count by tax_amount once. If you find such rows showing inflated
+// totals, treat them as one-time cleanup: zero out tax_amount or re-save.
 function expenseDisplayTotal(e: { amount?: number; tax_amount?: number; tax_inclusive?: number }): number {
-  const a = e.amount || 0;
-  const t = e.tax_amount || 0;
-  return e.tax_inclusive ? a : a + t;
+  return (e.amount || 0) + (e.tax_amount || 0);
 }
 const COLS_KEY = (uid: string) => `expense_cols_${uid}`;
 
