@@ -1032,8 +1032,19 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         <QuickAddBar companyId={activeCompany.id} onCreated={(id) => { reload(); onEdit(id); }} />
       )}
 
-      {/* Filters (sticky, feature 15) */}
-      <div className="block-card p-3" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+      {/* Filters (sticky, feature 15)
+          STICKY OVERLAP FIX: .block-card uses backdrop-filter: blur — perfect for
+          static glass panels, but when sticky-positioned over a scrolling table the
+          blur shows the rows behind through the toolbar. Force an opaque background
+          + disable the blur ONLY on this instance, so table rows can't bleed through. */}
+      <div className="block-card p-3" style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        background: 'var(--color-bg-primary)',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+      }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />

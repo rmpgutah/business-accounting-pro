@@ -425,15 +425,17 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       updated[index] = { ...updated[index], [field]: value };
       const subtotal = roundCents(updated[index].quantity * updated[index].unit_price);
       updated[index].amount = subtotal;
-      // Recompute tax_amount whenever rate or jurisdictions change
+      // Recompute tax_amount whenever rate or jurisdictions change.
+      // NOTE: rates here are now PERCENT (e.g. 7.65), matching the top-level
+      // tax_rate input. So we divide by 100 when applying to subtotal.
       const jurisdictions = updated[index].tax_jurisdictions || [];
       if (jurisdictions.length > 0) {
-        const jTotal = jurisdictions.reduce((s, j) => s + roundCents(subtotal * (j.rate || 0)), 0);
+        const jTotal = jurisdictions.reduce((s, j) => s + roundCents(subtotal * ((j.rate || 0) / 100)), 0);
         updated[index].tax_amount = jTotal;
         updated[index].tax_rate = jurisdictions.reduce((s, j) => s + (j.rate || 0), 0);
-        updated[index].tax_jurisdictions = jurisdictions.map(j => ({ ...j, amount: roundCents(subtotal * (j.rate || 0)) }));
+        updated[index].tax_jurisdictions = jurisdictions.map(j => ({ ...j, amount: roundCents(subtotal * ((j.rate || 0) / 100)) }));
       } else {
-        updated[index].tax_amount = roundCents(subtotal * (updated[index].tax_rate || 0));
+        updated[index].tax_amount = roundCents(subtotal * ((updated[index].tax_rate || 0) / 100));
       }
       return updated;
     });
@@ -687,6 +689,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               try { setAffidavit(JSON.parse(existing.lost_receipt_affidavit)); } catch { /* */ }
             }
             // Load existing line items
+            // TAX-RATE UNIT BOUNDARY: DB stores tax_rate as DECIMAL (e.g. 0.0765 for 7.65%).
+            // UI works in PERCENT for parity with the top-level tax_rate input. We
+            // multiply by 100 on load and divide by 100 on save (see lineItemsPayload).
+            // Same conversion applies to each tax_jurisdiction.rate.
             const existingLines = await api.query('expense_line_items', { expense_id: expenseId }, { field: 'sort_order', dir: 'asc' });
             if (Array.isArray(existingLines) && existingLines.length > 0) {
               setLineItems(existingLines.map((l: any) => ({
@@ -696,9 +702,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 unit_price: l.unit_price || 0,
                 amount: l.amount || 0,
                 account_id: l.account_id || '',
-                tax_rate: l.tax_rate || 0,
+                tax_rate: roundCents((l.tax_rate || 0) * 100),
                 tax_amount: l.tax_amount || 0,
-                tax_jurisdictions: parseJSON<any[]>(l.tax_jurisdictions, []),
+                tax_jurisdictions: parseJSON<any[]>(l.tax_jurisdictions, []).map((j: any) => ({
+                  ...j,
+                  rate: roundCents((j.rate || 0) * 100),
+                })),
               })));
               setUseLineItems(true);
             }
@@ -927,9 +936,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             unit_price: li.unit_price,
             amount: roundCents(li.quantity * li.unit_price),
             account_id: li.account_id || null,
-            tax_rate: li.tax_rate || 0,
+            // TAX-RATE UNIT BOUNDARY: UI works in percent, DB stores decimal.
+            // Divide by 100 here so on load × 100 brings it back.
+            tax_rate: (li.tax_rate || 0) / 100,
             tax_amount: roundCents(li.tax_amount || 0),
-            tax_jurisdictions: JSON.stringify(li.tax_jurisdictions || []),
+            tax_jurisdictions: JSON.stringify((li.tax_jurisdictions || []).map((j: any) => ({
+              ...j,
+              rate: (j.rate || 0) / 100,
+            }))),
           }))
         : [];
 
@@ -1119,12 +1133,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           <div>
             <FieldLabel label="Amount" required tooltip={useLineItems ? 'Pre-tax subtotal — auto-calculated from line items (tax is tracked separately)' : 'Pre-tax amount of the expense (tax is entered separately in Tax Amount)'} />
             <div className="relative">
-              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
               <input
                 type="number"
                 name="amount"
                 step="0.01"
-                className={`block-input pl-8 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
+                /* pl-10 (40px) leaves clearance for the $ icon (left-3 + size 14 = ends at ~26px).
+                   Older pl-8 (32px) was too tight on macOS Electron — the leading digit
+                   ("$65.99" → "$5.99") rendered under the icon. */
+                className={`block-input pl-10 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.amount}
                 onChange={handleChange}
@@ -1138,17 +1155,21 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           <div>
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
               Tax Amount {form.currency && form.currency !== 'USD' ? <span className="text-text-muted">({form.currency})</span> : null}
+              {useLineItems && <span className="ml-2 text-text-muted normal-case font-normal">(auto-summed from line items)</span>}
             </label>
             <div className="relative">
-              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
               <input
                 type="number"
                 name="tax_amount"
                 step="0.01"
-                className="block-input pl-8"
+                /* Read-only when itemized — useEffect overwrites this from
+                   lineItemTaxTotal, so allowing edits causes silent data loss. */
+                className={`block-input pl-10 ${useLineItems ? 'bg-bg-tertiary text-text-muted cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 value={form.tax_amount}
                 onChange={handleChange}
+                readOnly={useLineItems}
               />
             </div>
           </div>
@@ -1229,18 +1250,18 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     <div className="col-span-1"></div>
                     <div className="col-span-11 flex items-center gap-3 pb-1">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Tax rate</label>
-                      <input type="number" step="0.0001" max="1"
+                      <input type="number" step="0.01" min="0" max="100"
                         className="block-input text-xs font-mono text-right"
                         style={{ width: 90 }}
                         value={li.tax_rate || 0}
                         onChange={(e) => handleLineChange(idx, 'tax_rate', parseFloat(e.target.value) || 0)} />
-                      <span className="text-[10px] text-text-muted">(decimal, e.g. 0.0725)</span>
+                      <span className="text-[10px] text-text-muted">% (e.g. 7.25)</span>
                       <span className="text-[10px] text-text-muted">tax: {formatCurrency(li.tax_amount || 0)}</span>
                       <button type="button" className="text-[10px] underline text-accent-blue ml-auto"
                         onClick={() => {
                           const label = prompt('Add jurisdiction (e.g. "CA State"):');
                           if (!label) return;
-                          const rateStr = prompt('Rate as decimal (e.g. 0.0725):');
+                          const rateStr = prompt('Rate as PERCENT (e.g. 7.25):');
                           const rate = parseFloat(rateStr || '0') || 0;
                           const next = [...(li.tax_jurisdictions || []), { jurisdiction: label, rate, amount: 0 }];
                           handleLineChange(idx, 'tax_jurisdictions', next);
@@ -1248,7 +1269,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                       {(li.tax_jurisdictions || []).map((j, ji) => (
                         <span key={ji} className="text-[10px] px-2 py-0.5 border border-border-primary"
                           style={{ borderRadius: 4 }}>
-                          {j.jurisdiction} {(j.rate * 100).toFixed(2)}%
+                          {j.jurisdiction} {(j.rate || 0).toFixed(2)}%
                           <button type="button" className="ml-1 text-accent-expense"
                             onClick={() => {
                               const next = li.tax_jurisdictions.filter((_, k) => k !== ji);
