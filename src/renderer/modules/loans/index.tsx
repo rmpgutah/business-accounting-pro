@@ -11,8 +11,9 @@ import { useToast } from '../../components/ToastProvider';
 import LoanForm from './LoanForm';
 import LoanDetail from './LoanDetail';
 import AggregateDebtChart from './AggregateDebtChart';
+import LoanWizard from './LoanWizard';
 
-type View = 'list' | 'form' | 'detail';
+type View = 'list' | 'form' | 'detail' | 'wizard';
 
 const fmt$ = (n: number, currency: string = 'USD'): string => {
   try {
@@ -56,6 +57,17 @@ const LoansModule: React.FC = () => {
     );
   }
 
+  if (view === 'wizard') {
+    return (
+      <div style={{ padding: 24, maxWidth: 1000 }}>
+        <LoanWizard
+          onSaved={(id) => { setSelectedId(id); setView('detail'); }}
+          onCancel={() => setView('list')}
+        />
+      </div>
+    );
+  }
+
   if (view === 'detail' && selectedId) {
     return (
       <LoanDetail
@@ -74,12 +86,22 @@ const LoansModule: React.FC = () => {
         <h2 style={{ fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
           <Landmark size={22} /> Loans & Debt
         </h2>
-        <button
-          className="block-btn-primary flex items-center gap-2"
-          onClick={() => { setSelectedId(null); setView('form'); }}
-        >
-          <Plus size={14} /> New Loan
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => { setSelectedId(null); setView('form'); }}
+            title="Quick form for advanced users"
+          >
+            <Plus size={14} /> Quick Add
+          </button>
+          <button
+            className="block-btn-primary flex items-center gap-2"
+            onClick={() => { setSelectedId(null); setView('wizard'); }}
+            title="Type-aware step-by-step wizard"
+          >
+            <Plus size={14} /> New Loan (Wizard)
+          </button>
+        </div>
       </div>
 
       {/* Overdue alert banner — top of dashboard if any active loan

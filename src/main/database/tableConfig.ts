@@ -723,6 +723,11 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'invoice_payment_matches',
   // Loan Wave (F963-F992) — escrow ledger is append-only
   'loan_escrow_ledger',
+  // Loan Full-System (F993-F1052) — audit/snapshot tables
+  'loan_heloc_draws',
+  'loan_charge_offs',
+  'loan_recoveries',
+  'loan_risk_grades',
   // Invoice Wave II (F923-F962) — snapshot/audit/log tables
   'invoice_coupon_redemptions',
   'client_portal_tokens',

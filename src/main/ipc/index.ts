@@ -4031,6 +4031,77 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('la:debt-to-equity', () => la().computeDebtToEquity());
   ipcMain.handle('la:portfolio:dashboard', () => la().loanPortfolioDashboard());
 
+  // ─── Loan Full-System Wave (F993-F1052) — `lf:*` namespace ──
+  const lf = () => require('../services/loan-full-system');
+  // LG type-specific calculations
+  ipcMain.handle('lf:idr:calc', (_e, p: any) => lf().calculateIdrPayment(p));
+  ipcMain.handle('lf:pslf:track', (_e, p: any) => lf().trackPslfPayment(p));
+  ipcMain.handle('lf:heloc:phase-calc', (_e, p: any) => lf().helocPhaseCalculator(p));
+  ipcMain.handle('lf:construction:project', (_e, p: any) => lf().constructionLoanProjection(p));
+  ipcMain.handle('lf:reverse:options', (_e, p: any) => lf().reverseMortgageOptions(p));
+  ipcMain.handle('lf:cc:payoff', (_e, p: any) => lf().creditCardPayoff(p));
+  ipcMain.handle('lf:lease-vs-buy', (_e, p: any) => lf().leaseVsBuyComparison(p));
+  ipcMain.handle('lf:auto:afford', (_e, p: any) => lf().autoLoanAffordability(p));
+  ipcMain.handle('lf:sba:eligible', (_e, p: any) => lf().sbaEligibilityCheck(p));
+  ipcMain.handle('lf:margin:call', (_e, p: any) => lf().marginCallCalculator(p));
+  // LH advanced math
+  ipcMain.handle('lf:pv', (_e, p: any) => lf().presentValue(p));
+  ipcMain.handle('lf:fv', (_e, p: any) => lf().futureValue(p));
+  ipcMain.handle('lf:npv', (_e, { cash_flows, discount_rate_pct }: any) => lf().calculateNpv(cash_flows || [], discount_rate_pct));
+  ipcMain.handle('lf:irr', (_e, { cash_flows, max_iter, tolerance }: any) => lf().calculateIrr(cash_flows || [], max_iter, tolerance));
+  ipcMain.handle('lf:apr-to-apy', (_e, { apr_pct, compounds }: any) => lf().aprToApy(apr_pct, compounds || 12));
+  ipcMain.handle('lf:apy-to-apr', (_e, { apy_pct, compounds }: any) => lf().apyToApr(apy_pct, compounds || 12));
+  ipcMain.handle('lf:apr-with-fees', (_e, p: any) => lf().calculateAprWithFees(p));
+  ipcMain.handle('lf:yield-maintenance', (_e, p: any) => lf().yieldMaintenancePenalty(p));
+  ipcMain.handle('lf:defeasance', (_e, p: any) => lf().defeasanceCost(p));
+  ipcMain.handle('lf:duration', (_e, p: any) => lf().modifiedDuration(p));
+  ipcMain.handle('lf:cecl', (_e, p: any) => lf().cecLossReserve(p));
+  ipcMain.handle('lf:tax-equiv-yield', (_e, p: any) => lf().taxEquivalentYield(p));
+  // LI applications & origination
+  ipcMain.handle('lf:app:create', (_e, p: any) => lf().createLoanApplication(p));
+  ipcMain.handle('lf:prequal', (_e, p: any) => lf().preQualify(p));
+  ipcMain.handle('lf:1003', (_e, { borrower_id, application_id }: any) => lf().generate1003Form(borrower_id, application_id));
+  ipcMain.handle('lf:underwriting:checklist', (_e, { application_id }: any) => lf().underwritingChecklist(application_id));
+  ipcMain.handle('lf:loan-estimate', (_e, { application_id }: any) => lf().generateLoanEstimate(application_id));
+  ipcMain.handle('lf:cd:generate', (_e, { loan_id }: any) => lf().generateClosingDisclosure(loan_id));
+  ipcMain.handle('lf:til:generate', (_e, { loan_id }: any) => lf().generateTilDisclosure(loan_id));
+  ipcMain.handle('lf:promissory:create', (_e, p: any) => lf().createPromissoryNote(p));
+  ipcMain.handle('lf:committee:package', (_e, { application_id }: any) => lf().loanCommitteePackage(application_id));
+  ipcMain.handle('lf:borrower:upsert', (_e, p: any) => lf().upsertBorrowerProfile(p));
+  // LJ risk & compliance
+  ipcMain.handle('lf:credit:update', (_e, { borrower_id, score, source }: any) => lf().updateCreditScore(borrower_id, score, source));
+  ipcMain.handle('lf:dti', (_e, { borrower_id, additional_monthly_payment }: any) => lf().calculateBorrowerDti(borrower_id, additional_monthly_payment || 0));
+  ipcMain.handle('lf:reserve:portfolio', (_e, opts: any = {}) => lf().portfolioLossReserve(opts));
+  ipcMain.handle('lf:dscr:weighted', () => lf().riskWeightedDscr());
+  ipcMain.handle('lf:hmda', (_e, { application_id }: any) => lf().hmdaReportingFields(application_id));
+  ipcMain.handle('lf:fair-lending', () => lf().fairLendingCheck());
+  ipcMain.handle('lf:risk-grade:assign', (_e, p: any) => lf().assignRiskGrade(p));
+  ipcMain.handle('lf:watchlist', () => lf().loanWatchlist());
+  ipcMain.handle('lf:charge-off', (_e, p: any) => lf().chargeOffLoan(p));
+  ipcMain.handle('lf:recovery', (_e, p: any) => lf().recordRecovery(p));
+  // LK specialized products
+  ipcMain.handle('lf:heloc:draw', (_e, p: any) => lf().helocRecordDraw(p));
+  ipcMain.handle('lf:heloc:to-repayment', (_e, p: any) => lf().helocTransitionToRepayment(p));
+  ipcMain.handle('lf:construction:draw', (_e, p: any) => lf().createConstructionDraw(p));
+  ipcMain.handle('lf:bridge:calc', (_e, p: any) => lf().bridgeLoanCalculator(p));
+  ipcMain.handle('lf:lease:classify', (_e, p: any) => lf().classifyLease(p));
+  ipcMain.handle('lf:sale-leaseback', (_e, p: any) => lf().saleLeasebackAnalysis(p));
+  ipcMain.handle('lf:factoring', (_e, p: any) => lf().factoringAnalysis(p));
+  ipcMain.handle('lf:mca', (_e, p: any) => lf().mcaAnalysis(p));
+  ipcMain.handle('lf:afr', (_e, { term_category }: any) => lf().getCurrentAfr(term_category || 'mid'));
+  ipcMain.handle('lf:loc:track', (_e, p: any) => lf().trackLetterOfCredit(p));
+  // LL portfolio analytics
+  ipcMain.handle('lf:portfolio:aging', () => lf().portfolioAging());
+  ipcMain.handle('lf:portfolio:vintage', () => lf().vintageAnalysis());
+  ipcMain.handle('lf:portfolio:concentration', () => lf().concentrationRisk());
+  ipcMain.handle('lf:nim', (_e, { months }: any = {}) => lf().netInterestMargin(months || 12));
+  ipcMain.handle('lf:loan:yield', (_e, { loan_id }: any) => lf().loanYield(loan_id));
+  ipcMain.handle('lf:charge-off:rate', () => lf().chargeOffRate());
+  ipcMain.handle('lf:recovery:rate', () => lf().recoveryRate());
+  ipcMain.handle('lf:delinquency:rate', () => lf().delinquencyRate());
+  ipcMain.handle('lf:portfolio:stress', (_e, p: any) => lf().portfolioStressTest(p));
+  ipcMain.handle('lf:reserves:required', () => lf().requiredReserves());
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
