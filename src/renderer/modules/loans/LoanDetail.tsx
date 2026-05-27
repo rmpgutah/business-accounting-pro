@@ -370,6 +370,12 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
   // escrow values are sent verbatim. When OFF, the IPC handler
   // auto-derives them via daily-accrual splitPaymentDaily.
   const [manualSplit, setManualSplit] = useState(false);
+  // Auto-creates an Interest Expense entry linked to this loan payment.
+  // Default ON because interest IS a deductible business expense and
+  // every accounting workflow expects to see it in the expense ledger.
+  // Turn OFF if you'll record the expense separately or this loan is
+  // personal (interest isn't deductible).
+  const [createInterestExpense, setCreateInterestExpense] = useState(true);
   const [principal, setPrincipal] = useState(0);
   const [interest, setInterest] = useState(0);
   const [escrow, setEscrow] = useState(0);
@@ -420,6 +426,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
           interest_amount: interest,
           escrow_amount: escrow,
         } : {}),
+        ...(createInterestExpense ? {} : { skip_expense_creation: true } as any),
       });
       if (r?.error) { toast.error('Failed: ' + r.error); return; }
       toast.success('Payment recorded · principal ' + (r.split?.principal?.toFixed(2) || '0') + ' · interest ' + (r.split?.interest?.toFixed(2) || '0'));
@@ -533,6 +540,22 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginTop: 10 }}>
           <input type="checkbox" checked={extra} onChange={(e) => setExtra(e.target.checked)} />
           Extra principal-only payment (skips schedule, applies 100% to principal)
+        </label>
+
+        {/* Cross-integration with expense ledger — auto-creates an
+            Interest Expense entry for the interest portion. Bidirectional
+            link: the expense knows its loan_payment_id and vice versa.
+            Edit/delete one side, the other follows. */}
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginTop: 10 }}>
+          <input type="checkbox" checked={createInterestExpense}
+            onChange={(e) => setCreateInterestExpense(e.target.checked)}
+            style={{ marginTop: 3 }} />
+          <span>
+            <span style={{ fontWeight: 600 }}>Auto-create Interest Expense entry</span>
+            <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: 10, marginTop: 2 }}>
+              Books the interest portion to your expense ledger (deductible). Linked to this payment — delete or edit one, the other follows.
+            </span>
+          </span>
         </label>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 }}>

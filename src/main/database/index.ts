@@ -600,6 +600,10 @@ export function initDatabase(): Database.Database {
   // optional and avoid the cascading-delete complexity.
   "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
   "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
+  // Bidirectional link — loan_payment knows which expense was auto-created
+  // for its interest portion. Allows cascade-delete and edit-sync between
+  // the loan payment and the expense ledger.
+  "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
   // Vendor Advanced Wave — extend vendors with fields exposed by the new
   // 6-tab VendorFormAdvanced. Many existing columns already covered by
   // earlier waves (vendor_type, w9_status, approval_status, diversity,
