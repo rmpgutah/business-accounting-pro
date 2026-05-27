@@ -670,7 +670,7 @@ const api = {
     window.electronAPI.invoke('loans:save', payload),
   loanDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
     window.electronAPI.invoke('loans:delete', { id }),
-  loanRecordPayment: (payload: { loan_id: string; payment_date: string; amount: number; is_extra_principal?: boolean; payment_method?: string; reference?: string; notes?: string }): Promise<{ ok?: boolean; payment_id?: string; split?: { principal: number; interest: number; escrow: number; new_balance: number }; error?: string }> =>
+  loanRecordPayment: (payload: { loan_id: string; payment_date: string; amount: number; is_extra_principal?: boolean; payment_method?: string; reference?: string; notes?: string; principal_amount?: number; interest_amount?: number; escrow_amount?: number }): Promise<{ ok?: boolean; payment_id?: string; split?: { principal: number; interest: number; escrow: number; new_balance: number }; error?: string }> =>
     window.electronAPI.invoke('loans:record-payment', payload),
   loanRecompute: (loanId: string): Promise<{ ok?: boolean; totals?: { total_paid_to_date: number; total_principal_paid: number; total_interest_paid: number; current_balance: number; deferred_interest_balance: number }; corrected_count?: number; error?: string }> =>
     window.electronAPI.invoke('loans:recompute', loanId),

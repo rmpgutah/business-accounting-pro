@@ -353,6 +353,11 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
   );
 };
 
+// Record a new loan payment. By default the system auto-computes the
+// principal/interest/escrow split using daily accrual against the
+// current balance. Toggle "Override split manually" to type your own
+// values from a bank statement — those go straight to the DB and the
+// loan's running totals.
 const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; onSaved: () => void }> = ({ loanId, loan, onClose, onSaved }) => {
   const toast = useToast();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -361,9 +366,46 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
   const [reference, setReference] = useState('');
   const [extra, setExtra] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Manual split override — when ON, the user-typed principal/interest/
+  // escrow values are sent verbatim. When OFF, the IPC handler
+  // auto-derives them via daily-accrual splitPaymentDaily.
+  const [manualSplit, setManualSplit] = useState(false);
+  const [principal, setPrincipal] = useState(0);
+  const [interest, setInterest] = useState(0);
+  const [escrow, setEscrow] = useState(0);
+
+  // Live auto-split preview — shows what the system WOULD compute,
+  // so the user can see it before deciding to override. Uses periodic
+  // (monthly) rate as a quick approximation; actual save uses daily
+  // accrual based on days since last payment.
+  const monthlyRate = (loan.interest_rate || 0) / 12;
+  const accruedInterest = (loan.current_balance || loan.principal) * monthlyRate;
+  const previewInterest = extra ? 0 : Math.min(amount, accruedInterest);
+  const previewEscrow = extra ? 0 : Math.min(loan.escrow_per_payment || 0, Math.max(0, amount - previewInterest));
+  const previewPrincipal = extra ? amount : Math.max(0, amount - previewInterest - previewEscrow);
+
+  // When user toggles manual ON, seed inputs with the preview values
+  // so they have a starting point to tweak.
+  useEffect(() => {
+    if (manualSplit) {
+      setPrincipal(round2(previewPrincipal));
+      setInterest(round2(previewInterest));
+      setEscrow(round2(previewEscrow));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualSplit]);
+
+  function round2(n: number) { return Math.round(n * 100) / 100; }
+
+  const componentsSum = principal + interest + escrow;
+  const splitDiff = amount - componentsSum;
+  const splitBalanced = Math.abs(splitDiff) < 0.01;
 
   const handleSave = async () => {
     if (!amount || amount <= 0) { toast.error('Amount must be > 0'); return; }
+    if (manualSplit && !splitBalanced) {
+      if (!confirm(`Components sum to $${componentsSum.toFixed(2)} but Amount is $${amount.toFixed(2)} (diff $${Math.abs(splitDiff).toFixed(2)}). Save anyway?`)) return;
+    }
     setBusy(true);
     try {
       const r = await api.loanRecordPayment({
@@ -373,6 +415,11 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
         is_extra_principal: extra,
         payment_method: method,
         reference,
+        ...(manualSplit ? {
+          principal_amount: principal,
+          interest_amount: interest,
+          escrow_amount: escrow,
+        } : {}),
       });
       if (r?.error) { toast.error('Failed: ' + r.error); return; }
       toast.success('Payment recorded · principal ' + (r.split?.principal?.toFixed(2) || '0') + ' · interest ' + (r.split?.interest?.toFixed(2) || '0'));
@@ -382,13 +429,13 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 480, width: '100%', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 520, width: '100%', padding: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Record Loan Payment</div>
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="Payment Date">
             <input type="date" className="block-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          <Field label="Amount">
+          <Field label="Total Amount">
             <input type="number" step="0.01" className="block-input" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} />
           </Field>
           <Field label="Method">
@@ -398,16 +445,96 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
               <option value="wire">Wire</option>
               <option value="cash">Cash</option>
               <option value="card">Card</option>
+              <option value="transfer">Bank Transfer</option>
+              <option value="other">Other</option>
             </select>
           </Field>
           <Field label="Reference">
-            <input className="block-input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Check # or confirmation" />
+            <input className="block-input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Check # / confirmation" />
           </Field>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <input type="checkbox" checked={extra} onChange={(e) => setExtra(e.target.checked)} />
-            Extra principal-only payment (skips schedule, applies 100% to principal)
-          </label>
         </div>
+
+        {/* Live auto-split preview — visible always so user sees what
+            the system would compute. Becomes "starting point" if they
+            toggle the manual override on. */}
+        <div style={{
+          marginTop: 10, padding: '8px 10px',
+          background: 'rgba(96,165,250,0.06)',
+          border: '1px solid rgba(96,165,250,0.2)',
+          borderRadius: 6, fontSize: 11,
+        }}>
+          <div style={{ color: 'var(--color-text-muted)', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
+            Auto-split preview (daily accrual on save · monthly proxy shown here)
+          </div>
+          <div style={{ display: 'flex', gap: 16, fontFamily: 'SF Mono, Menlo, monospace' }}>
+            <span><span style={{ color: 'var(--color-text-muted)' }}>Principal: </span><span style={{ color: '#16a34a', fontWeight: 700 }}>${previewPrincipal.toFixed(2)}</span></span>
+            <span><span style={{ color: 'var(--color-text-muted)' }}>Interest: </span><span style={{ color: '#dc2626', fontWeight: 700 }}>${previewInterest.toFixed(2)}</span></span>
+            {(loan.escrow_per_payment || 0) > 0 && (
+              <span><span style={{ color: 'var(--color-text-muted)' }}>Escrow: </span><span style={{ fontWeight: 700 }}>${previewEscrow.toFixed(2)}</span></span>
+            )}
+          </div>
+        </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginTop: 10 }}>
+          <input type="checkbox" checked={manualSplit} onChange={(e) => setManualSplit(e.target.checked)} />
+          <span style={{ fontWeight: 600 }}>Override split manually</span>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>
+            — type values from your bank statement instead of auto-calc
+          </span>
+        </label>
+
+        {manualSplit && (
+          <div style={{ marginTop: 8, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              <Field label="Principal Portion">
+                <input type="number" step="0.01" className="block-input"
+                  value={principal || ''}
+                  onChange={(e) => setPrincipal(parseFloat(e.target.value) || 0)}
+                  style={{ color: '#16a34a' }} />
+              </Field>
+              <Field label="Interest Portion">
+                <input type="number" step="0.01" className="block-input"
+                  value={interest || ''}
+                  onChange={(e) => setInterest(parseFloat(e.target.value) || 0)}
+                  style={{ color: '#dc2626' }} />
+              </Field>
+              <Field label="Escrow Portion">
+                <input type="number" step="0.01" className="block-input"
+                  value={escrow || ''}
+                  onChange={(e) => setEscrow(parseFloat(e.target.value) || 0)} />
+              </Field>
+            </div>
+            {/* Live balance check */}
+            <div style={{
+              marginTop: 8, padding: '6px 8px',
+              background: splitBalanced ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
+              border: '1px solid ' + (splitBalanced ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'),
+              borderRadius: 4, fontSize: 10,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span style={{ fontFamily: 'SF Mono, Menlo, monospace' }}>
+                P+I+E = ${componentsSum.toFixed(2)} · Amount = ${amount.toFixed(2)}
+                {!splitBalanced && <span style={{ color: '#dc2626', marginLeft: 6 }}>diff ${Math.abs(splitDiff).toFixed(2)}</span>}
+              </span>
+              {!splitBalanced && (
+                <button
+                  onClick={() => setPrincipal(round2(principal + splitDiff))}
+                  className="block-btn"
+                  style={{ padding: '1px 6px', fontSize: 9 }}
+                  title="Adjust principal so components sum to amount"
+                >
+                  Balance → Principal
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginTop: 10 }}>
+          <input type="checkbox" checked={extra} onChange={(e) => setExtra(e.target.checked)} />
+          Extra principal-only payment (skips schedule, applies 100% to principal)
+        </label>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 }}>
           <button onClick={onClose} className="block-btn">Cancel</button>
           <button onClick={handleSave} disabled={busy} className="block-btn-primary">{busy ? 'Saving…' : 'Record'}</button>

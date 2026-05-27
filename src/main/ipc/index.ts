@@ -1405,6 +1405,12 @@ export function registerIpcHandlers(): void {
 
   // Record an actual payment. Splits into principal/interest, links
   // to the next pending scheduled row, updates loan running totals.
+  //
+  // Optional principal_amount/interest_amount/escrow_amount fields:
+  // if ANY of the three are explicitly provided (not undefined), they
+  // override the auto-computed daily-accrual split. Use this when the
+  // bank statement gives you exact split figures and you want them
+  // honored verbatim. Leave them undefined to let the system compute.
   ipcMain.handle('loans:record-payment', (_event, payload: {
     loan_id: string;
     payment_date: string;
@@ -1413,6 +1419,9 @@ export function registerIpcHandlers(): void {
     payment_method?: string;
     reference?: string;
     notes?: string;
+    principal_amount?: number;
+    interest_amount?: number;
+    escrow_amount?: number;
   }) => {
     try {
       const dbi = db.getDb();
@@ -1454,7 +1463,14 @@ export function registerIpcHandlers(): void {
       // We pass prior_deferred = 0 here because splitPaymentDaily already
       // accrues for `days` since last payment. If the prior payment was a
       // partial that left deferred interest, that was already booked then.
-      const split = payload.is_extra_principal
+      // User-provided splits take priority over auto-calculated ones.
+      // We accept ANY of the three being supplied — missing fields fall
+      // back to the auto-split values (so user can override just one).
+      const hasManualSplit =
+        payload.principal_amount !== undefined ||
+        payload.interest_amount !== undefined ||
+        payload.escrow_amount !== undefined;
+      const autoSplit = payload.is_extra_principal
         ? {
             principal: payload.amount,
             interest: 0,
@@ -1471,6 +1487,21 @@ export function registerIpcHandlers(): void {
             0,
             loan.escrow_per_payment || 0
           );
+      const split = hasManualSplit
+        ? (() => {
+            const p = payload.principal_amount !== undefined ? payload.principal_amount : autoSplit.principal;
+            const i = payload.interest_amount !== undefined ? payload.interest_amount : autoSplit.interest;
+            const e = payload.escrow_amount !== undefined ? payload.escrow_amount : autoSplit.escrow;
+            return {
+              principal: p,
+              interest: i,
+              escrow: e,
+              new_balance: Math.max(0, loan.current_balance - p),
+              deferred_interest: 0,
+              accrued_interest: autoSplit.accrued_interest,
+            };
+          })()
+        : autoSplit;
       void totalDaysSinceOrig; void deferredRow;  // reserved for future deferred-interest tracking
 
       // Find the next pending scheduled row to link to (skipped for
