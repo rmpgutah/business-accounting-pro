@@ -144,6 +144,13 @@ const Sidebar: React.FC = () => {
   const favoriteModules = usePersonalizationStore((s) => s.favoriteModules);
   const [showHidden, setShowHidden] = useState(false);
 
+  // ALWAYS-VISIBLE modules — these IGNORE every filter (hiddenModules,
+  // pinnedModules, sidebarOrder, cloud-loaded personalization, etc.) and
+  // are rendered unconditionally at the top of the nav. Loans was getting
+  // filtered out by some combination of stale persisted state, so we just
+  // stopped relying on personalization for it entirely.
+  const ALWAYS_VISIBLE = ['loans'];
+
   // Resolve order: pinned first, then user-ordered visible, then hidden under "More"
   // AUTO-ADD NEW MODULES: when a module is added to ALL_ITEMS (e.g. Loans)
   // after a user already has a persisted sidebarOrder, the user's saved order
@@ -155,11 +162,14 @@ const Sidebar: React.FC = () => {
   const missingFromOrder = Object.keys(ALL_ITEMS).filter((id) => !knownIds.has(id));
   const effectiveOrder = [...sidebarOrder, ...missingFromOrder];
 
+  // Drop ALWAYS_VISIBLE from every other bucket so we render each item once.
+  const isAlways = (id: string) => ALWAYS_VISIBLE.includes(id);
   const visibleOrder = effectiveOrder.filter(
-    (id) => ALL_ITEMS[id] && !hiddenModules.includes(id) && !pinnedModules.includes(id)
+    (id) => ALL_ITEMS[id] && !hiddenModules.includes(id) && !pinnedModules.includes(id) && !isAlways(id)
   );
-  const pinned = pinnedModules.filter((id) => ALL_ITEMS[id]);
-  const hidden = hiddenModules.filter((id) => ALL_ITEMS[id]);
+  const pinned = pinnedModules.filter((id) => ALL_ITEMS[id] && !isAlways(id));
+  const hidden = hiddenModules.filter((id) => ALL_ITEMS[id] && !isAlways(id));
+  const alwaysVisible = ALWAYS_VISIBLE.filter((id) => ALL_ITEMS[id]);
 
   const renderItem = (id: string) => {
     const item = ALL_ITEMS[id];
@@ -232,6 +242,23 @@ const Sidebar: React.FC = () => {
 
       {/* Navigation — user-customized order with Pinned + More overflow */}
       <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin">
+        {/* ALWAYS-VISIBLE: rendered above everything, ignores all personalization */}
+        {alwaysVisible.length > 0 && (
+          <div>
+            {!sidebarCollapsed && (
+              <div className="px-4 pt-2.5 pb-1 flex items-center gap-1">
+                <Banknote size={9} className="text-accent-warning" />
+                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
+                  FINANCE
+                </span>
+              </div>
+            )}
+            {alwaysVisible.map(renderItem)}
+            {!sidebarCollapsed && (
+              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
+            )}
+          </div>
+        )}
         {pinned.length > 0 && (
           <div>
             {!sidebarCollapsed && (
