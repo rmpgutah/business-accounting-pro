@@ -76,6 +76,10 @@ interface ExpenseFormData {
   fuel_station: string;
   notes: string;
   vat_gst: string;
+  // Header-level discount (post-Itemization Wave). Applied AFTER tax — does
+  // not reduce taxable base. Both fields are independent: $ + % both subtract.
+  discount_amount: string;
+  discount_percent: string;
 }
 
 interface DropdownOption {
@@ -315,6 +319,8 @@ const emptyForm: ExpenseFormData = {
   fuel_station: '',
   notes: '',
   vat_gst: '',
+  discount_amount: '',
+  discount_percent: '',
 };
 
 // ─── Attached Documents (for receipt linking) ─────────
@@ -724,6 +730,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               exchange_rate: (existing.exchange_rate ?? 1).toString(),
               tax_inclusive: !!existing.tax_inclusive,
               tax_rate: existing.tax_rate?.toString() || '',
+              // Header-level discount (load — empty string when 0 so input shows placeholder)
+              discount_amount: existing.discount_amount ? String(existing.discount_amount) : '',
+              discount_percent: existing.discount_percent ? String(existing.discount_percent) : '',
               entry_mode: (existing.entry_mode as any) || 'standard',
               odometer_start: existing.odometer_start?.toString() || '',
               odometer_end: existing.odometer_end?.toString() || '',
@@ -842,6 +851,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           exchange_rate: parseFloat(form.exchange_rate) || 1,
           tax_inclusive: form.tax_inclusive ? 1 : 0,
           tax_rate: parseFloat(form.tax_rate) || 0,
+          discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
+          discount_percent: parseFloat(form.discount_percent) || 0,
           entry_mode: form.entry_mode,
           odometer_start: parseFloat(form.odometer_start) || 0,
           odometer_end: parseFloat(form.odometer_end) || 0,
@@ -1292,6 +1303,76 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 readOnly={useLineItems}
               />
             </div>
+          </div>
+
+          {/* Header-level discount (full-width row spanning all 3 cols).
+              Math convention: discount is applied AFTER tax — matches the
+              invoice form's existing behavior. Both $ and % deduct
+              independently if both are set. Tax is computed on pre-discount
+              subtotal so this doesn't reduce the taxable base. */}
+          <div className="col-span-3">
+            <details className="block-card p-2" style={{ borderRadius: 6 }}>
+              <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
+                Discount
+                {(parseFloat(form.discount_amount) > 0 || parseFloat(form.discount_percent) > 0) && (
+                  <span className="ml-2 text-accent-blue normal-case font-normal">
+                    {parseFloat(form.discount_amount) > 0 ? formatCurrency(parseFloat(form.discount_amount)) : ''}
+                    {parseFloat(form.discount_amount) > 0 && parseFloat(form.discount_percent) > 0 ? ' + ' : ''}
+                    {parseFloat(form.discount_percent) > 0 ? `${form.discount_percent}%` : ''}
+                  </span>
+                )}
+              </summary>
+              <div className="grid grid-cols-3 gap-3 mt-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Discount (flat $)</label>
+                  <div className="relative">
+                    <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="block-input pl-12"
+                      placeholder="0.00"
+                      value={form.discount_amount}
+                      onChange={(e) => setForm(p => ({ ...p, discount_amount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Discount %</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    className="block-input"
+                    placeholder="0"
+                    value={form.discount_percent}
+                    onChange={(e) => setForm(p => ({ ...p, discount_percent: e.target.value }))}
+                  />
+                </div>
+                <div className="self-end">
+                  {/* Live computed "Final after discount" preview. Helps users see
+                      the net amount as they type the discount values. */}
+                  {(() => {
+                    const totalBefore = (parseFloat(form.amount) || 0); // form.amount already = subtotal + tax (per FINAL-PRICE)
+                    const flat = parseFloat(form.discount_amount) || 0;
+                    const pct = parseFloat(form.discount_percent) || 0;
+                    const pctDiscount = totalBefore * (pct / 100);
+                    const finalTotal = Math.max(0, totalBefore - flat - pctDiscount);
+                    const discountTotal = totalBefore - finalTotal;
+                    if (discountTotal <= 0) return null;
+                    return (
+                      <div className="text-[10px] text-text-muted font-mono">
+                        <div>Before discount: {formatCurrency(totalBefore)}</div>
+                        <div className="text-accent-blue">−{formatCurrency(discountTotal)}</div>
+                        <div className="text-text-primary font-bold">Final: {formatCurrency(finalTotal)}</div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </details>
           </div>
 
           {/* Line Items Toggle + Editor — full width */}

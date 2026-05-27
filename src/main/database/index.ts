@@ -589,6 +589,11 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expenses ADD COLUMN exchange_rate REAL DEFAULT 1",
   "ALTER TABLE expenses ADD COLUMN tax_inclusive INTEGER DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN tax_rate REAL DEFAULT 0",
+  // Header-level discount on expenses (added after Invoice Wave II — parity
+  // with invoices.discount_pct + invoices.discount_amount). Math convention
+  // matches invoices: discount is applied AFTER tax (does NOT reduce tax base).
+  "ALTER TABLE expenses ADD COLUMN discount_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN discount_percent REAL DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN entry_mode TEXT DEFAULT 'standard'",
   "ALTER TABLE expenses ADD COLUMN odometer_start REAL DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN odometer_end REAL DEFAULT 0",

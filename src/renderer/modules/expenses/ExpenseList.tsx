@@ -34,6 +34,8 @@ interface Expense {
   amount: number;
   tax_amount?: number;
   tax_inclusive?: number;
+  discount_amount?: number;
+  discount_percent?: number;
   status: 'pending' | 'approved' | 'paid' | 'rejected';
   is_billable: boolean;
   is_reimbursable?: number;
@@ -108,21 +110,19 @@ const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vend
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
 
-// FINAL-PRICE rule v2: amount + tax_amount = total, ALWAYS.
+// FINAL-PRICE rule v3: amount + tax − header_discount = total, ALWAYS.
 //
-// History of this function:
-//   v1 (Expense Upgrades Wave): branched on tax_inclusive because legacy
-//       inclusive-mode saves stored amount=total (latent bug from older code).
-//   v2 (current): NEW saves always store amount=pre-tax regardless of
-//       tax_inclusive mode (the flag is now just metadata about UI entry
-//       style). So the inclusive guard would UNDER-COUNT new inclusive rows.
-//       Dropping the guard makes display consistent with save semantics.
-//
-// TRUE legacy inclusive rows (rare; created before FINAL-PRICE wave) would
-// now over-count by tax_amount once. If you find such rows showing inflated
-// totals, treat them as one-time cleanup: zero out tax_amount or re-save.
-function expenseDisplayTotal(e: { amount?: number; tax_amount?: number; tax_inclusive?: number }): number {
-  return (e.amount || 0) + (e.tax_amount || 0);
+// Discount math: applied AFTER tax (does NOT reduce taxable base) for parity
+// with the invoice form. Both $ flat AND % apply independently — if both are
+// set, they both subtract. Negative totals are clamped to 0 (a discount can
+// never make an expense's value negative; that would be a credit memo
+// scenario which lives elsewhere).
+function expenseDisplayTotal(e: { amount?: number; tax_amount?: number; discount_amount?: number; discount_percent?: number }): number {
+  const grossTotal = (e.amount || 0) + (e.tax_amount || 0);
+  const flat = e.discount_amount || 0;
+  const pct = e.discount_percent || 0;
+  const pctOff = grossTotal * (pct / 100);
+  return Math.max(0, grossTotal - flat - pctOff);
 }
 const COLS_KEY = (uid: string) => `expense_cols_${uid}`;
 

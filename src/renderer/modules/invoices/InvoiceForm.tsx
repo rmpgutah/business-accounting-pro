@@ -585,17 +585,21 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   );
 
   const shippingTax = useMemo(() => 0, []); // reserved for future shipping tax
+  // Header % discount: amount taken off subtotal+tax. Applied AFTER tax, same
+  // convention as the flat $ discount. Previously this field was stored but
+  // never reduced the total (a long-standing no-op); now it does.
+  const headerPctDiscount = useMemo(
+    () => roundCents((subtotal + taxTotal) * ((form.discount_pct || 0) / 100)),
+    [subtotal, taxTotal, form.discount_pct]
+  );
   const total = useMemo(() => {
-    // Header discount (issue #3) is applied AFTER tax. This matches the existing
-    // user-visible behavior. Document choice: header discount does not reduce
-    // taxable base; only per-line discount_pct does. Shipping is included.
-    // NOTE: form.discount_pct (header-level "Invoice Discount %") is stored
-    // for reference but is NOT deducted from total here, matching legacy
-    // behavior. The print template's totals box also no longer renders it
-    // as a deduction line — see print-templates.ts.
-    const raw = roundCents(subtotal + taxTotal - (form.discount || 0) + (form.shipping_amount || 0) + shippingTax);
+    // Header discount (issue #3) is applied AFTER tax. Document choice: header
+    // discount does not reduce taxable base; only per-line discount_pct does.
+    // Shipping is included. Both the flat $ discount (form.discount) and the
+    // % discount (form.discount_pct) subtract from the post-tax subtotal.
+    const raw = roundCents(subtotal + taxTotal - (form.discount || 0) - headerPctDiscount + (form.shipping_amount || 0) + shippingTax);
     return form.invoice_type === 'credit_note' ? -Math.abs(raw) : raw;
-  }, [subtotal, taxTotal, form.discount, form.shipping_amount, form.invoice_type, shippingTax]);
+  }, [subtotal, taxTotal, form.discount, headerPctDiscount, form.shipping_amount, form.invoice_type, shippingTax]);
 
   // ─── Type config derived from form ──────────────────
   const typeConfig = useMemo(() => INVOICE_TYPE_CONFIG[form.invoice_type] || INVOICE_TYPE_CONFIG.standard, [form.invoice_type]);
@@ -1723,6 +1727,31 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
             />
           </div>
+          {/* Header % discount — now wired into the total (was stored-and-ignored
+              before). Shown side-by-side with the flat $ discount so users see
+              the combined effect immediately. */}
+          <div className="flex justify-between text-sm items-center">
+            <span className="text-text-secondary">Discount (%)</span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                className="block-input text-right font-mono w-20"
+                placeholder="0"
+                value={form.discount_pct || ''}
+                onChange={(e) => updateField('discount_pct', parseFloat(e.target.value) || 0)}
+              />
+              <span className="text-text-muted text-xs">%</span>
+            </div>
+          </div>
+          {headerPctDiscount > 0 && (
+            <div className="flex justify-between text-xs text-text-muted">
+              <span>({form.discount_pct}% off post-tax)</span>
+              <span className="font-mono">−{currencyFmt.format(headerPctDiscount)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm items-center">
             <span className="text-text-secondary">Shipping</span>
             <input
