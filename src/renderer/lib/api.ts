@@ -674,6 +674,10 @@ const api = {
     window.electronAPI.invoke('loans:record-payment', payload),
   loanRecompute: (loanId: string): Promise<{ ok?: boolean; totals?: { total_paid_to_date: number; total_principal_paid: number; total_interest_paid: number; current_balance: number; deferred_interest_balance: number }; corrected_count?: number; error?: string }> =>
     window.electronAPI.invoke('loans:recompute', loanId),
+  loanUpdatePayment: (payload: { payment_id: string; payment_date?: string; amount?: number; principal_amount?: number; interest_amount?: number; escrow_amount?: number; payment_method?: string; reference?: string; notes?: string; is_extra_principal?: boolean }): Promise<{ ok?: boolean; totals?: { paid: number; principal: number; interest: number; current_balance: number }; error?: string }> =>
+    window.electronAPI.invoke('loans:update-payment', payload),
+  loanDeletePayment: (paymentId: string): Promise<{ ok?: boolean; totals?: { paid: number; principal: number; interest: number; current_balance: number }; error?: string }> =>
+    window.electronAPI.invoke('loans:delete-payment', paymentId),
   loanPayoffScenario: (loan_id: string, extra_per_payment: number): Promise<{ baseline_total_interest: number; baseline_payoff_date: string; scenario_total_interest: number; scenario_payoff_date: string; interest_saved: number; months_saved: number; error?: string }> =>
     window.electronAPI.invoke('loans:payoff-scenario', { loan_id, extra_per_payment }),
   loansAggregate: (): Promise<{ stats: any; upcoming: any[] } | { error?: string }> =>

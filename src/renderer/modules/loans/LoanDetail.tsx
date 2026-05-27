@@ -8,7 +8,7 @@
 //   • Payment history list
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw, Pencil, X, Save } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
@@ -37,6 +37,10 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
   const [showPayment, setShowPayment] = useState(false);
   const [extraPerPayment, setExtraPerPayment] = useState(0);
   const [scenario, setScenario] = useState<any>(null);
+  // Inline payment editing — null when nothing is being edited, else the
+  // working copy of the row's fields. Save commits via loans:update-payment
+  // and re-aggregates loan totals. Delete pops a confirm then loans:delete-payment.
+  const [editPayment, setEditPayment] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -263,14 +267,16 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border-primary)', background: 'var(--color-bg-secondary)' }}>
-                    {['Date', 'Amount', 'Principal', 'Interest', 'Method'].map((h) => (
-                      <th key={h} style={{ padding: '6px 8px', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', textAlign: h === 'Date' || h === 'Method' ? 'left' : 'right' }}>{h}</th>
+                    {['Date', 'Amount', 'Principal', 'Interest', 'Method', ''].map((h, i) => (
+                      <th key={i} style={{ padding: '6px 8px', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', textAlign: h === 'Date' || h === 'Method' ? 'left' : (h === '' ? 'center' : 'right'), width: h === '' ? 70 : undefined }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map((p: any) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                    <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}
+                        onDoubleClick={() => setEditPayment({ ...p })}
+                        title="Double-click row to edit">
                       <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{p.payment_date}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>
                         {fmt$(p.amount, cur)}
@@ -279,6 +285,31 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{fmt$(p.principal_amount, cur)}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{fmt$(p.interest_amount, cur)}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{p.payment_method}</td>
+                      <td style={{ padding: '3px 6px', fontSize: 10, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button
+                          onClick={() => setEditPayment({ ...p })}
+                          className="block-btn"
+                          style={{ padding: '2px 6px', fontSize: 10, marginRight: 4 }}
+                          title="Edit this payment's date, amount, or principal/interest split"
+                        >
+                          <Pencil size={10} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Delete the ${fmt$(p.amount, cur)} payment on ${p.payment_date}? Loan totals will re-aggregate from remaining payments.`)) return;
+                            const r = await api.loanDeletePayment(p.id);
+                            if (r?.error) { toast.error('Delete failed: ' + r.error); return; }
+                            toast.success(`Payment deleted · balance now ${fmt$(r.totals?.current_balance || 0, cur)}`);
+                            const fresh = await api.loanGet(loanId);
+                            if (!fresh.error) setData(fresh);
+                          }}
+                          className="block-btn"
+                          style={{ padding: '2px 6px', fontSize: 10, color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
+                          title="Delete this payment"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -304,6 +335,20 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
 
       {/* Record payment modal */}
       {showPayment && <PaymentModal loanId={loanId} loan={loan} onClose={() => setShowPayment(false)} onSaved={() => { setShowPayment(false); load(); }} />}
+      {editPayment && (
+        <PaymentEditModal
+          payment={editPayment}
+          currency={cur}
+          onClose={() => setEditPayment(null)}
+          onSaved={async () => {
+            setEditPayment(null);
+            const fresh = await api.loanGet(loanId);
+            if (!fresh.error) setData(fresh);
+          }}
+          onError={(msg) => toast.error(msg)}
+          onSuccess={(msg) => toast.success(msg)}
+        />
+      )}
     </div>
   );
 };
@@ -366,6 +411,194 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 }}>
           <button onClick={onClose} className="block-btn">Cancel</button>
           <button onClick={handleSave} disabled={busy} className="block-btn-primary">{busy ? 'Saving…' : 'Record'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Edit any field of a recorded payment. After save, the IPC handler
+// re-aggregates loan totals from the SUM of all payment rows — so
+// manual overrides to principal/interest splits are preserved (no
+// silent re-allocation behind the user's back).
+//
+// Built-in math helper: when user changes Amount, we don't auto-touch
+// principal/interest. They have to set those explicitly. There's a
+// "Split = Amount − Interest" hint button that fills principal from
+// the gap so they don't have to do arithmetic in their head.
+const PaymentEditModal: React.FC<{
+  payment: any;
+  currency: string;
+  onClose: () => void;
+  onSaved: () => void;
+  onError: (msg: string) => void;
+  onSuccess: (msg: string) => void;
+}> = ({ payment, currency, onClose, onSaved, onError, onSuccess }) => {
+  const [form, setForm] = useState({
+    payment_date: payment.payment_date,
+    amount: Number(payment.amount) || 0,
+    principal_amount: Number(payment.principal_amount) || 0,
+    interest_amount: Number(payment.interest_amount) || 0,
+    escrow_amount: Number(payment.escrow_amount) || 0,
+    payment_method: payment.payment_method || 'ach',
+    reference: payment.reference || '',
+    notes: payment.notes || '',
+    is_extra_principal: !!payment.is_extra_principal,
+  });
+  const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const componentsSum = form.principal_amount + form.interest_amount + form.escrow_amount;
+  const diff = form.amount - componentsSum;
+  const balanced = Math.abs(diff) < 0.01;
+
+  const handleSave = async () => {
+    if (!form.payment_date) { onError('Date required'); return; }
+    if (form.amount <= 0) { onError('Amount must be > 0'); return; }
+    setBusy(true);
+    try {
+      const r = await api.loanUpdatePayment({
+        payment_id: payment.id,
+        payment_date: form.payment_date,
+        amount: form.amount,
+        principal_amount: form.principal_amount,
+        interest_amount: form.interest_amount,
+        escrow_amount: form.escrow_amount,
+        payment_method: form.payment_method,
+        reference: form.reference,
+        notes: form.notes,
+        is_extra_principal: form.is_extra_principal,
+      });
+      if (r?.error) { onError(r.error); return; }
+      onSuccess(
+        `Payment updated · balance: $${(r.totals?.current_balance || 0).toFixed(2)}` +
+        ` · interest paid: $${(r.totals?.interest || 0).toFixed(2)}`
+      );
+      onSaved();
+    } finally { setBusy(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete this ${currency} ${form.amount.toFixed(2)} payment on ${form.payment_date}?`)) return;
+    setDeleting(true);
+    try {
+      const r = await api.loanDeletePayment(payment.id);
+      if (r?.error) { onError(r.error); return; }
+      onSuccess(`Payment deleted · balance: $${(r.totals?.current_balance || 0).toFixed(2)}`);
+      onSaved();
+    } finally { setDeleting(false); }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 560, width: '100%', padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Edit Payment</div>
+          <button onClick={onClose} className="block-btn" style={{ padding: '4px 8px' }}><X size={14} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <Field label="Date">
+            <input type="date" className="block-input" value={form.payment_date}
+              onChange={(e) => setForm({ ...form, payment_date: e.target.value })} />
+          </Field>
+          <Field label="Amount Paid">
+            <input type="number" step="0.01" className="block-input" value={form.amount || ''}
+              onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })} />
+          </Field>
+          <Field label="Principal Portion">
+            <input type="number" step="0.01" className="block-input"
+              value={form.principal_amount || ''}
+              onChange={(e) => setForm({ ...form, principal_amount: parseFloat(e.target.value) || 0 })}
+              style={{ color: '#16a34a' }} />
+          </Field>
+          <Field label="Interest Portion">
+            <input type="number" step="0.01" className="block-input"
+              value={form.interest_amount || ''}
+              onChange={(e) => setForm({ ...form, interest_amount: parseFloat(e.target.value) || 0 })}
+              style={{ color: '#dc2626' }} />
+          </Field>
+          <Field label="Escrow Portion">
+            <input type="number" step="0.01" className="block-input"
+              value={form.escrow_amount || ''}
+              onChange={(e) => setForm({ ...form, escrow_amount: parseFloat(e.target.value) || 0 })} />
+          </Field>
+          <Field label="Method">
+            <select className="block-input" value={form.payment_method}
+              onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
+              <option value="ach">ACH / Auto-debit</option>
+              <option value="check">Check</option>
+              <option value="wire">Wire</option>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="transfer">Bank Transfer</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Reference">
+            <input className="block-input" value={form.reference}
+              onChange={(e) => setForm({ ...form, reference: e.target.value })}
+              placeholder="Check # / confirmation" />
+          </Field>
+          <Field label="Type">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '8px 10px' }}>
+              <input type="checkbox" checked={form.is_extra_principal}
+                onChange={(e) => setForm({ ...form, is_extra_principal: e.target.checked })} />
+              Extra-principal payment
+            </label>
+          </Field>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <Field label="Notes">
+            <textarea className="block-input" rows={2} value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </Field>
+        </div>
+
+        {/* Balance hint — green when components sum to amount, red when off */}
+        <div style={{
+          marginTop: 12, padding: '8px 10px',
+          background: balanced ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
+          border: '1px solid ' + (balanced ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'),
+          borderRadius: 6, fontSize: 11,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <span style={{ color: 'var(--color-text-muted)' }}>Principal + Interest + Escrow = </span>
+            <span style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>${componentsSum.toFixed(2)}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}> · Amount = </span>
+            <span style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>${form.amount.toFixed(2)}</span>
+            {!balanced && (
+              <span style={{ color: '#dc2626', marginLeft: 8 }}>· diff ${Math.abs(diff).toFixed(2)}</span>
+            )}
+          </div>
+          {!balanced && (
+            <button
+              onClick={() => {
+                // Auto-balance: add the diff to principal (most common case)
+                setForm({ ...form, principal_amount: form.principal_amount + diff });
+              }}
+              className="block-btn"
+              style={{ padding: '2px 8px', fontSize: 10 }}
+              title="Adjust principal by the diff so components sum to amount"
+            >
+              Auto-balance to Principal
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginTop: 16 }}>
+          <button onClick={handleDelete} disabled={deleting || busy} className="block-btn"
+            style={{ color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}>
+            <Trash2 size={12} style={{ marginRight: 4, display: 'inline' }} />
+            {deleting ? 'Deleting…' : 'Delete Payment'}
+          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={onClose} className="block-btn">Cancel</button>
+            <button onClick={handleSave} disabled={busy || deleting} className="block-btn-primary">
+              <Save size={12} style={{ marginRight: 4, display: 'inline' }} />
+              {busy ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1224,6 +1224,131 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // Edit an existing payment record. The user can override any
+  // field (date, amount, principal/interest/escrow split, method,
+  // reference, notes, extra-principal flag). After update, loan
+  // running totals are RE-AGGREGATED as the simple sum of every
+  // payment row — this respects the user's manual overrides rather
+  // than re-allocating via replay. Use the "Recompute" button if
+  // you want the system to re-derive splits automatically.
+  ipcMain.handle('loans:update-payment', (_event, payload: {
+    payment_id: string;
+    payment_date?: string;
+    amount?: number;
+    principal_amount?: number;
+    interest_amount?: number;
+    escrow_amount?: number;
+    payment_method?: string;
+    reference?: string;
+    notes?: string;
+    is_extra_principal?: boolean;
+  }) => {
+    try {
+      const dbi = db.getDb();
+      const existing = dbi.prepare(
+        "SELECT id, loan_id FROM loan_payments WHERE id = ?"
+      ).get(payload.payment_id) as any;
+      if (!existing) return { error: 'Payment not found' };
+
+      // D3: closed-period check on the (possibly new) payment date
+      const cid = db.getCurrentCompanyId();
+      if (cid && payload.payment_date) {
+        const period = findClosedPeriod(cid, payload.payment_date);
+        if (period) {
+          return { error: 'Cannot edit: ' + payload.payment_date + ' falls in a closed accounting period (' +
+            period.period_start + ' to ' + period.period_end + ').' };
+        }
+      }
+
+      // Build dynamic UPDATE for only the supplied fields.
+      const sets: string[] = [];
+      const vals: any[] = [];
+      const maybe = (col: string, v: any, transform?: (x: any) => any) => {
+        if (v === undefined) return;
+        sets.push(col + ' = ?');
+        vals.push(transform ? transform(v) : v);
+      };
+      maybe('payment_date', payload.payment_date);
+      maybe('amount', payload.amount);
+      maybe('principal_amount', payload.principal_amount);
+      maybe('interest_amount', payload.interest_amount);
+      maybe('escrow_amount', payload.escrow_amount);
+      maybe('payment_method', payload.payment_method);
+      maybe('reference', payload.reference);
+      maybe('notes', payload.notes);
+      maybe('is_extra_principal', payload.is_extra_principal, (v) => (v ? 1 : 0));
+      if (sets.length === 0) return { error: 'No fields to update' };
+
+      vals.push(payload.payment_id);
+      dbi.prepare(`UPDATE loan_payments SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+
+      // Re-aggregate loan totals from the sum of all payment rows.
+      const agg = dbi.prepare(
+        "SELECT COALESCE(SUM(amount),0) AS paid, COALESCE(SUM(principal_amount),0) AS principal, COALESCE(SUM(interest_amount),0) AS interest FROM loan_payments WHERE loan_id = ?"
+      ).get(existing.loan_id) as any;
+      const loan = db.getById('loans', existing.loan_id) as any;
+      const newBalance = Math.max(0, (loan.principal || 0) - (agg.principal || 0));
+      const newStatus = newBalance < 0.005 ? 'paid_off' : loan.status;
+      dbi.prepare(
+        "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_principal_paid = ?, total_interest_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(newBalance, agg.paid, agg.principal, agg.interest, newStatus, existing.loan_id);
+
+      return { ok: true, totals: { paid: agg.paid, principal: agg.principal, interest: agg.interest, current_balance: newBalance } };
+    } catch (err: any) {
+      return { error: err?.message || 'Update failed' };
+    }
+  });
+
+  // Delete a payment record. Re-aggregates loan totals from
+  // remaining payment rows. Does NOT delete the associated JE —
+  // user should reverse that manually if posted, or use a recompute
+  // workflow that recreates JEs.
+  ipcMain.handle('loans:delete-payment', (_event, paymentId: string) => {
+    try {
+      const dbi = db.getDb();
+      const existing = dbi.prepare(
+        "SELECT id, loan_id, schedule_id FROM loan_payments WHERE id = ?"
+      ).get(paymentId) as any;
+      if (!existing) return { error: 'Payment not found' };
+
+      dbi.prepare("DELETE FROM loan_payments WHERE id = ?").run(paymentId);
+
+      // If the deleted payment was linked to a schedule row, recompute
+      // that row's paid_status.
+      if (existing.schedule_id) {
+        const remainingPaid = dbi.prepare(
+          "SELECT COALESCE(SUM(amount),0) AS s FROM loan_payments WHERE schedule_id = ?"
+        ).get(existing.schedule_id) as any;
+        const sched = dbi.prepare(
+          "SELECT scheduled_payment FROM loan_payment_schedule WHERE id = ?"
+        ).get(existing.schedule_id) as any;
+        if (sched) {
+          const status = remainingPaid.s + 0.005 >= sched.scheduled_payment
+            ? 'paid'
+            : (remainingPaid.s > 0 ? 'partial' : 'pending');
+          dbi.prepare(
+            "UPDATE loan_payment_schedule SET paid_amount = ?, paid_status = ?, paid_date = ? WHERE id = ?"
+          ).run(remainingPaid.s, status, status === 'paid' ? null : null, existing.schedule_id);
+        }
+      }
+
+      // Re-aggregate loan totals.
+      const agg = dbi.prepare(
+        "SELECT COALESCE(SUM(amount),0) AS paid, COALESCE(SUM(principal_amount),0) AS principal, COALESCE(SUM(interest_amount),0) AS interest FROM loan_payments WHERE loan_id = ?"
+      ).get(existing.loan_id) as any;
+      const loan = db.getById('loans', existing.loan_id) as any;
+      const newBalance = Math.max(0, (loan.principal || 0) - (agg.principal || 0));
+      dbi.prepare(
+        "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_principal_paid = ?, total_interest_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(newBalance, agg.paid, agg.principal, agg.interest,
+        newBalance < 0.005 ? 'paid_off' : loan.status, existing.loan_id);
+
+      return { ok: true, totals: { paid: agg.paid, principal: agg.principal, interest: agg.interest, current_balance: newBalance } };
+    } catch (err: any) {
+      return { error: err?.message || 'Delete failed' };
+    }
+  });
+
   // Recompute loan running totals by replaying all recorded payments
   // through the correct daily-accrual split. Use this to repair
   // historical data after the partial-payment interest bug, OR after
