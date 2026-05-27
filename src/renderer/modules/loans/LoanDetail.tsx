@@ -267,6 +267,12 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         </div>
       </div>
 
+      {/* Loan Linkage Wave (F1053-F1062) — "Linked Expenses" section.
+          Loads expenses with related_loan_id = this loan. Shows up below
+          payment history so users see both the loan-side ledger AND the
+          expense-side ledger for the same money in one place. */}
+      <LinkedExpensesPanel loanId={loanId} currency={cur} />
+
       {/* Cross-entity relations & activity timeline — surfaces JE postings,
           linked payments, and any other modules that recordRelation()'d to
           this loan (e.g. bank-recon, expenses tagged with the loan). */}
@@ -369,3 +375,74 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 );
 
 export default LoanDetail;
+
+/**
+ * LinkedExpensesPanel — Loan Linkage Wave (F1055).
+ * Lists expense rows where related_loan_id === loanId. Shows the
+ * total interest expensed against this loan, useful for tax-deductibility
+ * computations and quick reconciliation between loan_payments and the
+ * expense ledger.
+ */
+const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string }> = ({ loanId, currency }) => {
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await (api as any).lkExpensesForLoan?.(loanId, { limit: 50 });
+        if (!cancelled && Array.isArray(result)) setExpenses(result);
+      } finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [loanId]);
+
+  const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+
+  if (loading) return null;
+
+  return (
+    <div className="block-card" style={{ padding: 0, overflow: 'hidden', marginTop: 16 }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-primary)', background: 'var(--color-bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+          Linked Expenses (Interest portion)
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+          {expenses.length} expense{expenses.length === 1 ? '' : 's'} · Total {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(total)}
+        </span>
+      </div>
+      {expenses.length === 0 ? (
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 11 }}>
+          No linked expenses yet. Use the "Linked to Loan" picker when recording an expense, or use the new
+          <code style={{ background: 'var(--color-bg-secondary)', padding: '0 4px', borderRadius: 3, margin: '0 4px' }}>api.lkRecordPayment</code>
+          flow to auto-create the interest expense when recording a payment.
+        </div>
+      ) : (
+        <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border-primary)', background: 'var(--color-bg-secondary)' }}>
+                {['Date', 'Description', 'Amount', 'Status'].map(h => (
+                  <th key={h} style={{ padding: '6px 8px', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', textAlign: h === 'Amount' ? 'right' : 'left' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((e: any) => (
+                <tr key={e.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                  <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{e.date}</td>
+                  <td style={{ padding: '5px 8px', fontSize: 10 }}>{e.description || '—'}</td>
+                  <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626', fontWeight: 600 }}>
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(e.amount || 0)}
+                  </td>
+                  <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{e.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};

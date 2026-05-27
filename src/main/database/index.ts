@@ -594,6 +594,12 @@ export function initDatabase(): Database.Database {
   // matches invoices: discount is applied AFTER tax (does NOT reduce tax base).
   "ALTER TABLE expenses ADD COLUMN discount_amount REAL DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN discount_percent REAL DEFAULT 0",
+  // Loan Linkage (F1053-F1062) — soft FKs to loans so an expense row
+  // (typically the interest portion of a loan payment) can be traced back
+  // to which loan it belonged to. Soft FKs (no REFERENCES) keep the columns
+  // optional and avoid the cascading-delete complexity.
+  "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
   "ALTER TABLE expenses ADD COLUMN entry_mode TEXT DEFAULT 'standard'",
   "ALTER TABLE expenses ADD COLUMN odometer_start REAL DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN odometer_end REAL DEFAULT 0",

@@ -2833,6 +2833,18 @@ const api = {
   lfPortfolioStress: (p: { rate_shock_pct: number; default_rate_increase_pct: number }) => window.electronAPI.invoke('lf:portfolio:stress', p),
   lfReservesRequired: () => window.electronAPI.invoke('lf:reserves:required'),
 
+  // ─── Loan Linkage Wave (F1053-F1062) ──────────────────────────
+  lkRecordPayment: (p: { loan_id: string; payment_date: string; amount: number; principal_amount: number; interest_amount: number; escrow_amount?: number; fees?: number; payment_method?: string; reference?: string; vendor_id?: string; category_id?: string; notes?: string; create_expense?: boolean }) => window.electronAPI.invoke('lk:record-payment', p),
+  lkLinkBankTx: (p: { bank_transaction_id: string; loan_id: string; schedule_id?: string; principal_amount: number; interest_amount: number; escrow_amount?: number; create_expense?: boolean }) => window.electronAPI.invoke('lk:link-bank-tx', p),
+  lkExpensesForLoan: (loan_id: string, opts?: { limit?: number; since?: string }) => window.electronAPI.invoke('lk:expenses-for-loan', { loan_id, opts: opts || {} }),
+  lkSuggestLoanForBankTx: (p: { amount: number; date: string; memo?: string; payee?: string }) => window.electronAPI.invoke('lk:suggest-loan-for-bank-tx', p),
+  lkAutoGlAccounts: (loan_id: string) => window.electronAPI.invoke('lk:auto-gl-accounts', { loan_id }),
+  lkRetrolink: (expense_id: string, loan_id: string, loan_payment_id?: string) => window.electronAPI.invoke('lk:retrolink', { expense_id, loan_id, loan_payment_id }),
+  lkLinkageDashboard: () => window.electronAPI.invoke('lk:linkage-dashboard'),
+  lkGenerateBill: (p: { loan_id: string; due_date?: string; vendor_id?: string }) => window.electronAPI.invoke('lk:generate-bill', p),
+  lkCashflowTimeline: (loan_id: string, opts?: { since?: string; until?: string }) => window.electronAPI.invoke('lk:cashflow-timeline', { loan_id, opts: opts || {} }),
+  lkLoanContextForExpense: (expense_id: string) => window.electronAPI.invoke('lk:loan-context-for-expense', { expense_id }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

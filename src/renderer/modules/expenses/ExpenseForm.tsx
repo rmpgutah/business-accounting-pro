@@ -80,6 +80,10 @@ interface ExpenseFormData {
   // not reduce taxable base. Both fields are independent: $ + % both subtract.
   discount_amount: string;
   discount_percent: string;
+  // Loan Linkage Wave (F1053-F1062) — soft FK to a loan record. When set,
+  // this expense is treated as the interest-portion bookkeeping of a loan
+  // payment and is surfaced on the Loan Detail page.
+  related_loan_id: string;
 }
 
 interface DropdownOption {
@@ -321,6 +325,7 @@ const emptyForm: ExpenseFormData = {
   vat_gst: '',
   discount_amount: '',
   discount_percent: '',
+  related_loan_id: '',
 };
 
 // ─── Attached Documents (for receipt linking) ─────────
@@ -354,6 +359,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [vendors, setVendors] = useState<Array<DropdownOption & { is_1099_eligible?: number; w9_status?: string }>>([]);
   const [projects, setProjects] = useState<DropdownOption[]>([]);
   const [clients, setClients] = useState<DropdownOption[]>([]);
+  // Loan Linkage: loans list for the "Linked to Loan" picker. Only active
+  // loans are loaded — closed/refinanced loans rarely need new payment links.
+  const [loans, setLoans] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
@@ -664,6 +672,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         api.query('clients', { company_id: cid })
           .then(r => { if (!cancelled) setClients(Array.isArray(r) ? r : []); })
           .catch(() => {});
+        // Loan Linkage: load active loans so users can link a payment expense
+        // to a loan. Uses rawQuery (rather than api.loansList) because that
+        // helper applies additional filtering and we want everything active.
+        api.rawQuery(`SELECT id, name FROM loans WHERE company_id = ? AND status = 'active' AND (deleted_at IS NULL) ORDER BY name`, [cid])
+          .then((r: any) => { if (!cancelled) setLoans(Array.isArray(r) ? r : []); })
+          .catch(() => {});
         // Tag autocomplete corpus (#22)
         api.rawQuery('SELECT tags FROM expenses WHERE company_id = ? AND tags IS NOT NULL', [cid])
           .then((rows: any[]) => {
@@ -757,6 +771,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               // Header-level discount (load — empty string when 0 so input shows placeholder)
               discount_amount: existing.discount_amount ? String(existing.discount_amount) : '',
               discount_percent: existing.discount_percent ? String(existing.discount_percent) : '',
+              // Loan Linkage — soft FK
+              related_loan_id: existing.related_loan_id || '',
               entry_mode: (existing.entry_mode as any) || 'standard',
               odometer_start: existing.odometer_start?.toString() || '',
               odometer_end: existing.odometer_end?.toString() || '',
@@ -877,6 +893,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           tax_rate: parseFloat(form.tax_rate) || 0,
           discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
           discount_percent: parseFloat(form.discount_percent) || 0,
+          related_loan_id: form.related_loan_id || null,
           entry_mode: form.entry_mode,
           odometer_start: parseFloat(form.odometer_start) || 0,
           odometer_end: parseFloat(form.odometer_end) || 0,
@@ -1421,6 +1438,44 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               </div>
             </details>
           </div>
+
+          {/* Loan Linkage Wave (F1053-F1062) — link this expense to a loan
+              (typically interest portion of a loan payment). The Loan Detail
+              page surfaces these expenses; reports route interest into the
+              right buckets. */}
+          {loans.length > 0 && (
+            <div className="col-span-3">
+              <details className="block-card p-2" style={{ borderRadius: 6 }} open={!!form.related_loan_id}>
+                <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
+                  Linked to Loan
+                  {form.related_loan_id && (
+                    <span className="ml-2 text-accent-blue normal-case font-normal">
+                      {loans.find(l => l.id === form.related_loan_id)?.name || form.related_loan_id}
+                    </span>
+                  )}
+                </summary>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Loan</label>
+                    <select
+                      className="block-input"
+                      value={form.related_loan_id}
+                      onChange={(e) => setForm(p => ({ ...p, related_loan_id: e.target.value }))}
+                    >
+                      <option value="">— Not linked —</option>
+                      {loans.map(l => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="text-[10px] text-text-muted self-end pb-1">
+                    Use this when the expense is the <strong>interest portion</strong> of a loan payment.
+                    Principal is balance-sheet movement (not an expense) and shouldn't be linked here.
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
 
           {/* Line Items Toggle + Editor — full width */}
           <div className="col-span-3">

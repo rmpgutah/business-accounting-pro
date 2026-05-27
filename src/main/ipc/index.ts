@@ -4102,6 +4102,19 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('lf:portfolio:stress', (_e, p: any) => lf().portfolioStressTest(p));
   ipcMain.handle('lf:reserves:required', () => lf().requiredReserves());
 
+  // ─── Loan Linkage Wave (F1053-F1062) — `lk:*` namespace ──
+  const lk = () => require('../services/loan-linkage-features');
+  ipcMain.handle('lk:record-payment', (_e, p: any) => lk().recordPaymentWithExpense(p));
+  ipcMain.handle('lk:link-bank-tx', (_e, p: any) => lk().linkBankTxToLoanPmt(p));
+  ipcMain.handle('lk:expenses-for-loan', (_e, { loan_id, opts }: any) => lk().expensesForLoan(loan_id, opts || {}));
+  ipcMain.handle('lk:suggest-loan-for-bank-tx', (_e, p: any) => lk().suggestLoanForBankTx(p));
+  ipcMain.handle('lk:auto-gl-accounts', (_e, { loan_id }: any) => lk().autoCreateGlAccountsForLoan(loan_id));
+  ipcMain.handle('lk:retrolink', (_e, { expense_id, loan_id, loan_payment_id }: any) => lk().retroLinkExpenseToLoan(expense_id, loan_id, loan_payment_id));
+  ipcMain.handle('lk:linkage-dashboard', () => lk().loanLinkageDashboard());
+  ipcMain.handle('lk:generate-bill', (_e, p: any) => lk().generateBillForUpcomingPayment(p));
+  ipcMain.handle('lk:cashflow-timeline', (_e, { loan_id, opts }: any) => lk().loanCashflowTimeline(loan_id, opts || {}));
+  ipcMain.handle('lk:loan-context-for-expense', (_e, { expense_id }: any) => lk().loanContextForExpense(expense_id));
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
