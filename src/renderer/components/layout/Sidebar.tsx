@@ -80,13 +80,16 @@ const sections: NavSection[] = [
   {
     title: 'FINANCE',
     items: [
-      { id: 'taxes', label: 'Taxes', icon: Calculator },
-      { id: 'budgets', label: 'Budgets', icon: PiggyBank },
+      // Loans promoted to top of FINANCE — was buried between Bills and POs,
+      // users reported "I don't see anything for LOAN on the side." High-value
+      // module deserves prominence.
+      { id: 'loans', label: 'Loans', icon: Banknote },
+      { id: 'bills', label: 'Bills (AP)', icon: FileInput },
+      { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
       { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
       { id: 'stripe-sync', label: 'Stripe Sync', icon: CreditCard },
-      { id: 'bills', label: 'Bills (AP)', icon: FileInput },
-      { id: 'loans', label: 'Loans', icon: Banknote },
-      { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
+      { id: 'budgets', label: 'Budgets', icon: PiggyBank },
+      { id: 'taxes', label: 'Taxes', icon: Calculator },
       { id: 'debt-collection', label: 'Debt Collection', icon: Scale },
     ],
   },

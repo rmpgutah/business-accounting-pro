@@ -600,6 +600,24 @@ export function initDatabase(): Database.Database {
   // optional and avoid the cascading-delete complexity.
   "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
   "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
+  // Vendor Advanced Wave — extend vendors with fields exposed by the new
+  // 6-tab VendorFormAdvanced. Many existing columns already covered by
+  // earlier waves (vendor_type, w9_status, approval_status, diversity,
+  // ach_routing, contract dates, performance counters) — these add the
+  // missing pieces: multi-contact / multi-address JSON blobs, COI,
+  // default GL accounts, credit limit, currency, website, business reg #.
+  "ALTER TABLE vendors ADD COLUMN contacts_json TEXT DEFAULT '[]'",
+  "ALTER TABLE vendors ADD COLUMN additional_addresses_json TEXT DEFAULT '[]'",
+  "ALTER TABLE vendors ADD COLUMN coi_expiry TEXT",
+  "ALTER TABLE vendors ADD COLUMN coi_amount REAL",
+  "ALTER TABLE vendors ADD COLUMN default_expense_account_id TEXT",
+  "ALTER TABLE vendors ADD COLUMN default_ap_account_id TEXT",
+  "ALTER TABLE vendors ADD COLUMN credit_limit REAL DEFAULT 0",
+  "ALTER TABLE vendors ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE vendors ADD COLUMN website TEXT",
+  "ALTER TABLE vendors ADD COLUMN business_registration_no TEXT",
+  "ALTER TABLE vendors ADD COLUMN onboarding_status TEXT DEFAULT 'in_progress'",
+  "ALTER TABLE vendors ADD COLUMN preferred_payment_method TEXT",
   "ALTER TABLE expenses ADD COLUMN entry_mode TEXT DEFAULT 'standard'",
   "ALTER TABLE expenses ADD COLUMN odometer_start REAL DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN odometer_end REAL DEFAULT 0",

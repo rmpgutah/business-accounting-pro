@@ -7724,3 +7724,241 @@ td[data-neg="true"]::after,
   color: var(--color-text-primary);
 }
 .lf-warning-icon { color: #f59e0b; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Tabbed Form V441-V450 (10 utilities) — generic tabbed modal layout
+   used by VendorFormAdvanced. Reusable for any future multi-tab form
+   (client editor, employee editor, etc.).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* V441: tab bar at the top of a form modal */
+.tform-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 12px 0 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+  overflow-x: auto;
+}
+.tform-tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--motion-base), border-color var(--motion-base);
+}
+.tform-tab:hover { color: var(--color-text-secondary); }
+.tform-tab.is-active { color: var(--color-accent-blue); border-bottom-color: var(--color-accent-blue); }
+.tform-tab .tform-tab-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tform-tab.is-active .tform-tab-badge { background: var(--color-accent-blue); color: white; }
+
+/* V442: tab content panel — padded with consistent spacing */
+.tform-panel {
+  padding: 18px 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* V443: section header within a tab panel */
+.tform-section {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 14px 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border-primary);
+}
+.tform-section:first-child { margin-top: 0; }
+
+/* V444: multi-contact card (used in vendor Contacts tab) */
+.tform-contact-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr 80px 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.tform-contact-name { font-weight: 600; font-size: 12px; color: var(--color-text-primary); }
+.tform-contact-role { font-size: 10px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.tform-contact-email, .tform-contact-phone { font-size: 11px; color: var(--color-text-secondary); font-family: var(--font-mono, ui-monospace, monospace); }
+.tform-contact-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  background: var(--color-accent-blue);
+  color: white;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* V445: address card (used in vendor Addresses tab) */
+.tform-address-card {
+  display: grid;
+  grid-template-columns: 60px 1fr 32px;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.tform-address-type {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  padding: 2px 6px;
+  background: var(--color-bg-secondary);
+  border-radius: 4px;
+  text-align: center;
+  height: fit-content;
+}
+.tform-address-type.billing { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.tform-address-type.shipping { background: rgba(34,197,94,0.15); color: #22c55e; }
+.tform-address-type.remit { background: rgba(168,85,247,0.15); color: #a855f7; }
+.tform-address-body { font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; }
+
+/* V446: read-only metric tile (used in Performance tab) */
+.tform-metric {
+  padding: 12px 14px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+}
+.tform-metric-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.tform-metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  margin-top: 2px;
+}
+.tform-metric-sub {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* V447: footer action bar (sticky bottom of tabbed form modal) */
+.tform-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-primary);
+}
+.tform-footer-status {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+.tform-footer-actions { display: flex; gap: 8px; }
+
+/* V448: add-row button (e.g., "Add Contact", "Add Address") */
+.tform-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px dashed var(--color-border-primary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-base);
+}
+.tform-add-btn:hover { border-color: var(--color-accent-blue); color: var(--color-accent-blue); border-style: solid; }
+
+/* V449: form modal shell (replaces simple block-card for forms with tabs) */
+.tform-modal {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.40);
+}
+.tform-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+.tform-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* V450: compact compliance status row (W-9, 1099, COI) */
+.tform-compliance-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.tform-compliance-row .tform-compliance-name { font-weight: 600; color: var(--color-text-primary); }
+.tform-compliance-row .tform-compliance-meta { font-size: 9px; color: var(--color-text-muted); margin-top: 2px; }
+.tform-compliance-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tform-compliance-status.complete { background: rgba(34,197,94,0.15); color: #22c55e; }
+.tform-compliance-status.pending { background: var(--color-bg-secondary); color: var(--color-text-muted); }
+.tform-compliance-status.expired { background: rgba(239,68,68,0.15); color: #ef4444; }
+.tform-compliance-status.expiring-soon { background: rgba(245,158,11,0.15); color: #f59e0b; }
