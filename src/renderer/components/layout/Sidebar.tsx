@@ -145,7 +145,17 @@ const Sidebar: React.FC = () => {
   const [showHidden, setShowHidden] = useState(false);
 
   // Resolve order: pinned first, then user-ordered visible, then hidden under "More"
-  const visibleOrder = sidebarOrder.filter(
+  // AUTO-ADD NEW MODULES: when a module is added to ALL_ITEMS (e.g. Loans)
+  // after a user already has a persisted sidebarOrder, the user's saved order
+  // doesn't know about the new item and it stays invisible forever. Fix: append
+  // any ALL_ITEMS that aren't in sidebarOrder / hiddenModules / pinnedModules.
+  // This is a runtime safety net — DEFAULT_SIDEBAR_ORDER should also list the
+  // new module for fresh installs, but this catches existing users too.
+  const knownIds = new Set([...sidebarOrder, ...hiddenModules, ...pinnedModules]);
+  const missingFromOrder = Object.keys(ALL_ITEMS).filter((id) => !knownIds.has(id));
+  const effectiveOrder = [...sidebarOrder, ...missingFromOrder];
+
+  const visibleOrder = effectiveOrder.filter(
     (id) => ALL_ITEMS[id] && !hiddenModules.includes(id) && !pinnedModules.includes(id)
   );
   const pinned = pinnedModules.filter((id) => ALL_ITEMS[id]);
