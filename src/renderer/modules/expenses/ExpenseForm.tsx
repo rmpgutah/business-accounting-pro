@@ -393,23 +393,47 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const isEditing = !!expenseId;
 
   // Auto-calculate totals from line items.
-  // MATH: expense.amount stores the PRE-TAX subtotal; expense.tax_amount stores
-  // the tax separately. So the line "Amount" column shows pre-tax (qty × price)
-  // and we expose three values: subtotal, tax total, grand total (subtotal+tax).
+  // MATH: expense.amount stores the POST-line-discount PRE-TAX subtotal;
+  // expense.tax_amount stores the tax separately (tax is computed on
+  // post-line-discount pre-tax per ItemizationEditor's lineEffective formula).
+  // We expose four values: gross subtotal (qty × price), line discount total,
+  // tax total, grand total (post-discount + tax). All views (form AMOUNT field,
+  // ItemizationEditor totals box, list display, detail hero) MUST roll up the
+  // same way or you get the bug where the editor shows $26.98 but the form
+  // and list show $29.98.
   const lineItemSubtotal = useMemo(() =>
     lineItems.reduce((sum, li) => sum + roundCents(li.quantity * li.unit_price), 0),
+    [lineItems]
+  );
+  // Sum of per-line discounts (flat $ takes priority over % per ItemizationEditor).
+  const lineItemDiscountTotal = useMemo(() =>
+    lineItems.reduce((sum, li) => {
+      const sub = roundCents((li.quantity || 0) * (li.unit_price || 0));
+      const flat = Number(li.discount_amount || 0);
+      const pct = Number(li.discount_percent || 0);
+      const disc = flat > 0 ? roundCents(flat) : pct > 0 ? roundCents(sub * (pct / 100)) : 0;
+      return sum + disc;
+    }, 0),
     [lineItems]
   );
   const lineItemTaxTotal = useMemo(() =>
     lineItems.reduce((sum, li) => sum + roundCents(li.tax_amount || 0), 0),
     [lineItems]
   );
+  // GRAND TOTAL: post-discount subtotal + tax. Equals ItemizationEditor's
+  // internal lineEffective.total sum, so the form's AMOUNT field and the
+  // editor's totals box always agree.
   const lineItemGrandTotal = useMemo(() =>
-    roundCents(lineItemSubtotal + lineItemTaxTotal),
-    [lineItemSubtotal, lineItemTaxTotal]
+    roundCents(lineItemSubtotal - lineItemDiscountTotal + lineItemTaxTotal),
+    [lineItemSubtotal, lineItemDiscountTotal, lineItemTaxTotal]
   );
-  // Backwards-compat alias used as the saved expense.amount (PRE-TAX subtotal).
-  const lineItemTotal = lineItemSubtotal;
+  // Saved as expense.amount — POST-line-discount PRE-TAX subtotal.
+  // Display formula then adds back tax and subtracts header discount:
+  //   final = expense.amount + expense.tax_amount − header_discount
+  const lineItemTotal = useMemo(() =>
+    roundCents(lineItemSubtotal - lineItemDiscountTotal),
+    [lineItemSubtotal, lineItemDiscountTotal]
+  );
 
   useEffect(() => {
     if (useLineItems && lineItems.length > 0) {
@@ -1352,21 +1376,44 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                   />
                 </div>
                 <div className="self-end">
-                  {/* Live computed "Final after discount" preview. Helps users see
-                      the net amount as they type the discount values. */}
+                  {/* Live "Final after discount" preview. Shows the full math
+                      stack: gross subtotal, line discounts (from itemization),
+                      tax, header discount, final. Only renders the rows that
+                      are actually non-zero so the panel stays compact. */}
                   {(() => {
-                    const totalBefore = (parseFloat(form.amount) || 0); // form.amount already = subtotal + tax (per FINAL-PRICE)
-                    const flat = parseFloat(form.discount_amount) || 0;
-                    const pct = parseFloat(form.discount_percent) || 0;
-                    const pctDiscount = totalBefore * (pct / 100);
-                    const finalTotal = Math.max(0, totalBefore - flat - pctDiscount);
-                    const discountTotal = totalBefore - finalTotal;
-                    if (discountTotal <= 0) return null;
+                    const gross = useLineItems ? lineItemSubtotal : (parseFloat(form.amount) || 0);
+                    const lineDisc = useLineItems ? lineItemDiscountTotal : 0;
+                    const tax = useLineItems ? lineItemTaxTotal : (parseFloat(form.tax_amount) || 0);
+                    const headerFlat = parseFloat(form.discount_amount) || 0;
+                    const headerPct = parseFloat(form.discount_percent) || 0;
+                    const postLineDiscount = Math.max(0, gross - lineDisc);
+                    const postTax = postLineDiscount + tax;
+                    const headerPctOff = postTax * (headerPct / 100);
+                    const finalTotal = Math.max(0, postTax - headerFlat - headerPctOff);
+                    const totalDiscount = lineDisc + headerFlat + headerPctOff;
+                    if (totalDiscount <= 0) return null;
                     return (
-                      <div className="text-[10px] text-text-muted font-mono">
-                        <div>Before discount: {formatCurrency(totalBefore)}</div>
-                        <div className="text-accent-blue">−{formatCurrency(discountTotal)}</div>
-                        <div className="text-text-primary font-bold">Final: {formatCurrency(finalTotal)}</div>
+                      <div className="text-[10px] text-text-muted font-mono space-y-0.5">
+                        <div className="flex justify-between gap-3"><span>Subtotal</span><span>{formatCurrency(gross)}</span></div>
+                        {lineDisc > 0 && (
+                          <div className="flex justify-between gap-3 text-accent-blue">
+                            <span>Line discounts</span>
+                            <span>−{formatCurrency(lineDisc)}</span>
+                          </div>
+                        )}
+                        {tax > 0 && (
+                          <div className="flex justify-between gap-3"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
+                        )}
+                        {(headerFlat > 0 || headerPctOff > 0) && (
+                          <div className="flex justify-between gap-3 text-accent-blue">
+                            <span>Header discount</span>
+                            <span>−{formatCurrency(headerFlat + headerPctOff)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between gap-3 text-text-primary font-bold border-t border-border-primary pt-0.5">
+                          <span>Final</span>
+                          <span>{formatCurrency(finalTotal)}</span>
+                        </div>
                       </div>
                     );
                   })()}
