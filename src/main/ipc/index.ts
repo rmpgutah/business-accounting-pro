@@ -1403,6 +1403,11 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // Note: lk:* (Loan Linkage) handlers are registered later in this
+  // file under "Loan Linkage Wave (F1053-F1062)". The API wrappers in
+  // src/renderer/lib/api.ts use the destructured-object convention
+  // they expect (e.g. { loan_id, opts }).
+
   // Record an actual payment. Splits into principal/interest, links
   // to the next pending scheduled row, updates loan running totals.
   //

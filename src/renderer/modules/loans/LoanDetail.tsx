@@ -323,7 +323,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
           Loads expenses with related_loan_id = this loan. Shows up below
           payment history so users see both the loan-side ledger AND the
           expense-side ledger for the same money in one place. */}
-      <LinkedExpensesPanel loanId={loanId} currency={cur} />
+      <LinkedExpensesPanel loanId={loanId} currency={cur} refreshKey={data?.payments?.length || 0} />
 
       {/* Cross-entity relations & activity timeline — surfaces JE postings,
           linked payments, and any other modules that recordRelation()'d to
@@ -764,20 +764,22 @@ export default LoanDetail;
  * computations and quick reconciliation between loan_payments and the
  * expense ledger.
  */
-const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string }> = ({ loanId, currency }) => {
+const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string; refreshKey?: number }> = ({ loanId, currency, refreshKey }) => {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
       try {
-        const result = await (api as any).lkExpensesForLoan?.(loanId, { limit: 50 });
+        const result = await api.lkExpensesForLoan(loanId, { limit: 50 });
         if (!cancelled && Array.isArray(result)) setExpenses(result);
+        else if (!cancelled) setExpenses([]);
       } finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [loanId]);
+  }, [loanId, refreshKey]);
 
   const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);
 
