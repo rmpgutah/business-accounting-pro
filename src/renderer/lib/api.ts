@@ -672,6 +672,8 @@ const api = {
     window.electronAPI.invoke('loans:delete', { id }),
   loanRecordPayment: (payload: { loan_id: string; payment_date: string; amount: number; is_extra_principal?: boolean; payment_method?: string; reference?: string; notes?: string }): Promise<{ ok?: boolean; payment_id?: string; split?: { principal: number; interest: number; escrow: number; new_balance: number }; error?: string }> =>
     window.electronAPI.invoke('loans:record-payment', payload),
+  loanRecompute: (loanId: string): Promise<{ ok?: boolean; totals?: { total_paid_to_date: number; total_principal_paid: number; total_interest_paid: number; current_balance: number; deferred_interest_balance: number }; corrected_count?: number; error?: string }> =>
+    window.electronAPI.invoke('loans:recompute', loanId),
   loanPayoffScenario: (loan_id: string, extra_per_payment: number): Promise<{ baseline_total_interest: number; baseline_payoff_date: string; scenario_total_interest: number; scenario_payoff_date: string; interest_saved: number; months_saved: number; error?: string }> =>
     window.electronAPI.invoke('loans:payoff-scenario', { loan_id, extra_per_payment }),
   loansAggregate: (): Promise<{ stats: any; upcoming: any[] } | { error?: string }> =>

@@ -8,7 +8,7 @@
 //   • Payment history list
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download } from 'lucide-react';
+import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
@@ -91,6 +91,27 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
           title="Export full amortization schedule as PDF"
         >
           <Download size={12} /> Export PDF
+        </button>
+        <button
+          onClick={async () => {
+            const r = await api.loanRecompute(loanId);
+            if (r?.error) { toast.error('Recompute failed: ' + r.error); return; }
+            toast.success(
+              `Balance recomputed · paid: $${(r.totals?.total_paid_to_date || 0).toFixed(2)}` +
+              ` · principal: $${(r.totals?.total_principal_paid || 0).toFixed(2)}` +
+              ` · interest: $${(r.totals?.total_interest_paid || 0).toFixed(2)}` +
+              ((r.totals?.deferred_interest_balance || 0) > 0
+                ? ` · deferred: $${r.totals!.deferred_interest_balance.toFixed(2)}`
+                : '')
+            );
+            // Reload loan + payments to reflect the corrected ledger
+            const fresh = await api.loanGet(loanId);
+            if (!fresh.error) setData(fresh);
+          }}
+          className="block-btn flex items-center gap-1.5 text-xs"
+          title="Replay every payment with correct daily-accrual interest split — fixes balance / total paid / interest paid"
+        >
+          <RefreshCw size={12} /> Recompute
         </button>
         <button onClick={onEdit} className="block-btn flex items-center gap-1.5 text-xs">
           <Edit size={12} /> Edit

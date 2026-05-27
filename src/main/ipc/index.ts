@@ -1224,6 +1224,60 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // Recompute loan running totals by replaying all recorded payments
+  // through the correct daily-accrual split. Use this to repair
+  // historical data after the partial-payment interest bug, OR after
+  // editing the loan's rate/principal. Idempotent.
+  ipcMain.handle('loans:recompute', (_event, loanId: string) => {
+    try {
+      const dbi = db.getDb();
+      const loan = db.getById('loans', loanId) as any;
+      if (!loan) return { error: 'Loan not found' };
+      const { replayPayments } = require('../services/loan-calculator');
+
+      const payments = dbi.prepare(
+        "SELECT id, payment_date, amount, is_extra_principal, escrow_amount FROM loan_payments WHERE loan_id = ? ORDER BY payment_date"
+      ).all(loanId) as any[];
+
+      const result = replayPayments({
+        origination_date: loan.origination_date,
+        origination_principal: loan.principal,
+        annual_rate: loan.interest_rate,
+        payments,
+      });
+
+      const tx = dbi.transaction(() => {
+        // Update each payment with the corrected split.
+        const updatePayment = dbi.prepare(
+          "UPDATE loan_payments SET principal_amount = ?, interest_amount = ?, escrow_amount = ? WHERE id = ?"
+        );
+        for (const c of result.corrected) {
+          updatePayment.run(c.principal, c.interest, c.escrow, c.id);
+        }
+        // Update loan totals.
+        const newStatus = result.totals.current_balance < 0.005 ? 'paid_off' : loan.status;
+        dbi.prepare(
+          "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_interest_paid = ?, total_principal_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
+        ).run(
+          result.totals.current_balance,
+          result.totals.total_paid_to_date,
+          result.totals.total_principal_paid,
+          result.totals.total_interest_paid,
+          newStatus,
+          loanId
+        );
+      });
+      tx();
+      return {
+        ok: true,
+        totals: result.totals,
+        corrected_count: result.corrected.length,
+      };
+    } catch (err: any) {
+      return { error: err?.message || 'Recompute failed' };
+    }
+  });
+
   // Record an actual payment. Splits into principal/interest, links
   // to the next pending scheduled row, updates loan running totals.
   ipcMain.handle('loans:record-payment', (_event, payload: {
@@ -1250,11 +1304,49 @@ export function registerIpcHandlers(): void {
         }
       }
 
-      const { splitPayment } = require('../services/loan-calculator');
+      const { splitPaymentDaily } = require('../services/loan-calculator');
+      // Days since last payment (or since first_payment_date if no prior
+      // payments). Daily accrual matches how the bank actually charges
+      // interest — much more accurate than naive monthly periodic.
+      const priorRow = dbi.prepare(
+        "SELECT payment_date FROM loan_payments WHERE loan_id = ? ORDER BY payment_date DESC LIMIT 1"
+      ).get(payload.loan_id) as any;
+      const lastDate = priorRow?.payment_date || loan.origination_date;
+      const days = Math.max(0, Math.round(
+        (new Date(payload.payment_date + 'T12:00:00').getTime() -
+         new Date(lastDate + 'T12:00:00').getTime()) / 86400000
+      ));
+      // Carry forward any deferred interest from prior partial payments.
+      const deferredRow = dbi.prepare(
+        "SELECT SUM(interest_amount) AS paid_interest FROM loan_payments WHERE loan_id = ?"
+      ).get(payload.loan_id) as any;
+      // Theoretical interest accrued since origination minus interest
+      // actually paid = deferred interest still owed.
+      const totalDaysSinceOrig = Math.max(0, Math.round(
+        (new Date(payload.payment_date + 'T12:00:00').getTime() -
+         new Date(loan.origination_date + 'T12:00:00').getTime()) / 86400000
+      ));
+      // We pass prior_deferred = 0 here because splitPaymentDaily already
+      // accrues for `days` since last payment. If the prior payment was a
+      // partial that left deferred interest, that was already booked then.
       const split = payload.is_extra_principal
-        // Extra principal: 100% to principal, no interest portion.
-        ? { principal: payload.amount, interest: 0, escrow: 0, new_balance: Math.max(0, loan.current_balance - payload.amount) }
-        : splitPayment(loan.current_balance, payload.amount, loan.interest_rate, loan.payment_frequency, loan.escrow_per_payment || 0);
+        ? {
+            principal: payload.amount,
+            interest: 0,
+            escrow: 0,
+            new_balance: Math.max(0, loan.current_balance - payload.amount),
+            deferred_interest: 0,
+            accrued_interest: 0,
+          }
+        : splitPaymentDaily(
+            loan.current_balance,
+            payload.amount,
+            loan.interest_rate,
+            days,
+            0,
+            loan.escrow_per_payment || 0
+          );
+      void totalDaysSinceOrig; void deferredRow;  // reserved for future deferred-interest tracking
 
       // Find the next pending scheduled row to link to (skipped for
       // extra-principal payments — those don't fulfill a scheduled

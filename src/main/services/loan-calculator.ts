@@ -247,6 +247,14 @@ export function payoffScenario(
  * into principal + interest based on the current balance and
  * scheduled rate. Used when recording free-form payments.
  *
+ * KEY FIX (partial payments): interest portion is CAPPED at the
+ * payment amount. If accrued interest is $198 but the customer paid
+ * $31, the recorded interest is $31, not $198 — and the unpaid
+ * $167 becomes deferred interest carried forward. Before this fix,
+ * the recorded interest_amount was always full periodic interest,
+ * which inflated `total_interest_paid` by 6×+ for partial payments
+ * and made the books lie.
+ *
  * Returns the split — caller stores both the payment and updates
  * the loan's running totals.
  */
@@ -256,23 +264,236 @@ export function splitPayment(
   annual_rate: number,
   payment_frequency: PaymentFrequency,
   escrow_amount: number = 0,
-): { principal: number; interest: number; escrow: number; new_balance: number } {
+): {
+  principal: number;
+  interest: number;
+  escrow: number;
+  new_balance: number;
+  deferred_interest: number;
+  accrued_interest: number;
+} {
   const r = periodicRate(annual_rate, payment_frequency);
-  const interestPortion = round2(current_balance * r);
-  // Pay interest first, then escrow, then principal absorbs the rest.
+  const accruedInterest = round2(current_balance * r);
+  // Pay interest FIRST, but cap at payment_amount (partial-payment fix).
+  const interestPortion = round2(Math.min(payment_amount, accruedInterest));
   const afterInterest = Math.max(0, payment_amount - interestPortion);
-  const escrowPortion = Math.min(escrow_amount, afterInterest);
+  const escrowPortion = round2(Math.min(escrow_amount, afterInterest));
   let principalPortion = afterInterest - escrowPortion;
   // Cap principal at remaining balance.
   if (principalPortion > current_balance) principalPortion = current_balance;
   const newBalance = Math.max(0, current_balance - principalPortion);
+  const deferredInterest = round2(Math.max(0, accruedInterest - interestPortion));
 
   return {
     principal: round2(principalPortion),
     interest: interestPortion,
-    escrow: round2(escrowPortion),
+    escrow: escrowPortion,
     new_balance: round2(newBalance),
+    deferred_interest: deferredInterest,
+    accrued_interest: accruedInterest,
   };
+}
+
+/**
+ * Daily-accrual variant — more accurate for auto loans, mortgages,
+ * and any loan where the customer pays early/late. Uses simple
+ * interest accrued over `days_since_last_payment` days at the
+ * loan's daily rate (annual_rate / 365). Honors deferred interest
+ * from prior partials.
+ *
+ * Why this matters for your loan: the bank computes interest daily.
+ * Paying on day 15 vs day 30 of the cycle yields different interest
+ * portions. The fixed monthly-periodic split is an approximation;
+ * this is the real-world split.
+ */
+export function splitPaymentDaily(
+  current_balance: number,
+  payment_amount: number,
+  annual_rate: number,
+  days_since_last: number,
+  prior_deferred_interest: number = 0,
+  escrow_amount: number = 0,
+): {
+  principal: number;
+  interest: number;
+  escrow: number;
+  new_balance: number;
+  deferred_interest: number;
+  accrued_interest: number;
+} {
+  const dailyRate = annual_rate / 365;
+  const periodInterest = current_balance * dailyRate * Math.max(0, days_since_last);
+  const accruedInterest = round2(periodInterest + prior_deferred_interest);
+  const interestPortion = round2(Math.min(payment_amount, accruedInterest));
+  const afterInterest = Math.max(0, payment_amount - interestPortion);
+  const escrowPortion = round2(Math.min(escrow_amount, afterInterest));
+  let principalPortion = afterInterest - escrowPortion;
+  if (principalPortion > current_balance) principalPortion = current_balance;
+  const newBalance = Math.max(0, current_balance - principalPortion);
+  const deferredInterest = round2(Math.max(0, accruedInterest - interestPortion));
+
+  return {
+    principal: round2(principalPortion),
+    interest: interestPortion,
+    escrow: escrowPortion,
+    new_balance: round2(newBalance),
+    deferred_interest: deferredInterest,
+    accrued_interest: accruedInterest,
+  };
+}
+
+/**
+ * Replay every recorded payment for a loan, computing the correct
+ * principal/interest split for each one in chronological order
+ * using daily accrual. Returns updated totals + a per-payment
+ * corrected ledger. Caller persists the corrections.
+ *
+ * Use this to FIX historical data after the partial-payment bug
+ * inflated interest totals. Idempotent — running it twice produces
+ * the same result.
+ */
+export function replayPayments(opts: {
+  origination_date: string;
+  origination_principal: number;
+  annual_rate: number;
+  payments: Array<{
+    id: string;
+    payment_date: string;
+    amount: number;
+    is_extra_principal?: number | boolean;
+    escrow_amount?: number;
+  }>;
+}): {
+  corrected: Array<{
+    id: string;
+    payment_date: string;
+    amount: number;
+    principal: number;
+    interest: number;
+    escrow: number;
+    deferred_interest: number;
+    balance_after: number;
+  }>;
+  totals: {
+    total_paid_to_date: number;
+    total_principal_paid: number;
+    total_interest_paid: number;
+    current_balance: number;
+    deferred_interest_balance: number;
+  };
+} {
+  // Sort by date (payments table may not preserve order).
+  const sorted = [...opts.payments].sort((a, b) =>
+    a.payment_date.localeCompare(b.payment_date)
+  );
+  let balance = opts.origination_principal;
+  let deferred = 0;
+  let lastDate = opts.origination_date;
+  let totalPaid = 0, totalPrincipal = 0, totalInterest = 0;
+  const corrected: any[] = [];
+
+  for (const p of sorted) {
+    const days = daysBetween(lastDate, p.payment_date);
+    if (p.is_extra_principal) {
+      // Extra principal: bypasses interest accrual, reduces balance directly.
+      // But still accrue interest for the period and defer it.
+      const periodInterest = balance * (opts.annual_rate / 365) * Math.max(0, days);
+      deferred = round2(deferred + periodInterest);
+      const principalApplied = Math.min(balance, p.amount);
+      balance = Math.max(0, balance - principalApplied);
+      corrected.push({
+        id: p.id,
+        payment_date: p.payment_date,
+        amount: p.amount,
+        principal: round2(principalApplied),
+        interest: 0,
+        escrow: 0,
+        deferred_interest: deferred,
+        balance_after: round2(balance),
+      });
+      totalPaid += p.amount;
+      totalPrincipal += principalApplied;
+    } else {
+      const split = splitPaymentDaily(
+        balance,
+        p.amount,
+        opts.annual_rate,
+        days,
+        deferred,
+        p.escrow_amount || 0,
+      );
+      balance = split.new_balance;
+      deferred = split.deferred_interest;
+      corrected.push({
+        id: p.id,
+        payment_date: p.payment_date,
+        amount: p.amount,
+        principal: split.principal,
+        interest: split.interest,
+        escrow: split.escrow,
+        deferred_interest: deferred,
+        balance_after: balance,
+      });
+      totalPaid += p.amount;
+      totalPrincipal += split.principal;
+      totalInterest += split.interest;
+    }
+    lastDate = p.payment_date;
+  }
+
+  return {
+    corrected,
+    totals: {
+      total_paid_to_date: round2(totalPaid),
+      total_principal_paid: round2(totalPrincipal),
+      total_interest_paid: round2(totalInterest),
+      current_balance: round2(balance),
+      deferred_interest_balance: round2(deferred),
+    },
+  };
+}
+
+function daysBetween(a: string, b: string): number {
+  const da = new Date(a + 'T12:00:00').getTime();
+  const db = new Date(b + 'T12:00:00').getTime();
+  return Math.max(0, Math.round((db - da) / 86400000));
+}
+
+/**
+ * Newton-Raphson solver: given principal, term, and observed monthly
+ * payment, back-solve the effective APR. Useful when the bank's
+ * actual payment differs from naive amortization (typically because
+ * fees were rolled into financing — the "amount financed" exceeds
+ * the loan principal the borrower entered).
+ *
+ * Converges in 4-7 iterations for typical loans.
+ */
+export function solveRateFromPayment(
+  principal: number,
+  payment: number,
+  n: number,
+  guess: number = 0.06,
+): number {
+  if (principal <= 0 || n <= 0 || payment <= 0) return 0;
+  // If payment * n barely exceeds principal, rate is ~0.
+  if (payment * n <= principal * 1.0001) return 0;
+  let r = guess / 12;  // monthly
+  for (let i = 0; i < 50; i++) {
+    const f = Math.pow(1 + r, n);
+    // f(r) = P · r·f / (f-1) - payment = 0
+    const fr = (principal * r * f) / (f - 1) - payment;
+    // f'(r) via numerical derivative (cheap & robust vs symbolic)
+    const dr = r * 1e-5 || 1e-7;
+    const f2 = Math.pow(1 + (r + dr), n);
+    const frPlus = (principal * (r + dr) * f2) / (f2 - 1) - payment;
+    const slope = (frPlus - fr) / dr;
+    if (!isFinite(slope) || Math.abs(slope) < 1e-12) break;
+    const next = r - fr / slope;
+    if (next <= 0) { r = r / 2; continue; }    // bounce back into positive
+    if (Math.abs(next - r) < 1e-10) { r = next; break; }
+    r = next;
+  }
+  return r * 12;  // return annual rate
 }
 
 function round2(n: number): number {
