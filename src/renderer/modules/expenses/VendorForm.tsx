@@ -348,7 +348,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Vendor Type</label>
-                    <ClassificationSelect value={form.vendor_type} onChange={(v: string) => setForm(p => ({ ...p, vendor_type: v }))} options={VENDOR_TYPE} />
+                    <ClassificationSelect value={form.vendor_type} onChange={(v: string) => setForm(p => ({ ...p, vendor_type: v }))} def={VENDOR_TYPE} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Status</label>
@@ -481,15 +481,15 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Approval Status</label>
-                    <ClassificationSelect value={form.approval_status} onChange={(v: string) => setForm(p => ({ ...p, approval_status: v }))} options={VENDOR_APPROVAL} />
+                    <ClassificationSelect value={form.approval_status} onChange={(v: string) => setForm(p => ({ ...p, approval_status: v }))} def={VENDOR_APPROVAL} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Location Type</label>
-                    <ClassificationSelect value={form.location_type} onChange={(v: string) => setForm(p => ({ ...p, location_type: v }))} options={VENDOR_LOCATION} />
+                    <ClassificationSelect value={form.location_type} onChange={(v: string) => setForm(p => ({ ...p, location_type: v }))} def={VENDOR_LOCATION} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Diversity Classifications</label>
-                    <ClassificationMultiSelect value={form.diversity} onChange={(v: string[]) => setForm(p => ({ ...p, diversity: v }))} options={VENDOR_DIVERSITY} />
+                    <ClassificationMultiSelect values={form.diversity} onChange={(v: string[]) => setForm(p => ({ ...p, diversity: v }))} def={VENDOR_DIVERSITY} />
                   </div>
                 </div>
 
@@ -516,7 +516,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                       Eligible
                     </label>
                     {form.is_1099_eligible && (
-                      <ClassificationSelect value={form.form_1099_box} onChange={(v: string) => setForm(p => ({ ...p, form_1099_box: v }))} options={VENDOR_1099_BOX} />
+                      <ClassificationSelect value={form.form_1099_box} onChange={(v: string) => setForm(p => ({ ...p, form_1099_box: v }))} def={VENDOR_1099_BOX} />
                     )}
                   </div>
                 </div>
