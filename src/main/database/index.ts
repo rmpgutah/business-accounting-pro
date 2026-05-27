@@ -2928,6 +2928,113 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   // F105 — loan_covenants
+  // Loan Wave (F963-F992) — 30 advanced loan features.
+  // Collateral linkage — what asset secures the loan. Many-to-many because
+  // a single asset can be cross-collateralized across multiple loans.
+  `CREATE TABLE IF NOT EXISTS loan_collateral (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT NOT NULL,
+    collateral_type TEXT NOT NULL,
+    asset_id TEXT,
+    description TEXT,
+    original_value REAL DEFAULT 0,
+    current_value REAL DEFAULT 0,
+    last_appraisal_date TEXT,
+    insurance_policy_id TEXT,
+    is_primary INTEGER DEFAULT 1,
+    cross_collateralized INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // Loan documents repository — note, agreement, disclosures, 1098, etc.
+  `CREATE TABLE IF NOT EXISTS loan_documents (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT NOT NULL,
+    document_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    file_path TEXT,
+    expires_at TEXT,
+    uploaded_by TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // Variable rate / ARM reset schedule. One row per scheduled rate change.
+  // Type column distinguishes auto-reset from manual override.
+  `CREATE TABLE IF NOT EXISTS loan_arm_schedule (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT NOT NULL,
+    reset_date TEXT NOT NULL,
+    reset_type TEXT DEFAULT 'auto',
+    index_name TEXT,
+    index_value REAL,
+    margin REAL DEFAULT 0,
+    new_rate REAL,
+    periodic_cap REAL,
+    lifetime_cap REAL,
+    notes TEXT,
+    applied INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // Escrow account ledger. Each deposit and disbursement is a row;
+  // running balance is computed by summing.
+  `CREATE TABLE IF NOT EXISTS loan_escrow_ledger (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT NOT NULL,
+    transaction_date TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    category TEXT,
+    payee TEXT,
+    reference TEXT,
+    running_balance REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  // PMI tracking — required when LTV > 80% on mortgages, auto-cancel at 78%
+  `CREATE TABLE IF NOT EXISTS loan_pmi_tracking (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT NOT NULL UNIQUE,
+    monthly_premium REAL DEFAULT 0,
+    starts_at TEXT,
+    auto_cancel_at_ltv REAL DEFAULT 78,
+    request_cancellation_at_ltv REAL DEFAULT 80,
+    current_ltv REAL,
+    last_ltv_check_at TEXT,
+    cancelled_at TEXT,
+    cancellation_reason TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`,
+  // Year-end 1098 mortgage interest statements. One row per loan per year.
+  `CREATE TABLE IF NOT EXISTS loan_1098_filings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    loan_id TEXT NOT NULL,
+    tax_year INTEGER NOT NULL,
+    box1_interest_received REAL DEFAULT 0,
+    box2_outstanding_principal REAL DEFAULT 0,
+    box3_origination_date TEXT,
+    box4_refund_overpayment REAL DEFAULT 0,
+    box5_mortgage_insurance REAL DEFAULT 0,
+    box6_points_paid REAL DEFAULT 0,
+    box7_address_same_as_collateral INTEGER DEFAULT 1,
+    box8_property_address TEXT,
+    box9_num_properties INTEGER DEFAULT 1,
+    box10_other TEXT,
+    box11_acquisition_date TEXT,
+    pdf_path TEXT,
+    transmitted_at TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT,
+    UNIQUE(company_id, loan_id, tax_year)
+  )`,
   `CREATE TABLE IF NOT EXISTS loan_covenants (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,

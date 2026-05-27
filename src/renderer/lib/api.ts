@@ -2725,6 +2725,44 @@ const api = {
   iwLtv: (client_id: string) => window.electronAPI.invoke('iw:ltv', { client_id }),
   iwChurnPredict: (client_id: string) => window.electronAPI.invoke('iw:churn:predict', { client_id }),
 
+  // ─── Loan Wave (F963-F992) ─────────────────────────────────────
+  // Batch LA: Refinance & Modifications
+  laRefiCompare: (p: { loan_id: string; new_rate: number; new_term_months: number; closing_costs?: number; cashout_amount?: number }) => window.electronAPI.invoke('la:refi:compare', p),
+  laRefiExecute: (p: { loan_id: string; new_rate: number; new_term_months: number; closing_costs?: number; cashout_amount?: number; new_lender_name?: string; effective_date?: string }) => window.electronAPI.invoke('la:refi:execute', p),
+  laModApply: (p: { loan_id: string; modification_type: 'rate_reduction' | 'term_extension' | 'forbearance' | 'principal_reduction'; new_rate?: number; new_term_months?: number; forbearance_months?: number; principal_reduction_amount?: number; effective_date?: string; reason: string }) => window.electronAPI.invoke('la:mod:apply', p),
+  laLumpPrincipal: (p: { loan_id: string; amount: number; payment_date?: string; notes?: string }) => window.electronAPI.invoke('la:lump-principal', p),
+  laBiweeklyImpact: (loan_id: string) => window.electronAPI.invoke('la:biweekly:impact', { loan_id }),
+  // Batch LB: Collateral & Documents
+  laCollateralAttach: (p: { loan_id: string; collateral_type: string; asset_id?: string; description?: string; original_value?: number; current_value?: number; is_primary?: boolean; cross_collateralized?: boolean }) => window.electronAPI.invoke('la:collateral:attach', p),
+  laDocAttach: (p: { loan_id: string; document_type: string; name: string; file_path?: string; expires_at?: string; uploaded_by?: string }) => window.electronAPI.invoke('la:doc:attach', p),
+  laCollateralRevalue: (id: string, new_value: number, appraisal_date?: string) => window.electronAPI.invoke('la:collateral:revalue', { id, new_value, appraisal_date }),
+  laLtv: (loan_id: string) => window.electronAPI.invoke('la:ltv', { loan_id }),
+  laLoansByAsset: (asset_id: string) => window.electronAPI.invoke('la:loans-by-asset', { asset_id }),
+  // Batch LC: Covenants
+  laCovenantCreate: (p: { loan_id?: string; covenant_name: string; metric: 'dscr' | 'current_ratio' | 'debt_to_equity' | 'quick_ratio' | 'interest_coverage'; operator: '>=' | '<=' | '='; threshold_value: number; measurement_frequency?: 'monthly' | 'quarterly' | 'annual'; notes?: string }) => window.electronAPI.invoke('la:covenant:create', p),
+  laCovenantMeasure: (id: string) => window.electronAPI.invoke('la:covenant:measure', { id }),
+  laCovenantBreaches: () => window.electronAPI.invoke('la:covenant:breaches'),
+  laComplianceCertificate: (opts?: { quarter?: number; year?: number }) => window.electronAPI.invoke('la:compliance:certificate', opts || {}),
+  laCovenantUpcoming: (days_ahead?: number) => window.electronAPI.invoke('la:covenant:upcoming', { days_ahead }),
+  // Batch LD: ARM
+  laArmSchedule: (p: { loan_id: string; reset_date: string; index_name?: string; index_value?: number; margin?: number; new_rate?: number; periodic_cap?: number; lifetime_cap?: number; notes?: string }) => window.electronAPI.invoke('la:arm:schedule', p),
+  laArmUpcoming: (days_ahead?: number) => window.electronAPI.invoke('la:arm:upcoming', { days_ahead }),
+  laArmApply: (id: string) => window.electronAPI.invoke('la:arm:apply', { id }),
+  laRecast: (loan_id: string) => window.electronAPI.invoke('la:recast', { loan_id }),
+  laStressRateShock: (loan_id: string, shock_pct: number) => window.electronAPI.invoke('la:stress:rate-shock', { loan_id, shock_pct }),
+  // Batch LE: Escrow & PMI
+  laEscrowRecord: (p: { loan_id: string; transaction_date: string; transaction_type: 'deposit' | 'disbursement'; amount: number; category?: string; payee?: string; reference?: string; notes?: string }) => window.electronAPI.invoke('la:escrow:record', p),
+  laEscrowAnalysis: (loan_id: string, year?: number) => window.electronAPI.invoke('la:escrow:analysis', { loan_id, year }),
+  laPmiSetup: (p: { loan_id: string; monthly_premium: number; starts_at?: string; auto_cancel_at_ltv?: number; request_cancellation_at_ltv?: number }) => window.electronAPI.invoke('la:pmi:setup', p),
+  laPmiCheckCancel: (loan_id: string) => window.electronAPI.invoke('la:pmi:check-cancel', { loan_id }),
+  laInsuranceLink: (collateral_id: string, policy_id: string) => window.electronAPI.invoke('la:insurance:link', { collateral_id, policy_id }),
+  // Batch LF: Tax & Portfolio
+  la1098Generate: (loan_id: string, tax_year: number) => window.electronAPI.invoke('la:1098:generate', { loan_id, tax_year }),
+  laDeductibleInterest: (loan_id: string, tax_year: number, business_use_pct: number) => window.electronAPI.invoke('la:deductible-interest', { loan_id, tax_year, business_use_pct }),
+  laDscr: () => window.electronAPI.invoke('la:dscr'),
+  laDebtToEquity: () => window.electronAPI.invoke('la:debt-to-equity'),
+  laPortfolioDashboard: () => window.electronAPI.invoke('la:portfolio:dashboard'),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };

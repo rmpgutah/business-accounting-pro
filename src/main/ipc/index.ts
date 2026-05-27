@@ -3992,6 +3992,45 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('iw:ltv', (_e, { client_id }: any) => iw().computeClientLtv(client_id));
   ipcMain.handle('iw:churn:predict', (_e, { client_id }: any) => iw().predictClientChurn(client_id));
 
+  // ─── Loan Wave (F963-F992) — `la:*` namespace ──
+  const la = () => require('../services/loan-advanced-features');
+  // Batch LA: Refinance & Modifications
+  ipcMain.handle('la:refi:compare', (_e, p: any) => la().refinanceScenarioComparison(p));
+  ipcMain.handle('la:refi:execute', (_e, p: any) => la().executeRefinance(p));
+  ipcMain.handle('la:mod:apply', (_e, p: any) => la().applyLoanModification(p));
+  ipcMain.handle('la:lump-principal', (_e, p: any) => la().lumpSumPrincipalPayment(p));
+  ipcMain.handle('la:biweekly:impact', (_e, { loan_id }: any) => la().biweeklyConversionImpact(loan_id));
+  // Batch LB: Collateral & Documents
+  ipcMain.handle('la:collateral:attach', (_e, p: any) => la().attachCollateral(p));
+  ipcMain.handle('la:doc:attach', (_e, p: any) => la().attachLoanDocument(p));
+  ipcMain.handle('la:collateral:revalue', (_e, { id, new_value, appraisal_date }: any) => la().revalueCollateral(id, new_value, appraisal_date));
+  ipcMain.handle('la:ltv', (_e, { loan_id }: any) => la().computeLtv(loan_id));
+  ipcMain.handle('la:loans-by-asset', (_e, { asset_id }: any) => la().loansSecuredByAsset(asset_id));
+  // Batch LC: Covenants & Compliance
+  ipcMain.handle('la:covenant:create', (_e, p: any) => la().createCovenant(p));
+  ipcMain.handle('la:covenant:measure', (_e, { id }: any) => la().computeCovenantStatus(id));
+  ipcMain.handle('la:covenant:breaches', () => la().listCovenantBreaches());
+  ipcMain.handle('la:compliance:certificate', (_e, opts: any = {}) => la().generateComplianceCertificate(opts));
+  ipcMain.handle('la:covenant:upcoming', (_e, { days_ahead }: any = {}) => la().upcomingCovenantMeasurements(days_ahead || 30));
+  // Batch LD: ARM
+  ipcMain.handle('la:arm:schedule', (_e, p: any) => la().scheduleArmReset(p));
+  ipcMain.handle('la:arm:upcoming', (_e, { days_ahead }: any = {}) => la().upcomingArmResets(days_ahead || 90));
+  ipcMain.handle('la:arm:apply', (_e, { id }: any) => la().applyArmReset(id));
+  ipcMain.handle('la:recast', (_e, { loan_id }: any) => la().recastSchedule(loan_id));
+  ipcMain.handle('la:stress:rate-shock', (_e, { loan_id, shock_pct }: any) => la().rateShockStressTest(loan_id, shock_pct));
+  // Batch LE: Escrow & PMI
+  ipcMain.handle('la:escrow:record', (_e, p: any) => la().recordEscrowEntry(p));
+  ipcMain.handle('la:escrow:analysis', (_e, { loan_id, year }: any) => la().annualEscrowAnalysis(loan_id, year));
+  ipcMain.handle('la:pmi:setup', (_e, p: any) => la().setupPmi(p));
+  ipcMain.handle('la:pmi:check-cancel', (_e, { loan_id }: any) => la().checkPmiCancellation(loan_id));
+  ipcMain.handle('la:insurance:link', (_e, { collateral_id, policy_id }: any) => la().linkInsuranceToCollateral(collateral_id, policy_id));
+  // Batch LF: Tax & Portfolio
+  ipcMain.handle('la:1098:generate', (_e, { loan_id, tax_year }: any) => la().generate1098(loan_id, tax_year));
+  ipcMain.handle('la:deductible-interest', (_e, { loan_id, tax_year, business_use_pct }: any) => la().computeDeductibleInterest(loan_id, tax_year, business_use_pct));
+  ipcMain.handle('la:dscr', () => la().computeDscr());
+  ipcMain.handle('la:debt-to-equity', () => la().computeDebtToEquity());
+  ipcMain.handle('la:portfolio:dashboard', () => la().loanPortfolioDashboard());
+
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {
       const cid = db.getCurrentCompanyId();
