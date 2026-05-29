@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Building2, ChevronDown, Search, Bell, X, LogOut, FileText, Receipt,
-  UserCircle, FileCheck, Clock, BarChart3,
+  UserCircle, FileCheck, Clock, BarChart3, Trash2,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { usePersonalizationStore } from '../../stores/personalizationStore';
 import api from '../../lib/api';
+import TrashBin from '../TrashBin';
 
 // Map quick-action ID -> icon + handler. The TopBar consumes the user's
 // configured list (max 5) from personalization store.
@@ -46,6 +47,7 @@ const TopBar: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localQuery, setLocalQuery] = useState('');
+  const [trashOpen, setTrashOpen] = useState(false);
 
   // Cmd+K / Ctrl+K shortcut
   useEffect(() => {
@@ -198,6 +200,15 @@ const TopBar: React.FC = () => {
         {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
+            aria-label="Trash"
+            title="Trash (deleted items, recoverable for 30 days)"
+            onClick={() => setTrashOpen(true)}
+            className="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            style={{ borderRadius: '6px' }}
+          >
+            <Trash2 size={18} />
+          </button>
+          <button
             aria-label="Notifications"
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
@@ -243,6 +254,9 @@ const TopBar: React.FC = () => {
           )}
         </div>
       </header>
+
+      {/* Trash Bin Overlay */}
+      {trashOpen && <TrashBin onClose={() => setTrashOpen(false)} />}
 
       {/* Search Modal Overlay */}
       {searchOpen && (
