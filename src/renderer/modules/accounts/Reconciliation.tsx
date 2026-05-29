@@ -4,6 +4,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
+import { renderAccountOptions } from './account-options';
 
 // Star confidence indicator (1–5)
 const Stars: React.FC<{ n: number }> = ({ n }) => (
@@ -206,7 +207,7 @@ const AccountReconciliation: React.FC = () => {
           <select value={accountId} onChange={(e) => setAccountId(e.target.value)}
             className="w-full px-2 py-1.5 text-xs bg-bg-primary border border-border-primary">
             <option value="">— select —</option>
-            {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+            {renderAccountOptions(accounts as any)}
           </select>
         </div>
         <div>

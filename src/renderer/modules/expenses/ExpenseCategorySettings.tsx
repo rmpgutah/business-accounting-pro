@@ -3,6 +3,7 @@ import { ArrowLeft, Settings, Plus, Trash2, Save } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryRow, CustomFieldDef, parseJSON } from './expense-helpers';
+import { renderAccountOptions, type AcctOption } from '../accounts/account-options';
 
 interface Props {
   onBack: () => void;
@@ -27,7 +28,7 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
 
   // Categories with cap / default account / tax category / required fields
   const [categories, setCategories] = useState<CategoryRow[]>([]);
-  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  const [accounts, setAccounts] = useState<AcctOption[]>([]);
   const [taxCategories, setTaxCategories] = useState<Array<{ id: string; name: string; schedule_c_line?: string }>>([]);
   const [savingCat, setSavingCat] = useState<string>('');
 
@@ -39,7 +40,7 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
       const [d, c, a, tc] = await Promise.all([
         api.query('custom_field_defs', { company_id: cid, entity_type: 'expense' }, { field: 'sort_order', dir: 'asc' }),
         api.query('categories', { company_id: cid, type: 'expense' }),
-        api.query('accounts', { company_id: cid, type: 'expense' }),
+        api.rawQuery('SELECT id, code, name, type FROM accounts WHERE company_id = ? AND is_active = 1', [cid]),
         api.query('tax_categories', { company_id: cid }),
       ]);
       if (cancelled) return;
@@ -50,7 +51,9 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
       })) : []);
       setCategories(Array.isArray(c) ? c : []);
       setAccounts(Array.isArray(a) ? a : []);
-      setTaxCategories(Array.isArray(tc) ? tc : []);
+      setTaxCategories(Array.isArray(tc) ? [...tc].sort((x: any, y: any) =>
+        (x.schedule_c_line || '').localeCompare(y.schedule_c_line || '', undefined, { numeric: true }) ||
+        (x.name || '').localeCompare(y.name || '')) : []);
     };
     load();
     return () => { cancelled = true; };
@@ -236,7 +239,7 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
                       value={c.default_account_id || ''}
                       onChange={(e) => updateCat(c.id, { default_account_id: e.target.value })}>
                       <option value="">— none —</option>
-                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      {renderAccountOptions(accounts)}
                     </select>
                   </td>
                   <td>

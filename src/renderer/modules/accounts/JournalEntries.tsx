@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, formatDate, roundCents } from '../../lib/format';
 import { downloadCSVBlob, dateStampedFilename } from '../../lib/csv-export';
 import { incrementDate } from '../../lib/je-helpers';
+import { renderAccountOptions } from './account-options';
 import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
@@ -673,7 +674,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
               className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
               style={{ borderRadius: '6px' }}>
               <option value="">Any</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+              {renderAccountOptions(accounts as any)}
             </select>
           </div>
           <div>

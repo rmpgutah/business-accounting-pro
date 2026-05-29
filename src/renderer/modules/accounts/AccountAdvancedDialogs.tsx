@@ -11,6 +11,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
+import { renderAccountOptions } from './account-options';
 import { todayLocal } from '../../lib/date-helpers';
 
 interface AccountLite {
@@ -502,11 +503,11 @@ export const SplitDialog: React.FC<{ companyId: string; accounts: AccountLite[];
       <p className="text-[10px] text-text-muted">Move JE lines matching the description regex from a source account to a target account within a date range.</p>
       <label className="block text-[10px] uppercase font-bold">Source</label>
       <select value={src} onChange={(e) => setSrc(e.target.value)} className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }}>
-        {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+        {renderAccountOptions(accounts as any)}
       </select>
       <label className="block text-[10px] uppercase font-bold">Target</label>
       <select value={tgt} onChange={(e) => setTgt(e.target.value)} className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }}>
-        {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+        {renderAccountOptions(accounts as any)}
       </select>
       <div className="grid grid-cols-2 gap-2">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="block-input px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
@@ -588,7 +589,7 @@ export const ClassifyRulesDialog: React.FC<{ companyId: string; accounts: Accoun
           className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
         <select value={acc} onChange={(e) => setAcc(e.target.value)}
           className="block-select px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }}>
-          {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+          {renderAccountOptions(accounts as any)}
         </select>
         <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Add</button>
       </div>

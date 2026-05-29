@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, FileSearch, Receipt, Users, FileText, Download, Grid, ClipboardCheck, Mail, Hash, KeyRound, LayoutDashboard } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
+import { renderAccountOptions } from './account-options';
 import { formatCurrency } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
@@ -72,7 +73,7 @@ const AccountAudit: React.FC<{ companyId: string }> = ({ companyId }) => {
     <div className="space-y-3">
       <select value={accountId} onChange={(e) => load(e.target.value)} className="w-full px-2 py-1.5 text-xs bg-bg-primary border border-border-primary">
         <option value="">— select an account —</option>
-        {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+        {renderAccountOptions(accounts as any)}
       </select>
       {data && (
         <div className="grid grid-cols-2 gap-3">
