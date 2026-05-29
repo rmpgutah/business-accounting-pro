@@ -3700,8 +3700,8 @@ function expenseTimelineSVG(expenses: Array<{ date: string; amount: number }>): 
   const total = vals.reduce((s, v) => s + v, 0);
   const mean = total / months.length;
 
-  const W = 720, H = 200;
-  const padT = 18, padB = 34, padX = 6;
+  const W = 720, H = 165;
+  const padT = 16, padB = 30, padX = 6;
   const chartH = H - padT - padB;
   const n = months.length;
   const slot = (W - padX * 2) / n;
@@ -3841,7 +3841,7 @@ function expenseHeatmapSVG(expenses: Array<{ date: string; amount: number }>): s
         More
       </span>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" preserveAspectRatio="xMinYMid meet" style="display:block;max-width:100%;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       ${dayLabels}
       ${monthMarks.join('')}
       ${cells.join('')}
@@ -3852,22 +3852,27 @@ function expenseHeatmapSVG(expenses: Array<{ date: string; amount: number }>): s
 // ═══════════════════════════════════════════════════════════════
 // EXPENSE DETAIL REPORT
 // ═══════════════════════════════════════════════════════════════
-export function generateExpenseReportHTML(
-  expenses: Array<{
-    date: string;
+interface ExpenseReportRow {
+  date: string;
+  description: string;
+  vendor_name: string;
+  category_name: string;
+  amount: number;
+  tax_amount: number;
+  status: string;
+  project_name?: string | null;
+  is_tax_deductible?: number | boolean | null;
+  payment_method?: string | null;
+  line_items?: Array<{
     description: string;
-    vendor_name: string;
-    category_name: string;
+    quantity: number;
+    unit_price: number;
     amount: number;
-    tax_amount: number;
-    status: string;
-    line_items?: Array<{
-      description: string;
-      quantity: number;
-      unit_price: number;
-      amount: number;
-    }>;
-  }>,
+  }>;
+}
+
+export function generateExpenseReportHTML(
+  expenses: ExpenseReportRow[],
   companyName: string,
   dateRange: string,
   groupBy: string
@@ -3891,7 +3896,7 @@ export function generateExpenseReportHTML(
     catch { return d; }
   };
 
-  const expenseRows = expenses.map(e => {
+  const renderRow = (e: ExpenseReportRow) => {
     const mainRow = `<tr>
       <td style="white-space:nowrap;">${fmtDateShort(e.date)}</td>
       <td>${esc(e.description) || '\u2014'}</td>
@@ -3902,7 +3907,7 @@ export function generateExpenseReportHTML(
     </tr>`;
 
     const lineItemRows = e.line_items && e.line_items.length > 0
-      ? `<tr><td colspan="6" style="padding:0 0 0 32px;">
+      ? `<tr><td colspan="6" style="padding:0 0 0 28px;">
           <table style="width:100%;margin:4px 0 8px;">
             <thead><tr>
               <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;">Description</th>
@@ -3923,7 +3928,62 @@ export function generateExpenseReportHTML(
       : '';
 
     return mainRow + lineItemRows;
-  }).join('');
+  };
+
+  // \u2500\u2500 Grouping \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const quarterOf = (d: string) => {
+    const m = parseInt((d || '').substring(5, 7), 10);
+    const y = (d || '').substring(0, 4);
+    if (!m) return 'Undated';
+    if (m <= 3) return `${y} \u00b7 Q1`;
+    if (m <= 6) return `${y} \u00b7 Q2`;
+    if (m <= 9) return `${y} \u00b7 Q3`;
+    return `${y} \u00b7 Q4`;
+  };
+  const pmLabel = (m: string | null | undefined) => {
+    const map: Record<string, string> = { cash: 'Cash', check: 'Check', credit_card: 'Credit Card', bank_transfer: 'Bank Transfer' };
+    return map[(m || '').toLowerCase()] || (m ? esc(m) : 'Unspecified');
+  };
+  const groupKey = (e: ExpenseReportRow): string => {
+    switch (groupBy) {
+      case 'category': return e.category_name || 'Uncategorized';
+      case 'vendor': return e.vendor_name || 'No Vendor';
+      case 'project': return e.project_name || 'No Project';
+      case 'quarter': return quarterOf(e.date);
+      case 'tax_deductible': return e.is_tax_deductible ? 'Tax Deductible' : 'Non-Deductible';
+      case 'payment_method': return pmLabel(e.payment_method);
+      default: return '';
+    }
+  };
+
+  const isGrouped = groupBy && groupBy !== 'none';
+  const groups: Array<{ label: string; total: number; rows: ExpenseReportRow[] }> = [];
+  if (isGrouped) {
+    const map = new Map<string, ExpenseReportRow[]>();
+    for (const e of expenses) {
+      const k = groupKey(e);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(e);
+    }
+    for (const [label, rows] of map.entries()) {
+      groups.push({ label, total: rows.reduce((s, e) => s + (Number(e.amount) || 0), 0), rows });
+    }
+    groups.sort((a, b) => b.total - a.total);
+  }
+  const groupByLabel = ({
+    category: 'Category', vendor: 'Vendor', project: 'Project', quarter: 'Quarter',
+    tax_deductible: 'Tax Status', payment_method: 'Payment Method',
+  } as Record<string, string>)[groupBy] || '';
+
+  // Shared table head — widened Date column + tighter padding so it never crops
+  const detailColgroup = `<colgroup>
+      <col style="width:16%;" /><col style="width:21%;" /><col style="width:17%;" />
+      <col style="width:16%;" /><col style="width:15%;" /><col style="width:15%;" />
+    </colgroup>`;
+  const detailHead = `<thead><tr>
+      <th>Date</th><th>Description</th><th>Vendor</th><th>Category</th>
+      <th class="text-right">Amount</th><th style="text-align:center;">Status</th>
+    </tr></thead>`;
 
   // Compute stats
   const totalTax = expenses.reduce((s, e) => s + (Number(e.tax_amount) || 0), 0);
@@ -3997,15 +4057,20 @@ ${baseStyles}
   }
   .exp-report .exp-viz-card {
     border: 1px solid var(--rule); border-radius: 3px;
-    padding: 14px 16px 10px; margin-bottom: 14px; background: var(--paper);
-    box-shadow: none;
+    padding: 11px 16px 8px; margin-bottom: 11px; background: var(--paper);
+    box-shadow: none; break-inside: avoid; page-break-inside: avoid;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .exp-report .exp-viz-title {
     font-size: 9.5px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.6px; color: var(--ink-faint); margin-bottom: 10px;
-    padding-bottom: 8px; border-bottom: 1px solid var(--rule-soft);
+    letter-spacing: 1.6px; color: var(--ink-faint); margin-bottom: 8px;
+    padding-bottom: 7px; border-bottom: 1px solid var(--rule-soft);
   }
+  /* Cover spacing — compact so all front matter fits one page */
+  .exp-report .exp-cover .rpt-section { margin-top: 14px; }
+  .exp-report .exp-cover .exp-cat-row { padding: 3.5px 0; }
+  .exp-report .exp-cover .exp-cat-card { break-inside: avoid; page-break-inside: avoid; }
+  .exp-report .exp-hdr { padding: 14px 0 12px; margin-bottom: 16px; }
   .exp-report .exp-viz-cap {
     font-size: 9px; color: var(--ink-faint); margin-top: 8px;
     padding-top: 8px; border-top: 1px solid var(--rule-soft);
@@ -4019,9 +4084,27 @@ ${baseStyles}
   .exp-report .exp-cat-fill { height: 100%; background: var(--ink-muted); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .exp-report .exp-cat-amt { width: 84px; text-align: right; font-size: 10px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; font-family: 'SF Mono',Menlo,monospace; }
   .exp-report .exp-cat-pct { width: 40px; text-align: right; font-size: 9px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  /* Front matter occupies its own cover page; transactions follow */
+  .exp-report .exp-cover { page-break-after: always; break-after: page; }
+  /* Tighter, formal table padding so the Date column never truncates */
+  .exp-report .exp-detail-table th,
+  .exp-report .exp-detail-table td { padding: 7px 10px; }
+  .exp-report .exp-detail-table td:first-child { font-variant-numeric: tabular-nums; }
+  /* Per-group header band */
+  .exp-report .exp-group-hd {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 8px 12px; margin-top: 16px;
+    background: var(--paper-tint); border: 1px solid var(--rule); border-bottom: 2px solid var(--ink);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .exp-report .exp-group-hd .g-lbl { font-size: 11px; font-weight: 800; color: var(--ink); text-transform: uppercase; letter-spacing: 0.8px; }
+  .exp-report .exp-group-hd .g-tot { font-size: 11px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; font-family: 'SF Mono',Menlo,monospace; }
+  .exp-report .exp-group-wrap { page-break-inside: auto; }
 </style></head>
 <body>
 <div class="rpt-page exp-report">
+ <div class="exp-cover">
   <!-- Formal letterhead -->
   <div class="exp-hdr no-break">
     <div class="exp-hdr-row">
@@ -4039,7 +4122,7 @@ ${baseStyles}
   </div>
 
   <!-- KPI tiles -->
-  <div class="rpt-stats" style="margin-bottom:20px;">
+  <div class="rpt-stats" style="margin-bottom:12px;">
     <div class="rpt-stat">
       <div class="rpt-stat-label">Transactions</div>
       <div class="rpt-stat-val">${expenses.length}</div>
@@ -4078,28 +4161,25 @@ ${baseStyles}
     }).join('')}
   </div>
   ` : ''}
+ </div><!-- /exp-cover -->
 
   <!-- Detail Table -->
-  <div class="rpt-section">Transaction Detail</div>
-  <table style="table-layout:fixed;">
-    <colgroup>
-      <col style="width:13%;" />
-      <col style="width:24%;" />
-      <col style="width:17%;" />
-      <col style="width:17%;" />
-      <col style="width:14%;" />
-      <col style="width:15%;" />
-    </colgroup>
-    <thead><tr>
-      <th>Date</th>
-      <th>Description</th>
-      <th>Vendor</th>
-      <th>Category</th>
-      <th class="text-right">Amount</th>
-      <th style="text-align:center;">Status</th>
-    </tr></thead>
-    <tbody>${expenseRows}</tbody>
-  </table>
+  <div class="rpt-section">Transaction Detail${isGrouped ? ` — Grouped by ${esc(groupByLabel)}` : ''}</div>
+  ${isGrouped ? groups.map(g => `
+  <div class="exp-group-wrap no-break">
+    <div class="exp-group-hd">
+      <span class="g-lbl">${esc(g.label)}</span>
+      <span class="g-tot">${fmt(g.total)} &middot; ${g.rows.length} item${g.rows.length === 1 ? '' : 's'}</span>
+    </div>
+    <table class="exp-detail-table" style="table-layout:fixed;">
+      ${detailColgroup}${detailHead}
+      <tbody>${g.rows.map(renderRow).join('')}</tbody>
+    </table>
+  </div>`).join('') : `
+  <table class="exp-detail-table" style="table-layout:fixed;">
+    ${detailColgroup}${detailHead}
+    <tbody>${expenses.map(renderRow).join('')}</tbody>
+  </table>`}
 
   <!-- Grand Total -->
   <div class="no-break" style="margin-top:16px;">

@@ -308,7 +308,7 @@ const ExpenseDetailReport: React.FC = () => {
         printData as any,
         activeCompany.name,
         `${startDate} to ${endDate}`,
-        groupBy === 'quarter' || groupBy === 'tax_deductible' || groupBy === 'payment_method' ? 'none' : groupBy
+        groupBy
       );
       await api.printPreview(html, 'Expense Detail Report');
     } catch (err) {
