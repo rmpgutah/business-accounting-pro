@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText, Laptop, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText, Laptop, ShieldCheck, PenTool, X, CheckCircle2 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -519,38 +519,84 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 };
 
 // ─── Agreements Panel ─────────────────────────────────────
-const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = ({ employeeId }) => {
+type AgreementType = 'equipment' | 'employee';
+interface SignedDoc { id: string; html: string; name: string; date: string }
+
+const escapeHtml = (s: string): string =>
+  String(s || '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
+
+const AGREEMENT_TITLE: Record<AgreementType, string> = {
+  equipment: 'Employer Provided Equipment Agreement',
+  employee: 'Employee Agreement',
+};
+
+const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = ({ employeeId, employeeName }) => {
   const [generatingEquip, setGeneratingEquip] = useState(false);
   const [generatingEmp, setGeneratingEmp] = useState(false);
+  // Per-type signed document (html with signature block embedded), loaded on
+  // mount from the e-sign store and updated after a fresh signature.
+  const [signed, setSigned] = useState<Partial<Record<AgreementType, SignedDoc>>>({});
+  const [signModal, setSignModal] = useState<null | AgreementType>(null);
 
-  const handleGenerate = async (type: 'equipment' | 'employee') => {
-    const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
-    setLoading(true);
-    try {
-      const { html } = type === 'equipment'
-        ? await api.generateEquipmentAgreement(employeeId)
-        : await api.generateEmployeeAgreement(employeeId);
-      if (html) {
-        const title = type === 'equipment' ? 'Employer Provided Equipment Agreement' : 'Employee Agreement';
-        await api.printPreview(html, title);
-      }
-    } catch (err: any) {
-      alert('Failed to generate document: ' + (err?.message || 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
+  // Description marker links an esign_document back to this employee + type,
+  // so the signed status persists across sessions.
+  const marker = (type: AgreementType) => `emp:${employeeId}:${type}`;
+
+  // Load any existing signed agreements on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const docs = await api.esignList();
+        if (!Array.isArray(docs)) return;
+        const next: Partial<Record<AgreementType, SignedDoc>> = {};
+        for (const type of ['equipment', 'employee'] as AgreementType[]) {
+          const doc = docs.find((d: any) => d.description === marker(type) && d.status === 'signed');
+          if (doc) {
+            const full = await api.esignGet(doc.id);
+            const sig = full?.signatures?.[full.signatures.length - 1];
+            next[type] = {
+              id: doc.id,
+              html: full?.content || '',
+              name: sig?.typed_name || sig?.signer_name || employeeName,
+              date: (sig?.signed_at || doc.updated_at || '').slice(0, 10),
+            };
+          }
+        }
+        if (!cancelled) setSigned(next);
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const genHtml = async (type: AgreementType): Promise<string> => {
+    const { html } = type === 'equipment'
+      ? await api.generateEquipmentAgreement(employeeId)
+      : await api.generateEmployeeAgreement(employeeId);
+    return html || '';
   };
 
-  const handleSavePDF = async (type: 'equipment' | 'employee') => {
+  // Preview: prefer the signed copy (with signature block) if present.
+  const handleGenerate = async (type: AgreementType) => {
     const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
     setLoading(true);
     try {
-      const { html } = type === 'equipment'
-        ? await api.generateEquipmentAgreement(employeeId)
-        : await api.generateEmployeeAgreement(employeeId);
+      const html = signed[type]?.html || (await genHtml(type));
+      if (html) await api.printPreview(html, AGREEMENT_TITLE[type]);
+    } catch (err: any) {
+      alert('Failed to generate document: ' + (err?.message || 'Unknown error'));
+    } finally { setLoading(false); }
+  };
+
+  const handleSavePDF = async (type: AgreementType) => {
+    const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
+    setLoading(true);
+    try {
+      const html = signed[type]?.html || (await genHtml(type));
       if (html) {
-        const title = type === 'equipment' ? 'Employer Provided Equipment Agreement' : 'Employee Agreement';
-        await api.saveToPDF(html, title, {
+        await api.saveToPDF(html, AGREEMENT_TITLE[type], {
           doctype: type === 'equipment' ? 'EquipAgreement' : 'EmployeeAgreement',
           identifier: employeeId,
           pdfOptions: { pageSize: 'Letter', printBackground: true },
@@ -559,65 +605,155 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
       }
     } catch (err: any) {
       alert('Failed to save document: ' + (err?.message || 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
+  };
+
+  // Build a print-friendly signature block and embed it before </body>.
+  const embedSignature = (html: string, typedName: string, dateStr: string): string => {
+    const dateDisplay = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const block = `<div style="margin-top:48px;padding-top:16px;border-top:2px solid #333;page-break-inside:avoid;">
+      <div style="font-size:11px;letter-spacing:1px;color:#666;text-transform:uppercase;margin-bottom:6px;">Electronic Signature</div>
+      <div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:30px;color:#111;line-height:1.1;">${escapeHtml(typedName)}</div>
+      <div style="font-size:12px;color:#333;margin-top:8px;">Signed by <strong>${escapeHtml(employeeName)}</strong> &nbsp;&middot;&nbsp; Date: <strong>${dateDisplay}</strong></div>
+      <div style="font-size:10px;color:#999;margin-top:4px;">Electronically signed &amp; recorded. This signature is cryptographically bound to the document content (SHA-256).</div>
+    </div>`;
+    return html.includes('</body>') ? html.replace('</body>', block + '</body>') : html + block;
+  };
+
+  const handleSign = async (type: AgreementType, typedName: string, dateStr: string) => {
+    const baseHtml = await genHtml(type);
+    if (!baseHtml) throw new Error('Could not generate the agreement to sign.');
+    const signedHtml = embedSignature(baseHtml, typedName, dateStr);
+    const created = await api.esignCreate(`${AGREEMENT_TITLE[type]} — ${employeeName}`, marker(type), signedHtml);
+    if (!created?.id) throw new Error('Could not create the e-sign document.');
+    const res = await api.esignSign(created.id, typedName, 'employee', employeeId, employeeName, dateStr);
+    if (res?.error) throw new Error(res.error);
+    setSigned((prev) => ({ ...prev, [type]: { id: created.id, html: signedHtml, name: typedName, date: dateStr } }));
+  };
+
+  const renderCard = (type: AgreementType, Icon: typeof Laptop, iconColor: string, desc: string) => {
+    const busy = type === 'equipment' ? generatingEquip : generatingEmp;
+    const sig = signed[type];
+    return (
+      <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+        <div className="flex items-center gap-2">
+          <Icon size={18} className={iconColor} />
+          <div>
+            <p className="text-sm font-semibold text-text-primary">{AGREEMENT_TITLE[type]}</p>
+            <p className="text-xs text-text-muted">{desc}</p>
+          </div>
+        </div>
+        {sig && (
+          <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-accent-income)' }}>
+            <CheckCircle2 size={13} />
+            <span>Signed by <strong>{sig.name}</strong> on {new Date(sig.date + 'T12:00:00').toLocaleDateString()}</span>
+          </div>
+        )}
+        <div className="flex gap-2 flex-wrap">
+          <button className="block-btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5" onClick={() => handleGenerate(type)} disabled={busy}>
+            <FileText size={12} /> {busy ? 'Generating...' : 'Preview'}
+          </button>
+          <button className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5" onClick={() => handleSavePDF(type)} disabled={busy}>
+            Save PDF
+          </button>
+          <button className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5" onClick={() => setSignModal(type)} disabled={busy}
+            style={{ borderColor: 'var(--color-accent-income)', color: 'var(--color-accent-income)' }}>
+            <PenTool size={12} /> {sig ? 'Re-sign' : 'E-Sign'}
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-bold text-text-primary">Employment Documents</h3>
       <div className="grid grid-cols-2 gap-4">
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+        {renderCard('equipment', Laptop, 'text-accent-blue', 'Itemizes all equipment issued to this employee with terms of use.')}
+        {renderCard('employee', ShieldCheck, 'text-accent-income', 'Employment contract with position details, compensation, and terms.')}
+      </div>
+      {signModal && (
+        <ESignModal
+          title={AGREEMENT_TITLE[signModal]}
+          defaultName={employeeName}
+          onClose={() => setSignModal(null)}
+          onSign={async (typedName, dateStr) => { await handleSign(signModal, typedName, dateStr); setSignModal(null); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─── E-Sign Modal ─────────────────────────────────────────
+// Captures a typed signature + a signing date. The date defaults to today
+// and is capped at today (max=) so the user can back-date to the current OR
+// a past date — but never the future.
+const ESignModal: React.FC<{
+  title: string;
+  defaultName: string;
+  onClose: () => void;
+  onSign: (typedName: string, dateStr: string) => Promise<void>;
+}> = ({ title, defaultName, onClose, onSign }) => {
+  const today = new Date().toISOString().split('T')[0];
+  const [typedName, setTypedName] = useState(defaultName || '');
+  const [dateStr, setDateStr] = useState(today);
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (!typedName.trim()) { setError('Type your full legal name to sign.'); return; }
+    if (!agree) { setError('You must confirm intent to sign.'); return; }
+    if (dateStr > today) { setError('Signing date cannot be in the future.'); return; }
+    setBusy(true); setError('');
+    try {
+      await onSign(typedName.trim(), dateStr);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to sign');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div className="block-card w-full max-w-md p-5 space-y-4" style={{ borderRadius: '10px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Laptop size={18} className="text-accent-blue" />
-            <div>
-              <p className="text-sm font-semibold text-text-primary">Employer Provided Equipment Agreement</p>
-              <p className="text-xs text-text-muted">Itemizes all equipment issued to this employee with terms of use.</p>
+            <PenTool size={16} className="text-accent-income" />
+            <span className="text-sm font-bold text-text-primary">E-Sign Document</span>
+          </div>
+          <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary" style={{ borderRadius: '6px' }}><X size={16} /></button>
+        </div>
+        <p className="text-xs text-text-muted">{title}</p>
+
+        <div>
+          <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Full Legal Name (your signature)</label>
+          <input className="block-input" value={typedName} onChange={(e) => setTypedName(e.target.value)} placeholder="Type your full name" autoFocus />
+          {typedName.trim() && (
+            <div className="mt-2 px-3 py-2" style={{ borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>
+              <span style={{ fontFamily: "'Snell Roundhand','Apple Chancery','Brush Script MT',cursive", fontSize: 26, color: 'var(--color-text-primary)' }}>{typedName}</span>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              className="block-btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
-              onClick={() => handleGenerate('equipment')}
-              disabled={generatingEquip}
-            >
-              <FileText size={12} /> {generatingEquip ? 'Generating...' : 'Preview'}
-            </button>
-            <button
-              className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5"
-              onClick={() => handleSavePDF('equipment')}
-              disabled={generatingEquip}
-            >
-              Save PDF
-            </button>
-          </div>
+          )}
         </div>
 
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={18} className="text-accent-income" />
-            <div>
-              <p className="text-sm font-semibold text-text-primary">Employee Agreement</p>
-              <p className="text-xs text-text-muted">Employment contract with position details, compensation, and terms.</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              className="block-btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
-              onClick={() => handleGenerate('employee')}
-              disabled={generatingEmp}
-            >
-              <FileText size={12} /> {generatingEmp ? 'Generating...' : 'Preview'}
-            </button>
-            <button
-              className="block-btn flex items-center gap-1.5 text-xs px-3 py-1.5"
-              onClick={() => handleSavePDF('employee')}
-              disabled={generatingEmp}
-            >
-              Save PDF
-            </button>
-          </div>
+        <div>
+          <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Date Signed</label>
+          <input type="date" className="block-input" value={dateStr} max={today} onChange={(e) => setDateStr(e.target.value)} />
+          <p className="text-[10px] text-text-muted mt-1">Defaults to today. You may back-date to a past date; future dates are not allowed.</p>
+        </div>
+
+        <label className="flex items-start gap-2 text-xs text-text-secondary">
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, accentColor: '#16a34a' }} />
+          <span>I, the named employee, agree that typing my name constitutes my electronic signature and that I have read and accept this document.</span>
+        </label>
+
+        {error && <p className="text-xs" style={{ color: 'var(--color-accent-expense)' }}>{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <button className="block-btn text-xs px-3 py-1.5" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="block-btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5" onClick={submit} disabled={busy}
+            style={{ background: 'var(--color-accent-income)', borderColor: 'var(--color-accent-income)' }}>
+            <PenTool size={12} /> {busy ? 'Signing...' : 'Sign Document'}
+          </button>
         </div>
       </div>
     </div>

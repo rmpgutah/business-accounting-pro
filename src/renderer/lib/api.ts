@@ -1048,8 +1048,8 @@ const api = {
   esignDelete: (id: string): Promise<any> =>
     window.electronAPI.invoke('esign:delete', { id }),
 
-  esignSign: (documentId: string, typedName: string, signerType: string, signerId: string, signerName: string): Promise<any> =>
-    window.electronAPI.invoke('esign:sign', { documentId, typedName, signerType, signerId, signerName }),
+  esignSign: (documentId: string, typedName: string, signerType: string, signerId: string, signerName: string, signedAt?: string): Promise<{ id?: string; signatureHash?: string; status?: string; signedAt?: string; error?: string }> =>
+    window.electronAPI.invoke('esign:sign', { documentId, typedName, signerType, signerId, signerName, signedAt }),
 
   esignRevoke: (id: string, reason?: string): Promise<any> =>
     window.electronAPI.invoke('esign:revoke', { id, reason }),

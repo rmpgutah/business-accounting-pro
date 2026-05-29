@@ -653,6 +653,7 @@ export function registerIpcHandlers(): void {
     'client_contacts', 'credit_notes', 'credit_note_items',
     'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
+    'employee_equipment',
     'pto_policies', 'pto_balances', 'pto_transactions',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
@@ -16604,21 +16605,34 @@ export function registerIpcHandlers(): void {
     return { changes: result.changes };
   });
 
-  ipcMain.handle('esign:sign', (_event, { documentId, typedName, signerType, signerId, signerName }: {
-    documentId: string; typedName: string; signerType: string; signerId: string; signerName: string;
+  ipcMain.handle('esign:sign', (_event, { documentId, typedName, signerType, signerId, signerName, signedAt }: {
+    documentId: string; typedName: string; signerType: string; signerId: string; signerName: string; signedAt?: string;
   }) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return null;
     const doc = db.getDb().prepare('SELECT * FROM esign_documents WHERE id = ? AND company_id = ?').get(documentId, companyId) as any;
     if (!doc) return { error: 'Document not found' };
     const userEmail = getLastLoginEmail() || 'unknown';
-    const hashInput = `${typedName}:${documentId}:${doc.content_hash}:${new Date().toISOString()}`;
+    // Effective signing timestamp — allow the caller to back-date to the
+    // current OR a PAST date (e.g. signing paperwork after the fact).
+    // Reject future dates: a signature can't be dated later than today.
+    // Accepts 'YYYY-MM-DD' (stamped at noon to dodge TZ edge cases) or a
+    // full ISO string. Falls back to now if absent/invalid.
+    let effectiveSignedAt = new Date().toISOString();
+    if (signedAt && typeof signedAt === 'string') {
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(signedAt) ? signedAt + 'T12:00:00' : signedAt;
+      const parsed = new Date(iso);
+      if (!isNaN(parsed.getTime()) && parsed.getTime() <= Date.now() + 86400000) {
+        effectiveSignedAt = parsed.toISOString();
+      }
+    }
+    const hashInput = `${typedName}:${documentId}:${doc.content_hash}:${effectiveSignedAt}`;
     const signatureHash = crypto.createHash('sha256').update(hashInput).digest('hex');
     const sigId = uuid();
     db.getDb().prepare(`
       INSERT INTO esign_signatures (id, document_id, signer_type, signer_id, signer_name, typed_name, signature_hash, signed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `).run(sigId, documentId, signerType || 'user', signerId || '', signerName || userEmail, typedName, signatureHash);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(sigId, documentId, signerType || 'user', signerId || '', signerName || userEmail, typedName, signatureHash, effectiveSignedAt);
     const allSignatures = db.getDb().prepare('SELECT COUNT(*) as cnt FROM esign_signatures WHERE document_id = ?').get(documentId) as any;
     db.getDb().prepare(`
       INSERT INTO esign_audit_log (id, document_id, action, performed_by, details, created_at)
@@ -16628,7 +16642,7 @@ export function registerIpcHandlers(): void {
       UPDATE esign_documents SET status = CASE WHEN ? > 0 THEN 'signed' ELSE status END, updated_at = datetime('now') WHERE id = ?
     `).run(1, documentId);
     scheduleAutoBackup();
-    return { id: sigId, signatureHash, status: 'signed' };
+    return { id: sigId, signatureHash, status: 'signed', signedAt: effectiveSignedAt };
   });
 
   ipcMain.handle('esign:revoke', (_event, { id, reason }: { id: string; reason?: string }) => {
