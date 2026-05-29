@@ -16352,47 +16352,72 @@ export function registerIpcHandlers(): void {
 <html lang="en">
 <head><meta charset="utf-8"><title>Employer Provided Equipment Agreement - ${empName}</title>
 <style>
-  @page { margin: 0.75in; size: Letter; }
-  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1f2937; margin: 0; padding: 0; }
-  .container { max-width: 700px; margin: 0 auto; }
-  h1 { font-size: 16pt; text-align: center; margin-bottom: 4px; color: #111827; }
-  h2 { font-size: 13pt; margin-top: 20px; margin-bottom: 8px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-  .subtitle { text-align: center; font-size: 10pt; color: #6b7280; margin-bottom: 24px; }
-  .field-row { margin-bottom: 4px; }
-  .field-label { font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+  @page { margin: 0.85in 0.9in; size: Letter; }
+  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
+  .container { max-width: 680px; margin: 0 auto; }
+  /* ── Formal letterhead ── */
+  .letterhead { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 2px solid #111; }
+  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #111; margin: 0; }
+  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 2px; letter-spacing: 0.3px; }
+  /* ── Date + addressee + RE + salutation ── */
+  .letter-date { margin-top: 20px; font-size: 10.5pt; }
+  .addressee { margin-top: 16px; font-size: 10.5pt; line-height: 1.5; }
+  .re-line { margin-top: 14px; font-size: 10.5pt; font-weight: 700; }
+  .salutation { margin-top: 14px; font-size: 11pt; }
+  /* ── Section headings ── */
+  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 22px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
+  /* ── Body + terms ── */
+  .letter-body { margin-top: 12px; font-size: 10.5pt; }
+  .letter-body p { margin: 8px 0; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
   th { background: #f3f4f6; padding: 8px; border: 1px solid #d1d5db; text-align: left; font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
-  .signature-section { margin-top: 32px; }
+  td { padding: 8px; border: 1px solid #d1d5db; }
+  .terms { margin: 16px 0; }
+  .terms p { margin: 8px 0; text-align: justify; font-size: 10.5pt; }
+  /* ── Signatures ── */
+  .signature-section { margin-top: 36px; page-break-inside: avoid; }
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
   .signature-field { flex: 1; }
-  .signature-line { border-top: 1px solid #374151; margin-top: 32px; padding-top: 4px; font-size: 10pt; }
-  .terms { margin: 16px 0; }
-  .terms p { margin: 6px 0; text-align: justify; }
-  .footer { margin-top: 32px; text-align: center; font-size: 9pt; color: #9ca3af; }
-  /* table-layout:fixed makes the colgroup widths authoritative so the
-     Definition column (longest text) gets the space it needs instead of
-     collapsing to a sliver while the short Violation column hogs width. */
-  .penalty-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; table-layout: fixed; }
-  .penalty-table th { background: #1f2937; color: #ffffff; padding: 7px 8px; border: 1px solid #374151; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  .signature-line { border-top: 1px solid #374151; margin-top: 36px; padding-top: 4px; font-size: 10pt; }
+  /* ── Footer ── */
+  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 1px solid #ddd; padding-top: 8px; }
+  /* ── Penalty table ── */
+  .penalty-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; table-layout: fixed; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+  .penalty-table th { background: #1f2937; color: #fff; padding: 7px 8px; border: 1px solid #374151; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
   .penalty-table td { padding: 7px 8px; border: 1px solid #d1d5db; vertical-align: top; font-size: 8.5pt; line-height: 1.35; word-wrap: break-word; overflow-wrap: anywhere; }
-  /* Keep each penalty row intact across page breaks (rows are now short
-     enough that this won't leave large gaps). */
   .penalty-table tr { page-break-inside: avoid; }
   .penalty-high { background: #fef2f2; }
   .penalty-medium { background: #fffbeb; }
+  @media print { body { padding: 0; } }
 </style></head>
 <body>
 <div class="container">
-  <h1>Employer Provided Equipment Agreement</h1>
-  <p class="subtitle">This Agreement is made and entered into as of ${today}</p>
+  <!-- Formal letterhead -->
+  <div class="letterhead">
+    <p class="co-name">${companyName}</p>
+    ${companyAddr ? `<p class="co-addr">${esc(companyAddr)}</p>` : ''}
+  </div>
 
-  <h2>Parties</h2>
-  <div class="field-row"><span class="field-label">Employer:</span> ${companyName}</div>
-  ${companyAddr ? `<div class="field-row"><span class="field-label">Address:</span> ${esc(companyAddr)}</div>` : ''}
-  <div style="margin-top:8px;" class="field-row"><span class="field-label">Employee:</span> ${empName}</div>
-  ${empTitle ? `<div class="field-row"><span class="field-label">Title:</span> ${esc(empTitle)}</div>` : ''}
-  ${empAddr ? `<div class="field-row"><span class="field-label">Address:</span> ${esc(empAddr)}</div>` : ''}
-  <div class="field-row"><span class="field-label">Start Date:</span> ${empStart}</div>
+  <!-- Date -->
+  <div class="letter-date">${today}</div>
+
+  <!-- Addressee -->
+  <div class="addressee">
+    ${empName}<br/>
+    ${empTitle ? esc(empTitle) + '<br/>' : ''}
+    ${empAddr ? esc(empAddr) + '<br/>' : ''}
+  </div>
+
+  <!-- RE line -->
+  <div class="re-line">RE: Employer Provided Equipment Agreement</div>
+
+  <!-- Salutation -->
+  <div class="salutation">Dear ${empName.split(' ')[0] || empName},</div>
+
+  <!-- Body opening -->
+  <div class="letter-body">
+    <p>This letter constitutes a formal agreement between ${companyName} ("Employer") and ${empName} ("Employee"), effective as of ${empStart || today}, regarding the issuance, use, care, and return of company-owned equipment. By acknowledging this document, the Employee agrees to the terms and conditions set forth herein.</p>
+  </div>
 
   <h2>Equipment Issued</h2>
   <p>The Employer has issued the following equipment to the Employee for business use. The Employee acknowledges receipt of the items listed below and agrees to the terms set forth in this Agreement.</p>
@@ -16635,39 +16660,61 @@ export function registerIpcHandlers(): void {
 <html lang="en">
 <head><meta charset="utf-8"><title>Employee Agreement - ${empName}</title>
 <style>
-  @page { margin: 0.75in; size: Letter; }
-  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1f2937; margin: 0; padding: 0; }
-  .container { max-width: 700px; margin: 0 auto; }
-  h1 { font-size: 16pt; text-align: center; margin-bottom: 4px; color: #111827; }
-  h2 { font-size: 13pt; margin-top: 20px; margin-bottom: 8px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-  .subtitle { text-align: center; font-size: 10pt; color: #6b7280; margin-bottom: 24px; }
-  .field-row { margin-bottom: 4px; }
-  .field-label { font-weight: 600; }
-  .section { margin: 8px 0; padding-left: 8px; }
-  .section p { margin: 6px 0; text-align: justify; }
-  .signature-section { margin-top: 32px; }
+  @page { margin: 0.85in 0.9in; size: Letter; }
+  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
+  .container { max-width: 680px; margin: 0 auto; }
+  .letterhead { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 2px solid #111; }
+  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #111; margin: 0; }
+  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 2px; letter-spacing: 0.3px; }
+  .letter-date { margin-top: 20px; font-size: 10.5pt; }
+  .addressee { margin-top: 16px; font-size: 10.5pt; line-height: 1.5; }
+  .re-line { margin-top: 14px; font-size: 10.5pt; font-weight: 700; }
+  .salutation { margin-top: 14px; font-size: 11pt; }
+  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 22px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
+  .letter-body { margin-top: 12px; font-size: 10.5pt; }
+  .letter-body p { margin: 8px 0; text-align: justify; }
+  .info-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+  .info-table td { padding: 5px 10px; font-size: 10pt; border-bottom: 1px solid #eee; }
+  .info-table td:first-child { font-weight: 600; width: 170px; color: #555; }
+  .section { margin: 16px 0; }
+  .section p { margin: 8px 0; text-align: justify; font-size: 10.5pt; }
+  .signature-section { margin-top: 36px; page-break-inside: avoid; }
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
   .signature-field { flex: 1; }
-  .signature-line { border-top: 1px solid #374151; margin-top: 32px; padding-top: 4px; font-size: 10pt; }
-  .footer { margin-top: 32px; text-align: center; font-size: 9pt; color: #9ca3af; }
-  .info-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  .info-table td { padding: 4px 8px; font-size: 10pt; }
-  .info-table td:first-child { font-weight: 600; width: 180px; color: #6b7280; }
+  .signature-line { border-top: 1px solid #374151; margin-top: 36px; padding-top: 4px; font-size: 10pt; }
+  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 1px solid #ddd; padding-top: 8px; }
+  @media print { body { padding: 0; } }
 </style></head>
 <body>
 <div class="container">
-  <h1>Employee Agreement</h1>
-  <p class="subtitle">This Agreement is made and entered into as of ${today}</p>
+  <!-- Formal letterhead -->
+  <div class="letterhead">
+    <p class="co-name">${companyName}</p>
+    ${companyAddr ? `<p class="co-addr">${esc(companyAddr)}</p>` : ''}
+  </div>
 
-  <h2>Parties</h2>
-  <table class="info-table">
-    <tr><td>Employer:</td><td>${companyName}</td></tr>
-    ${companyAddr ? `<tr><td>Address:</td><td>${esc(companyAddr)}</td></tr>` : ''}
-    <tr><td>Employee:</td><td>${empName}</td></tr>
-    ${empAddr ? `<tr><td>Address:</td><td>${esc(empAddr)}</td></tr>` : ''}
-    ${empEmail ? `<tr><td>Email:</td><td>${empEmail}</td></tr>` : ''}
-    ${empPhone ? `<tr><td>Phone:</td><td>${empPhone}</td></tr>` : ''}
-  </table>
+  <!-- Date -->
+  <div class="letter-date">${today}</div>
+
+  <!-- Addressee -->
+  <div class="addressee">
+    ${empName}<br/>
+    ${empTitle ? esc(empTitle) + '<br/>' : ''}
+    ${empAddr ? esc(empAddr) + '<br/>' : ''}
+    ${empEmail ? empEmail + '<br/>' : ''}
+    ${empPhone ? empPhone : ''}
+  </div>
+
+  <!-- RE line -->
+  <div class="re-line">RE: Employment Agreement</div>
+
+  <!-- Salutation -->
+  <div class="salutation">Dear ${empName.split(' ')[0] || empName},</div>
+
+  <!-- Body opening -->
+  <div class="letter-body">
+    <p>This letter constitutes a formal employment agreement between ${companyName} ("Employer") and ${empName} ("Employee"), effective as of ${empStart || today}. This Agreement sets forth the terms and conditions of your employment. By signing below, you acknowledge that you have read, understood, and agree to these terms.</p>
+  </div>
 
   <h2>Terms of Employment</h2>
   <table class="info-table">
