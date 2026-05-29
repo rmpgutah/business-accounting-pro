@@ -16450,6 +16450,176 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('hr:termination-report', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().terminationReport(c, year) : []; });
   ipcMain.handle('hr:company-wide-metrics', () => { const c = db.getCurrentCompanyId(); return c ? hr2().companyWideHRMetrics(c) : {}; });
 
+  // ─── System-Wide Waves 1-3 (SW1–SW150) ──────────────────
+  const sw1 = () => require('../services/system-wide-wave1');
+  const sw2 = () => require('../services/system-wide-wave2');
+  const sw3 = () => require('../services/system-wide-wave3');
+  // Clients (SW1-10)
+  ipcMain.handle('sw:client-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw1().clientDashboard(c) : {}; });
+  ipcMain.handle('sw:client-revenue-ranking', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw1().clientRevenueRanking(c, limit) : []; });
+  ipcMain.handle('sw:client-retention', () => { const c = db.getCurrentCompanyId(); return c ? sw1().clientRetentionRate(c) : {}; });
+  ipcMain.handle('sw:client-acquisition', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw1().clientAcquisitionByMonth(c, months) : []; });
+  ipcMain.handle('sw:clients-by-type', () => { const c = db.getCurrentCompanyId(); return c ? sw1().clientsByType(c) : []; });
+  ipcMain.handle('sw:client-contacts', () => { const c = db.getCurrentCompanyId(); return c ? sw1().clientContactsList(c) : []; });
+  ipcMain.handle('sw:clients-no-invoices', () => { const c = db.getCurrentCompanyId(); return c ? sw1().clientsWithoutInvoices(c) : []; });
+  ipcMain.handle('sw:client-geography', () => { const c = db.getCurrentCompanyId(); return c ? sw1().clientGeography(c) : []; });
+  ipcMain.handle('sw:top-clients-expenses', () => { const c = db.getCurrentCompanyId(); return c ? sw1().topClientsByExpenses(c) : []; });
+  ipcMain.handle('sw:client-comms', (_e, { clientId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().clientCommunicationLog(c, clientId) : []; });
+  // Projects (SW11-20)
+  ipcMain.handle('sw:project-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw1().projectDashboard(c) : {}; });
+  ipcMain.handle('sw:project-profitability', () => { const c = db.getCurrentCompanyId(); return c ? sw1().projectProfitability(c) : []; });
+  ipcMain.handle('sw:project-time', (_e, { projectId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().projectTimeTracking(c, projectId) : []; });
+  ipcMain.handle('sw:project-time-summary', () => { const c = db.getCurrentCompanyId(); return c ? sw1().projectTimeSummary(c) : []; });
+  ipcMain.handle('sw:project-burn', () => { const c = db.getCurrentCompanyId(); return c ? sw1().projectBudgetBurnRate(c) : []; });
+  ipcMain.handle('sw:projects-by-client', () => { const c = db.getCurrentCompanyId(); return c ? sw1().projectsByClient(c) : []; });
+  ipcMain.handle('sw:project-milestones', (_e, { projectId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().projectMilestones(c, projectId) : []; });
+  ipcMain.handle('sw:over-budget-projects', () => { const c = db.getCurrentCompanyId(); return c ? sw1().overBudgetProjects(c) : []; });
+  ipcMain.handle('sw:project-status', () => { const c = db.getCurrentCompanyId(); return c ? sw1().projectStatusBreakdown(c) : []; });
+  ipcMain.handle('sw:project-activity', () => { const c = db.getCurrentCompanyId(); return c ? sw1().recentProjectActivity(c) : []; });
+  // Inventory (SW21-30)
+  ipcMain.handle('sw:inventory-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryDashboard(c) : {}; });
+  ipcMain.handle('sw:low-stock', () => { const c = db.getCurrentCompanyId(); return c ? sw1().lowStockItems(c) : []; });
+  ipcMain.handle('sw:inventory-valuation', () => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryValuation(c) : []; });
+  ipcMain.handle('sw:inventory-movements', (_e, { itemId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryMovementHistory(c, itemId) : []; });
+  ipcMain.handle('sw:inventory-turnover', () => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryTurnoverRate(c) : {}; });
+  ipcMain.handle('sw:inventory-by-category', () => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryByCategory(c) : []; });
+  ipcMain.handle('sw:reorder-suggestions', () => { const c = db.getCurrentCompanyId(); return c ? sw1().reorderSuggestions(c) : []; });
+  ipcMain.handle('sw:inventory-aging', () => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryAging(c) : []; });
+  ipcMain.handle('sw:inventory-search', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().inventorySearch(c, query) : []; });
+  ipcMain.handle('sw:inventory-value-trend', () => { const c = db.getCurrentCompanyId(); return c ? sw1().inventoryValueTrend(c) : []; });
+  // Bills/AP (SW31-40)
+  ipcMain.handle('sw:bills-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw1().billsDashboard(c) : {}; });
+  ipcMain.handle('sw:bills-by-vendor', () => { const c = db.getCurrentCompanyId(); return c ? sw1().billsByVendor(c) : []; });
+  ipcMain.handle('sw:bills-aging', () => { const c = db.getCurrentCompanyId(); return c ? sw1().billsAging(c) : []; });
+  ipcMain.handle('sw:upcoming-bills', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw1().upcomingBillsDue(c, days) : []; });
+  ipcMain.handle('sw:bill-payments', (_e, { billId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().billPaymentHistory(c, billId) : []; });
+  ipcMain.handle('sw:cash-outflow-forecast', (_e, { weeks }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw1().cashOutflowForecast(c, weeks) : []; });
+  ipcMain.handle('sw:bills-monthly', () => { const c = db.getCurrentCompanyId(); return c ? sw1().billsMonthlyTrend(c) : []; });
+  ipcMain.handle('sw:recurring-bills', () => { const c = db.getCurrentCompanyId(); return c ? sw1().recurringBills(c) : []; });
+  ipcMain.handle('sw:bills-search', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().billsSearch(c, query) : []; });
+  ipcMain.handle('sw:ap-vs-ar', () => { const c = db.getCurrentCompanyId(); return c ? sw1().apVsArSummary(c) : {}; });
+  // Bank/Settings (SW41-50)
+  ipcMain.handle('sw:bank-recon-summary', () => { const c = db.getCurrentCompanyId(); return c ? sw1().bankReconciliationSummary(c) : {}; });
+  ipcMain.handle('sw:unmatched-txns', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw1().unmatchedTransactions(c, limit) : []; });
+  ipcMain.handle('sw:bank-balance-history', (_e, { accountId }: any) => sw1().bankBalanceHistory('', accountId));
+  ipcMain.handle('sw:txns-by-category', () => { const c = db.getCurrentCompanyId(); return c ? sw1().transactionsByCategory(c) : []; });
+  ipcMain.handle('sw:recon-progress', () => { const c = db.getCurrentCompanyId(); return c ? sw1().reconciliationProgress(c) : {}; });
+  ipcMain.handle('sw:settings-list', () => { const c = db.getCurrentCompanyId(); return c ? sw1().listSettings(c) : []; });
+  ipcMain.handle('sw:setting-get', (_e, { key }: any) => { const c = db.getCurrentCompanyId(); return c ? sw1().getSetting(c, key) : null; });
+  ipcMain.handle('sw:setting-set', (_e, { key, value }: any) => { const c = db.getCurrentCompanyId(); if (c) sw1().setSetting(c, key, value); return { ok: true }; });
+  ipcMain.handle('sw:company-profile', () => { const c = db.getCurrentCompanyId(); return c ? sw1().companyProfile(c) : null; });
+  ipcMain.handle('sw:system-health', () => { const c = db.getCurrentCompanyId(); return c ? sw1().systemHealthCheck(c) : {}; });
+  // Fixed Assets (SW51-60)
+  ipcMain.handle('sw:asset-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().assetDashboard(c) : {}; });
+  ipcMain.handle('sw:assets-by-category', () => { const c = db.getCurrentCompanyId(); return c ? sw2().assetsByCategory(c) : []; });
+  ipcMain.handle('sw:assets-depreciation', () => { const c = db.getCurrentCompanyId(); return c ? sw2().assetsNeedingDepreciation(c) : []; });
+  ipcMain.handle('sw:asset-depreciation-schedule', (_e, { assetId }: any) => sw2().assetDepreciationSchedule(assetId));
+  ipcMain.handle('sw:assets-warranty', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().assetsExpiringWarranty(c, days) : []; });
+  ipcMain.handle('sw:asset-insurance', () => { const c = db.getCurrentCompanyId(); return c ? sw2().assetInsuranceSummary(c) : []; });
+  ipcMain.handle('sw:recent-disposals', () => { const c = db.getCurrentCompanyId(); return c ? sw2().recentAssetDisposals(c) : []; });
+  ipcMain.handle('sw:asset-search', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().assetSearch(c, query) : []; });
+  ipcMain.handle('sw:total-asset-value', () => { const c = db.getCurrentCompanyId(); return c ? sw2().totalAssetValue(c) : {}; });
+  ipcMain.handle('sw:assets-by-location', () => { const c = db.getCurrentCompanyId(); return c ? sw2().assetsByLocation(c) : []; });
+  // Budgets (SW61-70)
+  ipcMain.handle('sw:budget-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().budgetDashboard(c) : {}; });
+  ipcMain.handle('sw:budget-vs-actual', (_e, { budgetId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().budgetVsActual(c, budgetId) : []; });
+  ipcMain.handle('sw:budget-utilization', () => { const c = db.getCurrentCompanyId(); return c ? sw2().budgetUtilization(c) : []; });
+  ipcMain.handle('sw:over-budget-categories', () => { const c = db.getCurrentCompanyId(); return c ? sw2().categoriesOverBudget(c) : []; });
+  ipcMain.handle('sw:budget-forecast', () => { const c = db.getCurrentCompanyId(); return c ? sw2().budgetForecast(c) : {}; });
+  ipcMain.handle('sw:budgets-list', () => { const c = db.getCurrentCompanyId(); return c ? sw2().listBudgets(c) : []; });
+  ipcMain.handle('sw:budget-lines', (_e, { budgetId }: any) => sw2().budgetLineDetails(budgetId));
+  ipcMain.handle('sw:budget-create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().createBudget(c, p) : {}; });
+  ipcMain.handle('sw:budget-line-add', (_e, { budgetId, ...line }: any) => sw2().addBudgetLine(budgetId, line));
+  ipcMain.handle('sw:budget-line-delete', (_e, { id }: any) => { sw2().deleteBudgetLine(id); return { ok: true }; });
+  // Documents/Email (SW71-80)
+  ipcMain.handle('sw:doc-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().documentDashboard(c) : {}; });
+  ipcMain.handle('sw:doc-search', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().documentSearch(c, query) : []; });
+  ipcMain.handle('sw:docs-by-entity', (_e, { entityType, entityId }: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().documentsByEntity(c, entityType, entityId) : []; });
+  ipcMain.handle('sw:recent-docs', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().recentDocuments(c, limit) : []; });
+  ipcMain.handle('sw:email-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().emailLogDashboard(c) : {}; });
+  ipcMain.handle('sw:email-history', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().emailHistory(c, limit) : []; });
+  ipcMain.handle('sw:email-by-recipient', () => { const c = db.getCurrentCompanyId(); return c ? sw2().emailByRecipient(c) : []; });
+  ipcMain.handle('sw:notification-stats', () => { const c = db.getCurrentCompanyId(); return c ? sw2().notificationStats(c) : {}; });
+  ipcMain.handle('sw:audit-summary', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().auditLogSummary(c, days) : []; });
+  ipcMain.handle('sw:audit-search', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().auditLogSearch(c, query) : []; });
+  // Time/Quotes (SW81-90)
+  ipcMain.handle('sw:time-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().timeTrackingDashboard(c) : {}; });
+  ipcMain.handle('sw:time-by-employee', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().timeByEmployee(c, opts.startDate, opts.endDate) : []; });
+  ipcMain.handle('sw:time-by-project', () => { const c = db.getCurrentCompanyId(); return c ? sw2().timeByProject(c) : []; });
+  ipcMain.handle('sw:unbilled-time', () => { const c = db.getCurrentCompanyId(); return c ? sw2().unbilledTime(c) : []; });
+  ipcMain.handle('sw:weekly-time', () => { const c = db.getCurrentCompanyId(); return c ? sw2().weeklyTimeReport(c) : []; });
+  ipcMain.handle('sw:quotes-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().quotesDashboard(c) : {}; });
+  ipcMain.handle('sw:quotes-by-status', () => { const c = db.getCurrentCompanyId(); return c ? sw2().quotesByStatus(c) : []; });
+  ipcMain.handle('sw:quote-funnel', () => { const c = db.getCurrentCompanyId(); return c ? sw2().quoteConversionFunnel(c) : {}; });
+  ipcMain.handle('sw:top-quotes', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().topQuotesByValue(c, limit) : []; });
+  ipcMain.handle('sw:expired-quotes', () => { const c = db.getCurrentCompanyId(); return c ? sw2().expiredQuotes(c) : []; });
+  // Automations/Cross (SW91-100)
+  ipcMain.handle('sw:automations-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw2().automationsDashboard(c) : {}; });
+  ipcMain.handle('sw:rule-history', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().ruleExecutionHistory(c, limit) : []; });
+  ipcMain.handle('sw:cross-module-summary', () => { const c = db.getCurrentCompanyId(); return c ? sw2().crossModuleSummary(c) : {}; });
+  ipcMain.handle('sw:recent-activity', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().recentSystemActivity(c, limit) : []; });
+  ipcMain.handle('sw:cash-flow-summary', () => { const c = db.getCurrentCompanyId(); return c ? sw2().cashFlowSummary(c) : {}; });
+  ipcMain.handle('sw:tax-summary-ytd', () => { const c = db.getCurrentCompanyId(); return c ? sw2().taxSummaryYTD(c) : {}; });
+  ipcMain.handle('sw:upcoming-deadlines', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw2().upcomingDeadlines(c, days) : []; });
+  ipcMain.handle('sw:global-search-v2', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw2().globalSearch(c, query) : []; });
+  ipcMain.handle('sw:data-integrity', () => { const c = db.getCurrentCompanyId(); return c ? sw2().dataIntegrityCheck(c) : {}; });
+  ipcMain.handle('sw:full-system-report', () => { const c = db.getCurrentCompanyId(); return c ? sw3().fullSystemReport(c) : {}; });
+  // Tax (SW101-110)
+  ipcMain.handle('sw:tax-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw3().taxDashboard(c) : {}; });
+  ipcMain.handle('sw:tax-payments', () => { const c = db.getCurrentCompanyId(); return c ? sw3().taxPaymentHistory(c) : []; });
+  ipcMain.handle('sw:tax-categories', () => { const c = db.getCurrentCompanyId(); return c ? sw3().taxCategorySummary(c) : []; });
+  ipcMain.handle('sw:sales-tax-liability', () => { const c = db.getCurrentCompanyId(); return c ? sw3().salesTaxLiability(c) : {}; });
+  ipcMain.handle('sw:deductible-summary', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw3().deductibleExpensesSummary(c, year) : []; });
+  ipcMain.handle('sw:estimated-tax', () => { const c = db.getCurrentCompanyId(); return c ? sw3().estimatedTaxQuarterly(c) : {}; });
+  ipcMain.handle('sw:1099-summary', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw3().form1099Summary(c, year) : []; });
+  ipcMain.handle('sw:payroll-tax-ytd', () => { const c = db.getCurrentCompanyId(); return c ? sw3().payrollTaxSummaryYTD(c) : {}; });
+  ipcMain.handle('sw:tax-calendar', () => { const c = db.getCurrentCompanyId(); return c ? sw3().taxCalendar(c) : []; });
+  ipcMain.handle('sw:tax-rates', (_e, { state }: any = {}) => sw3().taxRateLookup(state));
+  // PO (SW111-120)
+  ipcMain.handle('sw:po-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw3().purchaseOrderDashboard(c) : {}; });
+  ipcMain.handle('sw:po-by-vendor', () => { const c = db.getCurrentCompanyId(); return c ? sw3().poByVendor(c) : []; });
+  ipcMain.handle('sw:po-by-status', () => { const c = db.getCurrentCompanyId(); return c ? sw3().poByStatus(c) : []; });
+  ipcMain.handle('sw:overdue-pos', () => { const c = db.getCurrentCompanyId(); return c ? sw3().overduePOs(c) : []; });
+  ipcMain.handle('sw:po-search', (_e, { query }: any) => { const c = db.getCurrentCompanyId(); return c ? sw3().poSearch(c, query) : []; });
+  ipcMain.handle('sw:po-monthly', () => { const c = db.getCurrentCompanyId(); return c ? sw3().poMonthlyTrend(c) : []; });
+  ipcMain.handle('sw:po-lines', (_e, { poId }: any) => sw3().poLineItems(poId));
+  ipcMain.handle('sw:po-receiving', () => { const c = db.getCurrentCompanyId(); return c ? sw3().poReceivingHistory(c) : []; });
+  ipcMain.handle('sw:po-to-bill', (_e, { poId }: any) => sw3().convertPOToBill(poId));
+  ipcMain.handle('sw:po-approval-status', () => { const c = db.getCurrentCompanyId(); return c ? sw3().poApprovalStatus(c) : []; });
+  // KPI (SW121-130)
+  ipcMain.handle('sw:kpi-overview', () => { const c = db.getCurrentCompanyId(); return c ? sw3().kpiOverview(c) : {}; });
+  ipcMain.handle('sw:rev-vs-exp-trend', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw3().revenueVsExpenseTrend(c, months) : []; });
+  ipcMain.handle('sw:profit-margin-trend', () => { const c = db.getCurrentCompanyId(); return c ? sw3().profitMarginTrend(c) : []; });
+  ipcMain.handle('sw:operating-metrics', () => { const c = db.getCurrentCompanyId(); return c ? sw3().operatingMetrics(c) : {}; });
+  ipcMain.handle('sw:quick-ratios', () => { const c = db.getCurrentCompanyId(); return c ? sw3().quickRatios(c) : {}; });
+  ipcMain.handle('sw:mom-growth', () => { const c = db.getCurrentCompanyId(); return c ? sw3().monthOverMonthGrowth(c) : {}; });
+  ipcMain.handle('sw:burn-rate', () => { const c = db.getCurrentCompanyId(); return c ? sw3().burnRate(c) : {}; });
+  ipcMain.handle('sw:revenue-by-service', () => { const c = db.getCurrentCompanyId(); return c ? sw3().revenueByService(c) : []; });
+  ipcMain.handle('sw:top-expense-cats', () => { const c = db.getCurrentCompanyId(); return c ? sw3().topExpenseCategories(c) : []; });
+  ipcMain.handle('sw:financial-snapshot', () => { const c = db.getCurrentCompanyId(); return c ? sw3().financialSnapshot(c) : {}; });
+  // Stripe/Payments (SW131-140)
+  ipcMain.handle('sw:stripe-summary', () => { const c = db.getCurrentCompanyId(); return c ? sw3().stripeSyncSummary(c) : {}; });
+  ipcMain.handle('sw:stripe-recent', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw3().stripeRecentTransactions(c, limit) : []; });
+  ipcMain.handle('sw:stripe-monthly', () => { const c = db.getCurrentCompanyId(); return c ? sw3().stripeMonthlyTrend(c) : []; });
+  ipcMain.handle('sw:stripe-fees', () => { const c = db.getCurrentCompanyId(); return c ? sw3().stripeFeeSummary(c) : []; });
+  ipcMain.handle('sw:stripe-unmatched', () => { const c = db.getCurrentCompanyId(); return c ? sw3().unmatchedStripeTransactions(c) : []; });
+  ipcMain.handle('sw:payment-method-stats', () => { const c = db.getCurrentCompanyId(); return c ? sw3().paymentMethodStats(c) : []; });
+  ipcMain.handle('sw:avg-payment-size', () => { const c = db.getCurrentCompanyId(); return c ? sw3().averagePaymentSize(c) : {}; });
+  ipcMain.handle('sw:payments-by-month', () => { const c = db.getCurrentCompanyId(); return c ? sw3().paymentsByMonth(c) : []; });
+  ipcMain.handle('sw:overdue-payments', () => { const c = db.getCurrentCompanyId(); return c ? sw3().overduePayments(c) : []; });
+  ipcMain.handle('sw:payment-forecast', (_e, { weeks }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw3().paymentForecast(c, weeks) : []; });
+  // Company/Advanced (SW141-150)
+  ipcMain.handle('sw:company-dashboard', () => { const c = db.getCurrentCompanyId(); return c ? sw3().companyDashboard(c) : {}; });
+  ipcMain.handle('sw:company-growth', () => { const c = db.getCurrentCompanyId(); return c ? sw3().companyGrowthMetrics(c) : []; });
+  ipcMain.handle('sw:company-comparison', () => { const c = db.getCurrentCompanyId(); return c ? sw3().companyComparison(c) : []; });
+  ipcMain.handle('sw:recurring-revenue', () => { const c = db.getCurrentCompanyId(); return c ? sw3().recurringRevenueSummary(c) : {}; });
+  ipcMain.handle('sw:customer-ltv', () => { const c = db.getCurrentCompanyId(); return c ? sw3().customerLifetimeValue(c) : []; });
+  ipcMain.handle('sw:vendor-dependency', () => { const c = db.getCurrentCompanyId(); return c ? sw3().vendorDependencyAnalysis(c) : []; });
+  ipcMain.handle('sw:profit-by-month', () => { const c = db.getCurrentCompanyId(); return c ? sw3().profitByMonth(c) : []; });
+  ipcMain.handle('sw:annual-summary', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? sw3().annualSummary(c, year) : {}; });
+  ipcMain.handle('sw:system-usage', () => { const c = db.getCurrentCompanyId(); return c ? sw3().systemUsageStats(c) : {}; });
+  ipcMain.handle('sw:full-report', () => { const c = db.getCurrentCompanyId(); return c ? sw3().fullSystemReport(c) : {}; });
+
   // ─── HR Suite Wave 3 (HR101–HR150) ──────────────────────
   const hr3 = () => require('../services/hr-suite-wave3');
   // COBRA (HR101-HR106)
