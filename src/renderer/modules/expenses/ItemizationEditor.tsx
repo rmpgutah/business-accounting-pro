@@ -451,12 +451,12 @@ export default function ItemizationEditor({
                   </div>
                 )}
               </div>
-              {/* Qty */}
-              <input type="number" className="block-input text-sm iz-num-cell" step="1" min="0"
+              {/* Qty — step="any" so decimals like 20.255 gallons are accepted */}
+              <input type="number" className="block-input text-sm iz-num-cell" step="any" min="0"
                 value={li.quantity}
                 onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })} />
-              {/* Unit price */}
-              <input type="number" className="block-input text-sm iz-num-cell" step="0.01" min="0"
+              {/* Unit price — step="any" so 3+ decimal prices like $4.937/gal are accepted */}
+              <input type="number" className="block-input text-sm iz-num-cell" step="any" min="0"
                 placeholder="0.00"
                 value={li.unit_price || ''}
                 onChange={(e) => updateLine(idx, { unit_price: parseFloat(e.target.value) || 0 })} />
@@ -466,7 +466,7 @@ export default function ItemizationEditor({
                   <span className="iz-tax-flag exempt">EXEMPT</span>
                 </div>
               ) : (
-                <input type="number" className="block-input text-sm iz-num-cell" step="0.01" min="0" max="100"
+                <input type="number" className="block-input text-sm iz-num-cell" step="any" min="0" max="100"
                   value={li.tax_rate || 0}
                   onChange={(e) => updateLine(idx, { tax_rate: parseFloat(e.target.value) || 0 })} />
               )}
