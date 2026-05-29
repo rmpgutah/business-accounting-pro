@@ -168,7 +168,7 @@ const baseStyles = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  td { border-bottom: 1px solid var(--rule); color: var(--ink-muted); font-size: 11px; }
+  td { border-bottom: 1px solid var(--rule); color: var(--ink-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
   tr:nth-child(even) td { background: rgba(248,250,252,0.55); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   tr:hover td { background: rgba(219, 234, 254, 0.25); }
   .text-right { text-align: right; font-variant-numeric: tabular-nums; }
@@ -3712,9 +3712,17 @@ export function generateExpenseReportHTML(
     return `<span style="display:inline-block;font-size:9px;font-weight:700;color:${c};text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;text-align:center;">${status || '—'}</span>`;
   };
 
+  // Short date for table rows \u2014 "Mar 17, 2026" instead of "March 17, 2026"
+  // to prevent overflow in the fixed-width Date column.
+  const fmtDateShort = (d: string) => {
+    if (!d) return '';
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+    catch { return d; }
+  };
+
   const expenseRows = expenses.map(e => {
     const mainRow = `<tr>
-      <td style="white-space:nowrap;">${fmtDate(e.date)}</td>
+      <td style="white-space:nowrap;">${fmtDateShort(e.date)}</td>
       <td>${esc(e.description) || '\u2014'}</td>
       <td>${esc(e.vendor_name) || '\u2014'}</td>
       <td>${esc(e.category_name) || '\u2014'}</td>
@@ -3805,12 +3813,12 @@ ${baseStyles}
   <div class="rpt-section">Transaction Detail</div>
   <table style="table-layout:fixed;">
     <colgroup>
-      <col style="width:11%;" />
-      <col style="width:27%;" />
-      <col style="width:18%;" />
-      <col style="width:17%;" />
       <col style="width:13%;" />
+      <col style="width:24%;" />
+      <col style="width:17%;" />
+      <col style="width:17%;" />
       <col style="width:14%;" />
+      <col style="width:15%;" />
     </colgroup>
     <thead><tr>
       <th>Date</th>
