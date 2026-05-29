@@ -1586,6 +1586,87 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // Skip a monthly payment — marks the next pending schedule row as
+  // 'skipped', advances next_payment_due to the FOLLOWING row, and
+  // logs the reason. Interest still accrues during the skipped month
+  // (it's not forgiven — it adds to the remaining balance or extends
+  // the term depending on the lender's policy). The user can optionally
+  // choose to extend the term by 1 month or capitalize the skipped
+  // interest into the balance.
+  ipcMain.handle('loans:skip-payment', (_event, payload: {
+    loan_id: string;
+    reason?: string;
+    capitalize_interest?: boolean; // add the month's interest to balance
+  }) => {
+    try {
+      const dbi = db.getDb();
+      const loan = db.getById('loans', payload.loan_id) as any;
+      if (!loan) return { error: 'Loan not found' };
+      if (loan.status !== 'active') return { error: 'Can only skip payments on active loans' };
+
+      // Find the next pending scheduled row.
+      const nextRow = dbi.prepare(
+        "SELECT * FROM loan_payment_schedule WHERE loan_id = ? AND paid_status = 'pending' ORDER BY payment_number LIMIT 1"
+      ).get(payload.loan_id) as any;
+      if (!nextRow) return { error: 'No pending payments to skip' };
+
+      // Mark it as skipped.
+      dbi.prepare(
+        "UPDATE loan_payment_schedule SET paid_status = 'skipped', paid_date = ?, paid_amount = 0 WHERE id = ?"
+      ).run(new Date().toISOString().slice(0, 10), nextRow.id);
+
+      // Optionally capitalize the skipped month's interest into the balance
+      // (this is how most skip-a-payment programs work — interest accrues).
+      if (payload.capitalize_interest) {
+        const newBalance = (loan.current_balance || 0) + (nextRow.interest_amount || 0);
+        dbi.prepare(
+          "UPDATE loans SET current_balance = ?, updated_at = datetime('now') WHERE id = ?"
+        ).run(newBalance, payload.loan_id);
+      }
+
+      // Advance next_payment_due to the next pending row after the skipped one.
+      const followingRow = dbi.prepare(
+        "SELECT due_date FROM loan_payment_schedule WHERE loan_id = ? AND paid_status = 'pending' ORDER BY payment_number LIMIT 1"
+      ).get(payload.loan_id) as any;
+      dbi.prepare(
+        "UPDATE loans SET next_payment_due = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(followingRow?.due_date || null, payload.loan_id);
+
+      // Log the skip as a loan event if the table exists.
+      try {
+        dbi.prepare(
+          "INSERT INTO loan_events (id, loan_id, event_type, event_date, description, created_at) VALUES (?, ?, 'payment_skipped', ?, ?, datetime('now'))"
+        ).run(uuid(), payload.loan_id, new Date().toISOString().slice(0, 10),
+          `Payment #${nextRow.payment_number} (${nextRow.due_date}, $${(nextRow.scheduled_payment || 0).toFixed(2)}) skipped. Reason: ${payload.reason || 'Not specified'}. Interest ${payload.capitalize_interest ? 'capitalized into balance' : 'deferred'}.`);
+      } catch { /* loan_events may not have all columns */ }
+
+      // Create a notification about the skip.
+      try {
+        const cid = db.getCurrentCompanyId();
+        if (cid) {
+          db.create('notifications', {
+            company_id: cid, type: 'info',
+            title: `Payment skipped: ${loan.name}`,
+            message: `Payment #${nextRow.payment_number} ($${(nextRow.scheduled_payment || 0).toFixed(2)}) on ${nextRow.due_date} was skipped. Next due: ${followingRow?.due_date || 'N/A'}. Reason: ${payload.reason || 'Not specified'}.`,
+            entity_type: 'loan', entity_id: payload.loan_id, is_read: 0,
+          });
+        }
+      } catch { /* non-fatal */ }
+
+      scheduleAutoBackup();
+      return {
+        ok: true,
+        skipped_payment_number: nextRow.payment_number,
+        skipped_due_date: nextRow.due_date,
+        skipped_amount: nextRow.scheduled_payment,
+        interest_capitalized: payload.capitalize_interest ? nextRow.interest_amount : 0,
+        new_next_due: followingRow?.due_date || null,
+      };
+    } catch (err: any) {
+      return { error: err?.message || 'Skip failed' };
+    }
+  });
+
   // Note: lk:* (Loan Linkage) handlers are registered later in this
   // file under "Loan Linkage Wave (F1053-F1062)". The API wrappers in
   // src/renderer/lib/api.ts use the destructured-object convention

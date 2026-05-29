@@ -8,7 +8,7 @@
 //   • Payment history list
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw, Pencil, X, Save } from 'lucide-react';
+import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw, Pencil, X, Save, SkipForward } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
@@ -41,6 +41,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
   // working copy of the row's fields. Save commits via loans:update-payment
   // and re-aggregates loan totals. Delete pops a confirm then loans:delete-payment.
   const [editPayment, setEditPayment] = useState<any | null>(null);
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +68,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
   const cur = loan.currency || 'USD';
   const pctPaid = loan.principal > 0 ? ((loan.principal - loan.current_balance) / loan.principal) * 100 : 0;
   const totalScheduledInterest = schedule.reduce((s: number, r: any) => s + (Number(r.interest_amount) || 0), 0);
-  const remainingPayments = schedule.filter((r: any) => r.paid_status !== 'paid').length;
+  const remainingPayments = schedule.filter((r: any) => r.paid_status !== 'paid' && r.paid_status !== 'skipped').length;
 
   return (
     <div style={{ padding: 24, maxWidth: 1200 }}>
@@ -84,6 +85,11 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         </div>
         <button onClick={() => setShowPayment(true)} className="block-btn-primary flex items-center gap-2">
           <DollarSign size={14} /> Record Payment
+        </button>
+        <button onClick={() => setShowSkipModal(true)} className="block-btn flex items-center gap-1.5 text-xs"
+          title="Skip the next scheduled payment — interest still accrues"
+          style={{ borderColor: '#d97706', color: '#d97706' }}>
+          <SkipForward size={12} /> Skip Payment
         </button>
         <button
           onClick={async () => {
@@ -237,16 +243,19 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                 </tr>
               </thead>
               <tbody>
-                {schedule.filter((r: any) => r.paid_status !== 'paid').slice(0, 12).map((r: any) => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-                    <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{r.payment_number}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{r.due_date}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600 }}>{fmt$(r.scheduled_payment, cur)}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{fmt$(r.principal_amount, cur)}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{fmt$(r.interest_amount, cur)}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)' }}>{fmt$(r.remaining_balance, cur)}</td>
-                  </tr>
-                ))}
+                {schedule.filter((r: any) => r.paid_status !== 'paid').slice(0, 12).map((r: any) => {
+                  const isSkipped = r.paid_status === 'skipped';
+                  return (
+                    <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-primary)', opacity: isSkipped ? 0.5 : 1, textDecoration: isSkipped ? 'line-through' : 'none' }}>
+                      <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{r.payment_number}{isSkipped ? ' ⏭' : ''}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{r.due_date}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600 }}>{isSkipped ? <span style={{ color: '#d97706', textDecoration: 'none', display: 'inline-block', fontSize: 9, fontWeight: 700 }}>SKIPPED</span> : fmt$(r.scheduled_payment, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{isSkipped ? '—' : fmt$(r.principal_amount, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{isSkipped ? '—' : fmt$(r.interest_amount, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)' }}>{fmt$(r.remaining_balance, cur)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -335,6 +344,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
 
       {/* Record payment modal */}
       {showPayment && <PaymentModal loanId={loanId} loan={loan} onClose={() => setShowPayment(false)} onSaved={() => { setShowPayment(false); load(); }} />}
+      {showSkipModal && <SkipPaymentModal loanId={loanId} loan={loan} onClose={() => setShowSkipModal(false)} onSkipped={() => { setShowSkipModal(false); load(); }} />}
       {editPayment && (
         <PaymentEditModal
           payment={editPayment}
@@ -749,6 +759,109 @@ const PaymentEditModal: React.FC<{
               {busy ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Skip Payment Modal — lets the user skip the next scheduled payment
+// with a reason and an option to capitalize accrued interest into the
+// balance. The schedule row is marked 'skipped', next_payment_due
+// advances, and a notification + loan event are created.
+const SkipPaymentModal: React.FC<{
+  loanId: string; loan: any; onClose: () => void; onSkipped: () => void;
+}> = ({ loanId, loan, onClose, onSkipped }) => {
+  const toast = useToast();
+  const [reason, setReason] = useState('');
+  const [capitalize, setCapitalize] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const nextDue = loan.next_payment_due;
+  const payment = loan.payment_amount || 0;
+
+  const handleSkip = async () => {
+    if (!reason.trim()) { toast.error('Please enter a reason for skipping.'); return; }
+    setBusy(true);
+    try {
+      const r = await api.loanSkipPayment(loanId, reason.trim(), capitalize);
+      if (r?.error) { toast.error('Skip failed: ' + r.error); return; }
+      toast.success(
+        `Payment #${r.skipped_payment_number} ($${(r.skipped_amount || 0).toFixed(2)}) on ${r.skipped_due_date} skipped. ` +
+        `Next due: ${r.new_next_due || 'N/A'}.` +
+        (r.interest_capitalized ? ` $${r.interest_capitalized.toFixed(2)} interest added to balance.` : '')
+      );
+      onSkipped();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 480, width: '100%', padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SkipForward size={16} style={{ color: '#d97706' }} />
+            <span style={{ fontSize: 16, fontWeight: 700 }}>Skip a Payment</span>
+          </div>
+          <button onClick={onClose} className="block-btn" style={{ padding: '4px 8px' }}><X size={14} /></button>
+        </div>
+
+        {/* What will be skipped */}
+        <div style={{
+          padding: '10px 14px', marginBottom: 12, borderRadius: 6,
+          background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+            Next Scheduled Payment
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'SF Mono, Menlo, monospace' }}>
+              {nextDue ? new Date(nextDue + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+            </span>
+            <span style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#d97706' }}>
+              ${payment.toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+              Reason for Skipping *
+            </label>
+            <select className="block-select" value={reason} onChange={(e) => setReason(e.target.value)} style={{ marginBottom: 4 }}>
+              <option value="">Select a reason...</option>
+              <option value="Financial hardship">Financial hardship</option>
+              <option value="Lender-approved deferment">Lender-approved deferment</option>
+              <option value="Natural disaster / emergency">Natural disaster / emergency</option>
+              <option value="Payment holiday (promotional)">Payment holiday (promotional)</option>
+              <option value="Seasonal business adjustment">Seasonal business adjustment</option>
+              <option value="Other">Other</option>
+            </select>
+            {reason === 'Other' && (
+              <input className="block-input" placeholder="Describe the reason..." value="" onChange={(e) => setReason(e.target.value)} />
+            )}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            <input type="checkbox" checked={capitalize} onChange={(e) => setCapitalize(e.target.checked)}
+              style={{ marginTop: 3, accentColor: '#d97706' }} />
+            <span>
+              <strong>Capitalize accrued interest</strong>
+              <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                Add this month's interest to the loan balance. This is how most skip-a-payment programs work — the interest doesn't disappear, it gets added to what you owe. If unchecked, the interest is deferred (owed later but not added to the principal balance).
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 }}>
+          <button onClick={onClose} className="block-btn">Cancel</button>
+          <button onClick={handleSkip} disabled={busy || !reason.trim()} className="block-btn-primary"
+            style={{ background: '#d97706', borderColor: '#d97706' }}>
+            <SkipForward size={12} style={{ marginRight: 4, display: 'inline' }} />
+            {busy ? 'Skipping...' : 'Skip This Payment'}
+          </button>
         </div>
       </div>
     </div>

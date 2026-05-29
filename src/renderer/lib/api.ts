@@ -678,6 +678,8 @@ const api = {
     window.electronAPI.invoke('loans:delete', { id }),
   loanRecordPayment: (payload: { loan_id: string; payment_date: string; amount: number; is_extra_principal?: boolean; payment_method?: string; reference?: string; notes?: string; principal_amount?: number; interest_amount?: number; escrow_amount?: number }): Promise<{ ok?: boolean; payment_id?: string; split?: { principal: number; interest: number; escrow: number; new_balance: number }; error?: string }> =>
     window.electronAPI.invoke('loans:record-payment', payload),
+  loanSkipPayment: (loanId: string, reason?: string, capitalizeInterest?: boolean): Promise<{ ok?: boolean; skipped_payment_number?: number; skipped_due_date?: string; skipped_amount?: number; interest_capitalized?: number; new_next_due?: string; error?: string }> =>
+    window.electronAPI.invoke('loans:skip-payment', { loan_id: loanId, reason, capitalize_interest: capitalizeInterest }),
   loanRecompute: (loanId: string): Promise<{ ok?: boolean; totals?: { total_paid_to_date: number; total_principal_paid: number; total_interest_paid: number; current_balance: number; deferred_interest_balance: number }; corrected_count?: number; amortization_type?: string; schedule_payments?: number; expenses_backfilled?: number; error?: string }> =>
     window.electronAPI.invoke('loans:recompute', loanId),
   loanUpdatePayment: (payload: { payment_id: string; payment_date?: string; amount?: number; principal_amount?: number; interest_amount?: number; escrow_amount?: number; payment_method?: string; reference?: string; notes?: string; is_extra_principal?: boolean }): Promise<{ ok?: boolean; totals?: { paid: number; principal: number; interest: number; current_balance: number }; error?: string }> =>
