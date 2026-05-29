@@ -1469,7 +1469,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
               <div key={item.label} className="text-center">
                 <p className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-1">{item.label}</p>
                 <p className={`text-lg font-bold font-mono ${item.color}`}>
-                  ${Number(item.value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {/* Use formatCurrency (pins both min AND max fraction digits
+                      to 2). The bare toLocaleString with only minimumFractionDigits
+                      let sub-cent values render 3 decimals, e.g. $340.016. */}
+                  {formatCurrency(Number(item.value || 0))}
                 </p>
               </div>
             ))}
