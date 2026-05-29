@@ -445,31 +445,77 @@ export const NotesMemoField: React.FC<{ value: string; onChange: (v: string) => 
 };
 
 // ─── Tag input with autocomplete (#22) ─────────────────
+// Tag input — chip-based visual tags. Type a tag name and press Enter
+// or comma to add it. Click the × on a chip to remove. Autocomplete
+// dropdown suggests from existing tags as you type.
 export const TagsAutocomplete: React.FC<{
   value: string; onChange: (v: string) => void; allTags: string[];
 }> = ({ value, onChange, allTags }) => {
+  const [input, setInput] = useState('');
   const [suggest, setSuggest] = useState<string[]>([]);
-  const onTextChange = (v: string) => {
-    onChange(v);
-    const parts = v.split(',');
-    const cur = (parts[parts.length - 1] || '').trim().toLowerCase();
-    if (!cur) { setSuggest([]); return; }
-    setSuggest(allTags.filter(t => t.toLowerCase().startsWith(cur) && !parts.slice(0, -1).map(s => s.trim()).includes(t)).slice(0, 6));
-  };
-  const accept = (t: string) => {
-    const parts = value.split(',');
-    parts[parts.length - 1] = ` ${t}`;
-    onChange(parts.join(',').replace(/^\s+/, '') + ', ');
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Parse the comma-separated string into an array of trimmed tags.
+  const tags = (value || '').split(',').map(t => t.trim()).filter(Boolean);
+
+  const addTag = (tag: string) => {
+    const t = tag.trim();
+    if (!t || tags.includes(t)) return;
+    const next = [...tags, t].join(', ');
+    onChange(next);
+    setInput('');
     setSuggest([]);
+    inputRef.current?.focus();
   };
+
+  const removeTag = (tag: string) => {
+    const next = tags.filter(t => t !== tag).join(', ');
+    onChange(next);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+      e.preventDefault();
+      addTag(input);
+    }
+    if (e.key === 'Backspace' && !input && tags.length > 0) {
+      removeTag(tags[tags.length - 1]);
+    }
+  };
+
+  const handleInputChange = (v: string) => {
+    // Strip commas — they're the delimiter, not part of the tag name.
+    const clean = v.replace(/,/g, '');
+    setInput(clean);
+    if (!clean) { setSuggest([]); return; }
+    setSuggest(allTags.filter(t => t.toLowerCase().startsWith(clean.toLowerCase()) && !tags.includes(t)).slice(0, 6));
+  };
+
   return (
     <div className="relative">
-      <input type="text" className="block-input" placeholder="e.g. office, supplies"
-        value={value} onChange={e => onTextChange(e.target.value)} />
+      <div className="block-input flex flex-wrap items-center gap-1.5 min-h-[38px] cursor-text"
+        onClick={() => inputRef.current?.focus()}
+        style={{ paddingTop: 5, paddingBottom: 5 }}>
+        {tags.map(tag => (
+          <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium"
+            style={{ borderRadius: 4, background: 'rgba(96,165,250,0.15)', color: 'var(--color-accent-blue)' }}>
+            {tag}
+            <button type="button" onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
+              className="hover:text-accent-expense transition-colors" style={{ lineHeight: 1 }}>×</button>
+          </span>
+        ))}
+        <input ref={inputRef} type="text" className="flex-1 min-w-[80px] bg-transparent outline-none text-xs text-text-primary placeholder:text-text-muted"
+          placeholder={tags.length === 0 ? 'Type a tag and press Enter...' : 'Add more...'}
+          value={input} onChange={e => handleInputChange(e.target.value)} onKeyDown={handleKeyDown}
+          onBlur={() => { if (input.trim()) addTag(input); }} />
+      </div>
       {suggest.length > 0 && (
-        <div className="absolute z-10 mt-1 border border-border-primary bg-bg-secondary" style={{ borderRadius: 6 }}>
+        <div className="absolute z-10 mt-1 border border-border-primary bg-bg-secondary w-full" style={{ borderRadius: 6 }}>
           {suggest.map(t => (
-            <div key={t} className="px-3 py-1 text-xs cursor-pointer hover:bg-bg-tertiary" onClick={() => accept(t)}>{t}</div>
+            <div key={t} className="px-3 py-1.5 text-xs cursor-pointer hover:bg-bg-tertiary flex items-center gap-2"
+              onClick={() => addTag(t)}>
+              <span style={{ color: 'var(--color-accent-blue)' }}>+</span> {t}
+            </div>
           ))}
         </div>
       )}
