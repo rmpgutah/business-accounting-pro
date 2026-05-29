@@ -16119,7 +16119,11 @@ export function registerIpcHandlers(): void {
       if (!employee) return { html: '' };
 
       const company = dbInstance.prepare('SELECT * FROM companies WHERE id = ?').get(companyId) as any;
-      const equipment = dbInstance.prepare('SELECT * FROM employee_equipment WHERE employee_id = ? AND return_date IS NULL ORDER BY item_name').all(employeeId) as any[];
+      // ALL equipment ever issued to this employee — current, returned,
+      // lost, etc. (the prior `return_date IS NULL` filter hid returned
+      // items from the agreement). Future items are included automatically
+      // since there's no limit. A Status column distinguishes them.
+      const equipment = dbInstance.prepare('SELECT * FROM employee_equipment WHERE employee_id = ? ORDER BY assigned_date, item_name').all(employeeId) as any[];
 
       const esc = (s: any) => {
         if (s == null) return '';
@@ -16141,8 +16145,20 @@ export function registerIpcHandlers(): void {
       let equipmentRows = '';
       let penaltySection = '';
       let totalValue = 0;
+      const dispositionLabel = (item: any): string => {
+        const map: Record<string, string> = {
+          in_use: 'In Use', returned_good: 'Returned', returned_damaged: 'Returned (Damaged)',
+          lost: 'Lost', stolen: 'Stolen', not_returned: 'Not Returned', retired: 'Retired',
+        };
+        const d = item.disposition || (item.return_date ? 'returned_good' : 'in_use');
+        let label = map[d] || 'In Use';
+        if ((item.return_date || item.disposition_date) && d !== 'in_use') {
+          label += ` · ${fmtDate(item.return_date || item.disposition_date)}`;
+        }
+        return label;
+      };
       if (equipment.length === 0) {
-        equipmentRows = '<tr><td colspan="7" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
+        equipmentRows = '<tr><td colspan="8" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
       } else {
         const penaltyTypeLabel = (t: string, amt: number) => {
           const a = Number(amt) || 0;
@@ -16162,6 +16178,7 @@ export function registerIpcHandlers(): void {
             <td style="padding:8px;border:1px solid #d1d5db;text-transform:capitalize;">${esc(item.condition || 'good')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;text-align:right;">${val > 0 ? fmtCurrency(val) : '—'}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${fmtDate(item.assigned_date)}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${esc(dispositionLabel(item))}</td>
           </tr>`;
 
           // Penalties defined for this item.
@@ -16252,11 +16269,12 @@ export function registerIpcHandlers(): void {
         <th>Condition</th>
         <th style="text-align:right;">Value</th>
         <th>Date Issued</th>
+        <th>Status</th>
       </tr>
     </thead>
     <tbody>
       ${equipmentRows}
-      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td style="border:1px solid #d1d5db;"></td></tr>` : ''}
+      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td colspan="2" style="border:1px solid #d1d5db;"></td></tr>` : ''}
     </tbody>
   </table>
 
