@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
+import { SpendingTimeline, SpendingHeatmap } from './ExpenseVizCharts';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
 
@@ -425,6 +426,14 @@ const ExpenseAnalytics: React.FC = () => {
   return (
     <div className="space-y-4">
       {error && <ErrorBanner message={error} title="Failed to load analytics" onDismiss={() => setError('')} />}
+
+      {/* Spending timeline + daily heatmap (shared with Expense Detail Report) */}
+      {expenses.length > 0 && (
+        <>
+          <SpendingTimeline expenses={expenses} />
+          <SpendingHeatmap expenses={expenses} />
+        </>
+      )}
 
       {/* Stat tiles row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

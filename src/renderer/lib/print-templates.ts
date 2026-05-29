@@ -164,7 +164,7 @@ const baseStyles = `
     letter-spacing: 0.7px;
     color: var(--ink-faint);
     border-bottom: 1.5px solid var(--ink);
-    background: linear-gradient(180deg, var(--paper-tint) 0%, var(--paper-soft) 100%);
+    background: var(--paper-tint);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -224,10 +224,10 @@ const baseStyles = `
   .stamp-watermark.overdue { color: rgba(220, 38, 38, 0.10); }
   /* Accent gradient bar — subtle decorative element for headers */
   .accent-bar {
-    height: 4px;
-    background: linear-gradient(90deg, var(--ink) 0%, var(--accent) 50%, var(--ink) 100%);
+    height: 3px;
+    background: var(--ink);
     margin-bottom: 18px;
-    border-radius: 2px;
+    border-radius: 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -260,7 +260,7 @@ const baseStyles = `
     print-color-adjust: exact;
   }
   .card-surface.elevated {
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+    box-shadow: none;
   }
   h1, h2, h3, h4, h5, h6 { page-break-after: avoid; break-after: avoid; }
   img { max-width: 100%; height: auto; }
@@ -277,8 +277,8 @@ const baseStyles = `
   .rpt-badge {
     font-size: 11px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1.4px; color: var(--ink); padding: 7px 16px;
-    border: 2px solid var(--ink); border-radius: 6px;
-    background: linear-gradient(180deg, #ffffff 0%, var(--paper-tint) 100%);
+    border: 2px solid var(--ink); border-radius: 4px;
+    background: var(--paper);
   }
   .rpt-meta {
     display: flex; gap: 28px; margin-bottom: 22px; padding: 14px 18px;
@@ -297,24 +297,24 @@ const baseStyles = `
     font-size: 10px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1.6px; color: #fff; padding: 8px 14px;
     margin-top: 26px; margin-bottom: 0;
-    background: linear-gradient(90deg, var(--ink) 0%, #1e293b 100%);
-    border-radius: 6px 6px 0 0;
+    background: var(--ink);
+    border-radius: 3px 3px 0 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .rpt-section-alt { background: linear-gradient(90deg, #334155 0%, #475569 100%); }
+  .rpt-section-alt { background: #475569; }
   .rpt-stats {
     display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 12px; margin-bottom: 22px;
   }
   .rpt-stat {
     border: 1px solid var(--rule); padding: 14px 16px;
-    background: linear-gradient(180deg, #ffffff 0%, var(--paper-tint) 100%);
-    border-radius: 8px; position: relative; overflow: hidden;
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -4px rgba(15,23,42,0.06);
+    background: var(--paper);
+    border-radius: 3px; position: relative; overflow: hidden;
+    box-shadow: none;
   }
   .rpt-stat::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, var(--ink), var(--accent), var(--ink));
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--ink);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .rpt-stat-label {
@@ -391,12 +391,12 @@ const baseStyles = `
     margin-bottom: 16px; border-radius: 2px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .legal-accent-bar.tone-reminder { background: linear-gradient(90deg, #1e40af 0%, #3b82f6 100%); }
-  .legal-accent-bar.tone-warning  { background: linear-gradient(90deg, #b45309 0%, #f59e0b 100%); }
-  .legal-accent-bar.tone-final    { background: linear-gradient(90deg, #991b1b 0%, #dc2626 100%); }
-  .legal-accent-bar.tone-demand   { background: linear-gradient(90deg, #0f172a 0%, #475569 100%); }
-  .legal-accent-bar.tone-settlement { background: linear-gradient(90deg, #155e75 0%, #0891b2 100%); }
-  .legal-accent-bar.tone-confirm  { background: linear-gradient(90deg, #166534 0%, #16a34a 100%); }
+  .legal-accent-bar.tone-reminder { background: #1e40af; }
+  .legal-accent-bar.tone-warning  { background: #b45309; }
+  .legal-accent-bar.tone-final    { background: #991b1b; }
+  .legal-accent-bar.tone-demand   { background: #0f172a; }
+  .legal-accent-bar.tone-settlement { background: #155e75; }
+  .legal-accent-bar.tone-confirm  { background: #166534; }
   .legal-date {
     text-align: right; font-size: 9.5pt; margin-bottom: 18px;
     font-family: 'Inter', sans-serif; color: #475569;
@@ -602,10 +602,10 @@ const baseStyles = `
   .fd-letterhead-right { text-align: right; min-width: 220px; flex-shrink: 0; }
   /* Subtle accent bar above the letterhead (decorative) */
   .fd-letterhead-accent {
-    height: 4px;
-    background: linear-gradient(90deg, var(--ink) 0%, var(--accent) 60%, var(--ink) 100%);
+    height: 3px;
+    background: var(--ink);
     margin-bottom: 20px;
-    border-radius: 2px;
+    border-radius: 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .fd-co-name {
@@ -676,9 +676,9 @@ const baseStyles = `
     float: right; min-width: 320px; max-width: 360px;
     padding: 0; background: var(--paper);
     border: 1px solid var(--rule-strong);
-    border-radius: 8px;
+    border-radius: 4px;
     overflow: hidden;
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -2px rgba(15,23,42,0.04);
+    box-shadow: none;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .fd-totals-card .totals-rows { padding: 14px 18px 6px; }
@@ -699,7 +699,7 @@ const baseStyles = `
   /* Hero TOTAL row — gradient accent strip background */
   .fd-totals-card .totals-grand {
     margin-top: 4px; padding: 16px 18px;
-    background: linear-gradient(180deg, var(--ink) 0%, #1e293b 100%);
+    background: var(--ink);
     color: #fff;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
@@ -766,7 +766,7 @@ function reportHeader(companyName: string, docTitle: string, dateRange?: string)
       <div class="rpt-co" style="font-size: 22px; letter-spacing: -0.4px;">${esc(companyName)}</div>
       ${dateRange ? `<div class="rpt-co-sub" style="font-size: 11px; color: var(--ink-faint); margin-top: 4px; font-weight: 500;">${esc(dateRange)}</div>` : ''}
     </div>
-    <div class="rpt-badge" style="border-color: var(--ink); color: var(--ink); padding: 7px 16px; letter-spacing: 1.4px; font-size: 11px; background: linear-gradient(180deg, #fff, var(--paper-tint)); -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(docTitle)}</div>
+    <div class="rpt-badge" style="border-color: var(--ink); color: var(--ink); padding: 7px 16px; letter-spacing: 1.4px; font-size: 11px; background: var(--paper); -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(docTitle)}</div>
   </div>`;
 }
 
@@ -1570,10 +1570,10 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .totals-box {
   width: 320px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #ffffff;
   overflow: hidden;
-  box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 12px -4px rgba(15,23,42,0.06);
+  box-shadow: none;
 }
 .totals-box > .totals-row,
 .totals-box > [class^="totals-row"] { padding-left: 18px; padding-right: 18px; }
@@ -1595,7 +1595,7 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 }
 .totals-row:first-child { padding-top: 14px; }
 .totals-total {
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  background: #0f172a;
   color: #ffffff !important;
   padding: 14px 18px !important;
   margin-top: 6px;
@@ -2037,8 +2037,8 @@ export function generatePayStubHTML(
     position: relative;
   }
   .header::before {
-    content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg, #0f172a 0%, ${psAccent} 50%, #0f172a 100%);
+    content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 3px;
+    background: #0f172a;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .co-name { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; }
@@ -2049,8 +2049,8 @@ export function generatePayStubHTML(
     letter-spacing: 1.6px; color: #0f172a;
     padding: 8px 18px;
     border: 2px solid #0f172a;
-    border-radius: 6px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 4px;
+    background: #ffffff;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
@@ -2064,13 +2064,13 @@ export function generatePayStubHTML(
     margin-bottom: 24px;
     overflow: hidden;
     background: #ffffff;
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -4px rgba(15,23,42,0.05);
+    box-shadow: none;
   }
   .info-cell {
     padding: 11px 14px;
     border-right: 1px solid #e2e8f0;
     border-bottom: 1px solid #e2e8f0;
-    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+    background: #ffffff;
   }
   .info-cell:nth-child(4n) { border-right: none; }
   .info-cell:nth-last-child(-n+4) { border-bottom: none; }
@@ -2086,14 +2086,14 @@ export function generatePayStubHTML(
     font-size: 10px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1.6px; color: #fff;
     padding: 8px 14px; margin-top: 22px; margin-bottom: 0;
-    border-radius: 6px 6px 0 0;
+    border-radius: 3px 3px 0 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .section-earn    { background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%); }
-  .section-ded     { background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 100%); }
-  .section-summary { background: linear-gradient(90deg, #14532d 0%, #166534 100%); }
-  .section-employer{ background: linear-gradient(90deg, #475569 0%, #64748b 100%); }
-  .section-deposit { background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%); }
+  .section-earn    { background: #0f172a; }
+  .section-ded     { background: #7f1d1d; }
+  .section-summary { background: #14532d; }
+  .section-employer{ background: #475569; }
+  .section-deposit { background: #1e3a8a; }
 
   /* ── Employee identity block ── */
   .id-block {
@@ -2178,19 +2178,19 @@ export function generatePayStubHTML(
     align-items: center;
     margin-top: 26px;
     padding: 22px 26px;
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #f0fdf4 100%);
-    border: 2px solid #86efac;
-    border-radius: 10px;
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 4px;
     page-break-inside: avoid;
     break-inside: avoid;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 0 rgba(22,163,74,0.06), 0 8px 16px -6px rgba(22,163,74,0.16);
+    box-shadow: none;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .net-box::before {
-    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 5px;
-    background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+    background: #16a34a;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .net-current { padding-left: 8px; }
@@ -2915,7 +2915,7 @@ export function generateReportHTML(
   const summaryHTML = summary && summary.length > 0 ? `
     <div class="no-break" style="margin-top:24px;">
       <div class="rpt-section" style="margin-top:0;">Summary</div>
-      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;background:#ffffff;box-shadow:0 1px 0 rgba(15,23,42,0.04),0 4px 12px -4px rgba(15,23,42,0.06);-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 3px 3px;overflow:hidden;background:#ffffff;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       ${summary.map((s, i) => {
         const color = s.accent === 'green' ? '#16a34a' : s.accent === 'red' ? '#dc2626' : '#0f172a';
         const bg = i % 2 === 0 ? 'background:#f8fafc;' : 'background:#ffffff;';
@@ -3679,24 +3679,200 @@ body { background: #fff; }
 
 
 // ═══════════════════════════════════════════════════════════════
+// EXPENSE DETAIL REPORT — front-page analytics helpers
+// ═══════════════════════════════════════════════════════════════
+
+// Monthly spending timeline — pure inline SVG (bars + trend line).
+// Buckets expenses by YYYY-MM and renders a print-safe bar chart with a
+// smoothed trend polyline overlaid. Returns '' when there is nothing to show.
+function expenseTimelineSVG(expenses: Array<{ date: string; amount: number }>): string {
+  const byMonth = new Map<string, number>();
+  for (const e of expenses) {
+    const key = (e.date || '').slice(0, 7); // YYYY-MM
+    if (!key) continue;
+    byMonth.set(key, (byMonth.get(key) || 0) + (Number(e.amount) || 0));
+  }
+  const months = Array.from(byMonth.keys()).sort();
+  if (months.length === 0) return '';
+
+  const vals = months.map((m) => byMonth.get(m) || 0);
+  const max = Math.max(...vals, 1);
+  const total = vals.reduce((s, v) => s + v, 0);
+  const mean = total / months.length;
+
+  const W = 720, H = 165;
+  const padT = 16, padB = 30, padX = 6;
+  const chartH = H - padT - padB;
+  const n = months.length;
+  const slot = (W - padX * 2) / n;
+  const barW = Math.min(slot * 0.5, 54);
+
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split('-');
+    const d = new Date(Number(y), Number(m) - 1, 1);
+    const lbl = d.toLocaleDateString('en-US', { month: 'short' });
+    return Number(m) === 1 ? `${lbl} '${y.slice(2)}` : lbl;
+  };
+  const compact = (v: number) =>
+    v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `$${Math.round(v)}`;
+
+  const cx = (i: number) => padX + slot * i + slot / 2;
+  const cy = (v: number) => padT + chartH - (v / max) * chartH;
+
+  // Flat, formal bars — single solid ink-slate fill, square edges
+  const bars = months.map((m, i) => {
+    const v = byMonth.get(m) || 0;
+    const x = cx(i) - barW / 2;
+    const y = cy(v);
+    const h = padT + chartH - y;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 0).toFixed(1)}" fill="#334155" />
+      <text x="${cx(i).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="600" fill="#334155" font-family="'SF Mono',Menlo,monospace">${compact(v)}</text>
+      <text x="${cx(i).toFixed(1)}" y="${(H - 12).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="600" fill="#64748b">${monthLabel(m)}</text>`;
+  }).join('');
+
+  // Hairline gridlines
+  const gridLines = [0.25, 0.5, 0.75, 1].map((f) => {
+    const y = padT + chartH - chartH * f;
+    return `<line x1="${padX}" y1="${y.toFixed(1)}" x2="${(W - padX).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#eef2f7" stroke-width="1" />`;
+  }).join('');
+
+  // Dashed mean reference line (formal analytical marker)
+  const meanY = cy(mean);
+  const meanLine = `<line x1="${padX}" y1="${meanY.toFixed(1)}" x2="${(W - padX).toFixed(1)}" y2="${meanY.toFixed(1)}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" />
+    <text x="${(W - padX).toFixed(1)}" y="${(meanY - 4).toFixed(1)}" text-anchor="end" font-size="8" font-weight="600" fill="#94a3b8" letter-spacing="0.5">AVG ${compact(mean)}</text>`;
+
+  // Peak / quiet captions
+  let peakI = 0, lowI = 0;
+  vals.forEach((v, i) => { if (v > vals[peakI]) peakI = i; if (v < vals[lowI]) lowI = i; });
+  const caption = n > 1
+    ? `<div class="exp-viz-cap">Peak: ${monthLabel(months[peakI])} (${fmt(vals[peakI])}) &nbsp;&middot;&nbsp; Lowest: ${monthLabel(months[lowI])} (${fmt(vals[lowI])}) &nbsp;&middot;&nbsp; Monthly average: ${fmt(mean)}</div>`
+    : '';
+
+  return `<div class="exp-viz-card no-break">
+    <div class="exp-viz-title">Spending Over Time</div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      ${gridLines}
+      ${bars}
+      ${meanLine}
+    </svg>${caption}
+  </div>`;
+}
+
+// Date → spending heatmap — GitHub-style calendar grid, pure inline SVG.
+// Each cell is one day; colour intensity scales with that day's total spend.
+// Columns are ISO weeks (Sunday-aligned), rows are weekdays.
+function expenseHeatmapSVG(expenses: Array<{ date: string; amount: number }>): string {
+  const byDay = new Map<string, number>();
+  let min: string | null = null, max: string | null = null;
+  for (const e of expenses) {
+    const d = (e.date || '').slice(0, 10);
+    if (!d) continue;
+    byDay.set(d, (byDay.get(d) || 0) + (Number(e.amount) || 0));
+    if (!min || d < min) min = d;
+    if (!max || d > max) max = d;
+  }
+  if (!min || !max) return '';
+
+  const start = new Date(min + 'T12:00:00');
+  start.setDate(start.getDate() - start.getDay()); // align to Sunday
+  const end = new Date(max + 'T12:00:00');
+
+  const maxVal = Math.max(...Array.from(byDay.values()), 1);
+  // 5-step monochrome ink ramp (index 0 = no spend) — flat, formal
+  const ramp = ['#eef2f7', '#cdd7e4', '#9fb0c8', '#6e84a4', '#41587d', '#1e293b'];
+  const bucket = (v: number) => {
+    if (v <= 0) return 0;
+    const r = v / maxVal;
+    if (r <= 0.2) return 1;
+    if (r <= 0.4) return 2;
+    if (r <= 0.6) return 3;
+    if (r <= 0.8) return 4;
+    return 5;
+  };
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const cell = 12, gap = 3, step = cell + gap;
+  const padL = 26, padT = 16;
+
+  const cells: string[] = [];
+  const monthMarks: string[] = [];
+  let lastMonth = -1;
+  let activeDays = 0;
+  let peakDay = ''; let peakVal = 0;
+  const cur = new Date(start);
+  let week = 0;
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow === 0) week = Math.round((cur.getTime() - start.getTime()) / (7 * 86400000));
+    const key = iso(cur);
+    const v = byDay.get(key) || 0;
+    if (v > 0) activeDays++;
+    if (v > peakVal) { peakVal = v; peakDay = key; }
+    const x = padL + week * step;
+    const y = padT + dow * step;
+    cells.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="1" fill="${ramp[bucket(v)]}"><title>${key}: ${fmt(v)}</title></rect>`);
+    if (cur.getMonth() !== lastMonth && dow <= 6) {
+      lastMonth = cur.getMonth();
+      monthMarks.push(`<text x="${x}" y="${padT - 5}" font-size="9" font-weight="600" fill="#64748b">${cur.toLocaleDateString('en-US', { month: 'short' })}</text>`);
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const totalWeeks = Math.round((end.getTime() - start.getTime()) / (7 * 86400000)) + 1;
+  const W = padL + totalWeeks * step + 4;
+  const H = padT + 7 * step + 4;
+  const dayLabels = [['Mon', 1], ['Wed', 3], ['Fri', 5]]
+    .map(([lbl, d]) => `<text x="0" y="${padT + (d as number) * step + cell - 2}" font-size="8" fill="#94a3b8">${lbl}</text>`)
+    .join('');
+
+  const legend = ramp.map((c, i) => `<rect x="${i * (cell + 2)}" y="0" width="${cell}" height="${cell}" rx="1" fill="${c}" />`).join('');
+
+  const peakLabel = peakDay
+    ? new Date(peakDay + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—';
+  const caption = `<div class="exp-viz-cap">Busiest day: ${peakLabel} (${fmt(peakVal)}) &nbsp;&middot;&nbsp; ${activeDays} active spending day${activeDays === 1 ? '' : 's'}</div>`;
+
+  return `<div class="exp-viz-card no-break">
+    <div class="exp-viz-title" style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;">
+      <span>Daily Spending Heatmap</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:8px;font-weight:600;color:#94a3b8;text-transform:none;letter-spacing:0;">
+        Less
+        <svg width="${ramp.length * (cell + 2)}" height="${cell}" style="-webkit-print-color-adjust:exact;print-color-adjust:exact;">${legend}</svg>
+        More
+      </span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" preserveAspectRatio="xMinYMid meet" style="display:block;max-width:100%;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      ${dayLabels}
+      ${monthMarks.join('')}
+      ${cells.join('')}
+    </svg>${caption}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // EXPENSE DETAIL REPORT
 // ═══════════════════════════════════════════════════════════════
-export function generateExpenseReportHTML(
-  expenses: Array<{
-    date: string;
+interface ExpenseReportRow {
+  date: string;
+  description: string;
+  vendor_name: string;
+  category_name: string;
+  amount: number;
+  tax_amount: number;
+  status: string;
+  project_name?: string | null;
+  is_tax_deductible?: number | boolean | null;
+  payment_method?: string | null;
+  line_items?: Array<{
     description: string;
-    vendor_name: string;
-    category_name: string;
+    quantity: number;
+    unit_price: number;
     amount: number;
-    tax_amount: number;
-    status: string;
-    line_items?: Array<{
-      description: string;
-      quantity: number;
-      unit_price: number;
-      amount: number;
-    }>;
-  }>,
+  }>;
+}
+
+export function generateExpenseReportHTML(
+  expenses: ExpenseReportRow[],
   companyName: string,
   dateRange: string,
   groupBy: string
@@ -3720,7 +3896,7 @@ export function generateExpenseReportHTML(
     catch { return d; }
   };
 
-  const expenseRows = expenses.map(e => {
+  const renderRow = (e: ExpenseReportRow) => {
     const mainRow = `<tr>
       <td style="white-space:nowrap;">${fmtDateShort(e.date)}</td>
       <td>${esc(e.description) || '\u2014'}</td>
@@ -3731,7 +3907,7 @@ export function generateExpenseReportHTML(
     </tr>`;
 
     const lineItemRows = e.line_items && e.line_items.length > 0
-      ? `<tr><td colspan="6" style="padding:0 0 0 32px;">
+      ? `<tr><td colspan="6" style="padding:0 0 0 28px;">
           <table style="width:100%;margin:4px 0 8px;">
             <thead><tr>
               <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;">Description</th>
@@ -3752,11 +3928,67 @@ export function generateExpenseReportHTML(
       : '';
 
     return mainRow + lineItemRows;
-  }).join('');
+  };
+
+  // \u2500\u2500 Grouping \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const quarterOf = (d: string) => {
+    const m = parseInt((d || '').substring(5, 7), 10);
+    const y = (d || '').substring(0, 4);
+    if (!m) return 'Undated';
+    if (m <= 3) return `${y} \u00b7 Q1`;
+    if (m <= 6) return `${y} \u00b7 Q2`;
+    if (m <= 9) return `${y} \u00b7 Q3`;
+    return `${y} \u00b7 Q4`;
+  };
+  const pmLabel = (m: string | null | undefined) => {
+    const map: Record<string, string> = { cash: 'Cash', check: 'Check', credit_card: 'Credit Card', bank_transfer: 'Bank Transfer' };
+    return map[(m || '').toLowerCase()] || (m ? esc(m) : 'Unspecified');
+  };
+  const groupKey = (e: ExpenseReportRow): string => {
+    switch (groupBy) {
+      case 'category': return e.category_name || 'Uncategorized';
+      case 'vendor': return e.vendor_name || 'No Vendor';
+      case 'project': return e.project_name || 'No Project';
+      case 'quarter': return quarterOf(e.date);
+      case 'tax_deductible': return e.is_tax_deductible ? 'Tax Deductible' : 'Non-Deductible';
+      case 'payment_method': return pmLabel(e.payment_method);
+      default: return '';
+    }
+  };
+
+  const isGrouped = groupBy && groupBy !== 'none';
+  const groups: Array<{ label: string; total: number; rows: ExpenseReportRow[] }> = [];
+  if (isGrouped) {
+    const map = new Map<string, ExpenseReportRow[]>();
+    for (const e of expenses) {
+      const k = groupKey(e);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(e);
+    }
+    for (const [label, rows] of map.entries()) {
+      groups.push({ label, total: rows.reduce((s, e) => s + (Number(e.amount) || 0), 0), rows });
+    }
+    groups.sort((a, b) => b.total - a.total);
+  }
+  const groupByLabel = ({
+    category: 'Category', vendor: 'Vendor', project: 'Project', quarter: 'Quarter',
+    tax_deductible: 'Tax Status', payment_method: 'Payment Method',
+  } as Record<string, string>)[groupBy] || '';
+
+  // Shared table head — widened Date column + tighter padding so it never crops
+  const detailColgroup = `<colgroup>
+      <col style="width:16%;" /><col style="width:21%;" /><col style="width:17%;" />
+      <col style="width:16%;" /><col style="width:15%;" /><col style="width:15%;" />
+    </colgroup>`;
+  const detailHead = `<thead><tr>
+      <th>Date</th><th>Description</th><th>Vendor</th><th>Category</th>
+      <th class="text-right">Amount</th><th style="text-align:center;">Status</th>
+    </tr></thead>`;
 
   // Compute stats
   const totalTax = expenses.reduce((s, e) => s + (Number(e.tax_amount) || 0), 0);
   const avgExpense = expenses.length > 0 ? grandTotal / expenses.length : 0;
+  const largestExpense = expenses.reduce((m, e) => Math.max(m, Number(e.amount) || 0), 0);
 
   // Category breakdown
   const catTotals: Record<string, number> = {};
@@ -3764,79 +3996,197 @@ export function generateExpenseReportHTML(
   const topCategories = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxCat = Math.max(...topCategories.map(([, v]) => v), 1);
 
+  // Front-page analytics visualisations (pure inline SVG, print-safe)
+  const timelineSVG = expenseTimelineSVG(expenses as any);
+  const heatmapSVG = expenseHeatmapSVG(expenses as any);
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 ${baseStyles}
+</style>
+<style>
+  /* ── Expense Detail Report — flat, formal financial-statement styling ──
+     Scoped under .exp-report so shared .rpt-* classes elsewhere are unaffected.
+     No gradients, no shadows, hairline rules, restrained monochrome palette. */
+
+  /* Formal letterhead */
+  .exp-report .exp-hdr {
+    border-top: 2px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 16px 0 14px; margin-bottom: 20px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .exp-report .exp-hdr-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 28px; }
+  .exp-report .exp-hdr-eyebrow {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 2.4px; color: var(--ink-faint); margin-bottom: 7px;
+  }
+  .exp-report .exp-hdr-co { font-size: 23px; font-weight: 800; color: var(--ink); letter-spacing: -0.3px; line-height: 1.12; }
+  .exp-report .exp-hdr-period {
+    font-size: 10.5px; font-weight: 500; color: var(--ink-faint);
+    margin-top: 5px; font-variant-numeric: tabular-nums; letter-spacing: 0.2px;
+  }
+  .exp-report .exp-hdr-total { text-align: right; flex-shrink: 0; padding-left: 26px; border-left: 1px solid var(--rule); }
+  .exp-report .exp-hdr-total-lbl {
+    font-size: 8.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.8px; color: var(--ink-faint);
+  }
+  .exp-report .exp-hdr-total-val {
+    font-size: 30px; font-weight: 800; color: var(--ink); letter-spacing: -0.6px;
+    line-height: 1.05; margin-top: 5px; font-variant-numeric: tabular-nums;
+  }
+  .exp-report .exp-hdr-total-sub { font-size: 9.5px; color: var(--ink-faint); margin-top: 5px; font-variant-numeric: tabular-nums; }
+
+  /* Flat KPI tiles — no gradient, no shadow, hairline border, square */
+  .exp-report .rpt-stats { gap: 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .exp-report .rpt-stat {
+    background: var(--paper); border: none; border-radius: 0; box-shadow: none;
+    border-left: 1px solid var(--rule); padding: 13px 16px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .exp-report .rpt-stat:first-child { border-left: none; }
+  .exp-report .rpt-stat::before { display: none; content: none; }
+  .exp-report .rpt-stat-val { color: var(--ink); font-size: 19px; font-weight: 800; }
+  .exp-report .rpt-stat-label { color: var(--ink-faint); }
+
+  /* Flat section bars + analytics cards */
+  .exp-report .rpt-section,
+  .exp-report .rpt-section-alt {
+    background: var(--ink); border-radius: 0; letter-spacing: 1.8px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .exp-report .exp-viz-card {
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: 11px 16px 8px; margin-bottom: 11px; background: var(--paper);
+    box-shadow: none; break-inside: avoid; page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .exp-report .exp-viz-title {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.6px; color: var(--ink-faint); margin-bottom: 8px;
+    padding-bottom: 7px; border-bottom: 1px solid var(--rule-soft);
+  }
+  /* Cover spacing — compact so all front matter fits one page */
+  .exp-report .exp-cover .rpt-section { margin-top: 14px; }
+  .exp-report .exp-cover .exp-cat-row { padding: 3.5px 0; }
+  .exp-report .exp-cover .exp-cat-card { break-inside: avoid; page-break-inside: avoid; }
+  .exp-report .exp-hdr { padding: 14px 0 12px; margin-bottom: 16px; }
+  .exp-report .exp-viz-cap {
+    font-size: 9px; color: var(--ink-faint); margin-top: 8px;
+    padding-top: 8px; border-top: 1px solid var(--rule-soft);
+    font-variant-numeric: tabular-nums; letter-spacing: 0.2px;
+  }
+  /* Flat category breakdown */
+  .exp-report .exp-cat-row { display: flex; align-items: center; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--rule-soft); }
+  .exp-report .exp-cat-row:last-child { border-bottom: none; }
+  .exp-report .exp-cat-name { width: 190px; font-size: 10px; font-weight: 600; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exp-report .exp-cat-track { flex: 1; height: 9px; background: var(--rule-soft); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .exp-report .exp-cat-fill { height: 100%; background: var(--ink-muted); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .exp-report .exp-cat-amt { width: 84px; text-align: right; font-size: 10px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; font-family: 'SF Mono',Menlo,monospace; }
+  .exp-report .exp-cat-pct { width: 40px; text-align: right; font-size: 9px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  /* Front matter occupies its own cover page; transactions follow */
+  .exp-report .exp-cover { page-break-after: always; break-after: page; }
+  /* Tighter, formal table padding so the Date column never truncates */
+  .exp-report .exp-detail-table th,
+  .exp-report .exp-detail-table td { padding: 7px 10px; }
+  .exp-report .exp-detail-table td:first-child { font-variant-numeric: tabular-nums; }
+  /* Per-group header band */
+  .exp-report .exp-group-hd {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 8px 12px; margin-top: 16px;
+    background: var(--paper-tint); border: 1px solid var(--rule); border-bottom: 2px solid var(--ink);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .exp-report .exp-group-hd .g-lbl { font-size: 11px; font-weight: 800; color: var(--ink); text-transform: uppercase; letter-spacing: 0.8px; }
+  .exp-report .exp-group-hd .g-tot { font-size: 11px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; font-family: 'SF Mono',Menlo,monospace; }
+  .exp-report .exp-group-wrap { page-break-inside: auto; }
 </style></head>
 <body>
-<div class="rpt-page">
-  ${reportHeader(companyName, 'Expense Detail Report', dateRange)}
-
-  <!-- Stats -->
-  <div class="rpt-stats">
-    <div class="rpt-stat" style="border-left:3px solid #dc2626;">
-      <div class="rpt-stat-label">Grand Total</div>
-      <div class="rpt-stat-val" style="color:#dc2626;">${fmt(grandTotal)}</div>
+<div class="rpt-page exp-report">
+ <div class="exp-cover">
+  <!-- Formal letterhead -->
+  <div class="exp-hdr no-break">
+    <div class="exp-hdr-row">
+      <div>
+        <div class="exp-hdr-eyebrow">Expense Detail Report</div>
+        <div class="exp-hdr-co">${esc(companyName)}</div>
+        ${dateRange ? `<div class="exp-hdr-period">${esc(dateRange)}</div>` : ''}
+      </div>
+      <div class="exp-hdr-total">
+        <div class="exp-hdr-total-lbl">Total Spend</div>
+        <div class="exp-hdr-total-val">${fmt(grandTotal)}</div>
+        <div class="exp-hdr-total-sub">${expenses.length} transactions &middot; avg ${fmt(avgExpense)}</div>
+      </div>
     </div>
-    <div class="rpt-stat" style="border-left:3px solid #0f172a;">
+  </div>
+
+  <!-- KPI tiles -->
+  <div class="rpt-stats" style="margin-bottom:12px;">
+    <div class="rpt-stat">
       <div class="rpt-stat-label">Transactions</div>
       <div class="rpt-stat-val">${expenses.length}</div>
     </div>
-    <div class="rpt-stat" style="border-left:3px solid #64748b;">
+    <div class="rpt-stat">
       <div class="rpt-stat-label">Average</div>
       <div class="rpt-stat-val">${fmt(avgExpense)}</div>
     </div>
-    <div class="rpt-stat" style="border-left:3px solid #eab308;">
+    <div class="rpt-stat">
+      <div class="rpt-stat-label">Largest</div>
+      <div class="rpt-stat-val">${fmt(largestExpense)}</div>
+    </div>
+    <div class="rpt-stat">
       <div class="rpt-stat-label">Total Tax</div>
       <div class="rpt-stat-val">${fmt(totalTax)}</div>
     </div>
   </div>
 
-  <!-- Top Categories Mini-Chart -->
+  <!-- Spending timeline + daily heatmap -->
+  ${timelineSVG}
+  ${heatmapSVG}
+
+  <!-- Top Categories -->
   ${topCategories.length > 0 ? `
-  <div class="rpt-section rpt-section-alt">Top Categories</div>
-  <div style="padding:8px 0 16px;">
+  <div class="rpt-section">Top Categories</div>
+  <div class="exp-viz-card" style="border-top:none;border-radius:0 0 3px 3px;margin-bottom:14px;">
     ${topCategories.map(([cat, amount]) => {
       const pct = maxCat > 0 ? (amount / maxCat) * 100 : 0;
-      return `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
-        <span style="width:180px;font-size:10px;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(cat)}</span>
-        <div style="flex:1;height:14px;background:#f1f5f9;">
-          <div style="height:100%;width:${pct}%;background:#ef4444;opacity:0.7;"></div>
-        </div>
-        <span style="width:80px;text-align:right;font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(amount)}</span>
+      const sharePct = grandTotal > 0 ? (amount / grandTotal) * 100 : 0;
+      return `<div class="exp-cat-row">
+        <span class="exp-cat-name">${esc(cat)}</span>
+        <div class="exp-cat-track"><div class="exp-cat-fill" style="width:${pct.toFixed(1)}%;"></div></div>
+        <span class="exp-cat-amt">${fmt(amount)}</span>
+        <span class="exp-cat-pct">${sharePct.toFixed(0)}%</span>
       </div>`;
     }).join('')}
   </div>
   ` : ''}
+ </div><!-- /exp-cover -->
 
   <!-- Detail Table -->
-  <div class="rpt-section">Transaction Detail</div>
-  <table style="table-layout:fixed;">
-    <colgroup>
-      <col style="width:13%;" />
-      <col style="width:24%;" />
-      <col style="width:17%;" />
-      <col style="width:17%;" />
-      <col style="width:14%;" />
-      <col style="width:15%;" />
-    </colgroup>
-    <thead><tr>
-      <th>Date</th>
-      <th>Description</th>
-      <th>Vendor</th>
-      <th>Category</th>
-      <th class="text-right">Amount</th>
-      <th style="text-align:center;">Status</th>
-    </tr></thead>
-    <tbody>${expenseRows}</tbody>
-  </table>
+  <div class="rpt-section">Transaction Detail${isGrouped ? ` — Grouped by ${esc(groupByLabel)}` : ''}</div>
+  ${isGrouped ? groups.map(g => `
+  <div class="exp-group-wrap no-break">
+    <div class="exp-group-hd">
+      <span class="g-lbl">${esc(g.label)}</span>
+      <span class="g-tot">${fmt(g.total)} &middot; ${g.rows.length} item${g.rows.length === 1 ? '' : 's'}</span>
+    </div>
+    <table class="exp-detail-table" style="table-layout:fixed;">
+      ${detailColgroup}${detailHead}
+      <tbody>${g.rows.map(renderRow).join('')}</tbody>
+    </table>
+  </div>`).join('') : `
+  <table class="exp-detail-table" style="table-layout:fixed;">
+    ${detailColgroup}${detailHead}
+    <tbody>${expenses.map(renderRow).join('')}</tbody>
+  </table>`}
 
   <!-- Grand Total -->
   <div class="no-break" style="margin-top:16px;">
-    <div class="rpt-section" style="background:#7f1d1d;margin-top:0;">Total</div>
-    <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#fef2f2;font-size:13px;">
-      <span style="font-weight:800;color:#0f172a;">Grand Total (${expenses.length} transactions)</span>
-      <span style="font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(grandTotal)}</span>
+    <div class="rpt-section" style="margin-top:0;">Total</div>
+    <div style="display:flex;justify-content:space-between;padding:11px 14px;background:var(--paper-tint);border:1px solid var(--rule);border-top:none;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <span style="font-weight:700;color:var(--ink);">Grand Total (${expenses.length} transactions)</span>
+      <span style="font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(grandTotal)}</span>
     </div>
   </div>
 
