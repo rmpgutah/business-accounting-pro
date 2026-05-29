@@ -16407,12 +16407,24 @@ export function registerIpcHandlers(): void {
       };
       const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
       const fmtCurrency = (n: any) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n) || 0);
+      // Humanize a stored enum/slug value for display: turn snake_case /
+      // kebab-case tokens into Title Case ("on_site" → "On Site",
+      // "operations" → "Operations"). Preserves intentional user casing —
+      // a word that ISN'T all-lowercase (e.g. "iPhone", "PTO", "McAfee")
+      // is left untouched, so we never clobber how the user actually typed
+      // it. Only all-lowercase tokens get their first letter capitalized.
+      const humanize = (s: any): string => String(s ?? '')
+        .replace(/[_-]+/g, ' ')
+        .split(' ')
+        .map((w) => (w && w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+        .join(' ')
+        .trim();
 
       const companyName = esc(company?.name || '');
       const companyAddr = company ? [company.address_line1, company.address_line2, `${company.city || ''} ${company.state || ''} ${company.zip || ''}`].filter(Boolean).join(', ') : '';
 
       const empName = esc(employee.name || '');
-      const empTitle = esc(employee.job_title || '');
+      const empTitle = esc(humanize(employee.job_title || ''));
       const empAddr = [employee.address_line1, employee.address_line2, `${employee.city || ''} ${employee.state || ''} ${employee.zip || ''}`].filter(Boolean).join(', ');
       const empStart = fmtDate(employee.start_date);
       const empEmail = esc(employee.email || '');
@@ -16421,9 +16433,9 @@ export function registerIpcHandlers(): void {
       const payType = employee.pay_type === 'salary' ? 'Salary' : 'Hourly';
       const payLabel = employee.pay_type === 'salary' ? 'Annual Salary' : 'Hourly Rate';
       const empPay = fmtCurrency(employee.pay_rate);
-      const empSchedule = employee.pay_schedule?.charAt(0).toUpperCase() + employee.pay_schedule?.slice(1) || '';
-      const empDept = esc(employee.department || '');
-      const empLoc = esc(employee.work_location || '');
+      const empSchedule = humanize(employee.pay_schedule || '');
+      const empDept = esc(humanize(employee.department || ''));
+      const empLoc = esc(humanize(employee.work_location || ''));
       const today = fmtDate(new Date().toISOString());
 
       const html = `<!DOCTYPE html>
