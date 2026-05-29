@@ -1391,19 +1391,29 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // Recompute loan running totals by replaying all recorded payments
-  // through the correct daily-accrual split. Use this to repair
-  // historical data after the partial-payment interest bug, OR after
-  // editing the loan's rate/principal. Idempotent.
+  // Comprehensive loan REPAIR. One button that makes a loan internally
+  // consistent again. It:
+  //   1. Replays every payment with correct daily-accrual splits.
+  //   2. Re-derives loan totals (FIXED: interest/principal were swapped
+  //      into the wrong columns here previously — that's why "Interest
+  //      Paid" showed the principal sum).
+  //   3. Auto-corrects amortization_type when a term loan was mis-saved
+  //      as interest_only (its stored payment clearly amortizes).
+  //   4. Regenerates the forward schedule from the CURRENT balance over
+  //      the remaining term, so the schedule reflects reality after
+  //      payments instead of the stale origination snapshot.
+  //   5. Backfills missing linked Interest/Principal expense rows for
+  //      payments recorded before cross-posting existed.
+  // Idempotent — safe to run repeatedly.
   ipcMain.handle('loans:recompute', (_event, loanId: string) => {
     try {
       const dbi = db.getDb();
       const loan = db.getById('loans', loanId) as any;
       if (!loan) return { error: 'Loan not found' };
-      const { replayPayments } = require('../services/loan-calculator');
+      const { replayPayments, generateSchedule, periodicPayment } = require('../services/loan-calculator');
 
       const payments = dbi.prepare(
-        "SELECT id, payment_date, amount, is_extra_principal, escrow_amount FROM loan_payments WHERE loan_id = ? ORDER BY payment_date"
+        "SELECT id, payment_date, amount, is_extra_principal, escrow_amount, payment_method, related_expense_id, related_principal_expense_id FROM loan_payments WHERE loan_id = ? ORDER BY payment_date"
       ).all(loanId) as any[];
 
       const result = replayPayments({
@@ -1413,32 +1423,128 @@ export function registerIpcHandlers(): void {
         payments,
       });
 
+      // ── Decide the correct amortization type ──
+      // If marked interest_only but the stored level payment is >10%
+      // above a pure interest-only payment, it's really a term loan
+      // that was mis-saved → switch to 'standard'.
+      const rMonthly = (loan.interest_rate || 0) / 12;
+      const curBal = result.totals.current_balance;
+      const interestOnlyPmt = curBal * rMonthly;
+      let amType = loan.amortization_type || 'standard';
+      if (amType === 'interest_only' && (loan.payment_amount || 0) > interestOnlyPmt * 1.1) {
+        amType = 'standard';
+      }
+
+      // ── Remaining payment count to amortize the current balance at the
+      //    loan's level payment (guards against payment <= interest). ──
+      const pmt = loan.payment_amount || periodicPayment(curBal, rMonthly, loan.term_months || 1);
+      let remainingN = loan.term_months || 1;
+      if (curBal <= 0.01) {
+        remainingN = 0;
+      } else if (amType === 'standard' && rMonthly > 0 && pmt > interestOnlyPmt) {
+        remainingN = Math.max(1, Math.ceil(
+          -Math.log(1 - (curBal * rMonthly) / pmt) / Math.log(1 + rMonthly)
+        ));
+      }
+
+      const expCid = loan.company_id;
+      const findOrCreateCategory = (name: string, color: string): string => {
+        const existing = dbi.prepare(
+          "SELECT id FROM categories WHERE company_id = ? AND lower(name) = lower(?) AND is_active = 1 LIMIT 1"
+        ).get(expCid, name) as any;
+        if (existing?.id) return existing.id;
+        const newId = uuid();
+        dbi.prepare(
+          "INSERT INTO categories (id, company_id, name, type, color, description, is_active, created_at, updated_at) VALUES (?, ?, ?, 'expense', ?, ?, 1, datetime('now'), datetime('now'))"
+        ).run(newId, expCid, name, color, 'Auto-created for loan payment integration');
+        return newId;
+      };
+      const insertExpense = dbi.prepare(
+        "INSERT INTO expenses (id, company_id, date, amount, tax_amount, description, category_id, vendor_id, payment_method, status, related_loan_id, related_loan_payment_id, loan_component, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?, 'paid', ?, ?, ?, datetime('now'), datetime('now'))"
+      );
+
       const tx = dbi.transaction(() => {
-        // Update each payment with the corrected split.
+        // 1. Correct each payment's principal/interest/escrow split.
         const updatePayment = dbi.prepare(
           "UPDATE loan_payments SET principal_amount = ?, interest_amount = ?, escrow_amount = ? WHERE id = ?"
         );
         for (const c of result.corrected) {
           updatePayment.run(c.principal, c.interest, c.escrow, c.id);
         }
-        // Update loan totals.
-        const newStatus = result.totals.current_balance < 0.005 ? 'paid_off' : loan.status;
+
+        // 2. Fix loan totals — CORRECT column/value alignment.
+        const newStatus = result.totals.current_balance < 0.005 ? 'paid_off' : (loan.status === 'paid_off' ? 'active' : loan.status);
         dbi.prepare(
-          "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_interest_paid = ?, total_principal_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_interest_paid = ?, total_principal_paid = ?, amortization_type = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
         ).run(
           result.totals.current_balance,
           result.totals.total_paid_to_date,
-          result.totals.total_principal_paid,
-          result.totals.total_interest_paid,
+          result.totals.total_interest_paid,    // interest → interest column
+          result.totals.total_principal_paid,   // principal → principal column
+          amType,
           newStatus,
           loanId
         );
+
+        // 3. Regenerate the forward schedule from the current balance.
+        dbi.prepare("DELETE FROM loan_payment_schedule WHERE loan_id = ?").run(loanId);
+        if (remainingN > 0 && curBal > 0.01) {
+          const rows = generateSchedule({
+            principal: curBal,
+            annual_rate: loan.interest_rate,
+            term_months: remainingN,
+            first_payment_date: loan.next_payment_due || loan.first_payment_date,
+            payment_frequency: loan.payment_frequency || 'monthly',
+            amortization_type: amType,
+            balloon_amount: loan.balloon_amount || 0,
+            escrow_per_payment: loan.escrow_per_payment || 0,
+          });
+          const insertSched = dbi.prepare(
+            "INSERT INTO loan_payment_schedule (id, loan_id, payment_number, due_date, scheduled_payment, principal_amount, interest_amount, escrow_amount, remaining_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          );
+          for (const row of rows) {
+            insertSched.run(uuid(), loanId, row.payment_number, row.due_date, row.scheduled_payment,
+              row.principal_amount, row.interest_amount, row.escrow_amount, row.remaining_balance);
+          }
+          dbi.prepare("UPDATE loans SET next_payment_due = ? WHERE id = ?").run(rows[0]?.due_date || null, loanId);
+        }
+
+        // 4. Backfill missing linked expense rows (interest + principal).
+        let backfilled = 0;
+        const interestCatId = result.corrected.some((c: any) => c.interest > 0.005)
+          ? findOrCreateCategory('Interest Expense', '#f59e0b') : null;
+        const principalCatId = result.corrected.some((c: any) => c.principal > 0.005)
+          ? findOrCreateCategory('Loan Principal', '#6366f1') : null;
+        for (const c of result.corrected) {
+          const pRow = payments.find((p) => p.id === c.id);
+          const method = pRow?.payment_method || 'ach';
+          if (c.interest > 0.005 && !pRow?.related_expense_id && interestCatId) {
+            const exId = uuid();
+            insertExpense.run(exId, expCid, c.payment_date, c.interest,
+              (loan.name || 'Loan') + ' · interest on ' + c.payment_date,
+              interestCatId, method, loanId, c.id, 'interest');
+            dbi.prepare("UPDATE loan_payments SET related_expense_id = ? WHERE id = ?").run(exId, c.id);
+            backfilled++;
+          }
+          if (c.principal > 0.005 && !pRow?.related_principal_expense_id && principalCatId) {
+            const exId = uuid();
+            insertExpense.run(exId, expCid, c.payment_date, c.principal,
+              (loan.name || 'Loan') + ' · principal on ' + c.payment_date,
+              principalCatId, method, loanId, c.id, 'principal');
+            dbi.prepare("UPDATE loan_payments SET related_principal_expense_id = ? WHERE id = ?").run(exId, c.id);
+            backfilled++;
+          }
+        }
+        return backfilled;
       });
-      tx();
+      const backfilledCount = tx();
       return {
         ok: true,
         totals: result.totals,
         corrected_count: result.corrected.length,
+        amortization_type: amType,
+        schedule_payments: remainingN,
+        expenses_backfilled: backfilledCount,
       };
     } catch (err: any) {
       return { error: err?.message || 'Recompute failed' };

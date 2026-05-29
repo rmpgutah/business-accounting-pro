@@ -99,23 +99,23 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         <button
           onClick={async () => {
             const r = await api.loanRecompute(loanId);
-            if (r?.error) { toast.error('Recompute failed: ' + r.error); return; }
-            toast.success(
-              `Balance recomputed · paid: $${(r.totals?.total_paid_to_date || 0).toFixed(2)}` +
-              ` · principal: $${(r.totals?.total_principal_paid || 0).toFixed(2)}` +
-              ` · interest: $${(r.totals?.total_interest_paid || 0).toFixed(2)}` +
-              ((r.totals?.deferred_interest_balance || 0) > 0
-                ? ` · deferred: $${r.totals!.deferred_interest_balance.toFixed(2)}`
-                : '')
-            );
-            // Reload loan + payments to reflect the corrected ledger
+            if (r?.error) { toast.error('Repair failed: ' + r.error); return; }
+            const parts = [
+              `balance $${(r.totals?.current_balance || 0).toFixed(2)}`,
+              `interest $${(r.totals?.total_interest_paid || 0).toFixed(2)}`,
+              `principal $${(r.totals?.total_principal_paid || 0).toFixed(2)}`,
+            ];
+            if (r.schedule_payments) parts.push(`${r.schedule_payments} payments left`);
+            if (r.expenses_backfilled) parts.push(`${r.expenses_backfilled} expense rows backfilled`);
+            toast.success('Loan repaired · ' + parts.join(' · '));
+            // Reload loan + payments + schedule to reflect the repair
             const fresh = await api.loanGet(loanId);
             if (!fresh.error) setData(fresh);
           }}
           className="block-btn flex items-center gap-1.5 text-xs"
-          title="Replay every payment with correct daily-accrual interest split — fixes balance / total paid / interest paid"
+          title="Repair this loan: re-split payments, fix interest/principal totals, regenerate the schedule from the current balance, and backfill linked expense rows"
         >
-          <RefreshCw size={12} /> Recompute
+          <RefreshCw size={12} /> Repair
         </button>
         <button onClick={onEdit} className="block-btn flex items-center gap-1.5 text-xs">
           <Edit size={12} /> Edit
