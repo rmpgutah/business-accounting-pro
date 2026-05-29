@@ -35,7 +35,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { db } from '../db';
 
 export const portalRouter = Router();
@@ -104,7 +104,12 @@ const postSubmitLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => `${req.ip}|${req.params.token || ''}`,
+  // Use ipKeyGenerator to normalize IPv6 addresses (required by
+  // express-rate-limit v7+; v8 throws ERR_ERL_KEY_GEN_IPV6 otherwise).
+  // It masks IPv6 to a /56 subnet so a single user can't bypass the
+  // limit by varying the low bits of their address. Combined with the
+  // invoice token so the 5/hour cap is per-IP-per-invoice.
+  keyGenerator: (req: Request) => `${ipKeyGenerator(req.ip || '')}|${req.params.token || ''}`,
   message: { error: 'Too many submissions, please try again later' },
 });
 
