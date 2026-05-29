@@ -1056,7 +1056,7 @@ const Inventory: React.FC = () => {
                       <div className="flex items-center gap-2">
                         {isLow && <AlertTriangle size={12} className="text-accent-expense shrink-0" />}
                         <span className="block truncate max-w-[180px]">{item.name}</span>
-                        {item.is_asset && <span className="block-badge text-[10px]">Asset</span>}
+                        {!!item.is_asset && <span className="block-badge text-[10px]">Asset</span>}
                       </div>
                     </td>
                     <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>

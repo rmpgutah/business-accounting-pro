@@ -243,7 +243,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
                           cursor: 'pointer',
                         }}
                       >
-                        {inst.paid && <Check size={11} color="#fff" />}
+                        {!!inst.paid && <Check size={11} color="#fff" />}
                       </button>
                     </td>
                   </tr>
