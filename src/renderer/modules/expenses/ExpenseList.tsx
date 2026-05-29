@@ -802,11 +802,20 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               />
             ) : (
               <div className="flex items-center gap-1.5" onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'description', exp.description); }}>
-                <span className="block truncate max-w-[200px]">{exp.description || '(no description)'}</span>
+                <span
+                  className="block truncate max-w-[200px]"
+                  title={exp.description || undefined}
+                  style={exp.description ? undefined : { fontStyle: 'italic', color: 'var(--color-text-muted)' }}
+                >
+                  {exp.description || 'No description'}
+                </span>
+                {/* NOTE: SQLite stores booleans as 0/1 integers. Use ternaries or
+                    !! coercion — a bare `{flag && <X/>}` renders a literal "0" when
+                    flag is the integer 0 (the stray-0 bug fixed here). */}
                 {exp.is_recurring ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>RECURRING</span> : null}
-                {exp.is_reimbursable && !exp.reimbursed && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>REIMBURSE</span>}
+                {(!!exp.is_reimbursable && !exp.reimbursed) ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>REIMBURSE</span> : null}
                 {exp.reimbursed ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#16a34a22', color: '#16a34a' }}>REIMBURSED</span> : null}
-                {matchHint && <span title="A bank transaction matches this expense" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#06b6d422', color: '#06b6d4' }}><Banknote size={10} style={{ display: 'inline', marginRight: 2 }} />MATCH?</span>}
+                {matchHint ? <span title="A bank transaction matches this expense" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#06b6d422', color: '#06b6d4' }}><Banknote size={10} style={{ display: 'inline', marginRight: 2 }} />MATCH?</span> : null}
                 {exp.custom_fields && exp.custom_fields !== '{}' && <span title="Has detailed info"><FileText size={12} className="text-accent-blue shrink-0" /></span>}
                 {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#ef4444' }}>FLAGGED</span> : null}
                 {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#a855f7' }}>AUTO</span> : null}
@@ -826,7 +835,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           </td>
         )}
         {colVisible('category') && (
-          <td className="text-text-secondary truncate max-w-[160px]" onClick={(e) => e.stopPropagation()}>
+          <td className="text-text-secondary truncate max-w-[160px]" title={exp.category_name || undefined} onClick={(e) => e.stopPropagation()}>
             {isEditingCat ? (
               <select
                 autoFocus
@@ -1080,15 +1089,20 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       />
 
       {/* Filters (sticky, feature 15)
-          STICKY OVERLAP FIX: .block-card uses backdrop-filter: blur — perfect for
-          static glass panels, but when sticky-positioned over a scrolling table the
-          blur shows the rows behind through the toolbar. Force an opaque background
-          + disable the blur ONLY on this instance, so table rows can't bleed through. */}
+          STICKY OVERLAP FIX (v2): the toolbar must FULLY occlude rows scrolling
+          beneath it. Three things matter:
+          1. A guaranteed-opaque background — use --color-bg-primary-solid, which
+             is defined in BOTH themes (dark #08090c / light #f7f8fa). Plain
+             --color-bg-primary can be unset in some theme states, letting rows
+             bleed through the toolbar.
+          2. backdrop blur OFF (blur reveals what's behind a translucent layer).
+          3. z-index ABOVE the table header/cells (.block-table th has its own
+             blur + stacking), so the toolbar wins — z-30. */}
       <div className="block-card p-3" style={{
         position: 'sticky',
         top: 0,
-        zIndex: 10,
-        background: 'var(--color-bg-primary)',
+        zIndex: 30,
+        background: 'var(--color-bg-primary-solid)',
         backdropFilter: 'none',
         WebkitBackdropFilter: 'none',
       }}>
