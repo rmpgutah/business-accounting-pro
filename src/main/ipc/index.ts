@@ -17198,7 +17198,9 @@ export function registerIpcHandlers(): void {
   </div>
 
   <!-- Date -->
-  <div class="letter-date">${today}</div>
+  <div class="letter-date">${signatures?.employee?.date
+    ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
+    : today}</div>
 
   <!-- Addressee -->
   <div class="addressee">
@@ -17519,7 +17521,9 @@ export function registerIpcHandlers(): void {
   </div>
 
   <!-- Date -->
-  <div class="letter-date">${today}</div>
+  <div class="letter-date">${signatures?.employee?.date
+    ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
+    : today}</div>
 
   <!-- Addressee -->
   <div class="addressee">
