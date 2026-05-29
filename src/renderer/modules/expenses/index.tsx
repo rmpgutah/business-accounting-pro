@@ -525,6 +525,7 @@ const ExpensesModule: React.FC = () => {
           vendorId={viewingVendorId}
           onBack={handleVendorDetailBack}
           onEdit={handleEditVendor}
+          onDeleted={handleVendorDetailBack}
         />
       )}
 

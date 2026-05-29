@@ -67,14 +67,34 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
     : vendors;
 
   const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Delete vendor "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(
+      `Delete vendor "${name}"?\n\n` +
+      `It will move to Trash (recoverable for 30 days). Any expenses, bills, ` +
+      `purchase orders, or bank rules pointing to it will be unlinked.`
+    )) return;
     try {
-      await api.remove('vendors', id);
+      const res = await api.vendorDelete(id, false);
+      // IPC handlers resolve with {error} on failure (they don't throw),
+      // so we must inspect the result rather than rely on try/catch.
+      if (res?.error) {
+        alert('Failed to delete vendor: ' + res.error);
+        return;
+      }
+      const u = res?.unlinked;
+      const unlinkedTotal = u ? (u.expenses + u.bills + u.purchase_orders + u.bank_rules) : 0;
       setVendors((prev) => prev.filter((v) => v.id !== id));
+      if (unlinkedTotal > 0) {
+        const parts = [];
+        if (u!.expenses) parts.push(`${u!.expenses} expense${u!.expenses === 1 ? '' : 's'}`);
+        if (u!.bills) parts.push(`${u!.bills} bill${u!.bills === 1 ? '' : 's'}`);
+        if (u!.purchase_orders) parts.push(`${u!.purchase_orders} PO${u!.purchase_orders === 1 ? '' : 's'}`);
+        if (u!.bank_rules) parts.push(`${u!.bank_rules} bank rule${u!.bank_rules === 1 ? '' : 's'}`);
+        // Non-blocking info via console; the row is already gone from the UI.
+        console.info(`Vendor "${name}" deleted · unlinked ${parts.join(', ')}.`);
+      }
     } catch (err: any) {
       console.error('Failed to delete vendor:', err);
-      alert('Failed to delete vendor: ' + (err?.message || 'Unknown error') +
-        '\n\nThis vendor may be referenced by existing expenses or bills.');
+      alert('Failed to delete vendor: ' + (err?.message || 'Unknown error'));
     }
   };
 

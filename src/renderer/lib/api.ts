@@ -38,6 +38,12 @@ const api = {
   remove: (table: string, id: string) =>
     window.electronAPI.invoke('db:delete', { table, id }),
 
+  // Dedicated vendor delete — cleans up all references (expenses, bills,
+  // POs, bank rules) and returns a clear result. Soft-delete by default
+  // (recoverable in Trash); pass hard=true to permanently remove.
+  vendorDelete: (id: string, hard?: boolean): Promise<{ ok?: boolean; hard?: boolean; vendor_name?: string; unlinked?: { expenses: number; bills: number; purchase_orders: number; bank_rules: number }; error?: string }> =>
+    window.electronAPI.invoke('vendors:delete', { id, hard: !!hard }),
+
   rawQuery: (sql: string, params: any[] = []) =>
     window.electronAPI.invoke('db:raw-query', { sql, params }),
 

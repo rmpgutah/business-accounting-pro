@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Package, Edit } from 'lucide-react';
+import { ArrowLeft, Package, Edit, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
@@ -10,11 +10,12 @@ interface VendorDetailProps {
   vendorId: string;
   onBack: () => void;
   onEdit: (id: string) => void;
+  onDeleted?: () => void;
 }
 
 type Tab = 'expenses' | 'bills';
 
-const VendorDetail: React.FC<VendorDetailProps> = ({ vendorId, onBack, onEdit }) => {
+const VendorDetail: React.FC<VendorDetailProps> = ({ vendorId, onBack, onEdit, onDeleted }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [vendor, setVendor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -69,9 +70,25 @@ const VendorDetail: React.FC<VendorDetailProps> = ({ vendorId, onBack, onEdit })
         <button className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors" onClick={onBack}>
           <ArrowLeft size={16} /> Back to Vendors
         </button>
-        <button className="block-btn inline-flex items-center gap-1.5" onClick={() => onEdit(vendorId)}>
-          <Edit size={14} /> Edit
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="block-btn inline-flex items-center gap-1.5" onClick={() => onEdit(vendorId)}>
+            <Edit size={14} /> Edit
+          </button>
+          <button
+            className="block-btn-danger inline-flex items-center gap-1.5"
+            onClick={async () => {
+              if (!window.confirm(
+                `Delete vendor "${vendor.name}"?\n\nIt will move to Trash (recoverable for 30 days). ` +
+                `Linked expenses, bills, POs, and bank rules will be unlinked.`
+              )) return;
+              const res = await api.vendorDelete(vendorId, false);
+              if (res?.error) { alert('Failed to delete vendor: ' + res.error); return; }
+              onDeleted ? onDeleted() : onBack();
+            }}
+          >
+            <Trash2 size={14} /> Delete
+          </button>
+        </div>
       </div>
 
       {/* Vendor Card */}

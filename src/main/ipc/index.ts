@@ -950,6 +950,63 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Vendor delete (dedicated, reference-safe) ───────────────
+  // The generic db:delete soft-deletes vendors but SKIPS reference
+  // cleanup for soft-delete tables — so expenses/bills/POs keep
+  // pointing at a now-hidden vendor, and bank_rules.action_vendor_id
+  // (an enforced FK) blocks a hard delete entirely. This handler:
+  //   1. Counts what references the vendor (so the UI can warn).
+  //   2. Nulls EVERY reference (expenses, bills, purchase_orders,
+  //      bank_rules.action_vendor_id) regardless of soft/hard.
+  //   3. Soft-deletes (default → recoverable in Trash) or hard-deletes
+  //      when {hard:true}.
+  // Returns a clear { ok, unlinked } so the renderer can report it and
+  // never masks a failure.
+  ipcMain.handle('vendors:delete', (_event, { id, hard }: { id: string; hard?: boolean }) => {
+    try {
+      if (!id) return { error: 'No vendor id' };
+      const dbi = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      const vendor = db.getById('vendors', id) as any;
+      if (!vendor) return { error: 'Vendor not found' };
+
+      // Count references for the response (best-effort per table).
+      const count = (sql: string): number => {
+        try { return (dbi.prepare(sql).get(id) as any)?.c || 0; } catch { return 0; }
+      };
+      const unlinked = {
+        expenses: count("SELECT COUNT(*) c FROM expenses WHERE vendor_id = ?"),
+        bills: count("SELECT COUNT(*) c FROM bills WHERE vendor_id = ?"),
+        purchase_orders: count("SELECT COUNT(*) c FROM purchase_orders WHERE vendor_id = ?"),
+        bank_rules: count("SELECT COUNT(*) c FROM bank_rules WHERE action_vendor_id = ?"),
+      };
+
+      const tx = dbi.transaction(() => {
+        const run = (sql: string) => { try { dbi.prepare(sql).run(id); } catch { /* table may not exist */ } };
+        // Null all enforced + soft FK references so nothing dangles.
+        run("UPDATE expenses SET vendor_id = NULL WHERE vendor_id = ?");
+        run("UPDATE bills SET vendor_id = NULL WHERE vendor_id = ?");
+        run("UPDATE purchase_orders SET vendor_id = NULL WHERE vendor_id = ?");
+        run("UPDATE bank_rules SET action_vendor_id = NULL WHERE action_vendor_id = ?");
+
+        if (hard) {
+          dbi.prepare("DELETE FROM vendors WHERE id = ?").run(id);
+        } else {
+          // Soft delete → recoverable from Trash for 30 days.
+          dbi.prepare("UPDATE vendors SET deleted_at = datetime('now') WHERE id = ?").run(id);
+        }
+      });
+      tx();
+
+      if (companyId) { try { db.logAudit(companyId, 'vendors', id, 'delete'); } catch { /* non-fatal */ } }
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+
+      return { ok: true, hard: !!hard, unlinked, vendor_name: vendor.name };
+    } catch (err: any) {
+      return { error: err?.message || 'Delete failed' };
+    }
+  });
+
   // ─── P1.13: Trash (soft-delete recovery) ──────────────
   // Read-side counterpart to db.remove() now that supported tables
   // soft-delete. The Trash UI calls these to list / restore / purge
