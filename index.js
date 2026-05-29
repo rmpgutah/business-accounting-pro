@@ -1,22 +1,48 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
-import { app } from 'electron';
-import { v4 as uuid } from 'uuid';
-import {
-  TABLES_WITHOUT_UPDATED_AT,
-  TABLES_WITH_DELETED_AT,
-  SOFT_DELETE_TABLES,
-} from './tableConfig';
-
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SOFT_DELETE_TABLES = void 0;
+exports.getDbPath = getDbPath;
+exports.getDb = getDb;
+exports.roundCents = roundCents;
+exports.initDatabase = initDatabase;
+exports.reinitDatabase = reinitDatabase;
+exports.switchCompany = switchCompany;
+exports.setCurrentUser = setCurrentUser;
+exports.getCurrentUserId = getCurrentUserId;
+exports.getCurrentUserEmail = getCurrentUserEmail;
+exports.clearCurrentUser = clearCurrentUser;
+exports.getCurrentCompanyId = getCurrentCompanyId;
+exports.queryAll = queryAll;
+exports.getById = getById;
+exports.getByIdIncludingDeleted = getByIdIncludingDeleted;
+exports.create = create;
+exports.update = update;
+exports.remove = remove;
+exports.removeHard = removeHard;
+exports.restoreFromTrash = restoreFromTrash;
+exports.listTrash = listTrash;
+exports.purgeExpiredTrash = purgeExpiredTrash;
+exports.logAudit = logAudit;
+exports.runQuery = runQuery;
+exports.execQuery = execQuery;
+exports.seedDefaultAccounts = seedDefaultAccounts;
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const electron_1 = require("electron");
+const uuid_1 = require("uuid");
+const tableConfig_1 = require("./tableConfig");
 // Aliases for backward compatibility with local references
-const tablesWithoutUpdatedAt = TABLES_WITHOUT_UPDATED_AT;
-const tablesWithDeletedAt = TABLES_WITH_DELETED_AT;
+const tablesWithoutUpdatedAt = tableConfig_1.TABLES_WITHOUT_UPDATED_AT;
+const tablesWithDeletedAt = tableConfig_1.TABLES_WITH_DELETED_AT;
 // Re-export for consumers like ipc/index.ts
-export { SOFT_DELETE_TABLES } from './tableConfig';
-
-let db: Database.Database | null = null;
-let currentCompanyId: string | null = null;
+var tableConfig_2 = require("./tableConfig");
+Object.defineProperty(exports, "SOFT_DELETE_TABLES", { enumerable: true, get: function () { return tableConfig_2.SOFT_DELETE_TABLES; } });
+let db = null;
+let currentCompanyId = null;
 // "WHO" SYSTEM (added 2026-05-25 during who-system review):
 // Mirror of currentCompanyId for the authenticated user. Set from
 // auth:login and cleared from auth:logout. Used by logAudit() and any
@@ -24,108 +50,102 @@ let currentCompanyId: string | null = null;
 // the renderer to pass user_id (which is forgeable). The single-user
 // model matches the current Electron app architecture — only one
 // session can be active per main process at a time.
-let currentUserId: string | null = null;
-let currentUserEmail: string | null = null;
-
-export function getDbPath(): string {
-  const userDataPath = app.getPath('userData');
-  // Place DB directly in userData — no subdirectory creation, avoids APFS orphan-inode race
-  const dbPath = path.join(userDataPath, 'accounting.db');
-  // One-time migration: move from old databases/ subdir if it exists and is accessible
-  const legacyPath = path.join(userDataPath, 'databases', 'accounting.db');
-  if (!fs.existsSync(dbPath) && fs.existsSync(legacyPath)) {
-    try { fs.renameSync(legacyPath, dbPath); } catch (_) {}
-  }
-  return dbPath;
+let currentUserId = null;
+let currentUserEmail = null;
+function getDbPath() {
+    const userDataPath = electron_1.app.getPath('userData');
+    // Place DB directly in userData — no subdirectory creation, avoids APFS orphan-inode race
+    const dbPath = path_1.default.join(userDataPath, 'accounting.db');
+    // One-time migration: move from old databases/ subdir if it exists and is accessible
+    const legacyPath = path_1.default.join(userDataPath, 'databases', 'accounting.db');
+    if (!fs_1.default.existsSync(dbPath) && fs_1.default.existsSync(legacyPath)) {
+        try {
+            fs_1.default.renameSync(legacyPath, dbPath);
+        }
+        catch (_) { }
+    }
+    return dbPath;
 }
-
-export function getDb(): Database.Database {
-  if (!db) throw new Error('Database not initialized');
-  return db;
+function getDb() {
+    if (!db)
+        throw new Error('Database not initialized');
+    return db;
 }
-
 // INTEGRITY: round a money value to 2 decimal places to avoid float drift.
 // Use at the DB write boundary anywhere we accumulate (e.g. amount_paid +=
 // payment.amount). Without this, repeated additions silently produce values
 // like 100.00000000000001 which break equality checks downstream.
-export function roundCents(value: any): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!isFinite(n)) return 0;
-  return Math.round(n * 100) / 100;
+function roundCents(value) {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!isFinite(n))
+        return 0;
+    return Math.round(n * 100) / 100;
 }
-
 // P1.18: schema-version constant. Bump on backwards-INCOMPATIBLE
 // changes (drop column, change CHECK). The DB records the highest
 // version it's been touched by; if that exceeds APP_SCHEMA_VERSION,
 // we refuse to open it rather than corrupt it. Additive migrations
 // (ALTER ADD COLUMN, CREATE INDEX) don't need a bump.
 const APP_SCHEMA_VERSION = 2;
-
 // P2.20: Performance pragmas. WAL allows concurrent reads during
 // writes. synchronous=NORMAL is safe under WAL. 64MB cache + 256MB
 // mmap window covers a typical accounting DB without disk hits on
 // hot tables.
-function applyPerformancePragmas(database: Database.Database): void {
-  try {
-    database.pragma('journal_mode = WAL');
-    database.pragma('synchronous = NORMAL');
-    database.pragma('cache_size = -64000');
-    database.pragma('mmap_size = 268435456');
-    database.pragma('foreign_keys = ON');
-    database.pragma('temp_store = MEMORY');
-  } catch (err) {
-    console.warn('[db] performance pragma application partial:', err);
-  }
-}
-
-// P1.18: refuse to open a DB stamped by a newer app build.
-function checkSchemaVersionOrThrow(database: Database.Database): void {
-  try {
-    const hasMeta = database.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'"
-    ).get();
-    if (!hasMeta) return; // brand new DB
-    const row = database.prepare(
-      'SELECT version FROM schema_meta WHERE id = 1'
-    ).get() as { version?: number } | undefined;
-    const dbVersion = Number(row?.version ?? 1);
-    if (dbVersion > APP_SCHEMA_VERSION) {
-      throw new Error(
-        'Database was last opened by a newer app build (schema v' + dbVersion +
-        '; this app supports v' + APP_SCHEMA_VERSION + '). Refusing to open to prevent data corruption. ' +
-        'Update the desktop app to the latest version, or restore a backup taken with this app version.'
-      );
+function applyPerformancePragmas(database) {
+    try {
+        database.pragma('journal_mode = WAL');
+        database.pragma('synchronous = NORMAL');
+        database.pragma('cache_size = -64000');
+        database.pragma('mmap_size = 268435456');
+        database.pragma('foreign_keys = ON');
+        database.pragma('temp_store = MEMORY');
     }
-  } catch (err: any) {
-    if (err?.message?.includes('newer app build')) throw err;
-    // schema_meta missing or unreadable — proceed (migrations will create it)
-  }
+    catch (err) {
+        console.warn('[db] performance pragma application partial:', err);
+    }
 }
-
-export function initDatabase(): Database.Database {
-  const dbPath = getDbPath();
-  db = new Database(dbPath);
-  applyPerformancePragmas(db);
-  checkSchemaVersionOrThrow(db);
-
-  // Load and apply schema
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  if (fs.existsSync(schemaPath)) {
-    const schema = fs.readFileSync(schemaPath, 'utf-8');
-    db.exec(schema);
-  }
-
-  // ─── Column migrations (safe — catch errors for already-existing columns) ──
-  const migrations: string[] = [
-    "ALTER TABLE categories ADD COLUMN color TEXT DEFAULT '#6b7280'",
-    "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''",
-    "ALTER TABLE categories ADD COLUMN is_active INTEGER DEFAULT 1",
-    // Rules engine additions (2026-04-01)
-    "ALTER TABLE invoices ADD COLUMN rules_applied TEXT DEFAULT '[]'",
-    "ALTER TABLE expenses ADD COLUMN rules_applied TEXT DEFAULT '[]'",
-    // Dynamic invoices (2026-04-06)
-    "ALTER TABLE invoices ADD COLUMN terms_text TEXT DEFAULT ''",
-    `CREATE TABLE IF NOT EXISTS invoice_settings (
+// P1.18: refuse to open a DB stamped by a newer app build.
+function checkSchemaVersionOrThrow(database) {
+    try {
+        const hasMeta = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'").get();
+        if (!hasMeta)
+            return; // brand new DB
+        const row = database.prepare('SELECT version FROM schema_meta WHERE id = 1').get();
+        const dbVersion = Number(row?.version ?? 1);
+        if (dbVersion > APP_SCHEMA_VERSION) {
+            throw new Error('Database was last opened by a newer app build (schema v' + dbVersion +
+                '; this app supports v' + APP_SCHEMA_VERSION + '). Refusing to open to prevent data corruption. ' +
+                'Update the desktop app to the latest version, or restore a backup taken with this app version.');
+        }
+    }
+    catch (err) {
+        if (err?.message?.includes('newer app build'))
+            throw err;
+        // schema_meta missing or unreadable — proceed (migrations will create it)
+    }
+}
+function initDatabase() {
+    const dbPath = getDbPath();
+    db = new better_sqlite3_1.default(dbPath);
+    applyPerformancePragmas(db);
+    checkSchemaVersionOrThrow(db);
+    // Load and apply schema
+    const schemaPath = path_1.default.join(__dirname, 'schema.sql');
+    if (fs_1.default.existsSync(schemaPath)) {
+        const schema = fs_1.default.readFileSync(schemaPath, 'utf-8');
+        db.exec(schema);
+    }
+    // ─── Column migrations (safe — catch errors for already-existing columns) ──
+    const migrations = [
+        "ALTER TABLE categories ADD COLUMN color TEXT DEFAULT '#6b7280'",
+        "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''",
+        "ALTER TABLE categories ADD COLUMN is_active INTEGER DEFAULT 1",
+        // Rules engine additions (2026-04-01)
+        "ALTER TABLE invoices ADD COLUMN rules_applied TEXT DEFAULT '[]'",
+        "ALTER TABLE expenses ADD COLUMN rules_applied TEXT DEFAULT '[]'",
+        // Dynamic invoices (2026-04-06)
+        "ALTER TABLE invoices ADD COLUMN terms_text TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS invoice_settings (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL UNIQUE,
       accent_color TEXT NOT NULL DEFAULT '#2563eb',
@@ -141,7 +161,7 @@ export function initDatabase(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
-    `CREATE TABLE IF NOT EXISTS invoice_catalog_items (
+        `CREATE TABLE IF NOT EXISTS invoice_catalog_items (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
       name TEXT NOT NULL,
@@ -152,27 +172,27 @@ export function initDatabase(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
-    // Invoice Studio (2026-04-07) — rich row types, branding, payment schedule
-    "ALTER TABLE invoice_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
-    "ALTER TABLE invoice_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
-    "ALTER TABLE invoice_line_items ADD COLUMN item_code TEXT DEFAULT ''",
-    "ALTER TABLE invoice_line_items ADD COLUMN line_discount REAL DEFAULT 0",
-    "ALTER TABLE invoice_line_items ADD COLUMN line_discount_type TEXT DEFAULT 'percent'",
-    "ALTER TABLE invoice_settings ADD COLUMN secondary_color TEXT DEFAULT '#64748b'",
-    "ALTER TABLE invoice_settings ADD COLUMN watermark_text TEXT DEFAULT ''",
-    "ALTER TABLE invoice_settings ADD COLUMN watermark_opacity REAL DEFAULT 0.06",
-    "ALTER TABLE invoice_settings ADD COLUMN font_family TEXT DEFAULT 'system'",
-    "ALTER TABLE invoice_settings ADD COLUMN header_layout TEXT DEFAULT 'logo-left'",
-    "ALTER TABLE invoice_settings ADD COLUMN column_config TEXT DEFAULT '{}'",
-    "ALTER TABLE invoice_settings ADD COLUMN payment_qr_url TEXT DEFAULT ''",
-    "ALTER TABLE invoice_settings ADD COLUMN show_payment_qr INTEGER DEFAULT 0",
-    "ALTER TABLE invoice_catalog_items ADD COLUMN item_code TEXT DEFAULT ''",
-    "ALTER TABLE invoice_catalog_items ADD COLUMN unit_label TEXT DEFAULT ''",
-    // Catalog form needs a default quantity that auto-fills onto invoice
-    // line items (e.g. "License Pack — 5 seats" defaults qty=5). Idempotent
-    // ALTER (existing rows get DEFAULT 1).
-    "ALTER TABLE invoice_catalog_items ADD COLUMN default_quantity REAL DEFAULT 1",
-    `CREATE TABLE IF NOT EXISTS invoice_payment_schedule (
+        // Invoice Studio (2026-04-07) — rich row types, branding, payment schedule
+        "ALTER TABLE invoice_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
+        "ALTER TABLE invoice_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
+        "ALTER TABLE invoice_line_items ADD COLUMN item_code TEXT DEFAULT ''",
+        "ALTER TABLE invoice_line_items ADD COLUMN line_discount REAL DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN line_discount_type TEXT DEFAULT 'percent'",
+        "ALTER TABLE invoice_settings ADD COLUMN secondary_color TEXT DEFAULT '#64748b'",
+        "ALTER TABLE invoice_settings ADD COLUMN watermark_text TEXT DEFAULT ''",
+        "ALTER TABLE invoice_settings ADD COLUMN watermark_opacity REAL DEFAULT 0.06",
+        "ALTER TABLE invoice_settings ADD COLUMN font_family TEXT DEFAULT 'system'",
+        "ALTER TABLE invoice_settings ADD COLUMN header_layout TEXT DEFAULT 'logo-left'",
+        "ALTER TABLE invoice_settings ADD COLUMN column_config TEXT DEFAULT '{}'",
+        "ALTER TABLE invoice_settings ADD COLUMN payment_qr_url TEXT DEFAULT ''",
+        "ALTER TABLE invoice_settings ADD COLUMN show_payment_qr INTEGER DEFAULT 0",
+        "ALTER TABLE invoice_catalog_items ADD COLUMN item_code TEXT DEFAULT ''",
+        "ALTER TABLE invoice_catalog_items ADD COLUMN unit_label TEXT DEFAULT ''",
+        // Catalog form needs a default quantity that auto-fills onto invoice
+        // line items (e.g. "License Pack — 5 seats" defaults qty=5). Idempotent
+        // ALTER (existing rows get DEFAULT 1).
+        "ALTER TABLE invoice_catalog_items ADD COLUMN default_quantity REAL DEFAULT 1",
+        `CREATE TABLE IF NOT EXISTS invoice_payment_schedule (
       id TEXT PRIMARY KEY,
       invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
       milestone_label TEXT NOT NULL DEFAULT '',
@@ -182,10 +202,10 @@ export function initDatabase(): Database.Database {
       sort_order INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )`,
-    // Track 2: Enterprise foundations (2026-04-07)
-  "ALTER TABLE employee_deductions ADD COLUMN employer_match REAL DEFAULT 0",
-  "ALTER TABLE employee_deductions ADD COLUMN employer_match_type TEXT DEFAULT 'percent'",
-  `CREATE TABLE IF NOT EXISTS state_tax_brackets (
+        // Track 2: Enterprise foundations (2026-04-07)
+        "ALTER TABLE employee_deductions ADD COLUMN employer_match REAL DEFAULT 0",
+        "ALTER TABLE employee_deductions ADD COLUMN employer_match_type TEXT DEFAULT 'percent'",
+        `CREATE TABLE IF NOT EXISTS state_tax_brackets (
   id TEXT PRIMARY KEY,
   state TEXT NOT NULL,
   year INTEGER NOT NULL,
@@ -194,7 +214,7 @@ export function initDatabase(): Database.Database {
   rate REAL NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS pto_policies (
+        `CREATE TABLE IF NOT EXISTS pto_policies (
   id TEXT PRIMARY KEY,
   company_id TEXT NOT NULL,
   name TEXT NOT NULL DEFAULT '',
@@ -206,7 +226,7 @@ export function initDatabase(): Database.Database {
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS pto_balances (
+        `CREATE TABLE IF NOT EXISTS pto_balances (
   id TEXT PRIMARY KEY,
   employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   policy_id TEXT NOT NULL,
@@ -216,7 +236,7 @@ export function initDatabase(): Database.Database {
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS pto_transactions (
+        `CREATE TABLE IF NOT EXISTS pto_transactions (
   id TEXT PRIMARY KEY,
   employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   policy_id TEXT NOT NULL DEFAULT '',
@@ -226,31 +246,31 @@ export function initDatabase(): Database.Database {
   payroll_run_id TEXT DEFAULT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  // Track 1: Data entry expansion (2026-04-07)
-    "ALTER TABLE employees ADD COLUMN employment_type TEXT DEFAULT 'full-time'",
-    "ALTER TABLE employees ADD COLUMN department TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN job_title TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN emergency_contact_name TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN emergency_contact_phone TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN routing_number TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN account_number TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN account_type TEXT DEFAULT 'checking'",
-    "ALTER TABLE employees ADD COLUMN notes TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN phone TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN address_line1 TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN address_line2 TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN city TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN zip TEXT DEFAULT ''",
-    "ALTER TABLE employees ADD COLUMN ssn TEXT DEFAULT ''",
-    "ALTER TABLE clients ADD COLUMN industry TEXT DEFAULT ''",
-    "ALTER TABLE clients ADD COLUMN website TEXT DEFAULT ''",
-    "ALTER TABLE clients ADD COLUMN company_size TEXT DEFAULT ''",
-    "ALTER TABLE clients ADD COLUMN credit_limit REAL DEFAULT 0",
-    "ALTER TABLE clients ADD COLUMN preferred_payment_method TEXT DEFAULT ''",
-    "ALTER TABLE clients ADD COLUMN assigned_rep_id TEXT DEFAULT NULL",
-    "ALTER TABLE clients ADD COLUMN internal_notes TEXT DEFAULT ''",
-    "ALTER TABLE clients ADD COLUMN tags TEXT DEFAULT '[]'",
-    `CREATE TABLE IF NOT EXISTS client_contacts (
+        // Track 1: Data entry expansion (2026-04-07)
+        "ALTER TABLE employees ADD COLUMN employment_type TEXT DEFAULT 'full-time'",
+        "ALTER TABLE employees ADD COLUMN department TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN job_title TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN emergency_contact_name TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN emergency_contact_phone TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN routing_number TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN account_number TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN account_type TEXT DEFAULT 'checking'",
+        "ALTER TABLE employees ADD COLUMN notes TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN phone TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN address_line1 TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN address_line2 TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN city TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN zip TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN ssn TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN industry TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN website TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN company_size TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN credit_limit REAL DEFAULT 0",
+        "ALTER TABLE clients ADD COLUMN preferred_payment_method TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN assigned_rep_id TEXT DEFAULT NULL",
+        "ALTER TABLE clients ADD COLUMN internal_notes TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN tags TEXT DEFAULT '[]'",
+        `CREATE TABLE IF NOT EXISTS client_contacts (
   id TEXT PRIMARY KEY,
   client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   name TEXT NOT NULL DEFAULT '',
@@ -260,26 +280,26 @@ export function initDatabase(): Database.Database {
   is_primary INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-    "ALTER TABLE vendors ADD COLUMN w9_status TEXT DEFAULT 'not_collected'",
-    "ALTER TABLE vendors ADD COLUMN is_1099_eligible INTEGER DEFAULT 0",
-    "ALTER TABLE vendors ADD COLUMN ach_routing TEXT DEFAULT ''",
-    "ALTER TABLE vendors ADD COLUMN ach_account TEXT DEFAULT ''",
-    "ALTER TABLE vendors ADD COLUMN ach_account_type TEXT DEFAULT 'checking'",
-    "ALTER TABLE vendors ADD COLUMN contract_start TEXT DEFAULT ''",
-    "ALTER TABLE vendors ADD COLUMN contract_end TEXT DEFAULT ''",
-    "ALTER TABLE vendors ADD COLUMN contract_notes TEXT DEFAULT ''",
-    "ALTER TABLE debts ADD COLUMN employer_name TEXT DEFAULT ''",
-    "ALTER TABLE debts ADD COLUMN employment_status TEXT DEFAULT 'unknown'",
-    "ALTER TABLE debts ADD COLUMN monthly_income_estimate REAL DEFAULT 0",
-    "ALTER TABLE debts ADD COLUMN best_contact_time TEXT DEFAULT ''",
-    "ALTER TABLE debts ADD COLUMN debtor_attorney_name TEXT DEFAULT ''",
-    "ALTER TABLE debts ADD COLUMN debtor_attorney_phone TEXT DEFAULT ''",
-    "ALTER TABLE debt_communications ADD COLUMN outcome TEXT DEFAULT ''",
-    "ALTER TABLE debt_communications ADD COLUMN next_action TEXT DEFAULT ''",
-    "ALTER TABLE debt_communications ADD COLUMN next_action_date TEXT DEFAULT ''",
-    "ALTER TABLE debt_communications ADD COLUMN promise_amount REAL DEFAULT 0",
-    "ALTER TABLE debt_communications ADD COLUMN promise_date TEXT DEFAULT ''",
-    `CREATE TABLE IF NOT EXISTS debt_promises (
+        "ALTER TABLE vendors ADD COLUMN w9_status TEXT DEFAULT 'not_collected'",
+        "ALTER TABLE vendors ADD COLUMN is_1099_eligible INTEGER DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN ach_routing TEXT DEFAULT ''",
+        "ALTER TABLE vendors ADD COLUMN ach_account TEXT DEFAULT ''",
+        "ALTER TABLE vendors ADD COLUMN ach_account_type TEXT DEFAULT 'checking'",
+        "ALTER TABLE vendors ADD COLUMN contract_start TEXT DEFAULT ''",
+        "ALTER TABLE vendors ADD COLUMN contract_end TEXT DEFAULT ''",
+        "ALTER TABLE vendors ADD COLUMN contract_notes TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN employer_name TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN employment_status TEXT DEFAULT 'unknown'",
+        "ALTER TABLE debts ADD COLUMN monthly_income_estimate REAL DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN best_contact_time TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN debtor_attorney_name TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN debtor_attorney_phone TEXT DEFAULT ''",
+        "ALTER TABLE debt_communications ADD COLUMN outcome TEXT DEFAULT ''",
+        "ALTER TABLE debt_communications ADD COLUMN next_action TEXT DEFAULT ''",
+        "ALTER TABLE debt_communications ADD COLUMN next_action_date TEXT DEFAULT ''",
+        "ALTER TABLE debt_communications ADD COLUMN promise_amount REAL DEFAULT 0",
+        "ALTER TABLE debt_communications ADD COLUMN promise_date TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS debt_promises (
   id TEXT PRIMARY KEY,
   debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
   promised_date TEXT NOT NULL DEFAULT '',
@@ -288,20 +308,20 @@ export function initDatabase(): Database.Database {
   notes TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  // Debt & Invoice Enhancements (2026-04-07)
-  "ALTER TABLE debts ADD COLUMN assigned_collector_id TEXT DEFAULT NULL",
-  "ALTER TABLE debts ADD COLUMN auto_advance_enabled INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN po_number TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN job_reference TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN internal_notes TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN late_fee_pct REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN discount_pct REAL DEFAULT 0",
-  "ALTER TABLE invoice_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
-  "ALTER TABLE invoice_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
-  "ALTER TABLE clients ADD COLUMN default_payment_terms TEXT DEFAULT ''",
-  "ALTER TABLE clients ADD COLUMN default_late_fee_pct REAL DEFAULT 0",
-  `CREATE TABLE IF NOT EXISTS debt_payment_plans (
+        // Debt & Invoice Enhancements (2026-04-07)
+        "ALTER TABLE debts ADD COLUMN assigned_collector_id TEXT DEFAULT NULL",
+        "ALTER TABLE debts ADD COLUMN auto_advance_enabled INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN po_number TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN job_reference TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN internal_notes TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN late_fee_pct REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN discount_pct REAL DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
+        "ALTER TABLE clients ADD COLUMN default_payment_terms TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN default_late_fee_pct REAL DEFAULT 0",
+        `CREATE TABLE IF NOT EXISTS debt_payment_plans (
   id TEXT PRIMARY KEY,
   debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
   installment_amount REAL NOT NULL DEFAULT 0,
@@ -312,7 +332,7 @@ export function initDatabase(): Database.Database {
   notes TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS debt_plan_installments (
+        `CREATE TABLE IF NOT EXISTS debt_plan_installments (
   id TEXT PRIMARY KEY,
   plan_id TEXT NOT NULL REFERENCES debt_payment_plans(id) ON DELETE CASCADE,
   due_date TEXT NOT NULL DEFAULT '',
@@ -321,7 +341,7 @@ export function initDatabase(): Database.Database {
   paid_date TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS debt_settlements (
+        `CREATE TABLE IF NOT EXISTS debt_settlements (
   id TEXT PRIMARY KEY,
   debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
   offer_amount REAL NOT NULL DEFAULT 0,
@@ -333,7 +353,7 @@ export function initDatabase(): Database.Database {
   notes TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS debt_compliance_log (
+        `CREATE TABLE IF NOT EXISTS debt_compliance_log (
   id TEXT PRIMARY KEY,
   debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
   event_type TEXT NOT NULL DEFAULT '',
@@ -341,21 +361,21 @@ export function initDatabase(): Database.Database {
   notes TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
-  `CREATE TABLE IF NOT EXISTS invoice_debt_links (
+        `CREATE TABLE IF NOT EXISTS invoice_debt_links (
   id TEXT PRIMARY KEY,
   invoice_id TEXT NOT NULL,
   debt_id TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(invoice_id, debt_id)
 )`,
-  // Invoice type & currency enhancements (2026-04-07)
-  "ALTER TABLE invoices ADD COLUMN invoice_type TEXT DEFAULT 'standard'",
-  "ALTER TABLE invoices ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE invoices ADD COLUMN terms_accepted INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN shipping_amount REAL DEFAULT 0",
-  "ALTER TABLE invoice_line_items ADD COLUMN unit_label_override TEXT DEFAULT ''",
-  "ALTER TABLE invoice_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
-  `CREATE TABLE IF NOT EXISTS inventory_movements (
+        // Invoice type & currency enhancements (2026-04-07)
+        "ALTER TABLE invoices ADD COLUMN invoice_type TEXT DEFAULT 'standard'",
+        "ALTER TABLE invoices ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE invoices ADD COLUMN terms_accepted INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN shipping_amount REAL DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN unit_label_override TEXT DEFAULT ''",
+        "ALTER TABLE invoice_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
+        `CREATE TABLE IF NOT EXISTS inventory_movements (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     item_id TEXT NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
@@ -367,18 +387,18 @@ export function initDatabase(): Database.Database {
     created_by TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "ALTER TABLE inventory_items ADD COLUMN reorder_qty REAL DEFAULT 0",
-  // Debt notes table for quick internal annotations (2026-04-07)
-  `CREATE TABLE IF NOT EXISTS debt_notes (
+        "ALTER TABLE inventory_items ADD COLUMN reorder_qty REAL DEFAULT 0",
+        // Debt notes table for quick internal annotations (2026-04-07)
+        `CREATE TABLE IF NOT EXISTS debt_notes (
     id TEXT PRIMARY KEY,
     debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
     note TEXT NOT NULL DEFAULT '',
     created_by TEXT DEFAULT 'user',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_debt_notes_debt ON debt_notes(debt_id)`,
-  // Expense line items (2026-04-08)
-  `CREATE TABLE IF NOT EXISTS expense_line_items (
+        `CREATE INDEX IF NOT EXISTS idx_debt_notes_debt ON debt_notes(debt_id)`,
+        // Expense line items (2026-04-08)
+        `CREATE TABLE IF NOT EXISTS expense_line_items (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
     description TEXT DEFAULT '',
@@ -389,9 +409,9 @@ export function initDatabase(): Database.Database {
     sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_expense_li_expense ON expense_line_items(expense_id)`,
-  // Debt disputes (2026-04-08)
-  `CREATE TABLE IF NOT EXISTS debt_disputes (
+        `CREATE INDEX IF NOT EXISTS idx_expense_li_expense ON expense_line_items(expense_id)`,
+        // Debt disputes (2026-04-08)
+        `CREATE TABLE IF NOT EXISTS debt_disputes (
     id TEXT PRIMARY KEY,
     debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
     dispute_date TEXT DEFAULT (date('now')),
@@ -403,33 +423,33 @@ export function initDatabase(): Database.Database {
     resolved_by TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_debt_disputes_debt ON debt_disputes(debt_id)`,
-  // Debtor contact preferences (2026-04-08)
-  "ALTER TABLE debts ADD COLUMN preferred_contact_method TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN do_not_call INTEGER DEFAULT 0",
-  "ALTER TABLE debts ADD COLUMN cease_desist_active INTEGER DEFAULT 0",
-  // Invoice late fee & dunning (2026-04-08)
-  "ALTER TABLE invoices ADD COLUMN late_fee_applied INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN dunning_stage INTEGER DEFAULT 0",
-  // Payroll run type (2026-04-08)
-  "ALTER TABLE payroll_runs ADD COLUMN run_type TEXT DEFAULT 'regular'",
-  // Invoice reorder + customizations (2026-04-10)
-  // Per-line styling
-  "ALTER TABLE invoice_line_items ADD COLUMN bold INTEGER DEFAULT 0",
-  "ALTER TABLE invoice_line_items ADD COLUMN italic INTEGER DEFAULT 0",
-  "ALTER TABLE invoice_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
-  // Custom header field labels (per-company)
-  "ALTER TABLE invoice_settings ADD COLUMN custom_field_1_label TEXT DEFAULT ''",
-  "ALTER TABLE invoice_settings ADD COLUMN custom_field_2_label TEXT DEFAULT ''",
-  "ALTER TABLE invoice_settings ADD COLUMN custom_field_3_label TEXT DEFAULT ''",
-  "ALTER TABLE invoice_settings ADD COLUMN custom_field_4_label TEXT DEFAULT ''",
-  // Custom header field values (per-invoice)
-  "ALTER TABLE invoices ADD COLUMN custom_field_1 TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN custom_field_2 TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN custom_field_3 TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN custom_field_4 TEXT DEFAULT ''",
-  // DC Immersive Workspace (2026-04-12)
-  `CREATE TABLE IF NOT EXISTS debt_audit_log (
+        `CREATE INDEX IF NOT EXISTS idx_debt_disputes_debt ON debt_disputes(debt_id)`,
+        // Debtor contact preferences (2026-04-08)
+        "ALTER TABLE debts ADD COLUMN preferred_contact_method TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN do_not_call INTEGER DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN cease_desist_active INTEGER DEFAULT 0",
+        // Invoice late fee & dunning (2026-04-08)
+        "ALTER TABLE invoices ADD COLUMN late_fee_applied INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN dunning_stage INTEGER DEFAULT 0",
+        // Payroll run type (2026-04-08)
+        "ALTER TABLE payroll_runs ADD COLUMN run_type TEXT DEFAULT 'regular'",
+        // Invoice reorder + customizations (2026-04-10)
+        // Per-line styling
+        "ALTER TABLE invoice_line_items ADD COLUMN bold INTEGER DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN italic INTEGER DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
+        // Custom header field labels (per-company)
+        "ALTER TABLE invoice_settings ADD COLUMN custom_field_1_label TEXT DEFAULT ''",
+        "ALTER TABLE invoice_settings ADD COLUMN custom_field_2_label TEXT DEFAULT ''",
+        "ALTER TABLE invoice_settings ADD COLUMN custom_field_3_label TEXT DEFAULT ''",
+        "ALTER TABLE invoice_settings ADD COLUMN custom_field_4_label TEXT DEFAULT ''",
+        // Custom header field values (per-invoice)
+        "ALTER TABLE invoices ADD COLUMN custom_field_1 TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN custom_field_2 TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN custom_field_3 TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN custom_field_4 TEXT DEFAULT ''",
+        // DC Immersive Workspace (2026-04-12)
+        `CREATE TABLE IF NOT EXISTS debt_audit_log (
     id TEXT PRIMARY KEY,
     debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
     action TEXT NOT NULL,
@@ -441,8 +461,8 @@ export function initDatabase(): Database.Database {
     ip_address TEXT DEFAULT '',
     notes TEXT DEFAULT ''
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_debt_audit_debt ON debt_audit_log(debt_id)`,
-  `CREATE TABLE IF NOT EXISTS debt_payment_matches (
+        `CREATE INDEX IF NOT EXISTS idx_debt_audit_debt ON debt_audit_log(debt_id)`,
+        `CREATE TABLE IF NOT EXISTS debt_payment_matches (
     id TEXT PRIMARY KEY,
     bank_transaction_id TEXT NOT NULL,
     debt_id TEXT NOT NULL,
@@ -451,31 +471,31 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending','accepted','rejected')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_dpm_debt ON debt_payment_matches(debt_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_dpm_txn ON debt_payment_matches(bank_transaction_id)`,
-  // Expense approval workflow (2026-04-12)
-  "ALTER TABLE expenses ADD COLUMN approved_by TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN approved_date TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN rejection_reason TEXT DEFAULT ''",
-  // Performance indexes (2026-04-12)
-  "CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id)",
-  "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(company_id, status)",
-  "CREATE INDEX IF NOT EXISTS idx_invoices_due ON invoices(company_id, due_date)",
-  "CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(company_id, date)",
-  "CREATE INDEX IF NOT EXISTS idx_expenses_vendor ON expenses(vendor_id)",
-  "CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id)",
-  "CREATE INDEX IF NOT EXISTS idx_accounts_company ON accounts(company_id, code)",
-  "CREATE INDEX IF NOT EXISTS idx_je_company_date ON journal_entries(company_id, date)",
-  "CREATE INDEX IF NOT EXISTS idx_jel_account ON journal_entry_lines(account_id)",
-  "CREATE INDEX IF NOT EXISTS idx_time_entries_project ON time_entries(project_id)",
-  "CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id)",
-  "CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company_id)",
-  "CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id)",
-  "CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id)",
-  // ── Advanced Debt Collection Features (2026-04-23) ─────────────
-  // Feature 1: Skip Trace Module
-  `CREATE TABLE IF NOT EXISTS debt_skip_traces (
+        `CREATE INDEX IF NOT EXISTS idx_dpm_debt ON debt_payment_matches(debt_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_dpm_txn ON debt_payment_matches(bank_transaction_id)`,
+        // Expense approval workflow (2026-04-12)
+        "ALTER TABLE expenses ADD COLUMN approved_by TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN approved_date TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN rejection_reason TEXT DEFAULT ''",
+        // Performance indexes (2026-04-12)
+        "CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(company_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_due ON invoices(company_id, due_date)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(company_id, date)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_vendor ON expenses(vendor_id)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id)",
+        "CREATE INDEX IF NOT EXISTS idx_accounts_company ON accounts(company_id, code)",
+        "CREATE INDEX IF NOT EXISTS idx_je_company_date ON journal_entries(company_id, date)",
+        "CREATE INDEX IF NOT EXISTS idx_jel_account ON journal_entry_lines(account_id)",
+        "CREATE INDEX IF NOT EXISTS idx_time_entries_project ON time_entries(project_id)",
+        "CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id)",
+        "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id)",
+        "CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company_id)",
+        "CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id)",
+        "CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id)",
+        // ── Advanced Debt Collection Features (2026-04-23) ─────────────
+        // Feature 1: Skip Trace Module
+        `CREATE TABLE IF NOT EXISTS debt_skip_traces (
     id TEXT PRIMARY KEY,
     debt_id TEXT NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
     trace_date TEXT DEFAULT (date('now')),
@@ -489,31 +509,31 @@ export function initDatabase(): Database.Database {
     created_by TEXT DEFAULT 'user',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_skip_traces_debt ON debt_skip_traces(debt_id)`,
-  // Feature 2: Debtor Financial Profile
-  "ALTER TABLE debts ADD COLUMN debtor_ssn_last4 TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN debtor_dob TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN debtor_employer TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN debtor_income_monthly REAL DEFAULT 0",
-  "ALTER TABLE debts ADD COLUMN debtor_assets_description TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN debtor_bank_name TEXT DEFAULT ''",
-  // Feature 6: Debtor Credit Score Tracking
-  "ALTER TABLE debts ADD COLUMN credit_score INTEGER DEFAULT 0",
-  "ALTER TABLE debts ADD COLUMN credit_score_date TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN credit_score_source TEXT DEFAULT ''",
-  // Feature 10: Multi-Currency Debt Support
-  "ALTER TABLE debts ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE debts ADD COLUMN exchange_rate REAL DEFAULT 1.0",
-  // Feature 16: Interest Freeze/Resume
-  "ALTER TABLE debts ADD COLUMN interest_frozen INTEGER DEFAULT 0",
-  "ALTER TABLE debts ADD COLUMN interest_frozen_date TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN interest_frozen_reason TEXT DEFAULT ''",
-  // Feature 18: Collection Cost Tracking
-  "ALTER TABLE debts ADD COLUMN collection_costs REAL DEFAULT 0",
-  "ALTER TABLE debts ADD COLUMN agency_commission_rate REAL DEFAULT 0",
-  "ALTER TABLE debts ADD COLUMN agency_commission_paid REAL DEFAULT 0",
-  // Feature 24: Collection Campaign Manager
-  `CREATE TABLE IF NOT EXISTS debt_campaigns (
+        `CREATE INDEX IF NOT EXISTS idx_skip_traces_debt ON debt_skip_traces(debt_id)`,
+        // Feature 2: Debtor Financial Profile
+        "ALTER TABLE debts ADD COLUMN debtor_ssn_last4 TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN debtor_dob TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN debtor_employer TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN debtor_income_monthly REAL DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN debtor_assets_description TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN debtor_bank_name TEXT DEFAULT ''",
+        // Feature 6: Debtor Credit Score Tracking
+        "ALTER TABLE debts ADD COLUMN credit_score INTEGER DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN credit_score_date TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN credit_score_source TEXT DEFAULT ''",
+        // Feature 10: Multi-Currency Debt Support
+        "ALTER TABLE debts ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE debts ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+        // Feature 16: Interest Freeze/Resume
+        "ALTER TABLE debts ADD COLUMN interest_frozen INTEGER DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN interest_frozen_date TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN interest_frozen_reason TEXT DEFAULT ''",
+        // Feature 18: Collection Cost Tracking
+        "ALTER TABLE debts ADD COLUMN collection_costs REAL DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN agency_commission_rate REAL DEFAULT 0",
+        "ALTER TABLE debts ADD COLUMN agency_commission_paid REAL DEFAULT 0",
+        // Feature 24: Collection Campaign Manager
+        `CREATE TABLE IF NOT EXISTS debt_campaigns (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT DEFAULT '',
@@ -525,24 +545,24 @@ export function initDatabase(): Database.Database {
     letter_template_id TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // Pay stub deduction breakdown columns (2026-04-23)
-  "ALTER TABLE pay_stubs ADD COLUMN pretax_deductions REAL DEFAULT 0",
-  "ALTER TABLE pay_stubs ADD COLUMN posttax_deductions REAL DEFAULT 0",
-  "ALTER TABLE pay_stubs ADD COLUMN deduction_detail TEXT DEFAULT '{}'",
-  // Expense reimbursement tracking (2026-04-23)
-  "ALTER TABLE expenses ADD COLUMN reimbursed INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN reimbursed_date TEXT DEFAULT ''",
-  // ── Cross-entity integration layer (2026-04-24) ────────────────────
-  // NOTE: audit_log originally had CHECK(action IN ('create','update','delete'))
-  // which silently rejects export_pdf/email_pdf/print rows. We can't safely
-  // ALTER a CHECK constraint without a full table rebuild, and mid-release
-  // rebuilds are fragile. Writers now try the CHECK'd insert and fall back
-  // to a generic 'update' action if that fails — see logAudit().
-  // Generic entity relations — one place to record "X touches Y" so the
-  // Related panel doesn't need to know every table's join path. Populated
-  // both explicitly (handlers can record custom relations, e.g. bill↔PO)
-  // and implicitly (derived at query time from FK columns).
-  `CREATE TABLE IF NOT EXISTS entity_relations (
+        // Pay stub deduction breakdown columns (2026-04-23)
+        "ALTER TABLE pay_stubs ADD COLUMN pretax_deductions REAL DEFAULT 0",
+        "ALTER TABLE pay_stubs ADD COLUMN posttax_deductions REAL DEFAULT 0",
+        "ALTER TABLE pay_stubs ADD COLUMN deduction_detail TEXT DEFAULT '{}'",
+        // Expense reimbursement tracking (2026-04-23)
+        "ALTER TABLE expenses ADD COLUMN reimbursed INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN reimbursed_date TEXT DEFAULT ''",
+        // ── Cross-entity integration layer (2026-04-24) ────────────────────
+        // NOTE: audit_log originally had CHECK(action IN ('create','update','delete'))
+        // which silently rejects export_pdf/email_pdf/print rows. We can't safely
+        // ALTER a CHECK constraint without a full table rebuild, and mid-release
+        // rebuilds are fragile. Writers now try the CHECK'd insert and fall back
+        // to a generic 'update' action if that fails — see logAudit().
+        // Generic entity relations — one place to record "X touches Y" so the
+        // Related panel doesn't need to know every table's join path. Populated
+        // both explicitly (handlers can record custom relations, e.g. bill↔PO)
+        // and implicitly (derived at query time from FK columns).
+        `CREATE TABLE IF NOT EXISTS entity_relations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     from_type TEXT NOT NULL,
@@ -554,151 +574,151 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, from_type, from_id, to_type, to_id, relation)
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_entity_rel_from ON entity_relations(company_id, from_type, from_id)",
-  "CREATE INDEX IF NOT EXISTS idx_entity_rel_to   ON entity_relations(company_id, to_type, to_id)",
-  // Stripe cache objects can link back to a local entity (invoice/client/
-  // expense/bill). Keeps the bidirectional graph complete.
-  "ALTER TABLE stripe_cache ADD COLUMN local_entity_type TEXT DEFAULT ''",
-  "ALTER TABLE stripe_cache ADD COLUMN local_entity_id TEXT DEFAULT ''",
-  "CREATE INDEX IF NOT EXISTS idx_stripe_cache_local ON stripe_cache(company_id, local_entity_type, local_entity_id)",
-  // Feature 9: Payroll run notes
-  "ALTER TABLE payroll_runs ADD COLUMN notes TEXT DEFAULT ''",
-  // Feature 22: Employee count stored on payroll run
-  "ALTER TABLE payroll_runs ADD COLUMN employee_count INTEGER DEFAULT 0",
-  // Feature 6: Pay rate effective date for history tracking
-  "ALTER TABLE employees ADD COLUMN pay_rate_effective_date TEXT DEFAULT ''",
-  // Feature 20: Check number on pay stubs
-  "ALTER TABLE pay_stubs ADD COLUMN check_number TEXT DEFAULT ''",
-  // Company fiscal year end + base currency
-  "ALTER TABLE companies ADD COLUMN fiscal_year_end TEXT DEFAULT '12'",
-  "ALTER TABLE companies ADD COLUMN base_currency TEXT DEFAULT 'USD'",
-  // Company bank info for check printing (2026-04-24)
-  "ALTER TABLE companies ADD COLUMN bank_name TEXT DEFAULT ''",
-  "ALTER TABLE companies ADD COLUMN bank_routing_number TEXT DEFAULT ''",
-  "ALTER TABLE companies ADD COLUMN bank_account_number TEXT DEFAULT ''",
-  "ALTER TABLE companies ADD COLUMN bank_fraction_code TEXT DEFAULT ''",
-  // Admin signature for check printing (base64 data URL)
-  "ALTER TABLE companies ADD COLUMN signature_image TEXT DEFAULT ''",
-  // Per-tax YTD columns on pay_stubs for check printing (2026-04-24)
-  "ALTER TABLE pay_stubs ADD COLUMN ytd_federal_tax REAL DEFAULT 0",
-  "ALTER TABLE pay_stubs ADD COLUMN ytd_state_tax REAL DEFAULT 0",
-  "ALTER TABLE pay_stubs ADD COLUMN ytd_social_security REAL DEFAULT 0",
-  "ALTER TABLE pay_stubs ADD COLUMN ytd_medicare REAL DEFAULT 0",
-  // Expense capture features (2026-04-23) — multi-currency, mileage, per-diem, additional receipts, foreign tax, notes
-  "ALTER TABLE expenses ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE expenses ADD COLUMN exchange_rate REAL DEFAULT 1",
-  "ALTER TABLE expenses ADD COLUMN tax_inclusive INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN tax_rate REAL DEFAULT 0",
-  // Header-level discount on expenses (added after Invoice Wave II — parity
-  // with invoices.discount_pct + invoices.discount_amount). Math convention
-  // matches invoices: discount is applied AFTER tax (does NOT reduce tax base).
-  "ALTER TABLE expenses ADD COLUMN discount_amount REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN discount_percent REAL DEFAULT 0",
-  // Loan Linkage (F1053-F1062) — soft FKs to loans so an expense row
-  // (typically the interest portion of a loan payment) can be traced back
-  // to which loan it belonged to. Soft FKs (no REFERENCES) keep the columns
-  // optional and avoid the cascading-delete complexity.
-  "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
-  "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
-  // Bidirectional link — loan_payment knows which expense was auto-created
-  // for its interest portion. Allows cascade-delete and edit-sync between
-  // the loan payment and the expense ledger.
-  "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
-  // Second link for the PRINCIPAL-portion expense row. Each loan payment
-  // now spawns two linked expense rows: interest (deductible) +
-  // principal (non-deductible). Two named columns keep edit-sync
-  // unambiguous — interest_amount syncs related_expense_id, principal_amount
-  // syncs related_principal_expense_id.
-  "ALTER TABLE loan_payments ADD COLUMN related_principal_expense_id TEXT",
-  // Tags an expense row with which loan-payment component it represents,
-  // so reverse lookups + reports can filter.
-  // Now: 'combined' for the single split-expense per payment (legacy
-  // 'interest'/'principal' rows are migrated into one 'combined' row
-  // with line items). '' for normal expenses.
-  "ALTER TABLE expenses ADD COLUMN loan_component TEXT DEFAULT ''",
-  // Line-item split tags for the one-row-per-payment model: each loan
-  // payment expense has Interest + Principal (+ Escrow) line items.
-  "ALTER TABLE expense_line_items ADD COLUMN loan_component TEXT DEFAULT ''",
-  // Deductibility flag — principal repayment is NOT a deductible
-  // expense. Reports can sum only deductible=1 lines for accurate P&L
-  // while the parent row still shows the full cash-out.
-  "ALTER TABLE expense_line_items ADD COLUMN deductible INTEGER DEFAULT 1",
-  // Vendor Advanced Wave — extend vendors with fields exposed by the new
-  // 6-tab VendorFormAdvanced. Many existing columns already covered by
-  // earlier waves (vendor_type, w9_status, approval_status, diversity,
-  // ach_routing, contract dates, performance counters) — these add the
-  // missing pieces: multi-contact / multi-address JSON blobs, COI,
-  // default GL accounts, credit limit, currency, website, business reg #.
-  "ALTER TABLE vendors ADD COLUMN contacts_json TEXT DEFAULT '[]'",
-  "ALTER TABLE vendors ADD COLUMN additional_addresses_json TEXT DEFAULT '[]'",
-  "ALTER TABLE vendors ADD COLUMN coi_expiry TEXT",
-  "ALTER TABLE vendors ADD COLUMN coi_amount REAL",
-  "ALTER TABLE vendors ADD COLUMN default_expense_account_id TEXT",
-  "ALTER TABLE vendors ADD COLUMN default_ap_account_id TEXT",
-  "ALTER TABLE vendors ADD COLUMN credit_limit REAL DEFAULT 0",
-  "ALTER TABLE vendors ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE vendors ADD COLUMN website TEXT",
-  "ALTER TABLE vendors ADD COLUMN business_registration_no TEXT",
-  "ALTER TABLE vendors ADD COLUMN onboarding_status TEXT DEFAULT 'in_progress'",
-  "ALTER TABLE vendors ADD COLUMN preferred_payment_method TEXT",
-  "ALTER TABLE expenses ADD COLUMN entry_mode TEXT DEFAULT 'standard'",
-  "ALTER TABLE expenses ADD COLUMN odometer_start REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN odometer_end REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN miles REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN mileage_rate REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN per_diem_location TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN per_diem_days REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN per_diem_rate REAL DEFAULT 0",
-  // Fuel-mode columns (#.### precision — SQLite REAL preserves the exact
-  // 3-decimal pump readings; cents-rounded total still lives in `amount`).
-  "ALTER TABLE expenses ADD COLUMN fuel_gallons REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN fuel_price_per_gallon REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN fuel_grade TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN fuel_vehicle TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN fuel_odometer REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN fuel_station TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN receipts_json TEXT DEFAULT '[]'",
-  "ALTER TABLE expenses ADD COLUMN notes TEXT DEFAULT ''",
-  // ── Expense categorization, tax & compliance metadata (2026-04-23) ──
-  // Categorization
-  "ALTER TABLE categories ADD COLUMN monthly_cap REAL DEFAULT 0",
-  "ALTER TABLE categories ADD COLUMN default_account_id TEXT DEFAULT ''",
-  "ALTER TABLE categories ADD COLUMN required_fields TEXT DEFAULT '[]'",
-  "ALTER TABLE expenses ADD COLUMN expense_class TEXT DEFAULT ''",
-  // Tax
-  "ALTER TABLE expense_line_items ADD COLUMN tax_rate REAL DEFAULT 0",
-  // Itemization Wave (F841-F862) — per-line accounting + flags
-  "ALTER TABLE expense_line_items ADD COLUMN category_id TEXT",
-  "ALTER TABLE expense_line_items ADD COLUMN project_id TEXT",
-  "ALTER TABLE expense_line_items ADD COLUMN client_id TEXT",
-  "ALTER TABLE expense_line_items ADD COLUMN discount_amount REAL DEFAULT 0",
-  "ALTER TABLE expense_line_items ADD COLUMN discount_percent REAL DEFAULT 0",
-  "ALTER TABLE expense_line_items ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
-  "ALTER TABLE expense_line_items ADD COLUMN is_tax_exempt INTEGER DEFAULT 0",
-  "ALTER TABLE expense_line_items ADD COLUMN notes TEXT",
-  "ALTER TABLE expense_line_items ADD COLUMN item_type TEXT DEFAULT 'item'",
-  "ALTER TABLE expense_line_items ADD COLUMN tags TEXT DEFAULT '[]'",
-  "ALTER TABLE expense_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
-  "ALTER TABLE expense_line_items ADD COLUMN tax_jurisdictions TEXT DEFAULT '[]'",
-  "ALTER TABLE expenses ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
-  "ALTER TABLE expenses ADD COLUMN schedule_c_line TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN foreign_tax_amount REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN tax_year_override INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN vendor_is_1099 INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN vendor_w9_status TEXT DEFAULT ''",
-  // Compliance
-  "ALTER TABLE expenses ADD COLUMN lost_receipt_affidavit TEXT DEFAULT ''",
-  // ── Expense Approval & Reimbursement Workflow (2026-04-23) ─────────
-  "ALTER TABLE expenses ADD COLUMN approval_status TEXT DEFAULT 'draft'",
-  "ALTER TABLE expenses ADD COLUMN approver_id TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN approval_token TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN reimbursement_batch_id TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN payroll_run_id TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN is_locked INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN policy_override_comment TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN submitted_at TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN employee_id TEXT DEFAULT ''",
-  `CREATE TABLE IF NOT EXISTS expense_approval_steps (
+        "CREATE INDEX IF NOT EXISTS idx_entity_rel_from ON entity_relations(company_id, from_type, from_id)",
+        "CREATE INDEX IF NOT EXISTS idx_entity_rel_to   ON entity_relations(company_id, to_type, to_id)",
+        // Stripe cache objects can link back to a local entity (invoice/client/
+        // expense/bill). Keeps the bidirectional graph complete.
+        "ALTER TABLE stripe_cache ADD COLUMN local_entity_type TEXT DEFAULT ''",
+        "ALTER TABLE stripe_cache ADD COLUMN local_entity_id TEXT DEFAULT ''",
+        "CREATE INDEX IF NOT EXISTS idx_stripe_cache_local ON stripe_cache(company_id, local_entity_type, local_entity_id)",
+        // Feature 9: Payroll run notes
+        "ALTER TABLE payroll_runs ADD COLUMN notes TEXT DEFAULT ''",
+        // Feature 22: Employee count stored on payroll run
+        "ALTER TABLE payroll_runs ADD COLUMN employee_count INTEGER DEFAULT 0",
+        // Feature 6: Pay rate effective date for history tracking
+        "ALTER TABLE employees ADD COLUMN pay_rate_effective_date TEXT DEFAULT ''",
+        // Feature 20: Check number on pay stubs
+        "ALTER TABLE pay_stubs ADD COLUMN check_number TEXT DEFAULT ''",
+        // Company fiscal year end + base currency
+        "ALTER TABLE companies ADD COLUMN fiscal_year_end TEXT DEFAULT '12'",
+        "ALTER TABLE companies ADD COLUMN base_currency TEXT DEFAULT 'USD'",
+        // Company bank info for check printing (2026-04-24)
+        "ALTER TABLE companies ADD COLUMN bank_name TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN bank_routing_number TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN bank_account_number TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN bank_fraction_code TEXT DEFAULT ''",
+        // Admin signature for check printing (base64 data URL)
+        "ALTER TABLE companies ADD COLUMN signature_image TEXT DEFAULT ''",
+        // Per-tax YTD columns on pay_stubs for check printing (2026-04-24)
+        "ALTER TABLE pay_stubs ADD COLUMN ytd_federal_tax REAL DEFAULT 0",
+        "ALTER TABLE pay_stubs ADD COLUMN ytd_state_tax REAL DEFAULT 0",
+        "ALTER TABLE pay_stubs ADD COLUMN ytd_social_security REAL DEFAULT 0",
+        "ALTER TABLE pay_stubs ADD COLUMN ytd_medicare REAL DEFAULT 0",
+        // Expense capture features (2026-04-23) — multi-currency, mileage, per-diem, additional receipts, foreign tax, notes
+        "ALTER TABLE expenses ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE expenses ADD COLUMN exchange_rate REAL DEFAULT 1",
+        "ALTER TABLE expenses ADD COLUMN tax_inclusive INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN tax_rate REAL DEFAULT 0",
+        // Header-level discount on expenses (added after Invoice Wave II — parity
+        // with invoices.discount_pct + invoices.discount_amount). Math convention
+        // matches invoices: discount is applied AFTER tax (does NOT reduce tax base).
+        "ALTER TABLE expenses ADD COLUMN discount_amount REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN discount_percent REAL DEFAULT 0",
+        // Loan Linkage (F1053-F1062) — soft FKs to loans so an expense row
+        // (typically the interest portion of a loan payment) can be traced back
+        // to which loan it belonged to. Soft FKs (no REFERENCES) keep the columns
+        // optional and avoid the cascading-delete complexity.
+        "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
+        "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
+        // Bidirectional link — loan_payment knows which expense was auto-created
+        // for its interest portion. Allows cascade-delete and edit-sync between
+        // the loan payment and the expense ledger.
+        "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
+        // Second link for the PRINCIPAL-portion expense row. Each loan payment
+        // now spawns two linked expense rows: interest (deductible) +
+        // principal (non-deductible). Two named columns keep edit-sync
+        // unambiguous — interest_amount syncs related_expense_id, principal_amount
+        // syncs related_principal_expense_id.
+        "ALTER TABLE loan_payments ADD COLUMN related_principal_expense_id TEXT",
+        // Tags an expense row with which loan-payment component it represents,
+        // so reverse lookups + reports can filter.
+        // Now: 'combined' for the single split-expense per payment (legacy
+        // 'interest'/'principal' rows are migrated into one 'combined' row
+        // with line items). '' for normal expenses.
+        "ALTER TABLE expenses ADD COLUMN loan_component TEXT DEFAULT ''",
+        // Line-item split tags for the one-row-per-payment model: each loan
+        // payment expense has Interest + Principal (+ Escrow) line items.
+        "ALTER TABLE expense_line_items ADD COLUMN loan_component TEXT DEFAULT ''",
+        // Deductibility flag — principal repayment is NOT a deductible
+        // expense. Reports can sum only deductible=1 lines for accurate P&L
+        // while the parent row still shows the full cash-out.
+        "ALTER TABLE expense_line_items ADD COLUMN deductible INTEGER DEFAULT 1",
+        // Vendor Advanced Wave — extend vendors with fields exposed by the new
+        // 6-tab VendorFormAdvanced. Many existing columns already covered by
+        // earlier waves (vendor_type, w9_status, approval_status, diversity,
+        // ach_routing, contract dates, performance counters) — these add the
+        // missing pieces: multi-contact / multi-address JSON blobs, COI,
+        // default GL accounts, credit limit, currency, website, business reg #.
+        "ALTER TABLE vendors ADD COLUMN contacts_json TEXT DEFAULT '[]'",
+        "ALTER TABLE vendors ADD COLUMN additional_addresses_json TEXT DEFAULT '[]'",
+        "ALTER TABLE vendors ADD COLUMN coi_expiry TEXT",
+        "ALTER TABLE vendors ADD COLUMN coi_amount REAL",
+        "ALTER TABLE vendors ADD COLUMN default_expense_account_id TEXT",
+        "ALTER TABLE vendors ADD COLUMN default_ap_account_id TEXT",
+        "ALTER TABLE vendors ADD COLUMN credit_limit REAL DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE vendors ADD COLUMN website TEXT",
+        "ALTER TABLE vendors ADD COLUMN business_registration_no TEXT",
+        "ALTER TABLE vendors ADD COLUMN onboarding_status TEXT DEFAULT 'in_progress'",
+        "ALTER TABLE vendors ADD COLUMN preferred_payment_method TEXT",
+        "ALTER TABLE expenses ADD COLUMN entry_mode TEXT DEFAULT 'standard'",
+        "ALTER TABLE expenses ADD COLUMN odometer_start REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN odometer_end REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN miles REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN mileage_rate REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN per_diem_location TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN per_diem_days REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN per_diem_rate REAL DEFAULT 0",
+        // Fuel-mode columns (#.### precision — SQLite REAL preserves the exact
+        // 3-decimal pump readings; cents-rounded total still lives in `amount`).
+        "ALTER TABLE expenses ADD COLUMN fuel_gallons REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN fuel_price_per_gallon REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN fuel_grade TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN fuel_vehicle TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN fuel_odometer REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN fuel_station TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN receipts_json TEXT DEFAULT '[]'",
+        "ALTER TABLE expenses ADD COLUMN notes TEXT DEFAULT ''",
+        // ── Expense categorization, tax & compliance metadata (2026-04-23) ──
+        // Categorization
+        "ALTER TABLE categories ADD COLUMN monthly_cap REAL DEFAULT 0",
+        "ALTER TABLE categories ADD COLUMN default_account_id TEXT DEFAULT ''",
+        "ALTER TABLE categories ADD COLUMN required_fields TEXT DEFAULT '[]'",
+        "ALTER TABLE expenses ADD COLUMN expense_class TEXT DEFAULT ''",
+        // Tax
+        "ALTER TABLE expense_line_items ADD COLUMN tax_rate REAL DEFAULT 0",
+        // Itemization Wave (F841-F862) — per-line accounting + flags
+        "ALTER TABLE expense_line_items ADD COLUMN category_id TEXT",
+        "ALTER TABLE expense_line_items ADD COLUMN project_id TEXT",
+        "ALTER TABLE expense_line_items ADD COLUMN client_id TEXT",
+        "ALTER TABLE expense_line_items ADD COLUMN discount_amount REAL DEFAULT 0",
+        "ALTER TABLE expense_line_items ADD COLUMN discount_percent REAL DEFAULT 0",
+        "ALTER TABLE expense_line_items ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
+        "ALTER TABLE expense_line_items ADD COLUMN is_tax_exempt INTEGER DEFAULT 0",
+        "ALTER TABLE expense_line_items ADD COLUMN notes TEXT",
+        "ALTER TABLE expense_line_items ADD COLUMN item_type TEXT DEFAULT 'item'",
+        "ALTER TABLE expense_line_items ADD COLUMN tags TEXT DEFAULT '[]'",
+        "ALTER TABLE expense_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
+        "ALTER TABLE expense_line_items ADD COLUMN tax_jurisdictions TEXT DEFAULT '[]'",
+        "ALTER TABLE expenses ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
+        "ALTER TABLE expenses ADD COLUMN schedule_c_line TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN foreign_tax_amount REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN tax_year_override INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN vendor_is_1099 INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN vendor_w9_status TEXT DEFAULT ''",
+        // Compliance
+        "ALTER TABLE expenses ADD COLUMN lost_receipt_affidavit TEXT DEFAULT ''",
+        // ── Expense Approval & Reimbursement Workflow (2026-04-23) ─────────
+        "ALTER TABLE expenses ADD COLUMN approval_status TEXT DEFAULT 'draft'",
+        "ALTER TABLE expenses ADD COLUMN approver_id TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN approval_token TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN reimbursement_batch_id TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN payroll_run_id TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN is_locked INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN policy_override_comment TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN submitted_at TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN employee_id TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS expense_approval_steps (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
     step_order INTEGER NOT NULL DEFAULT 0,
@@ -708,17 +728,17 @@ export function initDatabase(): Database.Database {
     comment TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_eas_expense ON expense_approval_steps(expense_id)",
-  "CREATE INDEX IF NOT EXISTS idx_eas_approver ON expense_approval_steps(approver_id, status)",
-  `CREATE TABLE IF NOT EXISTS expense_comments (
+        "CREATE INDEX IF NOT EXISTS idx_eas_expense ON expense_approval_steps(expense_id)",
+        "CREATE INDEX IF NOT EXISTS idx_eas_approver ON expense_approval_steps(approver_id, status)",
+        `CREATE TABLE IF NOT EXISTS expense_comments (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
     user_id TEXT DEFAULT '',
     body TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_ecmt_expense ON expense_comments(expense_id)",
-  `CREATE TABLE IF NOT EXISTS reimbursement_batches (
+        "CREATE INDEX IF NOT EXISTS idx_ecmt_expense ON expense_comments(expense_id)",
+        `CREATE TABLE IF NOT EXISTS reimbursement_batches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL DEFAULT '',
@@ -732,8 +752,8 @@ export function initDatabase(): Database.Database {
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_reim_batch_company ON reimbursement_batches(company_id, employee_id)",
-  `CREATE TABLE IF NOT EXISTS period_locks (
+        "CREATE INDEX IF NOT EXISTS idx_reim_batch_company ON reimbursement_batches(company_id, employee_id)",
+        `CREATE TABLE IF NOT EXISTS period_locks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     locked_through_date TEXT NOT NULL DEFAULT '',
@@ -741,38 +761,38 @@ export function initDatabase(): Database.Database {
     note TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // ── Chart of Accounts enhancements (2026-04-23) ────────
-  "ALTER TABLE accounts ADD COLUMN sort_order INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN is_1099_eligible INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN color TEXT DEFAULT ''",
-  "ALTER TABLE accounts ADD COLUMN is_pinned INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN is_locked INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN requires_document INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN rename_log TEXT DEFAULT '[]'",
-  // ── Journal Entry feature pack (2026-04-23) ────────
-  "ALTER TABLE journal_entries ADD COLUMN is_recurring INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN recurring_template_id TEXT",
-  "ALTER TABLE journal_entries ADD COLUMN is_reversing INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN reverse_on_date TEXT",
-  "ALTER TABLE journal_entries ADD COLUMN reversed_from_id TEXT",
-  "ALTER TABLE journal_entries ADD COLUMN approval_status TEXT DEFAULT 'draft'",
-  "ALTER TABLE journal_entries ADD COLUMN class TEXT DEFAULT ''",
-  "ALTER TABLE journal_entries ADD COLUMN source_type TEXT DEFAULT ''",
-  "ALTER TABLE journal_entries ADD COLUMN source_id TEXT DEFAULT ''",
-  "ALTER TABLE journal_entry_lines ADD COLUMN line_memo TEXT DEFAULT ''",
-  "ALTER TABLE journal_entry_lines ADD COLUMN sort_order INTEGER DEFAULT 0",
-  `CREATE TABLE IF NOT EXISTS je_comments (
+        // ── Chart of Accounts enhancements (2026-04-23) ────────
+        "ALTER TABLE accounts ADD COLUMN sort_order INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN is_1099_eligible INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN color TEXT DEFAULT ''",
+        "ALTER TABLE accounts ADD COLUMN is_pinned INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN is_locked INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN requires_document INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN rename_log TEXT DEFAULT '[]'",
+        // ── Journal Entry feature pack (2026-04-23) ────────
+        "ALTER TABLE journal_entries ADD COLUMN is_recurring INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN recurring_template_id TEXT",
+        "ALTER TABLE journal_entries ADD COLUMN is_reversing INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN reverse_on_date TEXT",
+        "ALTER TABLE journal_entries ADD COLUMN reversed_from_id TEXT",
+        "ALTER TABLE journal_entries ADD COLUMN approval_status TEXT DEFAULT 'draft'",
+        "ALTER TABLE journal_entries ADD COLUMN class TEXT DEFAULT ''",
+        "ALTER TABLE journal_entries ADD COLUMN source_type TEXT DEFAULT ''",
+        "ALTER TABLE journal_entries ADD COLUMN source_id TEXT DEFAULT ''",
+        "ALTER TABLE journal_entry_lines ADD COLUMN line_memo TEXT DEFAULT ''",
+        "ALTER TABLE journal_entry_lines ADD COLUMN sort_order INTEGER DEFAULT 0",
+        `CREATE TABLE IF NOT EXISTS je_comments (
     id TEXT PRIMARY KEY,
     journal_entry_id TEXT NOT NULL,
     user_id TEXT DEFAULT '',
     body TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_je_comments_entry ON je_comments(journal_entry_id)",
-  // ── Trial Balance / General Ledger feature pack (2026-04-23) ────────
-  "ALTER TABLE journal_entry_lines ADD COLUMN note TEXT DEFAULT ''",
-  "ALTER TABLE journal_entries ADD COLUMN is_closing INTEGER DEFAULT 0",
-  `CREATE TABLE IF NOT EXISTS tb_working_adjustments (
+        "CREATE INDEX IF NOT EXISTS idx_je_comments_entry ON je_comments(journal_entry_id)",
+        // ── Trial Balance / General Ledger feature pack (2026-04-23) ────────
+        "ALTER TABLE journal_entry_lines ADD COLUMN note TEXT DEFAULT ''",
+        "ALTER TABLE journal_entries ADD COLUMN is_closing INTEGER DEFAULT 0",
+        `CREATE TABLE IF NOT EXISTS tb_working_adjustments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -784,9 +804,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_tb_adj_company ON tb_working_adjustments(company_id, period_start, period_end)",
-  // ── Period close + Reconciliation + Compliance (2026-04-23) ────────
-  `CREATE TABLE IF NOT EXISTS period_close_checklist (
+        "CREATE INDEX IF NOT EXISTS idx_tb_adj_company ON tb_working_adjustments(company_id, period_start, period_end)",
+        // ── Period close + Reconciliation + Compliance (2026-04-23) ────────
+        `CREATE TABLE IF NOT EXISTS period_close_checklist (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_label TEXT NOT NULL DEFAULT '',
@@ -798,8 +818,8 @@ export function initDatabase(): Database.Database {
     note TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_pcc_period ON period_close_checklist(company_id, period_label)",
-  `CREATE TABLE IF NOT EXISTS period_close_log (
+        "CREATE INDEX IF NOT EXISTS idx_pcc_period ON period_close_checklist(company_id, period_label)",
+        `CREATE TABLE IF NOT EXISTS period_close_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_start TEXT DEFAULT '',
@@ -811,14 +831,14 @@ export function initDatabase(): Database.Database {
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_pcl_company ON period_close_log(company_id)",
-  "ALTER TABLE period_locks ADD COLUMN period_start TEXT DEFAULT ''",
-  "ALTER TABLE period_locks ADD COLUMN period_end TEXT DEFAULT ''",
-  "ALTER TABLE period_locks ADD COLUMN reason TEXT DEFAULT ''",
-  "ALTER TABLE period_locks ADD COLUMN unlocked_at TEXT DEFAULT ''",
-  "ALTER TABLE period_locks ADD COLUMN unlocked_by TEXT DEFAULT ''",
-  "ALTER TABLE period_locks ADD COLUMN unlock_reason TEXT DEFAULT ''",
-  `CREATE TABLE IF NOT EXISTS account_reconciliations (
+        "CREATE INDEX IF NOT EXISTS idx_pcl_company ON period_close_log(company_id)",
+        "ALTER TABLE period_locks ADD COLUMN period_start TEXT DEFAULT ''",
+        "ALTER TABLE period_locks ADD COLUMN period_end TEXT DEFAULT ''",
+        "ALTER TABLE period_locks ADD COLUMN reason TEXT DEFAULT ''",
+        "ALTER TABLE period_locks ADD COLUMN unlocked_at TEXT DEFAULT ''",
+        "ALTER TABLE period_locks ADD COLUMN unlocked_by TEXT DEFAULT ''",
+        "ALTER TABLE period_locks ADD COLUMN unlock_reason TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS account_reconciliations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -832,18 +852,18 @@ export function initDatabase(): Database.Database {
     matches TEXT DEFAULT '[]',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_recon_acct ON account_reconciliations(company_id, account_id)",
-  "ALTER TABLE accounts ADD COLUMN allow_direct_posting INTEGER DEFAULT 1",
-  "ALTER TABLE accounts ADD COLUMN tax_line TEXT DEFAULT ''",
-  "ALTER TABLE accounts ADD COLUMN attachment_required INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN attachment_threshold REAL DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN approved_by TEXT DEFAULT ''",
-  "ALTER TABLE journal_entries ADD COLUMN posted_by TEXT DEFAULT ''",
-  // ── GL analytics: per-account monthly cap (2026-04-23) ────────
-  "ALTER TABLE accounts ADD COLUMN monthly_cap REAL DEFAULT 0",
-  // ── CoA round 2 (2026-04-23) ─────────────────────────────────
-  // F1: Account groups
-  `CREATE TABLE IF NOT EXISTS account_groups (
+        "CREATE INDEX IF NOT EXISTS idx_recon_acct ON account_reconciliations(company_id, account_id)",
+        "ALTER TABLE accounts ADD COLUMN allow_direct_posting INTEGER DEFAULT 1",
+        "ALTER TABLE accounts ADD COLUMN tax_line TEXT DEFAULT ''",
+        "ALTER TABLE accounts ADD COLUMN attachment_required INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN attachment_threshold REAL DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN approved_by TEXT DEFAULT ''",
+        "ALTER TABLE journal_entries ADD COLUMN posted_by TEXT DEFAULT ''",
+        // ── GL analytics: per-account monthly cap (2026-04-23) ────────
+        "ALTER TABLE accounts ADD COLUMN monthly_cap REAL DEFAULT 0",
+        // ── CoA round 2 (2026-04-23) ─────────────────────────────────
+        // F1: Account groups
+        `CREATE TABLE IF NOT EXISTS account_groups (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
@@ -851,17 +871,17 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS account_group_members (
+        `CREATE TABLE IF NOT EXISTS account_group_members (
     id TEXT PRIMARY KEY,
     group_id TEXT NOT NULL REFERENCES account_groups(id) ON DELETE CASCADE,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(group_id, account_id)
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_agm_group ON account_group_members(group_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_agm_account ON account_group_members(account_id)`,
-  // F2: Account permissions per role
-  `CREATE TABLE IF NOT EXISTS account_permissions (
+        `CREATE INDEX IF NOT EXISTS idx_agm_group ON account_group_members(group_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_agm_account ON account_group_members(account_id)`,
+        // F2: Account permissions per role
+        `CREATE TABLE IF NOT EXISTS account_permissions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -871,9 +891,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, account_id, role)
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_acct_perm_acct ON account_permissions(account_id, role)`,
-  // F3: Account watchlist
-  `CREATE TABLE IF NOT EXISTS account_watches (
+        `CREATE INDEX IF NOT EXISTS idx_acct_perm_acct ON account_permissions(account_id, role)`,
+        // F3: Account watchlist
+        `CREATE TABLE IF NOT EXISTS account_watches (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL DEFAULT '',
     account_id TEXT NOT NULL,
@@ -881,47 +901,47 @@ export function initDatabase(): Database.Database {
     notify_email TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_acct_watch_acct ON account_watches(account_id)`,
-  // F4: Account aliases
-  `CREATE TABLE IF NOT EXISTS account_aliases (
+        `CREATE INDEX IF NOT EXISTS idx_acct_watch_acct ON account_watches(account_id)`,
+        // F4: Account aliases
+        `CREATE TABLE IF NOT EXISTS account_aliases (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     alias TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_acct_alias_acct ON account_aliases(account_id)`,
-  // F5/22: Multi-currency + sub-ledger + bank linkage + soft delete
-  // SCHEMA: accounts.deleted_at is INTENTIONALLY a soft-delete column.
-  // Existing journal_entry_lines that reference a soft-deleted account
-  // continue to resolve via the live FK (no ON DELETE CASCADE on accounts),
-  // which is the correct behaviour for an audit-trail system: GL history
-  // must remain queryable even after the chart of accounts changes. List
-  // queries hide soft-deleted rows via tablesWithDeletedAt auto-filter.
-  "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE accounts ADD COLUMN bank_account_id TEXT DEFAULT ''",
-  "ALTER TABLE accounts ADD COLUMN subledger_type TEXT DEFAULT 'none'",
-  "ALTER TABLE accounts ADD COLUMN deleted_at TEXT DEFAULT ''",
-  "ALTER TABLE accounts ADD COLUMN compliance_tags TEXT DEFAULT '[]'",
-  // F10: Comments
-  `CREATE TABLE IF NOT EXISTS account_comments (
+        `CREATE INDEX IF NOT EXISTS idx_acct_alias_acct ON account_aliases(account_id)`,
+        // F5/22: Multi-currency + sub-ledger + bank linkage + soft delete
+        // SCHEMA: accounts.deleted_at is INTENTIONALLY a soft-delete column.
+        // Existing journal_entry_lines that reference a soft-deleted account
+        // continue to resolve via the live FK (no ON DELETE CASCADE on accounts),
+        // which is the correct behaviour for an audit-trail system: GL history
+        // must remain queryable even after the chart of accounts changes. List
+        // queries hide soft-deleted rows via tablesWithDeletedAt auto-filter.
+        "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE accounts ADD COLUMN bank_account_id TEXT DEFAULT ''",
+        "ALTER TABLE accounts ADD COLUMN subledger_type TEXT DEFAULT 'none'",
+        "ALTER TABLE accounts ADD COLUMN deleted_at TEXT DEFAULT ''",
+        "ALTER TABLE accounts ADD COLUMN compliance_tags TEXT DEFAULT '[]'",
+        // F10: Comments
+        `CREATE TABLE IF NOT EXISTS account_comments (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     user_id TEXT DEFAULT '',
     body TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_acct_comments_acct ON account_comments(account_id)`,
-  // F24: Auto-categorize rules
-  `CREATE TABLE IF NOT EXISTS account_classify_rules (
+        `CREATE INDEX IF NOT EXISTS idx_acct_comments_acct ON account_comments(account_id)`,
+        // F24: Auto-categorize rules
+        `CREATE TABLE IF NOT EXISTS account_classify_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pattern TEXT NOT NULL DEFAULT '',
     account_id TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_acr_company ON account_classify_rules(company_id)`,
-  // F25: Daily balance history
-  `CREATE TABLE IF NOT EXISTS account_balance_history (
+        `CREATE INDEX IF NOT EXISTS idx_acr_company ON account_classify_rules(company_id)`,
+        // F25: Daily balance history
+        `CREATE TABLE IF NOT EXISTS account_balance_history (
     id TEXT PRIMARY KEY,
     date TEXT NOT NULL DEFAULT '',
     account_id TEXT NOT NULL,
@@ -929,10 +949,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(date, account_id)
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_abh_acct_date ON account_balance_history(account_id, date)`,
-  // ── TB/GL round 2 (2026-04-23) ───────────────────────────────
-  // TB elimination entries (intercompany)
-  `CREATE TABLE IF NOT EXISTS tb_elimination_entries (
+        `CREATE INDEX IF NOT EXISTS idx_abh_acct_date ON account_balance_history(account_id, date)`,
+        // ── TB/GL round 2 (2026-04-23) ───────────────────────────────
+        // TB elimination entries (intercompany)
+        `CREATE TABLE IF NOT EXISTS tb_elimination_entries (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL DEFAULT '',
     period_label TEXT NOT NULL DEFAULT '',
@@ -941,23 +961,23 @@ export function initDatabase(): Database.Database {
     memo TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_tb_elim_period ON tb_elimination_entries(period_label, account_id)`,
-  // GL line-level review/flag/approval columns
-  "ALTER TABLE journal_entry_lines ADD COLUMN signed_off_by TEXT DEFAULT ''",
-  "ALTER TABLE journal_entry_lines ADD COLUMN signed_off_at TEXT DEFAULT ''",
-  "ALTER TABLE journal_entry_lines ADD COLUMN flagged INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entry_lines ADD COLUMN flag_reason TEXT DEFAULT ''",
-  "ALTER TABLE journal_entry_lines ADD COLUMN question_flag INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entry_lines ADD COLUMN approval_step INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entry_lines ADD COLUMN is_credit_memo INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entry_lines ADD COLUMN is_accountant_adj INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entry_lines ADD COLUMN mention TEXT DEFAULT ''",
-  // ── JE round 2 (2026-04-23) ───────────────────────────────
-  "ALTER TABLE journal_entry_lines ADD COLUMN is_locked INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN color TEXT DEFAULT ''",
-  "ALTER TABLE journal_entries ADD COLUMN is_starred INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN version INTEGER DEFAULT 1",
-  `CREATE TABLE IF NOT EXISTS je_history (
+        `CREATE INDEX IF NOT EXISTS idx_tb_elim_period ON tb_elimination_entries(period_label, account_id)`,
+        // GL line-level review/flag/approval columns
+        "ALTER TABLE journal_entry_lines ADD COLUMN signed_off_by TEXT DEFAULT ''",
+        "ALTER TABLE journal_entry_lines ADD COLUMN signed_off_at TEXT DEFAULT ''",
+        "ALTER TABLE journal_entry_lines ADD COLUMN flagged INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entry_lines ADD COLUMN flag_reason TEXT DEFAULT ''",
+        "ALTER TABLE journal_entry_lines ADD COLUMN question_flag INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entry_lines ADD COLUMN approval_step INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entry_lines ADD COLUMN is_credit_memo INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entry_lines ADD COLUMN is_accountant_adj INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entry_lines ADD COLUMN mention TEXT DEFAULT ''",
+        // ── JE round 2 (2026-04-23) ───────────────────────────────
+        "ALTER TABLE journal_entry_lines ADD COLUMN is_locked INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN color TEXT DEFAULT ''",
+        "ALTER TABLE journal_entries ADD COLUMN is_starred INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN version INTEGER DEFAULT 1",
+        `CREATE TABLE IF NOT EXISTS je_history (
     id TEXT PRIMARY KEY,
     je_id TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
@@ -965,20 +985,20 @@ export function initDatabase(): Database.Database {
     changed_at TEXT DEFAULT (datetime('now')),
     changed_by TEXT DEFAULT ''
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_je_history_je ON je_history(je_id, version)",
-  // ── Period Close + Reconciliation + Compliance round 2 (2026-04-23) ────────
-  "ALTER TABLE period_locks ADD COLUMN lock_level TEXT DEFAULT 'hard'", // 'soft' | 'hard'
-  "ALTER TABLE journal_entries ADD COLUMN adjustment_category TEXT DEFAULT ''",
-  "ALTER TABLE journal_entries ADD COLUMN is_inter_period INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN inter_period_pair_id TEXT DEFAULT ''",
-  "ALTER TABLE period_close_log ADD COLUMN digest_html TEXT DEFAULT ''",
-  "ALTER TABLE period_close_log ADD COLUMN roll_forward_done INTEGER DEFAULT 0",
-  "ALTER TABLE period_close_log ADD COLUMN is_short_period INTEGER DEFAULT 0",
-  "ALTER TABLE period_close_log ADD COLUMN reopened_at TEXT DEFAULT ''",
-  "ALTER TABLE period_close_log ADD COLUMN reopened_by TEXT DEFAULT ''",
-  "ALTER TABLE audit_log ADD COLUMN prev_hash TEXT DEFAULT ''",
-  "ALTER TABLE audit_log ADD COLUMN row_hash TEXT DEFAULT ''",
-  `CREATE TABLE IF NOT EXISTS account_reconciliation_items (
+        "CREATE INDEX IF NOT EXISTS idx_je_history_je ON je_history(je_id, version)",
+        // ── Period Close + Reconciliation + Compliance round 2 (2026-04-23) ────────
+        "ALTER TABLE period_locks ADD COLUMN lock_level TEXT DEFAULT 'hard'", // 'soft' | 'hard'
+        "ALTER TABLE journal_entries ADD COLUMN adjustment_category TEXT DEFAULT ''",
+        "ALTER TABLE journal_entries ADD COLUMN is_inter_period INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN inter_period_pair_id TEXT DEFAULT ''",
+        "ALTER TABLE period_close_log ADD COLUMN digest_html TEXT DEFAULT ''",
+        "ALTER TABLE period_close_log ADD COLUMN roll_forward_done INTEGER DEFAULT 0",
+        "ALTER TABLE period_close_log ADD COLUMN is_short_period INTEGER DEFAULT 0",
+        "ALTER TABLE period_close_log ADD COLUMN reopened_at TEXT DEFAULT ''",
+        "ALTER TABLE period_close_log ADD COLUMN reopened_by TEXT DEFAULT ''",
+        "ALTER TABLE audit_log ADD COLUMN prev_hash TEXT DEFAULT ''",
+        "ALTER TABLE audit_log ADD COLUMN row_hash TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS account_reconciliation_items (
     id TEXT PRIMARY KEY,
     recon_id TEXT NOT NULL DEFAULT '',
     company_id TEXT NOT NULL,
@@ -996,8 +1016,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_recon_items_acct ON account_reconciliation_items(company_id, account_id, as_of_date)",
-  `CREATE TABLE IF NOT EXISTS recon_schedule (
+        "CREATE INDEX IF NOT EXISTS idx_recon_items_acct ON account_reconciliation_items(company_id, account_id, as_of_date)",
+        `CREATE TABLE IF NOT EXISTS recon_schedule (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -1007,8 +1027,8 @@ export function initDatabase(): Database.Database {
     threshold REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_recon_sched ON recon_schedule(company_id, account_id)",
-  `CREATE TABLE IF NOT EXISTS recon_imports (
+        "CREATE INDEX IF NOT EXISTS idx_recon_sched ON recon_schedule(company_id, account_id)",
+        `CREATE TABLE IF NOT EXISTS recon_imports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -1018,7 +1038,7 @@ export function initDatabase(): Database.Database {
     imported_at TEXT DEFAULT (datetime('now')),
     imported_by TEXT DEFAULT ''
   )`,
-  `CREATE TABLE IF NOT EXISTS sox_controls (
+        `CREATE TABLE IF NOT EXISTS sox_controls (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     code TEXT DEFAULT '',
@@ -1029,8 +1049,8 @@ export function initDatabase(): Database.Database {
     last_reviewed_at TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_sox_controls_company ON sox_controls(company_id)",
-  `CREATE TABLE IF NOT EXISTS sox_control_tests (
+        "CREATE INDEX IF NOT EXISTS idx_sox_controls_company ON sox_controls(company_id)",
+        `CREATE TABLE IF NOT EXISTS sox_control_tests (
     id TEXT PRIMARY KEY,
     control_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -1041,17 +1061,17 @@ export function initDatabase(): Database.Database {
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_sox_tests_control ON sox_control_tests(control_id)",
-  `CREATE TABLE IF NOT EXISTS je_approvals (
+        "CREATE INDEX IF NOT EXISTS idx_sox_tests_control ON sox_control_tests(control_id)",
+        `CREATE TABLE IF NOT EXISTS je_approvals (
     id TEXT PRIMARY KEY,
     journal_entry_id TEXT NOT NULL,
     approver TEXT DEFAULT '',
     approved_at TEXT DEFAULT (datetime('now')),
     comment TEXT DEFAULT ''
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_je_approvals_je ON je_approvals(journal_entry_id)",
-  // ── Universal Tags + Custom Fields (2026-04-23) ──
-  `CREATE TABLE IF NOT EXISTS tag_groups (
+        "CREATE INDEX IF NOT EXISTS idx_je_approvals_je ON je_approvals(journal_entry_id)",
+        // ── Universal Tags + Custom Fields (2026-04-23) ──
+        `CREATE TABLE IF NOT EXISTS tag_groups (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -1060,7 +1080,7 @@ export function initDatabase(): Database.Database {
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS tags (
+        `CREATE TABLE IF NOT EXISTS tags (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -1070,9 +1090,9 @@ export function initDatabase(): Database.Database {
     deleted_at TEXT DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_tags_company ON tags(company_id)",
-  "CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)",
-  `CREATE TABLE IF NOT EXISTS entity_tags (
+        "CREATE INDEX IF NOT EXISTS idx_tags_company ON tags(company_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)",
+        `CREATE TABLE IF NOT EXISTS entity_tags (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1080,10 +1100,10 @@ export function initDatabase(): Database.Database {
     tag_id TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS uq_entity_tags ON entity_tags(company_id, entity_type, entity_id, tag_id)",
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_tag ON entity_tags(tag_id)",
-  `CREATE TABLE IF NOT EXISTS tag_rules (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_entity_tags ON entity_tags(company_id, entity_type, entity_id, tag_id)",
+        "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
+        "CREATE INDEX IF NOT EXISTS idx_entity_tags_tag ON entity_tags(tag_id)",
+        `CREATE TABLE IF NOT EXISTS tag_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
@@ -1093,7 +1113,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS custom_field_definitions (
+        `CREATE TABLE IF NOT EXISTS custom_field_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1109,8 +1129,8 @@ export function initDatabase(): Database.Database {
     deleted_at TEXT DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfd_key ON custom_field_definitions(company_id, entity_type, key)",
-  `CREATE TABLE IF NOT EXISTS custom_field_values (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfd_key ON custom_field_definitions(company_id, entity_type, key)",
+        `CREATE TABLE IF NOT EXISTS custom_field_values (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1123,12 +1143,11 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfv_entity_key ON custom_field_values(company_id, entity_type, entity_id, field_key)",
-  "CREATE INDEX IF NOT EXISTS idx_cfv_lookup ON custom_field_values(company_id, entity_type, entity_id)",
-
-  // ─── Workflow + Numbering + Email Templates (2026-04-23) ───
-  // Custom statuses (feature 1)
-  `CREATE TABLE IF NOT EXISTS custom_statuses (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfv_entity_key ON custom_field_values(company_id, entity_type, entity_id, field_key)",
+        "CREATE INDEX IF NOT EXISTS idx_cfv_lookup ON custom_field_values(company_id, entity_type, entity_id)",
+        // ─── Workflow + Numbering + Email Templates (2026-04-23) ───
+        // Custom statuses (feature 1)
+        `CREATE TABLE IF NOT EXISTS custom_statuses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1144,10 +1163,9 @@ export function initDatabase(): Database.Database {
     notify_users TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_status ON custom_statuses(company_id, entity_type, key)",
-
-  // Status transitions (feature 3)
-  `CREATE TABLE IF NOT EXISTS status_transitions (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_status ON custom_statuses(company_id, entity_type, key)",
+        // Status transitions (feature 3)
+        `CREATE TABLE IF NOT EXISTS status_transitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1158,10 +1176,9 @@ export function initDatabase(): Database.Database {
     requires_approval INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_status_trans ON status_transitions(company_id, entity_type)",
-
-  // Status history (feature 8)
-  `CREATE TABLE IF NOT EXISTS entity_status_history (
+        "CREATE INDEX IF NOT EXISTS idx_status_trans ON status_transitions(company_id, entity_type)",
+        // Status history (feature 8)
+        `CREATE TABLE IF NOT EXISTS entity_status_history (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1172,10 +1189,9 @@ export function initDatabase(): Database.Database {
     changed_by TEXT DEFAULT '',
     comment TEXT DEFAULT ''
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_status_hist ON entity_status_history(company_id, entity_type, entity_id)",
-
-  // Number sequences (features 11–15)
-  `CREATE TABLE IF NOT EXISTS number_sequences (
+        "CREATE INDEX IF NOT EXISTS idx_status_hist ON entity_status_history(company_id, entity_type, entity_id)",
+        // Number sequences (features 11–15)
+        `CREATE TABLE IF NOT EXISTS number_sequences (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1189,10 +1205,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS uq_number_seq ON number_sequences(company_id, entity_type)",
-
-  // Email templates (feature 21)
-  `CREATE TABLE IF NOT EXISTS email_templates (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_number_seq ON number_sequences(company_id, entity_type)",
+        // Email templates (feature 21)
+        `CREATE TABLE IF NOT EXISTS email_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -1207,10 +1222,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS uq_email_tmpl ON email_templates(company_id, key)",
-
-  // Email template version history (feature 30)
-  `CREATE TABLE IF NOT EXISTS email_template_history (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_email_tmpl ON email_templates(company_id, key)",
+        // Email template version history (feature 30)
+        `CREATE TABLE IF NOT EXISTS email_template_history (
     id TEXT PRIMARY KEY,
     template_id TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
@@ -1218,10 +1232,9 @@ export function initDatabase(): Database.Database {
     changed_at TEXT NOT NULL DEFAULT (datetime('now')),
     changed_by TEXT DEFAULT ''
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_email_tmpl_hist ON email_template_history(template_id)",
-
-  // Email schedules (feature 26)
-  `CREATE TABLE IF NOT EXISTS email_schedules (
+        "CREATE INDEX IF NOT EXISTS idx_email_tmpl_hist ON email_template_history(template_id)",
+        // Email schedules (feature 26)
+        `CREATE TABLE IF NOT EXISTS email_schedules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     template_key TEXT NOT NULL,
@@ -1231,41 +1244,41 @@ export function initDatabase(): Database.Database {
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_email_sched ON email_schedules(company_id)",
-  // ── Per-entity classification systems (2026-04-23) ─────────────
-  // Client classification (5)
-  "ALTER TABLE clients ADD COLUMN tier TEXT DEFAULT ''",
-  "ALTER TABLE clients ADD COLUMN segment TEXT DEFAULT ''",
-  "ALTER TABLE clients ADD COLUMN lifecycle_stage TEXT DEFAULT ''",
-  "ALTER TABLE clients ADD COLUMN risk_rating TEXT DEFAULT ''",
-  // Vendor classification (5)
-  "ALTER TABLE vendors ADD COLUMN vendor_type TEXT DEFAULT ''",
-  "ALTER TABLE vendors ADD COLUMN approval_status TEXT DEFAULT 'approved'",
-  "ALTER TABLE vendors ADD COLUMN form_1099_box TEXT DEFAULT ''",
-  "ALTER TABLE vendors ADD COLUMN diversity TEXT DEFAULT '[]'",
-  "ALTER TABLE vendors ADD COLUMN location_type TEXT DEFAULT ''",
-  // Project classification (5)
-  "ALTER TABLE projects ADD COLUMN phase TEXT DEFAULT ''",
-  "ALTER TABLE projects ADD COLUMN methodology TEXT DEFAULT ''",
-  "ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT ''",
-  "ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT ''",
-  "ALTER TABLE projects ADD COLUMN health TEXT DEFAULT ''",
-  // Debt classification (5) — debts.priority already exists; add the others
-  "ALTER TABLE debts ADD COLUMN risk_category TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN segment TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN origination_type TEXT DEFAULT ''",
-  "ALTER TABLE debts ADD COLUMN collectability TEXT DEFAULT ''",
-  // Employee classification (5) — employees.department already exists
-  "ALTER TABLE employees ADD COLUMN role TEXT DEFAULT ''",
-  "ALTER TABLE employees ADD COLUMN work_location TEXT DEFAULT ''",
-  "ALTER TABLE employees ADD COLUMN cost_class TEXT DEFAULT ''",
-  // Asset / Inventory / Account classification
-  "ALTER TABLE fixed_assets ADD COLUMN condition TEXT DEFAULT ''",
-  "ALTER TABLE inventory_items ADD COLUMN category TEXT DEFAULT ''",
-  "ALTER TABLE accounts ADD COLUMN business_purpose TEXT DEFAULT ''",
-  "ALTER TABLE accounts ADD COLUMN criticality TEXT DEFAULT ''",
-  // Classification settings (admin-tunable colors/thresholds)
-  `CREATE TABLE IF NOT EXISTS classification_settings (
+        "CREATE INDEX IF NOT EXISTS idx_email_sched ON email_schedules(company_id)",
+        // ── Per-entity classification systems (2026-04-23) ─────────────
+        // Client classification (5)
+        "ALTER TABLE clients ADD COLUMN tier TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN segment TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN lifecycle_stage TEXT DEFAULT ''",
+        "ALTER TABLE clients ADD COLUMN risk_rating TEXT DEFAULT ''",
+        // Vendor classification (5)
+        "ALTER TABLE vendors ADD COLUMN vendor_type TEXT DEFAULT ''",
+        "ALTER TABLE vendors ADD COLUMN approval_status TEXT DEFAULT 'approved'",
+        "ALTER TABLE vendors ADD COLUMN form_1099_box TEXT DEFAULT ''",
+        "ALTER TABLE vendors ADD COLUMN diversity TEXT DEFAULT '[]'",
+        "ALTER TABLE vendors ADD COLUMN location_type TEXT DEFAULT ''",
+        // Project classification (5)
+        "ALTER TABLE projects ADD COLUMN phase TEXT DEFAULT ''",
+        "ALTER TABLE projects ADD COLUMN methodology TEXT DEFAULT ''",
+        "ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT ''",
+        "ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT ''",
+        "ALTER TABLE projects ADD COLUMN health TEXT DEFAULT ''",
+        // Debt classification (5) — debts.priority already exists; add the others
+        "ALTER TABLE debts ADD COLUMN risk_category TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN segment TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN origination_type TEXT DEFAULT ''",
+        "ALTER TABLE debts ADD COLUMN collectability TEXT DEFAULT ''",
+        // Employee classification (5) — employees.department already exists
+        "ALTER TABLE employees ADD COLUMN role TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN work_location TEXT DEFAULT ''",
+        "ALTER TABLE employees ADD COLUMN cost_class TEXT DEFAULT ''",
+        // Asset / Inventory / Account classification
+        "ALTER TABLE fixed_assets ADD COLUMN condition TEXT DEFAULT ''",
+        "ALTER TABLE inventory_items ADD COLUMN category TEXT DEFAULT ''",
+        "ALTER TABLE accounts ADD COLUMN business_purpose TEXT DEFAULT ''",
+        "ALTER TABLE accounts ADD COLUMN criticality TEXT DEFAULT ''",
+        // Classification settings (admin-tunable colors/thresholds)
+        `CREATE TABLE IF NOT EXISTS classification_settings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     dimension TEXT NOT NULL,
@@ -1277,19 +1290,19 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, dimension, value)
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_class_settings_co ON classification_settings(company_id, dimension)",
-  // Tax System (2026-04-27) — Employee W-4 fields for 2020+ W-4
-  "ALTER TABLE employees ADD COLUMN w4_filing_status TEXT DEFAULT 'single'",
-  "ALTER TABLE employees ADD COLUMN w4_step2_checkbox INTEGER DEFAULT 0",
-  "ALTER TABLE employees ADD COLUMN w4_step3_dependent_credit REAL DEFAULT 0",
-  "ALTER TABLE employees ADD COLUMN w4_step4a_other_income REAL DEFAULT 0",
-  "ALTER TABLE employees ADD COLUMN w4_step4b_deductions REAL DEFAULT 0",
-  "ALTER TABLE employees ADD COLUMN w4_step4c_extra_withholding REAL DEFAULT 0",
-  "ALTER TABLE employees ADD COLUMN ut_exemptions INTEGER DEFAULT 1",
-  "ALTER TABLE employees ADD COLUMN ut_additional_withholding REAL DEFAULT 0",
-  "ALTER TABLE employees ADD COLUMN w4_received_date TEXT DEFAULT ''",
-  // Tax System (2026-04-27) — Utah withholding config
-  `CREATE TABLE IF NOT EXISTS utah_withholding_config (
+        "CREATE INDEX IF NOT EXISTS idx_class_settings_co ON classification_settings(company_id, dimension)",
+        // Tax System (2026-04-27) — Employee W-4 fields for 2020+ W-4
+        "ALTER TABLE employees ADD COLUMN w4_filing_status TEXT DEFAULT 'single'",
+        "ALTER TABLE employees ADD COLUMN w4_step2_checkbox INTEGER DEFAULT 0",
+        "ALTER TABLE employees ADD COLUMN w4_step3_dependent_credit REAL DEFAULT 0",
+        "ALTER TABLE employees ADD COLUMN w4_step4a_other_income REAL DEFAULT 0",
+        "ALTER TABLE employees ADD COLUMN w4_step4b_deductions REAL DEFAULT 0",
+        "ALTER TABLE employees ADD COLUMN w4_step4c_extra_withholding REAL DEFAULT 0",
+        "ALTER TABLE employees ADD COLUMN ut_exemptions INTEGER DEFAULT 1",
+        "ALTER TABLE employees ADD COLUMN ut_additional_withholding REAL DEFAULT 0",
+        "ALTER TABLE employees ADD COLUMN w4_received_date TEXT DEFAULT ''",
+        // Tax System (2026-04-27) — Utah withholding config
+        `CREATE TABLE IF NOT EXISTS utah_withholding_config (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -1304,8 +1317,8 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year)
   )`,
-  // Tax System (2026-04-27) — Tax filing period tracking
-  `CREATE TABLE IF NOT EXISTS tax_filing_periods (
+        // Tax System (2026-04-27) — Tax filing period tracking
+        `CREATE TABLE IF NOT EXISTS tax_filing_periods (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -1322,31 +1335,31 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year, quarter, form_type)
   )`,
-  // Quote System Enhancements (2026-04-28) — 95 features across pipeline, analytics, follow-up
-  "ALTER TABLE quotes ADD COLUMN po_number TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN job_reference TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN internal_notes TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE quotes ADD COLUMN exchange_rate REAL DEFAULT 1.0",
-  "ALTER TABLE quotes ADD COLUMN sales_rep_id TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN deal_size_category TEXT DEFAULT 'standard'",
-  "ALTER TABLE quotes ADD COLUMN probability INTEGER DEFAULT 50",
-  "ALTER TABLE quotes ADD COLUMN expected_close_date TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN lost_reason TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN won_date TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN sent_date TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN viewed_date TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN follow_up_date TEXT DEFAULT ''",
-  "ALTER TABLE quotes ADD COLUMN tags TEXT DEFAULT '[]'",
-  "ALTER TABLE quotes ADD COLUMN shipping_amount REAL DEFAULT 0",
-  "ALTER TABLE quotes ADD COLUMN parent_quote_id TEXT DEFAULT NULL",
-  "ALTER TABLE quotes ADD COLUMN revision_number INTEGER DEFAULT 1",
-  "ALTER TABLE quote_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
-  "ALTER TABLE quote_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
-  "ALTER TABLE quote_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
-  "ALTER TABLE quote_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
-  "ALTER TABLE quote_line_items ADD COLUMN item_code TEXT DEFAULT ''",
-  `CREATE TABLE IF NOT EXISTS quote_activity_log (
+        // Quote System Enhancements (2026-04-28) — 95 features across pipeline, analytics, follow-up
+        "ALTER TABLE quotes ADD COLUMN po_number TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN job_reference TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN internal_notes TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE quotes ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+        "ALTER TABLE quotes ADD COLUMN sales_rep_id TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN deal_size_category TEXT DEFAULT 'standard'",
+        "ALTER TABLE quotes ADD COLUMN probability INTEGER DEFAULT 50",
+        "ALTER TABLE quotes ADD COLUMN expected_close_date TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN lost_reason TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN won_date TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN sent_date TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN viewed_date TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN follow_up_date TEXT DEFAULT ''",
+        "ALTER TABLE quotes ADD COLUMN tags TEXT DEFAULT '[]'",
+        "ALTER TABLE quotes ADD COLUMN shipping_amount REAL DEFAULT 0",
+        "ALTER TABLE quotes ADD COLUMN parent_quote_id TEXT DEFAULT NULL",
+        "ALTER TABLE quotes ADD COLUMN revision_number INTEGER DEFAULT 1",
+        "ALTER TABLE quote_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
+        "ALTER TABLE quote_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+        "ALTER TABLE quote_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
+        "ALTER TABLE quote_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
+        "ALTER TABLE quote_line_items ADD COLUMN item_code TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS quote_activity_log (
     id TEXT PRIMARY KEY,
     quote_id TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
     activity_type TEXT NOT NULL DEFAULT '',
@@ -1354,7 +1367,7 @@ export function initDatabase(): Database.Database {
     user_name TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS quote_templates (
+        `CREATE TABLE IF NOT EXISTS quote_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
@@ -1366,12 +1379,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_quote_activity_quote ON quote_activity_log(quote_id)",
-  "CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(company_id, status)",
-  "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
-  "CREATE INDEX IF NOT EXISTS idx_quotes_follow_up ON quotes(company_id, follow_up_date)",
-  // Advanced System (2026-04-28) — Cognitive Command Layer
-  `CREATE TABLE IF NOT EXISTS custom_shortcuts (
+        "CREATE INDEX IF NOT EXISTS idx_quote_activity_quote ON quote_activity_log(quote_id)",
+        "CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(company_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_id)",
+        "CREATE INDEX IF NOT EXISTS idx_quotes_follow_up ON quotes(company_id, follow_up_date)",
+        // Advanced System (2026-04-28) — Cognitive Command Layer
+        `CREATE TABLE IF NOT EXISTS custom_shortcuts (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     key_combo TEXT NOT NULL,
@@ -1380,7 +1393,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS macros (
+        `CREATE TABLE IF NOT EXISTS macros (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -1391,7 +1404,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS command_history (
+        `CREATE TABLE IF NOT EXISTS command_history (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     command_id TEXT NOT NULL,
@@ -1400,8 +1413,8 @@ export function initDatabase(): Database.Database {
     result TEXT DEFAULT 'success',
     duration_ms INTEGER DEFAULT 0
   )`,
-  // Advanced System (2026-04-28) — Reactive Engine
-  `CREATE TABLE IF NOT EXISTS workflow_definitions (
+        // Advanced System (2026-04-28) — Reactive Engine
+        `CREATE TABLE IF NOT EXISTS workflow_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
@@ -1418,7 +1431,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS workflow_executions (
+        `CREATE TABLE IF NOT EXISTS workflow_executions (
     id TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
     triggered_at TEXT DEFAULT (datetime('now')),
@@ -1429,7 +1442,7 @@ export function initDatabase(): Database.Database {
     error_message TEXT DEFAULT '',
     duration_ms INTEGER DEFAULT 0
   )`,
-  `CREATE TABLE IF NOT EXISTS workflow_event_log (
+        `CREATE TABLE IF NOT EXISTS workflow_event_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -1438,8 +1451,8 @@ export function initDatabase(): Database.Database {
     payload_json TEXT DEFAULT '{}',
     occurred_at TEXT DEFAULT (datetime('now'))
   )`,
-  // Advanced System (2026-04-28) — Predictive Intelligence
-  `CREATE TABLE IF NOT EXISTS pattern_cache (
+        // Advanced System (2026-04-28) — Predictive Intelligence
+        `CREATE TABLE IF NOT EXISTS pattern_cache (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pattern_type TEXT NOT NULL,
@@ -1450,7 +1463,7 @@ export function initDatabase(): Database.Database {
     sample_size INTEGER DEFAULT 0,
     last_computed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS predictions (
+        `CREATE TABLE IF NOT EXISTS predictions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     prediction_type TEXT NOT NULL,
@@ -1463,7 +1476,7 @@ export function initDatabase(): Database.Database {
     prediction_data_json TEXT DEFAULT '{}',
     computed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS anomaly_log (
+        `CREATE TABLE IF NOT EXISTS anomaly_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -1476,24 +1489,24 @@ export function initDatabase(): Database.Database {
     resolved_by TEXT DEFAULT '',
     detected_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_command_history_user ON command_history(user_id, executed_at DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_workflow_event_log_type ON workflow_event_log(company_id, event_type, occurred_at DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow ON workflow_executions(workflow_id, triggered_at DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_pattern_cache_lookup ON pattern_cache(company_id, pattern_type, entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_predictions_lookup ON predictions(company_id, prediction_type, target_entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_anomaly_log_unresolved ON anomaly_log(company_id, resolved, detected_at DESC)",
-  // Invoice System Enhancements (2026-04-29)
-  "ALTER TABLE invoices ADD COLUMN auto_send_reminders INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN payment_link TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN portal_viewed_count INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN last_viewed_at TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN times_sent INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN tags TEXT DEFAULT '[]'",
-  "ALTER TABLE invoices ADD COLUMN priority TEXT DEFAULT 'normal'",
-  "ALTER TABLE invoices ADD COLUMN sales_rep_id TEXT DEFAULT ''",
-  "ALTER TABLE invoices ADD COLUMN deposit_required REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN deposit_paid REAL DEFAULT 0",
-  `CREATE TABLE IF NOT EXISTS invoice_activity_log (
+        "CREATE INDEX IF NOT EXISTS idx_command_history_user ON command_history(user_id, executed_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_event_log_type ON workflow_event_log(company_id, event_type, occurred_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow ON workflow_executions(workflow_id, triggered_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_pattern_cache_lookup ON pattern_cache(company_id, pattern_type, entity_id)",
+        "CREATE INDEX IF NOT EXISTS idx_predictions_lookup ON predictions(company_id, prediction_type, target_entity_id)",
+        "CREATE INDEX IF NOT EXISTS idx_anomaly_log_unresolved ON anomaly_log(company_id, resolved, detected_at DESC)",
+        // Invoice System Enhancements (2026-04-29)
+        "ALTER TABLE invoices ADD COLUMN auto_send_reminders INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN payment_link TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN portal_viewed_count INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN last_viewed_at TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN times_sent INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN tags TEXT DEFAULT '[]'",
+        "ALTER TABLE invoices ADD COLUMN priority TEXT DEFAULT 'normal'",
+        "ALTER TABLE invoices ADD COLUMN sales_rep_id TEXT DEFAULT ''",
+        "ALTER TABLE invoices ADD COLUMN deposit_required REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN deposit_paid REAL DEFAULT 0",
+        `CREATE TABLE IF NOT EXISTS invoice_activity_log (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     activity_type TEXT NOT NULL DEFAULT '',
@@ -1502,15 +1515,15 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_invoice_activity_invoice ON invoice_activity_log(invoice_id, created_at DESC)",
-  // Expense System Enhancements (2026-04-29)
-  "ALTER TABLE expenses ADD COLUMN merchant_location TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN tip_amount REAL DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN auto_categorized INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN flagged_for_review INTEGER DEFAULT 0",
-  "ALTER TABLE expenses ADD COLUMN flag_reason TEXT DEFAULT ''",
-  "ALTER TABLE expenses ADD COLUMN expense_owner_id TEXT DEFAULT ''",
-  `CREATE TABLE IF NOT EXISTS expense_activity_log (
+        "CREATE INDEX IF NOT EXISTS idx_invoice_activity_invoice ON invoice_activity_log(invoice_id, created_at DESC)",
+        // Expense System Enhancements (2026-04-29)
+        "ALTER TABLE expenses ADD COLUMN merchant_location TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN tip_amount REAL DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN auto_categorized INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN flagged_for_review INTEGER DEFAULT 0",
+        "ALTER TABLE expenses ADD COLUMN flag_reason TEXT DEFAULT ''",
+        "ALTER TABLE expenses ADD COLUMN expense_owner_id TEXT DEFAULT ''",
+        `CREATE TABLE IF NOT EXISTS expense_activity_log (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
     activity_type TEXT NOT NULL DEFAULT '',
@@ -1519,103 +1532,100 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_expense_activity_expense ON expense_activity_log(expense_id, created_at DESC)",
-  // Bills parity with Invoices (2026-04-29) — rich line items + custom fields
-  "ALTER TABLE bills ADD COLUMN po_number TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN job_reference TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN internal_notes TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN late_fee_pct REAL DEFAULT 0",
-  "ALTER TABLE bills ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
-  "ALTER TABLE bills ADD COLUMN discount_pct REAL DEFAULT 0",
-  "ALTER TABLE bills ADD COLUMN bill_type TEXT DEFAULT 'standard'",
-  "ALTER TABLE bills ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE bills ADD COLUMN exchange_rate REAL DEFAULT 1.0",
-  "ALTER TABLE bills ADD COLUMN terms_text TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN terms TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN shipping_amount REAL DEFAULT 0",
-  "ALTER TABLE bills ADD COLUMN custom_field_1 TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN custom_field_2 TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN custom_field_3 TEXT DEFAULT ''",
-  "ALTER TABLE bills ADD COLUMN custom_field_4 TEXT DEFAULT ''",
-  "ALTER TABLE bill_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
-  "ALTER TABLE bill_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
-  "ALTER TABLE bill_line_items ADD COLUMN item_code TEXT DEFAULT ''",
-  "ALTER TABLE bill_line_items ADD COLUMN line_discount REAL DEFAULT 0",
-  "ALTER TABLE bill_line_items ADD COLUMN line_discount_type TEXT DEFAULT 'percent'",
-  "ALTER TABLE bill_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
-  "ALTER TABLE bill_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
-  "ALTER TABLE bill_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
-  "ALTER TABLE bill_line_items ADD COLUMN bold INTEGER DEFAULT 0",
-  "ALTER TABLE bill_line_items ADD COLUMN italic INTEGER DEFAULT 0",
-  "ALTER TABLE bill_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
-  "ALTER TABLE bill_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
-  "ALTER TABLE bill_line_items ADD COLUMN project_id TEXT DEFAULT NULL",
-  // P1.4 — Custom letterhead image (2026-05-05)
-  // letterhead_data: base64-encoded PNG/JPEG (full-width banner) — stored
-  // inline so the image travels with backups and renders without external
-  // assets. Capped at ~2MB after compression in the upload UI.
-  // letterhead_position: 'top' renders above the header, 'replace' uses
-  // the image AS the header (no co-name text). 'bottom' for footer-style.
-  // letterhead_height: pixel height when rendered (defaults to 90px).
-  "ALTER TABLE invoice_settings ADD COLUMN letterhead_data TEXT DEFAULT NULL",
-  "ALTER TABLE invoice_settings ADD COLUMN letterhead_position TEXT DEFAULT 'top'",
-  "ALTER TABLE invoice_settings ADD COLUMN letterhead_height INTEGER DEFAULT 90",
-
-  // ── P1.18: Schema-version pinning ─────────────────────────────
-  // Records the highest schema version the DB has been exposed to.
-  // On startup, if the DB's stored version is HIGHER than this app
-  // build's max known version, we refuse to open it — preventing a
-  // user who just downgraded the app from corrupting newer data
-  // (e.g. dropping a column they didn't know about).
-  // Single-row table; APP_SCHEMA_VERSION is bumped each time we add
-  // a column or table. The migrations array runs idempotently
-  // regardless of version, so this is purely a safety guard for
-  // backwards-incompatible changes.
-  `CREATE TABLE IF NOT EXISTS schema_meta (
+        "CREATE INDEX IF NOT EXISTS idx_expense_activity_expense ON expense_activity_log(expense_id, created_at DESC)",
+        // Bills parity with Invoices (2026-04-29) — rich line items + custom fields
+        "ALTER TABLE bills ADD COLUMN po_number TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN job_reference TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN internal_notes TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN late_fee_pct REAL DEFAULT 0",
+        "ALTER TABLE bills ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
+        "ALTER TABLE bills ADD COLUMN discount_pct REAL DEFAULT 0",
+        "ALTER TABLE bills ADD COLUMN bill_type TEXT DEFAULT 'standard'",
+        "ALTER TABLE bills ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE bills ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+        "ALTER TABLE bills ADD COLUMN terms_text TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN terms TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN shipping_amount REAL DEFAULT 0",
+        "ALTER TABLE bills ADD COLUMN custom_field_1 TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN custom_field_2 TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN custom_field_3 TEXT DEFAULT ''",
+        "ALTER TABLE bills ADD COLUMN custom_field_4 TEXT DEFAULT ''",
+        "ALTER TABLE bill_line_items ADD COLUMN row_type TEXT DEFAULT 'item'",
+        "ALTER TABLE bill_line_items ADD COLUMN unit_label TEXT DEFAULT ''",
+        "ALTER TABLE bill_line_items ADD COLUMN item_code TEXT DEFAULT ''",
+        "ALTER TABLE bill_line_items ADD COLUMN line_discount REAL DEFAULT 0",
+        "ALTER TABLE bill_line_items ADD COLUMN line_discount_type TEXT DEFAULT 'percent'",
+        "ALTER TABLE bill_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+        "ALTER TABLE bill_line_items ADD COLUMN tax_rate_override REAL DEFAULT -1",
+        "ALTER TABLE bill_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
+        "ALTER TABLE bill_line_items ADD COLUMN bold INTEGER DEFAULT 0",
+        "ALTER TABLE bill_line_items ADD COLUMN italic INTEGER DEFAULT 0",
+        "ALTER TABLE bill_line_items ADD COLUMN highlight_color TEXT DEFAULT ''",
+        "ALTER TABLE bill_line_items ADD COLUMN sort_order INTEGER DEFAULT 0",
+        "ALTER TABLE bill_line_items ADD COLUMN project_id TEXT DEFAULT NULL",
+        // P1.4 — Custom letterhead image (2026-05-05)
+        // letterhead_data: base64-encoded PNG/JPEG (full-width banner) — stored
+        // inline so the image travels with backups and renders without external
+        // assets. Capped at ~2MB after compression in the upload UI.
+        // letterhead_position: 'top' renders above the header, 'replace' uses
+        // the image AS the header (no co-name text). 'bottom' for footer-style.
+        // letterhead_height: pixel height when rendered (defaults to 90px).
+        "ALTER TABLE invoice_settings ADD COLUMN letterhead_data TEXT DEFAULT NULL",
+        "ALTER TABLE invoice_settings ADD COLUMN letterhead_position TEXT DEFAULT 'top'",
+        "ALTER TABLE invoice_settings ADD COLUMN letterhead_height INTEGER DEFAULT 90",
+        // ── P1.18: Schema-version pinning ─────────────────────────────
+        // Records the highest schema version the DB has been exposed to.
+        // On startup, if the DB's stored version is HIGHER than this app
+        // build's max known version, we refuse to open it — preventing a
+        // user who just downgraded the app from corrupting newer data
+        // (e.g. dropping a column they didn't know about).
+        // Single-row table; APP_SCHEMA_VERSION is bumped each time we add
+        // a column or table. The migrations array runs idempotently
+        // regardless of version, so this is purely a safety guard for
+        // backwards-incompatible changes.
+        `CREATE TABLE IF NOT EXISTS schema_meta (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     version INTEGER NOT NULL DEFAULT 1,
     last_migrated_at TEXT NOT NULL DEFAULT (datetime('now')),
     app_version TEXT DEFAULT ''
   )`,
-  `INSERT OR IGNORE INTO schema_meta (id, version) VALUES (1, 1)`,
-
-  // ── P2.20: Composite indices for common filter+sort patterns ────
-  // The list views all filter by company_id and sort by date (or
-  // status). Without composite indices, SQLite scans the table
-  // and re-sorts in memory — fine at 1k rows, painful at 50k+.
-  // These cover the hottest list-view queries.
-  "CREATE INDEX IF NOT EXISTS idx_invoices_co_status_date ON invoices(company_id, status, due_date)",
-  "CREATE INDEX IF NOT EXISTS idx_invoices_co_client_date ON invoices(company_id, client_id, issue_date)",
-  "CREATE INDEX IF NOT EXISTS idx_bills_co_status_date ON bills(company_id, status, due_date)",
-  "CREATE INDEX IF NOT EXISTS idx_bills_co_vendor_date ON bills(company_id, vendor_id, issue_date)",
-  "CREATE INDEX IF NOT EXISTS idx_expenses_co_date ON expenses(company_id, date)",
-  "CREATE INDEX IF NOT EXISTS idx_expenses_co_vendor_date ON expenses(company_id, vendor_id, date)",
-  "CREATE INDEX IF NOT EXISTS idx_journal_entries_co_date ON journal_entries(company_id, date)",
-  "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON invoice_payments(invoice_id, payment_date)",
-  "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
-  "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
-
-  // ── LOAN TRACKING SYSTEM (4 tables) ───────────────────────────
-  //
-  // Source of truth for any debt the company carries: mortgages,
-  // auto loans, business loans, lines of credit, equipment financing.
-  // Decoupled from the GL — postings to interest-expense / loan-
-  // payable accounts happen via the existing JE system; this module
-  // owns the amortization math + payment lifecycle.
-  //
-  // Design decisions:
-  //   • Amortization schedule is PRE-COMPUTED on save (or recalc),
-  //     not derived on-the-fly. Stored rows = single source of truth
-  //     and supports rate changes (rebuild from change date forward).
-  //   • Actual payments are separate from scheduled payments; they
-  //     reference scheduled rows but can be partial / over /
-  //     ahead-of-schedule. The current_balance is computed from
-  //     actuals, never from schedule alone.
-  //   • Loan events table is append-only audit (rate change,
-  //     refinance, extension, lump-sum payment).
-  //   • All amounts in the loan's currency (defaults USD).
-  `CREATE TABLE IF NOT EXISTS loans (
+        `INSERT OR IGNORE INTO schema_meta (id, version) VALUES (1, 1)`,
+        // ── P2.20: Composite indices for common filter+sort patterns ────
+        // The list views all filter by company_id and sort by date (or
+        // status). Without composite indices, SQLite scans the table
+        // and re-sorts in memory — fine at 1k rows, painful at 50k+.
+        // These cover the hottest list-view queries.
+        "CREATE INDEX IF NOT EXISTS idx_invoices_co_status_date ON invoices(company_id, status, due_date)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_co_client_date ON invoices(company_id, client_id, issue_date)",
+        "CREATE INDEX IF NOT EXISTS idx_bills_co_status_date ON bills(company_id, status, due_date)",
+        "CREATE INDEX IF NOT EXISTS idx_bills_co_vendor_date ON bills(company_id, vendor_id, issue_date)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_co_date ON expenses(company_id, date)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_co_vendor_date ON expenses(company_id, vendor_id, date)",
+        "CREATE INDEX IF NOT EXISTS idx_journal_entries_co_date ON journal_entries(company_id, date)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON invoice_payments(invoice_id, payment_date)",
+        "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
+        "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
+        // ── LOAN TRACKING SYSTEM (4 tables) ───────────────────────────
+        //
+        // Source of truth for any debt the company carries: mortgages,
+        // auto loans, business loans, lines of credit, equipment financing.
+        // Decoupled from the GL — postings to interest-expense / loan-
+        // payable accounts happen via the existing JE system; this module
+        // owns the amortization math + payment lifecycle.
+        //
+        // Design decisions:
+        //   • Amortization schedule is PRE-COMPUTED on save (or recalc),
+        //     not derived on-the-fly. Stored rows = single source of truth
+        //     and supports rate changes (rebuild from change date forward).
+        //   • Actual payments are separate from scheduled payments; they
+        //     reference scheduled rows but can be partial / over /
+        //     ahead-of-schedule. The current_balance is computed from
+        //     actuals, never from schedule alone.
+        //   • Loan events table is append-only audit (rate change,
+        //     refinance, extension, lump-sum payment).
+        //   • All amounts in the loan's currency (defaults USD).
+        `CREATE TABLE IF NOT EXISTS loans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,                              -- "BMO Mortgage 2024", "SBA Loan #12345"
@@ -1652,12 +1662,11 @@ export function initDatabase(): Database.Database {
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     deleted_at TEXT DEFAULT NULL
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_loans_co_status ON loans(company_id, status) WHERE deleted_at IS NULL",
-  "CREATE INDEX IF NOT EXISTS idx_loans_next_due ON loans(company_id, next_payment_due) WHERE deleted_at IS NULL AND status = 'active'",
-
-  // Pre-computed amortization rows. One row per scheduled payment.
-  // Recreated when the loan's term/rate/principal changes.
-  `CREATE TABLE IF NOT EXISTS loan_payment_schedule (
+        "CREATE INDEX IF NOT EXISTS idx_loans_co_status ON loans(company_id, status) WHERE deleted_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_loans_next_due ON loans(company_id, next_payment_due) WHERE deleted_at IS NULL AND status = 'active'",
+        // Pre-computed amortization rows. One row per scheduled payment.
+        // Recreated when the loan's term/rate/principal changes.
+        `CREATE TABLE IF NOT EXISTS loan_payment_schedule (
     id TEXT PRIMARY KEY,
     loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
     payment_number INTEGER NOT NULL,                 -- 1, 2, 3, ... term_months
@@ -1672,13 +1681,12 @@ export function initDatabase(): Database.Database {
     paid_date TEXT DEFAULT NULL,                     -- when fully paid
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_loan_sched_loan_due ON loan_payment_schedule(loan_id, due_date)",
-  "CREATE INDEX IF NOT EXISTS idx_loan_sched_pending ON loan_payment_schedule(loan_id, paid_status) WHERE paid_status != 'paid'",
-
-  // Actual payments made — can be partial, over, or extra-principal.
-  // Linked to a scheduled row for normal payments, NULL for one-off
-  // principal-only payments.
-  `CREATE TABLE IF NOT EXISTS loan_payments (
+        "CREATE INDEX IF NOT EXISTS idx_loan_sched_loan_due ON loan_payment_schedule(loan_id, due_date)",
+        "CREATE INDEX IF NOT EXISTS idx_loan_sched_pending ON loan_payment_schedule(loan_id, paid_status) WHERE paid_status != 'paid'",
+        // Actual payments made — can be partial, over, or extra-principal.
+        // Linked to a scheduled row for normal payments, NULL for one-off
+        // principal-only payments.
+        `CREATE TABLE IF NOT EXISTS loan_payments (
     id TEXT PRIMARY KEY,
     loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
     schedule_id TEXT REFERENCES loan_payment_schedule(id) ON DELETE SET NULL,
@@ -1697,12 +1705,11 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, payment_date DESC)",
-
-  // Append-only audit / event log. Rate changes, refinances,
-  // extensions, lump payoffs — anything that changes the loan's
-  // terms.
-  `CREATE TABLE IF NOT EXISTS loan_events (
+        "CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, payment_date DESC)",
+        // Append-only audit / event log. Rate changes, refinances,
+        // extensions, lump payoffs — anything that changes the loan's
+        // terms.
+        `CREATE TABLE IF NOT EXISTS loan_events (
     id TEXT PRIMARY KEY,
     loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL,                        -- rate_change | refinance | extension | partial_payoff | full_payoff | note
@@ -1714,22 +1721,21 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_loan_events_loan ON loan_events(loan_id, event_date DESC)",
-
-  // ── D3: Period Close + Lockdown ───────────────────────────────
-  //
-  // Records each closed accounting period. Once a period is closed,
-  // any record dated within that period (invoices, bills, expenses,
-  // journal entries, payments) becomes immutable — IPC handlers
-  // check the closed_periods table before allowing INSERT / UPDATE
-  // / DELETE on rows whose date falls in a closed range.
-  //
-  // Reopening a closed period requires a reason and writes an audit
-  // entry — auditors love seeing this trail.
-  //
-  // Currently scoped per-company; future: per-fiscal-year so a Q1
-  // close doesn't reopen when Q2 closes.
-  `CREATE TABLE IF NOT EXISTS closed_periods (
+        "CREATE INDEX IF NOT EXISTS idx_loan_events_loan ON loan_events(loan_id, event_date DESC)",
+        // ── D3: Period Close + Lockdown ───────────────────────────────
+        //
+        // Records each closed accounting period. Once a period is closed,
+        // any record dated within that period (invoices, bills, expenses,
+        // journal entries, payments) becomes immutable — IPC handlers
+        // check the closed_periods table before allowing INSERT / UPDATE
+        // / DELETE on rows whose date falls in a closed range.
+        //
+        // Reopening a closed period requires a reason and writes an audit
+        // entry — auditors love seeing this trail.
+        //
+        // Currently scoped per-company; future: per-fiscal-year so a Q1
+        // close doesn't reopen when Q2 closes.
+        `CREATE TABLE IF NOT EXISTS closed_periods (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_start TEXT NOT NULL,           -- YYYY-MM-DD inclusive
@@ -1744,13 +1750,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_closed_periods_co_active ON closed_periods(company_id, is_active) WHERE is_active = 1",
-
-  // ── A7: Line-item snippets / field templates ─────────────────
-  // Reusable line-item presets users can drop onto invoices/quotes
-  // /bills with one click. Saves "Standard hourly consulting" once,
-  // reuses on every project.
-  `CREATE TABLE IF NOT EXISTS line_item_snippets (
+        "CREATE INDEX IF NOT EXISTS idx_closed_periods_co_active ON closed_periods(company_id, is_active) WHERE is_active = 1",
+        // ── A7: Line-item snippets / field templates ─────────────────
+        // Reusable line-item presets users can drop onto invoices/quotes
+        // /bills with one click. Saves "Standard hourly consulting" once,
+        // reuses on every project.
+        `CREATE TABLE IF NOT EXISTS line_item_snippets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -1766,14 +1771,13 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_line_snippets_co_use ON line_item_snippets(company_id, use_count DESC)",
-
-  // ── P4.49: Mileage log ────────────────────────────────────────
-  // Records vehicle business miles for tax-deduction purposes.
-  // The auto-computed `deduction_amount` uses the IRS-published
-  // standard mileage rate for the trip's tax year, looked up from
-  // the mileage_rates table (seeded with current+historical rates).
-  `CREATE TABLE IF NOT EXISTS mileage_log (
+        "CREATE INDEX IF NOT EXISTS idx_line_snippets_co_use ON line_item_snippets(company_id, use_count DESC)",
+        // ── P4.49: Mileage log ────────────────────────────────────────
+        // Records vehicle business miles for tax-deduction purposes.
+        // The auto-computed `deduction_amount` uses the IRS-published
+        // standard mileage rate for the trip's tax year, looked up from
+        // the mileage_rates table (seeded with current+historical rates).
+        `CREATE TABLE IF NOT EXISTS mileage_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     trip_date TEXT NOT NULL,
@@ -1790,22 +1794,20 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_mileage_co_date ON mileage_log(company_id, trip_date DESC)",
-
-  // IRS standard mileage rates by year. Seeded at startup if empty.
-  // Rates source: https://www.irs.gov/tax-professionals/standard-mileage-rates
-  `CREATE TABLE IF NOT EXISTS mileage_rates (
+        "CREATE INDEX IF NOT EXISTS idx_mileage_co_date ON mileage_log(company_id, trip_date DESC)",
+        // IRS standard mileage rates by year. Seeded at startup if empty.
+        // Rates source: https://www.irs.gov/tax-professionals/standard-mileage-rates
+        `CREATE TABLE IF NOT EXISTS mileage_rates (
     year INTEGER PRIMARY KEY,
     business_rate REAL NOT NULL,
     medical_rate REAL DEFAULT 0,
     charitable_rate REAL DEFAULT 0
   )`,
-
-  // ── P6.70: Outbound webhook subscriptions ─────────────────────
-  // Each row is a "fire HTTP POST when event_type happens for this
-  // company" rule. event_type='*' matches all events.
-  // secret is used for HMAC-SHA256 signing in X-BAP-Signature.
-  `CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+        // ── P6.70: Outbound webhook subscriptions ─────────────────────
+        // Each row is a "fire HTTP POST when event_type happens for this
+        // company" rule. event_type='*' matches all events.
+        // secret is used for HMAC-SHA256 signing in X-BAP-Signature.
+        `CREATE TABLE IF NOT EXISTS webhook_subscriptions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -1819,15 +1821,15 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_webhook_subs_co_event ON webhook_subscriptions(company_id, event_type) WHERE enabled = 1",
-  // Client Portal API integration (rmpgutahps.us, 2026-05-05)
-  // portal_integration_settings: per-company config for the external
-  // client-portal integration. The api_key column stores a base64
-  // ciphertext produced by Electron's safeStorage (OS keychain backed).
-  // We never write the plaintext key to disk — even DB backups expose
-  // only the ciphertext, which is undecryptable without the OS keychain.
-  // last_sync_at / last_test_at help the UI show health indicators.
-  `CREATE TABLE IF NOT EXISTS portal_integration_settings (
+        "CREATE INDEX IF NOT EXISTS idx_webhook_subs_co_event ON webhook_subscriptions(company_id, event_type) WHERE enabled = 1",
+        // Client Portal API integration (rmpgutahps.us, 2026-05-05)
+        // portal_integration_settings: per-company config for the external
+        // client-portal integration. The api_key column stores a base64
+        // ciphertext produced by Electron's safeStorage (OS keychain backed).
+        // We never write the plaintext key to disk — even DB backups expose
+        // only the ciphertext, which is undecryptable without the OS keychain.
+        // last_sync_at / last_test_at help the UI show health indicators.
+        `CREATE TABLE IF NOT EXISTS portal_integration_settings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL UNIQUE,
     portal_base_url TEXT NOT NULL DEFAULT 'https://rmpgutahps.us/client/login',
@@ -1843,57 +1845,55 @@ export function initDatabase(): Database.Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  // Health-check path is appended to api_endpoint for the test
-  // connection. Empty string = ping the base URL itself. Common
-  // Laravel/Express patterns: /health, /status, /api/v1/health.
-  // ALTER added separately so existing rows pick up the default.
-  "ALTER TABLE portal_integration_settings ADD COLUMN health_check_path TEXT DEFAULT '/health'",
-
-  // ── P1.13: Soft-delete columns (2026-05-05) ───────────────────
-  // Records with deleted_at IS NOT NULL are hidden from list/get
-  // queries but remain physically present until the auto-purge cron
-  // physically removes them after 30 days. Users can restore from
-  // Settings → Trash within that window. Currently scoped to the
-  // four most-deleted entities — clients/vendors deliberately
-  // excluded because their FK references would orphan invoices/bills.
-  "ALTER TABLE invoices ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE bills ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE expenses ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE journal_entries ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  // Indexes — soft-deleted rows are a SMALL minority, so a partial
-  // index keyed on deleted_at IS NULL gives effectively-free
-  // filtering for the common case.
-  "CREATE INDEX IF NOT EXISTS idx_invoices_not_deleted ON invoices(company_id) WHERE deleted_at IS NULL",
-  "CREATE INDEX IF NOT EXISTS idx_bills_not_deleted ON bills(company_id) WHERE deleted_at IS NULL",
-  "CREATE INDEX IF NOT EXISTS idx_expenses_not_deleted ON expenses(company_id) WHERE deleted_at IS NULL",
-  "CREATE INDEX IF NOT EXISTS idx_journal_entries_not_deleted ON journal_entries(company_id) WHERE deleted_at IS NULL",
-
-  // ── P1.11: Double-entry balance enforcement (DB triggers) ──────
-  //
-  // Belt + suspenders: the JS layer already validates balance, but
-  // these triggers prevent corrupted data from EVER reaching the
-  // tables — even if a bug, an interrupted transaction, or a
-  // direct-SQL operator tries to insert unbalanced lines on a
-  // POSTED journal entry. Drafts (is_posted=0) remain editable
-  // mid-flow; the check only enforces when the entry is finalized.
-  //
-  // Tolerance: $0.005 to absorb floating-point rounding from REAL
-  // arithmetic (better-sqlite3 stores debit/credit as REAL).
-  //
-  // Why three triggers on journal_entry_lines (INSERT/UPDATE/DELETE):
-  // SQLite triggers fire per-row per-statement. A multi-line journal
-  // can be inserted line-by-line; we want the *final* state of the
-  // parent entry to balance. Each operation re-checks the parent's
-  // total. If the parent is still a draft (is_posted=0), the WHEN
-  // clause skips the trigger — line-level edits on drafts are free.
-  //
-  // Why one trigger on journal_entries: when a user flips is_posted
-  // from 0→1, we must validate that the entry balances at THAT
-  // moment. Without this, a user could insert unbalanced lines
-  // while the entry is a draft, then flip is_posted=1 in a single
-  // UPDATE — bypassing the line-level triggers.
-  `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_insert`,
-  `CREATE TRIGGER trg_je_lines_balanced_after_insert
+        // Health-check path is appended to api_endpoint for the test
+        // connection. Empty string = ping the base URL itself. Common
+        // Laravel/Express patterns: /health, /status, /api/v1/health.
+        // ALTER added separately so existing rows pick up the default.
+        "ALTER TABLE portal_integration_settings ADD COLUMN health_check_path TEXT DEFAULT '/health'",
+        // ── P1.13: Soft-delete columns (2026-05-05) ───────────────────
+        // Records with deleted_at IS NOT NULL are hidden from list/get
+        // queries but remain physically present until the auto-purge cron
+        // physically removes them after 30 days. Users can restore from
+        // Settings → Trash within that window. Currently scoped to the
+        // four most-deleted entities — clients/vendors deliberately
+        // excluded because their FK references would orphan invoices/bills.
+        "ALTER TABLE invoices ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE bills ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE expenses ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE journal_entries ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        // Indexes — soft-deleted rows are a SMALL minority, so a partial
+        // index keyed on deleted_at IS NULL gives effectively-free
+        // filtering for the common case.
+        "CREATE INDEX IF NOT EXISTS idx_invoices_not_deleted ON invoices(company_id) WHERE deleted_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_bills_not_deleted ON bills(company_id) WHERE deleted_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_not_deleted ON expenses(company_id) WHERE deleted_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_journal_entries_not_deleted ON journal_entries(company_id) WHERE deleted_at IS NULL",
+        // ── P1.11: Double-entry balance enforcement (DB triggers) ──────
+        //
+        // Belt + suspenders: the JS layer already validates balance, but
+        // these triggers prevent corrupted data from EVER reaching the
+        // tables — even if a bug, an interrupted transaction, or a
+        // direct-SQL operator tries to insert unbalanced lines on a
+        // POSTED journal entry. Drafts (is_posted=0) remain editable
+        // mid-flow; the check only enforces when the entry is finalized.
+        //
+        // Tolerance: $0.005 to absorb floating-point rounding from REAL
+        // arithmetic (better-sqlite3 stores debit/credit as REAL).
+        //
+        // Why three triggers on journal_entry_lines (INSERT/UPDATE/DELETE):
+        // SQLite triggers fire per-row per-statement. A multi-line journal
+        // can be inserted line-by-line; we want the *final* state of the
+        // parent entry to balance. Each operation re-checks the parent's
+        // total. If the parent is still a draft (is_posted=0), the WHEN
+        // clause skips the trigger — line-level edits on drafts are free.
+        //
+        // Why one trigger on journal_entries: when a user flips is_posted
+        // from 0→1, we must validate that the entry balances at THAT
+        // moment. Without this, a user could insert unbalanced lines
+        // while the entry is a draft, then flip is_posted=1 in a single
+        // UPDATE — bypassing the line-level triggers.
+        `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_insert`,
+        `CREATE TRIGGER trg_je_lines_balanced_after_insert
    AFTER INSERT ON journal_entry_lines
    WHEN (SELECT is_posted FROM journal_entries WHERE id = NEW.journal_entry_id) = 1
    BEGIN
@@ -1905,8 +1905,8 @@ export function initDatabase(): Database.Database {
        THEN RAISE(ABORT, 'Posted journal entry must balance: total debits must equal total credits')
      END;
    END`,
-  `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_update`,
-  `CREATE TRIGGER trg_je_lines_balanced_after_update
+        `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_update`,
+        `CREATE TRIGGER trg_je_lines_balanced_after_update
    AFTER UPDATE ON journal_entry_lines
    WHEN (SELECT is_posted FROM journal_entries WHERE id = NEW.journal_entry_id) = 1
    BEGIN
@@ -1918,8 +1918,8 @@ export function initDatabase(): Database.Database {
        THEN RAISE(ABORT, 'Posted journal entry must balance: total debits must equal total credits')
      END;
    END`,
-  `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_delete`,
-  `CREATE TRIGGER trg_je_lines_balanced_after_delete
+        `DROP TRIGGER IF EXISTS trg_je_lines_balanced_after_delete`,
+        `CREATE TRIGGER trg_je_lines_balanced_after_delete
    AFTER DELETE ON journal_entry_lines
    WHEN (SELECT is_posted FROM journal_entries WHERE id = OLD.journal_entry_id) = 1
    BEGIN
@@ -1931,14 +1931,14 @@ export function initDatabase(): Database.Database {
        THEN RAISE(ABORT, 'Posted journal entry must balance: cannot delete a line that would unbalance the entry')
      END;
    END`,
-  // Trigger on journal_entries: when is_posted flips 0 → 1, validate
-  // that the entry balances at that moment. Catches the case where
-  // unbalanced draft lines were inserted under is_posted=0 and then
-  // the user attempts to post the entry in a single UPDATE.
-  // Also covers re-posting (1→1 update where lines may have changed
-  // between is_posted-related transactions).
-  `DROP TRIGGER IF EXISTS trg_je_balanced_on_post`,
-  `CREATE TRIGGER trg_je_balanced_on_post
+        // Trigger on journal_entries: when is_posted flips 0 → 1, validate
+        // that the entry balances at that moment. Catches the case where
+        // unbalanced draft lines were inserted under is_posted=0 and then
+        // the user attempts to post the entry in a single UPDATE.
+        // Also covers re-posting (1→1 update where lines may have changed
+        // between is_posted-related transactions).
+        `DROP TRIGGER IF EXISTS trg_je_balanced_on_post`,
+        `CREATE TRIGGER trg_je_balanced_on_post
    AFTER UPDATE OF is_posted ON journal_entries
    WHEN NEW.is_posted = 1
    BEGIN
@@ -1950,11 +1950,11 @@ export function initDatabase(): Database.Database {
        THEN RAISE(ABORT, 'Cannot post journal entry: total debits must equal total credits')
      END;
    END`,
-  // ─── Wave 4: Compliance documents (W-4 / W-9 / I-9) ─────────
-  // Stores forms RECEIVED from employees/vendors (paradigm-flip from
-  // forms ISSUED by the business). Tracks expiration for W-9 annual
-  // re-verification and I-9 retention rules.
-  `CREATE TABLE IF NOT EXISTS compliance_documents (
+        // ─── Wave 4: Compliance documents (W-4 / W-9 / I-9) ─────────
+        // Stores forms RECEIVED from employees/vendors (paradigm-flip from
+        // forms ISSUED by the business). Tracks expiration for W-9 annual
+        // re-verification and I-9 retention rules.
+        `CREATE TABLE IF NOT EXISTS compliance_documents (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     person_type TEXT NOT NULL CHECK(person_type IN ('employee','vendor','client')),
@@ -1975,11 +1975,11 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_compliance_docs_company ON compliance_documents(company_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_compliance_docs_person ON compliance_documents(person_type, person_id, form_type)`,
-  `CREATE INDEX IF NOT EXISTS idx_compliance_docs_expires ON compliance_documents(expires_at, status)`,
-  // Employee equipment (2026-05-21)
-  `CREATE TABLE IF NOT EXISTS employee_equipment (
+        `CREATE INDEX IF NOT EXISTS idx_compliance_docs_company ON compliance_documents(company_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_compliance_docs_person ON compliance_documents(person_type, person_id, form_type)`,
+        `CREATE INDEX IF NOT EXISTS idx_compliance_docs_expires ON compliance_documents(expires_at, status)`,
+        // Employee equipment (2026-05-21)
+        `CREATE TABLE IF NOT EXISTS employee_equipment (
     id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     item_name TEXT NOT NULL DEFAULT '',
@@ -1992,15 +1992,15 @@ export function initDatabase(): Database.Database {
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_employee_equipment_employee ON employee_equipment(employee_id)`,
-  // Equipment value (replacement cost) — referenced by the equipment
-  // agreement PDF and used as the base for percent-of-value penalties.
-  "ALTER TABLE employee_equipment ADD COLUMN value REAL DEFAULT 0",
-  // Custom, admin-defined penalties attached to a piece of issued
-  // equipment. Admin can add any number now or later (e.g. "Loss /
-  // non-return: $1,200 flat", "Late return: $25/day", "Damage: 50% of
-  // value"). Surfaced as terms on the Equipment Agreement.
-  `CREATE TABLE IF NOT EXISTS equipment_penalties (
+        `CREATE INDEX IF NOT EXISTS idx_employee_equipment_employee ON employee_equipment(employee_id)`,
+        // Equipment value (replacement cost) — referenced by the equipment
+        // agreement PDF and used as the base for percent-of-value penalties.
+        "ALTER TABLE employee_equipment ADD COLUMN value REAL DEFAULT 0",
+        // Custom, admin-defined penalties attached to a piece of issued
+        // equipment. Admin can add any number now or later (e.g. "Loss /
+        // non-return: $1,200 flat", "Late return: $25/day", "Damage: 50% of
+        // value"). Surfaced as terms on the Equipment Agreement.
+        `CREATE TABLE IF NOT EXISTS equipment_penalties (
     id TEXT PRIMARY KEY,
     equipment_id TEXT NOT NULL REFERENCES employee_equipment(id) ON DELETE CASCADE,
     label TEXT NOT NULL DEFAULT '',
@@ -2010,22 +2010,22 @@ export function initDatabase(): Database.Database {
     sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_equipment_penalties_equipment ON equipment_penalties(equipment_id)`,
-  // Equipment disposition + penalty assessment. When an item is returned,
-  // lost, stolen, etc., the admin records the outcome; matching penalties
-  // are summed into penalty_assessed. A clean return assesses $0.
-  "ALTER TABLE employee_equipment ADD COLUMN disposition TEXT DEFAULT 'in_use'", // in_use | returned_good | returned_damaged | lost | stolen | not_returned | retired
-  "ALTER TABLE employee_equipment ADD COLUMN disposition_date TEXT",
-  "ALTER TABLE employee_equipment ADD COLUMN disposition_notes TEXT DEFAULT ''",
-  "ALTER TABLE employee_equipment ADD COLUMN penalty_assessed REAL DEFAULT 0",
-  "ALTER TABLE employee_equipment ADD COLUMN penalty_waived INTEGER DEFAULT 0",
-  // Which outcome a penalty applies to (so the right ones auto-apply on
-  // disposition): any | damaged | lost | stolen | not_returned | late
-  "ALTER TABLE equipment_penalties ADD COLUMN applies_to TEXT DEFAULT 'any'",
-  // Employee credentials / licenses / certifications with expiry tracking.
-  // Drives proactive renewal alerts via the notification engine. No
-  // company_id (child of employees — tenancy via the parent).
-  `CREATE TABLE IF NOT EXISTS employee_credentials (
+        `CREATE INDEX IF NOT EXISTS idx_equipment_penalties_equipment ON equipment_penalties(equipment_id)`,
+        // Equipment disposition + penalty assessment. When an item is returned,
+        // lost, stolen, etc., the admin records the outcome; matching penalties
+        // are summed into penalty_assessed. A clean return assesses $0.
+        "ALTER TABLE employee_equipment ADD COLUMN disposition TEXT DEFAULT 'in_use'", // in_use | returned_good | returned_damaged | lost | stolen | not_returned | retired
+        "ALTER TABLE employee_equipment ADD COLUMN disposition_date TEXT",
+        "ALTER TABLE employee_equipment ADD COLUMN disposition_notes TEXT DEFAULT ''",
+        "ALTER TABLE employee_equipment ADD COLUMN penalty_assessed REAL DEFAULT 0",
+        "ALTER TABLE employee_equipment ADD COLUMN penalty_waived INTEGER DEFAULT 0",
+        // Which outcome a penalty applies to (so the right ones auto-apply on
+        // disposition): any | damaged | lost | stolen | not_returned | late
+        "ALTER TABLE equipment_penalties ADD COLUMN applies_to TEXT DEFAULT 'any'",
+        // Employee credentials / licenses / certifications with expiry tracking.
+        // Drives proactive renewal alerts via the notification engine. No
+        // company_id (child of employees — tenancy via the parent).
+        `CREATE TABLE IF NOT EXISTS employee_credentials (
     id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     credential_type TEXT NOT NULL DEFAULT 'license',
@@ -2037,11 +2037,11 @@ export function initDatabase(): Database.Database {
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_employee_credentials_employee ON employee_credentials(employee_id)`,
-  // Onboarding / offboarding checklist — persists MANUAL check-offs only.
-  // Data-backed steps (equipment issued, agreements signed, etc.) are
-  // derived live in the UI, never stored, so they can't drift.
-  `CREATE TABLE IF NOT EXISTS employee_checklist_items (
+        `CREATE INDEX IF NOT EXISTS idx_employee_credentials_employee ON employee_credentials(employee_id)`,
+        // Onboarding / offboarding checklist — persists MANUAL check-offs only.
+        // Data-backed steps (equipment issued, agreements signed, etc.) are
+        // derived live in the UI, never stored, so they can't drift.
+        `CREATE TABLE IF NOT EXISTS employee_checklist_items (
     id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     phase TEXT NOT NULL DEFAULT 'onboarding',
@@ -2050,9 +2050,9 @@ export function initDatabase(): Database.Database {
     completed_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_employee_checklist_employee ON employee_checklist_items(employee_id, phase)`,
-  // Performance reviews — periodic evaluations with numeric ratings and goals.
-  `CREATE TABLE IF NOT EXISTS employee_reviews (
+        `CREATE INDEX IF NOT EXISTS idx_employee_checklist_employee ON employee_checklist_items(employee_id, phase)`,
+        // Performance reviews — periodic evaluations with numeric ratings and goals.
+        `CREATE TABLE IF NOT EXISTS employee_reviews (
     id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     review_date TEXT NOT NULL,
@@ -2066,9 +2066,9 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'draft' CHECK(status IN ('draft','submitted','acknowledged')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_employee_reviews_employee ON employee_reviews(employee_id)`,
-  // Disciplinary actions — incidents, warnings, corrective actions.
-  `CREATE TABLE IF NOT EXISTS employee_disciplinary (
+        `CREATE INDEX IF NOT EXISTS idx_employee_reviews_employee ON employee_reviews(employee_id)`,
+        // Disciplinary actions — incidents, warnings, corrective actions.
+        `CREATE TABLE IF NOT EXISTS employee_disciplinary (
     id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     incident_date TEXT NOT NULL,
@@ -2083,9 +2083,9 @@ export function initDatabase(): Database.Database {
     acknowledged_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_employee_disciplinary_employee ON employee_disciplinary(employee_id)`,
-  // E-Sign documents (2026-05-21)
-  `CREATE TABLE IF NOT EXISTS esign_documents (
+        `CREATE INDEX IF NOT EXISTS idx_employee_disciplinary_employee ON employee_disciplinary(employee_id)`,
+        // E-Sign documents (2026-05-21)
+        `CREATE TABLE IF NOT EXISTS esign_documents (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     title TEXT NOT NULL DEFAULT '',
@@ -2097,7 +2097,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS esign_signatures (
+        `CREATE TABLE IF NOT EXISTS esign_signatures (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES esign_documents(id) ON DELETE CASCADE,
     signer_type TEXT NOT NULL CHECK(signer_type IN ('admin','employee','user')),
@@ -2107,14 +2107,14 @@ export function initDatabase(): Database.Database {
     signature_hash TEXT NOT NULL DEFAULT '',
     signed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS esign_permissions (
+        `CREATE TABLE IF NOT EXISTS esign_permissions (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES esign_documents(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL DEFAULT '',
     permission_level TEXT NOT NULL DEFAULT 'view' CHECK(permission_level IN ('view','edit','sign','admin')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS esign_audit_log (
+        `CREATE TABLE IF NOT EXISTS esign_audit_log (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES esign_documents(id) ON DELETE CASCADE,
     action TEXT NOT NULL DEFAULT '',
@@ -2124,26 +2124,24 @@ export function initDatabase(): Database.Database {
     details TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_esign_docs_company ON esign_documents(company_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_esign_signatures_doc ON esign_signatures(document_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_esign_permissions_doc ON esign_permissions(document_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_esign_audit_doc ON esign_audit_log(document_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_esign_audit_created ON esign_audit_log(created_at)`,
-  // Soft-delete column additions for tables missing deleted_at (2026-05-21)
-  "ALTER TABLE employees ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE clients ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE vendors ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE projects ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE quotes ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE loans ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE tags ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE custom_field_definitions ADD COLUMN deleted_at TEXT DEFAULT NULL",
-  "ALTER TABLE inventory_items ADD COLUMN deleted_at TEXT DEFAULT NULL",
-
-  // ─── Batch 1: 15 admin/settings features ────────────────────
-
-  // F1-F3: Custom fields system (clients, vendors, invoices)
-  `CREATE TABLE IF NOT EXISTS custom_field_definitions (
+        `CREATE INDEX IF NOT EXISTS idx_esign_docs_company ON esign_documents(company_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_esign_signatures_doc ON esign_signatures(document_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_esign_permissions_doc ON esign_permissions(document_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_esign_audit_doc ON esign_audit_log(document_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_esign_audit_created ON esign_audit_log(created_at)`,
+        // Soft-delete column additions for tables missing deleted_at (2026-05-21)
+        "ALTER TABLE employees ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE clients ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE vendors ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE projects ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE quotes ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE loans ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE tags ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE custom_field_definitions ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE inventory_items ADD COLUMN deleted_at TEXT DEFAULT NULL",
+        // ─── Batch 1: 15 admin/settings features ────────────────────
+        // F1-F3: Custom fields system (clients, vendors, invoices)
+        `CREATE TABLE IF NOT EXISTS custom_field_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     entity_type TEXT NOT NULL CHECK(entity_type IN ('client','vendor','invoice','expense','employee','project')),
@@ -2158,12 +2156,11 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, entity_type, field_key)
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, is_active)`,
-
-  // F4: Role permissions matrix (extends users table)
-  "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'",
-  "ALTER TABLE users ADD COLUMN permissions_json TEXT DEFAULT '{}'",
-  `CREATE TABLE IF NOT EXISTS user_role_templates (
+        `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, is_active)`,
+        // F4: Role permissions matrix (extends users table)
+        "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'",
+        "ALTER TABLE users ADD COLUMN permissions_json TEXT DEFAULT '{}'",
+        `CREATE TABLE IF NOT EXISTS user_role_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     role_name TEXT NOT NULL,
@@ -2172,37 +2169,30 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // F5: 2FA TOTP setup
-  "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
-  "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
-  "ALTER TABLE users ADD COLUMN totp_backup_codes TEXT DEFAULT '[]'",
-
-  // F6: Session timeout config (per company)
-  "ALTER TABLE companies ADD COLUMN session_timeout_minutes INTEGER DEFAULT 480",
-
-  // F7: Auto-backup schedule customization
-  "ALTER TABLE companies ADD COLUMN backup_schedule TEXT DEFAULT 'on_change'",
-  "ALTER TABLE companies ADD COLUMN backup_retain_count INTEGER DEFAULT 30",
-
-  // F8: Theme customization (per user)
-  "ALTER TABLE users ADD COLUMN theme_accent_color TEXT DEFAULT '#2563eb'",
-  "ALTER TABLE users ADD COLUMN theme_font_size TEXT DEFAULT 'medium'",
-  "ALTER TABLE users ADD COLUMN theme_density TEXT DEFAULT 'comfortable'",
-  "ALTER TABLE users ADD COLUMN theme_mode TEXT DEFAULT 'dark'",
-
-  // F9: Multi-fiscal-year support
-  "ALTER TABLE companies ADD COLUMN fiscal_year_start_month INTEGER DEFAULT 1",
-  "ALTER TABLE companies ADD COLUMN fiscal_year_start_day INTEGER DEFAULT 1",
-
-  // F10-F11: Activity feed + audit log viewer
-  // (audit_log table already exists — adding indices for the viewer)
-  "CREATE INDEX IF NOT EXISTS idx_audit_log_company_ts ON audit_log(company_id, timestamp DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(performed_by, timestamp DESC)",
-
-  // F12: Notification preferences per user
-  `CREATE TABLE IF NOT EXISTS notification_preferences (
+        // F5: 2FA TOTP setup
+        "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN totp_backup_codes TEXT DEFAULT '[]'",
+        // F6: Session timeout config (per company)
+        "ALTER TABLE companies ADD COLUMN session_timeout_minutes INTEGER DEFAULT 480",
+        // F7: Auto-backup schedule customization
+        "ALTER TABLE companies ADD COLUMN backup_schedule TEXT DEFAULT 'on_change'",
+        "ALTER TABLE companies ADD COLUMN backup_retain_count INTEGER DEFAULT 30",
+        // F8: Theme customization (per user)
+        "ALTER TABLE users ADD COLUMN theme_accent_color TEXT DEFAULT '#2563eb'",
+        "ALTER TABLE users ADD COLUMN theme_font_size TEXT DEFAULT 'medium'",
+        "ALTER TABLE users ADD COLUMN theme_density TEXT DEFAULT 'comfortable'",
+        "ALTER TABLE users ADD COLUMN theme_mode TEXT DEFAULT 'dark'",
+        // F9: Multi-fiscal-year support
+        "ALTER TABLE companies ADD COLUMN fiscal_year_start_month INTEGER DEFAULT 1",
+        "ALTER TABLE companies ADD COLUMN fiscal_year_start_day INTEGER DEFAULT 1",
+        // F10-F11: Activity feed + audit log viewer
+        // (audit_log table already exists — adding indices for the viewer)
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_company_ts ON audit_log(company_id, timestamp DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(performed_by, timestamp DESC)",
+        // F12: Notification preferences per user
+        `CREATE TABLE IF NOT EXISTS notification_preferences (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -2216,21 +2206,18 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id, company_id, notification_type)
   )`,
-
-  // F13: Currency settings (functional + reporting + display)
-  "ALTER TABLE companies ADD COLUMN functional_currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE companies ADD COLUMN reporting_currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE companies ADD COLUMN currency_display_format TEXT DEFAULT 'symbol_prefix'",
-
-  // F14: Password complexity policy
-  "ALTER TABLE companies ADD COLUMN password_min_length INTEGER DEFAULT 12",
-  "ALTER TABLE companies ADD COLUMN password_require_special INTEGER DEFAULT 1",
-  "ALTER TABLE companies ADD COLUMN password_require_number INTEGER DEFAULT 1",
-  "ALTER TABLE companies ADD COLUMN password_require_mixed_case INTEGER DEFAULT 1",
-  "ALTER TABLE companies ADD COLUMN password_rotation_days INTEGER DEFAULT 0",
-
-  // F15: User invitation flow
-  `CREATE TABLE IF NOT EXISTS user_invitations (
+        // F13: Currency settings (functional + reporting + display)
+        "ALTER TABLE companies ADD COLUMN functional_currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE companies ADD COLUMN reporting_currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE companies ADD COLUMN currency_display_format TEXT DEFAULT 'symbol_prefix'",
+        // F14: Password complexity policy
+        "ALTER TABLE companies ADD COLUMN password_min_length INTEGER DEFAULT 12",
+        "ALTER TABLE companies ADD COLUMN password_require_special INTEGER DEFAULT 1",
+        "ALTER TABLE companies ADD COLUMN password_require_number INTEGER DEFAULT 1",
+        "ALTER TABLE companies ADD COLUMN password_require_mixed_case INTEGER DEFAULT 1",
+        "ALTER TABLE companies ADD COLUMN password_rotation_days INTEGER DEFAULT 0",
+        // F15: User invitation flow
+        `CREATE TABLE IF NOT EXISTS user_invitations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     email TEXT NOT NULL,
@@ -2244,20 +2231,17 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_invitations_email ON user_invitations(email, accepted_at)",
-  "CREATE INDEX IF NOT EXISTS idx_invitations_token ON user_invitations(invitation_token)",
-
-  // ─── Batch 2: 20 invoicing & expense features ────────────────
-
-  // F16: Invoice late-fee auto-calc
-  "ALTER TABLE invoices ADD COLUMN late_fee_applied REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN late_fee_rate_pct REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
-  "ALTER TABLE companies ADD COLUMN default_late_fee_rate_pct REAL DEFAULT 1.5",
-  "ALTER TABLE companies ADD COLUMN default_late_fee_grace_days INTEGER DEFAULT 7",
-
-  // F17: Scheduled invoice reminders
-  `CREATE TABLE IF NOT EXISTS invoice_reminder_schedules (
+        "CREATE INDEX IF NOT EXISTS idx_invitations_email ON user_invitations(email, accepted_at)",
+        "CREATE INDEX IF NOT EXISTS idx_invitations_token ON user_invitations(invitation_token)",
+        // ─── Batch 2: 20 invoicing & expense features ────────────────
+        // F16: Invoice late-fee auto-calc
+        "ALTER TABLE invoices ADD COLUMN late_fee_applied REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN late_fee_rate_pct REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN late_fee_grace_days INTEGER DEFAULT 0",
+        "ALTER TABLE companies ADD COLUMN default_late_fee_rate_pct REAL DEFAULT 1.5",
+        "ALTER TABLE companies ADD COLUMN default_late_fee_grace_days INTEGER DEFAULT 7",
+        // F17: Scheduled invoice reminders
+        `CREATE TABLE IF NOT EXISTS invoice_reminder_schedules (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL REFERENCES invoices(id),
     days_after_due INTEGER NOT NULL,
@@ -2267,15 +2251,13 @@ export function initDatabase(): Database.Database {
     cancelled_at TEXT DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_invoice_reminders_scheduled ON invoice_reminder_schedules(scheduled_at, sent_at, cancelled_at)",
-
-  // F18: Partial payment tracking (existing payments table is fine; add summary cols on invoice)
-  "ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN balance_due REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN last_payment_date TEXT DEFAULT NULL",
-
-  // F19: Credit memos / refunds
-  `CREATE TABLE IF NOT EXISTS credit_memos (
+        "CREATE INDEX IF NOT EXISTS idx_invoice_reminders_scheduled ON invoice_reminder_schedules(scheduled_at, sent_at, cancelled_at)",
+        // F18: Partial payment tracking (existing payments table is fine; add summary cols on invoice)
+        "ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN balance_due REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN last_payment_date TEXT DEFAULT NULL",
+        // F19: Credit memos / refunds
+        `CREATE TABLE IF NOT EXISTS credit_memos (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     client_id TEXT NOT NULL REFERENCES clients(id),
@@ -2292,11 +2274,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_credit_memos_client ON credit_memos(client_id, status)",
-
-  // F20: Invoice batch send (no new schema — IPC handler)
-  // F21: Invoice template library
-  `CREATE TABLE IF NOT EXISTS invoice_templates (
+        "CREATE INDEX IF NOT EXISTS idx_credit_memos_client ON credit_memos(client_id, status)",
+        // F20: Invoice batch send (no new schema — IPC handler)
+        // F21: Invoice template library
+        `CREATE TABLE IF NOT EXISTS invoice_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     template_name TEXT NOT NULL,
@@ -2306,24 +2287,19 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // F22: Invoice number prefix per template — already in invoice_templates
-  // F23: Invoice currency conversion display
-  "ALTER TABLE invoices ADD COLUMN exchange_rate REAL DEFAULT 1.0",
-  "ALTER TABLE invoices ADD COLUMN reporting_currency_total REAL DEFAULT 0",
-
-  // F24: Invoice deposit/down-payment tracking
-  "ALTER TABLE invoices ADD COLUMN deposit_required REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN deposit_paid REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN deposit_due_date TEXT DEFAULT NULL",
-
-  // F25: Invoice line-item snippets — uses existing line_item_snippets table
-
-  // F26: Expense receipt thumbnail (existing receipts/files; add cache col)
-  "ALTER TABLE expenses ADD COLUMN receipt_thumbnail_path TEXT DEFAULT NULL",
-
-  // F27: Expense category budget alerts
-  `CREATE TABLE IF NOT EXISTS category_budget_alerts (
+        // F22: Invoice number prefix per template — already in invoice_templates
+        // F23: Invoice currency conversion display
+        "ALTER TABLE invoices ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+        "ALTER TABLE invoices ADD COLUMN reporting_currency_total REAL DEFAULT 0",
+        // F24: Invoice deposit/down-payment tracking
+        "ALTER TABLE invoices ADD COLUMN deposit_required REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN deposit_paid REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN deposit_due_date TEXT DEFAULT NULL",
+        // F25: Invoice line-item snippets — uses existing line_item_snippets table
+        // F26: Expense receipt thumbnail (existing receipts/files; add cache col)
+        "ALTER TABLE expenses ADD COLUMN receipt_thumbnail_path TEXT DEFAULT NULL",
+        // F27: Expense category budget alerts
+        `CREATE TABLE IF NOT EXISTS category_budget_alerts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     category_id TEXT NOT NULL,
@@ -2335,11 +2311,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // F28: Expense vendor auto-suggest — uses frequency from existing data (no schema)
-
-  // F29: Expense splitting across categories
-  `CREATE TABLE IF NOT EXISTS expense_splits (
+        // F28: Expense vendor auto-suggest — uses frequency from existing data (no schema)
+        // F29: Expense splitting across categories
+        `CREATE TABLE IF NOT EXISTS expense_splits (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL REFERENCES expenses(id),
     category_id TEXT,
@@ -2348,12 +2322,10 @@ export function initDatabase(): Database.Database {
     pct REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_expense_splits_parent ON expense_splits(expense_id)",
-
-  // F30: Expense mileage rates library — uses existing mileage_rates table
-
-  // F31: Expense reimbursement workflow
-  `CREATE TABLE IF NOT EXISTS expense_reimbursements (
+        "CREATE INDEX IF NOT EXISTS idx_expense_splits_parent ON expense_splits(expense_id)",
+        // F30: Expense mileage rates library — uses existing mileage_rates table
+        // F31: Expense reimbursement workflow
+        `CREATE TABLE IF NOT EXISTS expense_reimbursements (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     employee_id TEXT NOT NULL,
@@ -2369,16 +2341,15 @@ export function initDatabase(): Database.Database {
     notes TEXT DEFAULT '',
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_reimbursement_items (
+        `CREATE TABLE IF NOT EXISTS expense_reimbursement_items (
     id TEXT PRIMARY KEY,
     reimbursement_id TEXT NOT NULL REFERENCES expense_reimbursements(id),
     expense_id TEXT NOT NULL REFERENCES expenses(id),
     amount REAL NOT NULL
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_reimbursements_employee ON expense_reimbursements(employee_id, status)",
-
-  // F32: Per-diem rate lookup
-  `CREATE TABLE IF NOT EXISTS per_diem_rates (
+        "CREATE INDEX IF NOT EXISTS idx_reimbursements_employee ON expense_reimbursements(employee_id, status)",
+        // F32: Per-diem rate lookup
+        `CREATE TABLE IF NOT EXISTS per_diem_rates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     city TEXT NOT NULL,
@@ -2391,16 +2362,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, city, state, effective_year)
   )`,
-
-  // F33: Bulk re-categorize (no schema — IPC handler)
-  // F34: Expense report builder (no schema — uses reports infra)
-
-  // F35: Expense duplicate detection (no schema — runtime check)
-
-  // ─── Batch 3: 15 banking / reconciliation / payroll features ────
-
-  // F36: Bank rule engine (if memo contains X → categorize as Y)
-  `CREATE TABLE IF NOT EXISTS bank_categorization_rules (
+        // F33: Bulk re-categorize (no schema — IPC handler)
+        // F34: Expense report builder (no schema — uses reports infra)
+        // F35: Expense duplicate detection (no schema — runtime check)
+        // ─── Batch 3: 15 banking / reconciliation / payroll features ────
+        // F36: Bank rule engine (if memo contains X → categorize as Y)
+        `CREATE TABLE IF NOT EXISTS bank_categorization_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     rule_name TEXT NOT NULL,
@@ -2418,20 +2385,17 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_bank_rules_company ON bank_categorization_rules(company_id, is_active, priority)",
-
-  // F37: Auto-match reconciliation (no schema — algorithm in service)
-  // F38: Duplicate transaction warnings
-  "ALTER TABLE bank_transactions ADD COLUMN is_duplicate_of TEXT DEFAULT NULL",
-  "ALTER TABLE bank_transactions ADD COLUMN duplicate_confidence REAL DEFAULT 0",
-
-  // F39: Multi-bank transfer detection
-  "ALTER TABLE bank_transactions ADD COLUMN transfer_match_id TEXT DEFAULT NULL",
-  "CREATE INDEX IF NOT EXISTS idx_bank_tx_transfer ON bank_transactions(transfer_match_id)",
-
-  // F40: Bank balance projection (no schema — computed from scheduled inflows/outflows)
-  // F41: Statement CSV mapper
-  `CREATE TABLE IF NOT EXISTS bank_csv_mappings (
+        "CREATE INDEX IF NOT EXISTS idx_bank_rules_company ON bank_categorization_rules(company_id, is_active, priority)",
+        // F37: Auto-match reconciliation (no schema — algorithm in service)
+        // F38: Duplicate transaction warnings
+        "ALTER TABLE bank_transactions ADD COLUMN is_duplicate_of TEXT DEFAULT NULL",
+        "ALTER TABLE bank_transactions ADD COLUMN duplicate_confidence REAL DEFAULT 0",
+        // F39: Multi-bank transfer detection
+        "ALTER TABLE bank_transactions ADD COLUMN transfer_match_id TEXT DEFAULT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_bank_tx_transfer ON bank_transactions(transfer_match_id)",
+        // F40: Bank balance projection (no schema — computed from scheduled inflows/outflows)
+        // F41: Statement CSV mapper
+        `CREATE TABLE IF NOT EXISTS bank_csv_mappings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     bank_name TEXT NOT NULL,
@@ -2446,17 +2410,14 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // F42: Reconciliation history viewer
-  "ALTER TABLE bank_reconciliation_matches ADD COLUMN reconciled_at TEXT DEFAULT NULL",
-  "ALTER TABLE bank_reconciliation_matches ADD COLUMN reconciled_by TEXT DEFAULT ''",
-
-  // F43: Outstanding deposit tracker (deposited but not cleared)
-  "ALTER TABLE bank_transactions ADD COLUMN deposited_at TEXT DEFAULT NULL",
-  "ALTER TABLE bank_transactions ADD COLUMN cleared_at TEXT DEFAULT NULL",
-
-  // F44: Salary annual review tracker
-  `CREATE TABLE IF NOT EXISTS employee_salary_reviews (
+        // F42: Reconciliation history viewer
+        "ALTER TABLE bank_reconciliation_matches ADD COLUMN reconciled_at TEXT DEFAULT NULL",
+        "ALTER TABLE bank_reconciliation_matches ADD COLUMN reconciled_by TEXT DEFAULT ''",
+        // F43: Outstanding deposit tracker (deposited but not cleared)
+        "ALTER TABLE bank_transactions ADD COLUMN deposited_at TEXT DEFAULT NULL",
+        "ALTER TABLE bank_transactions ADD COLUMN cleared_at TEXT DEFAULT NULL",
+        // F44: Salary annual review tracker
+        `CREATE TABLE IF NOT EXISTS employee_salary_reviews (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     employee_id TEXT NOT NULL,
@@ -2473,12 +2434,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_salary_reviews_employee ON employee_salary_reviews(employee_id, review_date DESC)",
-
-  // F45: Pay stub bulk ZIP download (no schema — service handler)
-
-  // F46: Time-off balance tracker
-  `CREATE TABLE IF NOT EXISTS employee_time_off_balances (
+        "CREATE INDEX IF NOT EXISTS idx_salary_reviews_employee ON employee_salary_reviews(employee_id, review_date DESC)",
+        // F45: Pay stub bulk ZIP download (no schema — service handler)
+        // F46: Time-off balance tracker
+        `CREATE TABLE IF NOT EXISTS employee_time_off_balances (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     employee_id TEXT NOT NULL,
@@ -2494,7 +2453,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, employee_id, time_off_type)
   )`,
-  `CREATE TABLE IF NOT EXISTS time_off_requests (
+        `CREATE TABLE IF NOT EXISTS time_off_requests (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     employee_id TEXT NOT NULL,
@@ -2510,14 +2469,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_time_off_employee ON time_off_requests(employee_id, status, start_date)",
-
-  // F47: Bonus calculator (no schema — service computation)
-  // F48: State tax rate viewer (uses existing utah_withholding_config etc.)
-  // F49: Payroll cost forecast (no schema — derived from existing payroll data)
-
-  // F50: New-hire onboarding checklist
-  `CREATE TABLE IF NOT EXISTS onboarding_templates (
+        "CREATE INDEX IF NOT EXISTS idx_time_off_employee ON time_off_requests(employee_id, status, start_date)",
+        // F47: Bonus calculator (no schema — service computation)
+        // F48: State tax rate viewer (uses existing utah_withholding_config etc.)
+        // F49: Payroll cost forecast (no schema — derived from existing payroll data)
+        // F50: New-hire onboarding checklist
+        `CREATE TABLE IF NOT EXISTS onboarding_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     template_name TEXT NOT NULL,
@@ -2526,7 +2483,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS onboarding_assignments (
+        `CREATE TABLE IF NOT EXISTS onboarding_assignments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     employee_id TEXT NOT NULL,
@@ -2541,12 +2498,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_onboarding_employee ON onboarding_assignments(employee_id, completed)",
-
-  // ─── Batch 4: 10 reports/analytics features ──────────────────
-
-  // F60: Custom dashboard widgets
-  `CREATE TABLE IF NOT EXISTS dashboard_widgets (
+        "CREATE INDEX IF NOT EXISTS idx_onboarding_employee ON onboarding_assignments(employee_id, completed)",
+        // ─── Batch 4: 10 reports/analytics features ──────────────────
+        // F60: Custom dashboard widgets
+        `CREATE TABLE IF NOT EXISTS dashboard_widgets (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -2560,10 +2515,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_user ON dashboard_widgets(user_id, company_id, is_visible)",
-
-  // F58: AR aging email blast templates
-  `CREATE TABLE IF NOT EXISTS ar_collection_templates (
+        "CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_user ON dashboard_widgets(user_id, company_id, is_visible)",
+        // F58: AR aging email blast templates
+        `CREATE TABLE IF NOT EXISTS ar_collection_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     template_name TEXT NOT NULL,
@@ -2575,13 +2529,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch 5: 10 client/vendor/document/compliance features ───
-
-  // F61: Client merge (no schema — service handler)
-
-  // F62: Client tag/label system
-  `CREATE TABLE IF NOT EXISTS entity_tags (
+        // ─── Batch 5: 10 client/vendor/document/compliance features ───
+        // F61: Client merge (no schema — service handler)
+        // F62: Client tag/label system
+        `CREATE TABLE IF NOT EXISTS entity_tags (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     entity_type TEXT NOT NULL,
@@ -2591,11 +2542,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, entity_type, entity_id, tag)
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_search ON entity_tags(tag)",
-
-  // F63: Client communication history log
-  `CREATE TABLE IF NOT EXISTS client_communications (
+        "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
+        "CREATE INDEX IF NOT EXISTS idx_entity_tags_search ON entity_tags(tag)",
+        // F63: Client communication history log
+        `CREATE TABLE IF NOT EXISTS client_communications (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     client_id TEXT NOT NULL REFERENCES clients(id),
@@ -2613,29 +2563,25 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_client_comms_client ON client_communications(client_id, occurred_at DESC)",
-
-  // F64: Vendor 1099 status auto-check (no schema — service computation)
-  // F65: Vendor performance scorecard
-  "ALTER TABLE vendors ADD COLUMN on_time_payment_count INTEGER DEFAULT 0",
-  "ALTER TABLE vendors ADD COLUMN late_payment_count INTEGER DEFAULT 0",
-  "ALTER TABLE vendors ADD COLUMN quality_rating REAL DEFAULT 0",
-  "ALTER TABLE vendors ADD COLUMN dispute_count INTEGER DEFAULT 0",
-  "ALTER TABLE vendors ADD COLUMN avg_days_to_pay REAL DEFAULT 0",
-
-  // F66: Vendor contract / agreement storage (uses existing documents table with entity_type='vendor_contract')
-  "ALTER TABLE vendors ADD COLUMN contract_start_date TEXT DEFAULT NULL",
-  "ALTER TABLE vendors ADD COLUMN contract_end_date TEXT DEFAULT NULL",
-  "ALTER TABLE vendors ADD COLUMN contract_auto_renew INTEGER DEFAULT 0",
-  "ALTER TABLE vendors ADD COLUMN contract_renewal_notice_days INTEGER DEFAULT 30",
-
-  // F67: Document expiration reminders
-  "ALTER TABLE documents ADD COLUMN expires_at TEXT DEFAULT NULL",
-  "ALTER TABLE documents ADD COLUMN reminder_days_before INTEGER DEFAULT 30",
-  "ALTER TABLE documents ADD COLUMN last_reminded_at TEXT DEFAULT NULL",
-
-  // F68: Document version history
-  `CREATE TABLE IF NOT EXISTS document_versions (
+        "CREATE INDEX IF NOT EXISTS idx_client_comms_client ON client_communications(client_id, occurred_at DESC)",
+        // F64: Vendor 1099 status auto-check (no schema — service computation)
+        // F65: Vendor performance scorecard
+        "ALTER TABLE vendors ADD COLUMN on_time_payment_count INTEGER DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN late_payment_count INTEGER DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN quality_rating REAL DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN dispute_count INTEGER DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN avg_days_to_pay REAL DEFAULT 0",
+        // F66: Vendor contract / agreement storage (uses existing documents table with entity_type='vendor_contract')
+        "ALTER TABLE vendors ADD COLUMN contract_start_date TEXT DEFAULT NULL",
+        "ALTER TABLE vendors ADD COLUMN contract_end_date TEXT DEFAULT NULL",
+        "ALTER TABLE vendors ADD COLUMN contract_auto_renew INTEGER DEFAULT 0",
+        "ALTER TABLE vendors ADD COLUMN contract_renewal_notice_days INTEGER DEFAULT 30",
+        // F67: Document expiration reminders
+        "ALTER TABLE documents ADD COLUMN expires_at TEXT DEFAULT NULL",
+        "ALTER TABLE documents ADD COLUMN reminder_days_before INTEGER DEFAULT 30",
+        "ALTER TABLE documents ADD COLUMN last_reminded_at TEXT DEFAULT NULL",
+        // F68: Document version history
+        `CREATE TABLE IF NOT EXISTS document_versions (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES documents(id),
     version_number INTEGER NOT NULL,
@@ -2647,18 +2593,14 @@ export function initDatabase(): Database.Database {
     comment TEXT DEFAULT '',
     UNIQUE(document_id, version_number)
   )`,
-  "ALTER TABLE documents ADD COLUMN current_version INTEGER DEFAULT 1",
-
-  // F69: Document tag system (reuses entity_tags table from F62)
-
-  // F70: Document encrypted storage flag
-  "ALTER TABLE documents ADD COLUMN is_encrypted INTEGER DEFAULT 0",
-  "ALTER TABLE documents ADD COLUMN encryption_key_id TEXT DEFAULT NULL",
-
-  // ─── Batch 6: 20 automation & workflow features ──────────────
-
-  // F71-F75: Workflow framework — triggers, conditions, actions
-  `CREATE TABLE IF NOT EXISTS workflows (
+        "ALTER TABLE documents ADD COLUMN current_version INTEGER DEFAULT 1",
+        // F69: Document tag system (reuses entity_tags table from F62)
+        // F70: Document encrypted storage flag
+        "ALTER TABLE documents ADD COLUMN is_encrypted INTEGER DEFAULT 0",
+        "ALTER TABLE documents ADD COLUMN encryption_key_id TEXT DEFAULT NULL",
+        // ─── Batch 6: 20 automation & workflow features ──────────────
+        // F71-F75: Workflow framework — triggers, conditions, actions
+        `CREATE TABLE IF NOT EXISTS workflows (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     name TEXT NOT NULL,
@@ -2675,7 +2617,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS workflow_runs (
+        `CREATE TABLE IF NOT EXISTS workflow_runs (
     id TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL REFERENCES workflows(id),
     triggered_at TEXT DEFAULT (datetime('now')),
@@ -2686,11 +2628,10 @@ export function initDatabase(): Database.Database {
     duration_ms INTEGER DEFAULT 0,
     completed_at TEXT DEFAULT NULL
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_workflows_company_active ON workflows(company_id, is_active)",
-  "CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow ON workflow_runs(workflow_id, triggered_at DESC)",
-
-  // F76: Scheduled tasks (cron-style)
-  `CREATE TABLE IF NOT EXISTS scheduled_tasks (
+        "CREATE INDEX IF NOT EXISTS idx_workflows_company_active ON workflows(company_id, is_active)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow ON workflow_runs(workflow_id, triggered_at DESC)",
+        // F76: Scheduled tasks (cron-style)
+        `CREATE TABLE IF NOT EXISTS scheduled_tasks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     task_name TEXT NOT NULL,
@@ -2705,10 +2646,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(is_active, next_run_at)",
-
-  // F77-F79: Approval chains (multi-step)
-  `CREATE TABLE IF NOT EXISTS approval_chains (
+        "CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(is_active, next_run_at)",
+        // F77-F79: Approval chains (multi-step)
+        `CREATE TABLE IF NOT EXISTS approval_chains (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     chain_name TEXT NOT NULL,
@@ -2719,7 +2659,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS approval_instances (
+        `CREATE TABLE IF NOT EXISTS approval_instances (
     id TEXT PRIMARY KEY,
     chain_id TEXT NOT NULL REFERENCES approval_chains(id),
     entity_type TEXT NOT NULL,
@@ -2731,10 +2671,9 @@ export function initDatabase(): Database.Database {
     completed_at TEXT DEFAULT NULL,
     steps_log TEXT DEFAULT '[]'
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_approval_inst_entity ON approval_instances(entity_type, entity_id, status)",
-
-  // F80: Email templates library
-  `CREATE TABLE IF NOT EXISTS email_templates (
+        "CREATE INDEX IF NOT EXISTS idx_approval_inst_entity ON approval_instances(entity_type, entity_id, status)",
+        // F80: Email templates library
+        `CREATE TABLE IF NOT EXISTS email_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     template_name TEXT NOT NULL,
@@ -2748,15 +2687,14 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, template_key)
   )`,
-
-  // F81-F82: Outbound webhook subscriptions
-  // webhook_subscriptions already exists from earlier waves — add stats columns
-  "ALTER TABLE webhook_subscriptions ADD COLUMN secret_key TEXT DEFAULT ''",
-  "ALTER TABLE webhook_subscriptions ADD COLUMN last_delivered_at TEXT DEFAULT NULL",
-  "ALTER TABLE webhook_subscriptions ADD COLUMN last_status_code INTEGER DEFAULT 0",
-  "ALTER TABLE webhook_subscriptions ADD COLUMN consecutive_failures INTEGER DEFAULT 0",
-  "ALTER TABLE webhook_subscriptions ADD COLUMN delivery_count INTEGER DEFAULT 0",
-  `CREATE TABLE IF NOT EXISTS webhook_deliveries (
+        // F81-F82: Outbound webhook subscriptions
+        // webhook_subscriptions already exists from earlier waves — add stats columns
+        "ALTER TABLE webhook_subscriptions ADD COLUMN secret_key TEXT DEFAULT ''",
+        "ALTER TABLE webhook_subscriptions ADD COLUMN last_delivered_at TEXT DEFAULT NULL",
+        "ALTER TABLE webhook_subscriptions ADD COLUMN last_status_code INTEGER DEFAULT 0",
+        "ALTER TABLE webhook_subscriptions ADD COLUMN consecutive_failures INTEGER DEFAULT 0",
+        "ALTER TABLE webhook_subscriptions ADD COLUMN delivery_count INTEGER DEFAULT 0",
+        `CREATE TABLE IF NOT EXISTS webhook_deliveries (
     id TEXT PRIMARY KEY,
     subscription_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -2767,10 +2705,9 @@ export function initDatabase(): Database.Database {
     duration_ms INTEGER DEFAULT 0,
     succeeded INTEGER DEFAULT 0
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_sub ON webhook_deliveries(subscription_id, attempted_at DESC)",
-
-  // F83: Auto-categorize learned rules
-  `CREATE TABLE IF NOT EXISTS auto_categorize_learnings (
+        "CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_sub ON webhook_deliveries(subscription_id, attempted_at DESC)",
+        // F83: Auto-categorize learned rules
+        `CREATE TABLE IF NOT EXISTS auto_categorize_learnings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     description_pattern TEXT NOT NULL,
@@ -2783,15 +2720,13 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, description_pattern, vendor_id)
   )`,
-
-  // F84: Auto-archive policies
-  "ALTER TABLE companies ADD COLUMN auto_archive_paid_invoices_days INTEGER DEFAULT 0",
-  "ALTER TABLE companies ADD COLUMN auto_archive_closed_bills_days INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN archived_at TEXT DEFAULT NULL",
-  "ALTER TABLE bills ADD COLUMN archived_at TEXT DEFAULT NULL",
-
-  // F85: Triggered actions log
-  `CREATE TABLE IF NOT EXISTS triggered_actions_log (
+        // F84: Auto-archive policies
+        "ALTER TABLE companies ADD COLUMN auto_archive_paid_invoices_days INTEGER DEFAULT 0",
+        "ALTER TABLE companies ADD COLUMN auto_archive_closed_bills_days INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN archived_at TEXT DEFAULT NULL",
+        "ALTER TABLE bills ADD COLUMN archived_at TEXT DEFAULT NULL",
+        // F85: Triggered actions log
+        `CREATE TABLE IF NOT EXISTS triggered_actions_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     trigger_source TEXT NOT NULL,
@@ -2801,10 +2736,9 @@ export function initDatabase(): Database.Database {
     action_result TEXT DEFAULT '',
     triggered_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_triggered_actions_company ON triggered_actions_log(company_id, triggered_at DESC)",
-
-  // F86: SLA tracking (e.g., invoice payment SLA)
-  `CREATE TABLE IF NOT EXISTS sla_definitions (
+        "CREATE INDEX IF NOT EXISTS idx_triggered_actions_company ON triggered_actions_log(company_id, triggered_at DESC)",
+        // F86: SLA tracking (e.g., invoice payment SLA)
+        `CREATE TABLE IF NOT EXISTS sla_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     sla_name TEXT NOT NULL,
@@ -2816,9 +2750,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // F87-F88: Saved searches + filter presets
-  `CREATE TABLE IF NOT EXISTS saved_searches (
+        // F87-F88: Saved searches + filter presets
+        `CREATE TABLE IF NOT EXISTS saved_searches (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL REFERENCES companies(id),
@@ -2829,9 +2762,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // F89: Bulk operations log (undo)
-  `CREATE TABLE IF NOT EXISTS bulk_operations_log (
+        // F89: Bulk operations log (undo)
+        `CREATE TABLE IF NOT EXISTS bulk_operations_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     operation_type TEXT NOT NULL,
@@ -2843,9 +2775,8 @@ export function initDatabase(): Database.Database {
     can_undo INTEGER DEFAULT 1,
     undone_at TEXT DEFAULT NULL
   )`,
-
-  // F90: Quick actions / shortcuts
-  `CREATE TABLE IF NOT EXISTS quick_actions (
+        // F90: Quick actions / shortcuts
+        `CREATE TABLE IF NOT EXISTS quick_actions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -2857,9 +2788,9 @@ export function initDatabase(): Database.Database {
     is_pinned INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // ─── Batch 7: Banking, Treasury, Multi-Currency (F91-F110) ───
-  // F91 — cash_position_snapshots (roll-up snapshots for trend chart)
-  `CREATE TABLE IF NOT EXISTS cash_position_snapshots (
+        // ─── Batch 7: Banking, Treasury, Multi-Currency (F91-F110) ───
+        // F91 — cash_position_snapshots (roll-up snapshots for trend chart)
+        `CREATE TABLE IF NOT EXISTS cash_position_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     snapshot_date TEXT NOT NULL,
@@ -2871,8 +2802,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, snapshot_date)
   )`,
-  // F92 — cash_forecast_lines (daily projected cash by source)
-  `CREATE TABLE IF NOT EXISTS cash_forecast_lines (
+        // F92 — cash_forecast_lines (daily projected cash by source)
+        `CREATE TABLE IF NOT EXISTS cash_forecast_lines (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     forecast_date TEXT NOT NULL,
@@ -2885,9 +2816,9 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_cash_forecast_co_date ON cash_forecast_lines(company_id, projection_date)",
-  // F93 — fx_rates (historical FX with multi-source)
-  `CREATE TABLE IF NOT EXISTS fx_rates (
+        "CREATE INDEX IF NOT EXISTS idx_cash_forecast_co_date ON cash_forecast_lines(company_id, projection_date)",
+        // F93 — fx_rates (historical FX with multi-source)
+        `CREATE TABLE IF NOT EXISTS fx_rates (
     id TEXT PRIMARY KEY,
     rate_date TEXT NOT NULL,
     from_currency TEXT NOT NULL,
@@ -2897,8 +2828,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(rate_date, from_currency, to_currency, source)
   )`,
-  // F94 — fx_revaluation_runs (unrealized gain/loss on foreign-currency balances)
-  `CREATE TABLE IF NOT EXISTS fx_revaluation_runs (
+        // F94 — fx_revaluation_runs (unrealized gain/loss on foreign-currency balances)
+        `CREATE TABLE IF NOT EXISTS fx_revaluation_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     revaluation_date TEXT NOT NULL,
@@ -2911,11 +2842,11 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  // F95 — additional currency columns on bank accounts (already via accounts.currency)
-  "ALTER TABLE accounts ADD COLUMN account_native_currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE accounts ADD COLUMN last_fx_rate REAL DEFAULT 1.0",
-  // F96 — wire_transfers
-  `CREATE TABLE IF NOT EXISTS wire_transfers (
+        // F95 — additional currency columns on bank accounts (already via accounts.currency)
+        "ALTER TABLE accounts ADD COLUMN account_native_currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE accounts ADD COLUMN last_fx_rate REAL DEFAULT 1.0",
+        // F96 — wire_transfers
+        `CREATE TABLE IF NOT EXISTS wire_transfers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     transfer_date TEXT NOT NULL,
@@ -2932,8 +2863,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F97 — ach_batches + ach_batch_items
-  `CREATE TABLE IF NOT EXISTS ach_batches (
+        // F97 — ach_batches + ach_batch_items
+        `CREATE TABLE IF NOT EXISTS ach_batches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     batch_date TEXT NOT NULL,
@@ -2949,7 +2880,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     submitted_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS ach_batch_items (
+        `CREATE TABLE IF NOT EXISTS ach_batch_items (
     id TEXT PRIMARY KEY,
     batch_id TEXT NOT NULL REFERENCES ach_batches(id) ON DELETE CASCADE,
     payee_name TEXT NOT NULL,
@@ -2962,8 +2893,8 @@ export function initDatabase(): Database.Database {
     bill_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F98 — bank_fee_categories (auto-classification rules for service charges)
-  `CREATE TABLE IF NOT EXISTS bank_fee_categories (
+        // F98 — bank_fee_categories (auto-classification rules for service charges)
+        `CREATE TABLE IF NOT EXISTS bank_fee_categories (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pattern TEXT NOT NULL,
@@ -2973,8 +2904,8 @@ export function initDatabase(): Database.Database {
     match_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F99 — bank_match_attempts (fuzzy matcher audit)
-  `CREATE TABLE IF NOT EXISTS bank_match_attempts (
+        // F99 — bank_match_attempts (fuzzy matcher audit)
+        `CREATE TABLE IF NOT EXISTS bank_match_attempts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     transaction_id TEXT NOT NULL,
@@ -2984,8 +2915,8 @@ export function initDatabase(): Database.Database {
     accepted INTEGER DEFAULT 0,
     matched_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F100 — stop_payments
-  `CREATE TABLE IF NOT EXISTS stop_payments (
+        // F100 — stop_payments
+        `CREATE TABLE IF NOT EXISTS stop_payments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     bank_account_id TEXT,
@@ -3001,8 +2932,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F101 — pending_deposits (float tracker)
-  `CREATE TABLE IF NOT EXISTS pending_deposits (
+        // F101 — pending_deposits (float tracker)
+        `CREATE TABLE IF NOT EXISTS pending_deposits (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     deposit_date TEXT,
@@ -3016,8 +2947,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F102 — petty_cash_log
-  `CREATE TABLE IF NOT EXISTS petty_cash_log (
+        // F102 — petty_cash_log
+        `CREATE TABLE IF NOT EXISTS petty_cash_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     log_date TEXT NOT NULL,
@@ -3030,8 +2961,8 @@ export function initDatabase(): Database.Database {
     posted_je_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F103 — treasury_investments
-  `CREATE TABLE IF NOT EXISTS treasury_investments (
+        // F103 — treasury_investments
+        `CREATE TABLE IF NOT EXISTS treasury_investments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     instrument_type TEXT NOT NULL,
@@ -3048,8 +2979,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F104 — letters_of_credit
-  `CREATE TABLE IF NOT EXISTS letters_of_credit (
+        // F104 — letters_of_credit
+        `CREATE TABLE IF NOT EXISTS letters_of_credit (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     lc_number TEXT,
@@ -3065,11 +2996,11 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F105 — loan_covenants
-  // Loan Full-System Wave (F993-F1052) — 60 features covering all loan
-  // types + advanced math + applications/origination + risk/compliance +
-  // specialized products + portfolio analytics.
-  `CREATE TABLE IF NOT EXISTS borrower_profiles (
+        // F105 — loan_covenants
+        // Loan Full-System Wave (F993-F1052) — 60 features covering all loan
+        // types + advanced math + applications/origination + risk/compliance +
+        // specialized products + portfolio analytics.
+        `CREATE TABLE IF NOT EXISTS borrower_profiles (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -3092,7 +3023,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_applications (
+        `CREATE TABLE IF NOT EXISTS loan_applications (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     borrower_id TEXT,
@@ -3115,7 +3046,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_heloc_draws (
+        `CREATE TABLE IF NOT EXISTS loan_heloc_draws (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3127,7 +3058,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_construction_draws (
+        `CREATE TABLE IF NOT EXISTS loan_construction_draws (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3144,7 +3075,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_lease_terms (
+        `CREATE TABLE IF NOT EXISTS loan_lease_terms (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL UNIQUE,
@@ -3161,7 +3092,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_idr_plans (
+        `CREATE TABLE IF NOT EXISTS loan_idr_plans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3176,7 +3107,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_pslf_progress (
+        `CREATE TABLE IF NOT EXISTS loan_pslf_progress (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL UNIQUE,
@@ -3190,7 +3121,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_charge_offs (
+        `CREATE TABLE IF NOT EXISTS loan_charge_offs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3204,7 +3135,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_recoveries (
+        `CREATE TABLE IF NOT EXISTS loan_recoveries (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3215,7 +3146,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_risk_grades (
+        `CREATE TABLE IF NOT EXISTS loan_risk_grades (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3226,7 +3157,7 @@ export function initDatabase(): Database.Database {
     assigned_at TEXT DEFAULT (datetime('now')),
     notes TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_disclosures (
+        `CREATE TABLE IF NOT EXISTS loan_disclosures (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT,
@@ -3241,7 +3172,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_promissory_notes (
+        `CREATE TABLE IF NOT EXISTS loan_promissory_notes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT,
@@ -3261,10 +3192,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Loan Wave (F963-F992) — 30 advanced loan features.
-  // Collateral linkage — what asset secures the loan. Many-to-many because
-  // a single asset can be cross-collateralized across multiple loans.
-  `CREATE TABLE IF NOT EXISTS loan_collateral (
+        // Loan Wave (F963-F992) — 30 advanced loan features.
+        // Collateral linkage — what asset secures the loan. Many-to-many because
+        // a single asset can be cross-collateralized across multiple loans.
+        `CREATE TABLE IF NOT EXISTS loan_collateral (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3280,8 +3211,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Loan documents repository — note, agreement, disclosures, 1098, etc.
-  `CREATE TABLE IF NOT EXISTS loan_documents (
+        // Loan documents repository — note, agreement, disclosures, 1098, etc.
+        `CREATE TABLE IF NOT EXISTS loan_documents (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3293,9 +3224,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Variable rate / ARM reset schedule. One row per scheduled rate change.
-  // Type column distinguishes auto-reset from manual override.
-  `CREATE TABLE IF NOT EXISTS loan_arm_schedule (
+        // Variable rate / ARM reset schedule. One row per scheduled rate change.
+        // Type column distinguishes auto-reset from manual override.
+        `CREATE TABLE IF NOT EXISTS loan_arm_schedule (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3312,9 +3243,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Escrow account ledger. Each deposit and disbursement is a row;
-  // running balance is computed by summing.
-  `CREATE TABLE IF NOT EXISTS loan_escrow_ledger (
+        // Escrow account ledger. Each deposit and disbursement is a row;
+        // running balance is computed by summing.
+        `CREATE TABLE IF NOT EXISTS loan_escrow_ledger (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3328,8 +3259,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // PMI tracking — required when LTV > 80% on mortgages, auto-cancel at 78%
-  `CREATE TABLE IF NOT EXISTS loan_pmi_tracking (
+        // PMI tracking — required when LTV > 80% on mortgages, auto-cancel at 78%
+        `CREATE TABLE IF NOT EXISTS loan_pmi_tracking (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL UNIQUE,
@@ -3344,8 +3275,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Year-end 1098 mortgage interest statements. One row per loan per year.
-  `CREATE TABLE IF NOT EXISTS loan_1098_filings (
+        // Year-end 1098 mortgage interest statements. One row per loan per year.
+        `CREATE TABLE IF NOT EXISTS loan_1098_filings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT NOT NULL,
@@ -3368,7 +3299,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, loan_id, tax_year)
   )`,
-  `CREATE TABLE IF NOT EXISTS loan_covenants (
+        `CREATE TABLE IF NOT EXISTS loan_covenants (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     loan_id TEXT,
@@ -3384,8 +3315,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F106 — sweep_rules
-  `CREATE TABLE IF NOT EXISTS sweep_rules (
+        // F106 — sweep_rules
+        `CREATE TABLE IF NOT EXISTS sweep_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     source_account_id TEXT,
@@ -3399,8 +3330,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F107 — inter_company_transfers
-  `CREATE TABLE IF NOT EXISTS inter_company_transfers (
+        // F107 — inter_company_transfers
+        `CREATE TABLE IF NOT EXISTS inter_company_transfers (
     id TEXT PRIMARY KEY,
     transfer_date TEXT NOT NULL,
     from_company_id TEXT NOT NULL,
@@ -3415,8 +3346,8 @@ export function initDatabase(): Database.Database {
     to_je_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F108 — credit_card_statements + cc_statement_lines
-  `CREATE TABLE IF NOT EXISTS credit_card_statements (
+        // F108 — credit_card_statements + cc_statement_lines
+        `CREATE TABLE IF NOT EXISTS credit_card_statements (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     card_account_id TEXT,
@@ -3429,7 +3360,7 @@ export function initDatabase(): Database.Database {
     reconciled_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS cc_statement_lines (
+        `CREATE TABLE IF NOT EXISTS cc_statement_lines (
     id TEXT PRIMARY KEY,
     statement_id TEXT NOT NULL REFERENCES credit_card_statements(id) ON DELETE CASCADE,
     transaction_date TEXT NOT NULL,
@@ -3438,8 +3369,8 @@ export function initDatabase(): Database.Database {
     matched_expense_id TEXT,
     is_matched INTEGER DEFAULT 0
   )`,
-  // F109 — lockbox_imports + lockbox_items
-  `CREATE TABLE IF NOT EXISTS lockbox_imports (
+        // F109 — lockbox_imports + lockbox_items
+        `CREATE TABLE IF NOT EXISTS lockbox_imports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     import_date TEXT NOT NULL,
@@ -3450,7 +3381,7 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'imported',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS lockbox_items (
+        `CREATE TABLE IF NOT EXISTS lockbox_items (
     id TEXT PRIMARY KEY,
     import_id TEXT NOT NULL REFERENCES lockbox_imports(id) ON DELETE CASCADE,
     customer_id TEXT,
@@ -3461,8 +3392,8 @@ export function initDatabase(): Database.Database {
     matched_invoice_id TEXT,
     notes TEXT
   )`,
-  // F110 — positive_pay_files
-  `CREATE TABLE IF NOT EXISTS positive_pay_files (
+        // F110 — positive_pay_files
+        `CREATE TABLE IF NOT EXISTS positive_pay_files (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     bank_account_id TEXT,
@@ -3475,9 +3406,9 @@ export function initDatabase(): Database.Database {
     submitted_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // ─── Batch 8: Inventory, Projects, Time (F111-F130) ───
-  // F111 — warehouses
-  `CREATE TABLE IF NOT EXISTS warehouses (
+        // ─── Batch 8: Inventory, Projects, Time (F111-F130) ───
+        // F111 — warehouses
+        `CREATE TABLE IF NOT EXISTS warehouses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     code TEXT NOT NULL,
@@ -3490,8 +3421,8 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, code)
   )`,
-  // F112 — inventory_locations (bin/shelf within warehouse)
-  `CREATE TABLE IF NOT EXISTS inventory_locations (
+        // F112 — inventory_locations (bin/shelf within warehouse)
+        `CREATE TABLE IF NOT EXISTS inventory_locations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     warehouse_id TEXT NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
@@ -3503,9 +3434,9 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_inv_loc_wh ON inventory_locations(warehouse_id)",
-  // F113 — inventory_lots (lot/batch tracking)
-  `CREATE TABLE IF NOT EXISTS inventory_lots (
+        "CREATE INDEX IF NOT EXISTS idx_inv_loc_wh ON inventory_locations(warehouse_id)",
+        // F113 — inventory_lots (lot/batch tracking)
+        `CREATE TABLE IF NOT EXISTS inventory_lots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     item_id TEXT NOT NULL,
@@ -3522,8 +3453,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, item_id, lot_number)
   )`,
-  // F114 — inventory_serial_numbers
-  `CREATE TABLE IF NOT EXISTS inventory_serial_numbers (
+        // F114 — inventory_serial_numbers
+        `CREATE TABLE IF NOT EXISTS inventory_serial_numbers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     item_id TEXT NOT NULL,
@@ -3540,8 +3471,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, item_id, serial_number)
   )`,
-  // F115 — inventory_transfers
-  `CREATE TABLE IF NOT EXISTS inventory_transfers (
+        // F115 — inventory_transfers
+        `CREATE TABLE IF NOT EXISTS inventory_transfers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     transfer_number TEXT,
@@ -3557,7 +3488,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS inventory_transfer_items (
+        `CREATE TABLE IF NOT EXISTS inventory_transfer_items (
     id TEXT PRIMARY KEY,
     transfer_id TEXT NOT NULL REFERENCES inventory_transfers(id) ON DELETE CASCADE,
     item_id TEXT NOT NULL,
@@ -3566,8 +3497,8 @@ export function initDatabase(): Database.Database {
     unit_cost REAL DEFAULT 0,
     notes TEXT
   )`,
-  // F116 — inventory_adjustments
-  `CREATE TABLE IF NOT EXISTS inventory_adjustments (
+        // F116 — inventory_adjustments
+        `CREATE TABLE IF NOT EXISTS inventory_adjustments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     adjustment_number TEXT,
@@ -3583,7 +3514,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS inventory_adjustment_items (
+        `CREATE TABLE IF NOT EXISTS inventory_adjustment_items (
     id TEXT PRIMARY KEY,
     adjustment_id TEXT NOT NULL REFERENCES inventory_adjustments(id) ON DELETE CASCADE,
     item_id TEXT NOT NULL,
@@ -3594,8 +3525,8 @@ export function initDatabase(): Database.Database {
     unit_cost REAL DEFAULT 0,
     value_change REAL DEFAULT 0
   )`,
-  // F117 — stock_take_sessions
-  `CREATE TABLE IF NOT EXISTS stock_take_sessions (
+        // F117 — stock_take_sessions
+        `CREATE TABLE IF NOT EXISTS stock_take_sessions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     session_name TEXT,
@@ -3610,7 +3541,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS stock_take_counts (
+        `CREATE TABLE IF NOT EXISTS stock_take_counts (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES stock_take_sessions(id) ON DELETE CASCADE,
     item_id TEXT NOT NULL,
@@ -3621,8 +3552,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     counted_at TEXT
   )`,
-  // F118 — low_stock_alerts
-  `CREATE TABLE IF NOT EXISTS low_stock_alerts (
+        // F118 — low_stock_alerts
+        `CREATE TABLE IF NOT EXISTS low_stock_alerts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     item_id TEXT NOT NULL,
@@ -3636,13 +3567,13 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'active',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F119 — inventory_valuation_methods (per company default + per item override)
-  "ALTER TABLE companies ADD COLUMN inventory_valuation_method TEXT DEFAULT 'average'",
-  "ALTER TABLE inventory_items ADD COLUMN valuation_method_override TEXT",
-  "ALTER TABLE inventory_items ADD COLUMN minimum_stock REAL DEFAULT 0",
-  "ALTER TABLE inventory_items ADD COLUMN maximum_stock REAL DEFAULT 0",
-  // F120 — inventory_value_history (period-end COGS snapshots)
-  `CREATE TABLE IF NOT EXISTS inventory_value_history (
+        // F119 — inventory_valuation_methods (per company default + per item override)
+        "ALTER TABLE companies ADD COLUMN inventory_valuation_method TEXT DEFAULT 'average'",
+        "ALTER TABLE inventory_items ADD COLUMN valuation_method_override TEXT",
+        "ALTER TABLE inventory_items ADD COLUMN minimum_stock REAL DEFAULT 0",
+        "ALTER TABLE inventory_items ADD COLUMN maximum_stock REAL DEFAULT 0",
+        // F120 — inventory_value_history (period-end COGS snapshots)
+        `CREATE TABLE IF NOT EXISTS inventory_value_history (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     snapshot_date TEXT NOT NULL,
@@ -3653,8 +3584,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, snapshot_date)
   )`,
-  // F121 — project_tasks
-  `CREATE TABLE IF NOT EXISTS project_tasks (
+        // F121 — project_tasks
+        `CREATE TABLE IF NOT EXISTS project_tasks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3673,9 +3604,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_project_tasks_proj ON project_tasks(project_id, status)",
-  // F122 — project_milestones
-  `CREATE TABLE IF NOT EXISTS project_milestones (
+        "CREATE INDEX IF NOT EXISTS idx_project_tasks_proj ON project_tasks(project_id, status)",
+        // F122 — project_milestones
+        `CREATE TABLE IF NOT EXISTS project_milestones (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3691,8 +3622,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F123 — project_resources (team allocation)
-  `CREATE TABLE IF NOT EXISTS project_resources (
+        // F123 — project_resources (team allocation)
+        `CREATE TABLE IF NOT EXISTS project_resources (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3707,8 +3638,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F124 — project_budgets
-  `CREATE TABLE IF NOT EXISTS project_budgets (
+        // F124 — project_budgets
+        `CREATE TABLE IF NOT EXISTS project_budgets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3720,8 +3651,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F125 — project_risks
-  `CREATE TABLE IF NOT EXISTS project_risks (
+        // F125 — project_risks
+        `CREATE TABLE IF NOT EXISTS project_risks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3736,8 +3667,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F126 — project_change_orders
-  `CREATE TABLE IF NOT EXISTS project_change_orders (
+        // F126 — project_change_orders
+        `CREATE TABLE IF NOT EXISTS project_change_orders (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3753,8 +3684,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F127 — timesheet_periods
-  `CREATE TABLE IF NOT EXISTS timesheet_periods (
+        // F127 — timesheet_periods
+        `CREATE TABLE IF NOT EXISTS timesheet_periods (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -3768,8 +3699,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, employee_id, period_start)
   )`,
-  // F128 — timesheet_approvals
-  `CREATE TABLE IF NOT EXISTS timesheet_approvals (
+        // F128 — timesheet_approvals
+        `CREATE TABLE IF NOT EXISTS timesheet_approvals (
     id TEXT PRIMARY KEY,
     period_id TEXT NOT NULL REFERENCES timesheet_periods(id) ON DELETE CASCADE,
     step_number INTEGER DEFAULT 1,
@@ -3779,8 +3710,8 @@ export function initDatabase(): Database.Database {
     comment TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F129 — billable_time_summary cache (rebuilt periodically)
-  `CREATE TABLE IF NOT EXISTS billable_time_summary (
+        // F129 — billable_time_summary cache (rebuilt periodically)
+        `CREATE TABLE IF NOT EXISTS billable_time_summary (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     summary_date TEXT NOT NULL,
@@ -3795,9 +3726,9 @@ export function initDatabase(): Database.Database {
     invoiced_amount REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_bts_co_period ON billable_time_summary(company_id, period_start, period_end)",
-  // F130 — project_profitability snapshots
-  `CREATE TABLE IF NOT EXISTS project_profitability (
+        "CREATE INDEX IF NOT EXISTS idx_bts_co_period ON billable_time_summary(company_id, period_start, period_end)",
+        // F130 — project_profitability snapshots
+        `CREATE TABLE IF NOT EXISTS project_profitability (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -3814,9 +3745,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, project_id, snapshot_date)
   )`,
-  // ─── Batch 9: CRM, Sales, Quotes (F131-F150) ───
-  // F131 — sales_pipeline_stages
-  `CREATE TABLE IF NOT EXISTS sales_pipeline_stages (
+        // ─── Batch 9: CRM, Sales, Quotes (F131-F150) ───
+        // F131 — sales_pipeline_stages
+        `CREATE TABLE IF NOT EXISTS sales_pipeline_stages (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     stage_name TEXT NOT NULL,
@@ -3829,8 +3760,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F132 — deals (opportunities)
-  `CREATE TABLE IF NOT EXISTS deals (
+        // F132 — deals (opportunities)
+        `CREATE TABLE IF NOT EXISTS deals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     deal_name TEXT NOT NULL,
@@ -3854,9 +3785,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_deals_co_stage ON deals(company_id, stage_id, status)",
-  // F133 — deal_activities
-  `CREATE TABLE IF NOT EXISTS deal_activities (
+        "CREATE INDEX IF NOT EXISTS idx_deals_co_stage ON deals(company_id, stage_id, status)",
+        // F133 — deal_activities
+        `CREATE TABLE IF NOT EXISTS deal_activities (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     deal_id TEXT NOT NULL,
@@ -3871,8 +3802,8 @@ export function initDatabase(): Database.Database {
     performed_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F134 — sales_targets
-  `CREATE TABLE IF NOT EXISTS sales_targets (
+        // F134 — sales_targets
+        `CREATE TABLE IF NOT EXISTS sales_targets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rep_id TEXT,
@@ -3886,8 +3817,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F135 — sales_performance_snapshots
-  `CREATE TABLE IF NOT EXISTS sales_performance_snapshots (
+        // F135 — sales_performance_snapshots
+        `CREATE TABLE IF NOT EXISTS sales_performance_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     snapshot_date TEXT NOT NULL,
@@ -3903,8 +3834,8 @@ export function initDatabase(): Database.Database {
     avg_days_to_close REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F136 — lead_forms
-  `CREATE TABLE IF NOT EXISTS lead_forms (
+        // F136 — lead_forms
+        `CREATE TABLE IF NOT EXISTS lead_forms (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     form_name TEXT NOT NULL,
@@ -3917,7 +3848,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS lead_form_submissions (
+        `CREATE TABLE IF NOT EXISTS lead_form_submissions (
     id TEXT PRIMARY KEY,
     form_id TEXT NOT NULL REFERENCES lead_forms(id) ON DELETE CASCADE,
     submitted_at TEXT DEFAULT (datetime('now')),
@@ -3925,8 +3856,8 @@ export function initDatabase(): Database.Database {
     converted_to_lead_id TEXT,
     ip_address TEXT
   )`,
-  // F137 — lead_scoring_rules
-  `CREATE TABLE IF NOT EXISTS lead_scoring_rules (
+        // F137 — lead_scoring_rules
+        `CREATE TABLE IF NOT EXISTS lead_scoring_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -3936,8 +3867,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F138 — lead_routing_rules
-  `CREATE TABLE IF NOT EXISTS lead_routing_rules (
+        // F138 — lead_routing_rules
+        `CREATE TABLE IF NOT EXISTS lead_routing_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -3951,8 +3882,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F139 — sales_territories
-  `CREATE TABLE IF NOT EXISTS sales_territories (
+        // F139 — sales_territories
+        `CREATE TABLE IF NOT EXISTS sales_territories (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     territory_name TEXT NOT NULL,
@@ -3967,8 +3898,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F140 — commission_plans
-  `CREATE TABLE IF NOT EXISTS commission_plans (
+        // F140 — commission_plans
+        `CREATE TABLE IF NOT EXISTS commission_plans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     plan_name TEXT NOT NULL,
@@ -3982,8 +3913,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F141 — commission_calculations
-  `CREATE TABLE IF NOT EXISTS commission_calculations (
+        // F141 — commission_calculations
+        `CREATE TABLE IF NOT EXISTS commission_calculations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rep_id TEXT NOT NULL,
@@ -4001,8 +3932,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F142 — discount_rules
-  `CREATE TABLE IF NOT EXISTS discount_rules (
+        // F142 — discount_rules
+        `CREATE TABLE IF NOT EXISTS discount_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -4020,8 +3951,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F143 — promo_codes
-  `CREATE TABLE IF NOT EXISTS promo_codes (
+        // F143 — promo_codes
+        `CREATE TABLE IF NOT EXISTS promo_codes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     code TEXT NOT NULL,
@@ -4038,7 +3969,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, code)
   )`,
-  `CREATE TABLE IF NOT EXISTS promo_code_redemptions (
+        `CREATE TABLE IF NOT EXISTS promo_code_redemptions (
     id TEXT PRIMARY KEY,
     promo_code_id TEXT NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
     customer_id TEXT,
@@ -4047,8 +3978,8 @@ export function initDatabase(): Database.Database {
     discount_amount REAL DEFAULT 0,
     redeemed_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F144 — loyalty_tiers + customer_loyalty
-  `CREATE TABLE IF NOT EXISTS loyalty_tiers (
+        // F144 — loyalty_tiers + customer_loyalty
+        `CREATE TABLE IF NOT EXISTS loyalty_tiers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tier_name TEXT NOT NULL,
@@ -4062,7 +3993,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS customer_loyalty (
+        `CREATE TABLE IF NOT EXISTS customer_loyalty (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -4077,7 +4008,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, customer_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS loyalty_transactions (
+        `CREATE TABLE IF NOT EXISTS loyalty_transactions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -4088,8 +4019,8 @@ export function initDatabase(): Database.Database {
     invoice_id TEXT,
     redemption_id TEXT
   )`,
-  // F145 — customer_referrals
-  `CREATE TABLE IF NOT EXISTS customer_referrals (
+        // F145 — customer_referrals
+        `CREATE TABLE IF NOT EXISTS customer_referrals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     referrer_customer_id TEXT NOT NULL,
@@ -4103,8 +4034,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F146 — quote_templates_v2 (rich templates with default lines)
-  `CREATE TABLE IF NOT EXISTS quote_template_lines (
+        // F146 — quote_templates_v2 (rich templates with default lines)
+        `CREATE TABLE IF NOT EXISTS quote_template_lines (
     id TEXT PRIMARY KEY,
     template_id TEXT NOT NULL,
     sort_order INTEGER DEFAULT 0,
@@ -4116,8 +4047,8 @@ export function initDatabase(): Database.Database {
     tax_rate REAL DEFAULT 0,
     notes TEXT
   )`,
-  // F147 — quote_conversion_log
-  `CREATE TABLE IF NOT EXISTS quote_conversion_log (
+        // F147 — quote_conversion_log
+        `CREATE TABLE IF NOT EXISTS quote_conversion_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     quote_id TEXT NOT NULL,
@@ -4126,8 +4057,8 @@ export function initDatabase(): Database.Database {
     converted_by TEXT,
     notes TEXT
   )`,
-  // F148 — quote_signatures (light e-sign)
-  `CREATE TABLE IF NOT EXISTS quote_signatures (
+        // F148 — quote_signatures (light e-sign)
+        `CREATE TABLE IF NOT EXISTS quote_signatures (
     id TEXT PRIMARY KEY,
     quote_id TEXT NOT NULL,
     signer_name TEXT NOT NULL,
@@ -4138,8 +4069,8 @@ export function initDatabase(): Database.Database {
     user_agent TEXT,
     status TEXT DEFAULT 'signed'
   )`,
-  // F149 — rfp_tracking
-  `CREATE TABLE IF NOT EXISTS rfp_tracking (
+        // F149 — rfp_tracking
+        `CREATE TABLE IF NOT EXISTS rfp_tracking (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rfp_number TEXT,
@@ -4160,8 +4091,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F150 — win_loss_analysis
-  `CREATE TABLE IF NOT EXISTS win_loss_analysis (
+        // F150 — win_loss_analysis
+        `CREATE TABLE IF NOT EXISTS win_loss_analysis (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     deal_id TEXT NOT NULL,
@@ -4176,9 +4107,9 @@ export function initDatabase(): Database.Database {
     analyzed_by TEXT,
     analyzed_at TEXT DEFAULT (datetime('now'))
   )`,
-  // ─── Batch 10: Compliance, Security, API (F151-F170) ───
-  // F151 — data_retention_policies
-  `CREATE TABLE IF NOT EXISTS data_retention_policies (
+        // ─── Batch 10: Compliance, Security, API (F151-F170) ───
+        // F151 — data_retention_policies
+        `CREATE TABLE IF NOT EXISTS data_retention_policies (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     policy_name TEXT NOT NULL,
@@ -4192,8 +4123,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F152 — data_subject_requests (DSR / GDPR-style)
-  `CREATE TABLE IF NOT EXISTS data_subject_requests (
+        // F152 — data_subject_requests (DSR / GDPR-style)
+        `CREATE TABLE IF NOT EXISTS data_subject_requests (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     request_type TEXT NOT NULL,
@@ -4210,8 +4141,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     verification_method TEXT
   )`,
-  // F153 — anonymization_log (audit of personal-data scrubs)
-  `CREATE TABLE IF NOT EXISTS anonymization_log (
+        // F153 — anonymization_log (audit of personal-data scrubs)
+        `CREATE TABLE IF NOT EXISTS anonymization_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     subject_type TEXT,
@@ -4222,8 +4153,8 @@ export function initDatabase(): Database.Database {
     reason TEXT,
     dsr_id TEXT
   )`,
-  // F154 — entity_audit_history (per-record change log)
-  `CREATE TABLE IF NOT EXISTS entity_audit_history (
+        // F154 — entity_audit_history (per-record change log)
+        `CREATE TABLE IF NOT EXISTS entity_audit_history (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -4236,9 +4167,9 @@ export function initDatabase(): Database.Database {
     user_agent TEXT,
     occurred_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_eah_entity ON entity_audit_history(company_id, entity_type, entity_id)",
-  // F155 — user_session_log
-  `CREATE TABLE IF NOT EXISTS user_session_log (
+        "CREATE INDEX IF NOT EXISTS idx_eah_entity ON entity_audit_history(company_id, entity_type, entity_id)",
+        // F155 — user_session_log
+        `CREATE TABLE IF NOT EXISTS user_session_log (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     user_email TEXT,
@@ -4255,9 +4186,9 @@ export function initDatabase(): Database.Database {
     suspicious_reason TEXT,
     company_id TEXT
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_usl_user ON user_session_log(user_id, login_at)",
-  // F156 — ip_access_whitelist
-  `CREATE TABLE IF NOT EXISTS ip_access_whitelist (
+        "CREATE INDEX IF NOT EXISTS idx_usl_user ON user_session_log(user_id, login_at)",
+        // F156 — ip_access_whitelist
+        `CREATE TABLE IF NOT EXISTS ip_access_whitelist (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     cidr_or_ip TEXT NOT NULL,
@@ -4267,8 +4198,8 @@ export function initDatabase(): Database.Database {
     expires_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F157 — user_2fa
-  `CREATE TABLE IF NOT EXISTS user_2fa (
+        // F157 — user_2fa
+        `CREATE TABLE IF NOT EXISTS user_2fa (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     method TEXT DEFAULT 'totp',
@@ -4280,8 +4211,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id)
   )`,
-  // F158 — api_tokens
-  `CREATE TABLE IF NOT EXISTS api_tokens (
+        // F158 — api_tokens
+        `CREATE TABLE IF NOT EXISTS api_tokens (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -4296,8 +4227,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     revoked_at TEXT
   )`,
-  // F159 — api_rate_limits
-  `CREATE TABLE IF NOT EXISTS api_rate_limits (
+        // F159 — api_rate_limits
+        `CREATE TABLE IF NOT EXISTS api_rate_limits (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     token_id TEXT,
@@ -4309,7 +4240,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS api_request_log (
+        `CREATE TABLE IF NOT EXISTS api_request_log (
     id TEXT PRIMARY KEY,
     company_id TEXT,
     token_id TEXT,
@@ -4320,9 +4251,9 @@ export function initDatabase(): Database.Database {
     ip_address TEXT,
     requested_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_arl_token_time ON api_request_log(token_id, requested_at)",
-  // F160 — webhook_secret_rotations
-  `CREATE TABLE IF NOT EXISTS webhook_secret_rotations (
+        "CREATE INDEX IF NOT EXISTS idx_arl_token_time ON api_request_log(token_id, requested_at)",
+        // F160 — webhook_secret_rotations
+        `CREATE TABLE IF NOT EXISTS webhook_secret_rotations (
     id TEXT PRIMARY KEY,
     subscription_id TEXT NOT NULL,
     rotated_at TEXT DEFAULT (datetime('now')),
@@ -4331,8 +4262,8 @@ export function initDatabase(): Database.Database {
     new_secret_hash TEXT,
     reason TEXT
   )`,
-  // F161 — pci_checklist_items
-  `CREATE TABLE IF NOT EXISTS pci_checklist_items (
+        // F161 — pci_checklist_items
+        `CREATE TABLE IF NOT EXISTS pci_checklist_items (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     requirement_number TEXT,
@@ -4347,8 +4278,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F162 — soc2_controls
-  `CREATE TABLE IF NOT EXISTS soc2_controls (
+        // F162 — soc2_controls
+        `CREATE TABLE IF NOT EXISTS soc2_controls (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     trust_principle TEXT,
@@ -4365,8 +4296,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F163 — data_masking_rules
-  `CREATE TABLE IF NOT EXISTS data_masking_rules (
+        // F163 — data_masking_rules
+        `CREATE TABLE IF NOT EXISTS data_masking_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     field_path TEXT NOT NULL,
@@ -4378,8 +4309,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F164 — rtbf_requests (right-to-be-forgotten)
-  `CREATE TABLE IF NOT EXISTS rtbf_requests (
+        // F164 — rtbf_requests (right-to-be-forgotten)
+        `CREATE TABLE IF NOT EXISTS rtbf_requests (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     subject_email TEXT NOT NULL,
@@ -4396,8 +4327,8 @@ export function initDatabase(): Database.Database {
     fulfilled_by TEXT,
     notes TEXT
   )`,
-  // F165 — consent_records
-  `CREATE TABLE IF NOT EXISTS consent_records (
+        // F165 — consent_records
+        `CREATE TABLE IF NOT EXISTS consent_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     subject_type TEXT,
@@ -4412,9 +4343,9 @@ export function initDatabase(): Database.Database {
     user_agent TEXT,
     proof_text TEXT
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_consent_subject ON consent_records(company_id, subject_id, consent_type)",
-  // F166 — sub_processors
-  `CREATE TABLE IF NOT EXISTS sub_processors (
+        "CREATE INDEX IF NOT EXISTS idx_consent_subject ON consent_records(company_id, subject_id, consent_type)",
+        // F166 — sub_processors
+        `CREATE TABLE IF NOT EXISTS sub_processors (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     processor_name TEXT NOT NULL,
@@ -4433,8 +4364,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F167 — data_classifications
-  `CREATE TABLE IF NOT EXISTS data_classifications (
+        // F167 — data_classifications
+        `CREATE TABLE IF NOT EXISTS data_classifications (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     table_name TEXT NOT NULL,
@@ -4449,8 +4380,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F168 — encryption_verification_log
-  `CREATE TABLE IF NOT EXISTS encryption_verification_log (
+        // F168 — encryption_verification_log
+        `CREATE TABLE IF NOT EXISTS encryption_verification_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     scope TEXT NOT NULL,
@@ -4462,8 +4393,8 @@ export function initDatabase(): Database.Database {
     issues TEXT,
     notes TEXT
   )`,
-  // F169 — backup_verification_log
-  `CREATE TABLE IF NOT EXISTS backup_verification_log (
+        // F169 — backup_verification_log
+        `CREATE TABLE IF NOT EXISTS backup_verification_log (
     id TEXT PRIMARY KEY,
     company_id TEXT,
     backup_type TEXT,
@@ -4476,8 +4407,8 @@ export function initDatabase(): Database.Database {
     can_restore INTEGER DEFAULT 1,
     notes TEXT
   )`,
-  // F170 — vulnerabilities
-  `CREATE TABLE IF NOT EXISTS vulnerabilities (
+        // F170 — vulnerabilities
+        `CREATE TABLE IF NOT EXISTS vulnerabilities (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     cve_id TEXT,
@@ -4496,17 +4427,15 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-
-  // ═══════════════════════════════════════════════════════════════════
-  //   ACCOUNTING DEEP-DIVE: 90 features (F171-F260)
-  //   Batches A-I covering GL, COA, period close, fixed assets advanced,
-  //   revenue recognition, cost accounting, audit, budgeting, financial
-  //   statements + analysis.
-  // ═══════════════════════════════════════════════════════════════════
-
-  // ─── Batch A: GL & JE Operations (F171-F185) ───────────
-  // F171 — recurring journal entries
-  `CREATE TABLE IF NOT EXISTS recurring_je_definitions (
+        // ═══════════════════════════════════════════════════════════════════
+        //   ACCOUNTING DEEP-DIVE: 90 features (F171-F260)
+        //   Batches A-I covering GL, COA, period close, fixed assets advanced,
+        //   revenue recognition, cost accounting, audit, budgeting, financial
+        //   statements + analysis.
+        // ═══════════════════════════════════════════════════════════════════
+        // ─── Batch A: GL & JE Operations (F171-F185) ───────────
+        // F171 — recurring journal entries
+        `CREATE TABLE IF NOT EXISTS recurring_je_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -4525,13 +4454,13 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     created_by TEXT
   )`,
-  // F172 — reversing JE link (already-posted JE has a flag + linked reversal JE)
-  "ALTER TABLE journal_entries ADD COLUMN is_reversing INTEGER DEFAULT 0",
-  "ALTER TABLE journal_entries ADD COLUMN reversing_je_id TEXT",
-  "ALTER TABLE journal_entries ADD COLUMN reverse_on_date TEXT",
-  "ALTER TABLE journal_entries ADD COLUMN reversed_at TEXT",
-  // F173 — JE templates
-  `CREATE TABLE IF NOT EXISTS je_templates (
+        // F172 — reversing JE link (already-posted JE has a flag + linked reversal JE)
+        "ALTER TABLE journal_entries ADD COLUMN is_reversing INTEGER DEFAULT 0",
+        "ALTER TABLE journal_entries ADD COLUMN reversing_je_id TEXT",
+        "ALTER TABLE journal_entries ADD COLUMN reverse_on_date TEXT",
+        "ALTER TABLE journal_entries ADD COLUMN reversed_at TEXT",
+        // F173 — JE templates
+        `CREATE TABLE IF NOT EXISTS je_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -4543,12 +4472,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F174 — JE currency support
-  "ALTER TABLE journal_entries ADD COLUMN currency TEXT DEFAULT 'USD'",
-  "ALTER TABLE journal_entries ADD COLUMN exchange_rate REAL DEFAULT 1.0",
-  "ALTER TABLE journal_entries ADD COLUMN fx_gain_loss_account_id TEXT",
-  // F175 — inter-company JE pairing
-  `CREATE TABLE IF NOT EXISTS inter_company_je_pairs (
+        // F174 — JE currency support
+        "ALTER TABLE journal_entries ADD COLUMN currency TEXT DEFAULT 'USD'",
+        "ALTER TABLE journal_entries ADD COLUMN exchange_rate REAL DEFAULT 1.0",
+        "ALTER TABLE journal_entries ADD COLUMN fx_gain_loss_account_id TEXT",
+        // F175 — inter-company JE pairing
+        `CREATE TABLE IF NOT EXISTS inter_company_je_pairs (
     id TEXT PRIMARY KEY,
     parent_je_id TEXT NOT NULL,
     counterparty_je_id TEXT NOT NULL,
@@ -4557,8 +4486,8 @@ export function initDatabase(): Database.Database {
     paired_date TEXT DEFAULT (datetime('now')),
     notes TEXT
   )`,
-  // F176 — JE bulk import session
-  `CREATE TABLE IF NOT EXISTS je_import_sessions (
+        // F176 — JE bulk import session
+        `CREATE TABLE IF NOT EXISTS je_import_sessions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     file_name TEXT,
@@ -4569,8 +4498,8 @@ export function initDatabase(): Database.Database {
     imported_at TEXT DEFAULT (datetime('now')),
     imported_by TEXT
   )`,
-  // F180 — JE allocation rules
-  `CREATE TABLE IF NOT EXISTS je_allocation_rules (
+        // F180 — JE allocation rules
+        `CREATE TABLE IF NOT EXISTS je_allocation_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -4581,8 +4510,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F182 — JE narrative templates
-  `CREATE TABLE IF NOT EXISTS je_narratives (
+        // F182 — JE narrative templates
+        `CREATE TABLE IF NOT EXISTS je_narratives (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     slug TEXT NOT NULL,
@@ -4591,8 +4520,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, slug)
   )`,
-  // F178 — JE attachments
-  `CREATE TABLE IF NOT EXISTS je_attachments (
+        // F178 — JE attachments
+        `CREATE TABLE IF NOT EXISTS je_attachments (
     id TEXT PRIMARY KEY,
     je_id TEXT NOT NULL,
     file_name TEXT NOT NULL,
@@ -4602,14 +4531,13 @@ export function initDatabase(): Database.Database {
     uploaded_at TEXT DEFAULT (datetime('now')),
     uploaded_by TEXT
   )`,
-
-  // ─── Batch B: Chart of Accounts (F186-F195) ───────────
-  // F186 — account hierarchy (already has parent_id on accounts presumably; ensure)
-  "ALTER TABLE accounts ADD COLUMN parent_account_id TEXT",
-  "ALTER TABLE accounts ADD COLUMN level_depth INTEGER DEFAULT 0",
-  "ALTER TABLE accounts ADD COLUMN roll_up_to_id TEXT",
-  // F188 — account renumber log
-  `CREATE TABLE IF NOT EXISTS account_renumber_log (
+        // ─── Batch B: Chart of Accounts (F186-F195) ───────────
+        // F186 — account hierarchy (already has parent_id on accounts presumably; ensure)
+        "ALTER TABLE accounts ADD COLUMN parent_account_id TEXT",
+        "ALTER TABLE accounts ADD COLUMN level_depth INTEGER DEFAULT 0",
+        "ALTER TABLE accounts ADD COLUMN roll_up_to_id TEXT",
+        // F188 — account renumber log
+        `CREATE TABLE IF NOT EXISTS account_renumber_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -4619,19 +4547,19 @@ export function initDatabase(): Database.Database {
     renamed_at TEXT DEFAULT (datetime('now')),
     notes TEXT
   )`,
-  // F190 — suspense account designation
-  "ALTER TABLE accounts ADD COLUMN is_suspense INTEGER DEFAULT 0",
-  // F191 — account close (use is_active flag if exists; add closed_at)
-  "ALTER TABLE accounts ADD COLUMN closed_at TEXT",
-  "ALTER TABLE accounts ADD COLUMN closed_reason TEXT",
-  // F192 — account-to-tax-line mapping
-  "ALTER TABLE accounts ADD COLUMN tax_line_code TEXT",
-  "ALTER TABLE accounts ADD COLUMN tax_form TEXT",
-  // F193 — account-to-cash-flow mapping
-  "ALTER TABLE accounts ADD COLUMN cash_flow_section TEXT",
-  "ALTER TABLE accounts ADD COLUMN cash_flow_subsection TEXT",
-  // F195 — opening balances import
-  `CREATE TABLE IF NOT EXISTS opening_balances (
+        // F190 — suspense account designation
+        "ALTER TABLE accounts ADD COLUMN is_suspense INTEGER DEFAULT 0",
+        // F191 — account close (use is_active flag if exists; add closed_at)
+        "ALTER TABLE accounts ADD COLUMN closed_at TEXT",
+        "ALTER TABLE accounts ADD COLUMN closed_reason TEXT",
+        // F192 — account-to-tax-line mapping
+        "ALTER TABLE accounts ADD COLUMN tax_line_code TEXT",
+        "ALTER TABLE accounts ADD COLUMN tax_form TEXT",
+        // F193 — account-to-cash-flow mapping
+        "ALTER TABLE accounts ADD COLUMN cash_flow_section TEXT",
+        "ALTER TABLE accounts ADD COLUMN cash_flow_subsection TEXT",
+        // F195 — opening balances import
+        `CREATE TABLE IF NOT EXISTS opening_balances (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -4644,10 +4572,9 @@ export function initDatabase(): Database.Database {
     posted_je_id TEXT,
     UNIQUE(company_id, account_id, as_of_date)
   )`,
-
-  // ─── Batch C: Period Close + Adjustments (F196-F205) ───
-  // F196 — period_close_checklist already exists; extend with template
-  `CREATE TABLE IF NOT EXISTS period_close_templates (
+        // ─── Batch C: Period Close + Adjustments (F196-F205) ───
+        // F196 — period_close_checklist already exists; extend with template
+        `CREATE TABLE IF NOT EXISTS period_close_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -4657,8 +4584,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F197 — accrual entries (separate workflow)
-  `CREATE TABLE IF NOT EXISTS accrual_entries (
+        // F197 — accrual entries (separate workflow)
+        `CREATE TABLE IF NOT EXISTS accrual_entries (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     accrual_type TEXT DEFAULT 'expense',
@@ -4677,8 +4604,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  // F199 — prepaid amortization
-  `CREATE TABLE IF NOT EXISTS prepaid_schedules (
+        // F199 — prepaid amortization
+        `CREATE TABLE IF NOT EXISTS prepaid_schedules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -4697,7 +4624,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS prepaid_recognitions (
+        `CREATE TABLE IF NOT EXISTS prepaid_recognitions (
     id TEXT PRIMARY KEY,
     schedule_id TEXT NOT NULL REFERENCES prepaid_schedules(id) ON DELETE CASCADE,
     recognition_date TEXT NOT NULL,
@@ -4705,8 +4632,8 @@ export function initDatabase(): Database.Database {
     posted_je_id TEXT,
     posted_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F200 — deferred revenue amortization
-  `CREATE TABLE IF NOT EXISTS deferred_revenue_schedules (
+        // F200 — deferred revenue amortization
+        `CREATE TABLE IF NOT EXISTS deferred_revenue_schedules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -4726,7 +4653,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS deferred_revenue_recognitions (
+        `CREATE TABLE IF NOT EXISTS deferred_revenue_recognitions (
     id TEXT PRIMARY KEY,
     schedule_id TEXT NOT NULL REFERENCES deferred_revenue_schedules(id) ON DELETE CASCADE,
     recognition_date TEXT NOT NULL,
@@ -4734,8 +4661,8 @@ export function initDatabase(): Database.Database {
     posted_je_id TEXT,
     posted_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F205 — year-end closing entries
-  `CREATE TABLE IF NOT EXISTS year_end_close_runs (
+        // F205 — year-end closing entries
+        `CREATE TABLE IF NOT EXISTS year_end_close_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     fiscal_year INTEGER NOT NULL,
@@ -4748,10 +4675,9 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     UNIQUE(company_id, fiscal_year)
   )`,
-
-  // ─── Batch D: Fixed Assets Advanced (F206-F215) ───────
-  // F206 — disposal log
-  `CREATE TABLE IF NOT EXISTS asset_disposals (
+        // ─── Batch D: Fixed Assets Advanced (F206-F215) ───────
+        // F206 — disposal log
+        `CREATE TABLE IF NOT EXISTS asset_disposals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4766,8 +4692,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  // F207 — transfers
-  `CREATE TABLE IF NOT EXISTS asset_transfers (
+        // F207 — transfers
+        `CREATE TABLE IF NOT EXISTS asset_transfers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4780,8 +4706,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F209 — impairment
-  `CREATE TABLE IF NOT EXISTS asset_impairments (
+        // F209 — impairment
+        `CREATE TABLE IF NOT EXISTS asset_impairments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4794,8 +4720,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  // F210 — revaluation
-  `CREATE TABLE IF NOT EXISTS asset_revaluations (
+        // F210 — revaluation
+        `CREATE TABLE IF NOT EXISTS asset_revaluations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4809,8 +4735,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F212 — asset retirement obligations
-  `CREATE TABLE IF NOT EXISTS asset_retirement_obligations (
+        // F212 — asset retirement obligations
+        `CREATE TABLE IF NOT EXISTS asset_retirement_obligations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4824,8 +4750,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F213 — asset insurance
-  `CREATE TABLE IF NOT EXISTS asset_insurance (
+        // F213 — asset insurance
+        `CREATE TABLE IF NOT EXISTS asset_insurance (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4840,8 +4766,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F214 — asset warranties
-  `CREATE TABLE IF NOT EXISTS asset_warranties (
+        // F214 — asset warranties
+        `CREATE TABLE IF NOT EXISTS asset_warranties (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -4854,13 +4780,12 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F215 — depreciation convention column
-  "ALTER TABLE fixed_assets ADD COLUMN depreciation_convention TEXT DEFAULT 'full_month'",
-  "ALTER TABLE fixed_assets ADD COLUMN component_parent_id TEXT",
-
-  // ─── Batch E: Revenue Recognition (F216-F225) ─────────
-  // F216 — ASC 606 contracts + performance obligations
-  `CREATE TABLE IF NOT EXISTS revenue_contracts (
+        // F215 — depreciation convention column
+        "ALTER TABLE fixed_assets ADD COLUMN depreciation_convention TEXT DEFAULT 'full_month'",
+        "ALTER TABLE fixed_assets ADD COLUMN component_parent_id TEXT",
+        // ─── Batch E: Revenue Recognition (F216-F225) ─────────
+        // F216 — ASC 606 contracts + performance obligations
+        `CREATE TABLE IF NOT EXISTS revenue_contracts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     client_id TEXT,
@@ -4876,7 +4801,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS performance_obligations (
+        `CREATE TABLE IF NOT EXISTS performance_obligations (
     id TEXT PRIMARY KEY,
     contract_id TEXT NOT NULL REFERENCES revenue_contracts(id) ON DELETE CASCADE,
     description TEXT NOT NULL,
@@ -4891,8 +4816,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F217 — contract modifications log
-  `CREATE TABLE IF NOT EXISTS contract_modifications (
+        // F217 — contract modifications log
+        `CREATE TABLE IF NOT EXISTS contract_modifications (
     id TEXT PRIMARY KEY,
     contract_id TEXT NOT NULL REFERENCES revenue_contracts(id) ON DELETE CASCADE,
     modification_date TEXT NOT NULL,
@@ -4904,8 +4829,8 @@ export function initDatabase(): Database.Database {
     approved_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F218 — SSP tracking
-  `CREATE TABLE IF NOT EXISTS standalone_selling_prices (
+        // F218 — SSP tracking
+        `CREATE TABLE IF NOT EXISTS standalone_selling_prices (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     product_or_service TEXT NOT NULL,
@@ -4919,8 +4844,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F219 — variable consideration
-  `CREATE TABLE IF NOT EXISTS variable_consideration_adjustments (
+        // F219 — variable consideration
+        `CREATE TABLE IF NOT EXISTS variable_consideration_adjustments (
     id TEXT PRIMARY KEY,
     contract_id TEXT NOT NULL REFERENCES revenue_contracts(id) ON DELETE CASCADE,
     obligation_id TEXT,
@@ -4933,8 +4858,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F220 — milestone-based revenue release
-  `CREATE TABLE IF NOT EXISTS revenue_milestones (
+        // F220 — milestone-based revenue release
+        `CREATE TABLE IF NOT EXISTS revenue_milestones (
     id TEXT PRIMARY KEY,
     obligation_id TEXT NOT NULL,
     milestone_name TEXT NOT NULL,
@@ -4946,8 +4871,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F223 — returns reserve
-  `CREATE TABLE IF NOT EXISTS returns_reserves (
+        // F223 — returns reserve
+        `CREATE TABLE IF NOT EXISTS returns_reserves (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_start TEXT NOT NULL,
@@ -4959,8 +4884,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F224 — rebate accruals
-  `CREATE TABLE IF NOT EXISTS rebate_accruals (
+        // F224 — rebate accruals
+        `CREATE TABLE IF NOT EXISTS rebate_accruals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     program_name TEXT NOT NULL,
@@ -4976,8 +4901,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F225 — sales commissions deferral (ASC 340-40)
-  `CREATE TABLE IF NOT EXISTS commission_deferrals (
+        // F225 — sales commissions deferral (ASC 340-40)
+        `CREATE TABLE IF NOT EXISTS commission_deferrals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rep_id TEXT,
@@ -4994,10 +4919,9 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch F: Cost Accounting (F226-F235) ─────────────
-  // F226 — cost centers
-  `CREATE TABLE IF NOT EXISTS cost_centers (
+        // ─── Batch F: Cost Accounting (F226-F235) ─────────────
+        // F226 — cost centers
+        `CREATE TABLE IF NOT EXISTS cost_centers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     code TEXT NOT NULL,
@@ -5010,8 +4934,8 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, code)
   )`,
-  // F227 — cost center allocation rules
-  `CREATE TABLE IF NOT EXISTS cost_allocation_rules (
+        // F227 — cost center allocation rules
+        `CREATE TABLE IF NOT EXISTS cost_allocation_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -5025,8 +4949,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F228 — departments
-  `CREATE TABLE IF NOT EXISTS departments (
+        // F228 — departments
+        `CREATE TABLE IF NOT EXISTS departments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     code TEXT NOT NULL,
@@ -5039,8 +4963,8 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, code)
   )`,
-  // F229 — ABC pools
-  `CREATE TABLE IF NOT EXISTS activity_cost_pools (
+        // F229 — ABC pools
+        `CREATE TABLE IF NOT EXISTS activity_cost_pools (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pool_name TEXT NOT NULL,
@@ -5053,8 +4977,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F230 — standard costs
-  `CREATE TABLE IF NOT EXISTS standard_costs (
+        // F230 — standard costs
+        `CREATE TABLE IF NOT EXISTS standard_costs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     item_id TEXT,
@@ -5066,8 +4990,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F231 — variance analysis
-  `CREATE TABLE IF NOT EXISTS cost_variance_analyses (
+        // F231 — variance analysis
+        `CREATE TABLE IF NOT EXISTS cost_variance_analyses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_start TEXT NOT NULL,
@@ -5083,8 +5007,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F232 — overhead absorption
-  `CREATE TABLE IF NOT EXISTS overhead_rates (
+        // F232 — overhead absorption
+        `CREATE TABLE IF NOT EXISTS overhead_rates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rate_name TEXT NOT NULL,
@@ -5096,8 +5020,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F233 — WIP tracking
-  `CREATE TABLE IF NOT EXISTS work_in_process (
+        // F233 — WIP tracking
+        `CREATE TABLE IF NOT EXISTS work_in_process (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     job_number TEXT,
@@ -5113,8 +5037,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F235 — burden rates
-  `CREATE TABLE IF NOT EXISTS burden_rates (
+        // F235 — burden rates
+        `CREATE TABLE IF NOT EXISTS burden_rates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_class TEXT,
@@ -5126,10 +5050,9 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch G: Audit & Controls (F236-F245) ─────────────
-  // F236 — TB comparison snapshots
-  `CREATE TABLE IF NOT EXISTS tb_comparison_snapshots (
+        // ─── Batch G: Audit & Controls (F236-F245) ─────────────
+        // F236 — TB comparison snapshots
+        `CREATE TABLE IF NOT EXISTS tb_comparison_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_end TEXT NOT NULL,
@@ -5141,8 +5064,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, period_end)
   )`,
-  // F237 — materiality calculations
-  `CREATE TABLE IF NOT EXISTS materiality_calcs (
+        // F237 — materiality calculations
+        `CREATE TABLE IF NOT EXISTS materiality_calcs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     fiscal_year INTEGER NOT NULL,
@@ -5156,8 +5079,8 @@ export function initDatabase(): Database.Database {
     determined_by TEXT,
     determined_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F238 — audit samples
-  `CREATE TABLE IF NOT EXISTS audit_samples (
+        // F238 — audit samples
+        `CREATE TABLE IF NOT EXISTS audit_samples (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     population_description TEXT NOT NULL,
@@ -5171,8 +5094,8 @@ export function initDatabase(): Database.Database {
     results_summary TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F239 — audit confirmations
-  `CREATE TABLE IF NOT EXISTS audit_confirmations (
+        // F239 — audit confirmations
+        `CREATE TABLE IF NOT EXISTS audit_confirmations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     confirmation_type TEXT DEFAULT 'ar',
@@ -5190,8 +5113,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F240 — walkthroughs
-  `CREATE TABLE IF NOT EXISTS audit_walkthroughs (
+        // F240 — walkthroughs
+        `CREATE TABLE IF NOT EXISTS audit_walkthroughs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     process_name TEXT NOT NULL,
@@ -5207,8 +5130,8 @@ export function initDatabase(): Database.Database {
     document_path TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F241 — SoD matrix
-  `CREATE TABLE IF NOT EXISTS sod_conflicts (
+        // F241 — SoD matrix
+        `CREATE TABLE IF NOT EXISTS sod_conflicts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     conflicting_function_a TEXT NOT NULL,
@@ -5218,7 +5141,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS sod_user_assignments (
+        `CREATE TABLE IF NOT EXISTS sod_user_assignments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -5226,8 +5149,8 @@ export function initDatabase(): Database.Database {
     granted_at TEXT DEFAULT (datetime('now')),
     granted_by TEXT
   )`,
-  // F242 — RCSA
-  `CREATE TABLE IF NOT EXISTS rcsa_assessments (
+        // F242 — RCSA
+        `CREATE TABLE IF NOT EXISTS rcsa_assessments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     assessment_name TEXT NOT NULL,
@@ -5245,8 +5168,8 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'active',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F243 — audit issues
-  `CREATE TABLE IF NOT EXISTS audit_issues (
+        // F243 — audit issues
+        `CREATE TABLE IF NOT EXISTS audit_issues (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     issue_number TEXT,
@@ -5265,8 +5188,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F244 — control deficiencies
-  `CREATE TABLE IF NOT EXISTS control_deficiencies (
+        // F244 — control deficiencies
+        `CREATE TABLE IF NOT EXISTS control_deficiencies (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     control_reference TEXT,
@@ -5282,8 +5205,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F245 — auditor inquiry log
-  `CREATE TABLE IF NOT EXISTS auditor_inquiries (
+        // F245 — auditor inquiry log
+        `CREATE TABLE IF NOT EXISTS auditor_inquiries (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     auditor_firm TEXT,
@@ -5298,10 +5221,9 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'open',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch H: Budgeting & Forecasting Advanced (F246-F255) ───
-  // F246 — rolling forecasts
-  `CREATE TABLE IF NOT EXISTS rolling_forecasts (
+        // ─── Batch H: Budgeting & Forecasting Advanced (F246-F255) ───
+        // F246 — rolling forecasts
+        `CREATE TABLE IF NOT EXISTS rolling_forecasts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     forecast_name TEXT NOT NULL,
@@ -5314,7 +5236,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS rolling_forecast_lines (
+        `CREATE TABLE IF NOT EXISTS rolling_forecast_lines (
     id TEXT PRIMARY KEY,
     forecast_id TEXT NOT NULL REFERENCES rolling_forecasts(id) ON DELETE CASCADE,
     account_id TEXT,
@@ -5324,8 +5246,8 @@ export function initDatabase(): Database.Database {
     variance REAL DEFAULT 0,
     notes TEXT
   )`,
-  // F247 — what-if scenarios
-  `CREATE TABLE IF NOT EXISTS scenario_models (
+        // F247 — what-if scenarios
+        `CREATE TABLE IF NOT EXISTS scenario_models (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     scenario_name TEXT NOT NULL,
@@ -5339,8 +5261,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  // F248 — variance explanations
-  `CREATE TABLE IF NOT EXISTS variance_explanations (
+        // F248 — variance explanations
+        `CREATE TABLE IF NOT EXISTS variance_explanations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_month TEXT NOT NULL,
@@ -5355,8 +5277,8 @@ export function initDatabase(): Database.Database {
     is_material INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F249 — driver-based budgets
-  `CREATE TABLE IF NOT EXISTS budget_drivers (
+        // F249 — driver-based budgets
+        `CREATE TABLE IF NOT EXISTS budget_drivers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     driver_name TEXT NOT NULL,
@@ -5369,8 +5291,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F250 — budget consolidation
-  `CREATE TABLE IF NOT EXISTS budget_consolidations (
+        // F250 — budget consolidation
+        `CREATE TABLE IF NOT EXISTS budget_consolidations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     consolidation_name TEXT NOT NULL,
@@ -5383,8 +5305,8 @@ export function initDatabase(): Database.Database {
     approved_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F251 — budget approval workflow
-  `CREATE TABLE IF NOT EXISTS budget_approvals (
+        // F251 — budget approval workflow
+        `CREATE TABLE IF NOT EXISTS budget_approvals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     budget_id TEXT NOT NULL,
@@ -5395,8 +5317,8 @@ export function initDatabase(): Database.Database {
     comment TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F252 — forecast accuracy
-  `CREATE TABLE IF NOT EXISTS forecast_accuracy (
+        // F252 — forecast accuracy
+        `CREATE TABLE IF NOT EXISTS forecast_accuracy (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     forecast_id TEXT,
@@ -5409,8 +5331,8 @@ export function initDatabase(): Database.Database {
     bias REAL DEFAULT 0,
     measured_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F253 — direct method cash forecast
-  `CREATE TABLE IF NOT EXISTS direct_cash_forecasts (
+        // F253 — direct method cash forecast
+        `CREATE TABLE IF NOT EXISTS direct_cash_forecasts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     forecast_date TEXT NOT NULL,
@@ -5427,8 +5349,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F254 — headcount budget
-  `CREATE TABLE IF NOT EXISTS headcount_budgets (
+        // F254 — headcount budget
+        `CREATE TABLE IF NOT EXISTS headcount_budgets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     department_id TEXT,
@@ -5443,8 +5365,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F255 — CapEx planning
-  `CREATE TABLE IF NOT EXISTS capex_plans (
+        // F255 — CapEx planning
+        `CREATE TABLE IF NOT EXISTS capex_plans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_name TEXT NOT NULL,
@@ -5467,10 +5389,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-
-  // ─── Batch I: Financial Statements + Analysis (F256-F260) ───
-  // F256 — comparative statements config
-  `CREATE TABLE IF NOT EXISTS financial_statement_configs (
+        // ─── Batch I: Financial Statements + Analysis (F256-F260) ───
+        // F256 — comparative statements config
+        `CREATE TABLE IF NOT EXISTS financial_statement_configs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     config_name TEXT NOT NULL,
@@ -5483,8 +5404,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F258 — financial ratios
-  `CREATE TABLE IF NOT EXISTS financial_ratios (
+        // F258 — financial ratios
+        `CREATE TABLE IF NOT EXISTS financial_ratios (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     as_of_date TEXT NOT NULL,
@@ -5508,8 +5429,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, as_of_date)
   )`,
-  // F259 — KPI scorecard
-  `CREATE TABLE IF NOT EXISTS kpi_scorecard (
+        // F259 — KPI scorecard
+        `CREATE TABLE IF NOT EXISTS kpi_scorecard (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     kpi_name TEXT NOT NULL,
@@ -5526,8 +5447,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F260 — statement footnotes
-  `CREATE TABLE IF NOT EXISTS statement_footnotes (
+        // F260 — statement footnotes
+        `CREATE TABLE IF NOT EXISTS statement_footnotes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     fiscal_year INTEGER,
@@ -5540,14 +5461,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-
-  // ═══════════════════════════════════════════════════════════════════
-  //   DYNAMIC WAVE: 90 runtime functions (F261-F350)
-  //   New supporting tables (most batches reuse existing infrastructure).
-  // ═══════════════════════════════════════════════════════════════════
-
-  // ─── Batch J: Global Search (F261-F270) ───────────────
-  `CREATE TABLE IF NOT EXISTS search_history (
+        // ═══════════════════════════════════════════════════════════════════
+        //   DYNAMIC WAVE: 90 runtime functions (F261-F350)
+        //   New supporting tables (most batches reuse existing infrastructure).
+        // ═══════════════════════════════════════════════════════════════════
+        // ─── Batch J: Global Search (F261-F270) ───────────────
+        `CREATE TABLE IF NOT EXISTS search_history (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -5555,8 +5474,8 @@ export function initDatabase(): Database.Database {
     result_count INTEGER DEFAULT 0,
     searched_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_search_hist_user ON search_history(user_id, searched_at DESC)",
-  `CREATE TABLE IF NOT EXISTS recently_viewed_entities (
+        "CREATE INDEX IF NOT EXISTS idx_search_hist_user ON search_history(user_id, searched_at DESC)",
+        `CREATE TABLE IF NOT EXISTS recently_viewed_entities (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -5565,8 +5484,8 @@ export function initDatabase(): Database.Database {
     entity_label TEXT,
     viewed_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_recent_user ON recently_viewed_entities(user_id, viewed_at DESC)",
-  `CREATE TABLE IF NOT EXISTS pinned_entities (
+        "CREATE INDEX IF NOT EXISTS idx_recent_user ON recently_viewed_entities(user_id, viewed_at DESC)",
+        `CREATE TABLE IF NOT EXISTS pinned_entities (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -5576,9 +5495,8 @@ export function initDatabase(): Database.Database {
     pinned_at TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id, entity_type, entity_id)
   )`,
-
-  // ─── Batch K: Notifications & Alerts (F271-F280) ──────
-  `CREATE TABLE IF NOT EXISTS notification_preferences (
+        // ─── Batch K: Notifications & Alerts (F271-F280) ──────
+        `CREATE TABLE IF NOT EXISTS notification_preferences (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -5589,7 +5507,7 @@ export function initDatabase(): Database.Database {
     quiet_hours_end TEXT,
     UNIQUE(user_id, notification_type, channel)
   )`,
-  `CREATE TABLE IF NOT EXISTS alert_rules (
+        `CREATE TABLE IF NOT EXISTS alert_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -5603,13 +5521,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // notifications table already exists; add snooze + escalation columns
-  "ALTER TABLE notifications ADD COLUMN snoozed_until TEXT",
-  "ALTER TABLE notifications ADD COLUMN escalated_at TEXT",
-  "ALTER TABLE notifications ADD COLUMN escalation_count INTEGER DEFAULT 0",
-
-  // ─── Batch L: Import / Export (F281-F290) ─────────────
-  `CREATE TABLE IF NOT EXISTS import_templates (
+        // notifications table already exists; add snooze + escalation columns
+        "ALTER TABLE notifications ADD COLUMN snoozed_until TEXT",
+        "ALTER TABLE notifications ADD COLUMN escalated_at TEXT",
+        "ALTER TABLE notifications ADD COLUMN escalation_count INTEGER DEFAULT 0",
+        // ─── Batch L: Import / Export (F281-F290) ─────────────
+        `CREATE TABLE IF NOT EXISTS import_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -5621,7 +5538,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS export_jobs (
+        `CREATE TABLE IF NOT EXISTS export_jobs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     job_name TEXT NOT NULL,
@@ -5636,9 +5553,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-
-  // ─── Batch M: Bulk Actions (F291-F300) ────────────────
-  `CREATE TABLE IF NOT EXISTS bulk_undo_snapshots (
+        // ─── Batch M: Bulk Actions (F291-F300) ────────────────
+        `CREATE TABLE IF NOT EXISTS bulk_undo_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -5652,10 +5568,9 @@ export function initDatabase(): Database.Database {
     undone_at TEXT,
     performed_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_undo_co_perf ON bulk_undo_snapshots(company_id, performed_at DESC)",
-
-  // ─── Batch N: Smart Helpers (F301-F310) ───────────────
-  `CREATE TABLE IF NOT EXISTS smart_detections (
+        "CREATE INDEX IF NOT EXISTS idx_undo_co_perf ON bulk_undo_snapshots(company_id, performed_at DESC)",
+        // ─── Batch N: Smart Helpers (F301-F310) ───────────────
+        `CREATE TABLE IF NOT EXISTS smart_detections (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     detection_type TEXT NOT NULL,
@@ -5667,7 +5582,7 @@ export function initDatabase(): Database.Database {
     dismissed_at TEXT,
     detected_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_canonicalizations (
+        `CREATE TABLE IF NOT EXISTS vendor_canonicalizations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     input_pattern TEXT NOT NULL,
@@ -5676,7 +5591,7 @@ export function initDatabase(): Database.Database {
     match_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS recommendations (
+        `CREATE TABLE IF NOT EXISTS recommendations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -5689,9 +5604,8 @@ export function initDatabase(): Database.Database {
     completed_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch O: Keyboard & Macros (F311-F320) ───────────
-  `CREATE TABLE IF NOT EXISTS workspace_layouts (
+        // ─── Batch O: Keyboard & Macros (F311-F320) ───────────
+        `CREATE TABLE IF NOT EXISTS workspace_layouts (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -5701,7 +5615,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS command_registry (
+        `CREATE TABLE IF NOT EXISTS command_registry (
     id TEXT PRIMARY KEY,
     command_id TEXT NOT NULL UNIQUE,
     label TEXT NOT NULL,
@@ -5712,9 +5626,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch P: Report Engine (F321-F330) ───────────────
-  `CREATE TABLE IF NOT EXISTS custom_reports (
+        // ─── Batch P: Report Engine (F321-F330) ───────────────
+        `CREATE TABLE IF NOT EXISTS custom_reports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -5726,7 +5639,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS report_schedules (
+        `CREATE TABLE IF NOT EXISTS report_schedules (
     id TEXT PRIMARY KEY,
     report_id TEXT NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
     schedule_cron TEXT NOT NULL,
@@ -5738,7 +5651,7 @@ export function initDatabase(): Database.Database {
     run_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_executions (
+        `CREATE TABLE IF NOT EXISTS report_executions (
     id TEXT PRIMARY KEY,
     report_id TEXT NOT NULL,
     executed_at TEXT DEFAULT (datetime('now')),
@@ -5748,11 +5661,10 @@ export function initDatabase(): Database.Database {
     output_path TEXT,
     error_message TEXT
   )`,
-
-  // ─── Batch Q: Webhook Delivery (F331-F340) — reuses
-  //     webhook_subscriptions + webhook_deliveries from F71-F90.
-  //     Adds queue+retry tracking.
-  `CREATE TABLE IF NOT EXISTS webhook_queue (
+        // ─── Batch Q: Webhook Delivery (F331-F340) — reuses
+        //     webhook_subscriptions + webhook_deliveries from F71-F90.
+        //     Adds queue+retry tracking.
+        `CREATE TABLE IF NOT EXISTS webhook_queue (
     id TEXT PRIMARY KEY,
     subscription_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -5764,10 +5676,9 @@ export function initDatabase(): Database.Database {
     queued_at TEXT DEFAULT (datetime('now')),
     completed_at TEXT
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_webhook_q_status ON webhook_queue(status, next_attempt_at)",
-
-  // ─── Batch R: Real-time + Activity (F341-F350) ────────
-  `CREATE TABLE IF NOT EXISTS activity_feed (
+        "CREATE INDEX IF NOT EXISTS idx_webhook_q_status ON webhook_queue(status, next_attempt_at)",
+        // ─── Batch R: Real-time + Activity (F341-F350) ────────
+        `CREATE TABLE IF NOT EXISTS activity_feed (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -5779,8 +5690,8 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT DEFAULT '{}',
     occurred_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_activity_co_time ON activity_feed(company_id, occurred_at DESC)",
-  `CREATE TABLE IF NOT EXISTS entity_locks (
+        "CREATE INDEX IF NOT EXISTS idx_activity_co_time ON activity_feed(company_id, occurred_at DESC)",
+        `CREATE TABLE IF NOT EXISTS entity_locks (
     id TEXT PRIMARY KEY,
     entity_type TEXT NOT NULL,
     entity_id TEXT NOT NULL,
@@ -5790,7 +5701,7 @@ export function initDatabase(): Database.Database {
     expires_at TEXT NOT NULL,
     UNIQUE(entity_type, entity_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS user_presence (
+        `CREATE TABLE IF NOT EXISTS user_presence (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL UNIQUE,
     company_id TEXT,
@@ -5799,15 +5710,13 @@ export function initDatabase(): Database.Database {
     current_entity_id TEXT,
     last_heartbeat_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ═══════════════════════════════════════════════════════════════════
-  //   FEATURE EXPANSION WAVE 3: 90 features (F351-F440)
-  //   Payroll, Sales Tax, Consolidation, Portals, Time, Documents,
-  //   Collaboration, Integrations.
-  // ═══════════════════════════════════════════════════════════════════
-
-  // ─── Batch S: Payroll Deep-Dive (F351-F360) ───
-  `CREATE TABLE IF NOT EXISTS state_withholding_tables (
+        // ═══════════════════════════════════════════════════════════════════
+        //   FEATURE EXPANSION WAVE 3: 90 features (F351-F440)
+        //   Payroll, Sales Tax, Consolidation, Portals, Time, Documents,
+        //   Collaboration, Integrations.
+        // ═══════════════════════════════════════════════════════════════════
+        // ─── Batch S: Payroll Deep-Dive (F351-F360) ───
+        `CREATE TABLE IF NOT EXISTS state_withholding_tables (
     id TEXT PRIMARY KEY,
     state_code TEXT NOT NULL,
     filing_status TEXT NOT NULL,
@@ -5820,7 +5729,7 @@ export function initDatabase(): Database.Database {
     effective_year INTEGER NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS garnishments (
+        `CREATE TABLE IF NOT EXISTS garnishments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -5839,7 +5748,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS retirement_contributions (
+        `CREATE TABLE IF NOT EXISTS retirement_contributions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -5858,7 +5767,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS section_125_plans (
+        `CREATE TABLE IF NOT EXISTS section_125_plans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -5872,7 +5781,7 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS pto_accrual_rules (
+        `CREATE TABLE IF NOT EXISTS pto_accrual_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -5888,7 +5797,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS employee_state_allocations (
+        `CREATE TABLE IF NOT EXISTS employee_state_allocations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -5899,7 +5808,7 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS workers_comp_classes (
+        `CREATE TABLE IF NOT EXISTS workers_comp_classes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     class_code TEXT NOT NULL,
@@ -5910,7 +5819,7 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS state_reciprocity (
+        `CREATE TABLE IF NOT EXISTS state_reciprocity (
     id TEXT PRIMARY KEY,
     work_state TEXT NOT NULL,
     resident_state TEXT NOT NULL,
@@ -5919,7 +5828,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     UNIQUE(work_state, resident_state)
   )`,
-  `CREATE TABLE IF NOT EXISTS w2_year_end_runs (
+        `CREATE TABLE IF NOT EXISTS w2_year_end_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -5935,7 +5844,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year)
   )`,
-  `CREATE TABLE IF NOT EXISTS direct_deposit_batches (
+        `CREATE TABLE IF NOT EXISTS direct_deposit_batches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     payroll_run_id TEXT,
@@ -5948,9 +5857,8 @@ export function initDatabase(): Database.Database {
     submitted_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch T: Sales Tax Engine (F361-F370) ───
-  `CREATE TABLE IF NOT EXISTS sales_tax_nexus (
+        // ─── Batch T: Sales Tax Engine (F361-F370) ───
+        `CREATE TABLE IF NOT EXISTS sales_tax_nexus (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     state_code TEXT NOT NULL,
@@ -5967,7 +5875,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, state_code)
   )`,
-  `CREATE TABLE IF NOT EXISTS sales_tax_jurisdictions (
+        `CREATE TABLE IF NOT EXISTS sales_tax_jurisdictions (
     id TEXT PRIMARY KEY,
     state_code TEXT NOT NULL,
     county TEXT,
@@ -5982,8 +5890,8 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_tax_juris_zip ON sales_tax_jurisdictions(zip_code)",
-  `CREATE TABLE IF NOT EXISTS tax_exemption_certificates (
+        "CREATE INDEX IF NOT EXISTS idx_tax_juris_zip ON sales_tax_jurisdictions(zip_code)",
+        `CREATE TABLE IF NOT EXISTS tax_exemption_certificates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -5998,7 +5906,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS use_tax_accruals (
+        `CREATE TABLE IF NOT EXISTS use_tax_accruals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     purchase_date TEXT NOT NULL,
@@ -6013,7 +5921,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS sales_tax_filing_schedule (
+        `CREATE TABLE IF NOT EXISTS sales_tax_filing_schedule (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     state_code TEXT NOT NULL,
@@ -6026,7 +5934,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, state_code, filing_frequency)
   )`,
-  `CREATE TABLE IF NOT EXISTS sales_tax_liability (
+        `CREATE TABLE IF NOT EXISTS sales_tax_liability (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     state_code TEXT NOT NULL,
@@ -6046,7 +5954,7 @@ export function initDatabase(): Database.Database {
     payment_je_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS sales_tax_holidays (
+        `CREATE TABLE IF NOT EXISTS sales_tax_holidays (
     id TEXT PRIMARY KEY,
     state_code TEXT NOT NULL,
     holiday_name TEXT NOT NULL,
@@ -6057,9 +5965,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch U: Multi-Entity Consolidation (F371-F380) ───
-  `CREATE TABLE IF NOT EXISTS entity_hierarchy (
+        // ─── Batch U: Multi-Entity Consolidation (F371-F380) ───
+        `CREATE TABLE IF NOT EXISTS entity_hierarchy (
     id TEXT PRIMARY KEY,
     parent_company_id TEXT NOT NULL,
     child_company_id TEXT NOT NULL,
@@ -6071,7 +5978,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(parent_company_id, child_company_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS intercompany_elim_rules (
+        `CREATE TABLE IF NOT EXISTS intercompany_elim_rules (
     id TEXT PRIMARY KEY,
     parent_company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -6082,7 +5989,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS consolidated_statements (
+        `CREATE TABLE IF NOT EXISTS consolidated_statements (
     id TEXT PRIMARY KEY,
     parent_company_id TEXT NOT NULL,
     statement_type TEXT DEFAULT 'balance_sheet',
@@ -6094,7 +6001,7 @@ export function initDatabase(): Database.Database {
     generated_at TEXT DEFAULT (datetime('now')),
     generated_by TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS currency_translations (
+        `CREATE TABLE IF NOT EXISTS currency_translations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_end TEXT NOT NULL,
@@ -6107,7 +6014,7 @@ export function initDatabase(): Database.Database {
     method TEXT DEFAULT 'current_rate',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS minority_interests (
+        `CREATE TABLE IF NOT EXISTS minority_interests (
     id TEXT PRIMARY KEY,
     parent_company_id TEXT NOT NULL,
     subsidiary_company_id TEXT NOT NULL,
@@ -6118,7 +6025,7 @@ export function initDatabase(): Database.Database {
     income_attributable REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS goodwill_tracking (
+        `CREATE TABLE IF NOT EXISTS goodwill_tracking (
     id TEXT PRIMARY KEY,
     acquiring_company_id TEXT NOT NULL,
     acquired_company_id TEXT,
@@ -6133,7 +6040,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS equity_method_investments (
+        `CREATE TABLE IF NOT EXISTS equity_method_investments (
     id TEXT PRIMARY KEY,
     investor_company_id TEXT NOT NULL,
     investee_company_id TEXT,
@@ -6148,9 +6055,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-
-  // ─── Batch V: Customer Portal (F381-F390) ───
-  `CREATE TABLE IF NOT EXISTS portal_users (
+        // ─── Batch V: Customer Portal (F381-F390) ───
+        `CREATE TABLE IF NOT EXISTS portal_users (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT,
@@ -6166,7 +6072,7 @@ export function initDatabase(): Database.Database {
     invitation_token TEXT,
     UNIQUE(company_id, email, portal_type)
   )`,
-  `CREATE TABLE IF NOT EXISTS portal_payments (
+        `CREATE TABLE IF NOT EXISTS portal_payments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     portal_user_id TEXT NOT NULL,
@@ -6179,7 +6085,7 @@ export function initDatabase(): Database.Database {
     paid_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS portal_support_tickets (
+        `CREATE TABLE IF NOT EXISTS portal_support_tickets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     portal_user_id TEXT NOT NULL,
@@ -6195,7 +6101,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS portal_documents (
+        `CREATE TABLE IF NOT EXISTS portal_documents (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     portal_user_id TEXT NOT NULL,
@@ -6206,7 +6112,7 @@ export function initDatabase(): Database.Database {
     mime_type TEXT,
     uploaded_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS portal_auto_pay (
+        `CREATE TABLE IF NOT EXISTS portal_auto_pay (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -6217,7 +6123,7 @@ export function initDatabase(): Database.Database {
     canceled_at TEXT,
     UNIQUE(company_id, customer_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS portal_branding (
+        `CREATE TABLE IF NOT EXISTS portal_branding (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL UNIQUE,
     logo_url TEXT,
@@ -6230,9 +6136,8 @@ export function initDatabase(): Database.Database {
     support_email TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch W: Vendor Portal (F391-F400) ───
-  `CREATE TABLE IF NOT EXISTS vendor_po_responses (
+        // ─── Batch W: Vendor Portal (F391-F400) ───
+        `CREATE TABLE IF NOT EXISTS vendor_po_responses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     po_id TEXT NOT NULL,
@@ -6243,7 +6148,7 @@ export function initDatabase(): Database.Database {
     proposed_changes_json TEXT,
     notes TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_invoice_submissions (
+        `CREATE TABLE IF NOT EXISTS vendor_invoice_submissions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     portal_user_id TEXT NOT NULL,
@@ -6260,7 +6165,7 @@ export function initDatabase(): Database.Database {
     reviewed_at TEXT,
     reviewed_by TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_ach_updates (
+        `CREATE TABLE IF NOT EXISTS vendor_ach_updates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -6275,7 +6180,7 @@ export function initDatabase(): Database.Database {
     verified_at TEXT,
     approved_by TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_1099_downloads (
+        `CREATE TABLE IF NOT EXISTS vendor_1099_downloads (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -6286,7 +6191,7 @@ export function initDatabase(): Database.Database {
     downloaded_at TEXT DEFAULT (datetime('now')),
     ip_address TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_compliance_attestations (
+        `CREATE TABLE IF NOT EXISTS vendor_compliance_attestations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -6298,9 +6203,8 @@ export function initDatabase(): Database.Database {
     attested_at TEXT DEFAULT (datetime('now')),
     expires_at TEXT
   )`,
-
-  // ─── Batch X: Time Tracking deep-dive (F401-F410) ───
-  `CREATE TABLE IF NOT EXISTS time_timers (
+        // ─── Batch X: Time Tracking deep-dive (F401-F410) ───
+        `CREATE TABLE IF NOT EXISTS time_timers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -6313,7 +6217,7 @@ export function initDatabase(): Database.Database {
     is_billable INTEGER DEFAULT 1,
     status TEXT DEFAULT 'running'
   )`,
-  `CREATE TABLE IF NOT EXISTS billable_rates (
+        `CREATE TABLE IF NOT EXISTS billable_rates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT,
@@ -6325,7 +6229,7 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS overtime_rules (
+        `CREATE TABLE IF NOT EXISTS overtime_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -6338,7 +6242,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS time_rounding_rules (
+        `CREATE TABLE IF NOT EXISTS time_rounding_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     interval_minutes INTEGER DEFAULT 15,
@@ -6346,7 +6250,7 @@ export function initDatabase(): Database.Database {
     applies_to TEXT DEFAULT 'all',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS calendar_event_sync (
+        `CREATE TABLE IF NOT EXISTS calendar_event_sync (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -6360,7 +6264,7 @@ export function initDatabase(): Database.Database {
     synced_at TEXT DEFAULT (datetime('now')),
     UNIQUE(source, external_event_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS project_time_budgets (
+        `CREATE TABLE IF NOT EXISTS project_time_budgets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
@@ -6373,9 +6277,8 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, project_id)
   )`,
-
-  // ─── Batch Y: Document Intelligence (F411-F420) ───
-  `CREATE TABLE IF NOT EXISTS document_classifications (
+        // ─── Batch Y: Document Intelligence (F411-F420) ───
+        `CREATE TABLE IF NOT EXISTS document_classifications (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     document_id TEXT NOT NULL,
@@ -6385,7 +6288,7 @@ export function initDatabase(): Database.Database {
     classified_at TEXT DEFAULT (datetime('now')),
     method TEXT DEFAULT 'rule_based'
   )`,
-  `CREATE TABLE IF NOT EXISTS document_extracted_fields (
+        `CREATE TABLE IF NOT EXISTS document_extracted_fields (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
     field_name TEXT NOT NULL,
@@ -6395,7 +6298,7 @@ export function initDatabase(): Database.Database {
     verified INTEGER DEFAULT 0,
     extracted_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS bank_statement_imports (
+        `CREATE TABLE IF NOT EXISTS bank_statement_imports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     bank_account_id TEXT,
@@ -6408,7 +6311,7 @@ export function initDatabase(): Database.Database {
     parser_used TEXT,
     imported_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS contract_clauses (
+        `CREATE TABLE IF NOT EXISTS contract_clauses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     document_id TEXT NOT NULL,
@@ -6419,7 +6322,7 @@ export function initDatabase(): Database.Database {
     risk_level TEXT DEFAULT 'low',
     extracted_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS document_signing_workflows (
+        `CREATE TABLE IF NOT EXISTS document_signing_workflows (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     document_id TEXT NOT NULL,
@@ -6431,7 +6334,7 @@ export function initDatabase(): Database.Database {
     completed_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS document_retention_policies (
+        `CREATE TABLE IF NOT EXISTS document_retention_policies (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     document_type TEXT NOT NULL,
@@ -6441,9 +6344,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch Z: Collaboration (F421-F430) ───
-  `CREATE TABLE IF NOT EXISTS user_mentions (
+        // ─── Batch Z: Collaboration (F421-F430) ───
+        `CREATE TABLE IF NOT EXISTS user_mentions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     mentioned_user_id TEXT NOT NULL,
@@ -6455,7 +6357,7 @@ export function initDatabase(): Database.Database {
     is_read INTEGER DEFAULT 0,
     mentioned_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS entity_comments (
+        `CREATE TABLE IF NOT EXISTS entity_comments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -6469,8 +6371,8 @@ export function initDatabase(): Database.Database {
     deleted_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_comments_entity ON entity_comments(company_id, entity_type, entity_id)",
-  `CREATE TABLE IF NOT EXISTS comment_reactions (
+        "CREATE INDEX IF NOT EXISTS idx_comments_entity ON entity_comments(company_id, entity_type, entity_id)",
+        `CREATE TABLE IF NOT EXISTS comment_reactions (
     id TEXT PRIMARY KEY,
     comment_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -6478,7 +6380,7 @@ export function initDatabase(): Database.Database {
     reacted_at TEXT DEFAULT (datetime('now')),
     UNIQUE(comment_id, user_id, emoji)
   )`,
-  `CREATE TABLE IF NOT EXISTS internal_notes (
+        `CREATE TABLE IF NOT EXISTS internal_notes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -6489,7 +6391,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS entity_watchers (
+        `CREATE TABLE IF NOT EXISTS entity_watchers (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -6501,7 +6403,7 @@ export function initDatabase(): Database.Database {
     watched_at TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id, entity_type, entity_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS shared_drafts (
+        `CREATE TABLE IF NOT EXISTS shared_drafts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -6513,7 +6415,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS email_to_entity_addresses (
+        `CREATE TABLE IF NOT EXISTS email_to_entity_addresses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -6523,7 +6425,7 @@ export function initDatabase(): Database.Database {
     email_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS chat_messages (
+        `CREATE TABLE IF NOT EXISTS chat_messages (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     sender_user_id TEXT NOT NULL,
@@ -6534,9 +6436,8 @@ export function initDatabase(): Database.Database {
     read_at TEXT,
     sent_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AA: Integration Sync (F431-F440) ───
-  `CREATE TABLE IF NOT EXISTS plaid_links (
+        // ─── Batch AA: Integration Sync (F431-F440) ───
+        `CREATE TABLE IF NOT EXISTS plaid_links (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     institution_name TEXT,
@@ -6549,7 +6450,7 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'active',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS plaid_synced_transactions (
+        `CREATE TABLE IF NOT EXISTS plaid_synced_transactions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     plaid_link_id TEXT NOT NULL,
@@ -6564,7 +6465,7 @@ export function initDatabase(): Database.Database {
     matched_entity_id TEXT,
     synced_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS quickbooks_exports (
+        `CREATE TABLE IF NOT EXISTS quickbooks_exports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     export_format TEXT DEFAULT 'iif',
@@ -6576,7 +6477,7 @@ export function initDatabase(): Database.Database {
     exported_at TEXT DEFAULT (datetime('now')),
     exported_by TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS gmail_sync (
+        `CREATE TABLE IF NOT EXISTS gmail_sync (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -6590,7 +6491,7 @@ export function initDatabase(): Database.Database {
     matched_entity_id TEXT,
     synced_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS cloud_storage_files (
+        `CREATE TABLE IF NOT EXISTS cloud_storage_files (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     provider TEXT DEFAULT 'gdrive',
@@ -6602,7 +6503,7 @@ export function initDatabase(): Database.Database {
     synced_at TEXT DEFAULT (datetime('now')),
     UNIQUE(provider, external_file_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS calendar_integrations (
+        `CREATE TABLE IF NOT EXISTS calendar_integrations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     company_id TEXT,
@@ -6614,7 +6515,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS webhook_receiver_endpoints (
+        `CREATE TABLE IF NOT EXISTS webhook_receiver_endpoints (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     endpoint_path TEXT NOT NULL UNIQUE,
@@ -6625,19 +6526,17 @@ export function initDatabase(): Database.Database {
     received_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ═══════════════════════════════════════════════════════════════════
-  //   FINANCE WAVE: 100 features (F441-F540)
-  //   Invoice + Expense + Payment + Subscriptions + Collections +
-  //   Analytics + Tax + Vendor management upgrades
-  // ═══════════════════════════════════════════════════════════════════
-
-  // ─── Batch AB: Invoice Advanced (F441-F455) ───
-  // F441 — line-item discount already on quote_line_items; ensure on invoice_line_items
-  "ALTER TABLE invoice_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
-  "ALTER TABLE invoice_line_items ADD COLUMN discount_reason TEXT",
-  // F443 — recurring templates
-  `CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
+        // ═══════════════════════════════════════════════════════════════════
+        //   FINANCE WAVE: 100 features (F441-F540)
+        //   Invoice + Expense + Payment + Subscriptions + Collections +
+        //   Analytics + Tax + Vendor management upgrades
+        // ═══════════════════════════════════════════════════════════════════
+        // ─── Batch AB: Invoice Advanced (F441-F455) ───
+        // F441 — line-item discount already on quote_line_items; ensure on invoice_line_items
+        "ALTER TABLE invoice_line_items ADD COLUMN discount_pct REAL DEFAULT 0",
+        "ALTER TABLE invoice_line_items ADD COLUMN discount_reason TEXT",
+        // F443 — recurring templates
+        `CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     template_name TEXT NOT NULL,
@@ -6657,8 +6556,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // F444 — invoice approval workflow
-  `CREATE TABLE IF NOT EXISTS invoice_approval_steps (
+        // F444 — invoice approval workflow
+        `CREATE TABLE IF NOT EXISTS invoice_approval_steps (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,
     step_number INTEGER DEFAULT 1,
@@ -6668,8 +6567,8 @@ export function initDatabase(): Database.Database {
     comment TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F445-F446 — invoice email tracking
-  `CREATE TABLE IF NOT EXISTS invoice_email_log (
+        // F445-F446 — invoice email tracking
+        `CREATE TABLE IF NOT EXISTS invoice_email_log (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,
     recipient_email TEXT NOT NULL,
@@ -6683,8 +6582,8 @@ export function initDatabase(): Database.Database {
     delivery_status TEXT DEFAULT 'sent',
     bounce_reason TEXT
   )`,
-  // F447 — late fee config
-  `CREATE TABLE IF NOT EXISTS late_fee_policies (
+        // F447 — late fee config
+        `CREATE TABLE IF NOT EXISTS late_fee_policies (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     policy_name TEXT NOT NULL,
@@ -6698,8 +6597,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F448 — early payment discount terms
-  `CREATE TABLE IF NOT EXISTS payment_terms (
+        // F448 — early payment discount terms
+        `CREATE TABLE IF NOT EXISTS payment_terms (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     terms_name TEXT NOT NULL,
@@ -6710,11 +6609,11 @@ export function initDatabase(): Database.Database {
     is_default INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "ALTER TABLE invoices ADD COLUMN payment_terms_id TEXT",
-  "ALTER TABLE invoices ADD COLUMN early_discount_taken INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN early_discount_amount REAL DEFAULT 0",
-  // F450 — progress billing
-  `CREATE TABLE IF NOT EXISTS progress_billing_schedules (
+        "ALTER TABLE invoices ADD COLUMN payment_terms_id TEXT",
+        "ALTER TABLE invoices ADD COLUMN early_discount_taken INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN early_discount_amount REAL DEFAULT 0",
+        // F450 — progress billing
+        `CREATE TABLE IF NOT EXISTS progress_billing_schedules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     project_id TEXT,
@@ -6726,7 +6625,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS progress_billing_releases (
+        `CREATE TABLE IF NOT EXISTS progress_billing_releases (
     id TEXT PRIMARY KEY,
     schedule_id TEXT NOT NULL REFERENCES progress_billing_schedules(id) ON DELETE CASCADE,
     release_date TEXT NOT NULL,
@@ -6736,8 +6635,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F451 — retainer invoicing
-  `CREATE TABLE IF NOT EXISTS retainers (
+        // F451 — retainer invoicing
+        `CREATE TABLE IF NOT EXISTS retainers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
@@ -6754,7 +6653,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS retainer_drawdowns (
+        `CREATE TABLE IF NOT EXISTS retainer_drawdowns (
     id TEXT PRIMARY KEY,
     retainer_id TEXT NOT NULL REFERENCES retainers(id) ON DELETE CASCADE,
     drawdown_date TEXT NOT NULL,
@@ -6763,14 +6662,14 @@ export function initDatabase(): Database.Database {
     invoice_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F452 — deposits
-  "ALTER TABLE invoices ADD COLUMN deposit_required INTEGER DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN deposit_amount REAL DEFAULT 0",
-  "ALTER TABLE invoices ADD COLUMN deposit_paid_at TEXT",
-  // F453 — scheduled send
-  "ALTER TABLE invoices ADD COLUMN scheduled_send_at TEXT",
-  // F454 — multi-payment plan
-  `CREATE TABLE IF NOT EXISTS invoice_payment_plans (
+        // F452 — deposits
+        "ALTER TABLE invoices ADD COLUMN deposit_required INTEGER DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN deposit_amount REAL DEFAULT 0",
+        "ALTER TABLE invoices ADD COLUMN deposit_paid_at TEXT",
+        // F453 — scheduled send
+        "ALTER TABLE invoices ADD COLUMN scheduled_send_at TEXT",
+        // F454 — multi-payment plan
+        `CREATE TABLE IF NOT EXISTS invoice_payment_plans (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,
     company_id TEXT NOT NULL,
@@ -6784,7 +6683,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_payment_plan_installments (
+        `CREATE TABLE IF NOT EXISTS invoice_payment_plan_installments (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL REFERENCES invoice_payment_plans(id) ON DELETE CASCADE,
     installment_number INTEGER DEFAULT 1,
@@ -6794,8 +6693,8 @@ export function initDatabase(): Database.Database {
     paid_at TEXT,
     status TEXT DEFAULT 'pending'
   )`,
-  // F455 — invoice attachments
-  `CREATE TABLE IF NOT EXISTS invoice_attachments (
+        // F455 — invoice attachments
+        `CREATE TABLE IF NOT EXISTS invoice_attachments (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,
     file_name TEXT NOT NULL,
@@ -6805,10 +6704,9 @@ export function initDatabase(): Database.Database {
     uploaded_at TEXT DEFAULT (datetime('now')),
     uploaded_by TEXT
   )`,
-
-  // ─── Batch AC: Payment Processing (F456-F470) ───
-  // F458 — payment links
-  `CREATE TABLE IF NOT EXISTS payment_links (
+        // ─── Batch AC: Payment Processing (F456-F470) ───
+        // F458 — payment links
+        `CREATE TABLE IF NOT EXISTS payment_links (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT,
@@ -6822,8 +6720,8 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'active',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F459 — reminder cadence per invoice
-  `CREATE TABLE IF NOT EXISTS reminder_cadences (
+        // F459 — reminder cadence per invoice
+        `CREATE TABLE IF NOT EXISTS reminder_cadences (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     cadence_name TEXT NOT NULL,
@@ -6833,8 +6731,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F461 — failed payment retries
-  `CREATE TABLE IF NOT EXISTS payment_retry_attempts (
+        // F461 — failed payment retries
+        `CREATE TABLE IF NOT EXISTS payment_retry_attempts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT,
@@ -6846,8 +6744,8 @@ export function initDatabase(): Database.Database {
     failure_message TEXT,
     final_status TEXT DEFAULT 'pending'
   )`,
-  // F463 — credit memo / overpayment
-  `CREATE TABLE IF NOT EXISTS customer_credit_balances (
+        // F463 — credit memo / overpayment
+        `CREATE TABLE IF NOT EXISTS customer_credit_balances (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL UNIQUE,
@@ -6856,7 +6754,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS customer_credit_transactions (
+        `CREATE TABLE IF NOT EXISTS customer_credit_transactions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -6867,8 +6765,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     transaction_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F464 — refunds
-  `CREATE TABLE IF NOT EXISTS refunds (
+        // F464 — refunds
+        `CREATE TABLE IF NOT EXISTS refunds (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT,
@@ -6881,8 +6779,8 @@ export function initDatabase(): Database.Database {
     external_refund_id TEXT,
     status TEXT DEFAULT 'completed'
   )`,
-  // F465 — chargeback log
-  `CREATE TABLE IF NOT EXISTS chargebacks (
+        // F465 — chargeback log
+        `CREATE TABLE IF NOT EXISTS chargebacks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT,
@@ -6898,8 +6796,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F466 — customer payment method preferences
-  `CREATE TABLE IF NOT EXISTS customer_payment_methods (
+        // F466 — customer payment method preferences
+        `CREATE TABLE IF NOT EXISTS customer_payment_methods (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -6914,8 +6812,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F468 — check printing log
-  `CREATE TABLE IF NOT EXISTS check_print_jobs (
+        // F468 — check printing log
+        `CREATE TABLE IF NOT EXISTS check_print_jobs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     bank_account_id TEXT,
@@ -6928,8 +6826,8 @@ export function initDatabase(): Database.Database {
     printed_by TEXT,
     status TEXT DEFAULT 'printed'
   )`,
-  // F470 — crypto payments
-  `CREATE TABLE IF NOT EXISTS crypto_payments (
+        // F470 — crypto payments
+        `CREATE TABLE IF NOT EXISTS crypto_payments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT,
@@ -6942,10 +6840,9 @@ export function initDatabase(): Database.Database {
     status TEXT DEFAULT 'pending',
     received_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AD: Expense Advanced (F471-F485) ───
-  // F471 — expense reports (group of expenses)
-  `CREATE TABLE IF NOT EXISTS expense_reports (
+        // ─── Batch AD: Expense Advanced (F471-F485) ───
+        // F471 — expense reports (group of expenses)
+        `CREATE TABLE IF NOT EXISTS expense_reports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT,
@@ -6963,9 +6860,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  "ALTER TABLE expenses ADD COLUMN expense_report_id TEXT",
-  // F473 — per-diem
-  `CREATE TABLE IF NOT EXISTS per_diem_rates (
+        "ALTER TABLE expenses ADD COLUMN expense_report_id TEXT",
+        // F473 — per-diem
+        `CREATE TABLE IF NOT EXISTS per_diem_rates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     location TEXT NOT NULL,
@@ -6976,8 +6873,8 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F474 — mileage with multiple vehicles
-  `CREATE TABLE IF NOT EXISTS vehicles (
+        // F474 — mileage with multiple vehicles
+        `CREATE TABLE IF NOT EXISTS vehicles (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -6990,8 +6887,8 @@ export function initDatabase(): Database.Database {
     business_use_pct REAL DEFAULT 100,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F478 — 1099 thresholds
-  `CREATE TABLE IF NOT EXISTS vendor_1099_thresholds (
+        // F478 — 1099 thresholds
+        `CREATE TABLE IF NOT EXISTS vendor_1099_thresholds (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -7003,8 +6900,8 @@ export function initDatabase(): Database.Database {
     last_calculated_at TEXT,
     UNIQUE(company_id, vendor_id, tax_year)
   )`,
-  // F479 — expense category budgets
-  `CREATE TABLE IF NOT EXISTS expense_category_budgets (
+        // F479 — expense category budgets
+        `CREATE TABLE IF NOT EXISTS expense_category_budgets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     category_id TEXT,
@@ -7015,8 +6912,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F481 — reimbursements (extends expense_reimbursements pattern if exists)
-  `CREATE TABLE IF NOT EXISTS expense_reimbursements (
+        // F481 — reimbursements (extends expense_reimbursements pattern if exists)
+        `CREATE TABLE IF NOT EXISTS expense_reimbursements (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -7032,12 +6929,12 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  // F484 — rebillable expense flag
-  "ALTER TABLE expenses ADD COLUMN rebillable_to_client_id TEXT",
-  "ALTER TABLE expenses ADD COLUMN rebilled_on_invoice_id TEXT",
-  "ALTER TABLE expenses ADD COLUMN markup_pct REAL DEFAULT 0",
-  // F485 — pre-approval gates
-  `CREATE TABLE IF NOT EXISTS expense_pre_approvals (
+        // F484 — rebillable expense flag
+        "ALTER TABLE expenses ADD COLUMN rebillable_to_client_id TEXT",
+        "ALTER TABLE expenses ADD COLUMN rebilled_on_invoice_id TEXT",
+        "ALTER TABLE expenses ADD COLUMN markup_pct REAL DEFAULT 0",
+        // F485 — pre-approval gates
+        `CREATE TABLE IF NOT EXISTS expense_pre_approvals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -7054,9 +6951,8 @@ export function initDatabase(): Database.Database {
     actual_expense_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AE: Billing & Subscriptions (F486-F495) ───
-  `CREATE TABLE IF NOT EXISTS subscription_plans (
+        // ─── Batch AE: Billing & Subscriptions (F486-F495) ───
+        `CREATE TABLE IF NOT EXISTS subscription_plans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     plan_name TEXT NOT NULL,
@@ -7069,7 +6965,7 @@ export function initDatabase(): Database.Database {
     tier INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS subscriptions (
+        `CREATE TABLE IF NOT EXISTS subscriptions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -7092,7 +6988,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS subscription_proration_events (
+        `CREATE TABLE IF NOT EXISTS subscription_proration_events (
     id TEXT PRIMARY KEY,
     subscription_id TEXT NOT NULL,
     event_type TEXT,
@@ -7103,7 +6999,7 @@ export function initDatabase(): Database.Database {
     invoice_id TEXT,
     event_date TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS usage_records (
+        `CREATE TABLE IF NOT EXISTS usage_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     subscription_id TEXT,
@@ -7113,7 +7009,7 @@ export function initDatabase(): Database.Database {
     recorded_at TEXT DEFAULT (datetime('now')),
     billed INTEGER DEFAULT 0
   )`,
-  `CREATE TABLE IF NOT EXISTS pricing_tiers (
+        `CREATE TABLE IF NOT EXISTS pricing_tiers (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     plan_id TEXT NOT NULL,
@@ -7123,7 +7019,7 @@ export function initDatabase(): Database.Database {
     flat_fee REAL DEFAULT 0,
     sort_order INTEGER DEFAULT 0
   )`,
-  `CREATE TABLE IF NOT EXISTS mrr_arr_snapshots (
+        `CREATE TABLE IF NOT EXISTS mrr_arr_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     snapshot_date TEXT NOT NULL,
@@ -7137,13 +7033,12 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, snapshot_date)
   )`,
-
-  // ─── Batch AF: Credit & Collections (F496-F505) ───
-  "ALTER TABLE clients ADD COLUMN credit_limit REAL DEFAULT 0",
-  "ALTER TABLE clients ADD COLUMN credit_hold INTEGER DEFAULT 0",
-  "ALTER TABLE clients ADD COLUMN credit_hold_reason TEXT",
-  "ALTER TABLE clients ADD COLUMN credit_score INTEGER",
-  `CREATE TABLE IF NOT EXISTS customer_statements (
+        // ─── Batch AF: Credit & Collections (F496-F505) ───
+        "ALTER TABLE clients ADD COLUMN credit_limit REAL DEFAULT 0",
+        "ALTER TABLE clients ADD COLUMN credit_hold INTEGER DEFAULT 0",
+        "ALTER TABLE clients ADD COLUMN credit_hold_reason TEXT",
+        "ALTER TABLE clients ADD COLUMN credit_score INTEGER",
+        `CREATE TABLE IF NOT EXISTS customer_statements (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
@@ -7159,7 +7054,7 @@ export function initDatabase(): Database.Database {
     sent_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS dunning_sequences (
+        `CREATE TABLE IF NOT EXISTS dunning_sequences (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     sequence_name TEXT NOT NULL,
@@ -7167,7 +7062,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS dunning_events (
+        `CREATE TABLE IF NOT EXISTS dunning_events (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT NOT NULL,
@@ -7178,7 +7073,7 @@ export function initDatabase(): Database.Database {
     template_used TEXT,
     response_received_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS bad_debt_writeoffs (
+        `CREATE TABLE IF NOT EXISTS bad_debt_writeoffs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     customer_id TEXT,
@@ -7190,7 +7085,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     created_by TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS allowance_for_doubtful_accounts (
+        `CREATE TABLE IF NOT EXISTS allowance_for_doubtful_accounts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_end TEXT NOT NULL,
@@ -7201,7 +7096,7 @@ export function initDatabase(): Database.Database {
     posted_je_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS collection_agency_handoffs (
+        `CREATE TABLE IF NOT EXISTS collection_agency_handoffs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT,
@@ -7216,9 +7111,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AG: Financial Analytics (F506-F520) ───
-  `CREATE TABLE IF NOT EXISTS analytics_snapshots (
+        // ─── Batch AG: Financial Analytics (F506-F520) ───
+        `CREATE TABLE IF NOT EXISTS analytics_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     snapshot_date TEXT NOT NULL,
@@ -7229,7 +7123,7 @@ export function initDatabase(): Database.Database {
     computed_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, snapshot_date, metric_name)
   )`,
-  `CREATE TABLE IF NOT EXISTS cohort_analysis (
+        `CREATE TABLE IF NOT EXISTS cohort_analysis (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     cohort_month TEXT NOT NULL,
@@ -7240,9 +7134,8 @@ export function initDatabase(): Database.Database {
     computed_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, cohort_month, period_offset)
   )`,
-
-  // ─── Batch AH: Tax & Compliance (F521-F530) ───
-  `CREATE TABLE IF NOT EXISTS form_1099_runs (
+        // ─── Batch AH: Tax & Compliance (F521-F530) ───
+        `CREATE TABLE IF NOT EXISTS form_1099_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -7255,7 +7148,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year, form_type)
   )`,
-  `CREATE TABLE IF NOT EXISTS withholding_tracking (
+        `CREATE TABLE IF NOT EXISTS withholding_tracking (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT,
@@ -7266,7 +7159,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS quarterly_tax_estimates (
+        `CREATE TABLE IF NOT EXISTS quarterly_tax_estimates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -7280,7 +7173,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year, quarter)
   )`,
-  `CREATE TABLE IF NOT EXISTS tax_provision (
+        `CREATE TABLE IF NOT EXISTS tax_provision (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     fiscal_year INTEGER NOT NULL,
@@ -7298,7 +7191,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS rd_tax_credits (
+        `CREATE TABLE IF NOT EXISTS rd_tax_credits (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -7311,7 +7204,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS section_179_elections (
+        `CREATE TABLE IF NOT EXISTS section_179_elections (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
@@ -7321,9 +7214,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AI: Vendor Management Advanced (F531-F540) ───
-  `CREATE TABLE IF NOT EXISTS vendor_onboarding_checklists (
+        // ─── Batch AI: Vendor Management Advanced (F531-F540) ───
+        `CREATE TABLE IF NOT EXISTS vendor_onboarding_checklists (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -7334,7 +7226,7 @@ export function initDatabase(): Database.Database {
     completed_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_w9_records (
+        `CREATE TABLE IF NOT EXISTS vendor_w9_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -7350,7 +7242,7 @@ export function initDatabase(): Database.Database {
     signature_present INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_insurance_policies (
+        `CREATE TABLE IF NOT EXISTS vendor_insurance_policies (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -7364,7 +7256,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS vendor_disputes (
+        `CREATE TABLE IF NOT EXISTS vendor_disputes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT NOT NULL,
@@ -7378,15 +7270,13 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ═══════════════════════════════════════════════════════════════════
-  //   EXPENSE ADVANCED WAVE: 100 features (F541-F640)
-  //   Policy engine, templates, card mgmt, travel, mileage, custom
-  //   fields, spend analytics, workflows, mobile capture, reports.
-  // ═══════════════════════════════════════════════════════════════════
-
-  // ─── Batch AJ: Expense Policy Engine (F541-F550) ───
-  `CREATE TABLE IF NOT EXISTS expense_policies (
+        // ═══════════════════════════════════════════════════════════════════
+        //   EXPENSE ADVANCED WAVE: 100 features (F541-F640)
+        //   Policy engine, templates, card mgmt, travel, mileage, custom
+        //   fields, spend analytics, workflows, mobile capture, reports.
+        // ═══════════════════════════════════════════════════════════════════
+        // ─── Batch AJ: Expense Policy Engine (F541-F550) ───
+        `CREATE TABLE IF NOT EXISTS expense_policies (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     policy_name TEXT NOT NULL,
@@ -7404,7 +7294,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_policy_violations (
+        `CREATE TABLE IF NOT EXISTS expense_policy_violations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     expense_id TEXT NOT NULL,
@@ -7417,7 +7307,7 @@ export function initDatabase(): Database.Database {
     acknowledged_at TEXT,
     detected_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS travel_policy_caps (
+        `CREATE TABLE IF NOT EXISTS travel_policy_caps (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     destination_pattern TEXT,
@@ -7428,9 +7318,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AK: Expense Templates & Auto-Fill (F551-F560) ───
-  `CREATE TABLE IF NOT EXISTS expense_templates_v2 (
+        // ─── Batch AK: Expense Templates & Auto-Fill (F551-F560) ───
+        `CREATE TABLE IF NOT EXISTS expense_templates_v2 (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -7448,7 +7337,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS subscription_detections (
+        `CREATE TABLE IF NOT EXISTS subscription_detections (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vendor_id TEXT,
@@ -7464,7 +7353,7 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     detected_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS auto_tag_rules (
+        `CREATE TABLE IF NOT EXISTS auto_tag_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -7481,9 +7370,8 @@ export function initDatabase(): Database.Database {
     last_matched_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AL: Corporate Card Management (F561-F570) ───
-  `CREATE TABLE IF NOT EXISTS corporate_cards (
+        // ─── Batch AL: Corporate Card Management (F561-F570) ───
+        `CREATE TABLE IF NOT EXISTS corporate_cards (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     card_name TEXT NOT NULL,
@@ -7503,7 +7391,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS card_transactions (
+        `CREATE TABLE IF NOT EXISTS card_transactions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     card_id TEXT NOT NULL,
@@ -7520,8 +7408,8 @@ export function initDatabase(): Database.Database {
     is_personal INTEGER DEFAULT 0,
     imported_at TEXT DEFAULT (datetime('now'))
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_card_tx_match ON card_transactions(company_id, matched_expense_id)",
-  `CREATE TABLE IF NOT EXISTS card_dispute_records (
+        "CREATE INDEX IF NOT EXISTS idx_card_tx_match ON card_transactions(company_id, matched_expense_id)",
+        `CREATE TABLE IF NOT EXISTS card_dispute_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     card_transaction_id TEXT NOT NULL,
@@ -7532,7 +7420,7 @@ export function initDatabase(): Database.Database {
     resolved_at TEXT,
     status TEXT DEFAULT 'open'
   )`,
-  `CREATE TABLE IF NOT EXISTS card_spend_rules (
+        `CREATE TABLE IF NOT EXISTS card_spend_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     card_id TEXT,
@@ -7541,9 +7429,8 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AM: Travel Expense Specialized (F571-F580) ───
-  `CREATE TABLE IF NOT EXISTS trips (
+        // ─── Batch AM: Travel Expense Specialized (F571-F580) ───
+        `CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -7565,8 +7452,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  "ALTER TABLE expenses ADD COLUMN trip_id TEXT",
-  `CREATE TABLE IF NOT EXISTS trip_itinerary (
+        "ALTER TABLE expenses ADD COLUMN trip_id TEXT",
+        `CREATE TABLE IF NOT EXISTS trip_itinerary (
     id TEXT PRIMARY KEY,
     trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
     leg_number INTEGER DEFAULT 1,
@@ -7579,7 +7466,7 @@ export function initDatabase(): Database.Database {
     confirmation_number TEXT,
     notes TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS trip_per_diem_settings (
+        `CREATE TABLE IF NOT EXISTS trip_per_diem_settings (
     id TEXT PRIMARY KEY,
     trip_id TEXT NOT NULL,
     location TEXT NOT NULL,
@@ -7589,9 +7476,8 @@ export function initDatabase(): Database.Database {
     total_amount REAL DEFAULT 0,
     applied INTEGER DEFAULT 0
   )`,
-
-  // ─── Batch AN: Mileage Advanced (F581-F590) ───
-  `CREATE TABLE IF NOT EXISTS mileage_irs_rates (
+        // ─── Batch AN: Mileage Advanced (F581-F590) ───
+        `CREATE TABLE IF NOT EXISTS mileage_irs_rates (
     id TEXT PRIMARY KEY,
     tax_year INTEGER NOT NULL,
     business_rate REAL DEFAULT 0,
@@ -7602,7 +7488,7 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     UNIQUE(tax_year)
   )`,
-  `CREATE TABLE IF NOT EXISTS mileage_state_rates (
+        `CREATE TABLE IF NOT EXISTS mileage_state_rates (
     id TEXT PRIMARY KEY,
     state_code TEXT NOT NULL,
     rate_per_mile REAL DEFAULT 0,
@@ -7610,7 +7496,7 @@ export function initDatabase(): Database.Database {
     effective_to TEXT,
     notes TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS mileage_routes (
+        `CREATE TABLE IF NOT EXISTS mileage_routes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     expense_id TEXT,
@@ -7623,7 +7509,7 @@ export function initDatabase(): Database.Database {
     is_commute INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS mileage_route_stops (
+        `CREATE TABLE IF NOT EXISTS mileage_route_stops (
     id TEXT PRIMARY KEY,
     route_id TEXT NOT NULL REFERENCES mileage_routes(id) ON DELETE CASCADE,
     stop_order INTEGER DEFAULT 1,
@@ -7632,7 +7518,7 @@ export function initDatabase(): Database.Database {
     miles_from_previous REAL DEFAULT 0,
     notes TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS vehicle_depreciation (
+        `CREATE TABLE IF NOT EXISTS vehicle_depreciation (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vehicle_id TEXT NOT NULL,
@@ -7646,7 +7532,7 @@ export function initDatabase(): Database.Database {
     last_calculated_year INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS vehicle_maintenance (
+        `CREATE TABLE IF NOT EXISTS vehicle_maintenance (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     vehicle_id TEXT NOT NULL,
@@ -7661,10 +7547,9 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  "ALTER TABLE vehicles ADD COLUMN mileage_method TEXT DEFAULT 'standard'",
-
-  // ─── Batch AO: Custom Fields & Tagging (F591-F600) ───
-  `CREATE TABLE IF NOT EXISTS expense_custom_field_defs (
+        "ALTER TABLE vehicles ADD COLUMN mileage_method TEXT DEFAULT 'standard'",
+        // ─── Batch AO: Custom Fields & Tagging (F591-F600) ───
+        `CREATE TABLE IF NOT EXISTS expense_custom_field_defs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     field_name TEXT NOT NULL,
@@ -7678,7 +7563,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_custom_field_values (
+        `CREATE TABLE IF NOT EXISTS expense_custom_field_values (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL,
     field_def_id TEXT NOT NULL,
@@ -7688,7 +7573,7 @@ export function initDatabase(): Database.Database {
     value_json TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_tag_hierarchy (
+        `CREATE TABLE IF NOT EXISTS expense_tag_hierarchy (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tag_id TEXT NOT NULL,
@@ -7698,9 +7583,8 @@ export function initDatabase(): Database.Database {
     sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AP: Spend Analytics Advanced (F601-F610) ───
-  `CREATE TABLE IF NOT EXISTS spend_benchmarks (
+        // ─── Batch AP: Spend Analytics Advanced (F601-F610) ───
+        `CREATE TABLE IF NOT EXISTS spend_benchmarks (
     id TEXT PRIMARY KEY,
     industry TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -7711,7 +7595,7 @@ export function initDatabase(): Database.Database {
     source TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS cost_save_recommendations (
+        `CREATE TABLE IF NOT EXISTS cost_save_recommendations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     recommendation_type TEXT NOT NULL,
@@ -7725,9 +7609,8 @@ export function initDatabase(): Database.Database {
     dismissed_reason TEXT,
     generated_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AQ: Workflow Customization (F611-F620) ───
-  `CREATE TABLE IF NOT EXISTS approval_workflow_defs (
+        // ─── Batch AQ: Workflow Customization (F611-F620) ───
+        `CREATE TABLE IF NOT EXISTS approval_workflow_defs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     workflow_name TEXT NOT NULL,
@@ -7741,7 +7624,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS workflow_delegations (
+        `CREATE TABLE IF NOT EXISTS workflow_delegations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     delegator_user_id TEXT NOT NULL,
@@ -7752,7 +7635,7 @@ export function initDatabase(): Database.Database {
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS workflow_audit_log (
+        `CREATE TABLE IF NOT EXISTS workflow_audit_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     workflow_id TEXT,
@@ -7764,9 +7647,8 @@ export function initDatabase(): Database.Database {
     notes TEXT,
     occurred_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AR: Mobile & Capture (F621-F630) ───
-  `CREATE TABLE IF NOT EXISTS expense_capture_queue (
+        // ─── Batch AR: Mobile & Capture (F621-F630) ───
+        `CREATE TABLE IF NOT EXISTS expense_capture_queue (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -7780,10 +7662,10 @@ export function initDatabase(): Database.Database {
     processed_at TEXT,
     created_expense_id TEXT
   )`,
-  "ALTER TABLE expenses ADD COLUMN geo_lat REAL",
-  "ALTER TABLE expenses ADD COLUMN geo_lng REAL",
-  "ALTER TABLE expenses ADD COLUMN geo_location_name TEXT",
-  `CREATE TABLE IF NOT EXISTS expense_voice_memos (
+        "ALTER TABLE expenses ADD COLUMN geo_lat REAL",
+        "ALTER TABLE expenses ADD COLUMN geo_lng REAL",
+        "ALTER TABLE expenses ADD COLUMN geo_location_name TEXT",
+        `CREATE TABLE IF NOT EXISTS expense_voice_memos (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL,
     audio_path TEXT,
@@ -7791,9 +7673,8 @@ export function initDatabase(): Database.Database {
     duration_seconds REAL,
     recorded_at TEXT DEFAULT (datetime('now'))
   )`,
-
-  // ─── Batch AS: Reports & Year-End (F631-F640) ───
-  `CREATE TABLE IF NOT EXISTS expense_report_templates_v2 (
+        // ─── Batch AS: Reports & Year-End (F631-F640) ───
+        `CREATE TABLE IF NOT EXISTS expense_report_templates_v2 (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     template_name TEXT NOT NULL,
@@ -7806,10 +7687,10 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Invoice Wave II (F923-F962) — 40 more upgrades covering MRR/recurring,
-  // PDF brand customization, quote conversion, coupons, payment processing,
-  // international, workflow rules, client portal & LTV/churn predictions.
-  `CREATE TABLE IF NOT EXISTS pdf_brand_profiles (
+        // Invoice Wave II (F923-F962) — 40 more upgrades covering MRR/recurring,
+        // PDF brand customization, quote conversion, coupons, payment processing,
+        // international, workflow rules, client portal & LTV/churn predictions.
+        `CREATE TABLE IF NOT EXISTS pdf_brand_profiles (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -7825,7 +7706,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_coupons (
+        `CREATE TABLE IF NOT EXISTS invoice_coupons (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     code TEXT NOT NULL,
@@ -7843,7 +7724,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, code)
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_coupon_redemptions (
+        `CREATE TABLE IF NOT EXISTS invoice_coupon_redemptions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     coupon_id TEXT NOT NULL,
@@ -7851,7 +7732,7 @@ export function initDatabase(): Database.Database {
     discount_applied REAL NOT NULL,
     redeemed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS payment_intents (
+        `CREATE TABLE IF NOT EXISTS payment_intents (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT NOT NULL,
@@ -7865,7 +7746,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS client_portal_tokens (
+        `CREATE TABLE IF NOT EXISTS client_portal_tokens (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
@@ -7877,7 +7758,7 @@ export function initDatabase(): Database.Database {
     use_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_workflow_rules (
+        `CREATE TABLE IF NOT EXISTS invoice_workflow_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -7892,7 +7773,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS client_churn_predictions (
+        `CREATE TABLE IF NOT EXISTS client_churn_predictions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     client_id TEXT NOT NULL UNIQUE,
@@ -7903,7 +7784,7 @@ export function initDatabase(): Database.Database {
     avg_payment_lag REAL,
     computed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS client_ltv_snapshots (
+        `CREATE TABLE IF NOT EXISTS client_ltv_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
@@ -7916,10 +7797,10 @@ export function initDatabase(): Database.Database {
     projected_ltv REAL DEFAULT 0,
     snapshot_at TEXT DEFAULT (datetime('now'))
   )`,
-  // Invoice Upgrades Wave (F893-F922) — 30 serious upgrades across
-  // builder UX, smart inference, client engagement, workflow,
-  // analytics, bulk ops.
-  `CREATE TABLE IF NOT EXISTS invoice_line_templates (
+        // Invoice Upgrades Wave (F893-F922) — 30 serious upgrades across
+        // builder UX, smart inference, client engagement, workflow,
+        // analytics, bulk ops.
+        `CREATE TABLE IF NOT EXISTS invoice_line_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -7932,7 +7813,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_view_logs (
+        `CREATE TABLE IF NOT EXISTS invoice_view_logs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT NOT NULL,
@@ -7944,7 +7825,7 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT DEFAULT '{}',
     logged_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_email_templates_v2 (
+        `CREATE TABLE IF NOT EXISTS invoice_email_templates_v2 (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -7956,7 +7837,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_approval_rules (
+        `CREATE TABLE IF NOT EXISTS invoice_approval_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -7970,7 +7851,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_payment_matches (
+        `CREATE TABLE IF NOT EXISTS invoice_payment_matches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT NOT NULL,
@@ -7983,7 +7864,7 @@ export function initDatabase(): Database.Database {
     resolved_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_credit_memos (
+        `CREATE TABLE IF NOT EXISTS invoice_credit_memos (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT NOT NULL,
@@ -7997,7 +7878,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_dso_cache (
+        `CREATE TABLE IF NOT EXISTS invoice_dso_cache (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     client_id TEXT,
@@ -8007,7 +7888,7 @@ export function initDatabase(): Database.Database {
     computed_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, client_id, period_days)
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_collection_scores (
+        `CREATE TABLE IF NOT EXISTS invoice_collection_scores (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     invoice_id TEXT NOT NULL UNIQUE,
@@ -8016,7 +7897,7 @@ export function initDatabase(): Database.Database {
     risk_level TEXT,
     computed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS invoice_smart_filters (
+        `CREATE TABLE IF NOT EXISTS invoice_smart_filters (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -8027,9 +7908,9 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  // Expense Upgrades Wave (F863-F892) — 30 upgrades across bulk ops,
-  // smart filters, hygiene, approval workflow, insights, UX power.
-  `CREATE TABLE IF NOT EXISTS expense_drafts (
+        // Expense Upgrades Wave (F863-F892) — 30 upgrades across bulk ops,
+        // smart filters, hygiene, approval workflow, insights, UX power.
+        `CREATE TABLE IF NOT EXISTS expense_drafts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -8037,7 +7918,7 @@ export function initDatabase(): Database.Database {
     last_saved_at TEXT DEFAULT (datetime('now')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_approval_rules (
+        `CREATE TABLE IF NOT EXISTS expense_approval_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -8057,7 +7938,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_approval_history (
+        `CREATE TABLE IF NOT EXISTS expense_approval_history (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     expense_id TEXT NOT NULL,
@@ -8067,7 +7948,7 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_hygiene_scores (
+        `CREATE TABLE IF NOT EXISTS expense_hygiene_scores (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     expense_id TEXT NOT NULL UNIQUE,
@@ -8075,7 +7956,7 @@ export function initDatabase(): Database.Database {
     issues_json TEXT DEFAULT '[]',
     computed_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_smart_filters (
+        `CREATE TABLE IF NOT EXISTS expense_smart_filters (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -8086,7 +7967,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_approval_delegations (
+        `CREATE TABLE IF NOT EXISTS expense_approval_delegations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     delegator_user_id TEXT NOT NULL,
@@ -8098,7 +7979,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_duplicate_matches (
+        `CREATE TABLE IF NOT EXISTS expense_duplicate_matches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     expense_id TEXT NOT NULL,
@@ -8109,10 +7990,10 @@ export function initDatabase(): Database.Database {
     resolution TEXT,
     detected_at TEXT DEFAULT (datetime('now'))
   )`,
-  // Itemization Wave (F841-F862) — saved itemization templates so users
-  // can reuse common line-item patterns (e.g. "Monthly office supplies",
-  // "Travel reimbursement", "Marketing campaign breakdown").
-  `CREATE TABLE IF NOT EXISTS expense_itemization_templates (
+        // Itemization Wave (F841-F862) — saved itemization templates so users
+        // can reuse common line-item patterns (e.g. "Monthly office supplies",
+        // "Travel reimbursement", "Marketing campaign breakdown").
+        `CREATE TABLE IF NOT EXISTS expense_itemization_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -8125,7 +8006,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS expense_year_end_rollups (
+        `CREATE TABLE IF NOT EXISTS expense_year_end_rollups (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -8137,10 +8018,10 @@ export function initDatabase(): Database.Database {
     generated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, tax_year)
   )`,
-  // ─── Payroll Wave (F641-F740) ────────────────────────────────────
-  // 40+ tables for pay-run engine, withholding, benefits, garnishments,
-  // year-end filings (W-2, 940, 941), multi-state, workers comp, ACA.
-  `CREATE TABLE IF NOT EXISTS pay_periods (
+        // ─── Payroll Wave (F641-F740) ────────────────────────────────────
+        // 40+ tables for pay-run engine, withholding, benefits, garnishments,
+        // year-end filings (W-2, 940, 941), multi-state, workers comp, ACA.
+        `CREATE TABLE IF NOT EXISTS pay_periods (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_start TEXT NOT NULL,
@@ -8152,7 +8033,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS pay_runs (
+        `CREATE TABLE IF NOT EXISTS pay_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_period_id TEXT,
@@ -8171,7 +8052,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS pay_run_items (
+        `CREATE TABLE IF NOT EXISTS pay_run_items (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_id TEXT NOT NULL,
@@ -8210,7 +8091,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS paystubs (
+        `CREATE TABLE IF NOT EXISTS paystubs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_item_id TEXT NOT NULL,
@@ -8226,7 +8107,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS federal_tax_tables (
+        `CREATE TABLE IF NOT EXISTS federal_tax_tables (
     id TEXT PRIMARY KEY,
     tax_year INTEGER NOT NULL,
     filing_status TEXT NOT NULL,
@@ -8237,7 +8118,7 @@ export function initDatabase(): Database.Database {
     period_type TEXT DEFAULT 'annual',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS state_tax_tables (
+        `CREATE TABLE IF NOT EXISTS state_tax_tables (
     id TEXT PRIMARY KEY,
     tax_year INTEGER NOT NULL,
     state_code TEXT NOT NULL,
@@ -8248,7 +8129,7 @@ export function initDatabase(): Database.Database {
     base_tax REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS state_unemployment_rates (
+        `CREATE TABLE IF NOT EXISTS state_unemployment_rates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     state_code TEXT NOT NULL,
@@ -8260,7 +8141,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, state_code, tax_year)
   )`,
-  `CREATE TABLE IF NOT EXISTS withholding_records (
+        `CREATE TABLE IF NOT EXISTS withholding_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8275,7 +8156,7 @@ export function initDatabase(): Database.Database {
     record_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS employee_w4 (
+        `CREATE TABLE IF NOT EXISTS employee_w4 (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8291,7 +8172,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS benefit_plans (
+        `CREATE TABLE IF NOT EXISTS benefit_plans (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     plan_name TEXT NOT NULL,
@@ -8304,7 +8185,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS benefit_enrollments (
+        `CREATE TABLE IF NOT EXISTS benefit_enrollments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8318,7 +8199,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS deductions (
+        `CREATE TABLE IF NOT EXISTS deductions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8336,7 +8217,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS retirement_contributions (
+        `CREATE TABLE IF NOT EXISTS retirement_contributions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8351,7 +8232,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS hsa_fsa_contributions (
+        `CREATE TABLE IF NOT EXISTS hsa_fsa_contributions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8365,7 +8246,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS garnishment_orders (
+        `CREATE TABLE IF NOT EXISTS garnishment_orders (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8385,7 +8266,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS child_support_orders (
+        `CREATE TABLE IF NOT EXISTS child_support_orders (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8402,7 +8283,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS pay_advances (
+        `CREATE TABLE IF NOT EXISTS pay_advances (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8417,7 +8298,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS bonuses (
+        `CREATE TABLE IF NOT EXISTS bonuses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8431,7 +8312,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS commissions_v2 (
+        `CREATE TABLE IF NOT EXISTS commissions_v2 (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8446,7 +8327,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS overtime_rules (
+        `CREATE TABLE IF NOT EXISTS overtime_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     rule_name TEXT NOT NULL,
@@ -8461,7 +8342,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS holiday_pay_rules (
+        `CREATE TABLE IF NOT EXISTS holiday_pay_rules (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     holiday_date TEXT NOT NULL,
@@ -8472,7 +8353,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS time_off_accruals (
+        `CREATE TABLE IF NOT EXISTS time_off_accruals (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8489,7 +8370,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS time_off_requests (
+        `CREATE TABLE IF NOT EXISTS time_off_requests (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8504,7 +8385,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS direct_deposit_batches (
+        `CREATE TABLE IF NOT EXISTS direct_deposit_batches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_id TEXT NOT NULL,
@@ -8518,7 +8399,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS direct_deposit_accounts (
+        `CREATE TABLE IF NOT EXISTS direct_deposit_accounts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8534,7 +8415,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS check_print_runs (
+        `CREATE TABLE IF NOT EXISTS check_print_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_id TEXT NOT NULL,
@@ -8548,7 +8429,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS contractor_pay_runs (
+        `CREATE TABLE IF NOT EXISTS contractor_pay_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     run_number TEXT,
@@ -8560,7 +8441,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS contractor_pay_items (
+        `CREATE TABLE IF NOT EXISTS contractor_pay_items (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     contractor_pay_run_id TEXT NOT NULL,
@@ -8572,7 +8453,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS form_w2_filings (
+        `CREATE TABLE IF NOT EXISTS form_w2_filings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -8593,7 +8474,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, tax_year, employee_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS form_941_filings (
+        `CREATE TABLE IF NOT EXISTS form_941_filings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -8615,7 +8496,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, tax_year, quarter)
   )`,
-  `CREATE TABLE IF NOT EXISTS form_940_filings (
+        `CREATE TABLE IF NOT EXISTS form_940_filings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -8634,7 +8515,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, tax_year)
   )`,
-  `CREATE TABLE IF NOT EXISTS form_1099_nec_filings (
+        `CREATE TABLE IF NOT EXISTS form_1099_nec_filings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -8649,7 +8530,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, tax_year, vendor_id)
   )`,
-  `CREATE TABLE IF NOT EXISTS state_quarterly_filings (
+        `CREATE TABLE IF NOT EXISTS state_quarterly_filings (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     state_code TEXT NOT NULL,
@@ -8667,7 +8548,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, state_code, tax_year, quarter)
   )`,
-  `CREATE TABLE IF NOT EXISTS multi_state_allocations (
+        `CREATE TABLE IF NOT EXISTS multi_state_allocations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8681,7 +8562,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS workers_comp_classifications (
+        `CREATE TABLE IF NOT EXISTS workers_comp_classifications (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     class_code TEXT NOT NULL,
@@ -8693,7 +8574,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS workers_comp_assignments (
+        `CREATE TABLE IF NOT EXISTS workers_comp_assignments (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8703,7 +8584,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS workers_comp_premium_calcs (
+        `CREATE TABLE IF NOT EXISTS workers_comp_premium_calcs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_id TEXT,
@@ -8715,7 +8596,7 @@ export function initDatabase(): Database.Database {
     calc_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS aca_compliance_records (
+        `CREATE TABLE IF NOT EXISTS aca_compliance_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8731,7 +8612,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, employee_id, tax_year, month)
   )`,
-  `CREATE TABLE IF NOT EXISTS cobra_records (
+        `CREATE TABLE IF NOT EXISTS cobra_records (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8746,7 +8627,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS life_event_changes (
+        `CREATE TABLE IF NOT EXISTS life_event_changes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8759,7 +8640,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS compensation_history (
+        `CREATE TABLE IF NOT EXISTS compensation_history (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -8773,7 +8654,7 @@ export function initDatabase(): Database.Database {
     approved_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS gross_to_net_snapshots (
+        `CREATE TABLE IF NOT EXISTS gross_to_net_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_item_id TEXT NOT NULL,
@@ -8789,7 +8670,7 @@ export function initDatabase(): Database.Database {
     snapshot_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS payroll_journal_links (
+        `CREATE TABLE IF NOT EXISTS payroll_journal_links (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     pay_run_id TEXT NOT NULL,
@@ -8799,7 +8680,7 @@ export function initDatabase(): Database.Database {
     credit_total REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS pay_schedule_templates (
+        `CREATE TABLE IF NOT EXISTS pay_schedule_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     schedule_name TEXT NOT NULL,
@@ -8812,7 +8693,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS year_end_summaries (
+        `CREATE TABLE IF NOT EXISTS year_end_summaries (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     tax_year INTEGER NOT NULL,
@@ -8829,11 +8710,11 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, tax_year)
   )`,
-  // ─── Reporting & Dashboards Wave (F741-F840) ──────────────────────
-  // Reporting is mostly read-side: definitions + snapshots, not transactions.
-  // A "report" = definition (the spec) → run (an execution with frozen data).
-  // Snapshots let you trend metrics over time without re-querying source rows.
-  `CREATE TABLE IF NOT EXISTS report_definitions (
+        // ─── Reporting & Dashboards Wave (F741-F840) ──────────────────────
+        // Reporting is mostly read-side: definitions + snapshots, not transactions.
+        // A "report" = definition (the spec) → run (an execution with frozen data).
+        // Snapshots let you trend metrics over time without re-querying source rows.
+        `CREATE TABLE IF NOT EXISTS report_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -8853,7 +8734,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS report_runs (
+        `CREATE TABLE IF NOT EXISTS report_runs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     report_definition_id TEXT NOT NULL,
@@ -8869,7 +8750,7 @@ export function initDatabase(): Database.Database {
     finished_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_saved_views (
+        `CREATE TABLE IF NOT EXISTS report_saved_views (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     report_definition_id TEXT,
@@ -8884,7 +8765,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS scheduled_reports (
+        `CREATE TABLE IF NOT EXISTS scheduled_reports (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     report_definition_id TEXT NOT NULL,
@@ -8902,7 +8783,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS scheduled_report_history (
+        `CREATE TABLE IF NOT EXISTS scheduled_report_history (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     scheduled_report_id TEXT NOT NULL,
@@ -8913,7 +8794,7 @@ export function initDatabase(): Database.Database {
     report_run_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS kpi_definitions (
+        `CREATE TABLE IF NOT EXISTS kpi_definitions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -8933,7 +8814,7 @@ export function initDatabase(): Database.Database {
     updated_at TEXT,
     UNIQUE(company_id, key)
   )`,
-  `CREATE TABLE IF NOT EXISTS kpi_snapshots (
+        `CREATE TABLE IF NOT EXISTS kpi_snapshots (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     kpi_key TEXT NOT NULL,
@@ -8945,7 +8826,7 @@ export function initDatabase(): Database.Database {
     snapshot_at TEXT DEFAULT (datetime('now')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS dashboards (
+        `CREATE TABLE IF NOT EXISTS dashboards (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -8959,7 +8840,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS dashboard_widgets (
+        `CREATE TABLE IF NOT EXISTS dashboard_widgets (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     dashboard_id TEXT NOT NULL,
@@ -8976,7 +8857,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS variance_analyses (
+        `CREATE TABLE IF NOT EXISTS variance_analyses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     analysis_type TEXT NOT NULL,
@@ -8993,7 +8874,7 @@ export function initDatabase(): Database.Database {
     generated_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS exec_summaries (
+        `CREATE TABLE IF NOT EXISTS exec_summaries (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     period_start TEXT,
@@ -9007,7 +8888,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS report_drill_audit (
+        `CREATE TABLE IF NOT EXISTS report_drill_audit (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -9017,7 +8898,7 @@ export function initDatabase(): Database.Database {
     drill_path_json TEXT,
     drilled_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_export_jobs (
+        `CREATE TABLE IF NOT EXISTS report_export_jobs (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     report_run_id TEXT,
@@ -9031,7 +8912,7 @@ export function initDatabase(): Database.Database {
     requested_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS narrative_templates (
+        `CREATE TABLE IF NOT EXISTS narrative_templates (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -9042,7 +8923,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS period_comparisons (
+        `CREATE TABLE IF NOT EXISTS period_comparisons (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     comparison_type TEXT NOT NULL,
@@ -9058,7 +8939,7 @@ export function initDatabase(): Database.Database {
     computed_at TEXT DEFAULT (datetime('now')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_subscriptions (
+        `CREATE TABLE IF NOT EXISTS report_subscriptions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -9071,7 +8952,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS dashboard_shares (
+        `CREATE TABLE IF NOT EXISTS dashboard_shares (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     dashboard_id TEXT NOT NULL,
@@ -9081,7 +8962,7 @@ export function initDatabase(): Database.Database {
     shared_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_alerts (
+        `CREATE TABLE IF NOT EXISTS report_alerts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     kpi_key TEXT,
@@ -9097,7 +8978,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS report_alert_events (
+        `CREATE TABLE IF NOT EXISTS report_alert_events (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     alert_id TEXT NOT NULL,
@@ -9107,7 +8988,7 @@ export function initDatabase(): Database.Database {
     error_message TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_column_metadata (
+        `CREATE TABLE IF NOT EXISTS report_column_metadata (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     source_table TEXT NOT NULL,
@@ -9122,7 +9003,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS dashboard_versions (
+        `CREATE TABLE IF NOT EXISTS dashboard_versions (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     dashboard_id TEXT NOT NULL,
@@ -9133,7 +9014,7 @@ export function initDatabase(): Database.Database {
     saved_at TEXT DEFAULT (datetime('now')),
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_pin_cache (
+        `CREATE TABLE IF NOT EXISTS report_pin_cache (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     cache_key TEXT NOT NULL,
@@ -9142,7 +9023,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, cache_key)
   )`,
-  `CREATE TABLE IF NOT EXISTS report_favorites (
+        `CREATE TABLE IF NOT EXISTS report_favorites (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -9151,7 +9032,7 @@ export function initDatabase(): Database.Database {
     pinned_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS report_annotations (
+        `CREATE TABLE IF NOT EXISTS report_annotations (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     report_run_id TEXT,
@@ -9163,7 +9044,7 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS report_audit_log (
+        `CREATE TABLE IF NOT EXISTS report_audit_log (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
     user_id TEXT,
@@ -9173,443 +9054,426 @@ export function initDatabase(): Database.Database {
     metadata_json TEXT,
     logged_at TEXT DEFAULT (datetime('now'))
   )`,
-  // ─── Data hygiene: remove orphaned invoice_tokens whose invoice_id
-  // no longer exists. Tokens are ephemeral share links — when the
-  // underlying invoice is hard-deleted, the token becomes dangling and
-  // the schema validator flags it as an orphan FK. Idempotent + safe.
-  "DELETE FROM invoice_tokens WHERE invoice_id NOT IN (SELECT id FROM invoices)",
-  ];
-  // SCHEMA: previously this loop swallowed ALL errors silently, so a
-  // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
-  // indistinguishable from "column already exists" / "table already exists".
-  // We now whitelist the known-idempotent error shapes and warn on anything
-  // else so future destructive migrations surface in the logs.
-  const isIdempotentMigrationError = (msg: string): boolean => {
-    if (!msg) return false;
-    return (
-      /duplicate column name/i.test(msg) ||           // ALTER ADD COLUMN re-run
-      /already exists/i.test(msg) ||                  // CREATE TABLE / INDEX re-run
-      /index .* already exists/i.test(msg)
-    );
-  };
-  for (const sql of migrations) {
-    try {
-      db.exec(sql);
-    } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      if (!isIdempotentMigrationError(msg)) {
-        // eslint-disable-next-line no-console
-        console.warn(`[migrations] non-idempotent error for SQL: ${sql.slice(0, 80)}… → ${msg}`);
-      }
-    }
-  }
-
-  // SCHEMA: minimal schema-version tracking. The migrations array above is
-  // currently all-idempotent (ADD COLUMN / CREATE TABLE IF NOT EXISTS /
-  // CREATE INDEX IF NOT EXISTS), so each migration tolerates being run on
-  // every boot. If a future migration is NOT idempotent (e.g. UPDATE,
-  // INSERT-without-guard, table rebuild), bump SCHEMA_VERSION below and run
-  // the destructive step inside the `if (currentVersion < N)` block. We use
-  // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
-  // table because it requires zero extra DDL and is atomic per pragma write.
-  try {
-    const SCHEMA_VERSION = 3;
-    const row = db.pragma('user_version', { simple: true }) as number;
-    const currentVersion = typeof row === 'number' ? row : 0;
-
-    // Version 2: Seed detailed tax-aligned expense accounts into existing companies
-    if (currentVersion < 2) {
-      const newAccounts: Array<{ code: string; name: string; type: string; subtype: string }> = [
-        { code: '5000', name: 'Cost of Goods Sold', type: 'expense', subtype: 'cogs' },
-        { code: '5200', name: 'Materials & Supplies (COGS)', type: 'expense', subtype: 'cogs' },
-        { code: '5300', name: 'Freight & Shipping (COGS)', type: 'expense', subtype: 'cogs' },
-        { code: '5400', name: 'Direct Labor', type: 'expense', subtype: 'cogs' },
-        { code: '6050', name: 'Vehicle Expense', type: 'expense', subtype: 'operating' },
-        { code: '6110', name: 'Credit Card Processing Fees', type: 'expense', subtype: 'operating' },
-        { code: '6120', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
-        { code: '6150', name: 'Commissions & Fees', type: 'expense', subtype: 'operating' },
-        { code: '6250', name: 'Depletion', type: 'expense', subtype: 'operating' },
-        { code: '6310', name: 'Insurance — Health (Employees)', type: 'expense', subtype: 'operating' },
-        { code: '6320', name: 'Insurance — Workers Comp', type: 'expense', subtype: 'operating' },
-        { code: '6330', name: 'Insurance — Professional / E&O', type: 'expense', subtype: 'operating' },
-        { code: '6340', name: 'Insurance — Vehicle', type: 'expense', subtype: 'operating' },
-        { code: '6350', name: 'Insurance — Property', type: 'expense', subtype: 'operating' },
-        { code: '6410', name: 'Postage & Shipping', type: 'expense', subtype: 'operating' },
-        { code: '6420', name: 'Printing & Copying', type: 'expense', subtype: 'operating' },
-        { code: '6450', name: 'Interest — Mortgage (Business)', type: 'expense', subtype: 'operating' },
-        { code: '6460', name: 'Interest — Other Business Loans', type: 'expense', subtype: 'operating' },
-        { code: '6500', name: 'Legal Fees', type: 'expense', subtype: 'operating' },
-        { code: '6510', name: 'Accounting & Tax Preparation', type: 'expense', subtype: 'operating' },
-        { code: '6520', name: 'Professional Services — Other', type: 'expense', subtype: 'operating' },
-        { code: '6550', name: 'Rent — Office / Workspace', type: 'expense', subtype: 'operating' },
-        { code: '6560', name: 'Rent — Equipment / Machinery', type: 'expense', subtype: 'operating' },
-        { code: '6600', name: 'Repairs & Maintenance', type: 'expense', subtype: 'operating' },
-        { code: '6650', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
-        { code: '6660', name: 'Computer & IT Equipment', type: 'expense', subtype: 'operating' },
-        { code: '6700', name: 'Taxes — Business License & Permits', type: 'expense', subtype: 'taxes' },
-        { code: '6710', name: 'Taxes — Property', type: 'expense', subtype: 'taxes' },
-        { code: '6720', name: 'Taxes — Sales / Use', type: 'expense', subtype: 'taxes' },
-        { code: '6730', name: 'Taxes — State Franchise / Excise', type: 'expense', subtype: 'taxes' },
-        { code: '6800', name: 'Travel — Airfare', type: 'expense', subtype: 'operating' },
-        { code: '6810', name: 'Travel — Lodging', type: 'expense', subtype: 'operating' },
-        { code: '6820', name: 'Travel — Ground Transportation', type: 'expense', subtype: 'operating' },
-        { code: '6830', name: 'Meals — Business (50% deductible)', type: 'expense', subtype: 'operating' },
-        { code: '6840', name: 'Entertainment (non-deductible)', type: 'expense', subtype: 'operating' },
-        { code: '6850', name: 'Parking & Tolls', type: 'expense', subtype: 'operating' },
-        { code: '6910', name: 'Utilities — Gas / Heating', type: 'expense', subtype: 'operating' },
-        { code: '6920', name: 'Utilities — Water / Sewer', type: 'expense', subtype: 'operating' },
-        { code: '6930', name: 'Utilities — Telephone / Internet', type: 'expense', subtype: 'operating' },
-        { code: '6940', name: 'Utilities — Trash / Waste', type: 'expense', subtype: 'operating' },
-        { code: '6950', name: 'Cell Phone', type: 'expense', subtype: 'operating' },
-        { code: '7010', name: 'Payroll Tax Expense — FICA', type: 'expense', subtype: 'payroll' },
-        { code: '7020', name: 'Payroll Tax Expense — FUTA', type: 'expense', subtype: 'payroll' },
-        { code: '7030', name: 'Payroll Tax Expense — SUTA', type: 'expense', subtype: 'payroll' },
-        { code: '7040', name: 'Employee Benefits', type: 'expense', subtype: 'payroll' },
-        { code: '7050', name: 'Retirement Plan Contributions', type: 'expense', subtype: 'payroll' },
-        { code: '7060', name: 'Workers Compensation Premium', type: 'expense', subtype: 'payroll' },
-        { code: '7100', name: 'Officer Compensation', type: 'expense', subtype: 'payroll' },
-        { code: '7210', name: 'Amortization Expense', type: 'expense', subtype: 'operating' },
-        { code: '7220', name: 'Section 179 Expense', type: 'expense', subtype: 'operating' },
-        { code: '7300', name: 'Education & Training', type: 'expense', subtype: 'operating' },
-        { code: '7310', name: 'Conferences & Seminars', type: 'expense', subtype: 'operating' },
-        { code: '7320', name: 'Dues & Memberships', type: 'expense', subtype: 'operating' },
-        { code: '7330', name: 'Charitable Contributions', type: 'expense', subtype: 'operating' },
-        { code: '7340', name: 'Books & Publications', type: 'expense', subtype: 'operating' },
-        { code: '7400', name: 'Home Office — Direct Expenses', type: 'expense', subtype: 'operating' },
-        { code: '7410', name: 'Home Office — Indirect Expenses', type: 'expense', subtype: 'operating' },
-        { code: '8000', name: 'Bad Debts', type: 'expense', subtype: 'other' },
-        { code: '8100', name: 'Penalties & Fines', type: 'expense', subtype: 'other' },
-        { code: '8200', name: 'Loss on Disposal of Assets', type: 'expense', subtype: 'other' },
-        { code: '8300', name: 'Foreign Currency Loss', type: 'expense', subtype: 'other' },
-      ];
-      try {
-        const dbI = getDb();
-        const companies = dbI.prepare('SELECT id FROM companies').all() as Array<{ id: string }>;
-        const insertStmt = dbI.prepare(
-          `INSERT OR IGNORE INTO accounts (id, company_id, code, name, type, subtype, is_active, balance)
-           VALUES (?, ?, ?, ?, ?, ?, 1, 0)`
-        );
-        const seedTx = dbI.transaction(() => {
-          for (const co of companies) {
-            for (const acct of newAccounts) {
-              // Skip if code already exists for this company
-              const exists = dbI.prepare(
-                'SELECT id FROM accounts WHERE company_id = ? AND code = ?'
-              ).get(co.id, acct.code);
-              if (!exists) {
-                insertStmt.run(uuid(), co.id, acct.code, acct.name, acct.type, acct.subtype);
-              }
-            }
-          }
-        });
-        seedTx();
-      } catch (seedErr: any) {
-        console.warn('[schema v2] Failed to seed new expense accounts:', seedErr?.message);
-      }
-    }
-
-    // Version 3: Repair existing line-item expenses so expense.amount is the
-    // TOTAL COST INCLUDING TAX. Historically the save handler stored amount as
-    // the pre-tax net (sum of discounted line extensions), so any expense with
-    // taxed line items understated its true cost by the tax. We recompute the
-    // NET from the raw line fields (quantity, unit_price, discounts) — which is
-    // unambiguous and also corrects legacy discount drift — and add the stored
-    // per-line tax_amount, which is the trustworthy source of truth for tax.
-    // We deliberately do NOT recompute tax from tax_rate: tax_rate is stored
-    // inconsistently (UI = percentage, rule/import flows = fraction like
-    // 0.0765), so recomputing would turn a real 7.65% tax into 0.0765%. The
-    // tax_amount column was frozen-correct at write time regardless of which
-    // convention produced it. Only expenses that have line items are touched;
-    // single-amount expenses are left untouched.
-    if (currentVersion < 3) {
-      try {
-        const dbI = getDb();
-        const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
-
-        // 3a) Normalize line-item tax_rate convention. The ItemizationEditor
-        // treats tax_rate as a PERCENTAGE (it divides by 100), but legacy
-        // import/rule flows stored it as a FRACTION (e.g. 0.0765 for 7.65%).
-        // Left as-is, opening such an expense in the editor mis-displays tax
-        // and re-saving would corrupt the (correct) stored tax_amount. We
-        // convert any fractional rate (0 < rate < 1) to percentage form so the
-        // entire app converges on the editor's convention. All observed legacy
-        // rates are < 0.09, so the < 1 guard never touches real percentages.
-        try {
-          const n1 = dbI.prepare(
-            `UPDATE expense_line_items SET tax_rate = tax_rate * 100 WHERE tax_rate > 0 AND tax_rate < 1`
-          ).run();
-          if (n1.changes > 0) console.log(`[schema v3] Normalized ${n1.changes} line-item tax_rate(s) from fraction to percentage.`);
-        } catch (e: any) { console.warn('[schema v3] tax_rate normalize failed:', e?.message); }
-
-        const preTaxOf = (li: any): number => {
-          const gross = (Number(li.quantity) || 1) * (Number(li.unit_price) || 0);
-          const flat = Number(li.discount_amount) || 0;
-          const pct = Number(li.discount_percent) || 0;
-          const disc = flat > 0 ? flat : pct > 0 ? gross * (pct / 100) : 0;
-          return Math.max(0, gross - disc);
-        };
-        const taxOf = (li: any): number => {
-          if (li.is_tax_exempt) return 0;
-          // Trust the stored tax_amount (frozen-correct at write time). Fall
-          // back to tax_rate (treated as a percentage) only when absent.
-          const stored = Number(li.tax_amount);
-          if (Number.isFinite(stored) && stored > 0) return r2(stored);
-          const preTax = preTaxOf(li);
-          let jur: any = li.tax_jurisdictions;
-          if (typeof jur === 'string') { try { jur = JSON.parse(jur); } catch { jur = []; } }
-          if (Array.isArray(jur) && jur.length > 0) {
-            return r2(jur.reduce((s: number, j: any) => s + preTax * ((Number(j.rate) || 0) / 100), 0));
-          }
-          return r2(preTax * ((Number(li.tax_rate) || 0) / 100));
-        };
-        const expensesWithLines = dbI.prepare(
-          `SELECT DISTINCT expense_id FROM expense_line_items`
-        ).all() as Array<{ expense_id: string }>;
-        const linesStmt = dbI.prepare(`SELECT * FROM expense_line_items WHERE expense_id = ?`);
-        const updStmt = dbI.prepare(`UPDATE expenses SET amount = ?, tax_amount = ? WHERE id = ?`);
-        let repaired = 0;
-        const repairTx = dbI.transaction(() => {
-          for (const { expense_id } of expensesWithLines) {
-            const lines = linesStmt.all(expense_id) as any[];
-            if (!lines.length) continue;
-            const net = r2(lines.reduce((s, li) => s + preTaxOf(li), 0));
-            const tax = r2(lines.reduce((s, li) => s + taxOf(li), 0));
-            const total = r2(net + tax);
-            const cur = dbI.prepare(`SELECT amount, tax_amount FROM expenses WHERE id = ?`).get(expense_id) as any;
-            if (!cur) continue;
-            // Only write when something actually changes, to avoid churn.
-            if (r2(cur.amount) !== total || r2(cur.tax_amount) !== tax) {
-              updStmt.run(total, tax, expense_id);
-              repaired++;
-            }
-          }
-        });
-        repairTx();
-        if (repaired > 0) console.log(`[schema v3] Repaired ${repaired} expense(s) to include tax in cost.`);
-      } catch (repairErr: any) {
-        console.warn('[schema v3] Failed to repair expense tax-inclusive amounts:', repairErr?.message);
-      }
-    }
-
-    if (currentVersion < SCHEMA_VERSION) {
-      db.pragma(`user_version = ${SCHEMA_VERSION}`);
-    }
-  } catch (_) { /* pragma failure is non-fatal */ }
-
-  // Seed Utah state tax bracket (flat 4.55% per HB 106, 2025).
-  try {
-    const existing = db.prepare(
-      `SELECT COUNT(*) as c FROM state_tax_brackets WHERE state = 'UT' AND year = 2025`
-    ).get() as { c: number };
-    if (!existing || existing.c === 0) {
-      const id = `utbrk-2025-${Date.now()}`;
-      db.prepare(
-        `INSERT INTO state_tax_brackets (id, state, year, min_income, max_income, rate)
-         VALUES (?, 'UT', 2025, 0, NULL, 0.0455)`
-      ).run(id);
-    }
-  } catch (_) { /* ignore */ }
-
-  // P4.49: seed IRS mileage rates (current + historical) for the
-  // mileage_log auto-deduction calculation. Idempotent via INSERT OR IGNORE.
-  try {
-    const rates: Array<[number, number, number, number]> = [
-      // [year, business, medical, charitable]
-      [2024, 0.67, 0.21, 0.14],
-      [2025, 0.70, 0.21, 0.14],
-      [2026, 0.70, 0.21, 0.14], // mid-year update if/when IRS publishes
+        // ─── Data hygiene: remove orphaned invoice_tokens whose invoice_id
+        // no longer exists. Tokens are ephemeral share links — when the
+        // underlying invoice is hard-deleted, the token becomes dangling and
+        // the schema validator flags it as an orphan FK. Idempotent + safe.
+        "DELETE FROM invoice_tokens WHERE invoice_id NOT IN (SELECT id FROM invoices)",
     ];
-    const stmt = db.prepare(
-      "INSERT OR IGNORE INTO mileage_rates (year, business_rate, medical_rate, charitable_rate) VALUES (?, ?, ?, ?)"
-    );
-    for (const r of rates) stmt.run(...r);
-  } catch (_) { /* ignore */ }
-
-  // P1.18: stamp the schema version + app version after migrations.
-  // The version-pinning check at startup compares this against
-  // APP_SCHEMA_VERSION; if a newer app wrote here, an older app
-  // refuses to open the DB.
-  try {
-    const appVer = (require('electron').app?.getVersion?.() || '') as string;
-    db.prepare(
-      "UPDATE schema_meta SET version = ?, last_migrated_at = datetime('now'), app_version = ? WHERE id = 1"
-    ).run(APP_SCHEMA_VERSION, appVer);
-  } catch (_) { /* schema_meta may not exist on first-run pre-CREATE */ }
-
-  return db;
-}
-
-// Reinitialize database (used after restoring from backup)
-export function reinitDatabase(): Database.Database {
-  if (db) {
-    try { db.close(); } catch (_) {}
-  }
-  return initDatabase();
-}
-
-export function switchCompany(companyId: string): void {
-  currentCompanyId = companyId;
-}
-
-// ─── "WHO" SYSTEM accessors ──────────────────────────────
-export function setCurrentUser(userId: string | null, userEmail: string | null = null): void {
-  currentUserId = userId;
-  currentUserEmail = userEmail;
-}
-
-export function getCurrentUserId(): string | null {
-  return currentUserId;
-}
-
-export function getCurrentUserEmail(): string | null {
-  return currentUserEmail;
-}
-
-export function clearCurrentUser(): void {
-  currentUserId = null;
-  currentUserEmail = null;
-}
-
-export function getCurrentCompanyId(): string | null {
-  return currentCompanyId;
-}
-
-// ─── Generic CRUD ────────────────────────────────────────
-
-export function queryAll(
-  table: string,
-  filters: Record<string, any> = {},
-  sort?: { field: string; dir: 'asc' | 'desc' },
-  limit?: number,
-  offset?: number
-): any[] {
-  const conditions: string[] = [];
-  const params: any[] = [];
-
-  // SCHEMA: auto-filter soft-deleted rows for tables with deleted_at.
-  // Caller can override with `include_deleted: true` to see all rows.
-  // The accounts table uses '' for live and a timestamp for deleted; tags/
-  // custom_field_definitions use NULL for live. Cover both shapes.
-  const includeDeleted = filters && (filters as any).include_deleted === true;
-  if (filters && 'include_deleted' in filters) {
-    delete (filters as any).include_deleted;
-  }
-  if (!includeDeleted && tablesWithDeletedAt.has(table)) {
-    conditions.push(`COALESCE(deleted_at, '') = ''`);
-  }
-
-  for (const [key, value] of Object.entries(filters)) {
-    if (value === null) {
-      conditions.push(`${key} IS NULL`);
-    } else if (Array.isArray(value)) {
-      conditions.push(`${key} IN (${value.map(() => '?').join(',')})`);
-      params.push(...value);
-    } else if (key.endsWith('_gte')) {
-      const col = key.slice(0, -4);
-      conditions.push(`${col} >= ?`);
-      params.push(value);
-    } else if (key.endsWith('_lte')) {
-      const col = key.slice(0, -4);
-      conditions.push(`${col} <= ?`);
-      params.push(value);
-    } else if (key.endsWith('_like')) {
-      const col = key.slice(0, -5);
-      conditions.push(`${col} LIKE ?`);
-      params.push(value);
-    } else if (key.endsWith('_ne')) {
-      const col = key.slice(0, -3);
-      conditions.push(`${col} != ?`);
-      params.push(value);
-    } else {
-      conditions.push(`${key} = ?`);
-      params.push(typeof value === 'boolean' ? (value ? 1 : 0) : value);
+    // SCHEMA: previously this loop swallowed ALL errors silently, so a
+    // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
+    // indistinguishable from "column already exists" / "table already exists".
+    // We now whitelist the known-idempotent error shapes and warn on anything
+    // else so future destructive migrations surface in the logs.
+    const isIdempotentMigrationError = (msg) => {
+        if (!msg)
+            return false;
+        return (/duplicate column name/i.test(msg) || // ALTER ADD COLUMN re-run
+            /already exists/i.test(msg) || // CREATE TABLE / INDEX re-run
+            /index .* already exists/i.test(msg));
+    };
+    for (const sql of migrations) {
+        try {
+            db.exec(sql);
+        }
+        catch (err) {
+            const msg = err?.message ?? String(err);
+            if (!isIdempotentMigrationError(msg)) {
+                // eslint-disable-next-line no-console
+                console.warn(`[migrations] non-idempotent error for SQL: ${sql.slice(0, 80)}… → ${msg}`);
+            }
+        }
     }
-  }
-
-  let sql = `SELECT * FROM ${table}`;
-  if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`;
-  if (sort) sql += ` ORDER BY ${sort.field} ${sort.dir.toUpperCase()}`;
-  if (limit) sql += ` LIMIT ${limit}`;
-  if (offset) sql += ` OFFSET ${offset}`;
-
-  return getDb().prepare(sql).all(...params);
+    // SCHEMA: minimal schema-version tracking. The migrations array above is
+    // currently all-idempotent (ADD COLUMN / CREATE TABLE IF NOT EXISTS /
+    // CREATE INDEX IF NOT EXISTS), so each migration tolerates being run on
+    // every boot. If a future migration is NOT idempotent (e.g. UPDATE,
+    // INSERT-without-guard, table rebuild), bump SCHEMA_VERSION below and run
+    // the destructive step inside the `if (currentVersion < N)` block. We use
+    // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
+    // table because it requires zero extra DDL and is atomic per pragma write.
+    try {
+        const SCHEMA_VERSION = 3;
+        const row = db.pragma('user_version', { simple: true });
+        const currentVersion = typeof row === 'number' ? row : 0;
+        // Version 2: Seed detailed tax-aligned expense accounts into existing companies
+        if (currentVersion < 2) {
+            const newAccounts = [
+                { code: '5000', name: 'Cost of Goods Sold', type: 'expense', subtype: 'cogs' },
+                { code: '5200', name: 'Materials & Supplies (COGS)', type: 'expense', subtype: 'cogs' },
+                { code: '5300', name: 'Freight & Shipping (COGS)', type: 'expense', subtype: 'cogs' },
+                { code: '5400', name: 'Direct Labor', type: 'expense', subtype: 'cogs' },
+                { code: '6050', name: 'Vehicle Expense', type: 'expense', subtype: 'operating' },
+                { code: '6110', name: 'Credit Card Processing Fees', type: 'expense', subtype: 'operating' },
+                { code: '6120', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
+                { code: '6150', name: 'Commissions & Fees', type: 'expense', subtype: 'operating' },
+                { code: '6250', name: 'Depletion', type: 'expense', subtype: 'operating' },
+                { code: '6310', name: 'Insurance — Health (Employees)', type: 'expense', subtype: 'operating' },
+                { code: '6320', name: 'Insurance — Workers Comp', type: 'expense', subtype: 'operating' },
+                { code: '6330', name: 'Insurance — Professional / E&O', type: 'expense', subtype: 'operating' },
+                { code: '6340', name: 'Insurance — Vehicle', type: 'expense', subtype: 'operating' },
+                { code: '6350', name: 'Insurance — Property', type: 'expense', subtype: 'operating' },
+                { code: '6410', name: 'Postage & Shipping', type: 'expense', subtype: 'operating' },
+                { code: '6420', name: 'Printing & Copying', type: 'expense', subtype: 'operating' },
+                { code: '6450', name: 'Interest — Mortgage (Business)', type: 'expense', subtype: 'operating' },
+                { code: '6460', name: 'Interest — Other Business Loans', type: 'expense', subtype: 'operating' },
+                { code: '6500', name: 'Legal Fees', type: 'expense', subtype: 'operating' },
+                { code: '6510', name: 'Accounting & Tax Preparation', type: 'expense', subtype: 'operating' },
+                { code: '6520', name: 'Professional Services — Other', type: 'expense', subtype: 'operating' },
+                { code: '6550', name: 'Rent — Office / Workspace', type: 'expense', subtype: 'operating' },
+                { code: '6560', name: 'Rent — Equipment / Machinery', type: 'expense', subtype: 'operating' },
+                { code: '6600', name: 'Repairs & Maintenance', type: 'expense', subtype: 'operating' },
+                { code: '6650', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
+                { code: '6660', name: 'Computer & IT Equipment', type: 'expense', subtype: 'operating' },
+                { code: '6700', name: 'Taxes — Business License & Permits', type: 'expense', subtype: 'taxes' },
+                { code: '6710', name: 'Taxes — Property', type: 'expense', subtype: 'taxes' },
+                { code: '6720', name: 'Taxes — Sales / Use', type: 'expense', subtype: 'taxes' },
+                { code: '6730', name: 'Taxes — State Franchise / Excise', type: 'expense', subtype: 'taxes' },
+                { code: '6800', name: 'Travel — Airfare', type: 'expense', subtype: 'operating' },
+                { code: '6810', name: 'Travel — Lodging', type: 'expense', subtype: 'operating' },
+                { code: '6820', name: 'Travel — Ground Transportation', type: 'expense', subtype: 'operating' },
+                { code: '6830', name: 'Meals — Business (50% deductible)', type: 'expense', subtype: 'operating' },
+                { code: '6840', name: 'Entertainment (non-deductible)', type: 'expense', subtype: 'operating' },
+                { code: '6850', name: 'Parking & Tolls', type: 'expense', subtype: 'operating' },
+                { code: '6910', name: 'Utilities — Gas / Heating', type: 'expense', subtype: 'operating' },
+                { code: '6920', name: 'Utilities — Water / Sewer', type: 'expense', subtype: 'operating' },
+                { code: '6930', name: 'Utilities — Telephone / Internet', type: 'expense', subtype: 'operating' },
+                { code: '6940', name: 'Utilities — Trash / Waste', type: 'expense', subtype: 'operating' },
+                { code: '6950', name: 'Cell Phone', type: 'expense', subtype: 'operating' },
+                { code: '7010', name: 'Payroll Tax Expense — FICA', type: 'expense', subtype: 'payroll' },
+                { code: '7020', name: 'Payroll Tax Expense — FUTA', type: 'expense', subtype: 'payroll' },
+                { code: '7030', name: 'Payroll Tax Expense — SUTA', type: 'expense', subtype: 'payroll' },
+                { code: '7040', name: 'Employee Benefits', type: 'expense', subtype: 'payroll' },
+                { code: '7050', name: 'Retirement Plan Contributions', type: 'expense', subtype: 'payroll' },
+                { code: '7060', name: 'Workers Compensation Premium', type: 'expense', subtype: 'payroll' },
+                { code: '7100', name: 'Officer Compensation', type: 'expense', subtype: 'payroll' },
+                { code: '7210', name: 'Amortization Expense', type: 'expense', subtype: 'operating' },
+                { code: '7220', name: 'Section 179 Expense', type: 'expense', subtype: 'operating' },
+                { code: '7300', name: 'Education & Training', type: 'expense', subtype: 'operating' },
+                { code: '7310', name: 'Conferences & Seminars', type: 'expense', subtype: 'operating' },
+                { code: '7320', name: 'Dues & Memberships', type: 'expense', subtype: 'operating' },
+                { code: '7330', name: 'Charitable Contributions', type: 'expense', subtype: 'operating' },
+                { code: '7340', name: 'Books & Publications', type: 'expense', subtype: 'operating' },
+                { code: '7400', name: 'Home Office — Direct Expenses', type: 'expense', subtype: 'operating' },
+                { code: '7410', name: 'Home Office — Indirect Expenses', type: 'expense', subtype: 'operating' },
+                { code: '8000', name: 'Bad Debts', type: 'expense', subtype: 'other' },
+                { code: '8100', name: 'Penalties & Fines', type: 'expense', subtype: 'other' },
+                { code: '8200', name: 'Loss on Disposal of Assets', type: 'expense', subtype: 'other' },
+                { code: '8300', name: 'Foreign Currency Loss', type: 'expense', subtype: 'other' },
+            ];
+            try {
+                const dbI = getDb();
+                const companies = dbI.prepare('SELECT id FROM companies').all();
+                const insertStmt = dbI.prepare(`INSERT OR IGNORE INTO accounts (id, company_id, code, name, type, subtype, is_active, balance)
+           VALUES (?, ?, ?, ?, ?, ?, 1, 0)`);
+                const seedTx = dbI.transaction(() => {
+                    for (const co of companies) {
+                        for (const acct of newAccounts) {
+                            // Skip if code already exists for this company
+                            const exists = dbI.prepare('SELECT id FROM accounts WHERE company_id = ? AND code = ?').get(co.id, acct.code);
+                            if (!exists) {
+                                insertStmt.run((0, uuid_1.v4)(), co.id, acct.code, acct.name, acct.type, acct.subtype);
+                            }
+                        }
+                    }
+                });
+                seedTx();
+            }
+            catch (seedErr) {
+                console.warn('[schema v2] Failed to seed new expense accounts:', seedErr?.message);
+            }
+        }
+        // Version 3: Repair existing line-item expenses so expense.amount is the
+        // TOTAL COST INCLUDING TAX. Historically the save handler stored amount as
+        // the pre-tax net (sum of discounted line extensions), so any expense with
+        // taxed line items understated its true cost by the tax. We recompute the
+        // NET from the raw line fields (quantity, unit_price, discounts) — which is
+        // unambiguous and also corrects legacy discount drift — and add the stored
+        // per-line tax_amount, which is the trustworthy source of truth for tax.
+        // We deliberately do NOT recompute tax from tax_rate: tax_rate is stored
+        // inconsistently (UI = percentage, rule/import flows = fraction like
+        // 0.0765), so recomputing would turn a real 7.65% tax into 0.0765%. The
+        // tax_amount column was frozen-correct at write time regardless of which
+        // convention produced it. Only expenses that have line items are touched;
+        // single-amount expenses are left untouched.
+        if (currentVersion < 3) {
+            try {
+                const dbI = getDb();
+                const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+                // 3a) Normalize line-item tax_rate convention. The ItemizationEditor
+                // treats tax_rate as a PERCENTAGE (it divides by 100), but legacy
+                // import/rule flows stored it as a FRACTION (e.g. 0.0765 for 7.65%).
+                // Left as-is, opening such an expense in the editor mis-displays tax
+                // and re-saving would corrupt the (correct) stored tax_amount. We
+                // convert any fractional rate (0 < rate < 1) to percentage form so the
+                // entire app converges on the editor's convention. All observed legacy
+                // rates are < 0.09, so the < 1 guard never touches real percentages.
+                try {
+                    const n1 = dbI.prepare(`UPDATE expense_line_items SET tax_rate = tax_rate * 100 WHERE tax_rate > 0 AND tax_rate < 1`).run();
+                    if (n1.changes > 0)
+                        console.log(`[schema v3] Normalized ${n1.changes} line-item tax_rate(s) from fraction to percentage.`);
+                }
+                catch (e) {
+                    console.warn('[schema v3] tax_rate normalize failed:', e?.message);
+                }
+                const preTaxOf = (li) => {
+                    const gross = (Number(li.quantity) || 1) * (Number(li.unit_price) || 0);
+                    const flat = Number(li.discount_amount) || 0;
+                    const pct = Number(li.discount_percent) || 0;
+                    const disc = flat > 0 ? flat : pct > 0 ? gross * (pct / 100) : 0;
+                    return Math.max(0, gross - disc);
+                };
+                const taxOf = (li) => {
+                    if (li.is_tax_exempt)
+                        return 0;
+                    // Trust the stored tax_amount (frozen-correct at write time). Fall
+                    // back to tax_rate (treated as a percentage) only when absent.
+                    const stored = Number(li.tax_amount);
+                    if (Number.isFinite(stored) && stored > 0)
+                        return r2(stored);
+                    const preTax = preTaxOf(li);
+                    let jur = li.tax_jurisdictions;
+                    if (typeof jur === 'string') {
+                        try {
+                            jur = JSON.parse(jur);
+                        }
+                        catch {
+                            jur = [];
+                        }
+                    }
+                    if (Array.isArray(jur) && jur.length > 0) {
+                        return r2(jur.reduce((s, j) => s + preTax * ((Number(j.rate) || 0) / 100), 0));
+                    }
+                    return r2(preTax * ((Number(li.tax_rate) || 0) / 100));
+                };
+                const expensesWithLines = dbI.prepare(`SELECT DISTINCT expense_id FROM expense_line_items`).all();
+                const linesStmt = dbI.prepare(`SELECT * FROM expense_line_items WHERE expense_id = ?`);
+                const updStmt = dbI.prepare(`UPDATE expenses SET amount = ?, tax_amount = ? WHERE id = ?`);
+                let repaired = 0;
+                const repairTx = dbI.transaction(() => {
+                    for (const { expense_id } of expensesWithLines) {
+                        const lines = linesStmt.all(expense_id);
+                        if (!lines.length)
+                            continue;
+                        const net = r2(lines.reduce((s, li) => s + preTaxOf(li), 0));
+                        const tax = r2(lines.reduce((s, li) => s + taxOf(li), 0));
+                        const total = r2(net + tax);
+                        const cur = dbI.prepare(`SELECT amount, tax_amount FROM expenses WHERE id = ?`).get(expense_id);
+                        if (!cur)
+                            continue;
+                        // Only write when something actually changes, to avoid churn.
+                        if (r2(cur.amount) !== total || r2(cur.tax_amount) !== tax) {
+                            updStmt.run(total, tax, expense_id);
+                            repaired++;
+                        }
+                    }
+                });
+                repairTx();
+                if (repaired > 0)
+                    console.log(`[schema v3] Repaired ${repaired} expense(s) to include tax in cost.`);
+            }
+            catch (repairErr) {
+                console.warn('[schema v3] Failed to repair expense tax-inclusive amounts:', repairErr?.message);
+            }
+        }
+        if (currentVersion < SCHEMA_VERSION) {
+            db.pragma(`user_version = ${SCHEMA_VERSION}`);
+        }
+    }
+    catch (_) { /* pragma failure is non-fatal */ }
+    // Seed Utah state tax bracket (flat 4.55% per HB 106, 2025).
+    try {
+        const existing = db.prepare(`SELECT COUNT(*) as c FROM state_tax_brackets WHERE state = 'UT' AND year = 2025`).get();
+        if (!existing || existing.c === 0) {
+            const id = `utbrk-2025-${Date.now()}`;
+            db.prepare(`INSERT INTO state_tax_brackets (id, state, year, min_income, max_income, rate)
+         VALUES (?, 'UT', 2025, 0, NULL, 0.0455)`).run(id);
+        }
+    }
+    catch (_) { /* ignore */ }
+    // P4.49: seed IRS mileage rates (current + historical) for the
+    // mileage_log auto-deduction calculation. Idempotent via INSERT OR IGNORE.
+    try {
+        const rates = [
+            // [year, business, medical, charitable]
+            [2024, 0.67, 0.21, 0.14],
+            [2025, 0.70, 0.21, 0.14],
+            [2026, 0.70, 0.21, 0.14], // mid-year update if/when IRS publishes
+        ];
+        const stmt = db.prepare("INSERT OR IGNORE INTO mileage_rates (year, business_rate, medical_rate, charitable_rate) VALUES (?, ?, ?, ?)");
+        for (const r of rates)
+            stmt.run(...r);
+    }
+    catch (_) { /* ignore */ }
+    // P1.18: stamp the schema version + app version after migrations.
+    // The version-pinning check at startup compares this against
+    // APP_SCHEMA_VERSION; if a newer app wrote here, an older app
+    // refuses to open the DB.
+    try {
+        const appVer = (require('electron').app?.getVersion?.() || '');
+        db.prepare("UPDATE schema_meta SET version = ?, last_migrated_at = datetime('now'), app_version = ? WHERE id = 1").run(APP_SCHEMA_VERSION, appVer);
+    }
+    catch (_) { /* schema_meta may not exist on first-run pre-CREATE */ }
+    return db;
 }
-
+// Reinitialize database (used after restoring from backup)
+function reinitDatabase() {
+    if (db) {
+        try {
+            db.close();
+        }
+        catch (_) { }
+    }
+    return initDatabase();
+}
+function switchCompany(companyId) {
+    currentCompanyId = companyId;
+}
+// ─── "WHO" SYSTEM accessors ──────────────────────────────
+function setCurrentUser(userId, userEmail = null) {
+    currentUserId = userId;
+    currentUserEmail = userEmail;
+}
+function getCurrentUserId() {
+    return currentUserId;
+}
+function getCurrentUserEmail() {
+    return currentUserEmail;
+}
+function clearCurrentUser() {
+    currentUserId = null;
+    currentUserEmail = null;
+}
+function getCurrentCompanyId() {
+    return currentCompanyId;
+}
+// ─── Generic CRUD ────────────────────────────────────────
+function queryAll(table, filters = {}, sort, limit, offset) {
+    const conditions = [];
+    const params = [];
+    // SCHEMA: auto-filter soft-deleted rows for tables with deleted_at.
+    // Caller can override with `include_deleted: true` to see all rows.
+    // The accounts table uses '' for live and a timestamp for deleted; tags/
+    // custom_field_definitions use NULL for live. Cover both shapes.
+    const includeDeleted = filters && filters.include_deleted === true;
+    if (filters && 'include_deleted' in filters) {
+        delete filters.include_deleted;
+    }
+    if (!includeDeleted && tablesWithDeletedAt.has(table)) {
+        conditions.push(`COALESCE(deleted_at, '') = ''`);
+    }
+    for (const [key, value] of Object.entries(filters)) {
+        if (value === null) {
+            conditions.push(`${key} IS NULL`);
+        }
+        else if (Array.isArray(value)) {
+            conditions.push(`${key} IN (${value.map(() => '?').join(',')})`);
+            params.push(...value);
+        }
+        else if (key.endsWith('_gte')) {
+            const col = key.slice(0, -4);
+            conditions.push(`${col} >= ?`);
+            params.push(value);
+        }
+        else if (key.endsWith('_lte')) {
+            const col = key.slice(0, -4);
+            conditions.push(`${col} <= ?`);
+            params.push(value);
+        }
+        else if (key.endsWith('_like')) {
+            const col = key.slice(0, -5);
+            conditions.push(`${col} LIKE ?`);
+            params.push(value);
+        }
+        else if (key.endsWith('_ne')) {
+            const col = key.slice(0, -3);
+            conditions.push(`${col} != ?`);
+            params.push(value);
+        }
+        else {
+            conditions.push(`${key} = ?`);
+            params.push(typeof value === 'boolean' ? (value ? 1 : 0) : value);
+        }
+    }
+    let sql = `SELECT * FROM ${table}`;
+    if (conditions.length > 0)
+        sql += ` WHERE ${conditions.join(' AND ')}`;
+    if (sort)
+        sql += ` ORDER BY ${sort.field} ${sort.dir.toUpperCase()}`;
+    if (limit)
+        sql += ` LIMIT ${limit}`;
+    if (offset)
+        sql += ` OFFSET ${offset}`;
+    return getDb().prepare(sql).all(...params);
+}
 // ── P1.13: Soft-delete config ─────────────────────────────────
 // Tables in this set get the soft-delete treatment: remove() sets
 // deleted_at instead of physically removing the row; read helpers
 // filter out soft-deleted records. Other tables behave as before
 // (physical delete, no filter).
 // SCHEMA: imported from tableConfig.ts as single source of truth.
-
-export function getById(table: string, id: string): any {
-  if (SOFT_DELETE_TABLES.has(table)) {
-    return getDb().prepare(`SELECT * FROM ${table} WHERE id = ? AND deleted_at IS NULL`).get(id);
-  }
-  return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+function getById(table, id) {
+    if (tableConfig_1.SOFT_DELETE_TABLES.has(table)) {
+        return getDb().prepare(`SELECT * FROM ${table} WHERE id = ? AND deleted_at IS NULL`).get(id);
+    }
+    return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
 }
-
 // Bypasses the soft-delete filter — used by the Trash UI to load
 // records the user is reviewing for restore/purge.
-export function getByIdIncludingDeleted(table: string, id: string): any {
-  return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+function getByIdIncludingDeleted(table, id) {
+    return getDb().prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
 }
-
 // Cache of known columns per table to avoid repeated PRAGMA queries.
 // Cleared on schema reload (rare during runtime).
-const tableColumnCache: Map<string, Set<string>> = new Map();
-
-function getTableColumns(table: string): Set<string> {
-  const cached = tableColumnCache.get(table);
-  if (cached) return cached;
-  try {
-    const rows = getDb().prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    const cols = new Set(rows.map(r => r.name));
-    tableColumnCache.set(table, cols);
-    return cols;
-  } catch {
-    return new Set();
-  }
-}
-
-export function create(table: string, data: Record<string, any>): any {
-  const id = data.id || uuid();
-  const record = { ...data, id };
-
-  // SAFETY: filter out keys that aren't actual columns. Without this, a stale
-  // form payload (e.g., a column added to the form but missing migration) blows
-  // up the entire INSERT with "table has no column named X" — surfaced to the
-  // user as "Failed to save". Now we silently drop unknown keys and log them.
-  const knownCols = getTableColumns(table);
-  const droppedKeys: string[] = [];
-
-  const serialized: Record<string, any> = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (knownCols.size > 0 && !knownCols.has(key)) {
-      droppedKeys.push(key);
-      continue;
+const tableColumnCache = new Map();
+function getTableColumns(table) {
+    const cached = tableColumnCache.get(table);
+    if (cached)
+        return cached;
+    try {
+        const rows = getDb().prepare(`PRAGMA table_info(${table})`).all();
+        const cols = new Set(rows.map(r => r.name));
+        tableColumnCache.set(table, cols);
+        return cols;
     }
-    if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-      serialized[key] = JSON.stringify(value);
-    } else if (typeof value === 'boolean') {
-      serialized[key] = value ? 1 : 0;
-    } else {
-      serialized[key] = value;
+    catch {
+        return new Set();
     }
-  }
-
-  if (droppedKeys.length > 0) {
-    console.warn(`[db.create:${table}] dropped unknown columns:`, droppedKeys);
-  }
-
-  const keys = Object.keys(serialized);
-  const placeholders = keys.map(() => '?').join(', ');
-  const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
-
-  getDb().prepare(sql).run(...keys.map(k => serialized[k]));
-  return getById(table, id);
 }
-
+function create(table, data) {
+    const id = data.id || (0, uuid_1.v4)();
+    const record = { ...data, id };
+    // SAFETY: filter out keys that aren't actual columns. Without this, a stale
+    // form payload (e.g., a column added to the form but missing migration) blows
+    // up the entire INSERT with "table has no column named X" — surfaced to the
+    // user as "Failed to save". Now we silently drop unknown keys and log them.
+    const knownCols = getTableColumns(table);
+    const droppedKeys = [];
+    const serialized = {};
+    for (const [key, value] of Object.entries(record)) {
+        if (knownCols.size > 0 && !knownCols.has(key)) {
+            droppedKeys.push(key);
+            continue;
+        }
+        if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+            serialized[key] = JSON.stringify(value);
+        }
+        else if (typeof value === 'boolean') {
+            serialized[key] = value ? 1 : 0;
+        }
+        else {
+            serialized[key] = value;
+        }
+    }
+    if (droppedKeys.length > 0) {
+        console.warn(`[db.create:${table}] dropped unknown columns:`, droppedKeys);
+    }
+    const keys = Object.keys(serialized);
+    const placeholders = keys.map(() => '?').join(', ');
+    const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
+    getDb().prepare(sql).run(...keys.map(k => serialized[k]));
+    return getById(table, id);
+}
 // Tables that do NOT have an updated_at column.
 // Adding a table missing from this set causes every update() call on it
 // to append ", updated_at = datetime('now')" → immediate SQLite crash.
@@ -9621,285 +9485,262 @@ export function create(table: string, data: Record<string, any>): any {
 // Tables that do NOT have an updated_at column cause db.update() to append
 // ", updated_at = datetime('now')" unless listed here, so missing a table
 // from this set means an SQLite crash on first update.
-
 // SCHEMA: tablesWithDeletedAt imported from tableConfig.ts for single source of truth.
 // queryAll() auto-filters these to exclude soft-deleted rows unless the caller
 // passes `include_deleted: true`.
-
-export function update(table: string, id: string, data: Record<string, any>): any {
-  // INTEGRITY: drop `id` and `created_at` defensively — these must never be
-  // mutated. The IPC layer also strips them but a few internal callers go
-  // through this path directly (e.g. when copying form state).
-  if (data && typeof data === 'object') {
-    if ('id' in data) delete (data as any).id;
-    if ('created_at' in data) delete (data as any).created_at;
-  }
-
-  // SAFETY: filter out keys that aren't actual columns (matches db.create).
-  const knownCols = getTableColumns(table);
-  const droppedKeys: string[] = [];
-
-  const serialized: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (knownCols.size > 0 && !knownCols.has(key)) {
-      droppedKeys.push(key);
-      continue;
+function update(table, id, data) {
+    // INTEGRITY: drop `id` and `created_at` defensively — these must never be
+    // mutated. The IPC layer also strips them but a few internal callers go
+    // through this path directly (e.g. when copying form state).
+    if (data && typeof data === 'object') {
+        if ('id' in data)
+            delete data.id;
+        if ('created_at' in data)
+            delete data.created_at;
     }
-    if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-      serialized[key] = JSON.stringify(value);
-    } else if (typeof value === 'boolean') {
-      serialized[key] = value ? 1 : 0;
-    } else {
-      serialized[key] = value;
+    // SAFETY: filter out keys that aren't actual columns (matches db.create).
+    const knownCols = getTableColumns(table);
+    const droppedKeys = [];
+    const serialized = {};
+    for (const [key, value] of Object.entries(data)) {
+        if (knownCols.size > 0 && !knownCols.has(key)) {
+            droppedKeys.push(key);
+            continue;
+        }
+        if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+            serialized[key] = JSON.stringify(value);
+        }
+        else if (typeof value === 'boolean') {
+            serialized[key] = value ? 1 : 0;
+        }
+        else {
+            serialized[key] = value;
+        }
     }
-  }
-
-  if (droppedKeys.length > 0) {
-    console.warn(`[db.update:${table}] dropped unknown columns:`, droppedKeys);
-  }
-
-  if (Object.keys(serialized).length === 0) {
-    // Nothing to update — return the existing row instead of building empty SQL.
+    if (droppedKeys.length > 0) {
+        console.warn(`[db.update:${table}] dropped unknown columns:`, droppedKeys);
+    }
+    if (Object.keys(serialized).length === 0) {
+        // Nothing to update — return the existing row instead of building empty SQL.
+        return getById(table, id);
+    }
+    const sets = Object.keys(serialized).map(k => `${k} = ?`).join(', ');
+    const updatedAtClause = tablesWithoutUpdatedAt.has(table) ? '' : ", updated_at = datetime('now')";
+    const sql = `UPDATE ${table} SET ${sets}${updatedAtClause} WHERE id = ?`;
+    getDb().prepare(sql).run(...Object.values(serialized), id);
     return getById(table, id);
-  }
-
-  const sets = Object.keys(serialized).map(k => `${k} = ?`).join(', ');
-  const updatedAtClause = tablesWithoutUpdatedAt.has(table) ? '' : ", updated_at = datetime('now')";
-  const sql = `UPDATE ${table} SET ${sets}${updatedAtClause} WHERE id = ?`;
-
-  getDb().prepare(sql).run(...Object.values(serialized), id);
-  return getById(table, id);
 }
-
-export function remove(table: string, id: string): void {
-  // P1.13: soft-delete supported tables — sets deleted_at to now()
-  // so the row stays physically present for 30 days, after which the
-  // auto-purge cron physically removes it. User can restore from
-  // Settings → Trash within that window.
-  if (SOFT_DELETE_TABLES.has(table)) {
-    getDb().prepare(
-      `UPDATE ${table} SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`
-    ).run(id);
-    return;
-  }
-  getDb().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+function remove(table, id) {
+    // P1.13: soft-delete supported tables — sets deleted_at to now()
+    // so the row stays physically present for 30 days, after which the
+    // auto-purge cron physically removes it. User can restore from
+    // Settings → Trash within that window.
+    if (tableConfig_1.SOFT_DELETE_TABLES.has(table)) {
+        getDb().prepare(`UPDATE ${table} SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id);
+        return;
+    }
+    getDb().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
 }
-
 // Force physical delete — used by Trash UI's "Purge" action and the
 // auto-purge cron. Bypasses the soft-delete write entirely.
-export function removeHard(table: string, id: string): void {
-  getDb().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+function removeHard(table, id) {
+    getDb().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
 }
-
 // Undo a soft-delete — used by Trash UI's "Restore" action. No-op
 // for tables without deleted_at column.
-export function restoreFromTrash(table: string, id: string): boolean {
-  if (!SOFT_DELETE_TABLES.has(table)) return false;
-  const result = getDb().prepare(
-    `UPDATE ${table} SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL`
-  ).run(id);
-  return result.changes > 0;
+function restoreFromTrash(table, id) {
+    if (!tableConfig_1.SOFT_DELETE_TABLES.has(table))
+        return false;
+    const result = getDb().prepare(`UPDATE ${table} SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL`).run(id);
+    return result.changes > 0;
 }
-
 // List all soft-deleted records across the supported tables for the
 // active company. Returns up to `limit` per table sorted by deleted_at
 // DESC so the most recently trashed appear first.
-export function listTrash(companyId: string, limit: number = 100): Record<string, any[]> {
-  const out: Record<string, any[]> = {};
-  for (const table of SOFT_DELETE_TABLES) {
-    try {
-      out[table] = getDb().prepare(
-        `SELECT * FROM ${table} WHERE company_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ?`
-      ).all(companyId, limit) as any[];
-    } catch {
-      out[table] = [];
+function listTrash(companyId, limit = 100) {
+    const out = {};
+    for (const table of tableConfig_1.SOFT_DELETE_TABLES) {
+        try {
+            out[table] = getDb().prepare(`SELECT * FROM ${table} WHERE company_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ?`).all(companyId, limit);
+        }
+        catch {
+            out[table] = [];
+        }
     }
-  }
-  return out;
+    return out;
 }
-
 // Auto-purge: physically delete soft-deleted records older than the
 // retention window. Called by the trash-purge cron daily. Returns
 // per-table counts so the cron can log a summary.
-export function purgeExpiredTrash(retentionDays: number = 30): Record<string, number> {
-  const out: Record<string, number> = {};
-  const cutoff = `datetime('now', '-${Math.max(1, Math.floor(retentionDays))} days')`;
-  for (const table of SOFT_DELETE_TABLES) {
+function purgeExpiredTrash(retentionDays = 30) {
+    const out = {};
+    const cutoff = `datetime('now', '-${Math.max(1, Math.floor(retentionDays))} days')`;
+    for (const table of tableConfig_1.SOFT_DELETE_TABLES) {
+        try {
+            const result = getDb().prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}`).run();
+            out[table] = result.changes;
+        }
+        catch {
+            out[table] = 0;
+        }
+    }
+    return out;
+}
+function logAudit(companyId, entityType, entityId, action, changes = {}) {
+    // Legacy CHECK constraint on audit_log.action only allows the original
+    // three values; fall back to 'update' while preserving the real action
+    // in `changes._action` so downstream UI still sees it.
+    //
+    // WHO: read from the module-level currentUserId/Email set by auth:login.
+    // Falls back to 'system' for cron-triggered writes that run before any
+    // user is logged in (e.g. boot-time migrations, auto-overdue checker).
+    const actor = currentUserId
+        ? (currentUserEmail ? `${currentUserEmail} (${currentUserId})` : currentUserId)
+        : 'system';
     try {
-      const result = getDb().prepare(
-        `DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}`
-      ).run();
-      out[table] = result.changes;
-    } catch {
-      out[table] = 0;
+        create('audit_log', {
+            company_id: companyId,
+            entity_type: entityType,
+            entity_id: entityId,
+            action,
+            changes,
+            performed_by: actor,
+        });
     }
-  }
-  return out;
-}
-
-export function logAudit(
-  companyId: string,
-  entityType: string,
-  entityId: string,
-  action: 'create' | 'update' | 'delete' | 'export_pdf' | 'email_pdf' | 'print' | (string & {}),
-  changes: Record<string, any> = {}
-): void {
-  // Legacy CHECK constraint on audit_log.action only allows the original
-  // three values; fall back to 'update' while preserving the real action
-  // in `changes._action` so downstream UI still sees it.
-  //
-  // WHO: read from the module-level currentUserId/Email set by auth:login.
-  // Falls back to 'system' for cron-triggered writes that run before any
-  // user is logged in (e.g. boot-time migrations, auto-overdue checker).
-  const actor = currentUserId
-    ? (currentUserEmail ? `${currentUserEmail} (${currentUserId})` : currentUserId)
-    : 'system';
-  try {
-    create('audit_log', {
-      company_id: companyId,
-      entity_type: entityType,
-      entity_id: entityId,
-      action,
-      changes,
-      performed_by: actor,
-    });
-  } catch (err: any) {
-    if (/CHECK/i.test(err?.message ?? '')) {
-      create('audit_log', {
-        company_id: companyId,
-        entity_type: entityType,
-        entity_id: entityId,
-        action: 'update',
-        changes: { ...changes, _action: action },
-        performed_by: actor,
-      });
-    } else {
-      throw err;
+    catch (err) {
+        if (/CHECK/i.test(err?.message ?? '')) {
+            create('audit_log', {
+                company_id: companyId,
+                entity_type: entityType,
+                entity_id: entityId,
+                action: 'update',
+                changes: { ...changes, _action: action },
+                performed_by: actor,
+            });
+        }
+        else {
+            throw err;
+        }
     }
-  }
 }
-
-export function runQuery(sql: string, params: any[] = []): any[] {
-  return getDb().prepare(sql).all(...params);
+function runQuery(sql, params = []) {
+    return getDb().prepare(sql).all(...params);
 }
-
-export function execQuery(sql: string, params: any[] = []): void {
-  getDb().prepare(sql).run(...params);
+function execQuery(sql, params = []) {
+    getDb().prepare(sql).run(...params);
 }
-
 // ─── Seed Default Chart of Accounts ──────────────────────
-
-export function seedDefaultAccounts(companyId: string): void {
-  // Guard: skip if accounts already exist for this company (prevents UNIQUE crash on double-call)
-  const existing = getDb()
-    .prepare('SELECT COUNT(*) as count FROM accounts WHERE company_id = ?')
-    .get(companyId) as { count: number };
-  if (existing?.count > 0) return;
-
-  const defaults = [
-    { code: '1000', name: 'Cash', type: 'asset', subtype: 'current' },
-    { code: '1010', name: 'Checking Account', type: 'asset', subtype: 'bank' },
-    { code: '1020', name: 'Savings Account', type: 'asset', subtype: 'bank' },
-    { code: '1100', name: 'Accounts Receivable', type: 'asset', subtype: 'current' },
-    { code: '1200', name: 'Prepaid Expenses', type: 'asset', subtype: 'current' },
-    { code: '1500', name: 'Equipment', type: 'asset', subtype: 'fixed' },
-    { code: '1510', name: 'Accumulated Depreciation', type: 'asset', subtype: 'contra' },
-    { code: '2000', name: 'Accounts Payable', type: 'liability', subtype: 'current' },
-    { code: '2100', name: 'Credit Card', type: 'liability', subtype: 'current' },
-    { code: '2200', name: 'Payroll Liabilities', type: 'liability', subtype: 'current' },
-    { code: '2210', name: 'FUTA Payable', type: 'liability', subtype: 'current' },        // FIX #1: employer FUTA
-    { code: '2220', name: 'SUI Payable', type: 'liability', subtype: 'current' },         // FIX #1: employer SUI
-    { code: '2300', name: 'Sales Tax Payable', type: 'liability', subtype: 'current' },
-    { code: '2400', name: 'Federal Tax Payable', type: 'liability', subtype: 'current' },
-    { code: '2410', name: 'State Tax Payable', type: 'liability', subtype: 'current' },
-    { code: '3000', name: "Owner's Equity", type: 'equity', subtype: 'owner' },
-    { code: '3100', name: "Owner's Draw", type: 'equity', subtype: 'draw' },
-    { code: '3200', name: 'Retained Earnings', type: 'equity', subtype: 'retained' },
-    { code: '4000', name: 'Service Revenue', type: 'revenue', subtype: 'operating' },
-    { code: '4100', name: 'Consulting Revenue', type: 'revenue', subtype: 'operating' },
-    { code: '4200', name: 'Project Revenue', type: 'revenue', subtype: 'operating' },
-    { code: '4900', name: 'Other Income', type: 'revenue', subtype: 'other' },
-    // ─── COGS (5000s) — IRS Schedule C Line 4 / Form 1120 Line 2 ───
-    { code: '5000', name: 'Cost of Goods Sold', type: 'expense', subtype: 'cogs' },
-    { code: '5100', name: 'Cost of Services', type: 'expense', subtype: 'cogs' },
-    { code: '5200', name: 'Materials & Supplies (COGS)', type: 'expense', subtype: 'cogs' },
-    { code: '5300', name: 'Freight & Shipping (COGS)', type: 'expense', subtype: 'cogs' },
-    { code: '5400', name: 'Direct Labor', type: 'expense', subtype: 'cogs' },
-    // ─── Operating Expenses (6000s) — IRS Schedule C Lines 8–27 ───
-    { code: '6000', name: 'Advertising & Marketing', type: 'expense', subtype: 'operating' },    // Sch C Line 8
-    { code: '6050', name: 'Vehicle Expense', type: 'expense', subtype: 'operating' },             // Sch C Line 9
-    { code: '6100', name: 'Bank Fees & Service Charges', type: 'expense', subtype: 'operating' }, // Sch C Line 27a
-    { code: '6110', name: 'Credit Card Processing Fees', type: 'expense', subtype: 'operating' },
-    { code: '6120', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
-    { code: '6150', name: 'Commissions & Fees', type: 'expense', subtype: 'operating' },          // Sch C Line 10
-    { code: '6200', name: 'Contract Labor', type: 'expense', subtype: 'operating' },              // Sch C Line 11
-    { code: '6250', name: 'Depletion', type: 'expense', subtype: 'operating' },                   // Sch C Line 12
-    { code: '6300', name: 'Insurance — General Liability', type: 'expense', subtype: 'operating' }, // Sch C Line 15
-    { code: '6310', name: 'Insurance — Health (Employees)', type: 'expense', subtype: 'operating' },
-    { code: '6320', name: 'Insurance — Workers Comp', type: 'expense', subtype: 'operating' },
-    { code: '6330', name: 'Insurance — Professional / E&O', type: 'expense', subtype: 'operating' },
-    { code: '6340', name: 'Insurance — Vehicle', type: 'expense', subtype: 'operating' },
-    { code: '6350', name: 'Insurance — Property', type: 'expense', subtype: 'operating' },
-    { code: '6400', name: 'Office Supplies', type: 'expense', subtype: 'operating' },             // Sch C Line 22
-    { code: '6410', name: 'Postage & Shipping', type: 'expense', subtype: 'operating' },
-    { code: '6420', name: 'Printing & Copying', type: 'expense', subtype: 'operating' },
-    { code: '6450', name: 'Interest — Mortgage (Business)', type: 'expense', subtype: 'operating' }, // Sch C Line 16a
-    { code: '6460', name: 'Interest — Other Business Loans', type: 'expense', subtype: 'operating' }, // Sch C Line 16b
-    { code: '6500', name: 'Legal Fees', type: 'expense', subtype: 'operating' },                  // Sch C Line 17
-    { code: '6510', name: 'Accounting & Tax Preparation', type: 'expense', subtype: 'operating' },
-    { code: '6520', name: 'Professional Services — Other', type: 'expense', subtype: 'operating' },
-    { code: '6550', name: 'Rent — Office / Workspace', type: 'expense', subtype: 'operating' },   // Sch C Line 20b
-    { code: '6560', name: 'Rent — Equipment / Machinery', type: 'expense', subtype: 'operating' }, // Sch C Line 20a
-    { code: '6600', name: 'Repairs & Maintenance', type: 'expense', subtype: 'operating' },       // Sch C Line 21
-    { code: '6650', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
-    { code: '6660', name: 'Computer & IT Equipment', type: 'expense', subtype: 'operating' },
-    { code: '6700', name: 'Taxes — Business License & Permits', type: 'expense', subtype: 'taxes' }, // Sch C Line 23
-    { code: '6710', name: 'Taxes — Property', type: 'expense', subtype: 'taxes' },
-    { code: '6720', name: 'Taxes — Sales / Use', type: 'expense', subtype: 'taxes' },
-    { code: '6730', name: 'Taxes — State Franchise / Excise', type: 'expense', subtype: 'taxes' },
-    { code: '6800', name: 'Travel — Airfare', type: 'expense', subtype: 'operating' },            // Sch C Line 24a
-    { code: '6810', name: 'Travel — Lodging', type: 'expense', subtype: 'operating' },
-    { code: '6820', name: 'Travel — Ground Transportation', type: 'expense', subtype: 'operating' },
-    { code: '6830', name: 'Meals — Business (50% deductible)', type: 'expense', subtype: 'operating' }, // Sch C Line 24b
-    { code: '6840', name: 'Entertainment (non-deductible)', type: 'expense', subtype: 'operating' },
-    { code: '6850', name: 'Parking & Tolls', type: 'expense', subtype: 'operating' },
-    { code: '6900', name: 'Utilities — Electric', type: 'expense', subtype: 'operating' },        // Sch C Line 25
-    { code: '6910', name: 'Utilities — Gas / Heating', type: 'expense', subtype: 'operating' },
-    { code: '6920', name: 'Utilities — Water / Sewer', type: 'expense', subtype: 'operating' },
-    { code: '6930', name: 'Utilities — Telephone / Internet', type: 'expense', subtype: 'operating' },
-    { code: '6940', name: 'Utilities — Trash / Waste', type: 'expense', subtype: 'operating' },
-    { code: '6950', name: 'Cell Phone', type: 'expense', subtype: 'operating' },
-    // ─── Payroll (7000s) — IRS Schedule C Lines 14, 26 ───
-    { code: '7000', name: 'Wages & Salaries', type: 'expense', subtype: 'payroll' },              // Sch C Line 26
-    { code: '7010', name: 'Payroll Tax Expense — FICA', type: 'expense', subtype: 'payroll' },
-    { code: '7020', name: 'Payroll Tax Expense — FUTA', type: 'expense', subtype: 'payroll' },
-    { code: '7030', name: 'Payroll Tax Expense — SUTA', type: 'expense', subtype: 'payroll' },
-    { code: '7040', name: 'Employee Benefits', type: 'expense', subtype: 'payroll' },             // Sch C Line 14
-    { code: '7050', name: 'Retirement Plan Contributions', type: 'expense', subtype: 'payroll' },
-    { code: '7060', name: 'Workers Compensation Premium', type: 'expense', subtype: 'payroll' },
-    { code: '7100', name: 'Officer Compensation', type: 'expense', subtype: 'payroll' },          // Form 1120 Line 12
-    // ─── Depreciation & Amortization (7200s) ───
-    { code: '7200', name: 'Depreciation Expense', type: 'expense', subtype: 'operating' },        // Sch C Line 13
-    { code: '7210', name: 'Amortization Expense', type: 'expense', subtype: 'operating' },
-    { code: '7220', name: 'Section 179 Expense', type: 'expense', subtype: 'operating' },
-    // ─── Education, Dues, Charitable (7300s) ───
-    { code: '7300', name: 'Education & Training', type: 'expense', subtype: 'operating' },
-    { code: '7310', name: 'Conferences & Seminars', type: 'expense', subtype: 'operating' },
-    { code: '7320', name: 'Dues & Memberships', type: 'expense', subtype: 'operating' },
-    { code: '7330', name: 'Charitable Contributions', type: 'expense', subtype: 'operating' },    // Form 1120 Line 19
-    { code: '7340', name: 'Books & Publications', type: 'expense', subtype: 'operating' },
-    // ─── Home Office (7400s) — Form 8829 ───
-    { code: '7400', name: 'Home Office — Direct Expenses', type: 'expense', subtype: 'operating' },
-    { code: '7410', name: 'Home Office — Indirect Expenses', type: 'expense', subtype: 'operating' },
-    // ─── Bad Debt & Other (8000s–9000s) ───
-    { code: '8000', name: 'Bad Debts', type: 'expense', subtype: 'other' },                       // Sch C Line 27a (bad debts)
-    { code: '8100', name: 'Penalties & Fines', type: 'expense', subtype: 'other' },
-    { code: '8200', name: 'Loss on Disposal of Assets', type: 'expense', subtype: 'other' },
-    { code: '8300', name: 'Foreign Currency Loss', type: 'expense', subtype: 'other' },
-    { code: '9000', name: 'Miscellaneous Expense', type: 'expense', subtype: 'other' },           // Sch C Line 27a catch-all
-  ];
-
-  for (const acct of defaults) {
-    create('accounts', { company_id: companyId, ...acct });
-  }
+function seedDefaultAccounts(companyId) {
+    // Guard: skip if accounts already exist for this company (prevents UNIQUE crash on double-call)
+    const existing = getDb()
+        .prepare('SELECT COUNT(*) as count FROM accounts WHERE company_id = ?')
+        .get(companyId);
+    if (existing?.count > 0)
+        return;
+    const defaults = [
+        { code: '1000', name: 'Cash', type: 'asset', subtype: 'current' },
+        { code: '1010', name: 'Checking Account', type: 'asset', subtype: 'bank' },
+        { code: '1020', name: 'Savings Account', type: 'asset', subtype: 'bank' },
+        { code: '1100', name: 'Accounts Receivable', type: 'asset', subtype: 'current' },
+        { code: '1200', name: 'Prepaid Expenses', type: 'asset', subtype: 'current' },
+        { code: '1500', name: 'Equipment', type: 'asset', subtype: 'fixed' },
+        { code: '1510', name: 'Accumulated Depreciation', type: 'asset', subtype: 'contra' },
+        { code: '2000', name: 'Accounts Payable', type: 'liability', subtype: 'current' },
+        { code: '2100', name: 'Credit Card', type: 'liability', subtype: 'current' },
+        { code: '2200', name: 'Payroll Liabilities', type: 'liability', subtype: 'current' },
+        { code: '2210', name: 'FUTA Payable', type: 'liability', subtype: 'current' }, // FIX #1: employer FUTA
+        { code: '2220', name: 'SUI Payable', type: 'liability', subtype: 'current' }, // FIX #1: employer SUI
+        { code: '2300', name: 'Sales Tax Payable', type: 'liability', subtype: 'current' },
+        { code: '2400', name: 'Federal Tax Payable', type: 'liability', subtype: 'current' },
+        { code: '2410', name: 'State Tax Payable', type: 'liability', subtype: 'current' },
+        { code: '3000', name: "Owner's Equity", type: 'equity', subtype: 'owner' },
+        { code: '3100', name: "Owner's Draw", type: 'equity', subtype: 'draw' },
+        { code: '3200', name: 'Retained Earnings', type: 'equity', subtype: 'retained' },
+        { code: '4000', name: 'Service Revenue', type: 'revenue', subtype: 'operating' },
+        { code: '4100', name: 'Consulting Revenue', type: 'revenue', subtype: 'operating' },
+        { code: '4200', name: 'Project Revenue', type: 'revenue', subtype: 'operating' },
+        { code: '4900', name: 'Other Income', type: 'revenue', subtype: 'other' },
+        // ─── COGS (5000s) — IRS Schedule C Line 4 / Form 1120 Line 2 ───
+        { code: '5000', name: 'Cost of Goods Sold', type: 'expense', subtype: 'cogs' },
+        { code: '5100', name: 'Cost of Services', type: 'expense', subtype: 'cogs' },
+        { code: '5200', name: 'Materials & Supplies (COGS)', type: 'expense', subtype: 'cogs' },
+        { code: '5300', name: 'Freight & Shipping (COGS)', type: 'expense', subtype: 'cogs' },
+        { code: '5400', name: 'Direct Labor', type: 'expense', subtype: 'cogs' },
+        // ─── Operating Expenses (6000s) — IRS Schedule C Lines 8–27 ───
+        { code: '6000', name: 'Advertising & Marketing', type: 'expense', subtype: 'operating' }, // Sch C Line 8
+        { code: '6050', name: 'Vehicle Expense', type: 'expense', subtype: 'operating' }, // Sch C Line 9
+        { code: '6100', name: 'Bank Fees & Service Charges', type: 'expense', subtype: 'operating' }, // Sch C Line 27a
+        { code: '6110', name: 'Credit Card Processing Fees', type: 'expense', subtype: 'operating' },
+        { code: '6120', name: 'Stripe Processing Fees', type: 'expense', subtype: 'operating' },
+        { code: '6150', name: 'Commissions & Fees', type: 'expense', subtype: 'operating' }, // Sch C Line 10
+        { code: '6200', name: 'Contract Labor', type: 'expense', subtype: 'operating' }, // Sch C Line 11
+        { code: '6250', name: 'Depletion', type: 'expense', subtype: 'operating' }, // Sch C Line 12
+        { code: '6300', name: 'Insurance — General Liability', type: 'expense', subtype: 'operating' }, // Sch C Line 15
+        { code: '6310', name: 'Insurance — Health (Employees)', type: 'expense', subtype: 'operating' },
+        { code: '6320', name: 'Insurance — Workers Comp', type: 'expense', subtype: 'operating' },
+        { code: '6330', name: 'Insurance — Professional / E&O', type: 'expense', subtype: 'operating' },
+        { code: '6340', name: 'Insurance — Vehicle', type: 'expense', subtype: 'operating' },
+        { code: '6350', name: 'Insurance — Property', type: 'expense', subtype: 'operating' },
+        { code: '6400', name: 'Office Supplies', type: 'expense', subtype: 'operating' }, // Sch C Line 22
+        { code: '6410', name: 'Postage & Shipping', type: 'expense', subtype: 'operating' },
+        { code: '6420', name: 'Printing & Copying', type: 'expense', subtype: 'operating' },
+        { code: '6450', name: 'Interest — Mortgage (Business)', type: 'expense', subtype: 'operating' }, // Sch C Line 16a
+        { code: '6460', name: 'Interest — Other Business Loans', type: 'expense', subtype: 'operating' }, // Sch C Line 16b
+        { code: '6500', name: 'Legal Fees', type: 'expense', subtype: 'operating' }, // Sch C Line 17
+        { code: '6510', name: 'Accounting & Tax Preparation', type: 'expense', subtype: 'operating' },
+        { code: '6520', name: 'Professional Services — Other', type: 'expense', subtype: 'operating' },
+        { code: '6550', name: 'Rent — Office / Workspace', type: 'expense', subtype: 'operating' }, // Sch C Line 20b
+        { code: '6560', name: 'Rent — Equipment / Machinery', type: 'expense', subtype: 'operating' }, // Sch C Line 20a
+        { code: '6600', name: 'Repairs & Maintenance', type: 'expense', subtype: 'operating' }, // Sch C Line 21
+        { code: '6650', name: 'Software & Subscriptions', type: 'expense', subtype: 'operating' },
+        { code: '6660', name: 'Computer & IT Equipment', type: 'expense', subtype: 'operating' },
+        { code: '6700', name: 'Taxes — Business License & Permits', type: 'expense', subtype: 'taxes' }, // Sch C Line 23
+        { code: '6710', name: 'Taxes — Property', type: 'expense', subtype: 'taxes' },
+        { code: '6720', name: 'Taxes — Sales / Use', type: 'expense', subtype: 'taxes' },
+        { code: '6730', name: 'Taxes — State Franchise / Excise', type: 'expense', subtype: 'taxes' },
+        { code: '6800', name: 'Travel — Airfare', type: 'expense', subtype: 'operating' }, // Sch C Line 24a
+        { code: '6810', name: 'Travel — Lodging', type: 'expense', subtype: 'operating' },
+        { code: '6820', name: 'Travel — Ground Transportation', type: 'expense', subtype: 'operating' },
+        { code: '6830', name: 'Meals — Business (50% deductible)', type: 'expense', subtype: 'operating' }, // Sch C Line 24b
+        { code: '6840', name: 'Entertainment (non-deductible)', type: 'expense', subtype: 'operating' },
+        { code: '6850', name: 'Parking & Tolls', type: 'expense', subtype: 'operating' },
+        { code: '6900', name: 'Utilities — Electric', type: 'expense', subtype: 'operating' }, // Sch C Line 25
+        { code: '6910', name: 'Utilities — Gas / Heating', type: 'expense', subtype: 'operating' },
+        { code: '6920', name: 'Utilities — Water / Sewer', type: 'expense', subtype: 'operating' },
+        { code: '6930', name: 'Utilities — Telephone / Internet', type: 'expense', subtype: 'operating' },
+        { code: '6940', name: 'Utilities — Trash / Waste', type: 'expense', subtype: 'operating' },
+        { code: '6950', name: 'Cell Phone', type: 'expense', subtype: 'operating' },
+        // ─── Payroll (7000s) — IRS Schedule C Lines 14, 26 ───
+        { code: '7000', name: 'Wages & Salaries', type: 'expense', subtype: 'payroll' }, // Sch C Line 26
+        { code: '7010', name: 'Payroll Tax Expense — FICA', type: 'expense', subtype: 'payroll' },
+        { code: '7020', name: 'Payroll Tax Expense — FUTA', type: 'expense', subtype: 'payroll' },
+        { code: '7030', name: 'Payroll Tax Expense — SUTA', type: 'expense', subtype: 'payroll' },
+        { code: '7040', name: 'Employee Benefits', type: 'expense', subtype: 'payroll' }, // Sch C Line 14
+        { code: '7050', name: 'Retirement Plan Contributions', type: 'expense', subtype: 'payroll' },
+        { code: '7060', name: 'Workers Compensation Premium', type: 'expense', subtype: 'payroll' },
+        { code: '7100', name: 'Officer Compensation', type: 'expense', subtype: 'payroll' }, // Form 1120 Line 12
+        // ─── Depreciation & Amortization (7200s) ───
+        { code: '7200', name: 'Depreciation Expense', type: 'expense', subtype: 'operating' }, // Sch C Line 13
+        { code: '7210', name: 'Amortization Expense', type: 'expense', subtype: 'operating' },
+        { code: '7220', name: 'Section 179 Expense', type: 'expense', subtype: 'operating' },
+        // ─── Education, Dues, Charitable (7300s) ───
+        { code: '7300', name: 'Education & Training', type: 'expense', subtype: 'operating' },
+        { code: '7310', name: 'Conferences & Seminars', type: 'expense', subtype: 'operating' },
+        { code: '7320', name: 'Dues & Memberships', type: 'expense', subtype: 'operating' },
+        { code: '7330', name: 'Charitable Contributions', type: 'expense', subtype: 'operating' }, // Form 1120 Line 19
+        { code: '7340', name: 'Books & Publications', type: 'expense', subtype: 'operating' },
+        // ─── Home Office (7400s) — Form 8829 ───
+        { code: '7400', name: 'Home Office — Direct Expenses', type: 'expense', subtype: 'operating' },
+        { code: '7410', name: 'Home Office — Indirect Expenses', type: 'expense', subtype: 'operating' },
+        // ─── Bad Debt & Other (8000s–9000s) ───
+        { code: '8000', name: 'Bad Debts', type: 'expense', subtype: 'other' }, // Sch C Line 27a (bad debts)
+        { code: '8100', name: 'Penalties & Fines', type: 'expense', subtype: 'other' },
+        { code: '8200', name: 'Loss on Disposal of Assets', type: 'expense', subtype: 'other' },
+        { code: '8300', name: 'Foreign Currency Loss', type: 'expense', subtype: 'other' },
+        { code: '9000', name: 'Miscellaneous Expense', type: 'expense', subtype: 'other' }, // Sch C Line 27a catch-all
+    ];
+    for (const acct of defaults) {
+        create('accounts', { company_id: companyId, ...acct });
+    }
 }
+//# sourceMappingURL=index.js.map

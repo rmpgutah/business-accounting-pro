@@ -5836,22 +5836,53 @@ export function registerIpcHandlers(): void {
       // actually reduce the saved expense amount (previously it was stored on
       // the line but never subtracted, so the expense total ignored it).
       const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
-      const lineNet = (li: any): number => {
+      // Pre-tax, post-discount extended price for a line. Flat discount_amount
+      // takes precedence over discount_percent (same as ItemizationEditor),
+      // clamped at 0 — a discount can't make a line negative.
+      const linePreTax = (li: any): number => {
         const gross = (li.quantity || 1) * (li.unit_price || 0);
         const flat = Number(li.discount_amount || 0);
         const pct = Number(li.discount_percent || 0);
         const disc = flat > 0 ? flat : pct > 0 ? gross * (pct / 100) : 0;
-        return round2(Math.max(0, gross - disc));
+        return Math.max(0, gross - disc);
+      };
+      const lineNet = (li: any): number => round2(linePreTax(li));
+      // Tax on a line. The ItemizationEditor recomputes tax_amount on every
+      // edit (tax_rate %, jurisdictions, exemptions all folded in) and that
+      // value backs the grand total the user sees, so we TRUST the supplied
+      // tax_amount to stay WYSIWYG. We deliberately do NOT recompute from
+      // tax_rate here: tax_rate is stored inconsistently across entry paths
+      // (the UI treats it as a percentage and divides by 100, but tax-rule /
+      // import flows store it as a fraction like 0.0765), so recomputing would
+      // corrupt rule-/import-created expenses. tax_amount is the source of
+      // truth; tax_rate is only a fallback when no tax_amount was provided.
+      const lineTax = (li: any): number => {
+        if (li.is_tax_exempt) return 0;
+        const provided = Number(li.tax_amount);
+        if (Number.isFinite(provided) && provided > 0) return round2(provided);
+        const preTax = linePreTax(li);
+        let jur: any = li.tax_jurisdictions;
+        if (typeof jur === 'string') { try { jur = JSON.parse(jur); } catch { jur = []; } }
+        if (Array.isArray(jur) && jur.length > 0) {
+          return round2(jur.reduce((s: number, j: any) => s + preTax * ((Number(j.rate) || 0) / 100), 0));
+        }
+        return round2(preTax * ((Number(li.tax_rate) || 0) / 100));
       };
 
       const saveFn = rawDb.transaction(() => {
         let savedId: string;
 
-        // Auto-calculate amount from line items when present — SUM OF NET
-        // (post-discount, pre-tax) line amounts so per-line discounts are
-        // reflected in the stored expense.amount.
+        // Auto-calculate amount from line items when present. The stored
+        // expense.amount is the TOTAL COST INCLUDING TAX (net of discounts
+        // plus tax) so it matches the grand total the user sees and so every
+        // SUM(amount) report reflects the true out-of-pocket cost. The tax
+        // portion is also recorded in expense.tax_amount for reporting/audit
+        // (amount already includes it — reports must not add the two).
         if (lineItems.length > 0) {
-          expenseData.amount = round2(lineItems.reduce((sum: number, li: any) => sum + lineNet(li), 0));
+          const net = round2(lineItems.reduce((sum: number, li: any) => sum + lineNet(li), 0));
+          const tax = round2(lineItems.reduce((sum: number, li: any) => sum + lineTax(li), 0));
+          expenseData.amount = round2(net + tax);
+          expenseData.tax_amount = tax;
         }
 
         if (isEdit && expenseId) {
@@ -5874,13 +5905,16 @@ export function registerIpcHandlers(): void {
           savedId = record.id;
         }
 
-        // Insert new line items — store each line's NET (post-discount)
-        // extended amount so the line total and the expense total agree.
+        // Insert new line items — store each line's NET (post-discount,
+        // pre-tax) extended amount in `amount` and the server-computed tax in
+        // `tax_amount`, so amount + tax_amount = the line's tax-inclusive total
+        // and the per-line figures reconcile to the header total exactly.
         for (let i = 0; i < lineItems.length; i++) {
           db.create('expense_line_items', {
             ...lineItems[i],
             expense_id: savedId,
             amount: lineNet(lineItems[i]),
+            tax_amount: lineTax(lineItems[i]),
             sort_order: i,
           });
         }
