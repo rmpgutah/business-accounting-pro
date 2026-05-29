@@ -604,6 +604,15 @@ export function initDatabase(): Database.Database {
   // for its interest portion. Allows cascade-delete and edit-sync between
   // the loan payment and the expense ledger.
   "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
+  // Second link for the PRINCIPAL-portion expense row. Each loan payment
+  // now spawns two linked expense rows: interest (deductible) +
+  // principal (non-deductible). Two named columns keep edit-sync
+  // unambiguous — interest_amount syncs related_expense_id, principal_amount
+  // syncs related_principal_expense_id.
+  "ALTER TABLE loan_payments ADD COLUMN related_principal_expense_id TEXT",
+  // Tags an expense row with which loan-payment component it represents,
+  // so reverse lookups + reports can filter. 'interest' | 'principal' | ''
+  "ALTER TABLE expenses ADD COLUMN loan_component TEXT DEFAULT ''",
   // Vendor Advanced Wave — extend vendors with fields exposed by the new
   // 6-tab VendorFormAdvanced. Many existing columns already covered by
   // earlier waves (vendor_type, w9_status, approval_status, diversity,

@@ -1282,33 +1282,34 @@ export function registerIpcHandlers(): void {
       vals.push(payload.payment_id);
       dbi.prepare(`UPDATE loan_payments SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 
-      // Sync linked expense — when user changes interest_amount or date
-      // on a loan payment, the auto-created interest-expense row should
-      // follow. Otherwise the books diverge from the loan ledger.
+      // Sync BOTH linked expense rows — interest_amount syncs the
+      // interest expense, principal_amount syncs the principal expense.
+      // Date/method changes propagate to both. Keeps the expense ledger
+      // aligned with the loan ledger after an edit.
       const linked = dbi.prepare(
-        "SELECT related_expense_id, interest_amount, payment_date, payment_method FROM loan_payments WHERE id = ?"
+        "SELECT related_expense_id, related_principal_expense_id, interest_amount, principal_amount, payment_date, payment_method FROM loan_payments WHERE id = ?"
       ).get(payload.payment_id) as any;
-      if (linked?.related_expense_id) {
+      const syncExpense = (expenseId: string | null, amountField: number | undefined) => {
+        if (!expenseId) return;
         const expSets: string[] = [];
         const expVals: any[] = [];
-        if (payload.interest_amount !== undefined) {
-          expSets.push('amount = ?'); expVals.push(linked.interest_amount);
+        if (amountField !== undefined) { expSets.push('amount = ?'); expVals.push(amountField); }
+        if (payload.payment_date !== undefined) { expSets.push('date = ?'); expVals.push(linked.payment_date); }
+        if (payload.payment_method !== undefined) { expSets.push('payment_method = ?'); expVals.push(linked.payment_method); }
+        if (expSets.length === 0) return;
+        expSets.push("updated_at = datetime('now')");
+        expVals.push(expenseId);
+        try {
+          dbi.prepare(`UPDATE expenses SET ${expSets.join(', ')} WHERE id = ?`).run(...expVals);
+        } catch (syncErr: any) {
+          console.warn('linked expense sync failed:', syncErr?.message);
         }
-        if (payload.payment_date !== undefined) {
-          expSets.push('date = ?'); expVals.push(linked.payment_date);
-        }
-        if (payload.payment_method !== undefined) {
-          expSets.push('payment_method = ?'); expVals.push(linked.payment_method);
-        }
-        if (expSets.length > 0) {
-          expSets.push("updated_at = datetime('now')");
-          expVals.push(linked.related_expense_id);
-          try {
-            dbi.prepare(`UPDATE expenses SET ${expSets.join(', ')} WHERE id = ?`).run(...expVals);
-          } catch (syncErr: any) {
-            console.warn('linked expense sync failed:', syncErr?.message);
-          }
-        }
+      };
+      if (linked) {
+        syncExpense(linked.related_expense_id,
+          payload.interest_amount !== undefined ? linked.interest_amount : undefined);
+        syncExpense(linked.related_principal_expense_id,
+          payload.principal_amount !== undefined ? linked.principal_amount : undefined);
       }
 
       // Re-aggregate loan totals from the sum of all payment rows.
@@ -1336,18 +1337,17 @@ export function registerIpcHandlers(): void {
     try {
       const dbi = db.getDb();
       const existing = dbi.prepare(
-        "SELECT id, loan_id, schedule_id, related_expense_id FROM loan_payments WHERE id = ?"
+        "SELECT id, loan_id, schedule_id, related_expense_id, related_principal_expense_id FROM loan_payments WHERE id = ?"
       ).get(paymentId) as any;
       if (!existing) return { error: 'Payment not found' };
 
-      // Cascade: soft-delete the auto-created interest expense.
-      // Soft-delete preserves the audit trail (so reports for past
-      // periods stay consistent) but hides from active lists.
-      if (existing.related_expense_id) {
+      // Cascade: soft-delete BOTH auto-created expense rows (interest +
+      // principal). Soft-delete preserves the audit trail (so reports
+      // for past periods stay consistent) but hides from active lists.
+      for (const exId of [existing.related_expense_id, existing.related_principal_expense_id]) {
+        if (!exId) continue;
         try {
-          dbi.prepare(
-            "UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?"
-          ).run(existing.related_expense_id);
+          dbi.prepare("UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?").run(exId);
         } catch (cascErr: any) {
           console.warn('cascade delete of linked expense failed:', cascErr?.message);
         }
@@ -1579,39 +1579,69 @@ export function registerIpcHandlers(): void {
         payload.is_extra_principal ? 1 : 0, payload.notes || ''
       );
 
-      // ─── BIDIRECTIONAL EXPENSE LINK ──────────────────────────
-      // The interest portion of a loan payment IS a deductible
-      // business expense — auto-create an expense row for it and
-      // link both sides. Skip when interest is zero (extra-principal
-      // payments) or when caller explicitly opted out.
-      // Principal portion is NOT an expense — it's debt reduction on
-      // the balance sheet, already handled by the JE auto-posting
-      // below (DR Loan Liability / CR Cash).
+      // ─── BIDIRECTIONAL EXPENSE LINK (two rows) ───────────────
+      // Each loan payment spawns up to TWO linked expense rows so the
+      // full cash-out is visible in the Expenses ledger while keeping
+      // tax categories clean:
+      //   • Interest  → "Interest Expense" (deductible)
+      //   • Principal → "Loan Principal"   (non-deductible; debt repay)
+      // Skip when caller opts out via skip_expense_creation.
       const skipExpense = (payload as any).skip_expense_creation === true;
       const expCid = db.getCurrentCompanyId();
-      let linkedExpenseId: string | null = null;
-      if (!skipExpense && split.interest > 0.005 && expCid) {
+      let linkedInterestExpenseId: string | null = null;
+      let linkedPrincipalExpenseId: string | null = null;
+      if (!skipExpense && expCid) {
         try {
-          // Find or hint an "Interest Expense" category for clean
-          // categorization. Match by name; user can recategorize later.
-          const catRow = dbi.prepare(
-            "SELECT id FROM categories WHERE company_id = ? AND (lower(name) LIKE '%interest%' OR lower(name) = 'interest expense') AND (deleted_at IS NULL OR deleted_at = '') LIMIT 1"
-          ).get(expCid) as any;
-          const expenseId = uuid();
-          const desc = (loan.name || 'Loan') + ' · interest on ' + payload.payment_date;
-          dbi.prepare(
-            "INSERT INTO expenses (id, company_id, date, amount, tax_amount, description, category_id, vendor_id, payment_method, status, related_loan_id, related_loan_payment_id, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, 'paid', ?, ?, datetime('now'), datetime('now'))"
-          ).run(
-            expenseId, expCid, payload.payment_date, split.interest,
-            desc, catRow?.id || null, null,
-            payload.payment_method || 'ach',
-            payload.loan_id, pid
+          // Find-or-create a category by name + type. Categories use
+          // is_active (no deleted_at column) — earlier code referenced
+          // a nonexistent column and silently failed. Auto-creating
+          // ensures the rows are always properly categorized.
+          const findOrCreateCategory = (name: string, color: string): string => {
+            const existing = dbi.prepare(
+              "SELECT id FROM categories WHERE company_id = ? AND lower(name) = lower(?) AND is_active = 1 LIMIT 1"
+            ).get(expCid, name) as any;
+            if (existing?.id) return existing.id;
+            const newId = uuid();
+            dbi.prepare(
+              "INSERT INTO categories (id, company_id, name, type, color, description, is_active, created_at, updated_at) VALUES (?, ?, ?, 'expense', ?, ?, 1, datetime('now'), datetime('now'))"
+            ).run(newId, expCid, name, color, 'Auto-created for loan payment integration');
+            return newId;
+          };
+
+          const insertExpense = dbi.prepare(
+            "INSERT INTO expenses (id, company_id, date, amount, tax_amount, description, category_id, vendor_id, payment_method, status, related_loan_id, related_loan_payment_id, loan_component, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?, 'paid', ?, ?, ?, datetime('now'), datetime('now'))"
           );
-          linkedExpenseId = expenseId;
-          // Back-link loan_payment → expense
+
+          // Interest row (deductible)
+          if (split.interest > 0.005) {
+            const interestCat = findOrCreateCategory('Interest Expense', '#f59e0b');
+            linkedInterestExpenseId = uuid();
+            insertExpense.run(
+              linkedInterestExpenseId, expCid, payload.payment_date, split.interest,
+              (loan.name || 'Loan') + ' · interest on ' + payload.payment_date,
+              interestCat, payload.payment_method || 'ach',
+              payload.loan_id, pid, 'interest'
+            );
+          }
+
+          // Principal row (non-deductible — debt repayment, but shown
+          // so the full payment is visible as cash-out). Extra-principal
+          // payments are 100% principal and still get a row.
+          if (split.principal > 0.005) {
+            const principalCat = findOrCreateCategory('Loan Principal', '#6366f1');
+            linkedPrincipalExpenseId = uuid();
+            insertExpense.run(
+              linkedPrincipalExpenseId, expCid, payload.payment_date, split.principal,
+              (loan.name || 'Loan') + ' · principal on ' + payload.payment_date,
+              principalCat, payload.payment_method || 'ach',
+              payload.loan_id, pid, 'principal'
+            );
+          }
+
+          // Back-link both expense ids onto the loan payment.
           dbi.prepare(
-            "UPDATE loan_payments SET related_expense_id = ? WHERE id = ?"
-          ).run(linkedExpenseId, pid);
+            "UPDATE loan_payments SET related_expense_id = ?, related_principal_expense_id = ? WHERE id = ?"
+          ).run(linkedInterestExpenseId, linkedPrincipalExpenseId, pid);
         } catch (linkErr: any) {
           // Don't fail the whole payment if the expense couldn't be
           // created — log and continue. User can retro-link later.

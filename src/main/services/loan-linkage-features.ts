@@ -131,7 +131,7 @@ export function expensesForLoan(loanId: string, opts?: { limit?: number; since?:
     let where = `company_id = ? AND related_loan_id = ?`;
     if (opts?.since) { where += ` AND date >= ?`; params.push(opts.since); }
     params.push(opts?.limit || 100);
-    return db.getDb().prepare(`SELECT id, date, amount, description, category_id, status, related_loan_payment_id FROM expenses WHERE ${where} AND (deleted_at IS NULL) ORDER BY date DESC LIMIT ?`).all(...params);
+    return db.getDb().prepare(`SELECT id, date, amount, description, category_id, status, related_loan_payment_id, loan_component FROM expenses WHERE ${where} AND (deleted_at IS NULL) ORDER BY date DESC LIMIT ?`).all(...params);
   } catch (e: any) { return { error: e.message }; }
 }
 
