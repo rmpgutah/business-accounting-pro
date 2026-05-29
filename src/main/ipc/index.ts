@@ -4546,6 +4546,100 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('iw:ltv', (_e, { client_id }: any) => iw().computeClientLtv(client_id));
   ipcMain.handle('iw:churn:predict', (_e, { client_id }: any) => iw().predictClientChurn(client_id));
 
+  // ─── Invoice Wave 3 (80 features: IV1–IV80) ───────────
+  const iv3 = () => require('../services/invoice-wave3-features');
+  // Coupons (IV1-IV8)
+  ipcMain.handle('iv:coupons', (_e, { activeOnly }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().listCoupons(c, !!activeOnly) : []; });
+  ipcMain.handle('iv:coupon:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().upsertCoupon({ ...p, company_id: c }); });
+  ipcMain.handle('iv:coupon:delete', (_e, { id }: any) => { iv3().deleteCoupon(id); return { ok: true }; });
+  ipcMain.handle('iv:coupon:redeem', (_e, { code, invoiceId, invoiceTotal }: any) => { const c = db.getCurrentCompanyId(); return c ? iv3().redeemCoupon(c, code, invoiceId, invoiceTotal) : {}; });
+  ipcMain.handle('iv:coupon:history', () => { const c = db.getCurrentCompanyId(); return c ? iv3().couponRedemptionHistory(c) : []; });
+  ipcMain.handle('iv:coupon:summary', () => { const c = db.getCurrentCompanyId(); return c ? iv3().couponSummary(c) : {}; });
+  ipcMain.handle('iv:coupon:validate', (_e, { code }: any) => { const c = db.getCurrentCompanyId(); return c ? iv3().validateCoupon(c, code) : {}; });
+  ipcMain.handle('iv:coupon:expired', () => { const c = db.getCurrentCompanyId(); return c ? iv3().expiredCoupons(c) : []; });
+  // Credit memos (IV9-IV14)
+  ipcMain.handle('iv:credit-memos', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().listCreditMemos(c, opts.clientId) : []; });
+  ipcMain.handle('iv:credit-memo:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().createCreditMemo({ ...p, company_id: c }); });
+  ipcMain.handle('iv:credit-memo:apply', (_e, { memoId, toInvoiceId }: any) => iv3().applyCreditMemo(memoId, toInvoiceId));
+  ipcMain.handle('iv:credit-memo:void', (_e, { id }: any) => { iv3().voidCreditMemo(id); return { ok: true }; });
+  ipcMain.handle('iv:credit-memo:summary', () => { const c = db.getCurrentCompanyId(); return c ? iv3().creditMemoSummary(c) : {}; });
+  ipcMain.handle('iv:client-credit', (_e, { clientId }: any) => { const c = db.getCurrentCompanyId(); return c ? iv3().clientCreditBalance(c, clientId) : {}; });
+  // Payment plans (IV15-IV20)
+  ipcMain.handle('iv:payment-plan:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().createPaymentPlan({ ...p, company_id: c }); });
+  ipcMain.handle('iv:payment-plans', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().listPaymentPlans(c, opts.invoiceId) : []; });
+  ipcMain.handle('iv:payment-plan:installments', (_e, { planId }: any) => iv3().paymentPlanInstallments(planId));
+  ipcMain.handle('iv:installment:pay', (_e, { installmentId, amount }: any) => iv3().recordInstallmentPayment(installmentId, amount));
+  ipcMain.handle('iv:installments:overdue', () => { const c = db.getCurrentCompanyId(); return c ? iv3().overdueInstallments(c) : []; });
+  ipcMain.handle('iv:payment-plan:cancel', (_e, { planId }: any) => { iv3().cancelPaymentPlan(planId); return { ok: true }; });
+  // Collection scores (IV21-IV26)
+  ipcMain.handle('iv:collection-score', (_e, { invoiceId }: any) => iv3().computeCollectionScore(invoiceId));
+  ipcMain.handle('iv:collection-scores:bulk', () => { const c = db.getCurrentCompanyId(); return c ? iv3().bulkComputeCollectionScores(c) : {}; });
+  ipcMain.handle('iv:collection-board', () => { const c = db.getCurrentCompanyId(); return c ? iv3().collectionScoreBoard(c) : []; });
+  ipcMain.handle('iv:dso', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().computeDSO(c, days || 90) : {}; });
+  ipcMain.handle('iv:dso-by-client', () => { const c = db.getCurrentCompanyId(); return c ? iv3().dsoByClient(c) : []; });
+  ipcMain.handle('iv:dso-trend', () => { const c = db.getCurrentCompanyId(); return c ? iv3().dsoTrend(c) : []; });
+  // Approval workflow (IV27-IV32)
+  ipcMain.handle('iv:approval-rules', () => { const c = db.getCurrentCompanyId(); return c ? iv3().listApprovalRules(c) : []; });
+  ipcMain.handle('iv:approval-rule:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().upsertApprovalRule({ ...p, company_id: c }); });
+  ipcMain.handle('iv:approval-rule:delete', (_e, { id }: any) => { iv3().deleteApprovalRule(id); return { ok: true }; });
+  ipcMain.handle('iv:submit-for-approval', (_e, { invoiceId, submittedBy }: any) => iv3().submitForApproval(invoiceId, submittedBy));
+  ipcMain.handle('iv:approve', (_e, { invoiceId, approverUserId, comment }: any) => iv3().approveInvoice(invoiceId, approverUserId, comment));
+  ipcMain.handle('iv:approval-history', (_e, { invoiceId }: any) => iv3().approvalHistory(invoiceId));
+  // Templates (IV33-IV38)
+  ipcMain.handle('iv:templates', () => { const c = db.getCurrentCompanyId(); return c ? iv3().listInvoiceTemplates(c) : []; });
+  ipcMain.handle('iv:template:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().upsertInvoiceTemplate({ ...p, company_id: c }); });
+  ipcMain.handle('iv:template:delete', (_e, { id }: any) => { iv3().deleteInvoiceTemplate(id); return { ok: true }; });
+  ipcMain.handle('iv:line-templates', () => { const c = db.getCurrentCompanyId(); return c ? iv3().listLineTemplates(c) : []; });
+  ipcMain.handle('iv:line-template:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().upsertLineTemplate({ ...p, company_id: c }); });
+  ipcMain.handle('iv:line-template:delete', (_e, { id }: any) => { iv3().deleteLineTemplate(id); return { ok: true }; });
+  // Email & view tracking (IV39-IV44)
+  ipcMain.handle('iv:log-email', (_e, p: any) => iv3().logInvoiceEmail(p));
+  ipcMain.handle('iv:email-history', (_e, { invoiceId }: any) => iv3().invoiceEmailHistory(invoiceId));
+  ipcMain.handle('iv:log-view', (_e, p: any) => iv3().logInvoiceView(p));
+  ipcMain.handle('iv:view-history', (_e, { invoiceId }: any) => iv3().invoiceViewHistory(invoiceId));
+  ipcMain.handle('iv:view-stats', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceViewStats(c) : []; });
+  ipcMain.handle('iv:unviewed', () => { const c = db.getCurrentCompanyId(); return c ? iv3().unviewedInvoices(c) : []; });
+  // Attachments & activity (IV45-IV50)
+  ipcMain.handle('iv:attachments', (_e, { invoiceId }: any) => iv3().listAttachments(invoiceId));
+  ipcMain.handle('iv:attachment:add', (_e, p: any) => iv3().addAttachment(p));
+  ipcMain.handle('iv:attachment:delete', (_e, { id }: any) => { iv3().deleteAttachment(id); return { ok: true }; });
+  ipcMain.handle('iv:log-activity', (_e, p: any) => iv3().logActivity(p));
+  ipcMain.handle('iv:activity-log', (_e, { invoiceId }: any) => iv3().activityLog(invoiceId));
+  ipcMain.handle('iv:recent-activity', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().recentActivity(c, limit || 30) : []; });
+  // Analytics (IV51-IV60)
+  ipcMain.handle('iv:dashboard', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceDashboard(c) : {}; });
+  ipcMain.handle('iv:revenue-by-month', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().revenueByMonth(c, months || 12) : []; });
+  ipcMain.handle('iv:collection-rate', () => { const c = db.getCurrentCompanyId(); return c ? iv3().collectionRate(c) : {}; });
+  ipcMain.handle('iv:avg-payment-days', () => { const c = db.getCurrentCompanyId(); return c ? iv3().avgPaymentDays(c) : {}; });
+  ipcMain.handle('iv:by-status', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoicesByStatus(c) : []; });
+  ipcMain.handle('iv:top-clients', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().topClientsRevenue(c, limit || 10) : []; });
+  ipcMain.handle('iv:aging', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceAging(c) : []; });
+  ipcMain.handle('iv:growth-rate', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceGrowthRate(c) : []; });
+  ipcMain.handle('iv:avg-size', () => { const c = db.getCurrentCompanyId(); return c ? iv3().avgInvoiceSize(c) : {}; });
+  ipcMain.handle('iv:by-day-of-week', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoicesByDayOfWeek(c) : []; });
+  // Workflow & smart filters (IV61-IV70)
+  ipcMain.handle('iv:smart-filters', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().listSmartFilters(c, opts.userId) : []; });
+  ipcMain.handle('iv:smart-filter:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().upsertSmartFilter({ ...p, company_id: c }); });
+  ipcMain.handle('iv:smart-filter:delete', (_e, { id }: any) => { iv3().deleteSmartFilter(id); return { ok: true }; });
+  ipcMain.handle('iv:workflow-rules', () => { const c = db.getCurrentCompanyId(); return c ? iv3().listWorkflowRules(c) : []; });
+  ipcMain.handle('iv:workflow-rule:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return iv3().upsertWorkflowRule({ ...p, company_id: c }); });
+  ipcMain.handle('iv:workflow-rule:delete', (_e, { id }: any) => { iv3().deleteWorkflowRule(id); return { ok: true }; });
+  ipcMain.handle('iv:batch-send', (_e, { invoiceIds }: any) => { const c = db.getCurrentCompanyId(); return c ? iv3().batchSendInvoices(c, invoiceIds) : {}; });
+  ipcMain.handle('iv:batch-void', (_e, { invoiceIds }: any) => { const c = db.getCurrentCompanyId(); return c ? iv3().batchVoidInvoices(c, invoiceIds) : {}; });
+  ipcMain.handle('iv:duplicate', (_e, { invoiceId }: any) => iv3().duplicateInvoice(invoiceId));
+  ipcMain.handle('iv:payment-method-breakdown', () => { const c = db.getCurrentCompanyId(); return c ? iv3().paymentMethodBreakdown(c) : []; });
+  // Reports & health (IV71-IV80)
+  ipcMain.handle('iv:by-client', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoicesByClient(c) : []; });
+  ipcMain.handle('iv:unpaid-summary', () => { const c = db.getCurrentCompanyId(); return c ? iv3().unpaidInvoicesSummary(c) : []; });
+  ipcMain.handle('iv:late-fee-report', () => { const c = db.getCurrentCompanyId(); return c ? iv3().lateFeeReport(c) : []; });
+  ipcMain.handle('iv:recurring-summary', () => { const c = db.getCurrentCompanyId(); return c ? iv3().recurringInvoiceSummary(c) : {}; });
+  ipcMain.handle('iv:export', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceExportData(c, opts.startDate, opts.endDate) : []; });
+  ipcMain.handle('iv:search', (_e, { query, limit }: any) => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceSearchFullText(c, query, limit) : []; });
+  ipcMain.handle('iv:portal-health', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoicePortalHealth(c) : {}; });
+  ipcMain.handle('iv:quarterly', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoiceQuarterlyComparison(c) : []; });
+  ipcMain.handle('iv:client-payment-behavior', () => { const c = db.getCurrentCompanyId(); return c ? iv3().clientPaymentBehavior(c) : []; });
+  ipcMain.handle('iv:by-client-list', () => { const c = db.getCurrentCompanyId(); return c ? iv3().invoicesByClient(c) : []; });
+
   // ─── Loan Wave (F963-F992) — `la:*` namespace ──
   const la = () => require('../services/loan-advanced-features');
   // Batch LA: Refinance & Modifications
