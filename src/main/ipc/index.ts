@@ -529,7 +529,7 @@ function postJournalEntry(
   companyId: string,
   date: string,
   description: string,
-  lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>
+  lines: Array<{ nameHint: string; accountId?: string | null; debit: number; credit: number; note?: string }>
 ): void {
   // Skip lines with zero amounts
   const nonZero = lines.filter(l => l.debit > 0 || l.credit > 0);
@@ -537,7 +537,17 @@ function postJournalEntry(
 
   const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
   for (const line of nonZero) {
-    const accountId = findAccount(dbInstance as any, companyId, line.nameHint);
+    // Prefer an explicitly-mapped account (e.g. category.default_account_id);
+    // verify it still belongs to this company before trusting it, then fall
+    // back to fuzzy name resolution.
+    let accountId: string | null = null;
+    if (line.accountId) {
+      const ok = (dbInstance as any).prepare(
+        'SELECT id FROM accounts WHERE id = ? AND company_id = ? AND is_active = 1'
+      ).get(line.accountId, companyId) as any;
+      if (ok?.id) accountId = ok.id;
+    }
+    if (!accountId) accountId = findAccount(dbInstance as any, companyId, line.nameHint);
     if (!accountId) {
       // SAFETY: a missing account means the entry would be silently dropped,
       // which surfaces upstream as "saved but no ledger record." Log so we
@@ -5875,17 +5885,57 @@ export function registerIpcHandlers(): void {
           if (amount > 0) {
             const desc = expenseData.description || 'Expense';
             const isPaid = expenseData.status === 'paid';
+
+            // Resolve the expense's own category → name hint + mapped GL account.
             let expenseHint = 'Expense';
+            let expenseAccountId: string | null = null;
             if (expenseData.category_id) {
               try {
-                const cat = rawDb.prepare('SELECT name FROM categories WHERE id = ?').get(expenseData.category_id) as any;
+                const cat = rawDb.prepare('SELECT name, default_account_id FROM categories WHERE id = ?').get(expenseData.category_id) as any;
                 if (cat?.name) expenseHint = cat.name;
+                if (cat?.default_account_id) expenseAccountId = cat.default_account_id;
               } catch { /* ignore */ }
             }
+
+            // ITEMIZED POSTING: if line items carry their own category/account
+            // mapping, debit each mapped GL account separately so the ledger
+            // mirrors the itemization. Falls back to a single debit line.
+            const debitLines: Array<{ nameHint: string; accountId: string | null; debit: number; credit: number; note: string }> = [];
+            try {
+              const liRows = rawDb.prepare(
+                `SELECT li.amount, li.account_id, li.category_id, c.name AS cat_name, c.default_account_id AS cat_account
+                 FROM expense_line_items li
+                 LEFT JOIN categories c ON c.id = li.category_id
+                 WHERE li.expense_id = ?`
+              ).all(savedId) as any[];
+              const mapped = (liRows || []).filter(r => (r.account_id || r.cat_account) && Number(r.amount) > 0);
+              const mappedTotal = mapped.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+              // Only itemize when the mapped lines cover the full expense amount
+              // (within a cent) — otherwise a single category line is cleaner.
+              if (mapped.length > 0 && Math.abs(mappedTotal - amount) <= 0.01) {
+                // Aggregate by resolved account so we don't emit many tiny legs.
+                const byAccount = new Map<string, { acct: string; name: string; amt: number }>();
+                for (const r of mapped) {
+                  const acct = (r.account_id || r.cat_account) as string;
+                  const name = r.cat_name || expenseHint;
+                  const cur = byAccount.get(acct) || { acct, name, amt: 0 };
+                  cur.amt += Number(r.amount) || 0;
+                  byAccount.set(acct, cur);
+                }
+                for (const v of byAccount.values()) {
+                  debitLines.push({ nameHint: v.name, accountId: v.acct, debit: Math.round(v.amt * 100) / 100, credit: 0, note: `${v.name} — ${desc}` });
+                }
+              }
+            } catch { /* fall through to single-line posting */ }
+
+            if (debitLines.length === 0) {
+              debitLines.push({ nameHint: expenseHint, accountId: expenseAccountId, debit: amount, credit: 0, note: desc });
+            }
+
             postJournalEntry(rawDb, companyId, expenseData.date || localToday(),
               `Expense recorded - ${desc}`, [
-                { nameHint: expenseHint, debit: amount, credit: 0, note: desc },
-                { nameHint: isPaid ? 'Cash' : 'Payable', debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
+                ...debitLines,
+                { nameHint: isPaid ? 'Cash' : 'Payable', accountId: null, debit: 0, credit: amount, note: `${isPaid ? 'Cash paid' : 'AP'} for ${desc}` },
               ]);
           }
         }
@@ -9770,11 +9820,23 @@ export function registerIpcHandlers(): void {
     const constants = dbInstance.prepare('SELECT * FROM federal_payroll_constants WHERE tax_year = ?').get(year) as any;
     if (!constants) return { federal: 0, ss: 0, medicare: 0, total: 0 };
 
-    const brackets = dbInstance.prepare('SELECT * FROM federal_tax_brackets WHERE tax_year = ? AND filing_status = ? ORDER BY bracket_min').all(year, filingStatus) as any[];
+    // The UI uses IRS-style names (married_filing_jointly); the DB stores the
+    // short form (married_jointly). Normalize BEFORE querying brackets or the
+    // standard deduction — otherwise the bracket query returns 0 rows and the
+    // calculator silently reports $0 of withholding.
+    const uiToDbStatus: Record<string, string> = {
+      married_filing_jointly: 'married_jointly',
+      married_filing_separately: 'married_separately',
+      single: 'single',
+      head_of_household: 'head_of_household',
+    };
+    const dbStatus = uiToDbStatus[filingStatus] ?? filingStatus;
+
+    const brackets = dbInstance.prepare('SELECT * FROM federal_tax_brackets WHERE tax_year = ? AND filing_status = ? ORDER BY bracket_min').all(year, dbStatus) as any[];
 
     // Annualize
     const annualized = grossPay * 26; // biweekly assumption
-    const stdDed = filingStatus === 'married_jointly' ? constants.standard_deduction_married : filingStatus === 'head_of_household' ? constants.standard_deduction_hoh : constants.standard_deduction_single;
+    const stdDed = dbStatus === 'married_jointly' ? constants.standard_deduction_married : dbStatus === 'head_of_household' ? constants.standard_deduction_hoh : constants.standard_deduction_single;
     const taxableAnnual = Math.max(0, annualized - stdDed - (allowances * 4300));
 
     let annualFederal = 0;
@@ -13749,12 +13811,12 @@ export function registerIpcHandlers(): void {
     try {
       if (accountId) {
         return db.getDb().prepare(
-          `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id
+          `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id AND a.company_id = r.company_id
            WHERE r.company_id = ? AND r.account_id = ? ORDER BY r.as_of_date DESC`
         ).all(companyId, accountId);
       }
       return db.getDb().prepare(
-        `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id
+        `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id AND a.company_id = r.company_id
          WHERE r.company_id = ? ORDER BY r.as_of_date DESC`
       ).all(companyId);
     } catch { return []; }

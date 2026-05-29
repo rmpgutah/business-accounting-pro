@@ -664,6 +664,9 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE categories ADD COLUMN monthly_cap REAL DEFAULT 0",
   "ALTER TABLE categories ADD COLUMN default_account_id TEXT DEFAULT ''",
   "ALTER TABLE categories ADD COLUMN required_fields TEXT DEFAULT '[]'",
+  // Category → tax category mapping (Schedule C chain) + per-line GL account
+  "ALTER TABLE categories ADD COLUMN tax_category_id TEXT DEFAULT ''",
+  "ALTER TABLE expense_line_items ADD COLUMN account_id TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN expense_class TEXT DEFAULT ''",
   // Tax
   "ALTER TABLE expense_line_items ADD COLUMN tax_rate REAL DEFAULT 0",

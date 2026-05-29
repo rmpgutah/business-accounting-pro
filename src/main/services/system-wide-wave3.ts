@@ -16,14 +16,40 @@ export function taxPaymentHistory(cid: string) {
   return db.getDb().prepare(`SELECT * FROM tax_payments WHERE company_id = ? ORDER BY date DESC LIMIT 30`).all(cid);
 }
 export function taxCategorySummary(cid: string) {
-  return db.getDb().prepare(`SELECT tc.name, tc.rate, COUNT(DISTINCT e.id) AS expense_count FROM tax_categories tc LEFT JOIN expenses e ON e.category_id = tc.id WHERE tc.company_id = ? GROUP BY tc.id ORDER BY tc.name`).all(cid);
+  // Roll expenses up to their tax category via categories.tax_category_id.
+  // (Previously joined expenses.category_id = tax_categories.id, which never
+  // matched, and selected a non-existent tc.rate column.)
+  return db.getDb().prepare(
+    `SELECT tc.name, tc.schedule_c_line, tc.is_deductible,
+            COUNT(DISTINCT e.id) AS expense_count,
+            ROUND(COALESCE(SUM(e.amount), 0), 2) AS total
+     FROM tax_categories tc
+     LEFT JOIN categories c ON c.tax_category_id = tc.id AND c.company_id = tc.company_id
+     LEFT JOIN expenses e ON e.category_id = c.id AND e.deleted_at IS NULL
+     WHERE tc.company_id = ?
+     GROUP BY tc.id ORDER BY total DESC, tc.name`
+  ).all(cid);
 }
 export function salesTaxLiability(cid: string) {
   return db.getDb().prepare(`SELECT COALESCE(SUM(tax_amount),0) AS collected_tax, COALESCE((SELECT SUM(amount) FROM tax_payments WHERE company_id = ? AND strftime('%Y', date) = strftime('%Y', 'now') AND payment_type = 'sales_tax'),0) AS remitted, COALESCE(SUM(tax_amount),0) - COALESCE((SELECT SUM(amount) FROM tax_payments WHERE company_id = ? AND strftime('%Y', date) = strftime('%Y', 'now') AND payment_type = 'sales_tax'),0) AS outstanding FROM invoices WHERE company_id = ? AND strftime('%Y', issue_date) = strftime('%Y', 'now')`).get(cid, cid, cid);
 }
 export function deductibleExpensesSummary(cid: string, year?: number) {
   const y = year || new Date().getFullYear();
-  return db.getDb().prepare(`SELECT c.name AS category, ROUND(SUM(e.amount),2) AS total FROM expenses e LEFT JOIN categories c ON c.id = e.category_id WHERE e.company_id = ? AND e.tax_deductible = 1 AND strftime('%Y', e.date) = ? AND e.deleted_at IS NULL GROUP BY c.name ORDER BY total DESC`).all(cid, String(y));
+  // Roll deductible expenses up by Schedule C line when the category is mapped
+  // to a tax category; otherwise fall back to the raw category name.
+  return db.getDb().prepare(
+    `SELECT COALESCE(NULLIF(tc.schedule_c_line, ''), c.name, 'Uncategorized') AS category,
+            tc.schedule_c_line AS schedule_c_line,
+            tc.name AS tax_category,
+            ROUND(SUM(e.amount), 2) AS total
+     FROM expenses e
+     LEFT JOIN categories c ON c.id = e.category_id
+     LEFT JOIN tax_categories tc ON tc.id = c.tax_category_id
+     WHERE e.company_id = ? AND e.tax_deductible = 1
+       AND strftime('%Y', e.date) = ? AND e.deleted_at IS NULL
+     GROUP BY COALESCE(NULLIF(tc.schedule_c_line, ''), c.name, 'Uncategorized')
+     ORDER BY total DESC`
+  ).all(cid, String(y));
 }
 export function estimatedTaxQuarterly(cid: string) {
   const dbi = db.getDb();

@@ -25,9 +25,10 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
   });
   const [savingDef, setSavingDef] = useState(false);
 
-  // Categories with cap / default account / required fields
+  // Categories with cap / default account / tax category / required fields
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  const [taxCategories, setTaxCategories] = useState<Array<{ id: string; name: string; schedule_c_line?: string }>>([]);
   const [savingCat, setSavingCat] = useState<string>('');
 
   useEffect(() => {
@@ -35,10 +36,11 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
     const load = async () => {
       if (!activeCompany) return;
       const cid = activeCompany.id;
-      const [d, c, a] = await Promise.all([
+      const [d, c, a, tc] = await Promise.all([
         api.query('custom_field_defs', { company_id: cid, entity_type: 'expense' }, { field: 'sort_order', dir: 'asc' }),
         api.query('categories', { company_id: cid, type: 'expense' }),
         api.query('accounts', { company_id: cid, type: 'expense' }),
+        api.query('tax_categories', { company_id: cid }),
       ]);
       if (cancelled) return;
       setDefs(Array.isArray(d) ? d.map((x: any) => ({
@@ -48,6 +50,7 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
       })) : []);
       setCategories(Array.isArray(c) ? c : []);
       setAccounts(Array.isArray(a) ? a : []);
+      setTaxCategories(Array.isArray(tc) ? tc : []);
     };
     load();
     return () => { cancelled = true; };
@@ -92,6 +95,7 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
       await api.update('categories', cat.id, {
         monthly_cap: cat.monthly_cap || 0,
         default_account_id: cat.default_account_id || '',
+        tax_category_id: (cat as any).tax_category_id || '',
         required_fields: typeof cat.required_fields === 'string' ? cat.required_fields : JSON.stringify(cat.required_fields || []),
       });
     } finally {
@@ -195,14 +199,16 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
       <div className="block-card p-5">
         <h3 className="text-sm font-bold uppercase tracking-wider text-text-primary mb-3">Category Policies</h3>
         <p className="text-xs text-text-muted mb-4">
-          Per-category monthly budget cap, default GL account, and required-field policy.
+          Map each category to its GL account and Schedule&nbsp;C tax category, plus a monthly budget cap and required-field policy.
+          The GL account is used to auto-post journal entries; the tax category drives Schedule&nbsp;C deductible reporting.
         </p>
         <table className="block-table">
           <thead>
             <tr>
               <th>Category</th>
-              <th style={{ width: 140 }}>Monthly Cap</th>
-              <th style={{ width: 200 }}>Default Account</th>
+              <th style={{ width: 120 }}>Monthly Cap</th>
+              <th style={{ width: 190 }}>GL Account</th>
+              <th style={{ width: 200 }}>Tax Category (Schedule C)</th>
               <th>Required Fields (comma-separated keys)</th>
               <th style={{ width: 80 }}></th>
             </tr>
@@ -231,6 +237,16 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
                       onChange={(e) => updateCat(c.id, { default_account_id: e.target.value })}>
                       <option value="">— none —</option>
                       {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select className="block-select text-sm"
+                      value={(c as any).tax_category_id || ''}
+                      onChange={(e) => updateCat(c.id, { tax_category_id: e.target.value } as any)}>
+                      <option value="">— none —</option>
+                      {taxCategories.map(t => (
+                        <option key={t.id} value={t.id}>{t.schedule_c_line ? `${t.schedule_c_line} · ${t.name}` : t.name}</option>
+                      ))}
                     </select>
                   </td>
                   <td>
