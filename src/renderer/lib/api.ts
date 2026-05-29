@@ -1026,6 +1026,66 @@ const api = {
     window.electronAPI.invoke('payroll:employee-summary', { employeeId }),
 
   // ─── Employee Document Generation ────────────────
+  // ─── HR Suite (50 features: HR1–HR50) ────────────────────
+  // Benefits (HR1-HR10)
+  hrBenefitPlans: (activeOnly?: boolean) => window.electronAPI.invoke('hr:benefit-plans', { activeOnly }),
+  hrBenefitPlanUpsert: (plan: any) => window.electronAPI.invoke('hr:benefit-plan:upsert', plan),
+  hrBenefitPlanDelete: (id: string) => window.electronAPI.invoke('hr:benefit-plan:delete', { id }),
+  hrBenefitPlanSummary: () => window.electronAPI.invoke('hr:benefit-plan:summary'),
+  hrBenefitPlanEnrollees: (planId: string) => window.electronAPI.invoke('hr:benefit-plan:enrollees', { planId }),
+  hrEnroll: (enrollment: any) => window.electronAPI.invoke('hr:enroll', enrollment),
+  hrEnrollmentTerminate: (id: string, endDate?: string) => window.electronAPI.invoke('hr:enrollment:terminate', { id, endDate }),
+  hrEmployeeBenefits: (employeeId: string) => window.electronAPI.invoke('hr:employee-benefits', { employeeId }),
+  hrEnrollmentUpdate: (id: string, data: any) => window.electronAPI.invoke('hr:enrollment:update', { id, ...data }),
+  hrBenefitsCostPerEmployee: () => window.electronAPI.invoke('hr:benefits-cost-per-employee'),
+  // Overtime (HR11-HR15)
+  hrOvertimeRules: () => window.electronAPI.invoke('hr:overtime-rules'),
+  hrOvertimeRuleUpsert: (rule: any) => window.electronAPI.invoke('hr:overtime-rule:upsert', rule),
+  hrOvertimeRuleDelete: (id: string) => window.electronAPI.invoke('hr:overtime-rule:delete', { id }),
+  hrOvertimeCalculate: (hours: { daily: number; weekly: number }, stateCode?: string) => window.electronAPI.invoke('hr:overtime:calculate', { hours, stateCode }),
+  hrOvertimeSummary: (startDate: string, endDate: string) => window.electronAPI.invoke('hr:overtime:summary', { startDate, endDate }),
+  // Time-off (HR16-HR27)
+  hrTimeOffSubmit: (req: any) => window.electronAPI.invoke('hr:time-off:submit', req),
+  hrTimeOffApprove: (id: string, approvedBy: string) => window.electronAPI.invoke('hr:time-off:approve', { id, approvedBy }),
+  hrTimeOffDeny: (id: string, reason?: string) => window.electronAPI.invoke('hr:time-off:deny', { id, reason }),
+  hrTimeOffCancel: (id: string) => window.electronAPI.invoke('hr:time-off:cancel', { id }),
+  hrTimeOffList: (opts?: { employeeId?: string; status?: string }) => window.electronAPI.invoke('hr:time-off:list', opts || {}),
+  hrTimeOffPendingCount: (): Promise<number> => window.electronAPI.invoke('hr:time-off:pending-count'),
+  hrTimeOffCalendar: (month: string) => window.electronAPI.invoke('hr:time-off:calendar', { month }),
+  hrAccrualsList: (employeeId: string) => window.electronAPI.invoke('hr:accruals:list', { employeeId }),
+  hrAccrualsUpsert: (accrual: any) => window.electronAPI.invoke('hr:accruals:upsert', accrual),
+  hrAccrualsRun: (employeeId: string, hoursWorked?: number) => window.electronAPI.invoke('hr:accruals:run', { employeeId, hoursWorked }),
+  hrAccrualsDeduct: (employeeId: string, type: string, hours: number) => window.electronAPI.invoke('hr:accruals:deduct', { employeeId, type, hours }),
+  // Salary reviews (HR28-HR32)
+  hrSalaryReviews: (employeeId: string) => window.electronAPI.invoke('hr:salary-reviews:list', { employeeId }),
+  hrSalaryReviewCreate: (review: any) => window.electronAPI.invoke('hr:salary-review:create', review),
+  hrSalaryReviewDelete: (id: string) => window.electronAPI.invoke('hr:salary-review:delete', { id }),
+  hrSalaryReviewDashboard: () => window.electronAPI.invoke('hr:salary-review:dashboard'),
+  hrEmployeesDueForReview: (months?: number) => window.electronAPI.invoke('hr:employees-due-for-review', { months }),
+  // State allocations (HR33-HR36)
+  hrStateAllocations: (employeeId: string) => window.electronAPI.invoke('hr:state-allocations:list', { employeeId }),
+  hrStateAllocationUpsert: (alloc: any) => window.electronAPI.invoke('hr:state-allocation:upsert', alloc),
+  hrStateAllocationDelete: (id: string) => window.electronAPI.invoke('hr:state-allocation:delete', { id }),
+  hrMultiStateSummary: () => window.electronAPI.invoke('hr:multi-state-summary'),
+  // Pay schedules (HR37-HR40)
+  hrPaySchedules: () => window.electronAPI.invoke('hr:pay-schedules'),
+  hrPayScheduleUpsert: (sched: any) => window.electronAPI.invoke('hr:pay-schedule:upsert', sched),
+  hrPayScheduleDelete: (id: string) => window.electronAPI.invoke('hr:pay-schedule:delete', { id }),
+  hrNextPayDates: (count?: number) => window.electronAPI.invoke('hr:next-pay-dates', { count }),
+  // Onboarding templates (HR41-HR45)
+  hrOnboardingTemplates: () => window.electronAPI.invoke('hr:onboarding-templates'),
+  hrOnboardingTemplateUpsert: (tpl: any) => window.electronAPI.invoke('hr:onboarding-template:upsert', tpl),
+  hrOnboardingTemplateDelete: (id: string) => window.electronAPI.invoke('hr:onboarding-template:delete', { id }),
+  hrOnboardingApplyTemplate: (employeeId: string, templateId: string) => window.electronAPI.invoke('hr:onboarding:apply-template', { employeeId, templateId }),
+  hrOnboardingAssignments: (employeeId: string) => window.electronAPI.invoke('hr:onboarding:assignments', { employeeId }),
+  hrOnboardingToggle: (id: string, done: boolean, completedBy?: string) => window.electronAPI.invoke('hr:onboarding:toggle', { id, done, completedBy }),
+  // Analytics (HR46-HR50)
+  hrDashboard: () => window.electronAPI.invoke('hr:dashboard'),
+  hrTurnoverRate: (year?: number) => window.electronAPI.invoke('hr:turnover-rate', { year }),
+  hrPayrollCostSummary: () => window.electronAPI.invoke('hr:payroll-cost-summary'),
+  hrAnniversaries: () => window.electronAPI.invoke('hr:anniversaries'),
+  hrBirthdays: () => window.electronAPI.invoke('hr:birthdays'),
+
   employeeChecklist: (employeeId: string, phase: 'onboarding' | 'offboarding'): Promise<{ steps: Array<{ key: string; label: string; description: string; auto: boolean; done: boolean; category: string }>; done: number; total: number; phase: string; employee_name?: string; error?: string }> =>
     window.electronAPI.invoke('employee:checklist', { employeeId, phase }),
   employeeChecklistToggle: (employeeId: string, phase: string, stepKey: string, done: boolean): Promise<{ ok?: boolean; error?: string }> =>

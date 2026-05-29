@@ -16141,6 +16141,67 @@ export function registerIpcHandlers(): void {
   </div>`;
   }
 
+  // ─── HR Suite (50 features: HR1–HR50) ────────────────────
+  const hrs = () => require('../services/hr-suite-features');
+  // Benefits (HR1-HR10)
+  ipcMain.handle('hr:benefit-plans', (_e, { activeOnly }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hrs().listBenefitPlans(c, !!activeOnly) : []; });
+  ipcMain.handle('hr:benefit-plan:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().upsertBenefitPlan({ ...p, company_id: c }); });
+  ipcMain.handle('hr:benefit-plan:delete', (_e, { id }: any) => { hrs().deleteBenefitPlan(id); return { ok: true }; });
+  ipcMain.handle('hr:benefit-plan:summary', () => { const c = db.getCurrentCompanyId(); return c ? hrs().benefitPlanSummary(c) : {}; });
+  ipcMain.handle('hr:benefit-plan:enrollees', (_e, { planId }: any) => hrs().benefitPlanEnrollees(planId));
+  ipcMain.handle('hr:enroll', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().enrollEmployee({ ...p, company_id: c }); });
+  ipcMain.handle('hr:enrollment:terminate', (_e, { id, endDate }: any) => { hrs().terminateEnrollment(id, endDate); return { ok: true }; });
+  ipcMain.handle('hr:employee-benefits', (_e, { employeeId }: any) => hrs().employeeBenefits(employeeId));
+  ipcMain.handle('hr:enrollment:update', (_e, { id, ...data }: any) => { hrs().updateEnrollment(id, data); return { ok: true }; });
+  ipcMain.handle('hr:benefits-cost-per-employee', () => { const c = db.getCurrentCompanyId(); return c ? hrs().benefitsCostPerEmployee(c) : []; });
+  // Overtime (HR11-HR15)
+  ipcMain.handle('hr:overtime-rules', () => { const c = db.getCurrentCompanyId(); return c ? hrs().listOvertimeRules(c) : []; });
+  ipcMain.handle('hr:overtime-rule:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().upsertOvertimeRule({ ...p, company_id: c }); });
+  ipcMain.handle('hr:overtime-rule:delete', (_e, { id }: any) => { hrs().deleteOvertimeRule(id); return { ok: true }; });
+  ipcMain.handle('hr:overtime:calculate', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? hrs().calculateOvertime(c, p.hours, p.stateCode) : {}; });
+  ipcMain.handle('hr:overtime:summary', (_e, { startDate, endDate }: any) => { const c = db.getCurrentCompanyId(); return c ? hrs().overtimeSummary(c, startDate, endDate) : []; });
+  // Time-off (HR16-HR27)
+  ipcMain.handle('hr:time-off:submit', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().submitTimeOffRequest({ ...p, company_id: c }); });
+  ipcMain.handle('hr:time-off:approve', (_e, { id, approvedBy }: any) => { hrs().approveTimeOffRequest(id, approvedBy); return { ok: true }; });
+  ipcMain.handle('hr:time-off:deny', (_e, { id, reason }: any) => { hrs().denyTimeOffRequest(id, reason); return { ok: true }; });
+  ipcMain.handle('hr:time-off:cancel', (_e, { id }: any) => { hrs().cancelTimeOffRequest(id); return { ok: true }; });
+  ipcMain.handle('hr:time-off:list', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hrs().listTimeOffRequests(c, opts) : []; });
+  ipcMain.handle('hr:time-off:pending-count', () => { const c = db.getCurrentCompanyId(); return c ? hrs().pendingTimeOffCount(c) : 0; });
+  ipcMain.handle('hr:time-off:calendar', (_e, { month }: any) => { const c = db.getCurrentCompanyId(); return c ? hrs().timeOffCalendar(c, month) : []; });
+  ipcMain.handle('hr:accruals:list', (_e, { employeeId }: any) => hrs().listTimeOffAccruals(employeeId));
+  ipcMain.handle('hr:accruals:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().upsertTimeOffAccrual({ ...p, company_id: c }); });
+  ipcMain.handle('hr:accruals:run', (_e, { employeeId, hoursWorked }: any) => hrs().runAccrualForEmployee(employeeId, hoursWorked));
+  ipcMain.handle('hr:accruals:deduct', (_e, { employeeId, type, hours }: any) => hrs().deductTimeOff(employeeId, type, hours));
+  // Salary reviews (HR28-HR32)
+  ipcMain.handle('hr:salary-reviews:list', (_e, { employeeId }: any) => hrs().listSalaryReviews(employeeId));
+  ipcMain.handle('hr:salary-review:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().createSalaryReview({ ...p, company_id: c }); });
+  ipcMain.handle('hr:salary-review:delete', (_e, { id }: any) => { hrs().deleteSalaryReview(id); return { ok: true }; });
+  ipcMain.handle('hr:salary-review:dashboard', () => { const c = db.getCurrentCompanyId(); return c ? hrs().salaryReviewDashboard(c) : {}; });
+  ipcMain.handle('hr:employees-due-for-review', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hrs().employeesDueForReview(c, months || 12) : []; });
+  // State allocations (HR33-HR36)
+  ipcMain.handle('hr:state-allocations:list', (_e, { employeeId }: any) => hrs().listStateAllocations(employeeId));
+  ipcMain.handle('hr:state-allocation:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().upsertStateAllocation({ ...p, company_id: c }); });
+  ipcMain.handle('hr:state-allocation:delete', (_e, { id }: any) => { hrs().deleteStateAllocation(id); return { ok: true }; });
+  ipcMain.handle('hr:multi-state-summary', () => { const c = db.getCurrentCompanyId(); return c ? hrs().multiStateSummary(c) : []; });
+  // Pay schedules (HR37-HR40)
+  ipcMain.handle('hr:pay-schedules', () => { const c = db.getCurrentCompanyId(); return c ? hrs().listPaySchedules(c) : []; });
+  ipcMain.handle('hr:pay-schedule:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().upsertPaySchedule({ ...p, company_id: c }); });
+  ipcMain.handle('hr:pay-schedule:delete', (_e, { id }: any) => { hrs().deletePaySchedule(id); return { ok: true }; });
+  ipcMain.handle('hr:next-pay-dates', (_e, { count }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hrs().nextPayDates(c, count || 6) : []; });
+  // Onboarding templates (HR41-HR45)
+  ipcMain.handle('hr:onboarding-templates', () => { const c = db.getCurrentCompanyId(); return c ? hrs().listOnboardingTemplates(c) : []; });
+  ipcMain.handle('hr:onboarding-template:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hrs().upsertOnboardingTemplate({ ...p, company_id: c }); });
+  ipcMain.handle('hr:onboarding-template:delete', (_e, { id }: any) => { hrs().deleteOnboardingTemplate(id); return { ok: true }; });
+  ipcMain.handle('hr:onboarding:apply-template', (_e, { employeeId, templateId }: any) => { const c = db.getCurrentCompanyId(); return c ? hrs().applyOnboardingTemplate(c, employeeId, templateId) : { error: 'No company' }; });
+  ipcMain.handle('hr:onboarding:assignments', (_e, { employeeId }: any) => hrs().listOnboardingAssignments(employeeId));
+  ipcMain.handle('hr:onboarding:toggle', (_e, { id, done, completedBy }: any) => { hrs().toggleOnboardingAssignment(id, !!done, completedBy); return { ok: true }; });
+  // Analytics (HR46-HR50)
+  ipcMain.handle('hr:dashboard', () => { const c = db.getCurrentCompanyId(); return c ? hrs().hrDashboard(c) : {}; });
+  ipcMain.handle('hr:turnover-rate', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hrs().turnoverRate(c, year) : {}; });
+  ipcMain.handle('hr:payroll-cost-summary', () => { const c = db.getCurrentCompanyId(); return c ? hrs().payrollCostSummary(c) : {}; });
+  ipcMain.handle('hr:anniversaries', () => { const c = db.getCurrentCompanyId(); return c ? hrs().anniversariesThisMonth(c) : []; });
+  ipcMain.handle('hr:birthdays', () => { const c = db.getCurrentCompanyId(); return c ? hrs().birthdaysThisMonth(c) : []; });
+
   // ─── Onboarding / Offboarding Checklist ─────────────────
   // Returns a hybrid checklist: auto-detected steps (computed from real
   // data — equipment, agreements, banking, credentials) + manual
