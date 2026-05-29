@@ -695,6 +695,8 @@ const api = {
     window.electronAPI.invoke('lk:retrolink', { expense_id, loan_id, loan_payment_id }),
   lkLoanContextForExpense: (expenseId: string): Promise<any> =>
     window.electronAPI.invoke('lk:loan-context-for-expense', { expense_id: expenseId }),
+  lkBackfillExpenses: (all?: boolean): Promise<{ created_interest: number; created_principal: number; payments_processed: number; error?: string }> =>
+    window.electronAPI.invoke('lk:backfill-expenses', { all: !!all }),
   lkLinkageDashboard: (): Promise<any> =>
     window.electronAPI.invoke('lk:linkage-dashboard'),
   lkCashflowTimeline: (loanId: string, opts?: { since?: string; until?: string }): Promise<any> =>

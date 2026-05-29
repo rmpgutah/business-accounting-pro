@@ -421,6 +421,27 @@ app.whenReady().then(() => {
     // payment.received / etc. events occur, IF the company has
     // matching webhook_subscriptions rows.
     initWebhookDispatcher();
+    // One-time-ish reconciliation: ensure every loan payment already in
+    // the system has matching Interest + Principal expense rows. Reads
+    // stored splits, only fills gaps (related_expense_id IS NULL), so
+    // it's idempotent and fast after the first pass. Wrapped so a
+    // failure never blocks startup.
+    try {
+      const lk = require('./services/loan-linkage-features');
+      // First reconcile cached loan totals from payment-row sums (fixes
+      // any drift like the historical interest/principal column swap),
+      // then backfill matching expense rows for every payment.
+      const recon = lk.reconcileLoanTotals();
+      if (recon && recon.loans_fixed) {
+        console.log(`[loan-reconcile] fixed cached totals on ${recon.loans_fixed} loan(s)`);
+      }
+      const res = lk.backfillLoanPaymentExpenses();
+      if (res && (res.created_interest || res.created_principal)) {
+        console.log(`[loan-backfill] created ${res.created_interest} interest + ${res.created_principal} principal expense rows across ${res.payments_processed} payments`);
+      }
+    } catch (bfErr: any) {
+      console.warn('[loan-backfill] skipped:', bfErr?.message);
+    }
   } catch (err: any) {
     console.error('Failed to initialize:', err);
     dialog.showErrorBox('Startup Error', err.message || String(err));

@@ -339,3 +339,161 @@ export function loanContextForExpense(expenseId: string) {
     };
   } catch (e: any) { return null; }
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Global backfill — ensure EVERY loan payment already in the system has
+// matching Interest + Principal expense rows in the Expenses ledger,
+// properly categorized. Reads each payment's stored split (the source
+// of truth that reconciles to the balance) rather than re-deriving.
+//
+// Idempotent: only processes payments missing a link
+// (related_expense_id IS NULL / related_principal_expense_id IS NULL),
+// so it's safe to run on every app launch and as a manual re-sync.
+//
+// Scope: ALL companies (joins loan_payments → loans for company_id).
+// Pass a companyId to restrict.
+// ════════════════════════════════════════════════════════════════════
+export function backfillLoanPaymentExpenses(companyId?: string): {
+  created_interest: number;
+  created_principal: number;
+  payments_processed: number;
+  error?: string;
+} {
+  try {
+    const dbi = db.getDb();
+
+    // Pull payments that are missing at least one linked expense row.
+    // JOIN loans for company_id + loan name; skip soft-deleted loans.
+    const where = companyId ? 'AND l.company_id = ?' : '';
+    const params: any[] = companyId ? [companyId] : [];
+    const rows = dbi.prepare(`
+      SELECT lp.id, lp.payment_date, lp.principal_amount, lp.interest_amount,
+             lp.payment_method, lp.related_expense_id, lp.related_principal_expense_id,
+             l.company_id, l.name AS loan_name
+      FROM loan_payments lp
+      JOIN loans l ON lp.loan_id = l.id
+      WHERE (l.deleted_at IS NULL)
+        AND (
+          (lp.related_expense_id IS NULL AND lp.interest_amount > 0.005) OR
+          (lp.related_principal_expense_id IS NULL AND lp.principal_amount > 0.005)
+        )
+        ${where}
+    `).all(...params) as any[];
+
+    if (rows.length === 0) {
+      return { created_interest: 0, created_principal: 0, payments_processed: 0 };
+    }
+
+    // Per-company category cache so we find-or-create each category once.
+    const catCache: Record<string, { interest?: string; principal?: string }> = {};
+    const findOrCreateCategory = (cid: string, name: string, color: string, slot: 'interest' | 'principal'): string => {
+      if (!catCache[cid]) catCache[cid] = {};
+      const cached = catCache[cid][slot];
+      if (cached) return cached;
+      const existing = dbi.prepare(
+        "SELECT id FROM categories WHERE company_id = ? AND lower(name) = lower(?) AND is_active = 1 LIMIT 1"
+      ).get(cid, name) as any;
+      let id = existing?.id;
+      if (!id) {
+        id = uuid();
+        dbi.prepare(
+          "INSERT INTO categories (id, company_id, name, type, color, description, is_active, created_at, updated_at) VALUES (?, ?, ?, 'expense', ?, ?, 1, datetime('now'), datetime('now'))"
+        ).run(id, cid, name, color, 'Auto-created for loan payment integration');
+      }
+      catCache[cid][slot] = id;
+      return id;
+    };
+
+    const insertExpense = dbi.prepare(
+      "INSERT INTO expenses (id, company_id, date, amount, tax_amount, description, category_id, vendor_id, payment_method, status, related_loan_id, related_loan_payment_id, loan_component, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?, 'paid', NULL, ?, ?, datetime('now'), datetime('now'))"
+    );
+    const linkInterest = dbi.prepare("UPDATE loan_payments SET related_expense_id = ? WHERE id = ?");
+    const linkPrincipal = dbi.prepare("UPDATE loan_payments SET related_principal_expense_id = ? WHERE id = ?");
+
+    let createdInterest = 0, createdPrincipal = 0;
+
+    const tx = dbi.transaction(() => {
+      for (const r of rows) {
+        const method = r.payment_method || 'ach';
+        if (r.related_expense_id == null && r.interest_amount > 0.005) {
+          const cat = findOrCreateCategory(r.company_id, 'Interest Expense', '#f59e0b', 'interest');
+          const exId = uuid();
+          insertExpense.run(exId, r.company_id, r.payment_date, round2(r.interest_amount),
+            (r.loan_name || 'Loan') + ' · interest on ' + r.payment_date,
+            cat, method, r.id, 'interest');
+          linkInterest.run(exId, r.id);
+          createdInterest++;
+        }
+        if (r.related_principal_expense_id == null && r.principal_amount > 0.005) {
+          const cat = findOrCreateCategory(r.company_id, 'Loan Principal', '#6366f1', 'principal');
+          const exId = uuid();
+          insertExpense.run(exId, r.company_id, r.payment_date, round2(r.principal_amount),
+            (r.loan_name || 'Loan') + ' · principal on ' + r.payment_date,
+            cat, method, r.id, 'principal');
+          linkPrincipal.run(exId, r.id);
+          createdPrincipal++;
+        }
+      }
+    });
+    tx();
+
+    return {
+      created_interest: createdInterest,
+      created_principal: createdPrincipal,
+      payments_processed: rows.length,
+    };
+  } catch (e: any) {
+    return { created_interest: 0, created_principal: 0, payments_processed: 0, error: e?.message };
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Non-destructive total reconciliation. Re-derives each loan's cached
+// totals (current_balance, total_paid, total_principal_paid,
+// total_interest_paid) from the SUM of its payment rows — the source
+// of truth. Unlike loans:recompute (which REPLAYS and re-derives the
+// per-row splits via daily accrual), this TRUSTS the existing per-row
+// splits and only fixes the cached aggregates. Safe to run on startup:
+// it repairs drift (e.g. the old interest/principal column swap) without
+// touching manually-edited splits or the schedule.
+//
+// Only writes when a value actually changed, so it's cheap and quiet.
+// ════════════════════════════════════════════════════════════════════
+export function reconcileLoanTotals(companyId?: string): { loans_fixed: number } {
+  try {
+    const dbi = db.getDb();
+    const where = companyId ? 'WHERE company_id = ? AND deleted_at IS NULL' : 'WHERE deleted_at IS NULL';
+    const params: any[] = companyId ? [companyId] : [];
+    const loans = dbi.prepare(`SELECT id, principal, current_balance, total_paid_to_date, total_principal_paid, total_interest_paid, status FROM loans ${where}`).all(...params) as any[];
+    let fixed = 0;
+    const upd = dbi.prepare(
+      "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_principal_paid = ?, total_interest_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
+    );
+    const tx = dbi.transaction(() => {
+      for (const l of loans) {
+        const agg = dbi.prepare(
+          "SELECT COALESCE(SUM(amount),0) AS paid, COALESCE(SUM(principal_amount),0) AS principal, COALESCE(SUM(interest_amount),0) AS interest FROM loan_payments WHERE loan_id = ?"
+        ).get(l.id) as any;
+        const newBalance = round2(Math.max(0, (l.principal || 0) - (agg.principal || 0)));
+        const newPaid = round2(agg.paid);
+        const newPrincipal = round2(agg.principal);
+        const newInterest = round2(agg.interest);
+        const newStatus = newBalance < 0.005 ? 'paid_off' : (l.status === 'paid_off' ? 'active' : l.status);
+        const drift =
+          Math.abs((l.current_balance || 0) - newBalance) > 0.005 ||
+          Math.abs((l.total_paid_to_date || 0) - newPaid) > 0.005 ||
+          Math.abs((l.total_principal_paid || 0) - newPrincipal) > 0.005 ||
+          Math.abs((l.total_interest_paid || 0) - newInterest) > 0.005 ||
+          l.status !== newStatus;
+        if (drift) {
+          upd.run(newBalance, newPaid, newPrincipal, newInterest, newStatus, l.id);
+          fixed++;
+        }
+      }
+    });
+    tx();
+    return { loans_fixed: fixed };
+  } catch (e: any) {
+    return { loans_fixed: 0 };
+  }
+}

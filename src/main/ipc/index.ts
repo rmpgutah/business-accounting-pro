@@ -4585,6 +4585,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('lk:generate-bill', (_e, p: any) => lk().generateBillForUpcomingPayment(p));
   ipcMain.handle('lk:cashflow-timeline', (_e, { loan_id, opts }: any) => lk().loanCashflowTimeline(loan_id, opts || {}));
   ipcMain.handle('lk:loan-context-for-expense', (_e, { expense_id }: any) => lk().loanContextForExpense(expense_id));
+  // Global backfill — reconcile ALL existing loan payments into the
+  // expense ledger. Defaults to the active company; pass {all:true}
+  // to process every company. Idempotent.
+  ipcMain.handle('lk:backfill-expenses', (_e, payload?: { all?: boolean }) => {
+    try {
+      const cid = payload?.all ? undefined : (db.getCurrentCompanyId() || undefined);
+      return lk().backfillLoanPaymentExpenses(cid);
+    } catch (e: any) { return { error: e?.message }; }
+  });
 
   ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
     try {

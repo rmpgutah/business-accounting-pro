@@ -5,7 +5,7 @@
 // active loans on the list view.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle } from 'lucide-react';
+import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import LoanForm from './LoanForm';
@@ -87,6 +87,20 @@ const LoansModule: React.FC = () => {
           <Landmark size={22} /> Loans & Debt
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const r = await api.lkBackfillExpenses();
+              if (r?.error) { toast.error('Sync failed: ' + r.error); return; }
+              const total = (r.created_interest || 0) + (r.created_principal || 0);
+              if (total === 0) toast.success('All loan payments are already synced to Expenses.');
+              else toast.success(`Synced ${total} expense row${total === 1 ? '' : 's'} (${r.created_interest} interest + ${r.created_principal} principal) from ${r.payments_processed} payments.`);
+              load();
+            }}
+            title="Create matching Interest + Principal expense rows for any loan payments not yet in the Expenses ledger"
+          >
+            <RefreshCw size={14} /> Sync to Expenses
+          </button>
           <button
             className="block-btn flex items-center gap-2"
             onClick={() => { setSelectedId(null); setView('form'); }}
