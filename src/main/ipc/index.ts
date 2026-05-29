@@ -5829,12 +5829,29 @@ export function registerIpcHandlers(): void {
         }
       }
 
+      // Net extended price for a line: gross (qty × unit_price) MINUS its
+      // discount. A flat discount_amount takes priority over discount_percent
+      // (same precedence as the ItemizationEditor). Clamped at 0 — a discount
+      // can't make a line negative. This is what makes the per-line discount
+      // actually reduce the saved expense amount (previously it was stored on
+      // the line but never subtracted, so the expense total ignored it).
+      const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
+      const lineNet = (li: any): number => {
+        const gross = (li.quantity || 1) * (li.unit_price || 0);
+        const flat = Number(li.discount_amount || 0);
+        const pct = Number(li.discount_percent || 0);
+        const disc = flat > 0 ? flat : pct > 0 ? gross * (pct / 100) : 0;
+        return round2(Math.max(0, gross - disc));
+      };
+
       const saveFn = rawDb.transaction(() => {
         let savedId: string;
 
-        // Auto-calculate amount from line items when present
+        // Auto-calculate amount from line items when present — SUM OF NET
+        // (post-discount, pre-tax) line amounts so per-line discounts are
+        // reflected in the stored expense.amount.
         if (lineItems.length > 0) {
-          expenseData.amount = lineItems.reduce((sum: number, li: any) => sum + ((li.quantity || 1) * (li.unit_price || 0)), 0);
+          expenseData.amount = round2(lineItems.reduce((sum: number, li: any) => sum + lineNet(li), 0));
         }
 
         if (isEdit && expenseId) {
@@ -5857,12 +5874,13 @@ export function registerIpcHandlers(): void {
           savedId = record.id;
         }
 
-        // Insert new line items
+        // Insert new line items — store each line's NET (post-discount)
+        // extended amount so the line total and the expense total agree.
         for (let i = 0; i < lineItems.length; i++) {
           db.create('expense_line_items', {
             ...lineItems[i],
             expense_id: savedId,
-            amount: (lineItems[i].quantity || 1) * (lineItems[i].unit_price || 0),
+            amount: lineNet(lineItems[i]),
             sort_order: i,
           });
         }
