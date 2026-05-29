@@ -800,12 +800,9 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 
 // ─── Agreements Panel ─────────────────────────────────────
 type AgreementType = 'equipment' | 'employee';
-interface SignedDoc { id: string; html: string; name: string; date: string }
-
-const escapeHtml = (s: string): string =>
-  String(s || '').replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
-  ));
+interface SigInput { name: string; date: string }
+interface SigData { employee?: SigInput; employer?: SigInput }
+interface SignedDoc { id: string; html: string; employee?: SigInput; employer?: SigInput }
 
 const AGREEMENT_TITLE: Record<AgreementType, string> = {
   equipment: 'Employer Provided Equipment Agreement',
@@ -836,12 +833,14 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
           const doc = docs.find((d: any) => d.description === marker(type) && d.status === 'signed');
           if (doc) {
             const full = await api.esignGet(doc.id);
-            const sig = full?.signatures?.[full.signatures.length - 1];
+            const sigs: any[] = full?.signatures || [];
+            const emp = sigs.find((s) => s.signer_type === 'employee');
+            const empr = sigs.find((s) => s.signer_type === 'admin');
             next[type] = {
               id: doc.id,
               html: full?.content || '',
-              name: sig?.typed_name || sig?.signer_name || employeeName,
-              date: (sig?.signed_at || doc.updated_at || '').slice(0, 10),
+              employee: emp ? { name: emp.typed_name || emp.signer_name, date: (emp.signed_at || '').slice(0, 10) } : undefined,
+              employer: empr ? { name: empr.typed_name || empr.signer_name, date: (empr.signed_at || '').slice(0, 10) } : undefined,
             };
           }
         }
@@ -851,10 +850,10 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
     return () => { cancelled = true; };
   }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const genHtml = async (type: AgreementType): Promise<string> => {
+  const genHtml = async (type: AgreementType, sigs?: SigData): Promise<string> => {
     const { html } = type === 'equipment'
-      ? await api.generateEquipmentAgreement(employeeId)
-      : await api.generateEmployeeAgreement(employeeId);
+      ? await api.generateEquipmentAgreement(employeeId, sigs)
+      : await api.generateEmployeeAgreement(employeeId, sigs);
     return html || '';
   };
 
@@ -888,27 +887,24 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
     } finally { setLoading(false); }
   };
 
-  // Build a print-friendly signature block and embed it before </body>.
-  const embedSignature = (html: string, typedName: string, dateStr: string): string => {
-    const dateDisplay = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const block = `<div style="margin-top:48px;padding-top:16px;border-top:2px solid #333;page-break-inside:avoid;">
-      <div style="font-size:11px;letter-spacing:1px;color:#666;text-transform:uppercase;margin-bottom:6px;">Electronic Signature</div>
-      <div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:30px;color:#111;line-height:1.1;">${escapeHtml(typedName)}</div>
-      <div style="font-size:12px;color:#333;margin-top:8px;">Signed by <strong>${escapeHtml(employeeName)}</strong> &nbsp;&middot;&nbsp; Date: <strong>${dateDisplay}</strong></div>
-      <div style="font-size:10px;color:#999;margin-top:4px;">Electronically signed &amp; recorded. This signature is cryptographically bound to the document content (SHA-256).</div>
-    </div>`;
-    return html.includes('</body>') ? html.replace('</body>', block + '</body>') : html + block;
-  };
-
-  const handleSign = async (type: AgreementType, typedName: string, dateStr: string) => {
-    const baseHtml = await genHtml(type);
-    if (!baseHtml) throw new Error('Could not generate the agreement to sign.');
-    const signedHtml = embedSignature(baseHtml, typedName, dateStr);
+  // Generate the agreement WITH the signatures rendered in-place (formal
+  // Signatures section, both parties), persist it as an e-sign document,
+  // and record each party's signature (employee + employer/admin).
+  const handleSign = async (type: AgreementType, data: SigData) => {
+    if (!data.employee?.name && !data.employer?.name) throw new Error('Enter at least one signature.');
+    const signedHtml = await genHtml(type, data);
+    if (!signedHtml) throw new Error('Could not generate the agreement to sign.');
     const created = await api.esignCreate(`${AGREEMENT_TITLE[type]} — ${employeeName}`, marker(type), signedHtml);
     if (!created?.id) throw new Error('Could not create the e-sign document.');
-    const res = await api.esignSign(created.id, typedName, 'employee', employeeId, employeeName, dateStr);
-    if (res?.error) throw new Error(res.error);
-    setSigned((prev) => ({ ...prev, [type]: { id: created.id, html: signedHtml, name: typedName, date: dateStr } }));
+    if (data.employee?.name) {
+      const r = await api.esignSign(created.id, data.employee.name, 'employee', employeeId, employeeName, data.employee.date);
+      if (r?.error) throw new Error(r.error);
+    }
+    if (data.employer?.name) {
+      const r = await api.esignSign(created.id, data.employer.name, 'admin', '', data.employer.name, data.employer.date);
+      if (r?.error) throw new Error(r.error);
+    }
+    setSigned((prev) => ({ ...prev, [type]: { id: created.id, html: signedHtml, employee: data.employee, employer: data.employer } }));
   };
 
   const renderCard = (type: AgreementType, Icon: typeof Laptop, iconColor: string, desc: string) => {
@@ -923,10 +919,18 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
             <p className="text-xs text-text-muted">{desc}</p>
           </div>
         </div>
-        {sig && (
-          <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-accent-income)' }}>
-            <CheckCircle2 size={13} />
-            <span>Signed by <strong>{sig.name}</strong> on {new Date(sig.date + 'T12:00:00').toLocaleDateString()}</span>
+        {sig && (sig.employee || sig.employer) && (
+          <div className="text-xs space-y-0.5" style={{ color: 'var(--color-accent-income)' }}>
+            {sig.employee && (
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={13} /><span>Employee: <strong>{sig.employee.name}</strong>{sig.employee.date ? ` · ${new Date(sig.employee.date + 'T12:00:00').toLocaleDateString()}` : ''}</span>
+              </div>
+            )}
+            {sig.employer && (
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={13} /><span>Employer: <strong>{sig.employer.name}</strong>{sig.employer.date ? ` · ${new Date(sig.employer.date + 'T12:00:00').toLocaleDateString()}` : ''}</span>
+              </div>
+            )}
           </div>
         )}
         <div className="flex gap-2 flex-wrap">
@@ -955,9 +959,9 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
       {signModal && (
         <ESignModal
           title={AGREEMENT_TITLE[signModal]}
-          defaultName={employeeName}
+          defaultEmployeeName={employeeName}
           onClose={() => setSignModal(null)}
-          onSign={async (typedName, dateStr) => { await handleSign(signModal, typedName, dateStr); setSignModal(null); }}
+          onSign={async (data) => { await handleSign(signModal, data); setSignModal(null); }}
         />
       )}
     </div>
@@ -968,34 +972,51 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
 // Captures a typed signature + a signing date. The date defaults to today
 // and is capped at today (max=) so the user can back-date to the current OR
 // a past date — but never the future.
+// Captures BOTH the employee and (optionally) the employer/admin
+// signature — each a typed name + date (defaults to today, capped at
+// today so you can back-date but not future-date). The signatures are
+// rendered in-place in the document's formal Signatures section.
+const CURSIVE = "'Snell Roundhand','Apple Chancery','Brush Script MT',cursive";
 const ESignModal: React.FC<{
   title: string;
-  defaultName: string;
+  defaultEmployeeName: string;
   onClose: () => void;
-  onSign: (typedName: string, dateStr: string) => Promise<void>;
-}> = ({ title, defaultName, onClose, onSign }) => {
+  onSign: (data: SigData) => Promise<void>;
+}> = ({ title, defaultEmployeeName, onClose, onSign }) => {
   const today = new Date().toISOString().split('T')[0];
-  const [typedName, setTypedName] = useState(defaultName || '');
-  const [dateStr, setDateStr] = useState(today);
+  const [empName, setEmpName] = useState(defaultEmployeeName || '');
+  const [empDate, setEmpDate] = useState(today);
+  const [addEmployer, setAddEmployer] = useState(false);
+  const [emprName, setEmprName] = useState('');
+  const [emprDate, setEmprDate] = useState(today);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async () => {
-    if (!typedName.trim()) { setError('Type your full legal name to sign.'); return; }
+    if (!empName.trim() && !(addEmployer && emprName.trim())) { setError('Enter at least one signer name.'); return; }
     if (!agree) { setError('You must confirm intent to sign.'); return; }
-    if (dateStr > today) { setError('Signing date cannot be in the future.'); return; }
+    if (empDate > today || (addEmployer && emprDate > today)) { setError('Signing dates cannot be in the future.'); return; }
     setBusy(true); setError('');
     try {
-      await onSign(typedName.trim(), dateStr);
+      await onSign({
+        employee: empName.trim() ? { name: empName.trim(), date: empDate } : undefined,
+        employer: addEmployer && emprName.trim() ? { name: emprName.trim(), date: emprDate } : undefined,
+      });
     } catch (err: any) {
       setError(err?.message || 'Failed to sign');
     } finally { setBusy(false); }
   };
 
+  const sigPreview = (name: string) => name.trim() ? (
+    <div className="mt-2 px-3 py-2" style={{ borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>
+      <span style={{ fontFamily: CURSIVE, fontSize: 24, color: 'var(--color-text-primary)' }}>{name}</span>
+    </div>
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
-      <div className="block-card w-full max-w-md p-5 space-y-4" style={{ borderRadius: '10px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="block-card w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto" style={{ borderRadius: '10px' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <PenTool size={16} className="text-accent-income" />
@@ -1005,25 +1026,37 @@ const ESignModal: React.FC<{
         </div>
         <p className="text-xs text-text-muted">{title}</p>
 
-        <div>
-          <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Full Legal Name (your signature)</label>
-          <input className="block-input" value={typedName} onChange={(e) => setTypedName(e.target.value)} placeholder="Type your full name" autoFocus />
-          {typedName.trim() && (
-            <div className="mt-2 px-3 py-2" style={{ borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>
-              <span style={{ fontFamily: "'Snell Roundhand','Apple Chancery','Brush Script MT',cursive", fontSize: 26, color: 'var(--color-text-primary)' }}>{typedName}</span>
-            </div>
-          )}
+        {/* Employee signature */}
+        <div className="p-3" style={{ borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+          <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Employee Signature</label>
+          <div className="grid gap-2" style={{ gridTemplateColumns: '2fr 1fr' }}>
+            <input className="block-input" value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder="Employee full legal name" autoFocus />
+            <input type="date" className="block-input" value={empDate} max={today} onChange={(e) => setEmpDate(e.target.value)} />
+          </div>
+          {sigPreview(empName)}
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Date Signed</label>
-          <input type="date" className="block-input" value={dateStr} max={today} onChange={(e) => setDateStr(e.target.value)} />
-          <p className="text-[10px] text-text-muted mt-1">Defaults to today. You may back-date to a past date; future dates are not allowed.</p>
-        </div>
+        {/* Employer / admin signature */}
+        <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+          <input type="checkbox" checked={addEmployer} onChange={(e) => setAddEmployer(e.target.checked)} style={{ accentColor: '#16a34a' }} />
+          Add employer / authorized representative signature
+        </label>
+        {addEmployer && (
+          <div className="p-3" style={{ borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+            <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Employer Signature</label>
+            <div className="grid gap-2" style={{ gridTemplateColumns: '2fr 1fr' }}>
+              <input className="block-input" value={emprName} onChange={(e) => setEmprName(e.target.value)} placeholder="Authorized representative name" />
+              <input type="date" className="block-input" value={emprDate} max={today} onChange={(e) => setEmprDate(e.target.value)} />
+            </div>
+            {sigPreview(emprName)}
+          </div>
+        )}
+
+        <p className="text-[10px] text-text-muted">Dates default to today; you may back-date to a past date but not the future.</p>
 
         <label className="flex items-start gap-2 text-xs text-text-secondary">
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, accentColor: '#16a34a' }} />
-          <span>I, the named employee, agree that typing my name constitutes my electronic signature and that I have read and accept this document.</span>
+          <span>The named parties agree that typing their name constitutes their electronic signature and that they have read and accept this document.</span>
         </label>
 
         {error && <p className="text-xs" style={{ color: 'var(--color-accent-expense)' }}>{error}</p>}

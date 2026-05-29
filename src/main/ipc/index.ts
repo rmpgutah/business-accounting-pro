@@ -16109,7 +16109,38 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Employee Document Generation ─────────────────────────
-  ipcMain.handle('employee:generate-equipment-agreement', (_event, { employeeId }: { employeeId: string }) => {
+  // Shared, formal signature block for both agreements. Renders an
+  // in-place cursive signature + date for each party that has signed
+  // (employee and/or employer), or a blank ruled line for wet-ink
+  // signing when unsigned. Replaces the old approach of dangling an
+  // "ELECTRONIC SIGNATURE" block at the very bottom of the document.
+  type SigData = { employee?: { name: string; date: string }; employer?: { name: string; date: string } };
+  function agreementSignatureBlock(empName: string, companyName: string, signatures?: SigData): string {
+    const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    const fmt = (d: any) => d ? new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    const field = (label: 'Employee' | 'Employer', party: string, sig?: { name: string; date: string }) => {
+      const signed = !!(sig && sig.name);
+      return `<div class="signature-field"${label === 'Employer' ? ' style="margin-left:40px;"' : ''}>
+        ${signed
+          ? `<div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:26px;color:#111;border-bottom:1px solid #374151;padding-bottom:6px;min-height:38px;line-height:1.1;">${esc(sig!.name)}</div>`
+          : `<div class="signature-line">${label} Signature</div>`}
+        <p style="margin-top:6px;font-size:10pt;color:#374151;font-weight:700;">${esc(party)}</p>
+        <p style="font-size:9pt;color:#6b7280;">${label} Signature</p>
+        <p style="font-size:10pt;color:#374151;margin-top:2px;">Date: ${signed ? `<strong>${fmt(sig!.date)}</strong>` : '_______________'}</p>
+        ${signed ? `<p style="font-size:8pt;color:#9ca3af;margin-top:3px;">Electronically signed &amp; recorded &middot; cryptographically bound (SHA-256)</p>` : ''}
+      </div>`;
+    };
+    return `<div class="signature-section">
+    <h2>Signatures</h2>
+    <p>By signing below, the parties acknowledge and agree to the terms of this Agreement.</p>
+    <div class="signature-row">
+      ${field('Employee', empName, signatures?.employee)}
+      ${field('Employer', companyName, signatures?.employer)}
+    </div>
+  </div>`;
+  }
+
+  ipcMain.handle('employee:generate-equipment-agreement', (_event, { employeeId, signatures }: { employeeId: string; signatures?: SigData }) => {
     try {
       const dbInstance = db.getDb();
       const companyId = db.getCurrentCompanyId();
@@ -16429,22 +16460,7 @@ export function registerIpcHandlers(): void {
 
   <p style="font-size:10pt;color:#6b7280;margin-top:8px;"><em>Note: Any items not listed above that were previously issued must be disclosed to the Employer immediately. Failure to disclose previously issued equipment may result in additional liability.</em></p>
 
-  <div class="signature-section">
-    <h2>Signatures</h2>
-    <p>By signing below, the parties acknowledge and agree to the terms of this Agreement.</p>
-    <div class="signature-row">
-      <div class="signature-field">
-        <div class="signature-line">Employee Signature</div>
-        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${empName}</p>
-        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
-      </div>
-      <div class="signature-field" style="margin-left:40px;">
-        <div class="signature-line">Employer Signature</div>
-        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${companyName}</p>
-        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
-      </div>
-    </div>
-  </div>
+  ${agreementSignatureBlock(empName, companyName, signatures)}
 
   <div class="footer">
     <p>${companyName} &mdash; Employer Provided Equipment Agreement</p>
@@ -16461,7 +16477,7 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle('employee:generate-employee-agreement', (_event, { employeeId }: { employeeId: string }) => {
+  ipcMain.handle('employee:generate-employee-agreement', (_event, { employeeId, signatures }: { employeeId: string; signatures?: SigData }) => {
     try {
       const dbInstance = db.getDb();
       const companyId = db.getCurrentCompanyId();
@@ -16570,22 +16586,7 @@ export function registerIpcHandlers(): void {
     <p><strong>8. Governing Law.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the applicable jurisdiction')}.</p>
   </div>
 
-  <div class="signature-section">
-    <h2>Signatures</h2>
-    <p>By signing below, the parties acknowledge and agree to the terms of this Agreement.</p>
-    <div class="signature-row">
-      <div class="signature-field">
-        <div class="signature-line">Employee Signature</div>
-        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${empName}</p>
-        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
-      </div>
-      <div class="signature-field" style="margin-left:40px;">
-        <div class="signature-line">Employer Signature</div>
-        <p style="margin-top:4px;font-size:10pt;color:#6b7280;">${companyName}</p>
-        <p style="font-size:10pt;color:#6b7280;">Date: _______________</p>
-      </div>
-    </div>
-  </div>
+  ${agreementSignatureBlock(empName, companyName, signatures)}
 
   <div class="footer">
     <p>${companyName} &mdash; Employee Agreement</p>

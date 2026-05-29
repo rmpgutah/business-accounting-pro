@@ -1026,11 +1026,11 @@ const api = {
     window.electronAPI.invoke('payroll:employee-summary', { employeeId }),
 
   // ─── Employee Document Generation ────────────────
-  generateEquipmentAgreement: (employeeId: string): Promise<{ html: string }> =>
-    window.electronAPI.invoke('employee:generate-equipment-agreement', { employeeId }),
+  generateEquipmentAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string } }): Promise<{ html: string }> =>
+    window.electronAPI.invoke('employee:generate-equipment-agreement', { employeeId, signatures }),
 
-  generateEmployeeAgreement: (employeeId: string): Promise<{ html: string }> =>
-    window.electronAPI.invoke('employee:generate-employee-agreement', { employeeId }),
+  generateEmployeeAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string } }): Promise<{ html: string }> =>
+    window.electronAPI.invoke('employee:generate-employee-agreement', { employeeId, signatures }),
 
   // ─── E-Sign ───────────────────────────────────────
   esignList: (filters?: any): Promise<any[]> =>
