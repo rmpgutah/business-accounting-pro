@@ -1,9 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText, Laptop, ShieldCheck, PenTool, X, CheckCircle2 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+
+// PERF: these heavy panels sit below the form and would otherwise
+// re-render on EVERY keystroke (each fetches + renders lists), causing
+// noticeable data-entry lag. Memoize them so they only re-render when
+// their (stable) props change. The hide array MUST be a module constant
+// — a fresh `['pay_stubs']` literal each render would defeat React.memo's
+// shallow prop comparison.
+const HIDE_PAYSTUBS = ['pay_stubs'];
+const MemoRelatedPanel = React.memo(RelatedPanel);
+const MemoEntityTimeline = React.memo(EntityTimeline);
 import {
   EMPLOYEE_ROLE, EMPLOYEE_DEPARTMENT, EMPLOYEE_WORK_LOCATION, EMPLOYMENT_STATUS, EMPLOYEE_COST_CLASS,
   ClassificationSelect,
@@ -1041,6 +1051,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
 
   const isEditing = Boolean(employeeId);
 
+  // PERF: memoize the pay-history element so it isn't re-rendered on every
+  // keystroke in the form (it only depends on the stable employeeId).
+  const payHistoryEl = useMemo(
+    () => (employeeId ? <PayHistory employeeId={employeeId} /> : null),
+    [employeeId]
+  );
+
   // ─── Load existing employee ─────────────────────────
   useEffect(() => {
     if (!employeeId) return;
@@ -1755,16 +1772,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         </div>
       )}
 
-      {/* Pay History */}
-      {isEditing && (
-        <PayHistory employeeId={employeeId!} />
-      )}
+      {/* Pay History (memoized — see payHistoryEl) */}
+      {isEditing && payHistoryEl}
 
-      {/* Cross-integration panels */}
+      {/* Cross-integration panels (memoized components + stable props) */}
       {isEditing && employeeId && (
         <div className="grid grid-cols-2 gap-4 mt-6">
-          <RelatedPanel entityType="employee" entityId={employeeId} hide={['pay_stubs']} />
-          <EntityTimeline entityType="employees" entityId={employeeId} />
+          <MemoRelatedPanel entityType="employee" entityId={employeeId} hide={HIDE_PAYSTUBS} />
+          <MemoEntityTimeline entityType="employees" entityId={employeeId} />
         </div>
       )}
 

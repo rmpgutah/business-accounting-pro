@@ -16215,9 +16215,15 @@ export function registerIpcHandlers(): void {
   .terms { margin: 16px 0; }
   .terms p { margin: 6px 0; text-align: justify; }
   .footer { margin-top: 32px; text-align: center; font-size: 9pt; color: #9ca3af; }
-  .penalty-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
-  .penalty-table th { background: #1f2937; color: #ffffff; padding: 8px; border: 1px solid #374151; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
-  .penalty-table td { padding: 8px; border: 1px solid #d1d5db; vertical-align: top; font-size: 9pt; line-height: 1.4; }
+  /* table-layout:fixed makes the colgroup widths authoritative so the
+     Definition column (longest text) gets the space it needs instead of
+     collapsing to a sliver while the short Violation column hogs width. */
+  .penalty-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; table-layout: fixed; }
+  .penalty-table th { background: #1f2937; color: #ffffff; padding: 7px 8px; border: 1px solid #374151; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  .penalty-table td { padding: 7px 8px; border: 1px solid #d1d5db; vertical-align: top; font-size: 8.5pt; line-height: 1.35; word-wrap: break-word; overflow-wrap: anywhere; }
+  /* Keep each penalty row intact across page breaks (rows are now short
+     enough that this won't leave large gaps). */
+  .penalty-table tr { page-break-inside: avoid; }
   .penalty-high { background: #fef2f2; }
   .penalty-medium { background: #fffbeb; }
 </style></head>
@@ -16269,12 +16275,18 @@ export function registerIpcHandlers(): void {
 
     <p><strong>5. Monetary Penalty Schedule.</strong> The Employee acknowledges and expressly agrees to the following specific monetary penalties for violations of this Agreement. These penalties are in addition to, and not in lieu of, the Employee's obligation to pay the full replacement cost of Equipment under Section 6 below. Each penalty amount is assessed per item of Equipment involved and per occurrence. All penalties shall be deducted directly from the Employee's wages, salary, commissions, bonuses, or any other compensation payable to the Employee, without further notice or consent, to the fullest extent permitted by applicable law.</p>
     <table class="penalty-table">
+      <colgroup>
+        <col style="width:7%;" />
+        <col style="width:19%;" />
+        <col style="width:46%;" />
+        <col style="width:28%;" />
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:40px;">Tier</th>
+          <th>Tier</th>
           <th>Violation / Occurrence</th>
-          <th style="width:100px;">Definition</th>
-          <th style="width:140px;">Penalty Amount</th>
+          <th>Definition</th>
+          <th>Penalty Amount</th>
         </tr>
       </thead>
       <tbody>
