@@ -164,7 +164,7 @@ const baseStyles = `
     letter-spacing: 0.7px;
     color: var(--ink-faint);
     border-bottom: 1.5px solid var(--ink);
-    background: linear-gradient(180deg, var(--paper-tint) 0%, var(--paper-soft) 100%);
+    background: var(--paper-tint);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -224,10 +224,10 @@ const baseStyles = `
   .stamp-watermark.overdue { color: rgba(220, 38, 38, 0.10); }
   /* Accent gradient bar — subtle decorative element for headers */
   .accent-bar {
-    height: 4px;
-    background: linear-gradient(90deg, var(--ink) 0%, var(--accent) 50%, var(--ink) 100%);
+    height: 3px;
+    background: var(--ink);
     margin-bottom: 18px;
-    border-radius: 2px;
+    border-radius: 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -260,7 +260,7 @@ const baseStyles = `
     print-color-adjust: exact;
   }
   .card-surface.elevated {
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+    box-shadow: none;
   }
   h1, h2, h3, h4, h5, h6 { page-break-after: avoid; break-after: avoid; }
   img { max-width: 100%; height: auto; }
@@ -277,8 +277,8 @@ const baseStyles = `
   .rpt-badge {
     font-size: 11px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1.4px; color: var(--ink); padding: 7px 16px;
-    border: 2px solid var(--ink); border-radius: 6px;
-    background: linear-gradient(180deg, #ffffff 0%, var(--paper-tint) 100%);
+    border: 2px solid var(--ink); border-radius: 4px;
+    background: var(--paper);
   }
   .rpt-meta {
     display: flex; gap: 28px; margin-bottom: 22px; padding: 14px 18px;
@@ -297,24 +297,24 @@ const baseStyles = `
     font-size: 10px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1.6px; color: #fff; padding: 8px 14px;
     margin-top: 26px; margin-bottom: 0;
-    background: linear-gradient(90deg, var(--ink) 0%, #1e293b 100%);
-    border-radius: 6px 6px 0 0;
+    background: var(--ink);
+    border-radius: 3px 3px 0 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .rpt-section-alt { background: linear-gradient(90deg, #334155 0%, #475569 100%); }
+  .rpt-section-alt { background: #475569; }
   .rpt-stats {
     display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 12px; margin-bottom: 22px;
   }
   .rpt-stat {
     border: 1px solid var(--rule); padding: 14px 16px;
-    background: linear-gradient(180deg, #ffffff 0%, var(--paper-tint) 100%);
-    border-radius: 8px; position: relative; overflow: hidden;
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -4px rgba(15,23,42,0.06);
+    background: var(--paper);
+    border-radius: 3px; position: relative; overflow: hidden;
+    box-shadow: none;
   }
   .rpt-stat::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, var(--ink), var(--accent), var(--ink));
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--ink);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .rpt-stat-label {
@@ -391,12 +391,12 @@ const baseStyles = `
     margin-bottom: 16px; border-radius: 2px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .legal-accent-bar.tone-reminder { background: linear-gradient(90deg, #1e40af 0%, #3b82f6 100%); }
-  .legal-accent-bar.tone-warning  { background: linear-gradient(90deg, #b45309 0%, #f59e0b 100%); }
-  .legal-accent-bar.tone-final    { background: linear-gradient(90deg, #991b1b 0%, #dc2626 100%); }
-  .legal-accent-bar.tone-demand   { background: linear-gradient(90deg, #0f172a 0%, #475569 100%); }
-  .legal-accent-bar.tone-settlement { background: linear-gradient(90deg, #155e75 0%, #0891b2 100%); }
-  .legal-accent-bar.tone-confirm  { background: linear-gradient(90deg, #166534 0%, #16a34a 100%); }
+  .legal-accent-bar.tone-reminder { background: #1e40af; }
+  .legal-accent-bar.tone-warning  { background: #b45309; }
+  .legal-accent-bar.tone-final    { background: #991b1b; }
+  .legal-accent-bar.tone-demand   { background: #0f172a; }
+  .legal-accent-bar.tone-settlement { background: #155e75; }
+  .legal-accent-bar.tone-confirm  { background: #166534; }
   .legal-date {
     text-align: right; font-size: 9.5pt; margin-bottom: 18px;
     font-family: 'Inter', sans-serif; color: #475569;
@@ -602,10 +602,10 @@ const baseStyles = `
   .fd-letterhead-right { text-align: right; min-width: 220px; flex-shrink: 0; }
   /* Subtle accent bar above the letterhead (decorative) */
   .fd-letterhead-accent {
-    height: 4px;
-    background: linear-gradient(90deg, var(--ink) 0%, var(--accent) 60%, var(--ink) 100%);
+    height: 3px;
+    background: var(--ink);
     margin-bottom: 20px;
-    border-radius: 2px;
+    border-radius: 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .fd-co-name {
@@ -676,9 +676,9 @@ const baseStyles = `
     float: right; min-width: 320px; max-width: 360px;
     padding: 0; background: var(--paper);
     border: 1px solid var(--rule-strong);
-    border-radius: 8px;
+    border-radius: 4px;
     overflow: hidden;
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -2px rgba(15,23,42,0.04);
+    box-shadow: none;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .fd-totals-card .totals-rows { padding: 14px 18px 6px; }
@@ -699,7 +699,7 @@ const baseStyles = `
   /* Hero TOTAL row — gradient accent strip background */
   .fd-totals-card .totals-grand {
     margin-top: 4px; padding: 16px 18px;
-    background: linear-gradient(180deg, var(--ink) 0%, #1e293b 100%);
+    background: var(--ink);
     color: #fff;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
@@ -766,7 +766,7 @@ function reportHeader(companyName: string, docTitle: string, dateRange?: string)
       <div class="rpt-co" style="font-size: 22px; letter-spacing: -0.4px;">${esc(companyName)}</div>
       ${dateRange ? `<div class="rpt-co-sub" style="font-size: 11px; color: var(--ink-faint); margin-top: 4px; font-weight: 500;">${esc(dateRange)}</div>` : ''}
     </div>
-    <div class="rpt-badge" style="border-color: var(--ink); color: var(--ink); padding: 7px 16px; letter-spacing: 1.4px; font-size: 11px; background: linear-gradient(180deg, #fff, var(--paper-tint)); -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(docTitle)}</div>
+    <div class="rpt-badge" style="border-color: var(--ink); color: var(--ink); padding: 7px 16px; letter-spacing: 1.4px; font-size: 11px; background: var(--paper); -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(docTitle)}</div>
   </div>`;
 }
 
@@ -1570,10 +1570,10 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 .totals-box {
   width: 320px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #ffffff;
   overflow: hidden;
-  box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 12px -4px rgba(15,23,42,0.06);
+  box-shadow: none;
 }
 .totals-box > .totals-row,
 .totals-box > [class^="totals-row"] { padding-left: 18px; padding-right: 18px; }
@@ -1595,7 +1595,7 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 }
 .totals-row:first-child { padding-top: 14px; }
 .totals-total {
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  background: #0f172a;
   color: #ffffff !important;
   padding: 14px 18px !important;
   margin-top: 6px;
@@ -2037,8 +2037,8 @@ export function generatePayStubHTML(
     position: relative;
   }
   .header::before {
-    content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg, #0f172a 0%, ${psAccent} 50%, #0f172a 100%);
+    content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 3px;
+    background: #0f172a;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .co-name { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; }
@@ -2049,8 +2049,8 @@ export function generatePayStubHTML(
     letter-spacing: 1.6px; color: #0f172a;
     padding: 8px 18px;
     border: 2px solid #0f172a;
-    border-radius: 6px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 4px;
+    background: #ffffff;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
@@ -2064,13 +2064,13 @@ export function generatePayStubHTML(
     margin-bottom: 24px;
     overflow: hidden;
     background: #ffffff;
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 4px 8px -4px rgba(15,23,42,0.05);
+    box-shadow: none;
   }
   .info-cell {
     padding: 11px 14px;
     border-right: 1px solid #e2e8f0;
     border-bottom: 1px solid #e2e8f0;
-    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+    background: #ffffff;
   }
   .info-cell:nth-child(4n) { border-right: none; }
   .info-cell:nth-last-child(-n+4) { border-bottom: none; }
@@ -2086,14 +2086,14 @@ export function generatePayStubHTML(
     font-size: 10px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1.6px; color: #fff;
     padding: 8px 14px; margin-top: 22px; margin-bottom: 0;
-    border-radius: 6px 6px 0 0;
+    border-radius: 3px 3px 0 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .section-earn    { background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%); }
-  .section-ded     { background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 100%); }
-  .section-summary { background: linear-gradient(90deg, #14532d 0%, #166534 100%); }
-  .section-employer{ background: linear-gradient(90deg, #475569 0%, #64748b 100%); }
-  .section-deposit { background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%); }
+  .section-earn    { background: #0f172a; }
+  .section-ded     { background: #7f1d1d; }
+  .section-summary { background: #14532d; }
+  .section-employer{ background: #475569; }
+  .section-deposit { background: #1e3a8a; }
 
   /* ── Employee identity block ── */
   .id-block {
@@ -2178,19 +2178,19 @@ export function generatePayStubHTML(
     align-items: center;
     margin-top: 26px;
     padding: 22px 26px;
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #f0fdf4 100%);
-    border: 2px solid #86efac;
-    border-radius: 10px;
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 4px;
     page-break-inside: avoid;
     break-inside: avoid;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 0 rgba(22,163,74,0.06), 0 8px 16px -6px rgba(22,163,74,0.16);
+    box-shadow: none;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .net-box::before {
-    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 5px;
-    background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+    background: #16a34a;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .net-current { padding-left: 8px; }
@@ -2915,7 +2915,7 @@ export function generateReportHTML(
   const summaryHTML = summary && summary.length > 0 ? `
     <div class="no-break" style="margin-top:24px;">
       <div class="rpt-section" style="margin-top:0;">Summary</div>
-      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;background:#ffffff;box-shadow:0 1px 0 rgba(15,23,42,0.04),0 4px 12px -4px rgba(15,23,42,0.06);-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 3px 3px;overflow:hidden;background:#ffffff;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       ${summary.map((s, i) => {
         const color = s.accent === 'green' ? '#16a34a' : s.accent === 'red' ? '#dc2626' : '#0f172a';
         const bg = i % 2 === 0 ? 'background:#f8fafc;' : 'background:#ffffff;';
