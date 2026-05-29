@@ -4365,6 +4365,97 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('eu:draft:get', (_e, { user_id }: any = {}) => eu().getLatestDraft(user_id));
   ipcMain.handle('eu:draft:clear', (_e, { user_id }: any = {}) => eu().clearDraft(user_id));
 
+  // ─── Expense Wave 3 (80 features: EX1–EX80) ───────────
+  const ex3 = () => require('../services/expense-wave3-features');
+  // Smart Automation (EX1-EX10)
+  ipcMain.handle('ex:auto-split-project', (_e, { expenseId }: any) => ex3().autoSplitByProject(expenseId));
+  ipcMain.handle('ex:detect-recurring', () => { const c = db.getCurrentCompanyId(); return c ? ex3().detectRecurringPatterns(c) : []; });
+  ipcMain.handle('ex:categorization-accuracy', () => { const c = db.getCurrentCompanyId(); return c ? ex3().categorizationAccuracy(c) : {}; });
+  ipcMain.handle('ex:spending-velocity', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().spendingVelocity(c, days || 7) : {}; });
+  ipcMain.handle('ex:find-duplicates', () => { const c = db.getCurrentCompanyId(); return c ? ex3().findDuplicateExpenses(c) : []; });
+  ipcMain.handle('ex:forecast-next-month', () => { const c = db.getCurrentCompanyId(); return c ? ex3().forecastNextMonth(c) : {}; });
+  ipcMain.handle('ex:vendor-anomalies', (_e, { threshold }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().vendorAnomalies(c, threshold || 2) : []; });
+  ipcMain.handle('ex:unmatched-receipts', () => { const c = db.getCurrentCompanyId(); return c ? ex3().unmatchedReceipts(c) : []; });
+  ipcMain.handle('ex:expense-aging', () => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseAging(c) : []; });
+  ipcMain.handle('ex:auto-tag', (_e, { rules }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().autoTagExpenses(c, rules || []) : {}; });
+  // Analytics (EX11-EX20)
+  ipcMain.handle('ex:spending-by-day', () => { const c = db.getCurrentCompanyId(); return c ? ex3().spendingByDayOfWeek(c) : []; });
+  ipcMain.handle('ex:submission-patterns', () => { const c = db.getCurrentCompanyId(); return c ? ex3().submissionPatterns(c) : []; });
+  ipcMain.handle('ex:category-trends', () => { const c = db.getCurrentCompanyId(); return c ? ex3().categoryTrends(c) : []; });
+  ipcMain.handle('ex:vendor-loyalty', () => { const c = db.getCurrentCompanyId(); return c ? ex3().vendorLoyaltyScores(c) : []; });
+  ipcMain.handle('ex:tax-deduction-summary', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().taxDeductionSummary(c, year) : []; });
+  ipcMain.handle('ex:expense-revenue-ratio', () => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseToRevenueRatio(c) : {}; });
+  ipcMain.handle('ex:spending-heatmap', (_e, { weeks }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().spendingHeatmap(c, weeks || 12) : []; });
+  ipcMain.handle('ex:monthly-growth', () => { const c = db.getCurrentCompanyId(); return c ? ex3().monthlyGrowthRate(c) : []; });
+  ipcMain.handle('ex:category-concentration', () => { const c = db.getCurrentCompanyId(); return c ? ex3().categoryConcentration(c) : {}; });
+  ipcMain.handle('ex:budget-burn-rate', () => { const c = db.getCurrentCompanyId(); return c ? ex3().budgetBurnRate(c) : []; });
+  // Workflow (EX21-EX30)
+  ipcMain.handle('ex:check-policy', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().checkPolicyViolations(c, p) : {}; });
+  ipcMain.handle('ex:approval-chain', (_e, { amount }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().getApprovalChain(c, amount) : {}; });
+  ipcMain.handle('ex:batch-approve', (_e, { expenseIds, approvedBy }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchApprove(c, expenseIds, approvedBy) : {}; });
+  ipcMain.handle('ex:batch-reject', (_e, { expenseIds, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchReject(c, expenseIds, reason) : {}; });
+  ipcMain.handle('ex:generate-report', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().generateExpenseReport(c, p) : {}; });
+  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().voidExpense(c, expenseId, reason) : {}; });
+  ipcMain.handle('ex:split-expense', (_e, { expenseId, splits }: any) => ex3().splitExpense(expenseId, splits));
+  ipcMain.handle('ex:request-clarification', (_e, { expenseId, question }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().requestClarification(c, expenseId, question) : {}; });
+  ipcMain.handle('ex:submit-on-behalf', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().submitOnBehalf(c, p.data, p.onBehalfOf) : {}; });
+  ipcMain.handle('ex:escalate-stale', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().escalateStaleExpenses(c, days || 7) : {}; });
+  // Reporting (EX31-EX40)
+  ipcMain.handle('ex:by-employee', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseByEmployee(c, opts.startDate, opts.endDate) : []; });
+  ipcMain.handle('ex:by-payment-method', () => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseByPaymentMethod(c) : []; });
+  ipcMain.handle('ex:yoy-comparison', () => { const c = db.getCurrentCompanyId(); return c ? ex3().yearOverYearExpenses(c) : []; });
+  ipcMain.handle('ex:largest', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().largestExpenses(c, limit || 20) : []; });
+  ipcMain.handle('ex:uncategorized', () => { const c = db.getCurrentCompanyId(); return c ? ex3().uncategorizedExpenses(c) : []; });
+  ipcMain.handle('ex:missing-receipts', (_e, { threshold }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().missingReceiptsReport(c, threshold || 25) : []; });
+  ipcMain.handle('ex:reimbursement-aging', () => { const c = db.getCurrentCompanyId(); return c ? ex3().reimbursementAging(c) : []; });
+  ipcMain.handle('ex:project-summary', () => { const c = db.getCurrentCompanyId(); return c ? ex3().projectExpenseSummary(c) : []; });
+  ipcMain.handle('ex:vendor-trend', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().vendorSpendingTrend(c, vendorId) : []; });
+  ipcMain.handle('ex:export-csv', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().exportExpensesCSV(c, opts.startDate, opts.endDate) : []; });
+  // Integration (EX41-EX50)
+  ipcMain.handle('ex:billable-by-client', () => { const c = db.getCurrentCompanyId(); return c ? ex3().billableExpensesByClient(c) : []; });
+  ipcMain.handle('ex:unmatched-bank-txns', () => { const c = db.getCurrentCompanyId(); return c ? ex3().unmatchedBankTransactionsForExpenses(c) : []; });
+  ipcMain.handle('ex:loan-linked', () => { const c = db.getCurrentCompanyId(); return c ? ex3().loanLinkedExpenses(c) : []; });
+  ipcMain.handle('ex:payroll-linked', () => { const c = db.getCurrentCompanyId(); return c ? ex3().payrollLinkedExpenses(c) : []; });
+  ipcMain.handle('ex:convert-to-bill', (_e, { expenseId }: any) => ex3().convertExpenseToBill(expenseId));
+  ipcMain.handle('ex:mark-billable', (_e, { expenseId, clientId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().markBillable(c, expenseId, clientId) : {}; });
+  ipcMain.handle('ex:link-project-budget', (_e, { expenseId, projectId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().linkToProjectWithBudgetCheck(c, expenseId, projectId) : {}; });
+  ipcMain.handle('ex:calc-mileage', (_e, { miles, year }: any) => ex3().calculateMileage(miles, year));
+  ipcMain.handle('ex:convert-currency', (_e, p: any) => ex3().convertCurrency(p.amount, p.from, p.to, p.rate));
+  ipcMain.handle('ex:to-invoice-line', (_e, { expenseId }: any) => ex3().expenseToInvoiceLine(expenseId));
+  // Compliance (EX51-EX60)
+  ipcMain.handle('ex:per-diem', (_e, p: any) => ex3().calculatePerDiem(p.location || 'standard', p.days, p.mealsIncluded));
+  ipcMain.handle('ex:audit-trail', (_e, { expenseId }: any) => ex3().expenseAuditTrail(expenseId));
+  ipcMain.handle('ex:policy-compliance', () => { const c = db.getCurrentCompanyId(); return c ? ex3().policyComplianceReport(c) : {}; });
+  ipcMain.handle('ex:weekend-expenses', () => { const c = db.getCurrentCompanyId(); return c ? ex3().flagWeekendExpenses(c) : []; });
+  ipcMain.handle('ex:round-number', () => { const c = db.getCurrentCompanyId(); return c ? ex3().roundNumberExpenses(c) : []; });
+  ipcMain.handle('ex:dept-budget-variance', () => { const c = db.getCurrentCompanyId(); return c ? ex3().deptBudgetVariance(c) : []; });
+  ipcMain.handle('ex:tax-deductible-breakdown', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().taxDeductibleBreakdown(c, year) : {}; });
+  ipcMain.handle('ex:submission-timeliness', () => { const c = db.getCurrentCompanyId(); return c ? ex3().submissionTimeliness(c) : {}; });
+  ipcMain.handle('ex:employee-monthly-spending', (_e, { month }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().employeeMonthlySpending(c, month) : []; });
+  ipcMain.handle('ex:mileage-rates', () => ex3().mileageRateHistory());
+  // Batch ops (EX61-EX70)
+  ipcMain.handle('ex:batch-recategorize', (_e, { expenseIds, categoryId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchRecategorize(c, expenseIds, categoryId) : {}; });
+  ipcMain.handle('ex:batch-tax-deductible', (_e, { expenseIds, deductible }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchMarkTaxDeductible(c, expenseIds, deductible) : {}; });
+  ipcMain.handle('ex:batch-assign-project', (_e, { expenseIds, projectId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchAssignProject(c, expenseIds, projectId) : {}; });
+  ipcMain.handle('ex:batch-payment-method', (_e, { expenseIds, method }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchChangePaymentMethod(c, expenseIds, method) : {}; });
+  ipcMain.handle('ex:data-quality', (_e, { expenseId }: any) => ex3().expenseDataQuality(expenseId));
+  ipcMain.handle('ex:bulk-data-quality', () => { const c = db.getCurrentCompanyId(); return c ? ex3().bulkDataQuality(c) : {}; });
+  ipcMain.handle('ex:merge-vendor', (_e, { fromVendorId, toVendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().mergeVendorOnExpenses(c, fromVendorId, toVendorId) : {}; });
+  ipcMain.handle('ex:find-orphans', () => ex3().findOrphanExpenses());
+  ipcMain.handle('ex:batch-reimburse', (_e, { expenseIds }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchMarkReimbursed(c, expenseIds) : {}; });
+  ipcMain.handle('ex:create-template', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().createExpenseTemplate(c, p) : {}; });
+  // UX (EX71-EX80)
+  ipcMain.handle('ex:dashboard', () => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseDashboard(c) : {}; });
+  ipcMain.handle('ex:recent-vendors', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().recentVendors(c, limit || 10) : []; });
+  ipcMain.handle('ex:recent-categories', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? ex3().recentCategories(c, limit || 10) : []; });
+  ipcMain.handle('ex:count-by-status', () => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseCountByStatus(c) : []; });
+  ipcMain.handle('ex:avg-processing-time', () => { const c = db.getCurrentCompanyId(); return c ? ex3().avgProcessingTime(c) : {}; });
+  ipcMain.handle('ex:tags-summary', () => { const c = db.getCurrentCompanyId(); return c ? ex3().expenseTagsSummary(c) : []; });
+  ipcMain.handle('ex:quarterly-comparison', () => { const c = db.getCurrentCompanyId(); return c ? ex3().quarterlyComparison(c) : []; });
+  ipcMain.handle('ex:full-text-search', (_e, { query, limit }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().fullTextSearch(c, query, limit) : []; });
+  ipcMain.handle('ex:toggle-star', (_e, { expenseId }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().toggleStarExpense(c, expenseId) : {}; });
+  ipcMain.handle('ex:portal-health', () => { const c = db.getCurrentCompanyId(); return c ? ex3().portalHealthCheck(c) : {}; });
+
   // ─── Invoice Upgrades Wave (F893-F922) — `iu:*` namespace ──
   const iu = () => require('../services/invoice-upgrades-features');
   // Batch IA: Builder UX
