@@ -9213,7 +9213,7 @@ export function initDatabase(): Database.Database {
   // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
   // table because it requires zero extra DDL and is atomic per pragma write.
   try {
-    const SCHEMA_VERSION = 3;
+    const SCHEMA_VERSION = 4;
     const row = db.pragma('user_version', { simple: true }) as number;
     const currentVersion = typeof row === 'number' ? row : 0;
 
@@ -9388,6 +9388,66 @@ export function initDatabase(): Database.Database {
         if (repaired > 0) console.log(`[schema v3] Repaired ${repaired} expense(s) to include tax in cost.`);
       } catch (repairErr: any) {
         console.warn('[schema v3] Failed to repair expense tax-inclusive amounts:', repairErr?.message);
+      }
+    }
+
+    // Version 4: CORRECT the v3 over-count. v3 wrongly stored expense.amount as
+    // the tax-INCLUSIVE total (net + tax). But the app's FINAL-PRICE invariant
+    // (ExpenseList.expenseDisplayTotal) defines the displayed cost as
+    // amount + tax_amount − discount, treating amount as the PRE-TAX subtotal.
+    // So v3 made the list/detail double-add tax (e.g. $215.30 shown as $230.60)
+    // and mislabeled the form's "PRE-TAX AMOUNT". Here we restore the invariant:
+    // amount = sum of pre-tax (post-discount) line extensions, tax_amount = sum
+    // of stored per-line tax. This is idempotent and also correctly populates
+    // tax_amount for genuinely-taxed expenses while leaving tax-free ones at 0.
+    if (currentVersion < 4) {
+      try {
+        const dbI = getDb();
+        const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+        const preTaxOf = (li: any): number => {
+          const gross = (Number(li.quantity) || 1) * (Number(li.unit_price) || 0);
+          const flat = Number(li.discount_amount) || 0;
+          const pct = Number(li.discount_percent) || 0;
+          const disc = flat > 0 ? flat : pct > 0 ? gross * (pct / 100) : 0;
+          return Math.max(0, gross - disc);
+        };
+        const taxOf = (li: any): number => {
+          if (li.is_tax_exempt) return 0;
+          const stored = Number(li.tax_amount);
+          if (Number.isFinite(stored) && stored > 0) return r2(stored);
+          const preTax = preTaxOf(li);
+          let jur: any = li.tax_jurisdictions;
+          if (typeof jur === 'string') { try { jur = JSON.parse(jur); } catch { jur = []; } }
+          if (Array.isArray(jur) && jur.length > 0) {
+            return r2(jur.reduce((s: number, j: any) => s + preTax * ((Number(j.rate) || 0) / 100), 0));
+          }
+          return r2(preTax * ((Number(li.tax_rate) || 0) / 100));
+        };
+        const expensesWithLines = dbI.prepare(
+          `SELECT DISTINCT expense_id FROM expense_line_items`
+        ).all() as Array<{ expense_id: string }>;
+        const linesStmt = dbI.prepare(`SELECT * FROM expense_line_items WHERE expense_id = ?`);
+        const updStmt = dbI.prepare(`UPDATE expenses SET amount = ?, tax_amount = ? WHERE id = ?`);
+        const curStmt = dbI.prepare(`SELECT amount, tax_amount FROM expenses WHERE id = ?`);
+        let fixed = 0;
+        const fixTx = dbI.transaction(() => {
+          for (const { expense_id } of expensesWithLines) {
+            const lines = linesStmt.all(expense_id) as any[];
+            if (!lines.length) continue;
+            const net = r2(lines.reduce((s, li) => s + preTaxOf(li), 0)); // PRE-TAX
+            const tax = r2(lines.reduce((s, li) => s + taxOf(li), 0));
+            const cur = curStmt.get(expense_id) as any;
+            if (!cur) continue;
+            if (r2(cur.amount) !== net || r2(cur.tax_amount) !== tax) {
+              updStmt.run(net, tax, expense_id);
+              fixed++;
+            }
+          }
+        });
+        fixTx();
+        if (fixed > 0) console.log(`[schema v4] Restored pre-tax amount on ${fixed} expense(s) (FINAL-PRICE invariant).`);
+      } catch (fixErr: any) {
+        console.warn('[schema v4] Failed to restore pre-tax expense amounts:', fixErr?.message);
       }
     }
 

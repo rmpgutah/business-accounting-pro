@@ -5872,17 +5872,17 @@ export function registerIpcHandlers(): void {
       const saveFn = rawDb.transaction(() => {
         let savedId: string;
 
-        // Auto-calculate amount from line items when present. The stored
-        // expense.amount is the TOTAL COST INCLUDING TAX (net of discounts
-        // plus tax) so it matches the grand total the user sees and so every
-        // SUM(amount) report reflects the true out-of-pocket cost. The tax
-        // portion is also recorded in expense.tax_amount for reporting/audit
-        // (amount already includes it — reports must not add the two).
+        // Auto-calculate amount + tax from line items when present. Per the
+        // FINAL-PRICE invariant (see ExpenseList.expenseDisplayTotal), the
+        // stored expense.amount is the PRE-TAX subtotal (sum of discounted line
+        // extensions) and expense.tax_amount is the tax; the display layer
+        // computes the tax-inclusive cost as amount + tax_amount − discount.
+        // We must NOT roll tax into amount, or the list/detail would double-add
+        // it. Populating tax_amount here is what actually puts tax in the cost
+        // for line-item expenses that previously left the header tax_amount 0.
         if (lineItems.length > 0) {
-          const net = round2(lineItems.reduce((sum: number, li: any) => sum + lineNet(li), 0));
-          const tax = round2(lineItems.reduce((sum: number, li: any) => sum + lineTax(li), 0));
-          expenseData.amount = round2(net + tax);
-          expenseData.tax_amount = tax;
+          expenseData.amount = round2(lineItems.reduce((sum: number, li: any) => sum + lineNet(li), 0));
+          expenseData.tax_amount = round2(lineItems.reduce((sum: number, li: any) => sum + lineTax(li), 0));
         }
 
         if (isEdit && expenseId) {
