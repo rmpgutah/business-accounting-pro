@@ -641,7 +641,7 @@ export const ComplianceBadges: React.FC<{ tagsJson?: string }> = ({ tagsJson }) 
   return (
     <span className="inline-flex gap-1">
       {tags.map(t => (
-        <span key={t} className={`text-[8px] px-1 py-0.5 font-bold ${colors[t] || 'bg-gray-500/20 text-gray-400'}`} style={{ borderRadius: '3px' }}>{t}</span>
+        <span key={t} className={`text-[8px] px-1 py-0.5 font-bold ${colors[t] || 'bg-bg-tertiary text-text-muted'}`} style={{ borderRadius: '6px' }}>{t}</span>
       ))}
     </span>
   );

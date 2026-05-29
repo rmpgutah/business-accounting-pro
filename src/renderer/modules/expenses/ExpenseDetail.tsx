@@ -343,7 +343,7 @@ table{width:100%;border-collapse:collapse;}
               <XCircle size={13} /> Reset
             </button>
           )}
-          {expense.is_reimbursable && !expense.reimbursed && (
+          {!!expense.is_reimbursable && !expense.reimbursed && (
             <button onClick={markReimbursed} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
               <DollarSign size={13} /> Mark Reimbursed
             </button>

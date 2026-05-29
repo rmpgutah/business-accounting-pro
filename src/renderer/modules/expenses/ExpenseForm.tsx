@@ -1790,7 +1790,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           </div>
 
           {/* Reimbursement Status — only shown if reimbursable */}
-          {form.is_reimbursable && (
+          {!!form.is_reimbursable && (
             <div className="col-span-3">
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer select-none">

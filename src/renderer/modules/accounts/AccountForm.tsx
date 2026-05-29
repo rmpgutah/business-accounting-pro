@@ -484,8 +484,8 @@ const ToggleRow: React.FC<{ label: string; value: boolean; onChange: (v: boolean
   <button type="button" onClick={() => !disabled && onChange(!value)} disabled={disabled}
     className="flex items-center gap-2 px-2 py-1.5 border border-border-primary hover:border-accent-blue text-xs text-text-secondary disabled:opacity-50"
     style={{ borderRadius: '6px' }}>
-    {value ? <div className="w-7 h-3.5 bg-accent-blue flex items-center justify-end px-0.5" style={{ borderRadius: '6px' }}><div className="w-2.5 h-2.5 bg-white" style={{ borderRadius: '1px' }} /></div>
-      : <div className="w-7 h-3.5 bg-bg-tertiary flex items-center justify-start px-0.5" style={{ borderRadius: '6px' }}><div className="w-2.5 h-2.5 bg-text-muted" style={{ borderRadius: '1px' }} /></div>}
+    {value ? <div className="w-7 h-3.5 bg-accent-blue flex items-center justify-end px-0.5" style={{ borderRadius: '6px' }}><div className="w-2.5 h-2.5 bg-bg-primary" style={{ borderRadius: '6px' }} /></div>
+      : <div className="w-7 h-3.5 bg-bg-tertiary flex items-center justify-start px-0.5" style={{ borderRadius: '6px' }}><div className="w-2.5 h-2.5 bg-text-muted" style={{ borderRadius: '6px' }} /></div>}
     {icon}
     {label}
   </button>
