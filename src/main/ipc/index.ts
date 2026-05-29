@@ -17416,7 +17416,9 @@ export function registerIpcHandlers(): void {
 
   <div class="footer">
     <p>${companyName} &mdash; Employer Provided Equipment Agreement</p>
-    <p>Generated on ${today}</p>
+    <p>${signatures?.employee?.date
+      ? `Signed by ${empName} on ${fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)}`
+      : `Generated on ${today}`}</p>
   </div>
 </div>
 </body>
@@ -17596,7 +17598,9 @@ export function registerIpcHandlers(): void {
 
   <div class="footer">
     <p>${companyName} &mdash; Employee Agreement</p>
-    <p>Generated on ${today}</p>
+    <p>${signatures?.employee?.date
+      ? `Signed by ${empName} on ${fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)}`
+      : `Generated on ${today}`}</p>
   </div>
 </div>
 </body>
