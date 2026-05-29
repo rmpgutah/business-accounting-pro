@@ -323,6 +323,61 @@ export function checkEquipmentPenaltiesOwed(companyId?: string): number {
   return created;
 }
 
+// ─── Credential warning windows (DAYS AHEAD to start alerting) ───
+// LEARNING-MODE CONTRIBUTION POINT — tune these to your business.
+// Different credential types warrant different lead times: a license
+// you renew in person (often weeks of processing) needs more runway than
+// an online cert you can redo same-day. These defaults are sensible
+// starting points; adjust the numbers (and add your own credential
+// types) to match how your org actually renews things.
+const CREDENTIAL_WARNING_DAYS: Record<string, number> = {
+  license: 60,            // professional / state licenses — long renewal lead time
+  certification: 45,
+  training: 30,
+  background_check: 30,
+  drug_test: 14,
+  i9: 30,                 // I-9 reverification
+  w4: 30,
+  other: 30,
+};
+
+// ─── Check Expiring Employee Credentials ─────────────────
+export function checkExpiringEmployeeCredentials(companyId?: string): number {
+  const dbInstance = db.getDb();
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+  let created = 0;
+  // No company_id on employee_credentials — scope via the employee join.
+  let sql = `
+    SELECT ec.id, ec.credential_type, ec.name, ec.expiry_date, e.company_id, e.name AS employee_name
+    FROM employee_credentials ec JOIN employees e ON e.id = ec.employee_id
+    WHERE ec.expiry_date IS NOT NULL AND ec.expiry_date != ''
+  `;
+  const params: any[] = [];
+  if (companyId) { sql += ' AND e.company_id = ?'; params.push(companyId); }
+  let rows: any[] = [];
+  try { rows = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
+  for (const c of rows) {
+    const windowDays = CREDENTIAL_WARNING_DAYS[c.credential_type] ?? 30;
+    const h = new Date(_now.getTime() + windowDays * 86400000);
+    const horizon = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+    if (c.expiry_date > horizon) continue; // not yet within this credential's warning window
+    const existing = dbInstance.prepare(
+      `SELECT id FROM notifications WHERE entity_type='credential' AND entity_id=? AND type='compliance' AND date(created_at)=?`
+    ).get(c.id, today) as any;
+    if (existing) continue;
+    const expired = c.expiry_date < today;
+    db.create('notifications', {
+      company_id: c.company_id, type: 'compliance',
+      title: `${c.employee_name}: ${c.name || c.credential_type} ${expired ? 'expired' : 'expiring soon'}`,
+      message: `${c.employee_name}'s ${String(c.credential_type).replace(/_/g, ' ')} "${c.name}" ${expired ? 'expired on' : 'expires'} ${c.expiry_date}.`,
+      entity_type: 'credential', entity_id: c.id, is_read: 0,
+    });
+    created++;
+  }
+  return created;
+}
+
 export interface NotificationCheckResult {
   overdueNotifications: number;
   budgetAlerts: number;
@@ -331,6 +386,7 @@ export interface NotificationCheckResult {
   billAlerts: number;
   complianceAlerts: number;
   penaltyAlerts: number;
+  credentialAlerts: number;
 }
 
 // Reentrancy guard — the 30-minute cron and ad-hoc IPC invocations can otherwise
@@ -339,7 +395,7 @@ let notificationsRunning = false;
 
 export function runNotificationChecks(companyId?: string): NotificationCheckResult {
   if (notificationsRunning) {
-    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0, loanAlerts: 0, billAlerts: 0, complianceAlerts: 0, penaltyAlerts: 0 };
+    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0, loanAlerts: 0, billAlerts: 0, complianceAlerts: 0, penaltyAlerts: 0, credentialAlerts: 0 };
   }
   notificationsRunning = true;
   try {
@@ -350,7 +406,8 @@ export function runNotificationChecks(companyId?: string): NotificationCheckResu
     const billAlerts = checkOverdueBills(companyId);
     const complianceAlerts = checkExpiringVendorCompliance(companyId);
     const penaltyAlerts = checkEquipmentPenaltiesOwed(companyId);
-    return { overdueNotifications, budgetAlerts, reconciliationAlerts, loanAlerts, billAlerts, complianceAlerts, penaltyAlerts };
+    const credentialAlerts = checkExpiringEmployeeCredentials(companyId);
+    return { overdueNotifications, budgetAlerts, reconciliationAlerts, loanAlerts, billAlerts, complianceAlerts, penaltyAlerts, credentialAlerts };
   } finally {
     notificationsRunning = false;
   }

@@ -2022,6 +2022,22 @@ export function initDatabase(): Database.Database {
   // Which outcome a penalty applies to (so the right ones auto-apply on
   // disposition): any | damaged | lost | stolen | not_returned | late
   "ALTER TABLE equipment_penalties ADD COLUMN applies_to TEXT DEFAULT 'any'",
+  // Employee credentials / licenses / certifications with expiry tracking.
+  // Drives proactive renewal alerts via the notification engine. No
+  // company_id (child of employees — tenancy via the parent).
+  `CREATE TABLE IF NOT EXISTS employee_credentials (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    credential_type TEXT NOT NULL DEFAULT 'license',
+    name TEXT NOT NULL DEFAULT '',
+    issuer TEXT DEFAULT '',
+    credential_number TEXT DEFAULT '',
+    issue_date TEXT,
+    expiry_date TEXT,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_credentials_employee ON employee_credentials(employee_id)`,
   // E-Sign documents (2026-05-21)
   `CREATE TABLE IF NOT EXISTS esign_documents (
     id TEXT PRIMARY KEY,

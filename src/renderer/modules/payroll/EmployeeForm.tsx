@@ -798,6 +798,142 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   );
 };
 
+// ─── Credentials & Licenses Panel ─────────────────────────
+const CREDENTIAL_TYPES: { value: string; label: string }[] = [
+  { value: 'license', label: 'License' },
+  { value: 'certification', label: 'Certification' },
+  { value: 'training', label: 'Training' },
+  { value: 'background_check', label: 'Background Check' },
+  { value: 'drug_test', label: 'Drug Test' },
+  { value: 'i9', label: 'I-9 Verification' },
+  { value: 'w4', label: 'W-4' },
+  { value: 'other', label: 'Other' },
+];
+const CredentialsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const empty = { credential_type: 'license', name: '', issuer: '', credential_number: '', issue_date: '', expiry_date: '', notes: '' };
+  const [form, setForm] = useState({ ...empty });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    const rows = await api.query('employee_credentials', { employee_id: employeeId });
+    setItems(Array.isArray(rows) ? rows : []);
+  };
+  useEffect(() => { load(); }, [employeeId]);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      const payload = { employee_id: employeeId, ...form, name: form.name.trim(), issuer: form.issuer.trim(), credential_number: form.credential_number.trim(), issue_date: form.issue_date || null, expiry_date: form.expiry_date || null, notes: form.notes.trim() };
+      const r = editingId ? await api.update('employee_credentials', editingId, payload) : await api.create('employee_credentials', payload);
+      if ((r as any)?.error) throw new Error((r as any).error);
+      setShowForm(false); setEditingId(null); setForm({ ...empty }); await load();
+    } catch (err: any) {
+      alert('Failed to save credential: ' + (err?.message || 'Unknown error'));
+    } finally { setSaving(false); }
+  };
+  const handleEdit = (it: any) => {
+    setEditingId(it.id);
+    setForm({ credential_type: it.credential_type || 'license', name: it.name || '', issuer: it.issuer || '', credential_number: it.credential_number || '', issue_date: it.issue_date || '', expiry_date: it.expiry_date || '', notes: it.notes || '' });
+    setShowForm(true);
+  };
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this credential?')) return;
+    await api.remove('employee_credentials', id); await load();
+  };
+
+  // Display-side status (the notification engine uses per-type windows;
+  // the badge uses a simple 30-day "expiring soon" cue).
+  const expiryBadge = (expiry?: string) => {
+    if (!expiry) return <span className="text-text-muted text-xs">—</span>;
+    const today = new Date().toISOString().split('T')[0];
+    const soon = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+    if (expiry < today) return <span className="block-badge block-badge-expense" style={{ fontSize: 10 }}>Expired {formatDate(expiry)}</span>;
+    if (expiry <= soon) return <span className="block-badge block-badge-warning" style={{ fontSize: 10 }}>Expiring {formatDate(expiry)}</span>;
+    return <span className="block-badge block-badge-income" style={{ fontSize: 10 }}>Valid · {formatDate(expiry)}</span>;
+  };
+  const typeLabel = (t: string) => CREDENTIAL_TYPES.find((x) => x.value === t)?.label || t;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">Credentials & Licenses</h3>
+        <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { setEditingId(null); setForm({ ...empty }); setShowForm(!showForm); }}>
+          <Plus size={12} /> {showForm ? 'Cancel' : 'Add Credential'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Type</label>
+              <select className="block-select" value={form.credential_type} onChange={(e) => setForm(f => ({ ...f, credential_type: e.target.value }))}>
+                {CREDENTIAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Name / Title *</label>
+              <input className="block-input" placeholder="e.g. Utah Private Investigator License" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Issuer</label>
+              <input className="block-input" placeholder="e.g. Utah DOPL" value={form.issuer} onChange={(e) => setForm(f => ({ ...f, issuer: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Credential #</label>
+              <input className="block-input font-mono" value={form.credential_number} onChange={(e) => setForm(f => ({ ...f, credential_number: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Issue Date</label>
+              <input type="date" className="block-input" value={form.issue_date} onChange={(e) => setForm(f => ({ ...f, issue_date: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Expiry Date</label>
+              <input type="date" className="block-input" value={form.expiry_date} onChange={(e) => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Notes</label>
+              <input className="block-input" value={form.notes} onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving || !form.name.trim()}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save'}</button>
+        </div>
+      )}
+
+      {items.length === 0 && !showForm ? (
+        <p className="text-sm text-text-muted">No credentials on file. Track licenses, certifications, background checks, and I-9/W-4 with expiry — the system will alert you before they lapse.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="block-table">
+            <thead><tr><th>Type</th><th>Name</th><th>Issuer</th><th>Credential #</th><th>Status</th><th style={{ width: 80 }}>Actions</th></tr></thead>
+            <tbody>
+              {items.map((it: any) => (
+                <tr key={it.id}>
+                  <td className="text-xs text-text-muted">{typeLabel(it.credential_type)}</td>
+                  <td className="text-text-primary font-medium">{it.name}</td>
+                  <td className="text-xs">{it.issuer || '—'}</td>
+                  <td className="font-mono text-xs">{it.credential_number || '—'}</td>
+                  <td>{expiryBadge(it.expiry_date)}</td>
+                  <td>
+                    <div className="flex gap-1">
+                      <button className="text-text-muted hover:text-accent-blue p-0.5" onClick={() => handleEdit(it)} title="Edit"><Pencil size={12} /></button>
+                      <button className="text-text-muted hover:text-accent-expense p-0.5" onClick={() => handleDelete(it.id)} title="Delete"><Trash2 size={12} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Agreements Panel ─────────────────────────────────────
 type AgreementType = 'equipment' | 'employee';
 interface SigInput { name: string; date: string }
@@ -1764,6 +1900,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         {activeTab === 'equipment' && employeeId && (
           <div className="space-y-6">
             <EquipmentPanel employeeId={employeeId} />
+            <div className="border-t border-border-primary" />
+            <CredentialsPanel employeeId={employeeId} />
             <div className="border-t border-border-primary" />
             <AgreementsPanel employeeId={employeeId} employeeName={form.name} />
           </div>

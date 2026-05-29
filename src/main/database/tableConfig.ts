@@ -107,6 +107,7 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   // Employee child tables
   'employee_equipment',
   'equipment_penalties',
+  'employee_credentials',
   // E-sign child tables
   'esign_audit_log',
   'esign_permissions',
@@ -319,6 +320,7 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   // and crashes with "no such column: updated_at" on edit.
   'employee_equipment',
   'equipment_penalties',
+  'employee_credentials',
   // ── Append-only logs / audit trails ─────────────────────────────
   'anomaly_log',
   'anonymization_log',
