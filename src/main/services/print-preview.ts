@@ -160,15 +160,19 @@ function wrapWithToolbar(html: string, title: string): string {
     .pp-toolbar {
       position: sticky; top: 0; z-index: 9999;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 20px; background: #1a1a1a; border-bottom: 1px solid #333;
+      /* Left padding clears the macOS traffic-light buttons (hiddenInset
+         title bar overlays them on the top-left ~78px). The whole bar is
+         a window-drag region since there's no native title bar. */
+      padding: 12px 20px 12px 88px; background: #1a1a1a; border-bottom: 1px solid #333;
       font-family: -apple-system, system-ui, sans-serif;
+      -webkit-app-region: drag;
     }
-    .pp-toolbar-title { font-size: 13px; font-weight: 600; color: #e0e0e0; }
-    .pp-toolbar-actions { display: flex; gap: 8px; }
+    .pp-toolbar-title { font-size: 13px; font-weight: 600; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pp-toolbar-actions { display: flex; gap: 8px; -webkit-app-region: no-drag; }
     .pp-toolbar-btn {
       padding: 6px 16px; font-size: 12px; font-weight: 600;
       border: 1px solid #444; background: #2a2a2a; color: #e0e0e0;
-      cursor: pointer; border-radius: 0;
+      cursor: pointer; border-radius: 6px; -webkit-app-region: no-drag;
     }
     .pp-toolbar-btn:hover { background: #3a3a3a; }
     .pp-toolbar-btn-primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }

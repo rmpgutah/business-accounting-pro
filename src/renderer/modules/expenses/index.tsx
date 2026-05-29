@@ -53,6 +53,8 @@ const ExpensesModule: React.FC = () => {
   const [recentExpenses, setRecentExpenses] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [prevMonthTotal, setPrevMonthTotal] = useState(0);
+  const [monthlyTimeline, setMonthlyTimeline] = useState<any[]>([]);
+  const [dailyHeatmap, setDailyHeatmap] = useState<any[]>([]);
 
   // Load dashboard data
   useEffect(() => {
@@ -67,7 +69,7 @@ const ExpensesModule: React.FC = () => {
         const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const prevStart = `${prevMonthStart.getFullYear()}-${String(prevMonthStart.getMonth() + 1).padStart(2, '0')}-01`;
 
-        const [mainRow, cats, recent, pmethods, prevRow] = await Promise.all([
+        const [mainRow, cats, recent, pmethods, prevRow, timeline, heatmap] = await Promise.all([
           api.rawQuery(
             `SELECT
               COALESCE(SUM(CASE WHEN date >= ? THEN amount ELSE 0 END), 0) as mtd,
@@ -110,6 +112,20 @@ const ExpensesModule: React.FC = () => {
             FROM expenses WHERE company_id = ? AND date >= ? AND date < ?`,
             [activeCompany.id, prevStart, mtdStart]
           ),
+          // 12-month spending timeline (for the trend chart)
+          api.rawQuery(
+            `SELECT substr(date,1,7) as month, COUNT(*) as count, COALESCE(SUM(amount),0) as total
+            FROM expenses WHERE company_id = ? AND date >= date('now','-12 months') AND (deleted_at IS NULL)
+            GROUP BY month ORDER BY month`,
+            [activeCompany.id]
+          ),
+          // Daily spending for the last ~26 weeks (heatmap: date → total)
+          api.rawQuery(
+            `SELECT date, COUNT(*) as count, COALESCE(SUM(amount),0) as total
+            FROM expenses WHERE company_id = ? AND date >= date('now','-182 days') AND (deleted_at IS NULL)
+            GROUP BY date ORDER BY date`,
+            [activeCompany.id]
+          ),
         ]);
 
         if (cancelled) return;
@@ -120,6 +136,8 @@ const ExpensesModule: React.FC = () => {
         setPaymentMethods(Array.isArray(pmethods) ? pmethods : []);
         const prevR = Array.isArray(prevRow) ? prevRow[0] : prevRow;
         setPrevMonthTotal(prevR?.prev_month ?? 0);
+        setMonthlyTimeline(Array.isArray(timeline) ? timeline : []);
+        setDailyHeatmap(Array.isArray(heatmap) ? heatmap : []);
       } catch (err) {
         console.error('Dashboard load failed:', err);
       } finally {
@@ -397,6 +415,117 @@ const ExpensesModule: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Spending Timeline — 12-month trend bar chart */}
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Spending Timeline · Last 12 Months</div>
+                  {monthlyTimeline.length > 1 && (() => {
+                    const first = monthlyTimeline[0]?.total || 0;
+                    const last = monthlyTimeline[monthlyTimeline.length - 1]?.total || 0;
+                    const pct = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
+                    return <span className={`text-[10px] font-bold ${pct > 0 ? 'text-accent-expense' : 'text-accent-income'}`}>{pct > 0 ? '↑' : '↓'} {Math.abs(pct)}% trend</span>;
+                  })()}
+                </div>
+                {monthlyTimeline.length === 0 ? (
+                  <div className="text-xs text-text-muted py-8 text-center">No expense history yet</div>
+                ) : (() => {
+                  const maxT = Math.max(...monthlyTimeline.map(m => m.total || 0), 1);
+                  const avg = monthlyTimeline.reduce((s, m) => s + (m.total || 0), 0) / monthlyTimeline.length;
+                  return (
+                    <div>
+                      <div className="flex items-end gap-1.5" style={{ height: 140 }}>
+                        {monthlyTimeline.map((m, i) => {
+                          const h = Math.max(((m.total || 0) / maxT) * 100, 1.5);
+                          const isAboveAvg = (m.total || 0) > avg;
+                          const [, mm] = (m.month || '').split('-');
+                          const monthLabel = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(mm) || 0];
+                          return (
+                            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                              <div className="absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-mono font-bold text-text-primary whitespace-nowrap" style={{ bottom: `${h}%`, marginBottom: 2 }}>
+                                {formatCurrency(m.total)}
+                              </div>
+                              <div style={{
+                                width: '100%', height: `${h}%`,
+                                background: isAboveAvg ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)',
+                                borderRadius: '3px 3px 0 0', transition: 'height 0.3s ease', opacity: 0.85,
+                              }} />
+                              <div className="text-[9px] text-text-muted mt-1">{monthLabel}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-border-primary/40 text-[10px] text-text-muted">
+                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: 'var(--color-accent-blue)', borderRadius: 2 }} /> Below avg</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: 'var(--color-accent-expense)', borderRadius: 2 }} /> Above avg</span>
+                        <span className="ml-auto font-mono">Avg: <strong className="text-text-secondary">{formatCurrency(avg)}</strong>/mo</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Daily Spending Heatmap — GitHub-contribution style */}
+              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Daily Spending Heatmap · Last 26 Weeks</div>
+                {dailyHeatmap.length === 0 ? (
+                  <div className="text-xs text-text-muted py-8 text-center">No expense history yet</div>
+                ) : (() => {
+                  // Build a date→total map, then render a 7-row (weekday) × N-col (week) grid.
+                  const byDate = new Map<string, { total: number; count: number }>();
+                  dailyHeatmap.forEach((d: any) => byDate.set(d.date, { total: d.total || 0, count: d.count || 0 }));
+                  const maxDay = Math.max(...dailyHeatmap.map((d: any) => d.total || 0), 1);
+                  // Color scale: 5 buckets from faint to intense expense-red.
+                  const colorFor = (total: number) => {
+                    if (total <= 0) return 'var(--color-bg-tertiary)';
+                    const ratio = total / maxDay;
+                    if (ratio < 0.2) return 'rgba(239,68,68,0.25)';
+                    if (ratio < 0.4) return 'rgba(239,68,68,0.45)';
+                    if (ratio < 0.6) return 'rgba(239,68,68,0.65)';
+                    if (ratio < 0.8) return 'rgba(239,68,68,0.82)';
+                    return 'rgba(239,68,68,1)';
+                  };
+                  // Start 26 weeks ago, aligned to Sunday.
+                  const today = new Date();
+                  const start = new Date(today); start.setDate(start.getDate() - 26 * 7);
+                  start.setDate(start.getDate() - start.getDay()); // back to Sunday
+                  const weeks: Date[][] = [];
+                  const cursor = new Date(start);
+                  while (cursor <= today) {
+                    const week: Date[] = [];
+                    for (let dow = 0; dow < 7; dow++) { week.push(new Date(cursor)); cursor.setDate(cursor.getDate() + 1); }
+                    weeks.push(week);
+                  }
+                  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  return (
+                    <div>
+                      <div className="flex gap-[3px] overflow-x-auto pb-1">
+                        {weeks.map((week, wi) => (
+                          <div key={wi} className="flex flex-col gap-[3px]">
+                            {week.map((day, di) => {
+                              const cell = byDate.get(iso(day));
+                              const total = cell?.total || 0;
+                              const future = day > today;
+                              return (
+                                <div key={di} title={future ? '' : `${iso(day)}: ${formatCurrency(total)}${cell ? ` (${cell.count} expense${cell.count !== 1 ? 's' : ''})` : ''}`}
+                                  style={{ width: 13, height: 13, borderRadius: 2, background: future ? 'transparent' : colorFor(total), border: future ? 'none' : '1px solid rgba(255,255,255,0.04)', cursor: future ? 'default' : 'pointer' }} />
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border-primary/40 text-[10px] text-text-muted">
+                        <span>Less</span>
+                        {['var(--color-bg-tertiary)', 'rgba(239,68,68,0.25)', 'rgba(239,68,68,0.45)', 'rgba(239,68,68,0.65)', 'rgba(239,68,68,0.82)', 'rgba(239,68,68,1)'].map((c, i) => (
+                          <span key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, display: 'inline-block' }} />
+                        ))}
+                        <span>More</span>
+                        <span className="ml-auto font-mono">Peak day: <strong className="text-accent-expense">{formatCurrency(maxDay)}</strong></span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Recent Expenses */}
