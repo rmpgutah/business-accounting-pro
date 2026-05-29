@@ -1078,13 +1078,30 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
           if (doc) {
             const full = await api.esignGet(doc.id);
             const sigs: any[] = full?.signatures || [];
-            const emp = sigs.find((s) => s.signer_type === 'employee');
-            const empr = sigs.find((s) => s.signer_type === 'admin');
+            const emp = sigs.find((s: any) => s.signer_type === 'employee');
+            const empr = sigs.find((s: any) => s.signer_type === 'admin');
+            const empSig = emp ? { name: emp.typed_name || emp.signer_name, date: (emp.signed_at || '').slice(0, 10) } : undefined;
+            const emprSig = empr ? { name: empr.typed_name || empr.signer_name, date: (empr.signed_at || '').slice(0, 10) } : undefined;
+            // IMPORTANT: do NOT use the stored content (full?.content) —
+            // old documents may have signatures appended in the footer via
+            // the legacy embedSignature() approach. Always regenerate the
+            // HTML fresh with the signature data passed to the backend's
+            // agreementSignatureBlock, which renders them IN the formal
+            // Signatures section. This also picks up any template changes.
+            const freshHtml = await (async () => {
+              try {
+                const sigData: SigData = { employee: empSig, employer: emprSig };
+                const { html: h } = type === 'equipment'
+                  ? await api.generateEquipmentAgreement(employeeId, sigData)
+                  : await api.generateEmployeeAgreement(employeeId, sigData);
+                return h || '';
+              } catch { return ''; }
+            })();
             next[type] = {
               id: doc.id,
-              html: full?.content || '',
-              employee: emp ? { name: emp.typed_name || emp.signer_name, date: (emp.signed_at || '').slice(0, 10) } : undefined,
-              employer: empr ? { name: empr.typed_name || empr.signer_name, date: (empr.signed_at || '').slice(0, 10) } : undefined,
+              html: freshHtml,
+              employee: empSig,
+              employer: emprSig,
             };
           }
         }
@@ -1101,12 +1118,20 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
     return html || '';
   };
 
-  // Preview: prefer the signed copy (with signature block) if present.
+  // Always regenerate fresh HTML with current sigs so signatures render
+  // in the formal Signatures section (not the footer from legacy stored
+  // content). If the doc is signed, pass the sig data; if not, no sigs.
+  const getLatestHtml = async (type: AgreementType): Promise<string> => {
+    const sig = signed[type];
+    const sigs: SigData | undefined = (sig?.employee || sig?.employer) ? { employee: sig?.employee, employer: sig?.employer } : undefined;
+    return genHtml(type, sigs);
+  };
+
   const handleGenerate = async (type: AgreementType) => {
     const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
     setLoading(true);
     try {
-      const html = signed[type]?.html || (await genHtml(type));
+      const html = await getLatestHtml(type);
       if (html) await api.printPreview(html, AGREEMENT_TITLE[type]);
     } catch (err: any) {
       alert('Failed to generate document: ' + (err?.message || 'Unknown error'));
@@ -1117,7 +1142,7 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
     const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
     setLoading(true);
     try {
-      const html = signed[type]?.html || (await genHtml(type));
+      const html = await getLatestHtml(type);
       if (html) {
         await api.saveToPDF(html, AGREEMENT_TITLE[type], {
           doctype: type === 'equipment' ? 'EquipAgreement' : 'EmployeeAgreement',
