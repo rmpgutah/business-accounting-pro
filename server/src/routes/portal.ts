@@ -134,12 +134,31 @@ function resolveToken(req: Request, res: Response): TokenRow | null {
   return row;
 }
 
+// Default trusted domains for the client portal. The website at
+// rmpgutahps.us is the official portal front-end (see the desktop app's
+// portal_api_config defaults), so it's always allowed — even if the VPS
+// .env doesn't set PORTAL_PUBLIC_ORIGIN. Both the apex and any subdomain
+// (client., www., etc.) are trusted; a lookalike like
+// "rmpgutahps.us.evil.com" is NOT (the leading-dot check prevents it).
+const DEFAULT_TRUSTED_DOMAINS = ['rmpgutahps.us', 'accounting.rmpgutah.us'];
+
+function hostIsTrustedDomain(host: string, domain: string): boolean {
+  // Strip any port (host can be "example.com:443").
+  const h = host.split(':')[0].toLowerCase();
+  return h === domain || h.endsWith('.' + domain);
+}
+
 // (#5) Origin / Referer check for POST endpoints.
 function checkOrigin(req: Request): boolean {
   const origin = (req.headers.origin as string) || (req.headers.referer as string) || '';
   if (!origin) return false;
   let originHost: string;
   try { originHost = new URL(origin).host; } catch { return false; }
+
+  // Built-in trusted domains (apex + subdomains).
+  for (const d of DEFAULT_TRUSTED_DOMAINS) {
+    if (hostIsTrustedDomain(originHost, d)) return true;
+  }
 
   const envAllowed = (process.env.PORTAL_PUBLIC_ORIGIN || process.env.PUBLIC_BASE_URL || '')
     .split(',').map(s => s.trim()).filter(Boolean);
