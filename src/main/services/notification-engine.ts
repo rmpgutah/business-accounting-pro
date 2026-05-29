@@ -180,10 +180,49 @@ export function checkUnmatchedTransactions(companyId?: string): number {
 }
 
 // ─── Run All Notification Checks ─────────────────────────
+// ─── Check Overdue Loan Payments ─────────────────────────
+// Surfaces active loans whose next scheduled payment date has passed.
+// One notification per loan per day (idempotent like the invoice check).
+export function checkOverdueLoans(companyId?: string): number {
+  const dbInstance = db.getDb();
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+  let created = 0;
+  let sql = `
+    SELECT id, company_id, name, next_payment_due, payment_amount, current_balance
+    FROM loans
+    WHERE status = 'active' AND next_payment_due IS NOT NULL AND date(next_payment_due) < date(?)
+      AND (deleted_at IS NULL)
+  `;
+  const params: any[] = [today];
+  if (companyId) { sql += ' AND company_id = ?'; params.push(companyId); }
+  let loans: any[] = [];
+  try { loans = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
+
+  for (const loan of loans) {
+    const existing = dbInstance.prepare(
+      `SELECT id FROM notifications WHERE entity_type = 'loan' AND entity_id = ? AND type = 'overdue' AND date(created_at) = ?`
+    ).get(loan.id, today) as any;
+    if (existing) continue;
+    db.create('notifications', {
+      company_id: loan.company_id,
+      type: 'overdue',
+      title: `Loan payment overdue: ${loan.name}`,
+      message: `${loan.name} — payment of $${(loan.payment_amount || 0).toFixed(2)} was due ${loan.next_payment_due}. Balance $${(loan.current_balance || 0).toFixed(2)}.`,
+      entity_type: 'loan',
+      entity_id: loan.id,
+      is_read: 0,
+    });
+    created++;
+  }
+  return created;
+}
+
 export interface NotificationCheckResult {
   overdueNotifications: number;
   budgetAlerts: number;
   reconciliationAlerts: number;
+  loanAlerts: number;
 }
 
 // Reentrancy guard — the 30-minute cron and ad-hoc IPC invocations can otherwise
@@ -192,14 +231,15 @@ let notificationsRunning = false;
 
 export function runNotificationChecks(companyId?: string): NotificationCheckResult {
   if (notificationsRunning) {
-    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0 };
+    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0, loanAlerts: 0 };
   }
   notificationsRunning = true;
   try {
     const overdueNotifications = checkOverdueInvoices(companyId);
     const budgetAlerts = checkBudgetThresholds(companyId);
     const reconciliationAlerts = checkUnmatchedTransactions(companyId);
-    return { overdueNotifications, budgetAlerts, reconciliationAlerts };
+    const loanAlerts = checkOverdueLoans(companyId);
+    return { overdueNotifications, budgetAlerts, reconciliationAlerts, loanAlerts };
   } finally {
     notificationsRunning = false;
   }
