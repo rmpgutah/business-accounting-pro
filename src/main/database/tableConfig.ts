@@ -106,6 +106,7 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'email_template_history',
   // Employee child tables
   'employee_equipment',
+  'equipment_penalties',
   // E-sign child tables
   'esign_audit_log',
   'esign_permissions',
@@ -313,6 +314,11 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
 // Anything that is append-only by design (logs, audit trails, history) belongs here,
 // plus child/junction tables that don't track row-level update timestamps.
 export const TABLES_WITHOUT_UPDATED_AT = new Set([
+  // ── Employee equipment + custom penalties (no updated_at column) ──
+  // Without these, db.update() appends `, updated_at = datetime('now')`
+  // and crashes with "no such column: updated_at" on edit.
+  'employee_equipment',
+  'equipment_penalties',
   // ── Append-only logs / audit trails ─────────────────────────────
   'anomaly_log',
   'anonymization_log',

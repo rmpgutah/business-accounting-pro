@@ -1993,6 +1993,24 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_employee_equipment_employee ON employee_equipment(employee_id)`,
+  // Equipment value (replacement cost) — referenced by the equipment
+  // agreement PDF and used as the base for percent-of-value penalties.
+  "ALTER TABLE employee_equipment ADD COLUMN value REAL DEFAULT 0",
+  // Custom, admin-defined penalties attached to a piece of issued
+  // equipment. Admin can add any number now or later (e.g. "Loss /
+  // non-return: $1,200 flat", "Late return: $25/day", "Damage: 50% of
+  // value"). Surfaced as terms on the Equipment Agreement.
+  `CREATE TABLE IF NOT EXISTS equipment_penalties (
+    id TEXT PRIMARY KEY,
+    equipment_id TEXT NOT NULL REFERENCES employee_equipment(id) ON DELETE CASCADE,
+    label TEXT NOT NULL DEFAULT '',
+    penalty_type TEXT NOT NULL DEFAULT 'flat' CHECK(penalty_type IN ('flat','per_day','percent_of_value')),
+    amount REAL NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_equipment_penalties_equipment ON equipment_penalties(equipment_id)`,
   // E-Sign documents (2026-05-21)
   `CREATE TABLE IF NOT EXISTS esign_documents (
     id TEXT PRIMARY KEY,

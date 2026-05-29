@@ -653,7 +653,7 @@ export function registerIpcHandlers(): void {
     'client_contacts', 'credit_notes', 'credit_note_items',
     'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
-    'employee_equipment',
+    'employee_equipment', 'equipment_penalties',
     'pto_policies', 'pto_balances', 'pto_transactions',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
@@ -16137,12 +16137,20 @@ export function registerIpcHandlers(): void {
       const empStart = fmtDate(employee.start_date);
       const today = fmtDate(new Date().toISOString());
 
-      // Equipment table rows
+      // Equipment table rows + per-item penalty terms.
       let equipmentRows = '';
+      let penaltySection = '';
+      let totalValue = 0;
       if (equipment.length === 0) {
-        equipmentRows = '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
+        equipmentRows = '<tr><td colspan="7" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
       } else {
-        let totalValue = 0;
+        const penaltyTypeLabel = (t: string, amt: number) => {
+          const a = Number(amt) || 0;
+          if (t === 'per_day') return `${fmtCurrency(a)} per day`;
+          if (t === 'percent_of_value') return `${a}% of item value`;
+          return fmtCurrency(a);
+        };
+        const penaltyBlocks: string[] = [];
         equipment.forEach((item: any, i: number) => {
           const val = Number(item.value) || 0;
           totalValue += val;
@@ -16152,9 +16160,38 @@ export function registerIpcHandlers(): void {
             <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.serial_number || '—')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.model || '—')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;text-transform:capitalize;">${esc(item.condition || 'good')}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;text-align:right;">${val > 0 ? fmtCurrency(val) : '—'}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${fmtDate(item.assigned_date)}</td>
           </tr>`;
+
+          // Penalties defined for this item.
+          const pens = dbInstance.prepare(
+            'SELECT label, penalty_type, amount, notes FROM equipment_penalties WHERE equipment_id = ? ORDER BY sort_order'
+          ).all(item.id) as any[];
+          if (pens.length > 0) {
+            const rows = pens.map((p: any) =>
+              `<tr><td style="padding:5px 8px;border:1px solid #d1d5db;">${esc(p.label)}</td>
+                   <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:right;font-weight:600;">${penaltyTypeLabel(p.penalty_type, p.amount)}</td>
+                   <td style="padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${esc(p.notes || '')}</td></tr>`
+            ).join('');
+            penaltyBlocks.push(
+              `<p style="margin-top:14px;font-weight:700;font-size:11pt;">${esc(item.item_name)}${item.serial_number ? ` (SN: ${esc(item.serial_number)})` : ''}</p>
+               <table style="width:100%;border-collapse:collapse;margin-top:4px;font-size:10pt;">
+                 <thead><tr style="background:#f3f4f6;">
+                   <th style="padding:5px 8px;border:1px solid #d1d5db;text-align:left;">Penalty</th>
+                   <th style="padding:5px 8px;border:1px solid #d1d5db;text-align:right;">Amount</th>
+                   <th style="padding:5px 8px;border:1px solid #d1d5db;text-align:left;">Notes</th>
+                 </tr></thead><tbody>${rows}</tbody>
+               </table>`
+            );
+          }
         });
+        if (penaltyBlocks.length > 0) {
+          penaltySection = `
+            <h2 style="font-size:13pt;margin-top:24px;margin-bottom:6px;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:4px;">Penalty &amp; Liability Terms</h2>
+            <p style="font-size:10pt;color:#374151;margin-bottom:6px;">The Employee acknowledges responsibility for the following penalties in the event of loss, damage, late return, or non-return of the equipment listed above. Percent-of-value penalties are computed against each item's stated replacement value.</p>
+            ${penaltyBlocks.join('')}`;
+        }
       }
 
       const html = `<!DOCTYPE html>
@@ -16207,13 +16244,17 @@ export function registerIpcHandlers(): void {
         <th>Serial #</th>
         <th>Model</th>
         <th>Condition</th>
+        <th style="text-align:right;">Value</th>
         <th>Date Issued</th>
       </tr>
     </thead>
     <tbody>
       ${equipmentRows}
+      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td style="border:1px solid #d1d5db;"></td></tr>` : ''}
     </tbody>
   </table>
+
+  ${penaltySection}
 
   <h2>Terms &amp; Conditions</h2>
   <p style="font-size:10pt;color:#6b7280;margin-bottom:12px;">The Employee acknowledges and expressly agrees to the following terms and conditions governing the use of Employer-issued equipment. Any violation of these terms may result in disciplinary action, up to and including termination of employment and legal action.</p>

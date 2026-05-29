@@ -335,19 +335,36 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 };
 
 // ─── Equipment Panel ─────────────────────────────────────
+interface PenaltyRow { id?: string; label: string; penalty_type: string; amount: number; notes?: string }
+const PENALTY_TYPES: { value: string; label: string; suffix: string }[] = [
+  { value: 'flat', label: 'Flat fee ($)', suffix: '$' },
+  { value: 'per_day', label: 'Per day ($/day)', suffix: '$/day' },
+  { value: 'percent_of_value', label: '% of item value', suffix: '% of value' },
+];
+
 const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   const [items, setItems] = useState<any[]>([]);
+  const [penaltyCounts, setPenaltyCounts] = useState<Record<string, number>>({});
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     item_name: '', description: '', serial_number: '', model: '',
-    condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '',
+    condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '', value: 0,
   });
+  const [penalties, setPenalties] = useState<PenaltyRow[]>([]);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
     const rows = await api.query('employee_equipment', { employee_id: employeeId });
-    setItems(Array.isArray(rows) ? rows : []);
+    const list = Array.isArray(rows) ? rows : [];
+    setItems(list);
+    // Tally penalties per item so the table can show a count badge.
+    const counts: Record<string, number> = {};
+    await Promise.all(list.map(async (it: any) => {
+      const ps = await api.query('equipment_penalties', { equipment_id: it.id });
+      counts[it.id] = Array.isArray(ps) ? ps.length : 0;
+    }));
+    setPenaltyCounts(counts);
   };
 
   useEffect(() => { load(); }, [employeeId]);
@@ -355,8 +372,30 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   const resetForm = () => {
     setForm({
       item_name: '', description: '', serial_number: '', model: '',
-      condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '',
+      condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '', value: 0,
     });
+    setPenalties([]);
+  };
+
+  // Replace the equipment's penalty set with the current form rows
+  // (delete-then-insert keeps it simple and idempotent).
+  const syncPenalties = async (equipmentId: string) => {
+    const existing = await api.query('equipment_penalties', { equipment_id: equipmentId });
+    if (Array.isArray(existing)) {
+      for (const e of existing) await api.remove('equipment_penalties', e.id);
+    }
+    for (let i = 0; i < penalties.length; i++) {
+      const p = penalties[i];
+      if (!p.label.trim()) continue;
+      await api.create('equipment_penalties', {
+        equipment_id: equipmentId,
+        label: p.label.trim(),
+        penalty_type: p.penalty_type || 'flat',
+        amount: Number(p.amount) || 0,
+        notes: (p.notes || '').trim(),
+        sort_order: i,
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -370,15 +409,21 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
         serial_number: form.serial_number.trim(),
         model: form.model.trim(),
         condition: form.condition,
+        value: Number(form.value) || 0,
         assigned_date: form.assigned_date || null,
         return_date: form.return_date || null,
         notes: form.notes.trim(),
       };
+      let eqId = editingId;
       if (editingId) {
-        await api.update('employee_equipment', editingId, payload);
+        const r = await api.update('employee_equipment', editingId, payload);
+        if ((r as any)?.error) throw new Error((r as any).error);
       } else {
-        await api.create('employee_equipment', payload);
+        const created = await api.create('employee_equipment', payload);
+        if ((created as any)?.error) throw new Error((created as any).error);
+        eqId = (created as any)?.id || null;
       }
+      if (eqId) await syncPenalties(eqId);
       setShowForm(false);
       setEditingId(null);
       resetForm();
@@ -390,7 +435,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
     }
   };
 
-  const handleEdit = (item: any) => {
+  const handleEdit = async (item: any) => {
     setEditingId(item.id);
     setForm({
       item_name: item.item_name || '',
@@ -398,10 +443,14 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
       serial_number: item.serial_number || '',
       model: item.model || '',
       condition: item.condition || 'good',
+      value: Number(item.value) || 0,
       assigned_date: item.assigned_date || '',
       return_date: item.return_date || '',
       notes: item.notes || '',
     });
+    // Load this item's penalties so admin can add/edit them later.
+    const ps = await api.query('equipment_penalties', { equipment_id: item.id });
+    setPenalties(Array.isArray(ps) ? ps.map((r: any) => ({ id: r.id, label: r.label, penalty_type: r.penalty_type, amount: r.amount, notes: r.notes })) : []);
     setShowForm(true);
   };
 
@@ -459,6 +508,14 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
               </select>
             </div>
             <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Item Value / Replacement Cost</label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 12 }}>$</span>
+                <input type="number" step="0.01" min="0" className="block-input" style={{ paddingLeft: 22 }} placeholder="0.00"
+                  value={form.value || ''} onChange={(e) => setForm(f => ({...f, value: parseFloat(e.target.value) || 0}))} />
+              </div>
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Assigned Date</label>
               <input type="date" className="block-input" value={form.assigned_date} onChange={(e) => setForm(f => ({...f, assigned_date: e.target.value}))} />
             </div>
@@ -471,6 +528,39 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
               <input className="block-input" placeholder="Optional notes" value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
             </div>
           </div>
+
+          {/* Custom penalties — admin-defined, addable now or later. Appear
+              as enforceable terms on the Equipment Agreement. */}
+          <div className="pt-2 border-t border-border-primary/50">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider">Custom Penalties</label>
+              <button type="button" className="block-btn flex items-center gap-1 text-[11px] px-2 py-1"
+                onClick={() => setPenalties(p => [...p, { label: '', penalty_type: 'flat', amount: 0 }])}>
+                <Plus size={11} /> Add Penalty
+              </button>
+            </div>
+            {penalties.length === 0 ? (
+              <p className="text-[11px] text-text-muted">No penalties defined. Add loss/damage/late-return fees that apply to this item — they’ll appear as terms on the Equipment Agreement.</p>
+            ) : (
+              <div className="space-y-2">
+                {penalties.map((p, i) => (
+                  <div key={i} className="grid gap-2" style={{ gridTemplateColumns: '2fr 1.2fr 1fr auto' }}>
+                    <input className="block-input text-xs" placeholder="Penalty (e.g. Loss / non-return)" value={p.label}
+                      onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
+                    <select className="block-select text-xs" value={p.penalty_type}
+                      onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, penalty_type: e.target.value } : x))}>
+                      {PENALTY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <input type="number" step="0.01" min="0" className="block-input text-xs" placeholder="0"
+                      value={p.amount || ''} onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))} />
+                    <button type="button" className="text-text-muted hover:text-accent-expense p-1"
+                      onClick={() => setPenalties(arr => arr.filter((_, j) => j !== i))} title="Remove"><Trash2 size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving || !form.item_name.trim()}>
             {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
           </button>
@@ -488,6 +578,8 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                 <th>Serial #</th>
                 <th>Model</th>
                 <th>Condition</th>
+                <th className="text-right">Value</th>
+                <th>Penalties</th>
                 <th>Date Issued</th>
                 <th>Returned</th>
                 <th style={{width: 80}}>Actions</th>
@@ -500,6 +592,12 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                   <td className="font-mono text-xs">{item.serial_number || '—'}</td>
                   <td className="text-xs text-text-muted">{item.model || '—'}</td>
                   <td>{conditionBadge(item.condition)}</td>
+                  <td className="font-mono text-xs text-right">{Number(item.value) > 0 ? formatCurrency(item.value) : '—'}</td>
+                  <td>
+                    {penaltyCounts[item.id] > 0
+                      ? <span className="block-badge block-badge-warning" style={{ fontSize: 10 }}>{penaltyCounts[item.id]} penalt{penaltyCounts[item.id] === 1 ? 'y' : 'ies'}</span>
+                      : <span className="text-text-muted text-xs">—</span>}
+                  </td>
                   <td className="font-mono text-xs">{formatDate(item.assigned_date)}</td>
                   <td className="font-mono text-xs">{item.return_date ? formatDate(item.return_date) : <span className="text-accent-income text-xs">In Use</span>}</td>
                   <td>
