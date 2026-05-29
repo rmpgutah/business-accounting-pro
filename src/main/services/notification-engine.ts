@@ -218,11 +218,119 @@ export function checkOverdueLoans(companyId?: string): number {
   return created;
 }
 
+// ─── Check Overdue Bills (Accounts Payable) ──────────────
+export function checkOverdueBills(companyId?: string): number {
+  const dbInstance = db.getDb();
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+  let created = 0;
+  let sql = `
+    SELECT b.id, b.company_id, b.bill_number, b.total, b.amount_paid, b.due_date, v.name AS vendor_name
+    FROM bills b LEFT JOIN vendors v ON v.id = b.vendor_id
+    WHERE b.status IN ('pending','received','approved','partial')
+      AND b.due_date IS NOT NULL AND date(b.due_date) < date(?)
+  `;
+  const params: any[] = [today];
+  if (companyId) { sql += ' AND b.company_id = ?'; params.push(companyId); }
+  let bills: any[] = [];
+  try { bills = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
+  for (const bill of bills) {
+    const existing = dbInstance.prepare(
+      `SELECT id FROM notifications WHERE entity_type='bill' AND entity_id=? AND type='overdue' AND date(created_at)=?`
+    ).get(bill.id, today) as any;
+    if (existing) continue;
+    const bal = (bill.total || 0) - (bill.amount_paid || 0);
+    db.create('notifications', {
+      company_id: bill.company_id, type: 'overdue',
+      title: `Bill ${bill.bill_number} is overdue`,
+      message: `Bill ${bill.bill_number}${bill.vendor_name ? ` to ${bill.vendor_name}` : ''} — $${bal.toFixed(2)} due since ${bill.due_date}`,
+      entity_type: 'bill', entity_id: bill.id, is_read: 0,
+    });
+    created++;
+  }
+  return created;
+}
+
+// ─── Check Expiring Vendor Compliance (contract + insurance) ──
+export function checkExpiringVendorCompliance(companyId?: string, daysAhead = 30): number {
+  const dbInstance = db.getDb();
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+  const h = new Date(_now.getTime() + daysAhead * 86400000);
+  const horizon = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+  let created = 0;
+  let sql = `
+    SELECT id, company_id, name,
+      COALESCE(NULLIF(contract_end_date,''), NULLIF(contract_end,'')) AS contract_end,
+      NULLIF(coi_expiry,'') AS coi_expiry
+    FROM vendors WHERE (deleted_at IS NULL OR deleted_at = '')
+  `;
+  const params: any[] = [];
+  if (companyId) { sql += ' AND company_id = ?'; params.push(companyId); }
+  let vendors: any[] = [];
+  try { vendors = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
+  const flag = (v: any, label: string, kind: string, dateStr: string | null) => {
+    if (!dateStr || dateStr > horizon) return;
+    const existing = dbInstance.prepare(
+      `SELECT id FROM notifications WHERE entity_type='vendor' AND entity_id=? AND type='compliance' AND message LIKE ? AND date(created_at)=?`
+    ).get(v.id, `%${kind}%`, today) as any;
+    if (existing) return;
+    const expired = dateStr < today;
+    db.create('notifications', {
+      company_id: v.company_id, type: 'compliance',
+      title: `${v.name}: ${label} ${expired ? 'expired' : 'expiring soon'}`,
+      message: `${v.name} ${kind} ${expired ? 'expired on' : 'expires'} ${dateStr}.`,
+      entity_type: 'vendor', entity_id: v.id, is_read: 0,
+    });
+    created++;
+  };
+  for (const v of vendors) {
+    flag(v, 'Contract', 'contract', v.contract_end);
+    flag(v, 'Insurance (COI)', 'insurance', v.coi_expiry);
+  }
+  return created;
+}
+
+// ─── Check Equipment Penalties Owed ──────────────────────
+export function checkEquipmentPenaltiesOwed(companyId?: string): number {
+  const dbInstance = db.getDb();
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+  let created = 0;
+  // employee_equipment has no company_id — join employees for scoping.
+  let sql = `
+    SELECT ee.id, ee.item_name, ee.penalty_assessed, ee.disposition, e.company_id, e.name AS employee_name
+    FROM employee_equipment ee JOIN employees e ON e.id = ee.employee_id
+    WHERE ee.penalty_assessed > 0.005 AND COALESCE(ee.penalty_waived,0) = 0
+  `;
+  const params: any[] = [];
+  if (companyId) { sql += ' AND e.company_id = ?'; params.push(companyId); }
+  let rows: any[] = [];
+  try { rows = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
+  for (const r of rows) {
+    const existing = dbInstance.prepare(
+      `SELECT id FROM notifications WHERE entity_type='equipment' AND entity_id=? AND type='penalty' AND date(created_at)=?`
+    ).get(r.id, today) as any;
+    if (existing) continue;
+    db.create('notifications', {
+      company_id: r.company_id, type: 'penalty',
+      title: `Equipment penalty owed: $${(r.penalty_assessed || 0).toFixed(2)}`,
+      message: `${r.employee_name}: ${r.item_name} (${String(r.disposition || '').replace(/_/g, ' ')}) — assessed penalty $${(r.penalty_assessed || 0).toFixed(2)} outstanding.`,
+      entity_type: 'equipment', entity_id: r.id, is_read: 0,
+    });
+    created++;
+  }
+  return created;
+}
+
 export interface NotificationCheckResult {
   overdueNotifications: number;
   budgetAlerts: number;
   reconciliationAlerts: number;
   loanAlerts: number;
+  billAlerts: number;
+  complianceAlerts: number;
+  penaltyAlerts: number;
 }
 
 // Reentrancy guard — the 30-minute cron and ad-hoc IPC invocations can otherwise
@@ -231,7 +339,7 @@ let notificationsRunning = false;
 
 export function runNotificationChecks(companyId?: string): NotificationCheckResult {
   if (notificationsRunning) {
-    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0, loanAlerts: 0 };
+    return { overdueNotifications: 0, budgetAlerts: 0, reconciliationAlerts: 0, loanAlerts: 0, billAlerts: 0, complianceAlerts: 0, penaltyAlerts: 0 };
   }
   notificationsRunning = true;
   try {
@@ -239,7 +347,10 @@ export function runNotificationChecks(companyId?: string): NotificationCheckResu
     const budgetAlerts = checkBudgetThresholds(companyId);
     const reconciliationAlerts = checkUnmatchedTransactions(companyId);
     const loanAlerts = checkOverdueLoans(companyId);
-    return { overdueNotifications, budgetAlerts, reconciliationAlerts, loanAlerts };
+    const billAlerts = checkOverdueBills(companyId);
+    const complianceAlerts = checkExpiringVendorCompliance(companyId);
+    const penaltyAlerts = checkEquipmentPenaltiesOwed(companyId);
+    return { overdueNotifications, budgetAlerts, reconciliationAlerts, loanAlerts, billAlerts, complianceAlerts, penaltyAlerts };
   } finally {
     notificationsRunning = false;
   }

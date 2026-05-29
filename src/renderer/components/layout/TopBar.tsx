@@ -99,7 +99,7 @@ const TopBar: React.FC = () => {
     return `${Math.round(hrs / 24)}d ago`;
   };
   const notifIcon = (type: string) => {
-    if (type === 'overdue' || type === 'budget_alert') return <AlertTriangle size={13} className="text-accent-expense shrink-0 mt-0.5" />;
+    if (['overdue', 'budget_alert', 'penalty', 'compliance'].includes(type)) return <AlertTriangle size={13} className="text-accent-expense shrink-0 mt-0.5" />;
     return <Bell size={13} className="text-accent-blue shrink-0 mt-0.5" />;
   };
 
