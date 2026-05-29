@@ -2038,6 +2038,19 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_employee_credentials_employee ON employee_credentials(employee_id)`,
+  // Onboarding / offboarding checklist — persists MANUAL check-offs only.
+  // Data-backed steps (equipment issued, agreements signed, etc.) are
+  // derived live in the UI, never stored, so they can't drift.
+  `CREATE TABLE IF NOT EXISTS employee_checklist_items (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    phase TEXT NOT NULL DEFAULT 'onboarding',
+    step_key TEXT NOT NULL,
+    is_complete INTEGER DEFAULT 0,
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_checklist_employee ON employee_checklist_items(employee_id, phase)`,
   // E-Sign documents (2026-05-21)
   `CREATE TABLE IF NOT EXISTS esign_documents (
     id TEXT PRIMARY KEY,

@@ -798,6 +798,114 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   );
 };
 
+// ─── Onboarding / Offboarding Checklist ───────────────────
+// Hybrid: auto-detected steps (derived from real data) + manual
+// check-offs. Auto steps are read-only reflections of system state;
+// manual steps persist in employee_checklist_items.
+const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [phase, setPhase] = useState<'onboarding' | 'offboarding'>('onboarding');
+  const [data, setData] = useState<{ steps: any[]; done: number; total: number; employee_name?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await api.employeeChecklist(employeeId, phase);
+      if (!r?.error) setData(r);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [employeeId, phase]);
+
+  const toggle = async (stepKey: string, done: boolean) => {
+    await api.employeeChecklistToggle(employeeId, phase, stepKey, done);
+    await load();
+  };
+
+  const pct = data ? Math.round((data.done / Math.max(1, data.total)) * 100) : 0;
+
+  // Group steps by category.
+  const grouped = useMemo(() => {
+    if (!data) return new Map<string, any[]>();
+    const m = new Map<string, any[]>();
+    for (const s of data.steps) {
+      const arr = m.get(s.category) || [];
+      arr.push(s);
+      m.set(s.category, arr);
+    }
+    return m;
+  }, [data]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">
+          {phase === 'onboarding' ? 'Onboarding Checklist' : 'Offboarding Checklist'}
+        </h3>
+        <div className="flex gap-1">
+          {(['onboarding', 'offboarding'] as const).map(p => (
+            <button key={p} onClick={() => setPhase(p)}
+              className={`px-3 py-1 text-xs font-semibold capitalize ${phase === p ? 'text-white' : 'text-text-secondary'}`}
+              style={{ borderRadius: 6, background: phase === p ? 'rgba(59,130,246,0.8)' : 'rgba(255,255,255,0.04)' }}>
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {data && (
+        <div className="block-card p-3" style={{ borderRadius: 6 }}>
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="text-text-muted font-semibold uppercase tracking-wider">{data.done} of {data.total} complete</span>
+            <span className={`font-bold font-mono ${pct === 100 ? 'text-accent-income' : 'text-accent-blue'}`}>{pct}%</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, borderRadius: 3, background: pct === 100 ? 'var(--color-accent-income)' : 'var(--color-accent-blue)', transition: 'width 0.3s ease' }} />
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-6 text-xs text-text-muted">Loading checklist…</div>
+      ) : (
+        <div className="space-y-3">
+          {[...grouped.entries()].map(([category, steps]) => (
+            <div key={category}>
+              <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider px-1 mb-1">{category}</div>
+              <div className="block-card overflow-hidden" style={{ borderRadius: 6 }}>
+                {steps.map((step: any, i: number) => (
+                  <div key={step.key}
+                    className="flex items-center gap-3 px-3 py-2 transition-colors"
+                    style={{
+                      borderBottom: i < steps.length - 1 ? '1px solid var(--color-border-primary)' : undefined,
+                      background: step.done ? 'rgba(22,163,74,0.04)' : undefined,
+                    }}>
+                    {step.auto ? (
+                      <span className={`w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0 ${step.done ? 'text-accent-income' : 'text-text-muted'}`} style={{ borderRadius: 6, border: `1.5px solid ${step.done ? 'var(--color-accent-income)' : 'var(--color-border-primary)'}` }}>
+                        {step.done ? '✓' : ''}
+                      </span>
+                    ) : (
+                      <input type="checkbox" checked={step.done} onChange={(e) => toggle(step.key, e.target.checked)}
+                        style={{ width: 18, height: 18, accentColor: '#16a34a', cursor: 'pointer' }} />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${step.done ? 'text-text-muted line-through' : 'text-text-primary font-medium'}`}>{step.label}</span>
+                        {step.auto && <span className="text-[9px] text-accent-blue px-1 py-0.5" style={{ borderRadius: 4, background: 'rgba(59,130,246,0.1)' }}>AUTO</span>}
+                      </div>
+                      <p className="text-[11px] text-text-muted truncate">{step.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Credentials & Licenses Panel ─────────────────────────
 const CREDENTIAL_TYPES: { value: string; label: string }[] = [
   { value: 'license', label: 'License' },
@@ -1899,6 +2007,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         {/* Equipment & Agreements tab */}
         {activeTab === 'equipment' && employeeId && (
           <div className="space-y-6">
+            <OnboardingPanel employeeId={employeeId} />
+            <div className="border-t border-border-primary" />
             <EquipmentPanel employeeId={employeeId} />
             <div className="border-t border-border-primary" />
             <CredentialsPanel employeeId={employeeId} />

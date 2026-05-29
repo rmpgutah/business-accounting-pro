@@ -108,6 +108,7 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'employee_equipment',
   'equipment_penalties',
   'employee_credentials',
+  'employee_checklist_items',
   // E-sign child tables
   'esign_audit_log',
   'esign_permissions',
@@ -321,6 +322,7 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'employee_equipment',
   'equipment_penalties',
   'employee_credentials',
+  'employee_checklist_items',
   // ── Append-only logs / audit trails ─────────────────────────────
   'anomaly_log',
   'anonymization_log',

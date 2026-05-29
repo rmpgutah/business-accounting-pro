@@ -654,6 +654,7 @@ export function registerIpcHandlers(): void {
     'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
     'employee_equipment', 'equipment_penalties', 'employee_credentials',
+    'employee_checklist_items',
     'pto_policies', 'pto_balances', 'pto_transactions',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
@@ -16139,6 +16140,111 @@ export function registerIpcHandlers(): void {
     </div>
   </div>`;
   }
+
+  // ─── Onboarding / Offboarding Checklist ─────────────────
+  // Returns a hybrid checklist: auto-detected steps (computed from real
+  // data — equipment, agreements, banking, credentials) + manual
+  // check-offs (stored in employee_checklist_items). Auto steps are
+  // read-only and always reflect current system state.
+  ipcMain.handle('employee:checklist', (_event, { employeeId, phase }: { employeeId: string; phase: 'onboarding' | 'offboarding' }) => {
+    try {
+      const dbi = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      if (!companyId || !employeeId) return { steps: [] };
+      const emp = dbi.prepare('SELECT * FROM employees WHERE id = ? AND company_id = ?').get(employeeId, companyId) as any;
+      if (!emp) return { steps: [] };
+
+      // Manual check-offs for this employee + phase.
+      const manualRows = dbi.prepare(
+        'SELECT step_key, is_complete, completed_at FROM employee_checklist_items WHERE employee_id = ? AND phase = ?'
+      ).all(employeeId, phase) as any[];
+      const manualMap = new Map(manualRows.map(r => [r.step_key, r]));
+      const isManualDone = (key: string) => !!(manualMap.get(key)?.is_complete);
+
+      // Auto-detected data counts.
+      const equipCount = (dbi.prepare('SELECT COUNT(*) c FROM employee_equipment WHERE employee_id = ?').get(employeeId) as any)?.c || 0;
+      const credCount = (dbi.prepare('SELECT COUNT(*) c FROM employee_credentials WHERE employee_id = ?').get(employeeId) as any)?.c || 0;
+      const hasBanking = !!(emp.bank_name || emp.bank_routing || emp.bank_account);
+      const hasW4 = !!(emp.w4_filing_status);
+      const hasEmergency = !!(emp.emergency_contact_name);
+
+      // E-sign status for both agreement types.
+      let empAgreementSigned = false, equipAgreementSigned = false;
+      try {
+        const docs = dbi.prepare("SELECT description, status FROM esign_documents WHERE company_id = ? AND status = 'signed'").all(companyId) as any[];
+        empAgreementSigned = docs.some((d: any) => d.description === `emp:${employeeId}:employee`);
+        equipAgreementSigned = docs.some((d: any) => d.description === `emp:${employeeId}:equipment`);
+      } catch { /* esign tables may not exist */ }
+
+      // Equipment return status for offboarding.
+      let allReturned = true;
+      if (phase === 'offboarding' && equipCount > 0) {
+        const inUse = (dbi.prepare("SELECT COUNT(*) c FROM employee_equipment WHERE employee_id = ? AND (disposition IS NULL OR disposition = 'in_use')").get(employeeId) as any)?.c || 0;
+        allReturned = inUse === 0;
+      }
+
+      type Step = { key: string; label: string; description: string; auto: boolean; done: boolean; category: string };
+      const steps: Step[] = [];
+
+      if (phase === 'onboarding') {
+        steps.push(
+          { key: 'profile', label: 'Employee Profile', description: 'Name, contact info, address, job title', auto: true, done: !!(emp.name && emp.email), category: 'Setup' },
+          { key: 'banking', label: 'Direct Deposit / Banking', description: 'Bank routing + account for payroll', auto: true, done: hasBanking, category: 'Setup' },
+          { key: 'w4', label: 'W-4 Tax Withholding', description: 'Federal W-4 filing status and allowances', auto: true, done: hasW4, category: 'Setup' },
+          { key: 'emergency', label: 'Emergency Contact', description: 'Emergency contact name and phone', auto: true, done: hasEmergency, category: 'Setup' },
+          { key: 'equipment', label: 'Issue Equipment', description: 'Laptops, phones, keys, badges', auto: true, done: equipCount > 0, category: 'Provisioning' },
+          { key: 'credentials', label: 'Credentials & Licenses', description: 'Record any required licenses or certifications', auto: true, done: credCount > 0, category: 'Provisioning' },
+          { key: 'emp_agreement', label: 'Employee Agreement (E-Sign)', description: 'Employment contract with terms and compensation', auto: true, done: empAgreementSigned, category: 'Agreements' },
+          { key: 'equip_agreement', label: 'Equipment Agreement (E-Sign)', description: 'Equipment responsibility and penalty terms', auto: true, done: equipAgreementSigned, category: 'Agreements' },
+          // Manual steps — no data home, admin checks off when done.
+          { key: 'orientation', label: 'Orientation / Training', description: 'Company orientation session completed', auto: false, done: isManualDone('orientation'), category: 'Training' },
+          { key: 'building_access', label: 'Building / Facility Access', description: 'Keys, badge, alarm codes issued', auto: false, done: isManualDone('building_access'), category: 'Provisioning' },
+          { key: 'it_accounts', label: 'IT Accounts Setup', description: 'Email, Slack, software logins provisioned', auto: false, done: isManualDone('it_accounts'), category: 'Provisioning' },
+          { key: 'handbook_ack', label: 'Employee Handbook Acknowledgment', description: 'Employee confirmed receipt of handbook', auto: false, done: isManualDone('handbook_ack'), category: 'Agreements' },
+          { key: 'intro_team', label: 'Team Introduction', description: 'Introduced to team and supervisor', auto: false, done: isManualDone('intro_team'), category: 'Training' },
+        );
+      } else {
+        // Offboarding
+        steps.push(
+          { key: 'equipment_return', label: 'All Equipment Returned', description: 'Laptops, phones, keys, badges returned or accounted for', auto: true, done: allReturned, category: 'Return' },
+          { key: 'penalties_settled', label: 'Equipment Penalties Settled', description: 'Outstanding penalties paid or waived', auto: true, done: (() => { try { return (dbi.prepare("SELECT COUNT(*) c FROM employee_equipment WHERE employee_id = ? AND penalty_assessed > 0.005 AND COALESCE(penalty_waived,0) = 0").get(employeeId) as any)?.c === 0; } catch { return true; } })(), category: 'Return' },
+          { key: 'final_paycheck', label: 'Final Paycheck Processed', description: 'Last payroll run including accrued PTO', auto: false, done: isManualDone('final_paycheck'), category: 'Payroll' },
+          { key: 'benefits_termed', label: 'Benefits Terminated', description: 'Health, dental, vision, 401k terminated or COBRA offered', auto: false, done: isManualDone('benefits_termed'), category: 'Payroll' },
+          { key: 'it_deprovisioned', label: 'IT Accounts Deprovisioned', description: 'Email, Slack, software access revoked', auto: false, done: isManualDone('it_deprovisioned'), category: 'Access' },
+          { key: 'building_revoked', label: 'Building Access Revoked', description: 'Keys, badge, alarm codes collected / deactivated', auto: false, done: isManualDone('building_revoked'), category: 'Access' },
+          { key: 'exit_interview', label: 'Exit Interview', description: 'Conducted and documented', auto: false, done: isManualDone('exit_interview'), category: 'Admin' },
+          { key: 'cobra_notice', label: 'COBRA Notice Sent', description: 'COBRA continuation notice mailed within 14 days', auto: false, done: isManualDone('cobra_notice'), category: 'Admin' },
+        );
+      }
+
+      const done = steps.filter(s => s.done).length;
+      return { steps, done, total: steps.length, phase, employee_name: emp.name };
+    } catch (err: any) {
+      return { error: err?.message || 'Checklist failed' };
+    }
+  });
+
+  // Toggle a manual checklist step.
+  ipcMain.handle('employee:checklist-toggle', (_event, { employeeId, phase, stepKey, done }: { employeeId: string; phase: string; stepKey: string; done: boolean }) => {
+    try {
+      const dbi = db.getDb();
+      const existing = dbi.prepare(
+        'SELECT id FROM employee_checklist_items WHERE employee_id = ? AND phase = ? AND step_key = ?'
+      ).get(employeeId, phase, stepKey) as any;
+      if (existing) {
+        dbi.prepare('UPDATE employee_checklist_items SET is_complete = ?, completed_at = ? WHERE id = ?')
+          .run(done ? 1 : 0, done ? new Date().toISOString() : null, existing.id);
+      } else {
+        db.create('employee_checklist_items', {
+          employee_id: employeeId, phase, step_key: stepKey,
+          is_complete: done ? 1 : 0, completed_at: done ? new Date().toISOString() : null,
+        });
+      }
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
 
   ipcMain.handle('employee:generate-equipment-agreement', (_event, { employeeId, signatures }: { employeeId: string; signatures?: SigData }) => {
     try {

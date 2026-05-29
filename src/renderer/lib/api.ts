@@ -1026,6 +1026,11 @@ const api = {
     window.electronAPI.invoke('payroll:employee-summary', { employeeId }),
 
   // ─── Employee Document Generation ────────────────
+  employeeChecklist: (employeeId: string, phase: 'onboarding' | 'offboarding'): Promise<{ steps: Array<{ key: string; label: string; description: string; auto: boolean; done: boolean; category: string }>; done: number; total: number; phase: string; employee_name?: string; error?: string }> =>
+    window.electronAPI.invoke('employee:checklist', { employeeId, phase }),
+  employeeChecklistToggle: (employeeId: string, phase: string, stepKey: string, done: boolean): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('employee:checklist-toggle', { employeeId, phase, stepKey, done }),
+
   generateEquipmentAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string } }): Promise<{ html: string }> =>
     window.electronAPI.invoke('employee:generate-equipment-agreement', { employeeId, signatures }),
 
