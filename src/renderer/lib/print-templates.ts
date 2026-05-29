@@ -144,7 +144,7 @@ const baseStyles = `
      if the engine doesn't render the @bottom-right region. */
   @page {
     size: letter;
-    margin: 0.55in 0.5in 0.65in 0.5in;
+    margin: 0.5in 0.45in 0.6in 0.45in;
     @bottom-right {
       content: "Page " counter(page) " of " counter(pages);
       font-family: 'Inter', sans-serif;
@@ -2886,8 +2886,14 @@ export function generateReportHTML(
   rows: Record<string, any>[],
   summary?: ReportSummary[]
 ): string {
+  // Distribute column widths proportionally so no column gets starved.
+  // Currency/number columns get less width; text columns get more.
+  const colWidths = columns.map(c => c.format === 'currency' || c.align === 'right' ? 12 : c.key === 'description' || c.key === 'name' ? 25 : 15);
+  const totalW = colWidths.reduce((s, w) => s + w, 0);
+  const colgroup = `<colgroup>${colWidths.map(w => `<col style="width:${Math.round((w / totalW) * 100)}%;" />`).join('')}</colgroup>`;
+
   const headerCells = columns
-    .map(c => `<th class="${c.align === 'right' ? 'text-right' : ''}">${esc(c.label)}</th>`)
+    .map(c => `<th class="${c.align === 'right' ? 'text-right' : ''}" style="${c.align === 'right' ? 'white-space:nowrap;' : ''}">${esc(c.label)}</th>`)
     .join('');
 
   const bodyRows = rows.map(row => {
@@ -2940,7 +2946,8 @@ ${baseStyles}
     <div class="rpt-meta-item"><span class="rpt-meta-label">Entries</span><span class="rpt-meta-val">${rowCount}</span></div>
   </div>
 
-  <table>
+  <table style="table-layout:fixed;">
+    ${colgroup}
     <thead><tr>${headerCells}</tr></thead>
     <tbody>${bodyRows}</tbody>
   </table>
@@ -3702,17 +3709,17 @@ export function generateExpenseReportHTML(
       rejected: '#dc2626', draft: '#475569',
     };
     const c = colors[status?.toLowerCase()] || '#64748b';
-    return `<span style="font-size:10px;font-weight:600;color:${c};text-transform:uppercase;letter-spacing:0.5px;">${status || '—'}</span>`;
+    return `<span style="display:inline-block;font-size:9px;font-weight:700;color:${c};text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;text-align:center;">${status || '—'}</span>`;
   };
 
   const expenseRows = expenses.map(e => {
     const mainRow = `<tr>
-      <td>${fmtDate(e.date)}</td>
+      <td style="white-space:nowrap;">${fmtDate(e.date)}</td>
       <td>${esc(e.description) || '\u2014'}</td>
       <td>${esc(e.vendor_name) || '\u2014'}</td>
       <td>${esc(e.category_name) || '\u2014'}</td>
-      <td class="text-right font-mono">${fmt(Number(e.amount) || 0)}</td>
-      <td>${statusBadge(e.status)}</td>
+      <td class="text-right font-mono" style="white-space:nowrap;">${fmt(Number(e.amount) || 0)}</td>
+      <td style="text-align:center;white-space:nowrap;">${statusBadge(e.status)}</td>
     </tr>`;
 
     const lineItemRows = e.line_items && e.line_items.length > 0
@@ -3784,7 +3791,7 @@ ${baseStyles}
     ${topCategories.map(([cat, amount]) => {
       const pct = maxCat > 0 ? (amount / maxCat) * 100 : 0;
       return `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
-        <span style="width:120px;font-size:10px;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(cat)}</span>
+        <span style="width:180px;font-size:10px;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(cat)}</span>
         <div style="flex:1;height:14px;background:#f1f5f9;">
           <div style="height:100%;width:${pct}%;background:#ef4444;opacity:0.7;"></div>
         </div>
@@ -3796,14 +3803,22 @@ ${baseStyles}
 
   <!-- Detail Table -->
   <div class="rpt-section">Transaction Detail</div>
-  <table>
+  <table style="table-layout:fixed;">
+    <colgroup>
+      <col style="width:11%;" />
+      <col style="width:27%;" />
+      <col style="width:18%;" />
+      <col style="width:17%;" />
+      <col style="width:13%;" />
+      <col style="width:14%;" />
+    </colgroup>
     <thead><tr>
       <th>Date</th>
       <th>Description</th>
       <th>Vendor</th>
       <th>Category</th>
       <th class="text-right">Amount</th>
-      <th>Status</th>
+      <th style="text-align:center;">Status</th>
     </tr></thead>
     <tbody>${expenseRows}</tbody>
   </table>
