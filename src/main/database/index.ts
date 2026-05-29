@@ -611,8 +611,18 @@ export function initDatabase(): Database.Database {
   // syncs related_principal_expense_id.
   "ALTER TABLE loan_payments ADD COLUMN related_principal_expense_id TEXT",
   // Tags an expense row with which loan-payment component it represents,
-  // so reverse lookups + reports can filter. 'interest' | 'principal' | ''
+  // so reverse lookups + reports can filter.
+  // Now: 'combined' for the single split-expense per payment (legacy
+  // 'interest'/'principal' rows are migrated into one 'combined' row
+  // with line items). '' for normal expenses.
   "ALTER TABLE expenses ADD COLUMN loan_component TEXT DEFAULT ''",
+  // Line-item split tags for the one-row-per-payment model: each loan
+  // payment expense has Interest + Principal (+ Escrow) line items.
+  "ALTER TABLE expense_line_items ADD COLUMN loan_component TEXT DEFAULT ''",
+  // Deductibility flag — principal repayment is NOT a deductible
+  // expense. Reports can sum only deductible=1 lines for accurate P&L
+  // while the parent row still shows the full cash-out.
+  "ALTER TABLE expense_line_items ADD COLUMN deductible INTEGER DEFAULT 1",
   // Vendor Advanced Wave — extend vendors with fields exposed by the new
   // 6-tab VendorFormAdvanced. Many existing columns already covered by
   // earlier waves (vendor_type, w9_status, approval_status, diversity,

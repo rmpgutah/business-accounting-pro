@@ -553,7 +553,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
           <span>
             <span style={{ fontWeight: 600 }}>Cross-post to Expenses ledger</span>
             <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: 10, marginTop: 2 }}>
-              Creates two linked rows: <b style={{ color: '#f59e0b' }}>Interest</b> (deductible) + <b style={{ color: '#6366f1' }}>Principal</b> (debt repayment). Full payment shows in Expenses. Edit/delete one side — the other follows.
+              Creates one "Loan Payment" expense for the full amount, split into <b style={{ color: '#f59e0b' }}>Interest</b> (deductible) + <b style={{ color: '#6366f1' }}>Principal</b> line items. Edit/delete the payment — the expense follows.
             </span>
           </span>
         </label>
@@ -805,26 +805,21 @@ const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string; refreshK
   }, [loanId, refreshKey]);
 
   const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const interestTotal = expenses.filter(e => e.loan_component === 'interest').reduce((s, e) => s + (e.amount || 0), 0);
-  const principalTotal = expenses.filter(e => e.loan_component === 'principal').reduce((s, e) => s + (e.amount || 0), 0);
+  const interestTotal = expenses.reduce((s, e) => s + (Number(e.interest_portion) || 0), 0);
+  const principalTotal = expenses.reduce((s, e) => s + (Number(e.principal_portion) || 0), 0);
 
   if (loading) return null;
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n || 0);
-  const componentBadge = (c: string) => {
-    if (c === 'interest') return { label: 'Interest', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' };
-    if (c === 'principal') return { label: 'Principal', color: '#6366f1', bg: 'rgba(99,102,241,0.12)' };
-    return { label: 'Other', color: 'var(--color-text-muted)', bg: 'var(--color-bg-secondary)' };
-  };
 
   return (
     <div className="block-card" style={{ padding: 0, overflow: 'hidden', marginTop: 16 }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-primary)', background: 'var(--color-bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-          Linked Expenses (Interest + Principal)
+          Linked Expenses · one row per payment, split inside
         </span>
         <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-          {expenses.length} row{expenses.length === 1 ? '' : 's'} · Total {fmt(total)}
+          {expenses.length} payment{expenses.length === 1 ? '' : 's'} · Total {fmt(total)}
           {(interestTotal > 0 || principalTotal > 0) && (
             <span> · <span style={{ color: '#f59e0b' }}>Int {fmt(interestTotal)}</span> · <span style={{ color: '#6366f1' }}>Prin {fmt(principalTotal)}</span></span>
           )}
@@ -832,32 +827,30 @@ const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string; refreshK
       </div>
       {expenses.length === 0 ? (
         <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 11 }}>
-          No linked expenses yet. Record a payment with "Auto-create Interest Expense entry" enabled,
-          or use the "Linked to Loan" picker when recording an expense.
+          No linked expenses yet. Record a payment with "Cross-post to Expenses ledger" enabled,
+          or use the "Sync to Expenses" button on the Loans list.
         </div>
       ) : (
         <div style={{ maxHeight: 320, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border-primary)', background: 'var(--color-bg-secondary)' }}>
-                {['Date', 'Type', 'Description', 'Amount', 'Status'].map(h => (
-                  <th key={h} style={{ padding: '6px 8px', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', textAlign: h === 'Amount' ? 'right' : 'left' }}>{h}</th>
+                {['Date', 'Description', 'Interest', 'Principal', 'Payment', 'Status'].map(h => (
+                  <th key={h} style={{ padding: '6px 8px', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', textAlign: (h === 'Date' || h === 'Description' || h === 'Status') ? 'left' : 'right' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {expenses.map((e: any) => {
-                const badge = componentBadge(e.loan_component);
+                const interest = Number(e.interest_portion) || 0;
+                const principal = Number(e.principal_portion) || 0;
                 return (
                   <tr key={e.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{e.date}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: badge.color, background: badge.bg, padding: '1px 6px', borderRadius: 4 }}>{badge.label}</span>
-                    </td>
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>{e.description || '—'}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: badge.color, fontWeight: 600 }}>
-                      {fmt(e.amount || 0)}
-                    </td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#f59e0b' }}>{interest > 0 ? fmt(interest) : '—'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#6366f1' }}>{principal > 0 ? fmt(principal) : '—'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{fmt(e.amount || 0)}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{e.status}</td>
                   </tr>
                 );

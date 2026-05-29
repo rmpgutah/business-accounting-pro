@@ -436,8 +436,8 @@ app.whenReady().then(() => {
         console.log(`[loan-reconcile] fixed cached totals on ${recon.loans_fixed} loan(s)`);
       }
       const res = lk.backfillLoanPaymentExpenses();
-      if (res && (res.created_interest || res.created_principal)) {
-        console.log(`[loan-backfill] created ${res.created_interest} interest + ${res.created_principal} principal expense rows across ${res.payments_processed} payments`);
+      if (res && (res.created || res.migrated)) {
+        console.log(`[loan-backfill] ${res.created} new + ${res.migrated} migrated split-expense rows across ${res.payments_processed} payments`);
       }
     } catch (bfErr: any) {
       console.warn('[loan-backfill] skipped:', bfErr?.message);

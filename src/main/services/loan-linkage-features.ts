@@ -131,7 +131,18 @@ export function expensesForLoan(loanId: string, opts?: { limit?: number; since?:
     let where = `company_id = ? AND related_loan_id = ?`;
     if (opts?.since) { where += ` AND date >= ?`; params.push(opts.since); }
     params.push(opts?.limit || 100);
-    return db.getDb().prepare(`SELECT id, date, amount, description, category_id, status, related_loan_payment_id, loan_component FROM expenses WHERE ${where} AND (deleted_at IS NULL) ORDER BY date DESC LIMIT ?`).all(...params);
+    // One row per payment (loan_component='combined'). Attach the
+    // interest / principal split from the line items so the panel can
+    // render a single reconciled row that shows the breakdown.
+    return db.getDb().prepare(`
+      SELECT e.id, e.date, e.amount, e.description, e.category_id, e.status,
+             e.related_loan_payment_id, e.loan_component,
+             COALESCE((SELECT SUM(amount) FROM expense_line_items WHERE expense_id = e.id AND loan_component = 'interest'), 0) AS interest_portion,
+             COALESCE((SELECT SUM(amount) FROM expense_line_items WHERE expense_id = e.id AND loan_component = 'principal'), 0) AS principal_portion,
+             COALESCE((SELECT SUM(amount) FROM expense_line_items WHERE expense_id = e.id AND loan_component = 'escrow'), 0) AS escrow_portion
+      FROM expenses e
+      WHERE ${where} AND (e.deleted_at IS NULL)
+      ORDER BY e.date DESC LIMIT ?`).all(...params);
   } catch (e: any) { return { error: e.message }; }
 }
 
@@ -340,110 +351,165 @@ export function loanContextForExpense(expenseId: string) {
   } catch (e: any) { return null; }
 }
 
+// Find-or-create an expense category by name (categories use is_active,
+// not deleted_at). Used for the single "Loan Payment" parent category.
+function findOrCreateCategoryLk(companyId: string, name: string, color: string): string {
+  const dbi = db.getDb();
+  const existing = dbi.prepare(
+    "SELECT id FROM categories WHERE company_id = ? AND lower(name) = lower(?) AND is_active = 1 LIMIT 1"
+  ).get(companyId, name) as any;
+  if (existing?.id) return existing.id;
+  const id = uuid();
+  dbi.prepare(
+    "INSERT INTO categories (id, company_id, name, type, color, description, is_active, created_at, updated_at) VALUES (?, ?, ?, 'expense', ?, ?, 1, datetime('now'), datetime('now'))"
+  ).run(id, companyId, name, color, 'Auto-created for loan payment integration');
+  return id;
+}
+
 // ════════════════════════════════════════════════════════════════════
-// Global backfill — ensure EVERY loan payment already in the system has
-// matching Interest + Principal expense rows in the Expenses ledger,
-// properly categorized. Reads each payment's stored split (the source
-// of truth that reconciles to the balance) rather than re-deriving.
+// ONE-ROW-PER-PAYMENT split. Each loan payment maps to a SINGLE expense
+// row (amount = full payment) categorized "Loan Payment", broken into
+// line items:
+//   • Interest  (deductible = 1)
+//   • Principal (deductible = 0)  ← repayment, not a deductible expense
+//   • Escrow    (deductible = 0)  ← if any
+// Reports can sum only deductible line items for accurate P&L while the
+// parent row shows the full cash-out as one reconciled transaction.
 //
-// Idempotent: only processes payments missing a link
-// (related_expense_id IS NULL / related_principal_expense_id IS NULL),
-// so it's safe to run on every app launch and as a manual re-sync.
+// Idempotent + self-migrating: if a 'combined' expense already exists
+// for the payment, it's left alone unless force=true; any LEGACY
+// separate 'interest'/'principal' rows from the old two-row model are
+// removed and replaced by the single combined row.
 //
-// Scope: ALL companies (joins loan_payments → loans for company_id).
-// Pass a companyId to restrict.
+// Returns { id, created } — created=false means it already existed.
+// ════════════════════════════════════════════════════════════════════
+export function syncPaymentExpense(p: {
+  payment_id: string;
+  loan_id: string;
+  company_id: string;
+  loan_name: string;
+  payment_date: string;
+  payment_method?: string;
+  principal: number;
+  interest: number;
+  escrow?: number;
+  force?: boolean;
+}): { id: string | null; created: boolean } {
+  const dbi = db.getDb();
+  const principal = round2(p.principal || 0);
+  const interest = round2(p.interest || 0);
+  const escrow = round2(p.escrow || 0);
+  const total = round2(principal + interest + escrow);
+
+  // Existing combined row for this payment (active only).
+  const existingCombined = dbi.prepare(
+    "SELECT id FROM expenses WHERE related_loan_payment_id = ? AND loan_component = 'combined' AND (deleted_at IS NULL OR deleted_at = '')"
+  ).get(p.payment_id) as any;
+
+  // Remove legacy two-row artifacts (interest/principal rows) for this
+  // payment — they're being consolidated into the combined row.
+  const legacy = dbi.prepare(
+    "SELECT id FROM expenses WHERE related_loan_payment_id = ? AND loan_component IN ('interest','principal')"
+  ).all(p.payment_id) as any[];
+  for (const o of legacy) {
+    dbi.prepare("DELETE FROM expense_line_items WHERE expense_id = ?").run(o.id);
+    dbi.prepare("DELETE FROM expenses WHERE id = ?").run(o.id);
+  }
+
+  if (existingCombined && !p.force) {
+    // Already in the new model; just make sure the back-link is right.
+    dbi.prepare("UPDATE loan_payments SET related_expense_id = ?, related_principal_expense_id = NULL WHERE id = ?")
+      .run(existingCombined.id, p.payment_id);
+    return { id: existingCombined.id, created: legacy.length > 0 };
+  }
+
+  // force or no combined yet → (re)build it. Drop the old combined first.
+  if (existingCombined) {
+    dbi.prepare("DELETE FROM expense_line_items WHERE expense_id = ?").run(existingCombined.id);
+    dbi.prepare("DELETE FROM expenses WHERE id = ?").run(existingCombined.id);
+  }
+  dbi.prepare("UPDATE loan_payments SET related_expense_id = NULL, related_principal_expense_id = NULL WHERE id = ?")
+    .run(p.payment_id);
+
+  if (total <= 0.005) return { id: null, created: false };
+
+  const cat = findOrCreateCategoryLk(p.company_id, 'Loan Payment', '#8b5cf6');
+  const expId = uuid();
+  dbi.prepare(
+    "INSERT INTO expenses (id, company_id, date, amount, tax_amount, description, category_id, vendor_id, payment_method, status, related_loan_id, related_loan_payment_id, loan_component, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?, 'paid', ?, ?, 'combined', datetime('now'), datetime('now'))"
+  ).run(expId, p.company_id, p.payment_date, total,
+    (p.loan_name || 'Loan') + ' payment · ' + p.payment_date,
+    cat, p.payment_method || 'ach', p.loan_id, p.payment_id);
+
+  const liStmt = dbi.prepare(
+    "INSERT INTO expense_line_items (id, expense_id, description, quantity, unit_price, amount, loan_component, deductible, sort_order, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, datetime('now'))"
+  );
+  let so = 0;
+  if (interest > 0.005) liStmt.run(uuid(), expId, 'Interest (deductible)', interest, interest, 'interest', 1, so++);
+  if (principal > 0.005) liStmt.run(uuid(), expId, 'Principal (non-deductible)', principal, principal, 'principal', 0, so++);
+  if (escrow > 0.005) liStmt.run(uuid(), expId, 'Escrow', escrow, escrow, 'escrow', 0, so++);
+
+  dbi.prepare("UPDATE loan_payments SET related_expense_id = ? WHERE id = ?").run(expId, p.payment_id);
+  return { id: expId, created: true };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Global backfill — ensure EVERY loan payment has its single combined
+// split-expense row (migrating any legacy two-row data). Reads each
+// payment's stored split (source of truth). Idempotent: payments that
+// already have a combined row are skipped. Scope: all companies, or
+// pass companyId to restrict.
 // ════════════════════════════════════════════════════════════════════
 export function backfillLoanPaymentExpenses(companyId?: string): {
+  created: number;
+  migrated: number;
+  payments_processed: number;
+  // legacy fields kept for callers that read them
   created_interest: number;
   created_principal: number;
-  payments_processed: number;
   error?: string;
 } {
   try {
     const dbi = db.getDb();
-
-    // Pull payments that are missing at least one linked expense row.
-    // JOIN loans for company_id + loan name; skip soft-deleted loans.
     const where = companyId ? 'AND l.company_id = ?' : '';
     const params: any[] = companyId ? [companyId] : [];
     const rows = dbi.prepare(`
-      SELECT lp.id, lp.payment_date, lp.principal_amount, lp.interest_amount,
-             lp.payment_method, lp.related_expense_id, lp.related_principal_expense_id,
-             l.company_id, l.name AS loan_name
+      SELECT lp.id, lp.loan_id, lp.payment_date, lp.principal_amount, lp.interest_amount,
+             lp.escrow_amount, lp.payment_method, l.company_id, l.name AS loan_name
       FROM loan_payments lp
       JOIN loans l ON lp.loan_id = l.id
-      WHERE (l.deleted_at IS NULL)
-        AND (
-          (lp.related_expense_id IS NULL AND lp.interest_amount > 0.005) OR
-          (lp.related_principal_expense_id IS NULL AND lp.principal_amount > 0.005)
-        )
-        ${where}
+      WHERE (l.deleted_at IS NULL) ${where}
     `).all(...params) as any[];
 
-    if (rows.length === 0) {
-      return { created_interest: 0, created_principal: 0, payments_processed: 0 };
-    }
-
-    // Per-company category cache so we find-or-create each category once.
-    const catCache: Record<string, { interest?: string; principal?: string }> = {};
-    const findOrCreateCategory = (cid: string, name: string, color: string, slot: 'interest' | 'principal'): string => {
-      if (!catCache[cid]) catCache[cid] = {};
-      const cached = catCache[cid][slot];
-      if (cached) return cached;
-      const existing = dbi.prepare(
-        "SELECT id FROM categories WHERE company_id = ? AND lower(name) = lower(?) AND is_active = 1 LIMIT 1"
-      ).get(cid, name) as any;
-      let id = existing?.id;
-      if (!id) {
-        id = uuid();
-        dbi.prepare(
-          "INSERT INTO categories (id, company_id, name, type, color, description, is_active, created_at, updated_at) VALUES (?, ?, ?, 'expense', ?, ?, 1, datetime('now'), datetime('now'))"
-        ).run(id, cid, name, color, 'Auto-created for loan payment integration');
-      }
-      catCache[cid][slot] = id;
-      return id;
-    };
-
-    const insertExpense = dbi.prepare(
-      "INSERT INTO expenses (id, company_id, date, amount, tax_amount, description, category_id, vendor_id, payment_method, status, related_loan_id, related_loan_payment_id, loan_component, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?, 'paid', NULL, ?, ?, datetime('now'), datetime('now'))"
-    );
-    const linkInterest = dbi.prepare("UPDATE loan_payments SET related_expense_id = ? WHERE id = ?");
-    const linkPrincipal = dbi.prepare("UPDATE loan_payments SET related_principal_expense_id = ? WHERE id = ?");
-
-    let createdInterest = 0, createdPrincipal = 0;
-
+    let created = 0, migrated = 0;
     const tx = dbi.transaction(() => {
       for (const r of rows) {
-        const method = r.payment_method || 'ach';
-        if (r.related_expense_id == null && r.interest_amount > 0.005) {
-          const cat = findOrCreateCategory(r.company_id, 'Interest Expense', '#f59e0b', 'interest');
-          const exId = uuid();
-          insertExpense.run(exId, r.company_id, r.payment_date, round2(r.interest_amount),
-            (r.loan_name || 'Loan') + ' · interest on ' + r.payment_date,
-            cat, method, r.id, 'interest');
-          linkInterest.run(exId, r.id);
-          createdInterest++;
-        }
-        if (r.related_principal_expense_id == null && r.principal_amount > 0.005) {
-          const cat = findOrCreateCategory(r.company_id, 'Loan Principal', '#6366f1', 'principal');
-          const exId = uuid();
-          insertExpense.run(exId, r.company_id, r.payment_date, round2(r.principal_amount),
-            (r.loan_name || 'Loan') + ' · principal on ' + r.payment_date,
-            cat, method, r.id, 'principal');
-          linkPrincipal.run(exId, r.id);
-          createdPrincipal++;
-        }
+        const res = syncPaymentExpense({
+          payment_id: r.id,
+          loan_id: r.loan_id,
+          company_id: r.company_id,
+          loan_name: r.loan_name,
+          payment_date: r.payment_date,
+          payment_method: r.payment_method,
+          principal: r.principal_amount,
+          interest: r.interest_amount,
+          escrow: r.escrow_amount,
+        });
+        if (res.id && res.created) created++;
+        else if (res.created) migrated++;
       }
     });
     tx();
 
     return {
-      created_interest: createdInterest,
-      created_principal: createdPrincipal,
+      created,
+      migrated,
       payments_processed: rows.length,
+      created_interest: created,   // legacy aliases
+      created_principal: 0,
     };
   } catch (e: any) {
-    return { created_interest: 0, created_principal: 0, payments_processed: 0, error: e?.message };
+    return { created: 0, migrated: 0, payments_processed: 0, created_interest: 0, created_principal: 0, error: e?.message };
   }
 }
 

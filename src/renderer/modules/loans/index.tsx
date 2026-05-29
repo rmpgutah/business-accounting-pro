@@ -92,12 +92,18 @@ const LoansModule: React.FC = () => {
             onClick={async () => {
               const r = await api.lkBackfillExpenses();
               if (r?.error) { toast.error('Sync failed: ' + r.error); return; }
-              const total = (r.created_interest || 0) + (r.created_principal || 0);
-              if (total === 0) toast.success('All loan payments are already synced to Expenses.');
-              else toast.success(`Synced ${total} expense row${total === 1 ? '' : 's'} (${r.created_interest} interest + ${r.created_principal} principal) from ${r.payments_processed} payments.`);
+              const created = r.created || 0;
+              const migrated = r.migrated || 0;
+              if (created === 0 && migrated === 0) toast.success('All loan payments are already synced to Expenses.');
+              else {
+                const bits = [];
+                if (created) bits.push(`${created} new`);
+                if (migrated) bits.push(`${migrated} migrated`);
+                toast.success(`Synced ${bits.join(' + ')} loan-payment expense${(created + migrated) === 1 ? '' : 's'} (one split row each) from ${r.payments_processed} payments.`);
+              }
               load();
             }}
-            title="Create matching Interest + Principal expense rows for any loan payments not yet in the Expenses ledger"
+            title="Create one combined Interest+Principal split expense for any loan payment not yet in the Expenses ledger"
           >
             <RefreshCw size={14} /> Sync to Expenses
           </button>
