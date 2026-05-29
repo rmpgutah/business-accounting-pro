@@ -9,6 +9,7 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
+import { SpendingTimeline, SpendingHeatmap } from '../expenses/ExpenseVizCharts';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -216,6 +217,7 @@ const ExpenseDetailReport: React.FC = () => {
   }, [expenses, statusFilter]);
 
   const total = useMemo(() => filtered.reduce((s, e) => s + Math.abs(e.amount), 0), [filtered]);
+  const avgExpense = useMemo(() => (filtered.length ? total / filtered.length : 0), [total, filtered.length]);
 
   const pendingItems = useMemo(() => filtered.filter((e) => e.status === 'pending'), [filtered]);
   const approvedItems = useMemo(() => filtered.filter((e) => e.status === 'approved'), [filtered]);
@@ -469,6 +471,29 @@ const ExpenseDetailReport: React.FC = () => {
         </div>
       </div>
 
+      {/* Formal letterhead — flat, mirrors the printed PDF */}
+      {filtered.length > 0 && (
+        <div
+          className="p-5 flex items-end justify-between gap-6 flex-wrap bg-bg-secondary"
+          style={{
+            borderRadius: '6px',
+            borderTop: '2px solid var(--color-text-primary)',
+            borderBottom: '1px solid var(--color-border-primary)',
+          }}
+        >
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[2.4px] text-text-muted">Expense Detail Report</p>
+            <h2 className="text-2xl font-extrabold text-text-primary leading-tight mt-1.5">{activeCompany?.name ?? 'Company'}</h2>
+            <p className="text-[11px] text-text-muted mt-1.5 font-mono">{startDate} to {endDate}</p>
+          </div>
+          <div className="text-right pl-6" style={{ borderLeft: '1px solid var(--color-border-primary)' }}>
+            <p className="text-[9px] font-bold uppercase tracking-[1.8px] text-text-muted">Total Spend</p>
+            <p className="text-3xl font-extrabold text-text-primary font-mono leading-none mt-1">{formatCurrency(total)}</p>
+            <p className="text-[10px] text-text-muted font-mono mt-1.5">{filtered.length} transactions · avg {formatCurrency(avgExpense)}</p>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="report-summary-tiles">
         <SummaryBar
@@ -480,6 +505,14 @@ const ExpenseDetailReport: React.FC = () => {
           ]}
         />
       </div>
+
+      {/* Spending timeline + daily heatmap (matches printed report) */}
+      {filtered.length > 0 && (
+        <>
+          <SpendingTimeline expenses={filtered} />
+          <SpendingHeatmap expenses={filtered} />
+        </>
+      )}
 
       {/* Change 51-52: Tax Deductible Summary */}
       {filtered.length > 0 && (
