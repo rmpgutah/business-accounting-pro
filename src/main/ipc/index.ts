@@ -16202,6 +16202,69 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('hr:anniversaries', () => { const c = db.getCurrentCompanyId(); return c ? hrs().anniversariesThisMonth(c) : []; });
   ipcMain.handle('hr:birthdays', () => { const c = db.getCurrentCompanyId(); return c ? hrs().birthdaysThisMonth(c) : []; });
 
+  // ─── HR Suite Wave 2 (50 features: HR51–HR100) ──────────
+  const hr2 = () => require('../services/hr-suite-wave2');
+  // Garnishments (HR51-HR55)
+  ipcMain.handle('hr:garnishments', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().listGarnishmentOrders(c, opts.employeeId) : []; });
+  ipcMain.handle('hr:garnishment:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr2().upsertGarnishmentOrder({ ...p, company_id: c }); });
+  ipcMain.handle('hr:garnishment:delete', (_e, { id }: any) => { hr2().deleteGarnishmentOrder(id); return { ok: true }; });
+  ipcMain.handle('hr:garnishment:summary', () => { const c = db.getCurrentCompanyId(); return c ? hr2().garnishmentSummary(c) : {}; });
+  ipcMain.handle('hr:garnishment:record-deduction', (_e, { orderId, amount }: any) => { hr2().recordGarnishmentDeduction(orderId, amount); return { ok: true }; });
+  // Workers' Comp (HR56-HR60)
+  ipcMain.handle('hr:workers-comp', () => { const c = db.getCurrentCompanyId(); return c ? hr2().listWorkersCompClasses(c) : []; });
+  ipcMain.handle('hr:workers-comp:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr2().upsertWorkersCompClass({ ...p, company_id: c }); });
+  ipcMain.handle('hr:workers-comp:delete', (_e, { id }: any) => { hr2().deleteWorkersCompClass(id); return { ok: true }; });
+  ipcMain.handle('hr:workers-comp:estimate', (_e, { annualPayroll }: any) => { const c = db.getCurrentCompanyId(); return c ? hr2().estimateWorkersCompCost(c, annualPayroll) : {}; });
+  ipcMain.handle('hr:workers-comp:by-state', () => { const c = db.getCurrentCompanyId(); return c ? hr2().workersCompByState(c) : []; });
+  // Retirement (HR61-HR66)
+  ipcMain.handle('hr:retirement', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().listRetirementContributions(c, opts.employeeId) : []; });
+  ipcMain.handle('hr:retirement:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr2().upsertRetirementContribution({ ...p, company_id: c }); });
+  ipcMain.handle('hr:retirement:delete', (_e, { id }: any) => { hr2().deleteRetirementContribution(id); return { ok: true }; });
+  ipcMain.handle('hr:retirement:summary', () => { const c = db.getCurrentCompanyId(); return c ? hr2().retirementSummary(c) : {}; });
+  ipcMain.handle('hr:retirement:nearing-limit', () => { const c = db.getCurrentCompanyId(); return c ? hr2().retirementNearingLimit(c) : []; });
+  ipcMain.handle('hr:retirement:record-payment', (_e, { id, employeeAmount, employerAmount }: any) => { hr2().recordRetirementContributionPayment(id, employeeAmount, employerAmount); return { ok: true }; });
+  // Compliance docs (HR67-HR71)
+  ipcMain.handle('hr:compliance-docs', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().listComplianceDocs(c, opts.personType, opts.personId) : []; });
+  ipcMain.handle('hr:compliance-doc:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr2().upsertComplianceDoc({ ...p, company_id: c }); });
+  ipcMain.handle('hr:compliance-doc:delete', (_e, { id }: any) => { hr2().deleteComplianceDoc(id); return { ok: true }; });
+  ipcMain.handle('hr:compliance:expiring', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().complianceExpiringSoon(c, days || 30) : []; });
+  ipcMain.handle('hr:compliance:overview', () => { const c = db.getCurrentCompanyId(); return c ? hr2().complianceOverview(c) : {}; });
+  // Year-end (HR72-HR75)
+  ipcMain.handle('hr:year-end:get', (_e, { year }: any) => { const c = db.getCurrentCompanyId(); return c ? hr2().getYearEndSummary(c, year) : null; });
+  ipcMain.handle('hr:year-end:generate', (_e, { year }: any) => { const c = db.getCurrentCompanyId(); return c ? hr2().generateYearEndSummary(c, year) : {}; });
+  ipcMain.handle('hr:year-end:list', () => { const c = db.getCurrentCompanyId(); return c ? hr2().listYearEndSummaries(c) : []; });
+  ipcMain.handle('hr:year-end:yoy', () => { const c = db.getCurrentCompanyId(); return c ? hr2().yearOverYearComparison(c) : []; });
+  // Labor cost (HR76-HR80)
+  ipcMain.handle('hr:labor-cost:by-dept', () => { const c = db.getCurrentCompanyId(); return c ? hr2().laborCostByDepartment(c) : []; });
+  ipcMain.handle('hr:labor-cost:by-type', () => { const c = db.getCurrentCompanyId(); return c ? hr2().laborCostByType(c) : []; });
+  ipcMain.handle('hr:labor-cost:total', () => { const c = db.getCurrentCompanyId(); return c ? hr2().totalLaborCost(c) : {}; });
+  ipcMain.handle('hr:cost-per-hire', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().costPerHire(c, year) : {}; });
+  ipcMain.handle('hr:compensation-distribution', () => { const c = db.getCurrentCompanyId(); return c ? hr2().compensationDistribution(c) : []; });
+  // Directory + org (HR81-HR85)
+  ipcMain.handle('hr:directory', () => { const c = db.getCurrentCompanyId(); return c ? hr2().employeeDirectory(c) : []; });
+  ipcMain.handle('hr:headcount-by-month', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().headcountByMonth(c, months || 12) : []; });
+  ipcMain.handle('hr:by-location', () => { const c = db.getCurrentCompanyId(); return c ? hr2().employeesByLocation(c) : []; });
+  ipcMain.handle('hr:tenure-milestones', () => { const c = db.getCurrentCompanyId(); return c ? hr2().tenureMilestones(c) : []; });
+  ipcMain.handle('hr:new-hire-report', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().newHireReport(c, days || 90) : []; });
+  // Pay equity (HR86-HR90)
+  ipcMain.handle('hr:pay-equity:by-dept', () => { const c = db.getCurrentCompanyId(); return c ? hr2().payEquityByDepartment(c) : []; });
+  ipcMain.handle('hr:pay-equity:by-role', () => { const c = db.getCurrentCompanyId(); return c ? hr2().payEquityByRole(c) : []; });
+  ipcMain.handle('hr:compensation-benchmark', () => { const c = db.getCurrentCompanyId(); return c ? hr2().compensationBenchmark(c) : {}; });
+  ipcMain.handle('hr:recent-raises', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().recentRaises(c, days || 90) : []; });
+  ipcMain.handle('hr:top-earners', (_e, { limit }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().topEarners(c, limit || 10) : []; });
+  // Probation + retention (HR91-HR95)
+  ipcMain.handle('hr:probation', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().employeesOnProbation(c, days || 90) : []; });
+  ipcMain.handle('hr:onboarding-progress', () => { const c = db.getCurrentCompanyId(); return c ? hr2().onboardingProgress(c) : []; });
+  ipcMain.handle('hr:onboarding-overdue', () => { const c = db.getCurrentCompanyId(); return c ? hr2().onboardingOverdueItems(c) : []; });
+  ipcMain.handle('hr:retention-risk', () => { const c = db.getCurrentCompanyId(); return c ? hr2().employeeRetentionRisk(c) : []; });
+  ipcMain.handle('hr:satisfaction-proxy', () => { const c = db.getCurrentCompanyId(); return c ? hr2().employeeSatisfactionProxy(c) : {}; });
+  // Advanced reports (HR96-HR100)
+  ipcMain.handle('hr:employee-snapshot', (_e, { employeeId }: any) => hr2().fullEmployeeSnapshot(employeeId));
+  ipcMain.handle('hr:bulk-status-change', (_e, { employeeIds, newStatus }: any) => { const c = db.getCurrentCompanyId(); return c ? hr2().bulkStatusChange(c, employeeIds, newStatus) : {}; });
+  ipcMain.handle('hr:export-roster', () => { const c = db.getCurrentCompanyId(); return c ? hr2().exportEmployeeRoster(c) : []; });
+  ipcMain.handle('hr:termination-report', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().terminationReport(c, year) : []; });
+  ipcMain.handle('hr:company-wide-metrics', () => { const c = db.getCurrentCompanyId(); return c ? hr2().companyWideHRMetrics(c) : {}; });
+
   // ─── Onboarding / Offboarding Checklist ─────────────────
   // Returns a hybrid checklist: auto-detected steps (computed from real
   // data — equipment, agreements, banking, credentials) + manual

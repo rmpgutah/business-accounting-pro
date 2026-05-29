@@ -1086,6 +1086,68 @@ const api = {
   hrAnniversaries: () => window.electronAPI.invoke('hr:anniversaries'),
   hrBirthdays: () => window.electronAPI.invoke('hr:birthdays'),
 
+  // ─── HR Suite Wave 2 (HR51–HR100) ────────────────────────
+  // Garnishments (HR51-HR55)
+  hrGarnishments: (employeeId?: string) => window.electronAPI.invoke('hr:garnishments', { employeeId }),
+  hrGarnishmentUpsert: (order: any) => window.electronAPI.invoke('hr:garnishment:upsert', order),
+  hrGarnishmentDelete: (id: string) => window.electronAPI.invoke('hr:garnishment:delete', { id }),
+  hrGarnishmentSummary: () => window.electronAPI.invoke('hr:garnishment:summary'),
+  hrGarnishmentRecordDeduction: (orderId: string, amount: number) => window.electronAPI.invoke('hr:garnishment:record-deduction', { orderId, amount }),
+  // Workers' Comp (HR56-HR60)
+  hrWorkersComp: () => window.electronAPI.invoke('hr:workers-comp'),
+  hrWorkersCompUpsert: (cls: any) => window.electronAPI.invoke('hr:workers-comp:upsert', cls),
+  hrWorkersCompDelete: (id: string) => window.electronAPI.invoke('hr:workers-comp:delete', { id }),
+  hrWorkersCompEstimate: (annualPayroll: number) => window.electronAPI.invoke('hr:workers-comp:estimate', { annualPayroll }),
+  hrWorkersCompByState: () => window.electronAPI.invoke('hr:workers-comp:by-state'),
+  // Retirement (HR61-HR66)
+  hrRetirement: (employeeId?: string) => window.electronAPI.invoke('hr:retirement', { employeeId }),
+  hrRetirementUpsert: (rc: any) => window.electronAPI.invoke('hr:retirement:upsert', rc),
+  hrRetirementDelete: (id: string) => window.electronAPI.invoke('hr:retirement:delete', { id }),
+  hrRetirementSummary: () => window.electronAPI.invoke('hr:retirement:summary'),
+  hrRetirementNearingLimit: () => window.electronAPI.invoke('hr:retirement:nearing-limit'),
+  hrRetirementRecordPayment: (id: string, employeeAmount: number, employerAmount: number) => window.electronAPI.invoke('hr:retirement:record-payment', { id, employeeAmount, employerAmount }),
+  // Compliance docs (HR67-HR71)
+  hrComplianceDocs: (personType?: string, personId?: string) => window.electronAPI.invoke('hr:compliance-docs', { personType, personId }),
+  hrComplianceDocUpsert: (doc: any) => window.electronAPI.invoke('hr:compliance-doc:upsert', doc),
+  hrComplianceDocDelete: (id: string) => window.electronAPI.invoke('hr:compliance-doc:delete', { id }),
+  hrComplianceExpiring: (days?: number) => window.electronAPI.invoke('hr:compliance:expiring', { days }),
+  hrComplianceOverview: () => window.electronAPI.invoke('hr:compliance:overview'),
+  // Year-end (HR72-HR75)
+  hrYearEndGet: (year: number) => window.electronAPI.invoke('hr:year-end:get', { year }),
+  hrYearEndGenerate: (year: number) => window.electronAPI.invoke('hr:year-end:generate', { year }),
+  hrYearEndList: () => window.electronAPI.invoke('hr:year-end:list'),
+  hrYearEndYoY: () => window.electronAPI.invoke('hr:year-end:yoy'),
+  // Labor cost (HR76-HR80)
+  hrLaborCostByDept: () => window.electronAPI.invoke('hr:labor-cost:by-dept'),
+  hrLaborCostByType: () => window.electronAPI.invoke('hr:labor-cost:by-type'),
+  hrLaborCostTotal: () => window.electronAPI.invoke('hr:labor-cost:total'),
+  hrCostPerHire: (year?: number) => window.electronAPI.invoke('hr:cost-per-hire', { year }),
+  hrCompensationDistribution: () => window.electronAPI.invoke('hr:compensation-distribution'),
+  // Directory + org (HR81-HR85)
+  hrDirectory: () => window.electronAPI.invoke('hr:directory'),
+  hrHeadcountByMonth: (months?: number) => window.electronAPI.invoke('hr:headcount-by-month', { months }),
+  hrByLocation: () => window.electronAPI.invoke('hr:by-location'),
+  hrTenureMilestones: () => window.electronAPI.invoke('hr:tenure-milestones'),
+  hrNewHireReport: (days?: number) => window.electronAPI.invoke('hr:new-hire-report', { days }),
+  // Pay equity (HR86-HR90)
+  hrPayEquityByDept: () => window.electronAPI.invoke('hr:pay-equity:by-dept'),
+  hrPayEquityByRole: () => window.electronAPI.invoke('hr:pay-equity:by-role'),
+  hrCompensationBenchmark: () => window.electronAPI.invoke('hr:compensation-benchmark'),
+  hrRecentRaises: (days?: number) => window.electronAPI.invoke('hr:recent-raises', { days }),
+  hrTopEarners: (limit?: number) => window.electronAPI.invoke('hr:top-earners', { limit }),
+  // Probation + retention (HR91-HR95)
+  hrProbation: (days?: number) => window.electronAPI.invoke('hr:probation', { days }),
+  hrOnboardingProgressAll: () => window.electronAPI.invoke('hr:onboarding-progress'),
+  hrOnboardingOverdue: () => window.electronAPI.invoke('hr:onboarding-overdue'),
+  hrRetentionRisk: () => window.electronAPI.invoke('hr:retention-risk'),
+  hrSatisfactionProxy: () => window.electronAPI.invoke('hr:satisfaction-proxy'),
+  // Advanced reports (HR96-HR100)
+  hrEmployeeSnapshot: (employeeId: string) => window.electronAPI.invoke('hr:employee-snapshot', { employeeId }),
+  hrBulkStatusChange: (employeeIds: string[], newStatus: string) => window.electronAPI.invoke('hr:bulk-status-change', { employeeIds, newStatus }),
+  hrExportRoster: () => window.electronAPI.invoke('hr:export-roster'),
+  hrTerminationReport: (year?: number) => window.electronAPI.invoke('hr:termination-report', { year }),
+  hrCompanyWideMetrics: () => window.electronAPI.invoke('hr:company-wide-metrics'),
+
   employeeChecklist: (employeeId: string, phase: 'onboarding' | 'offboarding'): Promise<{ steps: Array<{ key: string; label: string; description: string; auto: boolean; done: boolean; category: string }>; done: number; total: number; phase: string; employee_name?: string; error?: string }> =>
     window.electronAPI.invoke('employee:checklist', { employeeId, phase }),
   employeeChecklistToggle: (employeeId: string, phase: string, stepKey: string, done: boolean): Promise<{ ok?: boolean; error?: string }> =>
