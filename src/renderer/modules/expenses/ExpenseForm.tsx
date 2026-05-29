@@ -84,6 +84,12 @@ interface ExpenseFormData {
   // this expense is treated as the interest-portion bookkeeping of a loan
   // payment and is surfaced on the Loan Detail page.
   related_loan_id: string;
+  // Merchant / location / markup fields — user-facing columns that existed
+  // in the DB but had no form input until now.
+  merchant_location: string;
+  geo_location_name: string;
+  markup_pct: string;
+  employee_id: string;
 }
 
 interface DropdownOption {
@@ -326,6 +332,10 @@ const emptyForm: ExpenseFormData = {
   discount_amount: '',
   discount_percent: '',
   related_loan_id: '',
+  merchant_location: '',
+  geo_location_name: '',
+  markup_pct: '',
+  employee_id: '',
 };
 
 // ─── Attached Documents (for receipt linking) ─────────
@@ -773,6 +783,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               discount_percent: existing.discount_percent ? String(existing.discount_percent) : '',
               // Loan Linkage — soft FK
               related_loan_id: existing.related_loan_id || '',
+              merchant_location: existing.merchant_location || '',
+              geo_location_name: existing.geo_location_name || '',
+              markup_pct: existing.markup_pct != null ? String(existing.markup_pct) : '',
+              employee_id: existing.employee_id || '',
               entry_mode: (existing.entry_mode as any) || 'standard',
               odometer_start: existing.odometer_start?.toString() || '',
               odometer_end: existing.odometer_end?.toString() || '',
@@ -894,6 +908,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
           discount_percent: parseFloat(form.discount_percent) || 0,
           related_loan_id: form.related_loan_id || null,
+          merchant_location: form.merchant_location.trim() || null,
+          geo_location_name: form.geo_location_name.trim() || null,
+          markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
+          employee_id: form.employee_id || null,
           entry_mode: form.entry_mode,
           odometer_start: parseFloat(form.odometer_start) || 0,
           odometer_end: parseFloat(form.odometer_end) || 0,
@@ -1724,6 +1742,36 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               value={form.reference}
               onChange={handleChange}
             />
+          </div>
+
+          {/* Merchant Location */}
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              Merchant Location
+            </label>
+            <input type="text" className="block-input" placeholder="e.g. Salt Lake City, UT"
+              value={form.merchant_location} onChange={e => setForm(p => ({ ...p, merchant_location: e.target.value }))} />
+          </div>
+
+          {/* Geo Location Name (for GPS-tagged receipts) */}
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              GPS / Location Name
+            </label>
+            <input type="text" className="block-input" placeholder="e.g. Store #1234, Airport Terminal B"
+              value={form.geo_location_name} onChange={e => setForm(p => ({ ...p, geo_location_name: e.target.value }))} />
+          </div>
+
+          {/* Markup % (for billable expenses passed to client) */}
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              Markup % <span className="text-text-muted text-[10px]">(billable pass-through)</span>
+            </label>
+            <div className="relative">
+              <input type="number" step="0.1" min="0" className="block-input" placeholder="0"
+                value={form.markup_pct} onChange={e => setForm(p => ({ ...p, markup_pct: e.target.value }))} style={{ paddingRight: 24 }} />
+              <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 11 }}>%</span>
+            </div>
           </div>
 
           {/* Tags with autocomplete (#22) */}
