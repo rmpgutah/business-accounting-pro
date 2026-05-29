@@ -1148,6 +1148,68 @@ const api = {
   hrTerminationReport: (year?: number) => window.electronAPI.invoke('hr:termination-report', { year }),
   hrCompanyWideMetrics: () => window.electronAPI.invoke('hr:company-wide-metrics'),
 
+  // ─── HR Suite Wave 3 (HR101–HR150) ───────────────────────
+  // COBRA (HR101-106)
+  hrCobraList: (employeeId?: string) => window.electronAPI.invoke('hr:cobra:list', { employeeId }),
+  hrCobraUpsert: (rec: any) => window.electronAPI.invoke('hr:cobra:upsert', rec),
+  hrCobraDelete: (id: string) => window.electronAPI.invoke('hr:cobra:delete', { id }),
+  hrCobraPendingNotices: () => window.electronAPI.invoke('hr:cobra:pending-notices'),
+  hrCobraMarkSent: (id: string) => window.electronAPI.invoke('hr:cobra:mark-sent', { id }),
+  hrCobraSummary: () => window.electronAPI.invoke('hr:cobra:summary'),
+  // Direct deposit (HR107-112)
+  hrDDAccounts: (employeeId?: string) => window.electronAPI.invoke('hr:dd-accounts', { employeeId }),
+  hrDDAccountUpsert: (acct: any) => window.electronAPI.invoke('hr:dd-account:upsert', acct),
+  hrDDAccountDelete: (id: string) => window.electronAPI.invoke('hr:dd-account:delete', { id }),
+  hrDDBatches: () => window.electronAPI.invoke('hr:dd-batches'),
+  hrDDBatchCreate: (batch: any) => window.electronAPI.invoke('hr:dd-batch:create', batch),
+  hrDDBatchSubmit: (id: string) => window.electronAPI.invoke('hr:dd-batch:submit', { id }),
+  // Life events (HR113-117)
+  hrLifeEvents: (employeeId?: string) => window.electronAPI.invoke('hr:life-events', { employeeId }),
+  hrLifeEventCreate: (evt: any) => window.electronAPI.invoke('hr:life-event:create', evt),
+  hrLifeEventProcessed: (id: string) => window.electronAPI.invoke('hr:life-event:processed', { id }),
+  hrLifeEventsPending: () => window.electronAPI.invoke('hr:life-events:pending'),
+  hrLifeEventDelete: (id: string) => window.electronAPI.invoke('hr:life-event:delete', { id }),
+  // W-2 runs (HR118-122)
+  hrW2Runs: () => window.electronAPI.invoke('hr:w2-runs'),
+  hrW2RunGet: (year: number) => window.electronAPI.invoke('hr:w2-run:get', { year }),
+  hrW2RunGenerate: (year: number) => window.electronAPI.invoke('hr:w2-run:generate', { year }),
+  hrW2RunSubmit: (id: string, submittedBy?: string) => window.electronAPI.invoke('hr:w2-run:submit', { id, submittedBy }),
+  hrW2PerEmployee: (year: number) => window.electronAPI.invoke('hr:w2-per-employee', { year }),
+  // Check runs (HR123-126)
+  hrCheckRuns: () => window.electronAPI.invoke('hr:check-runs'),
+  hrCheckRunCreate: (run: any) => window.electronAPI.invoke('hr:check-run:create', run),
+  hrCheckRunPrinted: (id: string) => window.electronAPI.invoke('hr:check-run:printed', { id }),
+  hrCheckRunVoid: (id: string) => window.electronAPI.invoke('hr:check-run:void', { id }),
+  // State reciprocity + journal (HR127-130)
+  hrStateReciprocity: () => window.electronAPI.invoke('hr:state-reciprocity'),
+  hrCheckReciprocity: (workState: string, residentState: string) => window.electronAPI.invoke('hr:check-reciprocity', { workState, residentState }),
+  hrPayrollJournalLinks: () => window.electronAPI.invoke('hr:payroll-journal-links'),
+  hrPayrollJournalLinkCreate: (link: any) => window.electronAPI.invoke('hr:payroll-journal-link:create', link),
+  // Legacy garnishments (HR131-135)
+  hrGarnishmentsLegacy: (employeeId?: string) => window.electronAPI.invoke('hr:garnishments-legacy', { employeeId }),
+  hrGarnishmentLegacyUpsert: (g: any) => window.electronAPI.invoke('hr:garnishment-legacy:upsert', g),
+  hrGarnishmentLegacyDelete: (id: string) => window.electronAPI.invoke('hr:garnishment-legacy:delete', { id }),
+  hrGarnishmentLegacyRecordPayment: (id: string, amount: number) => window.electronAPI.invoke('hr:garnishment-legacy:record-payment', { id, amount }),
+  hrGarnishmentsLegacyTotal: () => window.electronAPI.invoke('hr:garnishments-legacy:total'),
+  // Advanced payroll analytics (HR136-140)
+  hrPayrollByMonth: (months?: number) => window.electronAPI.invoke('hr:payroll-by-month', { months }),
+  hrAvgPayByDept: () => window.electronAPI.invoke('hr:avg-pay-by-dept'),
+  hrPayrollTaxLiability: (year?: number) => window.electronAPI.invoke('hr:payroll-tax-liability', { year }),
+  hrHighestPaidByDept: () => window.electronAPI.invoke('hr:highest-paid-by-dept'),
+  hrPayStubSearch: (opts: { employeeId?: string; startDate?: string; endDate?: string; limit?: number }) => window.electronAPI.invoke('hr:pay-stub-search', opts),
+  // Workforce planning (HR141-145)
+  hrHeadcountForecast: (months?: number) => window.electronAPI.invoke('hr:headcount-forecast', { months }),
+  hrLaborBudgetVariance: () => window.electronAPI.invoke('hr:labor-budget-variance'),
+  hrDeptStaffing: () => window.electronAPI.invoke('hr:dept-staffing'),
+  hrFTECount: () => window.electronAPI.invoke('hr:fte-count'),
+  hrSeasonalHiring: () => window.electronAPI.invoke('hr:seasonal-hiring'),
+  // HR action log + misc (HR146-150)
+  hrActionLog: (days?: number) => window.electronAPI.invoke('hr:action-log', { days }),
+  hrEmployeeCostBreakdown: (employeeId: string) => window.electronAPI.invoke('hr:employee-cost-breakdown', { employeeId }),
+  hrEmployeeTimeline: (employeeId: string) => window.electronAPI.invoke('hr:employee-timeline', { employeeId }),
+  hrOrgSummary: () => window.electronAPI.invoke('hr:org-summary'),
+  hrComplianceChecklist: () => window.electronAPI.invoke('hr:compliance-checklist'),
+
   employeeChecklist: (employeeId: string, phase: 'onboarding' | 'offboarding'): Promise<{ steps: Array<{ key: string; label: string; description: string; auto: boolean; done: boolean; category: string }>; done: number; total: number; phase: string; employee_name?: string; error?: string }> =>
     window.electronAPI.invoke('employee:checklist', { employeeId, phase }),
   employeeChecklistToggle: (employeeId: string, phase: string, stepKey: string, done: boolean): Promise<{ ok?: boolean; error?: string }> =>

@@ -16265,6 +16265,69 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('hr:termination-report', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr2().terminationReport(c, year) : []; });
   ipcMain.handle('hr:company-wide-metrics', () => { const c = db.getCurrentCompanyId(); return c ? hr2().companyWideHRMetrics(c) : {}; });
 
+  // ─── HR Suite Wave 3 (HR101–HR150) ──────────────────────
+  const hr3 = () => require('../services/hr-suite-wave3');
+  // COBRA (HR101-HR106)
+  ipcMain.handle('hr:cobra:list', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().listCobraRecords(c, opts.employeeId) : []; });
+  ipcMain.handle('hr:cobra:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().upsertCobraRecord({ ...p, company_id: c }); });
+  ipcMain.handle('hr:cobra:delete', (_e, { id }: any) => { hr3().deleteCobraRecord(id); return { ok: true }; });
+  ipcMain.handle('hr:cobra:pending-notices', () => { const c = db.getCurrentCompanyId(); return c ? hr3().cobraPendingNotices(c) : []; });
+  ipcMain.handle('hr:cobra:mark-sent', (_e, { id }: any) => { hr3().markCobraNoticeSent(id); return { ok: true }; });
+  ipcMain.handle('hr:cobra:summary', () => { const c = db.getCurrentCompanyId(); return c ? hr3().cobraSummary(c) : {}; });
+  // Direct deposit (HR107-HR112)
+  ipcMain.handle('hr:dd-accounts', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().listDirectDepositAccounts(c, opts.employeeId) : []; });
+  ipcMain.handle('hr:dd-account:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().upsertDirectDeposit({ ...p, company_id: c }); });
+  ipcMain.handle('hr:dd-account:delete', (_e, { id }: any) => { hr3().deleteDirectDeposit(id); return { ok: true }; });
+  ipcMain.handle('hr:dd-batches', () => { const c = db.getCurrentCompanyId(); return c ? hr3().listDirectDepositBatches(c) : []; });
+  ipcMain.handle('hr:dd-batch:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().createDirectDepositBatch({ ...p, company_id: c }); });
+  ipcMain.handle('hr:dd-batch:submit', (_e, { id }: any) => { hr3().submitDirectDepositBatch(id); return { ok: true }; });
+  // Life events (HR113-HR117)
+  ipcMain.handle('hr:life-events', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().listLifeEvents(c, opts.employeeId) : []; });
+  ipcMain.handle('hr:life-event:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().createLifeEvent({ ...p, company_id: c }); });
+  ipcMain.handle('hr:life-event:processed', (_e, { id }: any) => { hr3().markLifeEventProcessed(id); return { ok: true }; });
+  ipcMain.handle('hr:life-events:pending', () => { const c = db.getCurrentCompanyId(); return c ? hr3().pendingLifeEvents(c) : []; });
+  ipcMain.handle('hr:life-event:delete', (_e, { id }: any) => { hr3().deleteLifeEvent(id); return { ok: true }; });
+  // W-2 runs (HR118-HR122)
+  ipcMain.handle('hr:w2-runs', () => { const c = db.getCurrentCompanyId(); return c ? hr3().listW2Runs(c) : []; });
+  ipcMain.handle('hr:w2-run:get', (_e, { year }: any) => { const c = db.getCurrentCompanyId(); return c ? hr3().getW2Run(c, year) : null; });
+  ipcMain.handle('hr:w2-run:generate', (_e, { year }: any) => { const c = db.getCurrentCompanyId(); return c ? hr3().generateW2Run(c, year) : {}; });
+  ipcMain.handle('hr:w2-run:submit', (_e, { id, submittedBy }: any) => { hr3().submitW2Run(id, submittedBy || ''); return { ok: true }; });
+  ipcMain.handle('hr:w2-per-employee', (_e, { year }: any) => { const c = db.getCurrentCompanyId(); return c ? hr3().w2PerEmployeeDetail(c, year) : []; });
+  // Check runs (HR123-HR126)
+  ipcMain.handle('hr:check-runs', () => { const c = db.getCurrentCompanyId(); return c ? hr3().listCheckPrintRuns(c) : []; });
+  ipcMain.handle('hr:check-run:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().createCheckPrintRun({ ...p, company_id: c }); });
+  ipcMain.handle('hr:check-run:printed', (_e, { id }: any) => { hr3().markChecksPrinted(id); return { ok: true }; });
+  ipcMain.handle('hr:check-run:void', (_e, { id }: any) => { hr3().voidCheckRun(id); return { ok: true }; });
+  // State reciprocity + journal links (HR127-HR130)
+  ipcMain.handle('hr:state-reciprocity', () => hr3().listStateReciprocity());
+  ipcMain.handle('hr:check-reciprocity', (_e, { workState, residentState }: any) => hr3().checkReciprocity(workState, residentState));
+  ipcMain.handle('hr:payroll-journal-links', () => { const c = db.getCurrentCompanyId(); return c ? hr3().listPayrollJournalLinks(c) : []; });
+  ipcMain.handle('hr:payroll-journal-link:create', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().createPayrollJournalLink({ ...p, company_id: c }); });
+  // Legacy garnishments (HR131-HR135)
+  ipcMain.handle('hr:garnishments-legacy', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().listGarnishments(c, opts.employeeId) : []; });
+  ipcMain.handle('hr:garnishment-legacy:upsert', (_e, p: any) => { const c = db.getCurrentCompanyId(); return hr3().upsertGarnishment({ ...p, company_id: c }); });
+  ipcMain.handle('hr:garnishment-legacy:delete', (_e, { id }: any) => { hr3().deleteGarnishment(id); return { ok: true }; });
+  ipcMain.handle('hr:garnishment-legacy:record-payment', (_e, { id, amount }: any) => { hr3().recordGarnishmentPayment(id, amount); return { ok: true }; });
+  ipcMain.handle('hr:garnishments-legacy:total', () => { const c = db.getCurrentCompanyId(); return c ? hr3().activeGarnishmentTotal(c) : {}; });
+  // Advanced payroll analytics (HR136-HR140)
+  ipcMain.handle('hr:payroll-by-month', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().payrollByMonth(c, months || 12) : []; });
+  ipcMain.handle('hr:avg-pay-by-dept', () => { const c = db.getCurrentCompanyId(); return c ? hr3().avgPayByDepartment(c) : []; });
+  ipcMain.handle('hr:payroll-tax-liability', (_e, { year }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().payrollTaxLiability(c, year) : {}; });
+  ipcMain.handle('hr:highest-paid-by-dept', () => { const c = db.getCurrentCompanyId(); return c ? hr3().highestPaidByDepartment(c) : []; });
+  ipcMain.handle('hr:pay-stub-search', (_e, opts: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().payStubSearch(c, opts) : []; });
+  // Workforce planning (HR141-HR145)
+  ipcMain.handle('hr:headcount-forecast', (_e, { months }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().headcountForecast(c, months || 6) : {}; });
+  ipcMain.handle('hr:labor-budget-variance', () => { const c = db.getCurrentCompanyId(); return c ? hr3().laborBudgetVariance(c) : {}; });
+  ipcMain.handle('hr:dept-staffing', () => { const c = db.getCurrentCompanyId(); return c ? hr3().departmentStaffingLevels(c) : []; });
+  ipcMain.handle('hr:fte-count', () => { const c = db.getCurrentCompanyId(); return c ? hr3().fteCount(c) : {}; });
+  ipcMain.handle('hr:seasonal-hiring', () => { const c = db.getCurrentCompanyId(); return c ? hr3().seasonalHiringPattern(c) : []; });
+  // HR action log + misc (HR146-HR150)
+  ipcMain.handle('hr:action-log', (_e, { days }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? hr3().hrActionLog(c, days || 30) : []; });
+  ipcMain.handle('hr:employee-cost-breakdown', (_e, { employeeId }: any) => hr3().employeeCostBreakdown(employeeId));
+  ipcMain.handle('hr:employee-timeline', (_e, { employeeId }: any) => hr3().employeeTimelineSummary(employeeId));
+  ipcMain.handle('hr:org-summary', () => { const c = db.getCurrentCompanyId(); return c ? hr3().companyOrgSummary(c) : {}; });
+  ipcMain.handle('hr:compliance-checklist', () => { const c = db.getCurrentCompanyId(); return c ? hr3().hrComplianceChecklist(c) : []; });
+
   // ─── Onboarding / Offboarding Checklist ─────────────────
   // Returns a hybrid checklist: auto-detected steps (computed from real
   // data — equipment, agreements, banking, credentials) + manual
