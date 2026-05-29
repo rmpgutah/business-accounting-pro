@@ -1680,10 +1680,10 @@ const api = {
   employeeChecklistToggle: (employeeId: string, phase: string, stepKey: string, done: boolean): Promise<{ ok?: boolean; error?: string }> =>
     window.electronAPI.invoke('employee:checklist-toggle', { employeeId, phase, stepKey, done }),
 
-  generateEquipmentAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string } }): Promise<{ html: string }> =>
+  generateEquipmentAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string }; employerTitle?: string }): Promise<{ html: string }> =>
     window.electronAPI.invoke('employee:generate-equipment-agreement', { employeeId, signatures }),
 
-  generateEmployeeAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string } }): Promise<{ html: string }> =>
+  generateEmployeeAgreement: (employeeId: string, signatures?: { employee?: { name: string; date: string }; employer?: { name: string; date: string }; employerTitle?: string }): Promise<{ html: string }> =>
     window.electronAPI.invoke('employee:generate-employee-agreement', { employeeId, signatures }),
 
   // ─── E-Sign ───────────────────────────────────────

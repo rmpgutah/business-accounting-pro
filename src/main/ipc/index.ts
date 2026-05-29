@@ -16381,17 +16381,25 @@ export function registerIpcHandlers(): void {
   // (employee and/or employer), or a blank ruled line for wet-ink
   // signing when unsigned. Replaces the old approach of dangling an
   // "ELECTRONIC SIGNATURE" block at the very bottom of the document.
-  type SigData = { employee?: { name: string; date: string }; employer?: { name: string; date: string } };
+  type SigData = { employee?: { name: string; date: string }; employer?: { name: string; date: string }; employerTitle?: string };
   function agreementSignatureBlock(empName: string, companyName: string, signatures?: SigData): string {
     const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     const fmt = (d: any) => d ? new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    // The employer signer's role/title — defaults to "HR Manager" (the
+    // person who signs employment & equipment agreements on the company's
+    // behalf). Overridable via signatures.employerTitle.
+    const employerTitle = (signatures as any)?.employerTitle || 'HR Manager';
     const field = (label: 'Employee' | 'Employer', party: string, sig?: { name: string; date: string }) => {
       const signed = !!(sig && sig.name);
+      const roleLine = label === 'Employer'
+        ? `<p style="font-size:9pt;color:#374151;font-weight:600;margin-top:1px;">${esc(employerTitle)}</p>`
+        : '';
       return `<div class="signature-field"${label === 'Employer' ? ' style="margin-left:40px;"' : ''}>
         ${signed
           ? `<div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:26px;color:#111;border-bottom:1px solid #374151;padding-bottom:6px;min-height:38px;line-height:1.1;">${esc(sig!.name)}</div>`
           : `<div class="signature-line">${label} Signature</div>`}
         <p style="margin-top:6px;font-size:10pt;color:#374151;font-weight:700;">${esc(party)}</p>
+        ${roleLine}
         <p style="font-size:9pt;color:#6b7280;">${label} Signature</p>
         <p style="font-size:10pt;color:#374151;margin-top:2px;">Date: ${signed ? `<strong>${fmt(sig!.date)}</strong>` : '_______________'}</p>
         ${signed ? `<p style="font-size:8pt;color:#9ca3af;margin-top:3px;">Electronically signed &amp; recorded &middot; cryptographically bound (SHA-256)</p>` : ''}
@@ -17509,7 +17517,12 @@ export function registerIpcHandlers(): void {
     <p><strong>5. Confidentiality.</strong> The Employee agrees to maintain the confidentiality of all proprietary and confidential information of the Employer and its clients, both during and after employment.</p>
     <p><strong>6. Company Property.</strong> The Employee agrees to return all company property, documents, data, and equipment upon termination of employment.</p>
     <p><strong>7. Compliance with Policies.</strong> The Employee agrees to comply with all Employer policies, procedures, and rules as may be adopted or modified from time to time.</p>
-    <p><strong>8. Governing Law.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the applicable jurisdiction')}.</p>
+    <p><strong>8. Company Credit Card &amp; Purchasing Authorization.</strong> The Employer may, at its sole discretion, authorize the Employee to make purchases on a company-issued credit card, procurement card, or approved vendor account for legitimate, work-related expenses. Such authority is conditioned on the following: (a) <em>Prior approval</em> — all purchases exceeding limits set by the Employer must receive prior written or electronic approval from the Employee's supervisor or an authorized approver before the transaction is made; (b) <em>Business purpose only</em> — the card and any company funds shall be used exclusively for bona fide business purposes and never for personal, family, or household expenses; (c) <em>Receipts &amp; documentation</em> — the Employee shall retain and submit an itemized receipt and a business-purpose justification for every transaction within five (5) business days, through the Employer's expense management system; (d) <em>Spending limits</em> — the Employee shall not exceed any per-transaction, daily, or monthly limit assigned to them, nor circumvent limits by splitting transactions; (e) <em>Prohibited uses</em> — cash advances, gift cards, alcohol (unless pre-approved for a qualifying event), and any purchase prohibited by Employer policy are not permitted. The Employee acknowledges that unauthorized, undocumented, or personal charges may be deducted from wages to the fullest extent permitted by applicable law, and may result in revocation of purchasing privileges and disciplinary action up to and including termination. The card remains the property of the Employer and must be surrendered immediately upon request or termination.</p>
+    <p><strong>9. Expense Reimbursement.</strong> The Employer will reimburse the Employee for reasonable, necessary, and pre-approved out-of-pocket business expenses incurred in the performance of their duties, provided the Employee submits a complete expense report with original itemized receipts within thirty (30) days of incurring the expense. Reimbursement is subject to the Employer's then-current expense and travel policies. The Employer reserves the right to deny reimbursement for expenses that are undocumented, lack a clear business purpose, exceed policy limits, or were not properly pre-approved where pre-approval is required.</p>
+    <p><strong>10. Work Schedule &amp; Overtime.</strong> The Employee's regular work schedule shall be as assigned by the Employer and may be modified to meet business needs. Non-exempt employees shall be paid overtime in accordance with applicable federal and state wage-and-hour law for hours worked beyond the applicable threshold. The Employee shall accurately record all time worked and shall not perform off-the-clock work. Overtime must be authorized in advance by the Employee's supervisor.</p>
+    <p><strong>11. Confidential Information &amp; Non-Disclosure.</strong> In addition to Section 5, the Employee agrees that all client lists, case files, financial records, business methods, pricing, and other proprietary information constitute trade secrets of the Employer. The Employee shall not disclose, copy, or use such information except as required to perform their duties, and these obligations survive termination of employment indefinitely.</p>
+    <p><strong>12. Data Security &amp; Acceptable Use.</strong> The Employee shall protect all Employer and client data, use only Employer-approved systems and devices for work, maintain strong credentials, report any suspected security incident immediately, and comply with the Employer's Information Technology Acceptable Use Policy. The Employee shall not store Employer or client data on personal devices or unauthorized cloud services.</p>
+    <p><strong>13. Governing Law.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the applicable jurisdiction')}.</p>
   </div>
 
   ${agreementSignatureBlock(empName, companyName, signatures)}

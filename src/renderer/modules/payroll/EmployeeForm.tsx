@@ -1288,8 +1288,8 @@ const CredentialsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 // ─── Agreements Panel ─────────────────────────────────────
 type AgreementType = 'equipment' | 'employee';
 interface SigInput { name: string; date: string }
-interface SigData { employee?: SigInput; employer?: SigInput }
-interface SignedDoc { id: string; html: string; employee?: SigInput; employer?: SigInput }
+interface SigData { employee?: SigInput; employer?: SigInput; employerTitle?: string }
+interface SignedDoc { id: string; html: string; employee?: SigInput; employer?: SigInput; employerTitle?: string }
 
 const AGREEMENT_TITLE: Record<AgreementType, string> = {
   equipment: 'Employer Provided Equipment Agreement',
@@ -1366,7 +1366,7 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
   // content). If the doc is signed, pass the sig data; if not, no sigs.
   const getLatestHtml = async (type: AgreementType): Promise<string> => {
     const sig = signed[type];
-    const sigs: SigData | undefined = (sig?.employee || sig?.employer) ? { employee: sig?.employee, employer: sig?.employer } : undefined;
+    const sigs: SigData | undefined = (sig?.employee || sig?.employer) ? { employee: sig?.employee, employer: sig?.employer, employerTitle: sig?.employerTitle } : undefined;
     return genHtml(type, sigs);
   };
 
@@ -1416,7 +1416,7 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
       const r = await api.esignSign(created.id, data.employer.name, 'admin', '', data.employer.name, data.employer.date);
       if (r?.error) throw new Error(r.error);
     }
-    setSigned((prev) => ({ ...prev, [type]: { id: created.id, html: signedHtml, employee: data.employee, employer: data.employer } }));
+    setSigned((prev) => ({ ...prev, [type]: { id: created.id, html: signedHtml, employee: data.employee, employer: data.employer, employerTitle: data.employerTitle } }));
   };
 
   const renderCard = (type: AgreementType, Icon: typeof Laptop, iconColor: string, desc: string) => {
@@ -1501,6 +1501,7 @@ const ESignModal: React.FC<{
   const [addEmployer, setAddEmployer] = useState(false);
   const [emprName, setEmprName] = useState('');
   const [emprDate, setEmprDate] = useState(today);
+  const [emprTitle, setEmprTitle] = useState('HR Manager');
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1514,6 +1515,7 @@ const ESignModal: React.FC<{
       await onSign({
         employee: empName.trim() ? { name: empName.trim(), date: empDate } : undefined,
         employer: addEmployer && emprName.trim() ? { name: emprName.trim(), date: emprDate } : undefined,
+        employerTitle: addEmployer ? (emprTitle.trim() || 'HR Manager') : undefined,
       });
     } catch (err: any) {
       setError(err?.message || 'Failed to sign');
@@ -1560,6 +1562,7 @@ const ESignModal: React.FC<{
               <input className="block-input" value={emprName} onChange={(e) => setEmprName(e.target.value)} placeholder="Authorized representative name" />
               <input type="date" className="block-input" value={emprDate} max={today} onChange={(e) => setEmprDate(e.target.value)} />
             </div>
+            <input className="block-input mt-2" value={emprTitle} onChange={(e) => setEmprTitle(e.target.value)} placeholder="Title (e.g. HR Manager)" />
             {sigPreview(emprName)}
           </div>
         )}
