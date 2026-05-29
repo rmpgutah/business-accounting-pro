@@ -337,14 +337,16 @@ export const CurrencySelector: React.FC<{
 // ─── Markdown notes (#21) ──────────────────────────────
 function renderInline(s: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const matches = Array.from(s.matchAll(/(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g));
+  // Order matters: bold (**) before italic (*), underline (__) before bold
+  const matches = Array.from(s.matchAll(/(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|`([^`]+)`)/g));
   let last = 0; let i = 0;
   for (const m of matches) {
     const idx = m.index ?? 0;
     if (idx > last) parts.push(s.slice(last, idx));
     if (m[2]) parts.push(<strong key={i++}>{m[2]}</strong>);
-    else if (m[3]) parts.push(<em key={i++}>{m[3]}</em>);
-    else if (m[4]) parts.push(<code key={i++} className="px-1 bg-bg-tertiary">{m[4]}</code>);
+    else if (m[3]) parts.push(<u key={i++}>{m[3]}</u>);
+    else if (m[4]) parts.push(<em key={i++}>{m[4]}</em>);
+    else if (m[5]) parts.push(<code key={i++} className="px-1 bg-bg-tertiary">{m[5]}</code>);
     last = idx + m[0].length;
   }
   if (last < s.length) parts.push(s.slice(last));
@@ -372,6 +374,40 @@ function MarkdownPreview({ src }: { src: string }) {
 }
 export const NotesMemoField: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
   const [preview, setPreview] = useState(false);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Wrap selected text with markers, or insert markers at cursor if no selection.
+  const wrapSelection = (before: string, after: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = value.slice(start, end);
+    const replacement = selected ? `${before}${selected}${after}` : `${before}text${after}`;
+    const newVal = value.slice(0, start) + replacement + value.slice(end);
+    onChange(newVal);
+    // Restore focus + select the wrapped text (not the markers).
+    setTimeout(() => {
+      ta.focus();
+      if (selected) {
+        ta.selectionStart = start + before.length;
+        ta.selectionEnd = start + before.length + selected.length;
+      } else {
+        ta.selectionStart = start + before.length;
+        ta.selectionEnd = start + before.length + 4; // "text"
+      }
+    }, 0);
+  };
+
+  const TB: React.FC<{ label: string; icon: React.ReactNode; before: string; after: string; title: string }> = ({ icon, before, after, title }) => (
+    <button type="button" title={title}
+      onClick={() => wrapSelection(before, after)}
+      className="px-2 py-1 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+      style={{ borderRadius: 4 }}>
+      {icon}
+    </button>
+  );
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
@@ -386,8 +422,23 @@ export const NotesMemoField: React.FC<{ value: string; onChange: (v: string) => 
           <MarkdownPreview src={value || '_(empty)_'} />
         </div>
       ) : (
-        <textarea className="block-input" rows={4} placeholder="Markdown supported: **bold**, *italic*, `code`, # heading, - list"
-          value={value} onChange={e => onChange(e.target.value)} />
+        <div>
+          {/* Formatting toolbar — WYSIWYG-style buttons that wrap selected
+              text with markdown markers. Users don't need to know markdown
+              syntax; they select text and click Bold/Italic/Underline. */}
+          <div className="flex items-center gap-0.5 mb-1 px-1 py-0.5" style={{ borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border-primary)' }}>
+            <TB icon={<span style={{ fontWeight: 800, fontSize: 13 }}>B</span>} before="**" after="**" title="Bold (wrap with **)" label="Bold" />
+            <TB icon={<span style={{ fontStyle: 'italic', fontSize: 13 }}>I</span>} before="*" after="*" title="Italic (wrap with *)" label="Italic" />
+            <TB icon={<span style={{ textDecoration: 'underline', fontSize: 13 }}>U</span>} before="__" after="__" title="Underline (wrap with __)" label="Underline" />
+            <div style={{ width: 1, height: 16, background: 'var(--color-border-primary)', margin: '0 4px' }} />
+            <TB icon={<span style={{ fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace' }}>&lt;/&gt;</span>} before="`" after="`" title="Code (wrap with `)" label="Code" />
+            <TB icon={<span style={{ fontSize: 12, fontWeight: 700 }}>H</span>} before="# " after="" title="Heading (# prefix)" label="Heading" />
+            <TB icon={<span style={{ fontSize: 12 }}>•</span>} before="- " after="" title="Bullet list (- prefix)" label="List" />
+          </div>
+          <textarea ref={textareaRef} className="block-input" rows={4}
+            placeholder="Type your notes here. Use the toolbar above to format text, or type naturally."
+            value={value} onChange={e => onChange(e.target.value)} />
+        </div>
       )}
     </div>
   );
