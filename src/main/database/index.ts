@@ -2011,6 +2011,17 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_equipment_penalties_equipment ON equipment_penalties(equipment_id)`,
+  // Equipment disposition + penalty assessment. When an item is returned,
+  // lost, stolen, etc., the admin records the outcome; matching penalties
+  // are summed into penalty_assessed. A clean return assesses $0.
+  "ALTER TABLE employee_equipment ADD COLUMN disposition TEXT DEFAULT 'in_use'", // in_use | returned_good | returned_damaged | lost | stolen | not_returned | retired
+  "ALTER TABLE employee_equipment ADD COLUMN disposition_date TEXT",
+  "ALTER TABLE employee_equipment ADD COLUMN disposition_notes TEXT DEFAULT ''",
+  "ALTER TABLE employee_equipment ADD COLUMN penalty_assessed REAL DEFAULT 0",
+  "ALTER TABLE employee_equipment ADD COLUMN penalty_waived INTEGER DEFAULT 0",
+  // Which outcome a penalty applies to (so the right ones auto-apply on
+  // disposition): any | damaged | lost | stolen | not_returned | late
+  "ALTER TABLE equipment_penalties ADD COLUMN applies_to TEXT DEFAULT 'any'",
   // E-Sign documents (2026-05-21)
   `CREATE TABLE IF NOT EXISTS esign_documents (
     id TEXT PRIMARY KEY,

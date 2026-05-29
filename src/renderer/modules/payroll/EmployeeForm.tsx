@@ -335,12 +335,59 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 };
 
 // ─── Equipment Panel ─────────────────────────────────────
-interface PenaltyRow { id?: string; label: string; penalty_type: string; amount: number; notes?: string }
+interface PenaltyRow { id?: string; label: string; penalty_type: string; amount: number; notes?: string; applies_to?: string }
 const PENALTY_TYPES: { value: string; label: string; suffix: string }[] = [
   { value: 'flat', label: 'Flat fee ($)', suffix: '$' },
   { value: 'per_day', label: 'Per day ($/day)', suffix: '$/day' },
   { value: 'percent_of_value', label: '% of item value', suffix: '% of value' },
 ];
+// Which outcome a penalty is tied to.
+const PENALTY_TRIGGERS: { value: string; label: string }[] = [
+  { value: 'any', label: 'Any issue' },
+  { value: 'damaged', label: 'Damaged' },
+  { value: 'lost', label: 'Lost' },
+  { value: 'stolen', label: 'Stolen' },
+  { value: 'not_returned', label: 'Not returned' },
+  { value: 'late', label: 'Late return' },
+];
+// Equipment disposition / outcome.
+const DISPOSITIONS: { value: string; label: string; clean: boolean }[] = [
+  { value: 'in_use', label: 'In Use', clean: true },
+  { value: 'returned_good', label: 'Returned — Good Condition', clean: true },
+  { value: 'returned_damaged', label: 'Returned — Damaged', clean: false },
+  { value: 'lost', label: 'Lost', clean: false },
+  { value: 'stolen', label: 'Stolen', clean: false },
+  { value: 'not_returned', label: 'Not Returned', clean: false },
+  { value: 'retired', label: 'Retired / Decommissioned', clean: true },
+];
+// Penalty triggers fired by each disposition. 'late' is included for
+// returned-late and not-returned outcomes (per-day fees).
+const DISPOSITION_TRIGGERS: Record<string, string[]> = {
+  in_use: [], returned_good: [], retired: [],
+  returned_damaged: ['damaged', 'any', 'late'],
+  lost: ['lost', 'any'],
+  stolen: ['stolen', 'any'],
+  not_returned: ['not_returned', 'any', 'late'],
+};
+const isReturnedDisposition = (d: string) => d.startsWith('returned');
+
+// Compute the penalty owed for a disposition given the item's penalties,
+// value, and (for per-day fees) the number of late days. A clean return
+// triggers nothing → $0.
+function computeAssessment(disposition: string, penalties: PenaltyRow[], itemValue: number, days: number) {
+  const triggers = DISPOSITION_TRIGGERS[disposition] || [];
+  if (triggers.length === 0) return { total: 0, lines: [] as Array<PenaltyRow & { computed: number }> };
+  const lines = penalties
+    .filter((p) => triggers.includes(p.applies_to || 'any'))
+    .map((p) => {
+      let computed = 0;
+      if (p.penalty_type === 'per_day') computed = (Number(p.amount) || 0) * (days || 0);
+      else if (p.penalty_type === 'percent_of_value') computed = ((Number(p.amount) || 0) / 100) * (itemValue || 0);
+      else computed = Number(p.amount) || 0;
+      return { ...p, computed: Math.round(computed * 100) / 100 };
+    });
+  return { total: Math.round(lines.reduce((s, l) => s + l.computed, 0) * 100) / 100, lines };
+}
 
 const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   const [items, setItems] = useState<any[]>([]);
@@ -350,6 +397,8 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   const [form, setForm] = useState({
     item_name: '', description: '', serial_number: '', model: '',
     condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '', value: 0,
+    disposition: 'in_use', disposition_date: '', disposition_notes: '',
+    penalty_waived: false, penalty_override: null as number | null, penalty_days: 0,
   });
   const [penalties, setPenalties] = useState<PenaltyRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -373,6 +422,8 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
     setForm({
       item_name: '', description: '', serial_number: '', model: '',
       condition: 'good', assigned_date: new Date().toISOString().split('T')[0], return_date: '', notes: '', value: 0,
+      disposition: 'in_use', disposition_date: '', disposition_notes: '',
+      penalty_waived: false, penalty_override: null, penalty_days: 0,
     });
     setPenalties([]);
   };
@@ -392,6 +443,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
         label: p.label.trim(),
         penalty_type: p.penalty_type || 'flat',
         amount: Number(p.amount) || 0,
+        applies_to: p.applies_to || 'any',
         notes: (p.notes || '').trim(),
         sort_order: i,
       });
@@ -402,6 +454,12 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
     if (!form.item_name.trim()) return;
     setSaving(true);
     try {
+      // Assess the penalty owed for the current disposition. A clean
+      // return ($0-trigger) or a waiver yields 0.
+      const assessment = computeAssessment(form.disposition, penalties, Number(form.value) || 0, Number(form.penalty_days) || 0);
+      const computedPenalty = form.penalty_override != null ? form.penalty_override : assessment.total;
+      const finalPenalty = form.penalty_waived ? 0 : computedPenalty;
+      const isClean = (DISPOSITIONS.find((d) => d.value === form.disposition)?.clean) ?? true;
       const payload = {
         employee_id: employeeId,
         item_name: form.item_name.trim(),
@@ -411,8 +469,14 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
         condition: form.condition,
         value: Number(form.value) || 0,
         assigned_date: form.assigned_date || null,
-        return_date: form.return_date || null,
+        // Returned dispositions imply a return date; non-returned keep null.
+        return_date: isReturnedDisposition(form.disposition) ? (form.return_date || form.disposition_date || null) : (form.disposition === 'in_use' ? (form.return_date || null) : null),
         notes: form.notes.trim(),
+        disposition: form.disposition,
+        disposition_date: form.disposition === 'in_use' ? null : (form.disposition_date || new Date().toISOString().split('T')[0]),
+        disposition_notes: form.disposition_notes.trim(),
+        penalty_assessed: isClean ? 0 : finalPenalty,
+        penalty_waived: form.penalty_waived ? 1 : 0,
       };
       let eqId = editingId;
       if (editingId) {
@@ -447,10 +511,17 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
       assigned_date: item.assigned_date || '',
       return_date: item.return_date || '',
       notes: item.notes || '',
+      disposition: item.disposition || 'in_use',
+      disposition_date: item.disposition_date || '',
+      disposition_notes: item.disposition_notes || '',
+      penalty_waived: !!item.penalty_waived,
+      // Treat the stored assessed amount as the override starting point.
+      penalty_override: item.penalty_assessed != null ? Number(item.penalty_assessed) : null,
+      penalty_days: 0,
     });
     // Load this item's penalties so admin can add/edit them later.
     const ps = await api.query('equipment_penalties', { equipment_id: item.id });
-    setPenalties(Array.isArray(ps) ? ps.map((r: any) => ({ id: r.id, label: r.label, penalty_type: r.penalty_type, amount: r.amount, notes: r.notes })) : []);
+    setPenalties(Array.isArray(ps) ? ps.map((r: any) => ({ id: r.id, label: r.label, penalty_type: r.penalty_type, amount: r.amount, notes: r.notes, applies_to: r.applies_to || 'any' })) : []);
     setShowForm(true);
   };
 
@@ -467,6 +538,21 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
       poor: 'block-badge block-badge-expense',
     };
     return <span className={colors[cond] || 'block-badge'} style={{ textTransform: 'capitalize', fontSize: '10px' }}>{cond}</span>;
+  };
+
+  const dispositionBadge = (disp: string | undefined, returnDate: string | undefined) => {
+    const d = disp || (returnDate ? 'returned_good' : 'in_use');
+    const meta: Record<string, { label: string; cls: string }> = {
+      in_use: { label: 'In Use', cls: 'block-badge-income' },
+      returned_good: { label: 'Returned ✓', cls: 'block-badge' },
+      returned_damaged: { label: 'Returned · Damaged', cls: 'block-badge block-badge-warning' },
+      lost: { label: 'Lost', cls: 'block-badge block-badge-expense' },
+      stolen: { label: 'Stolen', cls: 'block-badge block-badge-expense' },
+      not_returned: { label: 'Not Returned', cls: 'block-badge block-badge-expense' },
+      retired: { label: 'Retired', cls: 'block-badge' },
+    };
+    const m = meta[d] || meta.in_use;
+    return <span className={m.cls} style={{ fontSize: '10px' }}>{m.label}</span>;
   };
 
   return (
@@ -535,21 +621,28 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider">Custom Penalties</label>
               <button type="button" className="block-btn flex items-center gap-1 text-[11px] px-2 py-1"
-                onClick={() => setPenalties(p => [...p, { label: '', penalty_type: 'flat', amount: 0 }])}>
+                onClick={() => setPenalties(p => [...p, { label: '', penalty_type: 'flat', amount: 0, applies_to: 'any' }])}>
                 <Plus size={11} /> Add Penalty
               </button>
             </div>
             {penalties.length === 0 ? (
-              <p className="text-[11px] text-text-muted">No penalties defined. Add loss/damage/late-return fees that apply to this item — they’ll appear as terms on the Equipment Agreement.</p>
+              <p className="text-[11px] text-text-muted">No penalties defined. Add loss/damage/late-return fees that apply to this item — they’ll appear as terms on the Equipment Agreement and auto-assess when you set the disposition below.</p>
             ) : (
               <div className="space-y-2">
+                <div className="grid gap-2 text-[9px] uppercase tracking-wider text-text-muted font-semibold" style={{ gridTemplateColumns: '2fr 1.1fr 1.2fr 0.9fr auto' }}>
+                  <span>Penalty</span><span>Type</span><span>Applies To</span><span>Amount</span><span></span>
+                </div>
                 {penalties.map((p, i) => (
-                  <div key={i} className="grid gap-2" style={{ gridTemplateColumns: '2fr 1.2fr 1fr auto' }}>
-                    <input className="block-input text-xs" placeholder="Penalty (e.g. Loss / non-return)" value={p.label}
+                  <div key={i} className="grid gap-2" style={{ gridTemplateColumns: '2fr 1.1fr 1.2fr 0.9fr auto' }}>
+                    <input className="block-input text-xs" placeholder="e.g. Loss / non-return" value={p.label}
                       onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
                     <select className="block-select text-xs" value={p.penalty_type}
                       onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, penalty_type: e.target.value } : x))}>
                       {PENALTY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <select className="block-select text-xs" value={p.applies_to || 'any'}
+                      onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, applies_to: e.target.value } : x))}>
+                      {PENALTY_TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                     <input type="number" step="0.01" min="0" className="block-input text-xs" placeholder="0"
                       value={p.amount || ''} onChange={(e) => setPenalties(arr => arr.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))} />
@@ -560,6 +653,79 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
               </div>
             )}
           </div>
+
+          {/* Disposition / outcome — drives penalty assessment. */}
+          {(() => {
+            const disp = DISPOSITIONS.find((d) => d.value === form.disposition);
+            const clean = disp?.clean ?? true;
+            const assessment = computeAssessment(form.disposition, penalties, Number(form.value) || 0, Number(form.penalty_days) || 0);
+            const hasPerDay = assessment.lines.some((l) => l.penalty_type === 'per_day');
+            const computed = form.penalty_override != null ? form.penalty_override : assessment.total;
+            const finalPenalty = form.penalty_waived ? 0 : computed;
+            return (
+              <div className="pt-2 border-t border-border-primary/50">
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Disposition / Outcome</label>
+                <div className="grid gap-3" style={{ gridTemplateColumns: '2fr 1fr' }}>
+                  <select className="block-select" value={form.disposition}
+                    onChange={(e) => setForm(f => ({ ...f, disposition: e.target.value, penalty_override: null, penalty_waived: false }))}>
+                    {DISPOSITIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                  {form.disposition !== 'in_use' && (
+                    <input type="date" className="block-input" value={form.disposition_date}
+                      onChange={(e) => setForm(f => ({ ...f, disposition_date: e.target.value }))} title="Date of return / loss / etc." />
+                  )}
+                </div>
+
+                {/* Penalty assessment (only when the outcome triggers penalties) */}
+                {!clean && (
+                  <div className="mt-3 p-3" style={{ borderRadius: 6, background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.25)' }}>
+                    {assessment.lines.length === 0 ? (
+                      <p className="text-[11px] text-text-muted">No penalties match this outcome. Define a penalty above with “Applies To” set to <b>{DISPOSITIONS.find(d=>d.value===form.disposition)?.label}</b> or <b>Any issue</b>, or enter an amount manually below.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {assessment.lines.map((l, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-[11px]">
+                            <span className="text-text-secondary">{l.label || '(penalty)'} <span className="text-text-muted">· {PENALTY_TYPES.find(t=>t.value===l.penalty_type)?.label}</span></span>
+                            <span className="font-mono text-accent-expense">{formatCurrency(l.computed)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {hasPerDay && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <label className="text-[11px] text-text-muted">Late days</label>
+                        <input type="number" min="0" className="block-input text-xs" style={{ width: 90 }} value={form.penalty_days || ''}
+                          onChange={(e) => setForm(f => ({ ...f, penalty_days: parseInt(e.target.value) || 0, penalty_override: null }))} />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-border-primary/40">
+                      <div className="flex items-center gap-3">
+                        <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Assessed Penalty</label>
+                        <label className="flex items-center gap-1 text-[11px] text-text-muted">
+                          <input type="checkbox" checked={form.penalty_waived} onChange={(e) => setForm(f => ({ ...f, penalty_waived: e.target.checked }))} style={{ accentColor: '#16a34a' }} /> Waive
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-text-muted text-xs">$</span>
+                        <input type="number" step="0.01" min="0" disabled={form.penalty_waived}
+                          className="block-input text-xs text-right" style={{ width: 110, opacity: form.penalty_waived ? 0.5 : 1 }}
+                          value={form.penalty_waived ? 0 : (form.penalty_override != null ? form.penalty_override : assessment.total)}
+                          onChange={(e) => setForm(f => ({ ...f, penalty_override: parseFloat(e.target.value) || 0 }))} />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-text-muted mt-1">Final penalty to charge: <b className="text-accent-expense">{formatCurrency(finalPenalty)}</b>{form.penalty_override != null && !form.penalty_waived ? ' (manually adjusted)' : ''}{form.penalty_waived ? ' (waived)' : ''}</p>
+                  </div>
+                )}
+                {clean && form.disposition !== 'in_use' && (
+                  <p className="text-[11px] text-accent-income mt-2">Returned without issue — no penalty assessed.</p>
+                )}
+                {form.disposition !== 'in_use' && (
+                  <input className="block-input text-xs mt-3" placeholder="Disposition notes (optional)" value={form.disposition_notes}
+                    onChange={(e) => setForm(f => ({ ...f, disposition_notes: e.target.value }))} />
+                )}
+              </div>
+            );
+          })()}
 
           <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving || !form.item_name.trim()}>
             {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
@@ -581,7 +747,8 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                 <th className="text-right">Value</th>
                 <th>Penalties</th>
                 <th>Date Issued</th>
-                <th>Returned</th>
+                <th>Status</th>
+                <th className="text-right">Assessed</th>
                 <th style={{width: 80}}>Actions</th>
               </tr>
             </thead>
@@ -599,7 +766,12 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                       : <span className="text-text-muted text-xs">—</span>}
                   </td>
                   <td className="font-mono text-xs">{formatDate(item.assigned_date)}</td>
-                  <td className="font-mono text-xs">{item.return_date ? formatDate(item.return_date) : <span className="text-accent-income text-xs">In Use</span>}</td>
+                  <td>{dispositionBadge(item.disposition, item.return_date)}</td>
+                  <td className="font-mono text-xs text-right">
+                    {Number(item.penalty_assessed) > 0
+                      ? <span className="text-accent-expense font-semibold">{formatCurrency(item.penalty_assessed)}</span>
+                      : (item.penalty_waived ? <span className="text-text-muted text-xs">waived</span> : <span className="text-text-muted">—</span>)}
+                  </td>
                   <td>
                     <div className="flex gap-1">
                       <button className="text-text-muted hover:text-accent-blue transition-colors p-0.5" onClick={() => handleEdit(item)} title="Edit"><Pencil size={12} /></button>
