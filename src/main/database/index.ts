@@ -2051,6 +2051,39 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_employee_checklist_employee ON employee_checklist_items(employee_id, phase)`,
+  // Performance reviews — periodic evaluations with numeric ratings and goals.
+  `CREATE TABLE IF NOT EXISTS employee_reviews (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    review_date TEXT NOT NULL,
+    review_period TEXT DEFAULT '',
+    reviewer_name TEXT DEFAULT '',
+    overall_rating INTEGER DEFAULT 3,
+    performance_summary TEXT DEFAULT '',
+    strengths TEXT DEFAULT '',
+    areas_for_improvement TEXT DEFAULT '',
+    goals TEXT DEFAULT '',
+    status TEXT DEFAULT 'draft' CHECK(status IN ('draft','submitted','acknowledged')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_reviews_employee ON employee_reviews(employee_id)`,
+  // Disciplinary actions — incidents, warnings, corrective actions.
+  `CREATE TABLE IF NOT EXISTS employee_disciplinary (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    incident_date TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'verbal_warning' CHECK(severity IN ('verbal_warning','written_warning','final_warning','suspension','termination','other')),
+    category TEXT DEFAULT 'policy_violation',
+    description TEXT DEFAULT '',
+    action_taken TEXT DEFAULT '',
+    follow_up_date TEXT,
+    follow_up_notes TEXT DEFAULT '',
+    issued_by TEXT DEFAULT '',
+    acknowledged INTEGER DEFAULT 0,
+    acknowledged_date TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_disciplinary_employee ON employee_disciplinary(employee_id)`,
   // E-Sign documents (2026-05-21)
   `CREATE TABLE IF NOT EXISTS esign_documents (
     id TEXT PRIMARY KEY,

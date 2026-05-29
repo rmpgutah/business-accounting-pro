@@ -798,6 +798,249 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   );
 };
 
+// ─── Performance Reviews Panel ────────────────────────────
+const RATING_LABELS = ['', 'Unsatisfactory', 'Needs Improvement', 'Meets Expectations', 'Exceeds Expectations', 'Outstanding'];
+const PerformanceReviewsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const empty = { review_date: new Date().toISOString().split('T')[0], review_period: '', reviewer_name: '', overall_rating: 3, performance_summary: '', strengths: '', areas_for_improvement: '', goals: '', status: 'draft' };
+  const [form, setForm] = useState({ ...empty });
+  const [saving, setSaving] = useState(false);
+  const load = async () => { const r = await api.query('employee_reviews', { employee_id: employeeId }); setItems(Array.isArray(r) ? r : []); };
+  useEffect(() => { load(); }, [employeeId]);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = { employee_id: employeeId, ...form, overall_rating: Number(form.overall_rating) || 3 };
+      const r = editingId ? await api.update('employee_reviews', editingId, payload) : await api.create('employee_reviews', payload);
+      if ((r as any)?.error) throw new Error((r as any).error);
+      setShowForm(false); setEditingId(null); setForm({ ...empty }); await load();
+    } catch (err: any) { alert('Save failed: ' + (err?.message || 'Unknown')); } finally { setSaving(false); }
+  };
+  const handleEdit = (it: any) => { setEditingId(it.id); setForm({ review_date: it.review_date || '', review_period: it.review_period || '', reviewer_name: it.reviewer_name || '', overall_rating: it.overall_rating || 3, performance_summary: it.performance_summary || '', strengths: it.strengths || '', areas_for_improvement: it.areas_for_improvement || '', goals: it.goals || '', status: it.status || 'draft' }); setShowForm(true); };
+  const handleDelete = async (id: string) => { if (!window.confirm('Delete this review?')) return; await api.remove('employee_reviews', id); await load(); };
+  const ratingBadge = (r: number) => {
+    const colors = ['', 'block-badge block-badge-expense', 'block-badge block-badge-warning', 'block-badge', 'block-badge block-badge-income', 'block-badge block-badge-income'];
+    return <span className={colors[r] || 'block-badge'} style={{ fontSize: 10 }}>{r}/5 · {RATING_LABELS[r]}</span>;
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">Performance Reviews</h3>
+        <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { setEditingId(null); setForm({ ...empty }); setShowForm(!showForm); }}>
+          <Plus size={12} /> {showForm ? 'Cancel' : 'New Review'}
+        </button>
+      </div>
+      {showForm && (
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Review Date</label><input type="date" className="block-input" value={form.review_date} onChange={e => setForm(f => ({...f, review_date: e.target.value}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Review Period</label><input className="block-input" placeholder="e.g. Q1 2026, Annual 2025" value={form.review_period} onChange={e => setForm(f => ({...f, review_period: e.target.value}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Reviewer</label><input className="block-input" placeholder="Manager / supervisor name" value={form.reviewer_name} onChange={e => setForm(f => ({...f, reviewer_name: e.target.value}))} /></div>
+          </div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Overall Rating (1-5)</label>
+            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 6, background: form.overall_rating >= n ? (n <= 2 ? '#dc2626' : n === 3 ? '#3b82f6' : '#16a34a') : 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
+              <span className="text-xs text-text-muted ml-2 self-center">{RATING_LABELS[form.overall_rating]}</span>
+            </div>
+          </div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Performance Summary</label><textarea className="block-input" rows={2} value={form.performance_summary} onChange={e => setForm(f => ({...f, performance_summary: e.target.value}))} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Strengths</label><textarea className="block-input" rows={2} value={form.strengths} onChange={e => setForm(f => ({...f, strengths: e.target.value}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Areas for Improvement</label><textarea className="block-input" rows={2} value={form.areas_for_improvement} onChange={e => setForm(f => ({...f, areas_for_improvement: e.target.value}))} /></div>
+          </div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Goals / Action Items</label><textarea className="block-input" rows={2} value={form.goals} onChange={e => setForm(f => ({...f, goals: e.target.value}))} /></div>
+          <div className="flex items-center gap-3">
+            <select className="block-select text-xs" value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value}))}>
+              <option value="draft">Draft</option><option value="submitted">Submitted</option><option value="acknowledged">Acknowledged</option>
+            </select>
+            <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save'}</button>
+          </div>
+        </div>
+      )}
+      {items.length === 0 && !showForm ? <p className="text-sm text-text-muted">No performance reviews on record.</p> : (
+        <div className="overflow-x-auto"><table className="block-table"><thead><tr><th>Date</th><th>Period</th><th>Reviewer</th><th>Rating</th><th>Status</th><th style={{width:80}}>Actions</th></tr></thead><tbody>
+          {items.sort((a: any, b: any) => (b.review_date || '').localeCompare(a.review_date || '')).map((it: any) => (
+            <tr key={it.id}><td className="font-mono text-xs">{formatDate(it.review_date)}</td><td className="text-xs">{it.review_period || '—'}</td><td className="text-xs">{it.reviewer_name || '—'}</td><td>{ratingBadge(it.overall_rating)}</td><td className="text-xs capitalize">{it.status}</td><td><div className="flex gap-1"><button className="text-text-muted hover:text-accent-blue p-0.5" onClick={() => handleEdit(it)}><Pencil size={12}/></button><button className="text-text-muted hover:text-accent-expense p-0.5" onClick={() => handleDelete(it.id)}><Trash2 size={12}/></button></div></td></tr>
+          ))}</tbody></table></div>
+      )}
+    </div>
+  );
+};
+
+// ─── Disciplinary Actions Panel ───────────────────────────
+const SEVERITY_LABELS: Record<string, { label: string; cls: string }> = {
+  verbal_warning: { label: 'Verbal Warning', cls: 'block-badge' },
+  written_warning: { label: 'Written Warning', cls: 'block-badge block-badge-warning' },
+  final_warning: { label: 'Final Warning', cls: 'block-badge block-badge-expense' },
+  suspension: { label: 'Suspension', cls: 'block-badge block-badge-expense' },
+  termination: { label: 'Termination', cls: 'block-badge block-badge-expense' },
+  other: { label: 'Other', cls: 'block-badge' },
+};
+const DisciplinaryPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const empty = { incident_date: new Date().toISOString().split('T')[0], severity: 'verbal_warning', category: 'policy_violation', description: '', action_taken: '', follow_up_date: '', follow_up_notes: '', issued_by: '' };
+  const [form, setForm] = useState({ ...empty });
+  const [saving, setSaving] = useState(false);
+  const load = async () => { const r = await api.query('employee_disciplinary', { employee_id: employeeId }); setItems(Array.isArray(r) ? r : []); };
+  useEffect(() => { load(); }, [employeeId]);
+  const handleSave = async () => {
+    if (!form.description.trim()) { alert('Description required'); return; }
+    setSaving(true);
+    try {
+      const payload = { employee_id: employeeId, ...form };
+      const r = editingId ? await api.update('employee_disciplinary', editingId, payload) : await api.create('employee_disciplinary', payload);
+      if ((r as any)?.error) throw new Error((r as any).error);
+      setShowForm(false); setEditingId(null); setForm({ ...empty }); await load();
+    } catch (err: any) { alert('Save failed: ' + (err?.message || 'Unknown')); } finally { setSaving(false); }
+  };
+  const handleEdit = (it: any) => { setEditingId(it.id); setForm({ incident_date: it.incident_date || '', severity: it.severity || 'verbal_warning', category: it.category || '', description: it.description || '', action_taken: it.action_taken || '', follow_up_date: it.follow_up_date || '', follow_up_notes: it.follow_up_notes || '', issued_by: it.issued_by || '' }); setShowForm(true); };
+  const handleDelete = async (id: string) => { if (!window.confirm('Delete this record?')) return; await api.remove('employee_disciplinary', id); await load(); };
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">Disciplinary Actions</h3>
+        <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { setEditingId(null); setForm({ ...empty }); setShowForm(!showForm); }}>
+          <Plus size={12} /> {showForm ? 'Cancel' : 'Record Incident'}
+        </button>
+      </div>
+      {showForm && (
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Incident Date</label><input type="date" className="block-input" value={form.incident_date} onChange={e => setForm(f => ({...f, incident_date: e.target.value}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Severity</label>
+              <select className="block-select" value={form.severity} onChange={e => setForm(f => ({...f, severity: e.target.value}))}>
+                <option value="verbal_warning">Verbal Warning</option><option value="written_warning">Written Warning</option><option value="final_warning">Final Warning</option><option value="suspension">Suspension</option><option value="termination">Termination</option><option value="other">Other</option>
+              </select></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Issued By</label><input className="block-input" placeholder="Manager name" value={form.issued_by} onChange={e => setForm(f => ({...f, issued_by: e.target.value}))} /></div>
+          </div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Category</label><input className="block-input" placeholder="e.g. Policy Violation, Attendance, Misconduct" value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value}))} /></div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Description *</label><textarea className="block-input" rows={3} value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} /></div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Action Taken / Corrective Plan</label><textarea className="block-input" rows={2} value={form.action_taken} onChange={e => setForm(f => ({...f, action_taken: e.target.value}))} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Follow-up Date</label><input type="date" className="block-input" value={form.follow_up_date} onChange={e => setForm(f => ({...f, follow_up_date: e.target.value}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Follow-up Notes</label><input className="block-input" value={form.follow_up_notes} onChange={e => setForm(f => ({...f, follow_up_notes: e.target.value}))} /></div>
+          </div>
+          <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save'}</button>
+        </div>
+      )}
+      {items.length === 0 && !showForm ? <p className="text-sm text-text-muted">No disciplinary actions on record.</p> : (
+        <div className="overflow-x-auto"><table className="block-table"><thead><tr><th>Date</th><th>Severity</th><th>Category</th><th>Description</th><th>Issued By</th><th style={{width:80}}>Actions</th></tr></thead><tbody>
+          {items.sort((a: any, b: any) => (b.incident_date || '').localeCompare(a.incident_date || '')).map((it: any) => {
+            const sev = SEVERITY_LABELS[it.severity] || SEVERITY_LABELS.other;
+            return (<tr key={it.id}><td className="font-mono text-xs">{formatDate(it.incident_date)}</td><td><span className={sev.cls} style={{fontSize:10}}>{sev.label}</span></td><td className="text-xs">{it.category || '—'}</td><td className="text-xs truncate max-w-[200px]" title={it.description}>{it.description || '—'}</td><td className="text-xs">{it.issued_by || '—'}</td><td><div className="flex gap-1"><button className="text-text-muted hover:text-accent-blue p-0.5" onClick={() => handleEdit(it)}><Pencil size={12}/></button><button className="text-text-muted hover:text-accent-expense p-0.5" onClick={() => handleDelete(it.id)}><Trash2 size={12}/></button></div></td></tr>);
+          })}</tbody></table></div>
+      )}
+    </div>
+  );
+};
+
+// ─── Compensation History Panel ───────────────────────────
+const CompensationHistoryPanel: React.FC<{ employeeId: string; currentRate: number; currentPayType: string }> = ({ employeeId, currentRate, currentPayType }) => {
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const empty = { change_date: new Date().toISOString().split('T')[0], change_type: 'raise', old_amount: currentRate, new_amount: 0, old_rate_type: currentPayType, new_rate_type: currentPayType, reason: '', approved_by: '' };
+  const [form, setForm] = useState({ ...empty });
+  const [saving, setSaving] = useState(false);
+  const load = async () => {
+    const r = await api.rawQuery('SELECT * FROM compensation_history WHERE employee_id = ? ORDER BY change_date DESC', [employeeId]);
+    setItems(Array.isArray(r) ? r : []);
+  };
+  useEffect(() => { load(); }, [employeeId]);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const cid = await api.rawQuery("SELECT value FROM settings WHERE key = 'active_company_id' LIMIT 1", []);
+      const companyId = Array.isArray(cid) && cid[0]?.value ? cid[0].value : '';
+      await api.rawQuery(
+        'INSERT INTO compensation_history (id, company_id, employee_id, change_date, change_type, old_amount, new_amount, old_rate_type, new_rate_type, reason, approved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [crypto.randomUUID(), companyId, employeeId, form.change_date, form.change_type, form.old_amount, form.new_amount, form.old_rate_type, form.new_rate_type, form.reason, form.approved_by]
+      );
+      setShowForm(false); setForm({ ...empty }); await load();
+    } catch (err: any) { alert('Save failed: ' + (err?.message || 'Unknown')); } finally { setSaving(false); }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text-primary">Compensation History</h3>
+        <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { setForm({ ...empty, old_amount: currentRate, old_rate_type: currentPayType, new_rate_type: currentPayType }); setShowForm(!showForm); }}>
+          <Plus size={12} /> {showForm ? 'Cancel' : 'Record Change'}
+        </button>
+      </div>
+      {showForm && (
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Effective Date</label><input type="date" className="block-input" value={form.change_date} onChange={e => setForm(f => ({...f, change_date: e.target.value}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Change Type</label>
+              <select className="block-select" value={form.change_type} onChange={e => setForm(f => ({...f, change_type: e.target.value}))}>
+                <option value="raise">Raise</option><option value="promotion">Promotion</option><option value="demotion">Demotion</option><option value="adjustment">Adjustment</option><option value="initial">Initial Rate</option>
+              </select></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Approved By</label><input className="block-input" value={form.approved_by} onChange={e => setForm(f => ({...f, approved_by: e.target.value}))} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Previous Rate ($)</label><input type="number" step="0.01" className="block-input" value={form.old_amount || ''} onChange={e => setForm(f => ({...f, old_amount: parseFloat(e.target.value) || 0}))} /></div>
+            <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">New Rate ($)</label><input type="number" step="0.01" className="block-input" value={form.new_amount || ''} onChange={e => setForm(f => ({...f, new_amount: parseFloat(e.target.value) || 0}))} /></div>
+          </div>
+          <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Reason</label><input className="block-input" value={form.reason} onChange={e => setForm(f => ({...f, reason: e.target.value}))} placeholder="e.g. Annual review, Market adjustment" /></div>
+          <button className="block-btn-primary text-xs" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+        </div>
+      )}
+      {items.length === 0 && !showForm ? <p className="text-sm text-text-muted">No compensation changes recorded. Current rate: {formatCurrency(currentRate)} ({currentPayType}).</p> : (
+        <div className="overflow-x-auto"><table className="block-table"><thead><tr><th>Date</th><th>Type</th><th>Previous</th><th>New</th><th>Change</th><th>Reason</th></tr></thead><tbody>
+          {items.map((it: any) => {
+            const diff = (it.new_amount || 0) - (it.old_amount || 0);
+            const pct = (it.old_amount || 0) > 0 ? ((diff / it.old_amount) * 100).toFixed(1) : '—';
+            return (<tr key={it.id}><td className="font-mono text-xs">{formatDate(it.change_date)}</td><td className="text-xs capitalize">{(it.change_type || '').replace(/_/g, ' ')}</td><td className="font-mono text-xs">{formatCurrency(it.old_amount)}</td><td className="font-mono text-xs font-bold">{formatCurrency(it.new_amount)}</td><td className={`font-mono text-xs ${diff > 0 ? 'text-accent-income' : diff < 0 ? 'text-accent-expense' : ''}`}>{diff > 0 ? '+' : ''}{formatCurrency(diff)} ({pct}%)</td><td className="text-xs truncate max-w-[160px]" title={it.reason}>{it.reason || '—'}</td></tr>);
+          })}</tbody></table></div>
+      )}
+    </div>
+  );
+};
+
+// ─── PTO Summary Panel ────────────────────────────────────
+const PtoSummaryPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
+  const [balances, setBalances] = useState<any[]>([]);
+  const [recent, setRecent] = useState<any[]>([]);
+  const load = async () => {
+    const b = await api.query('pto_balances', { employee_id: employeeId });
+    setBalances(Array.isArray(b) ? b : []);
+    const t = await api.rawQuery('SELECT * FROM pto_transactions WHERE employee_id = ? ORDER BY transaction_date DESC LIMIT 10', [employeeId]);
+    setRecent(Array.isArray(t) ? t : []);
+  };
+  useEffect(() => { load(); }, [employeeId]);
+  const totalAvailable = balances.reduce((s: number, b: any) => s + (Number(b.available_hours) || 0), 0);
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-bold text-text-primary">PTO / Time Off</h3>
+      {balances.length === 0 ? <p className="text-sm text-text-muted">No PTO balances. Set up PTO policies in Settings to track accruals.</p> : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {balances.map((b: any) => (
+              <div key={b.id} className="block-card p-3 text-center" style={{ borderRadius: 6 }}>
+                <p className="text-lg font-bold font-mono text-text-primary">{Number(b.available_hours || 0).toFixed(1)}h</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">{(b.pto_type || 'PTO').replace(/_/g, ' ')}</p>
+                {Number(b.used_hours) > 0 && <p className="text-[10px] text-text-muted mt-1">{Number(b.used_hours).toFixed(1)}h used</p>}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-text-muted">Total available: <strong>{totalAvailable.toFixed(1)} hours</strong></p>
+        </>
+      )}
+      {recent.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Recent Transactions</h4>
+          <div className="overflow-x-auto"><table className="block-table"><thead><tr><th>Date</th><th>Type</th><th>Hours</th><th>Notes</th></tr></thead><tbody>
+            {recent.map((t: any) => (
+              <tr key={t.id}><td className="font-mono text-xs">{formatDate(t.transaction_date)}</td><td className="text-xs capitalize">{(t.transaction_type || '').replace(/_/g, ' ')}</td><td className={`font-mono text-xs ${(t.hours || 0) > 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{(t.hours || 0) > 0 ? '+' : ''}{Number(t.hours || 0).toFixed(1)}h</td><td className="text-xs truncate max-w-[200px]">{t.notes || '—'}</td></tr>
+            ))}</tbody></table></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Onboarding / Offboarding Checklist ───────────────────
 // Hybrid: auto-detected steps (derived from real data) + manual
 // check-offs. Auto steps are read-only reflections of system state;
@@ -1348,7 +1591,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking' | 'deductions' | 'equipment'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'hr' | 'banking' | 'deductions' | 'equipment' | 'hr-suite'>('general');
   const [ytdSummary, setYtdSummary] = useState<any>(null);
 
   const isEditing = Boolean(employeeId);
@@ -1592,7 +1835,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       <div className="block-card p-6" style={{ borderRadius: '6px' }}>
         {/* Tab bar */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-border-primary)', marginBottom: 20 }}>
-          {(['general', 'hr', 'banking', 'deductions', 'equipment'] as const).map((tab) => (
+          {(['general', 'hr', 'banking', 'deductions', 'equipment', 'hr-suite'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -1605,7 +1848,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
                 color: activeTab === tab ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
               }}
             >
-              {tab === 'general' ? 'General' : tab === 'hr' ? 'HR & Profile' : tab === 'banking' ? 'Banking & Emergency' : tab === 'deductions' ? 'Deductions' : 'Equipment & Agreements'}
+              {tab === 'general' ? 'General' : tab === 'hr' ? 'HR & Profile' : tab === 'banking' ? 'Banking & Emergency' : tab === 'deductions' ? 'Deductions' : tab === 'equipment' ? 'Equipment & Agreements' : 'HR Suite'}
             </button>
           ))}
         </div>
@@ -2043,6 +2286,22 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         )}
         {activeTab === 'equipment' && !employeeId && (
           <p className="text-sm text-text-muted">Save the employee first to manage equipment and generate agreements.</p>
+        )}
+
+        {/* HR Suite — performance reviews, disciplinary, compensation history, PTO */}
+        {activeTab === 'hr-suite' && employeeId && (
+          <div className="space-y-6">
+            <PerformanceReviewsPanel employeeId={employeeId} />
+            <div className="border-t border-border-primary" />
+            <DisciplinaryPanel employeeId={employeeId} />
+            <div className="border-t border-border-primary" />
+            <CompensationHistoryPanel employeeId={employeeId} currentRate={form.pay_rate} currentPayType={form.pay_type} />
+            <div className="border-t border-border-primary" />
+            <PtoSummaryPanel employeeId={employeeId} />
+          </div>
+        )}
+        {activeTab === 'hr-suite' && !employeeId && (
+          <p className="text-sm text-text-muted">Save the employee first to access the HR Suite.</p>
         )}
       </div>
 

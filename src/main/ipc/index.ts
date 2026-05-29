@@ -654,7 +654,7 @@ export function registerIpcHandlers(): void {
     'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
     'employee_equipment', 'equipment_penalties', 'employee_credentials',
-    'employee_checklist_items',
+    'employee_checklist_items', 'employee_reviews', 'employee_disciplinary',
     'pto_policies', 'pto_balances', 'pto_transactions',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
