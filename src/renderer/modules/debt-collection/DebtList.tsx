@@ -7,6 +7,7 @@ import { formatCurrency } from '../../lib/format';
 import { formatStatus } from '../../lib/format';
 import { formatDate } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { calcRiskScore, getRiskBadge } from './riskScore';
 import PaymentMatchReview from './PaymentMatchReview';
@@ -90,6 +91,13 @@ const PRIORITY_WEIGHT: Record<string, number> = { critical: 4, high: 3, medium: 
 // ─── Component ──────────────────────────────────────────
 const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Debt Collection): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cDcCol = (id: string) => custValues['debt-collection.' + id] !== false; // default visible
+  // dc-col-original-balance descriptor defaults to false, so honor the real default.
+  const cDcOriginal = useCustomizationStore((s) => Boolean(s.get('debt-collection.dc-col-original-balance')));
+  const cDcDensity = useCustomizationStore((s) => String(s.get('debt-collection.dc-display-density') ?? 'comfortable'));
+  const cDcFont = cDcDensity === 'compact' ? 11 : cDcDensity === 'spacious' ? 13 : undefined;
   const [debts, setDebts] = useState<Debt[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -1042,7 +1050,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cDcFont }}>
             <thead>
               {isReceivable ? (
                 <tr>
@@ -1055,9 +1063,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     Debtor <SortIndicator field="debtor_name" />
                   </th>
                   <th>Source</th>
+                  {cDcOriginal && (
                   <th className="text-right cursor-pointer select-none" onClick={() => toggleSort('original_amount')}>
                     Original <SortIndicator field="original_amount" />
                   </th>
+                  )}
                   <th className="text-right cursor-pointer select-none" onClick={() => toggleSort('balance_due')}>
                     Balance Due <SortIndicator field="balance_due" />
                   </th>
@@ -1067,10 +1077,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                   <th>Stage</th>
                   <th>Priority</th>
                   <th>Risk</th>
-                  {/* Feature 26: Last Contact column */}
+                  {cDcCol('dc-col-last-payment-date') && (
                   <th className="cursor-pointer select-none" onClick={() => toggleSort('last_contact')}>
                     Last Contact <SortIndicator field="last_contact" />
                   </th>
+                  )}
                   {/* Feature 27: Quick Actions */}
                   <th style={{ width: '120px' }}>Actions</th>
                 </tr>
@@ -1082,11 +1093,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                   <th style={{ width: 28 }}></th>
                   <th>Creditor</th>
                   <th>Source</th>
-                  <th className="text-right">Original</th>
+                  {cDcOriginal && <th className="text-right">Original</th>}
                   <th className="text-right">Balance Due</th>
                   <th>Due Date</th>
                   <th>Status</th>
-                  <th>Last Contact</th>
+                  {cDcCol('dc-col-last-payment-date') && <th>Last Contact</th>}
                   <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               )}
@@ -1167,9 +1178,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       </div>
                     </td>
                     <td className="text-text-secondary text-xs font-mono">{sourceLabel}</td>
+                    {cDcOriginal && (
                     <td className="text-right font-mono text-text-secondary">
                       {formatCurrency(debt.original_amount)}
                     </td>
+                    )}
                     <td className={`text-right font-mono ${balanceClass}`}>
                       {formatCurrency(debt.balance_due)}
                     </td>
@@ -1208,6 +1221,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       })()}
                     </td>
                     {/* Feature 26: Last Contact */}
+                    {cDcCol('dc-col-last-payment-date') && (
                     <td>
                       {daysSinceContact != null ? (
                         <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? '#dc2626' : daysSinceContact > 7 ? '#f59e0b' : '#16a34a' }}>
@@ -1217,6 +1231,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <span className="text-xs text-text-muted">Never</span>
                       )}
                     </td>
+                    )}
                     {/* Feature 27: Quick Action Buttons */}
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
@@ -1323,9 +1338,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       </div>
                     </td>
                     <td className="text-text-secondary text-xs font-mono">{sourceLabel}</td>
+                    {cDcOriginal && (
                     <td className="text-right font-mono text-text-secondary">
                       {formatCurrency(debt.original_amount)}
                     </td>
+                    )}
                     <td className={`text-right font-mono ${balanceClass}`}>
                       {formatCurrency(debt.balance_due)}
                     </td>
@@ -1336,6 +1353,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <span className={statusBadge.className}>{statusBadge.label}</span>
                     </td>
                     {/* Last Contact for payables */}
+                    {cDcCol('dc-col-last-payment-date') && (
                     <td>
                       {daysSinceContact != null ? (
                         <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? '#dc2626' : daysSinceContact > 7 ? '#f59e0b' : '#16a34a' }}>
@@ -1345,6 +1363,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         <span className="text-xs text-text-muted">Never</span>
                       )}
                     </td>
+                    )}
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button

@@ -7,6 +7,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { formatCurrency } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { ImportWizard } from '../../components/ImportWizard';
@@ -92,6 +93,10 @@ function fuzzyMatch(needle: string, haystack: string): boolean {
 
 const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Accounts): ledger density (column gating skipped —
+  // cells live in AccountRow across flat+tree paths with colSpan group headers).
+  const cAcctDensity = useCustomizationStore((s) => String(s.get('accounts.accounts-ledger-density') ?? 'comfortable'));
+  const cAcctFont = cAcctDensity === 'compact' ? 12 : cAcctDensity === 'spacious' ? 15 : undefined;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -495,7 +500,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       {/* Table */}
       <div className="block-table bg-bg-secondary border border-border-primary overflow-hidden" style={{ borderRadius: '6px' }}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{ fontSize: cAcctFont }}>
             <thead>
               <tr className="bg-bg-tertiary border-b border-border-primary">
                 <th className="w-8 px-2 py-2"><input type="checkbox"
