@@ -6,7 +6,7 @@ import * as db from '../database';
 import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
+const round2 = (n: number): number => Math.round((Number(n) || 0) * 100) / 100;
 
 // ── F71-F75: Workflow framework ───────────────────────────────
 
