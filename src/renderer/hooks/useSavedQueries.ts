@@ -43,7 +43,13 @@ function writeQueries<F>(companyId: string, module: string, list: SavedQuery<F>[
 }
 
 function genId(): string {
-  return 'sq-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  // Prefer the CSPRNG-backed UUID; fall back to a random suffix from getRandomValues.
+  try { return 'sq-' + crypto.randomUUID(); } catch { /* older runtime */ }
+  const b = new Uint8Array(6);
+  crypto.getRandomValues(b);
+  let suffix = '';
+  for (let i = 0; i < b.length; i++) suffix += (b[i] % 36).toString(36);
+  return 'sq-' + Date.now() + '-' + suffix;
 }
 
 export function useSavedQueries<F>(companyId: string, module: string) {

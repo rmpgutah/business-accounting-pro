@@ -5,13 +5,39 @@
 // Batch X: Time Tracking deep-dive (F401-F410)
 // Batch Y: Document Intelligence (F411-F420)
 
-import { randomUUID as uuid, createHash, randomBytes } from 'crypto';
+import { randomUUID as uuid, createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import * as db from '../database';
 
 const now = (): string => new Date().toISOString();
 const today = (): string => now().slice(0, 10);
 const round2 = (n: number): number => Math.round((n || 0) * 100) / 100;
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
+
+// ─── Portal password hashing (scrypt, memory-hard KDF) ──────────────
+// Stored format: `scrypt$<saltHex>$<derivedKeyHex>`. scrypt is deliberately
+// slow + memory-hard, so a leaked hash can't be brute-forced like a raw
+// sha256. Legacy `sha256(password+id)` hashes are still verified (and
+// transparently upgraded on next successful login) for backward compatibility.
+const SCRYPT_KEYLEN = 64;
+function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, SCRYPT_KEYLEN);
+  return `scrypt$${salt.toString('hex')}$${derived.toString('hex')}`;
+}
+function verifyPassword(password: string, userId: string, stored: string | null | undefined): boolean {
+  if (!stored) return false;
+  if (stored.startsWith('scrypt$')) {
+    const [, saltHex, hashHex] = stored.split('$');
+    if (!saltHex || !hashHex) return false;
+    const expected = Buffer.from(hashHex, 'hex');
+    const derived = scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length);
+    return expected.length === derived.length && timingSafeEqual(expected, derived);
+  }
+  // Legacy unsalted sha256 — constant-time compare, caller should upgrade on success.
+  const legacy = Buffer.from(sha256(password + userId), 'hex');
+  const storedBuf = Buffer.from(stored, 'hex');
+  return legacy.length === storedBuf.length && timingSafeEqual(legacy, storedBuf);
+}
 
 // ════════════════════════════════════════════════════════════════
 // Batch V: Customer Portal (F381-F390)
@@ -30,15 +56,18 @@ export function activatePortalUser(token: string, password: string): { ok: boole
   const dbi = db.getDb();
   const u = dbi.prepare(`SELECT id FROM portal_users WHERE invitation_token = ? AND activated_at IS NULL`).get(token) as any;
   if (!u) return { ok: false, error: 'Invalid or already-used token' };
-  const passwordHash = sha256(password + u.id);
+  const passwordHash = hashPassword(password);
   dbi.prepare(`UPDATE portal_users SET password_hash = ?, activated_at = ?, invitation_token = NULL WHERE id = ?`).run(passwordHash, now(), u.id);
   return { ok: true, user_id: u.id };
 }
 
 export function authPortalUser(email: string, password: string, companyId: string, portalType: string = 'customer'): { ok: boolean; user_id?: string; customer_id?: string; vendor_id?: string } {
   const u = db.getDb().prepare(`SELECT * FROM portal_users WHERE email = ? AND company_id = ? AND portal_type = ? AND is_active = 1`).get(email, companyId, portalType) as any;
-  if (!u || u.password_hash !== sha256(password + u.id)) return { ok: false };
-  db.getDb().prepare(`UPDATE portal_users SET last_login_at = ? WHERE id = ?`).run(now(), u.id);
+  if (!u || !verifyPassword(password, u.id, u.password_hash)) return { ok: false };
+  // Transparently upgrade legacy sha256 hashes to scrypt on successful login.
+  const upgrade = u.password_hash && !String(u.password_hash).startsWith('scrypt$') ? hashPassword(password) : null;
+  db.getDb().prepare(`UPDATE portal_users SET last_login_at = ?${upgrade ? ', password_hash = ?' : ''} WHERE id = ?`)
+    .run(...(upgrade ? [now(), upgrade, u.id] : [now(), u.id]));
   return { ok: true, user_id: u.id, customer_id: u.customer_id, vendor_id: u.vendor_id };
 }
 

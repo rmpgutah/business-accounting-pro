@@ -17,6 +17,17 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
+// ─── CSS string escape helper ───────────────────────────────
+// For interpolating untrusted text inside a CSS `content: "..."` string.
+// Backslash MUST be escaped first (otherwise escaping `"` is incomplete and a
+// stray `\` could break out), then quotes, then newlines (illegal in CSS strings).
+function escCss(s: string | null | undefined): string {
+  return String(s ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]/g, ' ');
+}
+
 // ─── Client Portal URL Builder ───────────────────────────────
 // Constructs the deep-link a recipient sees on the QR code / email.
 // Three URL conventions are supported so admins can repoint the portal
@@ -1556,7 +1567,7 @@ ${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma'
 @page {
   margin: 0.55in 0.5in 0.85in 0.5in;
   @bottom-left {
-    content: "${companyName.replace(/"/g, '\\"')} · ${invoiceTypeLabel.replace(/"/g, '\\"')} #${(docNumberField || '').toString().replace(/"/g, '\\"')} · Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}";
+    content: "${escCss(companyName)} · ${escCss(invoiceTypeLabel)} #${escCss((docNumberField || '').toString())} · Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}";
     font-family: 'SF Mono', Menlo, Consolas, monospace;
     font-size: 8pt;
     color: #94a3b8;

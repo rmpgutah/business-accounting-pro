@@ -31,7 +31,12 @@ const SOFT_DELETE_TABLES = new Set([
 ]);
 
 function genId(): string {
-  try { return uuid(); } catch { return 'undo-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); }
+  try { return uuid(); } catch { /* fall through to CSPRNG suffix */ }
+  const b = new Uint8Array(6);
+  crypto.getRandomValues(b);
+  let suffix = '';
+  for (let i = 0; i < b.length; i++) suffix += (b[i] % 36).toString(36);
+  return 'undo-' + Date.now() + '-' + suffix;
 }
 
 /**

@@ -17,6 +17,18 @@ function sanitizeEmail(email: string): string {
   return cleaned;
 }
 
+/**
+ * Resolve a filename inside BACKUP_DIR and guarantee the result cannot escape it.
+ * This is the authoritative path-traversal barrier — every fs path flows through here.
+ */
+function resolveInBackupDir(filename: string): string {
+  const full = path.resolve(BACKUP_DIR, filename);
+  if (full !== BACKUP_DIR && !full.startsWith(BACKUP_DIR + path.sep)) {
+    throw new Error('Path escapes backup directory');
+  }
+  return full;
+}
+
 function verifySignature(body: Buffer, signature: string): boolean {
   const secret = process.env.SYNC_SECRET!;
   const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
@@ -56,9 +68,9 @@ backupRouter.post('/upload', (req, res) => {
       const backupFilename = `${safeEmail}_${timestamp}.db`;
       const latestFilename = `${safeEmail}_latest.db`;
 
-      // Write files using only sanitized filenames joined to the fixed BACKUP_DIR
-      fs.writeFileSync(path.join(BACKUP_DIR, backupFilename), body);
-      fs.writeFileSync(path.join(BACKUP_DIR, latestFilename), body);
+      // Write files using only sanitized filenames resolved inside the fixed BACKUP_DIR
+      fs.writeFileSync(resolveInBackupDir(backupFilename), body);
+      fs.writeFileSync(resolveInBackupDir(latestFilename), body);
 
       // Clean old backups (keep last 20)
       const allBackups = fs.readdirSync(BACKUP_DIR)
@@ -69,7 +81,7 @@ backupRouter.post('/upload', (req, res) => {
         // Only delete files that match the safe prefix pattern
         const fname = allBackups[i];
         if (/^[A-Za-z0-9@._-]+\.db$/.test(fname)) {
-          fs.unlinkSync(path.join(BACKUP_DIR, fname));
+          fs.unlinkSync(resolveInBackupDir(fname));
         }
       }
 
@@ -87,7 +99,7 @@ backupRouter.get('/download/:email', (req, res) => {
   try {
     const safeEmail = sanitizeEmail(req.params.email);
     const latestFilename = `${safeEmail}_latest.db`;
-    const fullPath = path.join(BACKUP_DIR, latestFilename);
+    const fullPath = resolveInBackupDir(latestFilename);
 
     if (!fs.existsSync(fullPath)) {
       return res.status(404).json({ error: 'No backup found for this user' });
@@ -109,7 +121,7 @@ backupRouter.get('/status/:email', (req, res) => {
   try {
     const safeEmail = sanitizeEmail(req.params.email);
     const latestFilename = `${safeEmail}_latest.db`;
-    const fullPath = path.join(BACKUP_DIR, latestFilename);
+    const fullPath = resolveInBackupDir(latestFilename);
 
     if (!fs.existsSync(fullPath)) {
       return res.json({ exists: false });
