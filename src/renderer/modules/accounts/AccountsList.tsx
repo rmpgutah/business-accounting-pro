@@ -93,10 +93,16 @@ function fuzzyMatch(needle: string, haystack: string): boolean {
 
 const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  // Customization Center (Accounts): ledger density (column gating skipped —
-  // cells live in AccountRow across flat+tree paths with colSpan group headers).
+  // Customization Center (Accounts): ledger density + column visibility.
+  // Type/Subtype/Last-Txn are gateable; Code/Name/Balance stay always-on so the
+  // group-header colSpan math (2 fixed + the 3 toggles) stays simple.
   const cAcctDensity = useCustomizationStore((s) => String(s.get('accounts.accounts-ledger-density') ?? 'comfortable'));
   const cAcctFont = cAcctDensity === 'compact' ? 12 : cAcctDensity === 'spacious' ? 15 : undefined;
+  const custValues = useCustomizationStore((s) => s.values);
+  const cAcctType = custValues['accounts.accounts-col-type'] !== false;
+  const cAcctSubtype = custValues['accounts.accounts-col-subtype'] !== false;
+  const cAcctLastTxn = custValues['accounts.accounts-col-date'] !== false;
+  const acctGroupColSpan = 2 + (cAcctType ? 1 : 0) + (cAcctSubtype ? 1 : 0) + (cAcctLastTxn ? 1 : 0);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -329,6 +335,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
     return (
       <React.Fragment key={acct.id}>
         <AccountRow account={acct} depth={depth} onEdit={onEditAccount}
+          showType={cAcctType} showSubtype={cAcctSubtype} showLastTxn={cAcctLastTxn}
           selected={selected.has(acct.id)} onToggleSelect={toggleSelected}
           onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop}
           onSetOpeningBalance={() => setShowOpeningBalDialog(acct)}
@@ -509,9 +516,9 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
                 <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider w-8" />
                 <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Code</th>
                 <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Type</th>
-                <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Subtype</th>
-                <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Last Txn</th>
+                {cAcctType && <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Type</th>}
+                {cAcctSubtype && <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Subtype</th>}
+                {cAcctLastTxn && <th className="text-left px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Last Txn</th>}
                 <th className="text-right px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Balance</th>
               </tr>
             </thead>
@@ -525,13 +532,14 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
                     <tr className="bg-bg-tertiary/50 border-b border-border-primary cursor-pointer hover:bg-bg-hover" onClick={() => toggleCollapse(type)}>
                       <td className="px-2 py-2"></td>
                       <td className="px-4 py-2">{isCollapsed ? <ChevronRight size={14} className="text-text-muted" /> : <ChevronDown size={14} className="text-text-muted" />}</td>
-                      <td colSpan={5} className="px-4 py-2 text-xs font-bold text-text-primary uppercase tracking-wider">
+                      <td colSpan={acctGroupColSpan} className="px-4 py-2 text-xs font-bold text-text-primary uppercase tracking-wider">
                         {TYPE_LABELS[type]} <span className="text-text-muted font-normal ml-1">({items.length})</span>
                       </td>
                       <td className={`px-4 py-2 text-right font-mono text-xs font-semibold ${TYPE_ACCENT[type]}`}>{formatCurrency(total)}</td>
                     </tr>
                     {!isCollapsed && items.map(account => (
                       <AccountRow key={account.id} account={account} depth={0} onEdit={onEditAccount}
+                        showType={cAcctType} showSubtype={cAcctSubtype} showLastTxn={cAcctLastTxn}
                         selected={selected.has(account.id)} onToggleSelect={toggleSelected}
                         onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop}
                         onSetOpeningBalance={() => setShowOpeningBalDialog(account)}
@@ -612,7 +620,10 @@ const AccountRow: React.FC<{
   onRenumber?: () => void;
   onSoftDelete?: () => void;
   onRestore?: () => void;
-}> = ({ account, depth, onEdit, selected, onToggleSelect, onDragStart, onDragOver, onDrop, onSetOpeningBalance, isDormant, onPerms, onWatch, onAliases, onRenumber, onSoftDelete, onRestore }) => {
+  showType?: boolean;
+  showSubtype?: boolean;
+  showLastTxn?: boolean;
+}> = ({ account, depth, onEdit, selected, onToggleSelect, onDragStart, onDragOver, onDrop, onSetOpeningBalance, isDormant, onPerms, onWatch, onAliases, onRenumber, onSoftDelete, onRestore, showType = true, showSubtype = true, showLastTxn = true }) => {
   return (
     <tr className={`border-b border-border-primary hover:bg-bg-hover cursor-pointer ${!account.is_active ? 'opacity-50' : ''}`}
       draggable={!account.is_locked}
@@ -652,9 +663,9 @@ const AccountRow: React.FC<{
         </div>
         {(account.monthly_cap || 0) > 0 && <BudgetRibbon account={account as any} />}
       </td>
-      <td className="px-4 py-2 text-xs text-text-secondary capitalize">{account.type}</td>
-      <td className="px-4 py-2 text-xs text-text-muted">{account.subtype || '-'}</td>
-      <td className="px-4 py-2 text-xs text-text-muted font-mono">{account.last_txn_date || '-'}</td>
+      {showType && <td className="px-4 py-2 text-xs text-text-secondary capitalize">{account.type}</td>}
+      {showSubtype && <td className="px-4 py-2 text-xs text-text-muted">{account.subtype || '-'}</td>}
+      {showLastTxn && <td className="px-4 py-2 text-xs text-text-muted font-mono">{account.last_txn_date || '-'}</td>}
       <td className="px-4 py-2 text-right font-mono text-xs text-text-primary" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-2">
           <span>{formatCurrency(account.balance ?? 0)}</span>

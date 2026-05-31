@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 import {
@@ -90,6 +91,10 @@ const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget 
 // ─── Component ──────────────────────────────────────────
 const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Projects): card density (this view is a card grid,
+  // not a column table, so density is the meaningful live preference).
+  const cProjDensity = useCustomizationStore((s) => String(s.get('projects.projects-density') ?? 'comfortable'));
+  const cProjFont = cProjDensity === 'compact' ? 12 : cProjDensity === 'spacious' ? 15 : undefined;
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [expenses, setExpenses] = useState<Record<string, number>>({});
@@ -483,7 +488,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" style={{ fontSize: cProjFont }}>
           {filtered.map((project) => {
             const spent = expenses[project.id] ?? 0;
             const hours = timeEntries[project.id] ?? 0;
