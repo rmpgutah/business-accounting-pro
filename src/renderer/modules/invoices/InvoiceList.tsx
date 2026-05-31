@@ -14,6 +14,7 @@ import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 import { InvoiceBulkActionBar, OverdueAlertBanner, TopClientsWidget, DSOMiniCard, AgingBucketBar } from './InvoiceUpgradesUI';
+import { useCustomizationStore } from '../../stores/customizationStore';
 
 // ─── Types ─────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -144,6 +145,13 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     }
     return [];
   };
+
+  // Live customization preferences (Customization Center → Invoicing).
+  const cShowIssueDate = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-issue-date')));
+  const cShowDueDate = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-due-date')));
+  const cShowDaysCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-days-overdue')));
+  const cDensity = useCustomizationStore((s) => String(s.get('invoicing.display-density') ?? 'comfortable'));
+  const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
 
   // Helper: days outstanding (positive = overdue, negative = due in N days)
   const daysOutstanding = (inv: Invoice): number => {
@@ -931,7 +939,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cTableFontSize }}>
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>
@@ -946,9 +954,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 <th style={{ width: '24px' }} title="Risk indicator"></th>
                 <th>Invoice #</th>
                 <th>Client Name</th>
-                <th>Issue Date</th>
-                <th>Due Date</th>
-                <th>Days</th>
+                {cShowIssueDate && <th>Issue Date</th>}
+                {cShowDueDate && <th>Due Date</th>}
+                {cShowDaysCol && <th>Days</th>}
                 {showPredictedColumn && <th>Predicted Pay</th>}
                 <th className="text-right">Total</th>
                 <th className="text-right">Amount Paid</th>
@@ -1023,9 +1031,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     <td onClick={(e) => e.stopPropagation()}>
                       <EntityChip type="client" id={inv.client_id} label={clientMap.get(inv.client_id) ?? 'Unknown'} variant="inline" />
                     </td>
-                    <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>
-                    <td className="text-text-secondary">{formatDate(inv.due_date)}</td>
-                    <td className={`text-xs font-semibold ${daysColor}`}>{daysLabel}</td>
+                    {cShowIssueDate && <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>}
+                    {cShowDueDate && <td className="text-text-secondary">{formatDate(inv.due_date)}</td>}
+                    {cShowDaysCol && <td className={`text-xs font-semibold ${daysColor}`}>{daysLabel}</td>}
                     {showPredictedColumn && (
                       <td className="text-text-muted text-xs">
                         {predictedDates[inv.id] === undefined
