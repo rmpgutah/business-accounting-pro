@@ -267,7 +267,10 @@ const ReconcileView: React.FC = () => {
   const progressPct = useMemo(() => {
     const total = bankTxns.length;
     if (total === 0) return 0;
-    const matched = total - unmatchedBank.length + matchedPairs.length;
+    // unmatchedBank already excludes matchedPairs (via matchedBankIds), so
+    // total - unmatchedBank.length IS the matched count. Don't add matchedPairs
+    // again — that double-counts every locally-matched pair.
+    const matched = total - unmatchedBank.length;
     return Math.min(100, Math.max(0, (matched / total) * 100));
   }, [bankTxns, unmatchedBank, matchedPairs]);
 
@@ -505,7 +508,7 @@ const ReconcileView: React.FC = () => {
               Reconciliation Progress
             </span>
             <span className="text-xs font-mono text-text-primary">
-              {progressPct.toFixed(0)}% • {bankTxns.length - unmatchedBank.length + matchedPairs.length} of {bankTxns.length} matched
+              {progressPct.toFixed(0)}% • {bankTxns.length - unmatchedBank.length} of {bankTxns.length} matched
             </span>
           </div>
           <div

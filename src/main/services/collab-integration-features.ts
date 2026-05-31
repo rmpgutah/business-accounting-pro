@@ -3,7 +3,7 @@
 // Batch Z: Collaboration (F421-F430)
 // Batch AA: Integration Sync (F431-F440)
 
-import { randomUUID as uuid, createHash, randomBytes } from 'crypto';
+import { randomUUID as uuid, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import * as db from '../database';
 
 const now = (): string => new Date().toISOString();
@@ -195,8 +195,14 @@ export function recordStripeEvent(opts: { event_type: string; payload: any; sign
   const id = uuid();
   let verified = true;
   if (opts.signature && opts.secret) {
+    // Full constant-time comparison. The old check only matched the first 8
+    // hex chars of the signature against the expected hash prefix — an
+    // attacker needed to guess just 8 chars (~32 bits) to forge a "verified"
+    // event. Compare the entire digest in length-safe, timing-safe fashion.
     const expected = sha256(JSON.stringify(opts.payload) + opts.secret);
-    verified = expected.startsWith(opts.signature.slice(0, 8));
+    const a = Buffer.from(expected, 'utf8');
+    const b = Buffer.from(opts.signature, 'utf8');
+    verified = a.length === b.length && timingSafeEqual(a, b);
   }
   // Log in webhook_queue for processing
   db.getDb().prepare(`INSERT INTO webhook_queue (id, subscription_id, event_type, payload_json, status, queued_at, next_attempt_at) VALUES (?, ?, ?, ?, 'queued', ?, ?)`)

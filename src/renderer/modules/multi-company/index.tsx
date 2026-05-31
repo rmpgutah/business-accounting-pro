@@ -20,6 +20,9 @@ interface Company {
   legal_name: string;
   tax_id: string;
   created_at: string;
+  industry?: string;
+  fiscal_year_end?: string;
+  base_currency?: string;
 }
 
 // ─── Multi-Company Component ────────────────────────────
@@ -108,13 +111,16 @@ const MultiCompany: React.FC = () => {
 
   const handleEdit = (company: Company) => {
     setEditingId(company.id);
+    // Load the company's saved values — previously these were hard-reset to
+    // defaults, so opening Edit discarded the real industry / fiscal year /
+    // currency and saving would overwrite them.
     setFormData({
       name: company.name,
       legal_name: company.legal_name || '',
       tax_id: company.tax_id || '',
-      industry: '',
-      fiscal_year_end: '12',
-      base_currency: 'USD',
+      industry: company.industry || '',
+      fiscal_year_end: company.fiscal_year_end || '12',
+      base_currency: company.base_currency || 'USD',
     });
     setShowForm(true);
   };

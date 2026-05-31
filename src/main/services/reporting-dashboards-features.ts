@@ -601,10 +601,10 @@ export function drillIntoEntity(table: string, id: string) {
       return db.getDb().prepare(`SELECT je.* FROM journal_entry_lines jel INNER JOIN journal_entries je ON jel.journal_entry_id = je.id WHERE jel.account_id = ? AND je.company_id = ? ORDER BY je.date DESC LIMIT 100`).all(id, db.getCurrentCompanyId());
     }
     if (table === 'vendors') {
-      return db.getDb().prepare(`SELECT * FROM bills WHERE vendor_id = ? AND company_id = ? ORDER BY date DESC LIMIT 100`).all(id, db.getCurrentCompanyId());
+      return db.getDb().prepare(`SELECT * FROM bills WHERE vendor_id = ? AND company_id = ? ORDER BY issue_date DESC LIMIT 100`).all(id, db.getCurrentCompanyId());
     }
     if (table === 'clients') {
-      return db.getDb().prepare(`SELECT * FROM invoices WHERE client_id = ? AND company_id = ? ORDER BY date DESC LIMIT 100`).all(id, db.getCurrentCompanyId());
+      return db.getDb().prepare(`SELECT * FROM invoices WHERE client_id = ? AND company_id = ? ORDER BY issue_date DESC LIMIT 100`).all(id, db.getCurrentCompanyId());
     }
     return { rows: [], message: 'No drill-down configured for ' + table };
   } catch (e: any) { return { error: e.message }; }
@@ -729,7 +729,7 @@ export function generateProfitAndLoss(rangeStart: string, rangeEnd: string) {
   try {
     const cid = db.getCurrentCompanyId();
     const lines = db.getDb().prepare(`SELECT a.id, a.name, a.type, a.subtype,
-      COALESCE(SUM(CASE WHEN jel.type = 'credit' THEN jel.amount ELSE -jel.amount END), 0) net
+      COALESCE(SUM(jel.credit - jel.debit), 0) net
       FROM accounts a
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id AND je.date BETWEEN ? AND ?
@@ -749,7 +749,7 @@ export function generateBalanceSheet(asOfDate: string) {
   try {
     const cid = db.getCurrentCompanyId();
     const rows = db.getDb().prepare(`SELECT a.id, a.name, a.type, a.subtype,
-      COALESCE(SUM(CASE WHEN jel.type = 'debit' THEN jel.amount ELSE -jel.amount END), 0) balance
+      COALESCE(SUM(jel.debit - jel.credit), 0) balance
       FROM accounts a
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id AND je.date <= ?
@@ -774,8 +774,8 @@ export function generateCashFlow(rangeStart: string, rangeEnd: string) {
     const netIncome = pnl.net_income;
     // Approximation — production should split by D&A, AR change, AP change
     const cid = db.getCurrentCompanyId();
-    const arChange = (db.getDb().prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) ar FROM invoices WHERE company_id = ? AND date BETWEEN ? AND ?`).get(cid, rangeStart, rangeEnd) as any).ar || 0;
-    const apChange = (db.getDb().prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) ap FROM bills WHERE company_id = ? AND date BETWEEN ? AND ?`).get(cid, rangeStart, rangeEnd) as any).ap || 0;
+    const arChange = (db.getDb().prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) ar FROM invoices WHERE company_id = ? AND issue_date BETWEEN ? AND ?`).get(cid, rangeStart, rangeEnd) as any).ar || 0;
+    const apChange = (db.getDb().prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) ap FROM bills WHERE company_id = ? AND issue_date BETWEEN ? AND ?`).get(cid, rangeStart, rangeEnd) as any).ap || 0;
     const operating = round2(netIncome - arChange + apChange);
     return { range_start: rangeStart, range_end: rangeEnd, net_income: netIncome, ar_change: -arChange, ap_change: apChange, operating_activities: operating };
   } catch (e: any) { return { error: e.message }; }
@@ -785,8 +785,8 @@ export function generateCashFlow(rangeStart: string, rangeEnd: string) {
 export function generateTrialBalance(asOfDate: string) {
   try {
     const rows = db.getDb().prepare(`SELECT a.id, a.name, a.type,
-      COALESCE(SUM(CASE WHEN jel.type = 'debit' THEN jel.amount ELSE 0 END), 0) total_debits,
-      COALESCE(SUM(CASE WHEN jel.type = 'credit' THEN jel.amount ELSE 0 END), 0) total_credits
+      COALESCE(SUM(jel.debit), 0) total_debits,
+      COALESCE(SUM(jel.credit), 0) total_credits
       FROM accounts a
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
       LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id AND je.date <= ?
@@ -804,7 +804,7 @@ export function generateTrialBalance(asOfDate: string) {
 export function generateArAging() {
   try {
     const todayD = new Date(today() + 'T00:00:00Z').getTime();
-    const inv = db.getDb().prepare(`SELECT i.id, i.client_id, c.name client_name, i.date, i.due_date, i.total, i.amount_paid FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.company_id = ? AND i.status IN ('sent', 'overdue', 'partial')`).all(db.getCurrentCompanyId()) as any[];
+    const inv = db.getDb().prepare(`SELECT i.id, i.client_id, c.name client_name, i.issue_date AS date, i.due_date, i.total, i.amount_paid FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.company_id = ? AND i.status IN ('sent', 'overdue', 'partial')`).all(db.getCurrentCompanyId()) as any[];
     const buckets = { current: 0, b30: 0, b60: 0, b90: 0, b90plus: 0 };
     const detail: any[] = [];
     for (const i of inv) {
@@ -827,7 +827,7 @@ export function generateArAging() {
 export function generateApAging() {
   try {
     const todayD = new Date(today() + 'T00:00:00Z').getTime();
-    const bills = db.getDb().prepare(`SELECT b.id, b.vendor_id, v.name vendor_name, b.date, b.due_date, b.total, b.amount_paid FROM bills b LEFT JOIN vendors v ON b.vendor_id = v.id WHERE b.company_id = ? AND b.status IN ('open', 'overdue', 'partial')`).all(db.getCurrentCompanyId()) as any[];
+    const bills = db.getDb().prepare(`SELECT b.id, b.vendor_id, v.name vendor_name, b.issue_date AS date, b.due_date, b.total, b.amount_paid FROM bills b LEFT JOIN vendors v ON b.vendor_id = v.id WHERE b.company_id = ? AND b.status IN ('pending', 'received', 'approved', 'partial', 'overdue')`).all(db.getCurrentCompanyId()) as any[];
     const buckets = { current: 0, b30: 0, b60: 0, b90: 0, b90plus: 0 };
     const detail: any[] = [];
     for (const b of bills) {
@@ -959,7 +959,7 @@ export function quarterOverQuarter(year: number, quarter: number) {
 export function buildCohortReport(rangeStart: string, rangeEnd: string) {
   try {
     const cid = db.getCurrentCompanyId();
-    const rows = db.getDb().prepare(`SELECT substr(date, 1, 7) cohort_month, COUNT(DISTINCT client_id) clients, SUM(total) revenue FROM invoices WHERE company_id = ? AND date BETWEEN ? AND ? GROUP BY cohort_month ORDER BY cohort_month`).all(cid, rangeStart, rangeEnd) as any[];
+    const rows = db.getDb().prepare(`SELECT substr(issue_date, 1, 7) cohort_month, COUNT(DISTINCT client_id) clients, SUM(total) revenue FROM invoices WHERE company_id = ? AND issue_date BETWEEN ? AND ? GROUP BY cohort_month ORDER BY cohort_month`).all(cid, rangeStart, rangeEnd) as any[];
     return { cohorts: rows.map(r => ({ ...r, revenue: round2(r.revenue || 0) })) };
   } catch (e: any) { return { error: e.message }; }
 }
@@ -969,12 +969,12 @@ export function topContributors(metric: 'revenue' | 'expense' | 'invoices', rang
   try {
     const cid = db.getCurrentCompanyId();
     if (metric === 'revenue') {
-      return db.getDb().prepare(`SELECT c.id, c.name, SUM(i.total) total FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.company_id = ? AND i.date BETWEEN ? AND ? GROUP BY c.id, c.name ORDER BY total DESC LIMIT ?`).all(cid, rangeStart, rangeEnd, limit);
+      return db.getDb().prepare(`SELECT c.id, c.name, SUM(i.total) total FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.company_id = ? AND i.issue_date BETWEEN ? AND ? GROUP BY c.id, c.name ORDER BY total DESC LIMIT ?`).all(cid, rangeStart, rangeEnd, limit);
     }
     if (metric === 'expense') {
       return db.getDb().prepare(`SELECT v.id, v.name, SUM(e.amount) total FROM expenses e LEFT JOIN vendors v ON e.vendor_id = v.id WHERE e.company_id = ? AND e.date BETWEEN ? AND ? GROUP BY v.id, v.name ORDER BY total DESC LIMIT ?`).all(cid, rangeStart, rangeEnd, limit);
     }
-    return db.getDb().prepare(`SELECT c.id, c.name, COUNT(*) count FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.company_id = ? AND i.date BETWEEN ? AND ? GROUP BY c.id, c.name ORDER BY count DESC LIMIT ?`).all(cid, rangeStart, rangeEnd, limit);
+    return db.getDb().prepare(`SELECT c.id, c.name, COUNT(*) count FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.company_id = ? AND i.issue_date BETWEEN ? AND ? GROUP BY c.id, c.name ORDER BY count DESC LIMIT ?`).all(cid, rangeStart, rangeEnd, limit);
   } catch (e: any) { return { error: e.message }; }
 }
 

@@ -203,10 +203,18 @@ export function autoEscalationCheck(cid: string) {
     { minAge: 180, fromStage: 'collections_agency', toStage: 'legal_action' },
   ];
   let escalated = 0;
+  // A debt advances at most ONE stage per run. Without this guard, a debt that
+  // is e.g. 200 days delinquent in stage 'reminder' would be moved to 'warning'
+  // by rule 1, then re-matched by rule 2 (now current_stage='warning'), and so
+  // on — cascading through every stage to 'legal_action' in a single pass and
+  // counting the same debt 5×.
+  const alreadyEscalated = new Set<string>();
   for (const rule of rules) {
     const candidates = dbi.prepare(`SELECT id FROM debts WHERE company_id = ? AND status IN ('active','in_collection') AND current_stage = ? AND delinquent_date IS NOT NULL AND julianday('now') - julianday(delinquent_date) >= ?`).all(cid, rule.fromStage, rule.minAge) as any[];
     for (const d of candidates) {
+      if (alreadyEscalated.has(d.id)) continue;
       dbi.prepare(`UPDATE debts SET current_stage = ?, updated_at = datetime('now') WHERE id = ?`).run(rule.toStage, d.id);
+      alreadyEscalated.add(d.id);
       escalated++;
     }
   }

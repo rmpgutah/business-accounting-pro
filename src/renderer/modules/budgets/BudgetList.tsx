@@ -114,28 +114,28 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
             (s, l) => s + (Number(l.amount) || 0),
             0
           );
-          const accountIds = (lines || [])
-            .map((l) => l.account_id)
-            .filter((x): x is string => !!x);
+          // Actuals must match BudgetDetail, which sums expenses by category
+          // name. Budget lines created through BudgetForm only ever set
+          // `category` (free text) — `account_id` is left null — so the old
+          // GL-by-account_id query returned 0 for every normally-created
+          // budget, zeroing out Actual/Variance/Forecast/risk across the list.
+          const lineCategories = (lines || [])
+            .map((l) => (l.category || '').toLowerCase().trim())
+            .filter((c) => !!c);
           let actual = 0;
-          if (accountIds.length > 0) {
+          if (lineCategories.length > 0) {
             try {
-              const ph = accountIds.map(() => '?').join(',');
               const rows: any[] = await api.rawQuery(
-                `SELECT SUM(jel.debit - jel.credit) AS spend
-                 FROM journal_entry_lines jel
-                 JOIN journal_entries je ON je.id = jel.journal_entry_id
-                 WHERE je.company_id = ?
-                   AND jel.account_id IN (${ph})
-                   AND je.date >= ? AND je.date <= ?`,
-                [
-                  activeCompany.id,
-                  ...accountIds,
-                  budget.start_date,
-                  budget.end_date,
-                ]
+                `SELECT LOWER(c.name) AS cat, COALESCE(SUM(e.amount), 0) AS spend
+                 FROM expenses e
+                 LEFT JOIN categories c ON e.category_id = c.id
+                 WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
+                 GROUP BY LOWER(c.name)`,
+                [activeCompany.id, budget.start_date, budget.end_date]
               );
-              actual = Number(rows?.[0]?.spend) || 0;
+              const spendByCat: Record<string, number> = {};
+              for (const r of rows || []) spendByCat[String(r.cat)] = Number(r.spend) || 0;
+              actual = lineCategories.reduce((s, cat) => s + (spendByCat[cat] || 0), 0);
             } catch {
               /* ignore */
             }

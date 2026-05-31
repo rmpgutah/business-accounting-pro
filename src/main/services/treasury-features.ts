@@ -34,8 +34,8 @@ export function captureCashPosition(companyId: string, snapshotDate?: string): a
     breakdown.push({ id: acct.id, name: acct.name, currency: acct.cur, balance: bal });
     totalCash += bal;
   }
-  const totalAR = (dbi.prepare(`SELECT COALESCE(SUM(balance), 0) AS s FROM invoices WHERE company_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId) as any).s;
-  const totalAP = (dbi.prepare(`SELECT COALESCE(SUM(balance), 0) AS s FROM bills WHERE company_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId) as any).s;
+  const totalAR = (dbi.prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) AS s FROM invoices WHERE company_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId) as any).s;
+  const totalAP = (dbi.prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) AS s FROM bills WHERE company_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId) as any).s;
 
   const id = uuid();
   dbi.prepare(`
@@ -85,14 +85,14 @@ export function rebuildCashForecast(companyId: string, daysAhead: number = 90): 
 
   // Outgoing: bills with due_date in window
   const bills = dbi.prepare(`
-    SELECT id, due_date, balance FROM bills
+    SELECT id, due_date, (total - amount_paid) AS balance FROM bills
      WHERE company_id = ? AND status NOT IN ('paid','void','cancelled')
        AND (deleted_at IS NULL OR deleted_at = '')
        AND due_date IS NOT NULL AND due_date <= date('now', '+' || ? || ' days')
   `).all(companyId, daysAhead) as any[];
   // Incoming: invoices with due_date in window
   const invoices = dbi.prepare(`
-    SELECT id, due_date, balance FROM invoices
+    SELECT id, due_date, (total - amount_paid) AS balance FROM invoices
      WHERE company_id = ? AND status NOT IN ('paid','void','cancelled')
        AND (deleted_at IS NULL OR deleted_at = '')
        AND due_date IS NOT NULL AND due_date <= date('now', '+' || ? || ' days')
@@ -179,12 +179,12 @@ export function runFxRevaluation(companyId: string, asOfDate?: string, createdBy
   const date = asOfDate || today();
   // Find all foreign-currency open invoices and bills
   const invoices = dbi.prepare(`
-    SELECT id, currency, exchange_rate, balance FROM invoices
+    SELECT id, currency, exchange_rate, (total - amount_paid) AS balance FROM invoices
      WHERE company_id = ? AND currency != 'USD' AND status NOT IN ('paid','void','cancelled')
        AND (deleted_at IS NULL OR deleted_at = '')
   `).all(companyId) as any[];
   const bills = dbi.prepare(`
-    SELECT id, currency, exchange_rate, balance FROM bills
+    SELECT id, currency, exchange_rate, (total - amount_paid) AS balance FROM bills
      WHERE company_id = ? AND currency != 'USD' AND status NOT IN ('paid','void','cancelled')
        AND (deleted_at IS NULL OR deleted_at = '')
   `).all(companyId) as any[];

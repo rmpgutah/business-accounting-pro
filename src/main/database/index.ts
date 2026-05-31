@@ -2580,8 +2580,11 @@ export function initDatabase(): Database.Database {
 
   // F61: Client merge (no schema — service handler)
 
-  // F62: Client tag/label system
-  `CREATE TABLE IF NOT EXISTS entity_tags (
+  // F62: Client tag/label system. Distinct table from `entity_tags` (which is
+  // the tag_id-keyed system defined earlier) — these collided on the same name,
+  // so this free-text tag/color feature wrote to columns that didn't exist on
+  // the winning CREATE and threw on every call. Renamed to entity_labels.
+  `CREATE TABLE IF NOT EXISTS entity_labels (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     entity_type TEXT NOT NULL,
@@ -2591,8 +2594,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, entity_type, entity_id, tag)
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_search ON entity_tags(tag)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_labels_lookup ON entity_labels(company_id, entity_type, entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_labels_search ON entity_labels(tag)",
 
   // F63: Client communication history log
   `CREATE TABLE IF NOT EXISTS client_communications (
@@ -9213,7 +9216,7 @@ export function initDatabase(): Database.Database {
   // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
   // table because it requires zero extra DDL and is atomic per pragma write.
   try {
-    const SCHEMA_VERSION = 4;
+    const SCHEMA_VERSION = 5;
     const row = db.pragma('user_version', { simple: true }) as number;
     const currentVersion = typeof row === 'number' ? row : 0;
 
@@ -9448,6 +9451,56 @@ export function initDatabase(): Database.Database {
         if (fixed > 0) console.log(`[schema v4] Restored pre-tax amount on ${fixed} expense(s) (FINAL-PRICE invariant).`);
       } catch (fixErr: any) {
         console.warn('[schema v4] Failed to restore pre-tax expense amounts:', fixErr?.message);
+      }
+    }
+
+    // Version 5: REGENERATE balloon-loan amortization schedules. The old
+    // balloon formula amortized (principal − balloon) UNDISCOUNTED over all n
+    // periods, which left far more than the stated balloon owing at the end
+    // (e.g. ~$28k instead of $20k on a $100k/6%/60mo loan) — so the regular
+    // payment was too low and the displayed schedule was wrong. The fixed
+    // formula (loan-calculator.ts) discounts the balloon to present value and
+    // amortizes over n−1 regular payments. Existing balloon loans only pick up
+    // the corrected schedule on their next save, so repair them once here.
+    // Idempotent: regenerating from the same loan terms yields the same rows.
+    if (currentVersion < 5) {
+      try {
+        const dbI = getDb();
+        const { generateSchedule } = require('../services/loan-calculator');
+        const balloonLoans = dbI.prepare(
+          `SELECT * FROM loans WHERE amortization_type = 'balloon'`
+        ).all() as any[];
+        const del = dbI.prepare(`DELETE FROM loan_payment_schedule WHERE loan_id = ?`);
+        const ins = dbI.prepare(
+          `INSERT INTO loan_payment_schedule (id, loan_id, payment_number, due_date, scheduled_payment, principal_amount, interest_amount, escrow_amount, remaining_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        let repaired = 0;
+        const tx = dbI.transaction(() => {
+          for (const loan of balloonLoans) {
+            if (!loan.first_payment_date || !loan.term_months) continue;
+            const rows = generateSchedule({
+              principal: loan.principal,
+              annual_rate: loan.interest_rate,
+              term_months: loan.term_months,
+              first_payment_date: loan.first_payment_date,
+              payment_frequency: loan.payment_frequency || 'monthly',
+              amortization_type: 'balloon',
+              balloon_amount: loan.balloon_amount || 0,
+              escrow_per_payment: loan.escrow_per_payment || 0,
+            });
+            if (!rows.length) continue;
+            del.run(loan.id);
+            for (const row of rows) {
+              ins.run(uuid(), loan.id, row.payment_number, row.due_date, row.scheduled_payment,
+                row.principal_amount, row.interest_amount, row.escrow_amount, row.remaining_balance);
+            }
+            repaired++;
+          }
+        });
+        tx();
+        if (repaired > 0) console.log(`[schema v5] Regenerated amortization schedule for ${repaired} balloon loan(s).`);
+      } catch (balloonErr: any) {
+        console.warn('[schema v5] Failed to regenerate balloon loan schedules:', balloonErr?.message);
       }
     }
 

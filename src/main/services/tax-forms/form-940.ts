@@ -83,9 +83,7 @@ export interface Form940Data {
 }
 
 // FUTA constants (these have been stable for 40+ years; if Congress changes them, edit here)
-const FUTA_WAGE_BASE = 7000;         // First $7K of each employee's wages
-const FUTA_GROSS_RATE = 0.060;       // Statutory 6.0%
-const FUTA_NET_RATE = 0.006;          // After 5.4% state credit (0.6% effective)
+import { FUTA_WAGE_BASE, FUTA_GROSS_RATE, FUTA_NET_RATE } from '../../lib/tax-constants';
 const QUARTERLY_DEPOSIT_THRESHOLD = 500; // Must deposit if quarterly tax > $500
 
 function round2(n: number): number {

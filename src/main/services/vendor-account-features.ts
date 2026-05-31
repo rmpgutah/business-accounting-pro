@@ -48,7 +48,8 @@ export function vendorYoYSpend(cid: string, vendorId: string) {
 // ═══ VN16–VN30: Compliance & Contracts ═══════════════════
 export function vendor1099Status(cid: string, vendorId: string) {
   const dbi = db.getDb();
-  const v = dbi.prepare('SELECT is_1099_eligible, tax_id_last4 FROM vendors WHERE id = ? AND company_id = ?').get(vendorId, cid) as any;
+  // vendors has no tax_id_last4 column — derive last 4 from the stored tax_id.
+  const v = dbi.prepare("SELECT is_1099_eligible, substr(tax_id, -4) AS tax_id_last4 FROM vendors WHERE id = ? AND company_id = ?").get(vendorId, cid) as any;
   const ytdPaid = (dbi.prepare(`SELECT COALESCE(SUM(amount),0) t FROM expenses WHERE vendor_id = ? AND company_id = ? AND strftime('%Y', date) = strftime('%Y', 'now') AND deleted_at IS NULL`).get(vendorId, cid) as any)?.t || 0;
   return { is1099Eligible: !!v?.is_1099_eligible, taxIdLast4: v?.tax_id_last4 || '', ytdPaid: round2(ytdPaid), threshold: 600, requiresFiling: !!v?.is_1099_eligible && ytdPaid >= 600 };
 }
@@ -126,7 +127,7 @@ export function vendorsByLocation(cid: string) { return db.getDb().prepare(`SELE
 export function vendorsWithExpiredInsurance(cid: string) { return db.getDb().prepare(`SELECT id, name, coi_expiry FROM vendors WHERE company_id = ? AND deleted_at IS NULL AND coi_expiry IS NOT NULL AND coi_expiry < date('now') ORDER BY coi_expiry`).all(cid); }
 export function vendorsWithExpiredContracts(cid: string) { return db.getDb().prepare(`SELECT id, name, COALESCE(contract_end_date, contract_end) AS contract_end FROM vendors WHERE company_id = ? AND deleted_at IS NULL AND COALESCE(contract_end_date, contract_end) IS NOT NULL AND COALESCE(contract_end_date, contract_end) < date('now') ORDER BY contract_end`).all(cid); }
 export function vendorsNeeding1099(cid: string) {
-  return db.getDb().prepare(`SELECT v.id, v.name, v.tax_id_last4, ROUND(SUM(e.amount),2) AS ytd_paid FROM vendors v JOIN expenses e ON e.vendor_id = v.id WHERE v.company_id = ? AND v.is_1099_eligible = 1 AND strftime('%Y', e.date) = strftime('%Y', 'now') AND e.deleted_at IS NULL GROUP BY v.id HAVING ytd_paid >= 600 ORDER BY ytd_paid DESC`).all(cid);
+  return db.getDb().prepare(`SELECT v.id, v.name, substr(v.tax_id, -4) AS tax_id_last4, ROUND(SUM(e.amount),2) AS ytd_paid FROM vendors v JOIN expenses e ON e.vendor_id = v.id WHERE v.company_id = ? AND v.is_1099_eligible = 1 AND strftime('%Y', e.date) = strftime('%Y', 'now') AND e.deleted_at IS NULL GROUP BY v.id HAVING ytd_paid >= 600 ORDER BY ytd_paid DESC`).all(cid);
 }
 export function vendorsWithoutW9(cid: string) {
   return db.getDb().prepare(`SELECT v.id, v.name FROM vendors v WHERE v.company_id = ? AND v.is_1099_eligible = 1 AND v.deleted_at IS NULL AND v.id NOT IN (SELECT person_id FROM compliance_documents WHERE company_id = ? AND person_type = 'vendor' AND form_type = 'W-9' AND status = 'current') ORDER BY v.name`).all(cid, cid);
@@ -142,7 +143,7 @@ export function vendorCount(cid: string) {
   return { total, approved, pending: total - approved };
 }
 export function vendorExport(cid: string) {
-  return db.getDb().prepare('SELECT name, email, phone, vendor_type, approval_status, location_type, payment_terms, is_1099_eligible, tax_id_last4, coi_expiry, contract_end_date FROM vendors WHERE company_id = ? AND deleted_at IS NULL ORDER BY name').all(cid);
+  return db.getDb().prepare("SELECT name, email, phone, vendor_type, approval_status, location_type, payment_terms, is_1099_eligible, substr(tax_id, -4) AS tax_id_last4, coi_expiry, contract_end_date FROM vendors WHERE company_id = ? AND deleted_at IS NULL ORDER BY name").all(cid);
 }
 
 // ═══ VN81–VN110: Bill & Payment Analytics ════════════════

@@ -102,12 +102,13 @@ class WorkflowEngine {
       case 'send_notification':
         try {
           db.getDb().prepare(
-            `INSERT INTO notifications (id, company_id, type, message, entity_type, entity_id, read_status, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'))`
+            `INSERT INTO notifications (id, company_id, type, title, message, entity_type, entity_id, is_read, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`
           ).run(
             uuid(),
             payload.companyId,
             action.config.notification_type || 'info',
+            action.config.title || 'Workflow notification',
             action.config.message || `Workflow triggered by ${payload.type}`,
             payload.entityType || '',
             payload.entityId || ''

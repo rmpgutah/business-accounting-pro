@@ -30,7 +30,7 @@ export function checkOverdueInvoices(companyId?: string): number {
     const existing = dbInstance.prepare(
       `SELECT id FROM notifications
        WHERE entity_type = 'invoice' AND entity_id = ? AND type = 'overdue'
-       AND date(created_at) = ?`
+       AND date(created_at, 'localtime') = ?`
     ).get(inv.id, today) as any;
 
     if (existing) continue;
@@ -105,7 +105,7 @@ export function checkBudgetThresholds(companyId?: string): number {
       const existing = dbInstance.prepare(
         `SELECT id FROM notifications
          WHERE entity_type = 'budget' AND entity_id = ? AND type = 'budget_alert'
-         AND date(created_at) = ?`
+         AND date(created_at, 'localtime') = ?`
       ).get(budget.id, today) as any;
 
       if (existing) continue;
@@ -158,7 +158,7 @@ export function checkUnmatchedTransactions(companyId?: string): number {
     const existing = dbInstance.prepare(
       `SELECT id FROM notifications
        WHERE entity_type = 'bank_account' AND entity_id = ? AND type = 'reconciliation'
-       AND date(created_at) = ?`
+       AND date(created_at, 'localtime') = ?`
     ).get(acct.bank_account_id, today) as any;
 
     if (existing) continue;
@@ -201,7 +201,7 @@ export function checkOverdueLoans(companyId?: string): number {
 
   for (const loan of loans) {
     const existing = dbInstance.prepare(
-      `SELECT id FROM notifications WHERE entity_type = 'loan' AND entity_id = ? AND type = 'overdue' AND date(created_at) = ?`
+      `SELECT id FROM notifications WHERE entity_type = 'loan' AND entity_id = ? AND type = 'overdue' AND date(created_at, 'localtime') = ?`
     ).get(loan.id, today) as any;
     if (existing) continue;
     db.create('notifications', {
@@ -236,7 +236,7 @@ export function checkOverdueBills(companyId?: string): number {
   try { bills = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
   for (const bill of bills) {
     const existing = dbInstance.prepare(
-      `SELECT id FROM notifications WHERE entity_type='bill' AND entity_id=? AND type='overdue' AND date(created_at)=?`
+      `SELECT id FROM notifications WHERE entity_type='bill' AND entity_id=? AND type='overdue' AND date(created_at, 'localtime')=?`
     ).get(bill.id, today) as any;
     if (existing) continue;
     const bal = (bill.total || 0) - (bill.amount_paid || 0);
@@ -272,7 +272,7 @@ export function checkExpiringVendorCompliance(companyId?: string, daysAhead = 30
   const flag = (v: any, label: string, kind: string, dateStr: string | null) => {
     if (!dateStr || dateStr > horizon) return;
     const existing = dbInstance.prepare(
-      `SELECT id FROM notifications WHERE entity_type='vendor' AND entity_id=? AND type='compliance' AND message LIKE ? AND date(created_at)=?`
+      `SELECT id FROM notifications WHERE entity_type='vendor' AND entity_id=? AND type='compliance' AND message LIKE ? AND date(created_at, 'localtime')=?`
     ).get(v.id, `%${kind}%`, today) as any;
     if (existing) return;
     const expired = dateStr < today;
@@ -309,7 +309,7 @@ export function checkEquipmentPenaltiesOwed(companyId?: string): number {
   try { rows = dbInstance.prepare(sql).all(...params) as any[]; } catch { return 0; }
   for (const r of rows) {
     const existing = dbInstance.prepare(
-      `SELECT id FROM notifications WHERE entity_type='equipment' AND entity_id=? AND type='penalty' AND date(created_at)=?`
+      `SELECT id FROM notifications WHERE entity_type='equipment' AND entity_id=? AND type='penalty' AND date(created_at, 'localtime')=?`
     ).get(r.id, today) as any;
     if (existing) continue;
     db.create('notifications', {
@@ -363,7 +363,7 @@ export function checkExpiringEmployeeCredentials(companyId?: string): number {
     const horizon = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
     if (c.expiry_date > horizon) continue; // not yet within this credential's warning window
     const existing = dbInstance.prepare(
-      `SELECT id FROM notifications WHERE entity_type='credential' AND entity_id=? AND type='compliance' AND date(created_at)=?`
+      `SELECT id FROM notifications WHERE entity_type='credential' AND entity_id=? AND type='compliance' AND date(created_at, 'localtime')=?`
     ).get(c.id, today) as any;
     if (existing) continue;
     const expired = c.expiry_date < today;

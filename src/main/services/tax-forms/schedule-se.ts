@@ -58,7 +58,9 @@ export interface ScheduleSEData {
   is_negative_profit: boolean;                // SE tax is 0 if profit < $400
 }
 
-const SS_WAGE_BASE_2026 = 182100;
+import { SS_WAGE_BASE_2026 } from '../../lib/tax-constants';
+// SE rates are the COMBINED self-employment rates (both halves), distinct from
+// the per-side payroll rates in tax-constants — keep them local.
 const SS_RATE = 0.124;        // 12.4% combined (employee 6.2% + employer 6.2%)
 const MEDICARE_RATE = 0.029;  // 2.9% combined
 const SE_ADJUSTMENT = 0.9235; // 92.35% — the "deductible employer half"

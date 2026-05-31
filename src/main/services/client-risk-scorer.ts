@@ -101,7 +101,7 @@ export function scoreOneClient(companyId: string, clientId: string): ClientRiskS
   // Pull all invoices for this client
   const invoices = dbi.prepare(`
     SELECT i.id, i.invoice_number, i.issue_date, i.due_date, i.total, i.amount_paid, i.status,
-      (SELECT MAX(p.payment_date) FROM invoice_payments p WHERE p.invoice_id = i.id) AS paid_date
+      (SELECT MAX(p.date) FROM payments p WHERE p.invoice_id = i.id) AS paid_date
     FROM invoices i
     WHERE i.company_id = ? AND i.client_id = ?
       AND COALESCE(i.deleted_at, '') = ''
@@ -233,8 +233,9 @@ export function scoreOneClient(companyId: string, clientId: string): ClientRiskS
  */
 export function scoreAllClients(companyId: string): ClientRiskScore[] {
   const dbi = db.getDb();
+  // clients has no deleted_at column (not soft-deletable) — don't filter on it.
   const clients = dbi.prepare(
-    "SELECT id FROM clients WHERE company_id = ? AND COALESCE(deleted_at, '') = ''"
+    "SELECT id FROM clients WHERE company_id = ?"
   ).all(companyId) as Array<{ id: string }>;
 
   const scores: ClientRiskScore[] = [];

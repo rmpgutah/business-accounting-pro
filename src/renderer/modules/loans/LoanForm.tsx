@@ -34,6 +34,16 @@ const EMPTY: any = {
   notes: '',
 };
 
+// Periodic payment frequency → payments per year / display label.
+// Mirrors loan-calculator.ts (main process); duplicated here because the
+// renderer can't import across the Electron process boundary.
+const PAYMENTS_PER_YEAR: Record<string, number> = {
+  monthly: 12, biweekly: 26, weekly: 52, quarterly: 4, annual: 1,
+};
+const FREQ_LABELS: Record<string, string> = {
+  monthly: 'Monthly', biweekly: 'Bi-weekly', weekly: 'Weekly', quarterly: 'Quarterly', annual: 'Annual',
+};
+
 const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
   const toast = useToast();
   const [form, setForm] = useState<any>(EMPTY);
@@ -57,15 +67,20 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
     }).finally(() => setLoading(false));
   }, [loanId, toast]);
 
-  // Compute live monthly-payment preview from form values
+  // Compute live per-payment preview from form values.
+  // Must honor payment_frequency or non-monthly loans show a wrong figure
+  // (matches the backend amortization in loan-calculator.ts).
+  const freq = form.payment_frequency || 'monthly';
+  const periodsPerYear = PAYMENTS_PER_YEAR[freq] || 12;
+  const freqLabel = FREQ_LABELS[freq] || 'Payment';
+  const numPayments = Math.max(1, Math.round((Number(form.term_months) || 0) * (periodsPerYear / 12)));
   const livePayment = (() => {
     const P = Number(form.principal) || 0;
     const annualR = Number(form.interest_rate) || 0;
-    const n = Number(form.term_months) || 1;
-    const r = annualR / 12;
-    if (P === 0 || n === 0) return 0;
-    if (r === 0) return P / n;
-    const f = Math.pow(1 + r, n);
+    const r = annualR / periodsPerYear;
+    if (P === 0 || numPayments === 0) return 0;
+    if (r === 0) return P / numPayments;
+    const f = Math.pow(1 + r, numPayments);
     return P * (r * f) / (f - 1);
   })();
 
@@ -209,13 +224,13 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
           borderRadius: 6,
         }}>
           <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)' }}>
-            Live Preview · Monthly Payment (excludes escrow)
+            Live Preview · {freqLabel} Payment (excludes escrow)
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-primary)', marginTop: 4 }}>
             ${livePayment.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4 }}>
-            {form.term_months} payments × ${livePayment.toLocaleString('en-US', { maximumFractionDigits: 0 })} = ${(livePayment * (form.term_months || 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })} total · ${((livePayment * (form.term_months || 0)) - (form.principal || 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })} interest over life
+            {numPayments} payments × ${livePayment.toLocaleString('en-US', { maximumFractionDigits: 0 })} = ${(livePayment * numPayments).toLocaleString('en-US', { maximumFractionDigits: 0 })} total · ${((livePayment * numPayments) - (form.principal || 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })} interest over life
           </div>
         </div>
       </div>

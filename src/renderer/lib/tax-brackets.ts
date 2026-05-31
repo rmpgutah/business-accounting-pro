@@ -251,7 +251,15 @@ export function getStandardDeduction(
   year: number = new Date().getFullYear(),
   step2Halve: boolean = false,
 ): number {
-  const base = STANDARD_DEDUCTION_BY_YEAR[pickYear(year)][filing];
+  // Prefer the DB-configured standard deduction (set via setDbConstants),
+  // mirroring getSSWageBase/getFutaRate — otherwise an admin's edit to the
+  // standard deduction is silently ignored and withholding uses stale numbers.
+  const dbBase = _dbConstants
+    ? (filing === 'mfj' ? _dbConstants.standard_deduction_married
+      : filing === 'hoh' ? _dbConstants.standard_deduction_hoh
+      : _dbConstants.standard_deduction_single)
+    : 0;
+  const base = dbBase > 0 ? dbBase : STANDARD_DEDUCTION_BY_YEAR[pickYear(year)][filing];
   return step2Halve ? base / 2 : base;
 }
 

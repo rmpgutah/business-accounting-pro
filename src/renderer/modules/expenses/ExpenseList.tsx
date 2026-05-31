@@ -320,17 +320,19 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     });
   }, [expenses, search, categoryFilter, dateFrom, dateTo, reimbursableOnly, amountMin, amountMax, hasReceiptFilter, autoCatFilter, flaggedFilter, currencyFilter]);
 
+  // Footer/summary totals must use the same final price (subtotal + tax − discount)
+  // each row renders via expenseDisplayTotal, or the numbers won't reconcile with the rows.
   const total = useMemo(
-    () => filtered.reduce((sum, e) => sum + (e.amount || 0), 0),
+    () => filtered.reduce((sum, e) => sum + expenseDisplayTotal(e), 0),
     [filtered]
   );
 
   // ─── Inline Summary Stats ─────────────────────────────
   const summaryStats = useMemo(() => {
-    const t = filtered.reduce((s, e) => s + (e.amount ?? 0), 0);
-    const taxDed = filtered.filter(e => e.is_tax_deductible).reduce((s, e) => s + (e.amount ?? 0), 0);
-    const billable = filtered.filter(e => e.is_billable).reduce((s, e) => s + (e.amount ?? 0), 0);
-    const max = filtered.length > 0 ? Math.max(...filtered.map(e => e.amount ?? 0)) : 0;
+    const t = filtered.reduce((s, e) => s + expenseDisplayTotal(e), 0);
+    const taxDed = filtered.filter(e => e.is_tax_deductible).reduce((s, e) => s + expenseDisplayTotal(e), 0);
+    const billable = filtered.filter(e => e.is_billable).reduce((s, e) => s + expenseDisplayTotal(e), 0);
+    const max = filtered.length > 0 ? Math.max(...filtered.map(e => expenseDisplayTotal(e))) : 0;
     return {
       total: t,
       avg: filtered.length > 0 ? t / filtered.length : 0,
