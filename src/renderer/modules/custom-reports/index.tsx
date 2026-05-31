@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileBarChart, Plus, Play, Download, Printer, Save, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import {
   downloadCSVBlob,
@@ -267,7 +268,7 @@ export default function CustomReportsModule() {
               onChange={(e) => setConfig({ ...config, table: e.target.value, fields: [], filters: [] })}
             >
               {Object.keys(AVAILABLE_FIELDS).map((t) => (
-                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ')}</option>
+                <option key={t} value={t}>{humanizeLabel(t)}</option>
               ))}
             </select>
           </div>

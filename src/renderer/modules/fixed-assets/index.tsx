@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
-import { formatCurrency, roundCents } from '../../lib/format';
+import { formatCurrency, roundCents, humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -364,7 +364,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             <td class="num">${formatCurrency(a.purchase_price)}</td>
             <td class="num">${formatCurrency(a.accumulated_depreciation || 0)}</td>
             <td class="num">${formatCurrency(a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0)))}</td>
-            <td>${a.status}</td>
+            <td>${a.status === 'fully_depreciated' ? 'Fully Dep.' : humanizeLabel(a.status)}</td>
           </tr>`).join('')}
         </tbody>
         <tfoot><tr>
@@ -844,7 +844,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                   <td className="text-right text-accent-income font-semibold">{fmt.format((a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))))}</td>
                   <td>
                     <span className={`block-badge ${STATUS_COLORS[a.status] || 'block-badge'}`}>
-                      {a.status === 'fully_depreciated' ? 'Fully Dep.' : a.status.charAt(0).toUpperCase() + a.status.slice(1)}
+                      {a.status === 'fully_depreciated' ? 'Fully Dep.' : humanizeLabel(a.status)}
                     </span>
                   </td>
                   <td className="text-center">
@@ -1399,7 +1399,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-text-primary">{asset.name}</h1>
               <span className={`block-badge ${STATUS_COLORS[asset.status]}`}>
-                {asset.status === 'fully_depreciated' ? 'Fully Dep.' : asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
+                {asset.status === 'fully_depreciated' ? 'Fully Dep.' : humanizeLabel(asset.status)}
               </span>
             </div>
             <p className="text-xs text-text-muted mt-0.5 font-mono">{asset.asset_code} · {CATEGORY_LABELS[asset.category]}</p>
@@ -1489,7 +1489,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
           { icon: <Tag size={13} />, label: 'Method', value: METHODS.find((m) => m.value === asset.depreciation_method)?.label ?? asset.depreciation_method },
           { icon: <Hash size={13} />, label: 'Serial Number', value: asset.serial_number || '—' },
           { icon: <MapPin size={13} />, label: 'Location', value: asset.location || '—' },
-          { icon: <CheckCircle size={13} />, label: 'Status', value: asset.status.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) },
+          { icon: <CheckCircle size={13} />, label: 'Status', value: humanizeLabel(asset.status) },
         ].map((d) => (
           <div key={d.label} className="block-card p-3 flex items-start gap-2">
             <span className="text-text-muted mt-0.5">{d.icon}</span>

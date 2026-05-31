@@ -17,7 +17,7 @@
 import React, { useMemo, useState } from 'react';
 import { Home, CreditCard, GraduationCap, Car, Briefcase, Hammer, TrendingUp, FileText, Award, Building, ChevronRight, ChevronLeft, Save, X } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 
 interface LoanType {
   key: string;
@@ -379,7 +379,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
               <button type="button" className="lw-nav-btn" onClick={runPrequal}>Run Pre-Qualification</button>
               {prequal?.verdict && (
                 <div className={`lf-verdict-card ${prequal.verdict}`} style={{ padding: '6px 14px' }}>
-                  <span className="lf-verdict-headline" style={{ fontSize: 12 }}>{prequal.verdict.replace('_', ' ')}</span>
+                  <span className="lf-verdict-headline" style={{ fontSize: 12 }}>{humanizeLabel(prequal.verdict)}</span>
                 </div>
               )}
             </div>

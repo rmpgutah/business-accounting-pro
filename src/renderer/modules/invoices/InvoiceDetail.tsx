@@ -8,7 +8,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate, humanizeLabel } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import EntityChip from '../../components/EntityChip';
@@ -626,7 +626,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               background: (INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280') + '22',
               color: INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280',
             }}>
-              {invoice.invoice_type.replace('_', ' ')}
+              {humanizeLabel(invoice.invoice_type)}
             </span>
           )}
           {invoice.currency && invoice.currency !== 'USD' && (

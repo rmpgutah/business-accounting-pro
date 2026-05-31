@@ -3,7 +3,7 @@ import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriang
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { formatStatus } from '../../lib/format';
 import { formatDate } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -1418,7 +1418,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       {sorted.length > 0 && (
         <div className="text-xs text-text-muted">
           Showing {sorted.length} of {debts.length} debt{debts.length !== 1 ? 's' : ''}
-          {sortField !== 'created_at' && <span> &middot; Sorted by {sortField.replace('_', ' ')}</span>}
+          {sortField !== 'created_at' && <span> &middot; Sorted by {humanizeLabel(sortField)}</span>}
         </div>
       )}
 
