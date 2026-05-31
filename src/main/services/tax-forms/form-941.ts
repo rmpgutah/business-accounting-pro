@@ -92,11 +92,7 @@ export interface Form941Data {
   pay_stub_count: number;
 }
 
-const SS_RATE = 0.062;            // 6.2% employer + 6.2% employee = 12.4% combined
-const MEDICARE_RATE = 0.0145;     // 1.45% × 2 = 2.9% combined
-const ADDTL_MEDICARE_RATE = 0.009; // 0.9% on employee wages over $200k
-const SS_WAGE_BASE_2026 = 182100; // 2026 SS wage base (actual: was $168,600 in 2024, $176,100 in 2025; assume $182,100 in 2026)
-const ADDTL_MEDICARE_THRESHOLD = 200000;
+import { SS_RATE, MEDICARE_RATE, ADDTL_MEDICARE_RATE, SS_WAGE_BASE_2026, ADDTL_MEDICARE_THRESHOLD } from '../../lib/tax-constants';
 
 function quarterDateRange(year: number, quarter: 1 | 2 | 3 | 4): { start: string; end: string } {
   const startMonth = (quarter - 1) * 3 + 1;
@@ -135,11 +131,15 @@ export function computeForm941(companyId: string, year: number, quarter: 1 | 2 |
   // Aggregate amounts
   const totals = stubs.reduce((acc, s) => {
     acc.gross += Number(s.gross_pay) || 0;
+    // Medicare-taxable wages = gross − pre-tax deductions (401k, §125, HSA).
+    // Using raw gross for line 5c overstated Medicare wages/tax for anyone with
+    // pre-tax deductions and broke reconciliation to W-2 Box 5.
+    acc.medicare_wages += Math.max(0, (Number(s.gross_pay) || 0) - (Number(s.pretax_deductions) || 0));
     acc.fed_tax += Number(s.federal_tax) || 0;
     acc.ss_employee += Number(s.social_security) || 0;
     acc.medicare_employee += Number(s.medicare) || 0;
     return acc;
-  }, { gross: 0, fed_tax: 0, ss_employee: 0, medicare_employee: 0 });
+  }, { gross: 0, medicare_wages: 0, fed_tax: 0, ss_employee: 0, medicare_employee: 0 });
 
   // Compute additional Medicare — wages exceeding $200k YTD per employee
   // We use the pay-stub YTD field rather than recomputing. For form 941
@@ -175,8 +175,8 @@ export function computeForm941(companyId: string, year: number, quarter: 1 | 2 |
     line5a_wages += Math.max(0, ssAtEnd - ssAtStart);
   }
 
-  // Medicare-taxable: no cap
-  const line5c_wages = totals.gross;
+  // Medicare-taxable: no cap, but net of pre-tax deductions (not raw gross).
+  const line5c_wages = totals.medicare_wages;
 
   // Compute combined (employee + employer) tax amounts for the form
   // (Form 941 reports COMBINED figures; we have employee figures from

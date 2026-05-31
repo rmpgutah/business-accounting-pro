@@ -2580,8 +2580,11 @@ export function initDatabase(): Database.Database {
 
   // F61: Client merge (no schema — service handler)
 
-  // F62: Client tag/label system
-  `CREATE TABLE IF NOT EXISTS entity_tags (
+  // F62: Client tag/label system. Distinct table from `entity_tags` (which is
+  // the tag_id-keyed system defined earlier) — these collided on the same name,
+  // so this free-text tag/color feature wrote to columns that didn't exist on
+  // the winning CREATE and threw on every call. Renamed to entity_labels.
+  `CREATE TABLE IF NOT EXISTS entity_labels (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL REFERENCES companies(id),
     entity_type TEXT NOT NULL,
@@ -2591,8 +2594,8 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(company_id, entity_type, entity_id, tag)
   )`,
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_lookup ON entity_tags(company_id, entity_type, entity_id)",
-  "CREATE INDEX IF NOT EXISTS idx_entity_tags_search ON entity_tags(tag)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_labels_lookup ON entity_labels(company_id, entity_type, entity_id)",
+  "CREATE INDEX IF NOT EXISTS idx_entity_labels_search ON entity_labels(tag)",
 
   // F63: Client communication history log
   `CREATE TABLE IF NOT EXISTS client_communications (

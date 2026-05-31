@@ -70,28 +70,28 @@ export function addTag(record: { company_id: string; entity_type: string; entity
   const dbi = db.getDb();
   const id = uuid();
   try {
-    dbi.prepare(`INSERT INTO entity_tags (id, company_id, entity_type, entity_id, tag, color) VALUES (?, ?, ?, ?, ?, ?)`)
+    dbi.prepare(`INSERT INTO entity_labels (id, company_id, entity_type, entity_id, tag, color) VALUES (?, ?, ?, ?, ?, ?)`)
       .run(id, record.company_id, record.entity_type, record.entity_id, record.tag.toLowerCase().trim(), record.color || '#6b7280');
   } catch (e: any) {
     // Likely UNIQUE conflict — tag already exists
     if (!/UNIQUE/i.test(e?.message || '')) throw e;
   }
-  return dbi.prepare('SELECT * FROM entity_tags WHERE company_id = ? AND entity_type = ? AND entity_id = ? AND tag = ?').get(record.company_id, record.entity_type, record.entity_id, record.tag.toLowerCase().trim());
+  return dbi.prepare('SELECT * FROM entity_labels WHERE company_id = ? AND entity_type = ? AND entity_id = ? AND tag = ?').get(record.company_id, record.entity_type, record.entity_id, record.tag.toLowerCase().trim());
 }
 
 export function removeTag(id: string): boolean {
-  return db.getDb().prepare('DELETE FROM entity_tags WHERE id = ?').run(id).changes > 0;
+  return db.getDb().prepare('DELETE FROM entity_labels WHERE id = ?').run(id).changes > 0;
 }
 
 export function listEntityTags(companyId: string, entityType: string, entityId: string): any[] {
-  return db.getDb().prepare('SELECT * FROM entity_tags WHERE company_id = ? AND entity_type = ? AND entity_id = ? ORDER BY tag').all(companyId, entityType, entityId) as any[];
+  return db.getDb().prepare('SELECT * FROM entity_labels WHERE company_id = ? AND entity_type = ? AND entity_id = ? ORDER BY tag').all(companyId, entityType, entityId) as any[];
 }
 
 export function listAllTags(companyId: string, entityType?: string): any[] {
   const dbi = db.getDb();
   const sql = entityType
-    ? `SELECT tag, COUNT(*) AS usage_count, MAX(color) AS color FROM entity_tags WHERE company_id = ? AND entity_type = ? GROUP BY tag ORDER BY usage_count DESC`
-    : `SELECT tag, COUNT(*) AS usage_count, MAX(color) AS color FROM entity_tags WHERE company_id = ? GROUP BY tag ORDER BY usage_count DESC`;
+    ? `SELECT tag, COUNT(*) AS usage_count, MAX(color) AS color FROM entity_labels WHERE company_id = ? AND entity_type = ? GROUP BY tag ORDER BY usage_count DESC`
+    : `SELECT tag, COUNT(*) AS usage_count, MAX(color) AS color FROM entity_labels WHERE company_id = ? GROUP BY tag ORDER BY usage_count DESC`;
   const params = entityType ? [companyId, entityType] : [companyId];
   return dbi.prepare(sql).all(...params) as any[];
 }
@@ -104,7 +104,7 @@ export function searchByTag(companyId: string, entityType: string, tag: string):
     if (!['clients', 'vendors', 'invoices', 'expenses', 'employees', 'projects'].includes(entityType)) return [];
     return dbi.prepare(`
       SELECT e.* FROM ${entityType} e
-      JOIN entity_tags t ON t.entity_id = e.id
+      JOIN entity_labels t ON t.entity_id = e.id
       WHERE t.company_id = ? AND t.entity_type = ? AND t.tag = ?
         AND COALESCE(e.deleted_at, '') = ''
     `).all(companyId, entityType.replace(/s$/, ''), tagLower) as any[];

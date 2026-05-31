@@ -98,7 +98,11 @@ export function listDepartments(companyId: string, activeOnly: boolean = false):
 }
 
 export function departmentPL(companyId: string, departmentId: string, periodStart: string, periodEnd: string): { revenue: number; expenses: number; net_income: number; by_account: any[] } {
-  // Note: this assumes journal_entry_lines has an optional department_id column; if not present, returns empty roll-up
+  // NOTE: the GL has no department/class dimension — journal_entry_lines has no
+  // department_id column, so this query throws and the catch below returns an
+  // empty roll-up. Project-scoped P&L is available via reports-analytics
+  // departmentPnL (which keys off invoices/expenses.project_id). This stays as a
+  // graceful no-op until a department dimension is added to the ledger.
   const dbi = db.getDb();
   let byAccount: any[] = [];
   try {
@@ -767,19 +771,26 @@ export function commonSizeStatement(lines: Array<{ account_id: string; amount: n
 // F258 — financial ratios
 export function calculateRatios(companyId: string, asOfDate: string): any {
   const dbi = db.getDb();
-  const accountBal = (type: string): number => {
-    const r = dbi.prepare(`SELECT COALESCE(SUM(jel.debit - jel.credit), 0) AS bal FROM journal_entry_lines jel JOIN journal_entries je ON je.id = jel.journal_entry_id JOIN accounts a ON a.id = jel.account_id WHERE je.company_id = ? AND je.is_posted = 1 AND je.entry_date <= ? AND a.account_type = ?`).get(companyId, asOfDate, type) as any;
+  // The accounts taxonomy is type ∈ (asset,liability,equity,revenue,expense)
+  // with a free-text `subtype` ('current','operating','payroll',...). The old
+  // code filtered on a nonexistent `account_type` column with made-up values
+  // ('current_asset','cost_of_sales',...) → every query threw and the whole
+  // ratio set errored. Filter on the real type (+ optional subtype) instead.
+  const accountBal = (type: string, subtype?: string): number => {
+    const sub = subtype ? ' AND a.subtype = ?' : '';
+    const params = subtype ? [companyId, asOfDate, type, subtype] : [companyId, asOfDate, type];
+    const r = dbi.prepare(`SELECT COALESCE(SUM(jel.debit - jel.credit), 0) AS bal FROM journal_entry_lines jel JOIN journal_entries je ON je.id = jel.journal_entry_id JOIN accounts a ON a.id = jel.account_id WHERE je.company_id = ? AND je.is_posted = 1 AND je.date <= ? AND a.type = ?${sub}`).get(...params) as any;
     return Math.abs(r?.bal || 0);
   };
-  const currentAssets = accountBal('current_asset');
-  const currentLiabilities = accountBal('current_liability');
-  const totalAssets = accountBal('asset') + currentAssets + accountBal('fixed_asset') + accountBal('other_asset');
-  const totalLiabilities = currentLiabilities + accountBal('long_term_liability') + accountBal('other_liability');
+  const currentAssets = accountBal('asset', 'current');
+  const currentLiabilities = accountBal('liability', 'current');
+  const totalAssets = accountBal('asset');           // all asset accounts
+  const totalLiabilities = accountBal('liability');  // all liability accounts
   const equity = accountBal('equity');
   const revenue = accountBal('revenue');
-  const cogs = accountBal('cost_of_sales');
+  const cogs = accountBal('expense', 'cogs');        // 0 unless a COGS subtype is used
   const grossProfit = revenue - cogs;
-  const operatingExpenses = accountBal('expense');
+  const operatingExpenses = accountBal('expense') - cogs;
   const operatingIncome = grossProfit - operatingExpenses;
   const netIncome = operatingIncome; // simplified
 

@@ -87,9 +87,7 @@ export interface FormW2Data {
   warnings: string[];
 }
 
-const SS_WAGE_BASE_2026 = 182100;
-const SS_RATE = 0.062;
-const MEDICARE_RATE = 0.0145;
+import { SS_WAGE_BASE_2026, SS_RATE, MEDICARE_RATE } from '../../lib/tax-constants';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;

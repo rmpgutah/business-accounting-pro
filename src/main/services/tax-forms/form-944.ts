@@ -92,11 +92,7 @@ export interface Form944Data {
   warnings: string[];
 }
 
-const SS_RATE = 0.062;            // employer + employee each
-const MEDICARE_RATE = 0.0145;     // employer + employee each
-const ADDTL_MEDICARE_RATE = 0.009; // employee only on wages > $200k
-const SS_WAGE_BASE_2026 = 182100;
-const ADDTL_MEDICARE_THRESHOLD = 200000;
+import { SS_RATE, MEDICARE_RATE, ADDTL_MEDICARE_RATE, SS_WAGE_BASE_2026, ADDTL_MEDICARE_THRESHOLD } from '../../lib/tax-constants';
 const SCHEDULE_B_THRESHOLD = 2500;
 
 function round2(n: number): number {
