@@ -213,13 +213,14 @@ function validEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 function sanitizePlainText(s: string, max: number): string {
-  // Strip HTML tags and ASCII control chars; cap length.
+  // Cap length first to bound the work, then drop angle brackets and ASCII
+  // control chars in a single linear pass. Using a character class (no `*`
+  // quantifier across delimiters) avoids polynomial backtracking, and removing
+  // `<`/`>` outright means no HTML tag can be reconstructed from a single pass.
   return String(s)
-    // eslint-disable-next-line no-control-regex
-    .replace(/<[^>]*>/g, '')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-\x1F\x7F]/g, '')
     .slice(0, max)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[<>\x00-\x1F\x7F]/g, '')
     .trim();
 }
 
