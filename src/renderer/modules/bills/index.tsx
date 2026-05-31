@@ -24,6 +24,7 @@ import { generateBillHTML } from '../../lib/print-templates';
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { useAppStore } from '../../stores/appStore';
 import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
 import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
@@ -225,6 +226,11 @@ interface BillsListProps {
 const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const nav = useNavigation();
+  // Customization Center (Bills): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cBillCol = (id: string) => custValues['bills.' + id] !== false; // default visible
+  const cBillDensity = useCustomizationStore((s) => String(s.get('bills.bills-density') ?? 'comfortable'));
+  const cBillFont = cBillDensity === 'compact' ? 11 : cBillDensity === 'spacious' ? 13 : undefined;
   const [bills, setBills] = useState<Bill[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [stats, setStats] = useState<BillStats>({
@@ -908,7 +914,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cBillFont }}>
             <thead>
               <tr>
                 <th style={{ width: '32px' }} onClick={(e) => e.stopPropagation()}>
@@ -923,14 +929,14 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                   />
                 </th>
                 <th>Bill #</th>
-                <th>Vendor</th>
+                {cBillCol('bills-col-vendor') && <th>Vendor</th>}
                 <th style={{ width: '50px' }} title="1099 eligible">1099</th>
-                <th>Issue Date</th>
-                <th>Due Date</th>
-                <th className="text-right">Total</th>
-                <th className="text-right">Amount Paid</th>
-                <th className="text-right">Balance</th>
-                <th>Status</th>
+                {cBillCol('bills-col-bill-date') && <th>Issue Date</th>}
+                {cBillCol('bills-col-due-date') && <th>Due Date</th>}
+                {cBillCol('bills-col-amount') && <th className="text-right">Total</th>}
+                {cBillCol('bills-col-paid-amount') && <th className="text-right">Amount Paid</th>}
+                {cBillCol('bills-col-balance') && <th className="text-right">Balance</th>}
+                {cBillCol('bills-col-status') && <th>Status</th>}
                 <th style={{ width: '120px' }}>Actions</th>
               </tr>
             </thead>
@@ -959,6 +965,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     <td className="font-mono text-accent-blue text-xs" onClick={(e) => e.stopPropagation()}>
                       <EntityChip type="bill" id={bill.id} label={bill.bill_number} variant="inline" />
                     </td>
+                    {cBillCol('bills-col-vendor') && (
                     <td className="text-text-primary cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       {bill.vendor_id && vendorName !== '—' ? (
                         <EntityChip type="vendor" id={bill.vendor_id} label={vendorName} variant="inline" />
@@ -966,6 +973,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                         <span className="block truncate max-w-[180px]">{vendorName}</span>
                       )}
                     </td>
+                    )}
                     <td className="text-center">
                       {is1099 ? (
                         <span
@@ -984,14 +992,19 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                         <span className="text-[10px] text-text-muted">—</span>
                       )}
                     </td>
-                    <td className="font-mono text-text-secondary text-xs">{formatDate(bill.issue_date)}</td>
-                    <td className="font-mono text-text-secondary text-xs">{formatDate(bill.due_date)}</td>
+                    {cBillCol('bills-col-bill-date') && <td className="font-mono text-text-secondary text-xs">{formatDate(bill.issue_date)}</td>}
+                    {cBillCol('bills-col-due-date') && <td className="font-mono text-text-secondary text-xs">{formatDate(bill.due_date)}</td>}
+                    {cBillCol('bills-col-amount') && (
                     <td className="text-right font-mono text-text-primary">
                       {formatCurrency(bill.total)}
                     </td>
+                    )}
+                    {cBillCol('bills-col-paid-amount') && (
                     <td className="text-right font-mono text-accent-income">
                       {formatCurrency(bill.amount_paid)}
                     </td>
+                    )}
+                    {cBillCol('bills-col-balance') && (
                     <td
                       className={`text-right font-mono ${
                         balance > 0 ? 'text-accent-expense' : 'text-text-muted'
@@ -999,9 +1012,12 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     >
                       {formatCurrency(balance)}
                     </td>
+                    )}
+                    {cBillCol('bills-col-status') && (
                     <td>
                       <span className={badge.className}>{badge.label}</span>
                     </td>
+                    )}
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button

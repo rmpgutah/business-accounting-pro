@@ -6,6 +6,7 @@ import {
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import {
   INVENTORY_CATEGORY,
@@ -85,6 +86,11 @@ function MovBadge({ type }: { type: string }) {
 // ─── Component ──────────────────────────────────────────
 const Inventory: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Inventory): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cInvCol = (id: string) => custValues['inventory.' + id] !== false; // default visible
+  const cInvDensity = useCustomizationStore((s) => String(s.get('inventory.inv-display-density') ?? 'comfortable'));
+  const cInvFont = cInvDensity === 'compact' ? 11 : cInvDensity === 'spacious' ? 13 : undefined;
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -1007,7 +1013,7 @@ const Inventory: React.FC = () => {
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cInvFont }}>
             <thead>
               <tr>
                 <th className="w-8 text-center">
@@ -1019,13 +1025,13 @@ const Inventory: React.FC = () => {
                   />
                 </th>
                 <th className="cursor-pointer select-none" onClick={() => handleInvSort('name')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleInvSort('sku')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">SKU {sortField === 'sku' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="cursor-pointer select-none" onClick={() => handleInvSort('category')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Category {sortField === 'category' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th>Status</th>
-                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('quantity')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Qty {sortField === 'quantity' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('unit_cost')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Unit Cost {sortField === 'unit_cost' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
-                <th className="text-right">Total Value</th>
-                <th className="text-right">Reorder At</th>
+                {cInvCol('inv-col-sku') && <th className="cursor-pointer select-none" onClick={() => handleInvSort('sku')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">SKU {sortField === 'sku' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>}
+                {cInvCol('inv-col-category') && <th className="cursor-pointer select-none" onClick={() => handleInvSort('category')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Category {sortField === 'category' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>}
+                {cInvCol('inv-col-status') && <th>Status</th>}
+                {cInvCol('inv-col-on-hand') && <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('quantity')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Qty {sortField === 'quantity' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>}
+                {cInvCol('inv-col-unit-cost') && <th className="text-right cursor-pointer select-none" onClick={() => handleInvSort('unit_cost')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Unit Cost {sortField === 'unit_cost' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>}
+                {cInvCol('inv-col-total-value') && <th className="text-right">Total Value</th>}
+                {cInvCol('inv-col-reorder-point') && <th className="text-right">Reorder At</th>}
                 <th className="text-right">Suggested</th>
                 <th className="text-right">Days Stock</th>
                 <th className="text-center">Actions</th>
@@ -1059,8 +1065,9 @@ const Inventory: React.FC = () => {
                         {!!item.is_asset && <span className="block-badge text-[10px]">Asset</span>}
                       </div>
                     </td>
-                    <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>
-                    <td className="text-text-secondary text-sm truncate max-w-[140px]"><ClassificationBadge def={INVENTORY_CATEGORY} value={item.category} /></td>
+                    {cInvCol('inv-col-sku') && <td className="font-mono text-text-secondary text-xs">{item.sku || '—'}</td>}
+                    {cInvCol('inv-col-category') && <td className="text-text-secondary text-sm truncate max-w-[140px]"><ClassificationBadge def={INVENTORY_CATEGORY} value={item.category} /></td>}
+                    {cInvCol('inv-col-status') && (
                     <td>
                       <span
                         className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5"
@@ -1069,15 +1076,18 @@ const Inventory: React.FC = () => {
                         {status.label}
                       </span>
                     </td>
+                    )}
+                    {cInvCol('inv-col-on-hand') && (
                     <td className={`text-right font-mono font-semibold ${isLow ? 'text-accent-expense' : 'text-text-primary'}`}>
                       {item.quantity}
                       {isLow && item.reorder_qty > 0 && (
                         <span className="block text-[10px] text-text-muted font-normal">order {item.reorder_qty}</span>
                       )}
                     </td>
-                    <td className="text-right font-mono text-text-secondary text-sm">{fmt.format(item.unit_cost)}</td>
-                    <td className="text-right font-mono text-text-primary font-medium text-sm">{fmt.format(item.quantity * item.unit_cost)}</td>
-                    <td className="text-right font-mono text-text-muted text-sm">{item.reorder_point || '—'}</td>
+                    )}
+                    {cInvCol('inv-col-unit-cost') && <td className="text-right font-mono text-text-secondary text-sm">{fmt.format(item.unit_cost)}</td>}
+                    {cInvCol('inv-col-total-value') && <td className="text-right font-mono text-text-primary font-medium text-sm">{fmt.format(item.quantity * item.unit_cost)}</td>}
+                    {cInvCol('inv-col-reorder-point') && <td className="text-right font-mono text-text-muted text-sm">{item.reorder_point || '—'}</td>}
                     <td className="text-right font-mono text-accent-blue text-sm">{suggestedReorder > 0 ? suggestedReorder : '—'}</td>
                     <td className="text-right font-mono text-text-muted text-sm">{daysOfStock !== null ? `${daysOfStock}d` : '—'}</td>
                     <td className="text-center">
