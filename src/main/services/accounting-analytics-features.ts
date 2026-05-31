@@ -266,12 +266,12 @@ export function listBurdenRates(companyId: string): any[] {
 export function captureTBSnapshot(companyId: string, periodEnd: string, fiscalYear?: number): any {
   const dbi = db.getDb();
   const rows = dbi.prepare(`
-    SELECT a.id, a.code, a.name, a.account_type,
+    SELECT a.id, a.code, a.name, a.type AS account_type,
       COALESCE(SUM(jel.debit), 0) AS debit,
       COALESCE(SUM(jel.credit), 0) AS credit
       FROM accounts a
       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
-      LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id AND je.is_posted = 1 AND je.entry_date <= ?
+      LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id AND je.is_posted = 1 AND je.date <= ?
      WHERE a.company_id = ? AND (a.deleted_at IS NULL OR a.deleted_at = '')
      GROUP BY a.id
   `).all(periodEnd, companyId) as any[];
