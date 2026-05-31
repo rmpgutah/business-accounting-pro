@@ -7,6 +7,7 @@ import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
@@ -91,6 +92,11 @@ function nextDueBg(nextDate: string): string {
 const RecurringTransactions: React.FC = () => {
   const nav = useNavigation();
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Recurring): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cRecCol = (id: string) => custValues['recurring.' + id] !== false; // default visible
+  const cRecDensity = useCustomizationStore((s) => String(s.get('recurring.display-density') ?? 'comfortable'));
+  const cRecFont = cRecDensity === 'compact' ? 11 : cRecDensity === 'spacious' ? 13 : undefined;
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -508,15 +514,15 @@ const RecurringTransactions: React.FC = () => {
             </div>
           ) : (
             <div className="block-card p-0 overflow-hidden">
-              <table className="block-table">
+              <table className="block-table" style={{ fontSize: cRecFont }}>
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Type</th>
-                    <th>Frequency</th>
-                    <th>Next Due</th>
-                    <th>Last Generated</th>
-                    <th>End Date</th>
+                    {cRecCol('col-type') && <th>Type</th>}
+                    {cRecCol('col-frequency') && <th>Frequency</th>}
+                    {cRecCol('col-next-run') && <th>Next Due</th>}
+                    {cRecCol('col-last-run') && <th>Last Generated</th>}
+                    {cRecCol('col-end-date') && <th>End Date</th>}
                     <th>Status</th>
                     <th className="text-center">Toggle</th>
                   </tr>
@@ -525,12 +531,17 @@ const RecurringTransactions: React.FC = () => {
                   {filtered.map((t) => (
                     <tr key={t.id}>
                       <td className="text-text-primary font-medium truncate max-w-[200px]">{t.name}</td>
+                      {cRecCol('col-type') && (
                       <td>
                         <span className={typeBadge[t.type] || 'block-badge capitalize'}>{t.type}</span>
                       </td>
+                      )}
+                      {cRecCol('col-frequency') && (
                       <td className="text-text-secondary">
                         {frequencyLabel[t.frequency] || t.frequency}
                       </td>
+                      )}
+                      {cRecCol('col-next-run') && (
                       <td>
                         <span
                           className={`font-mono text-xs px-2 py-0.5 ${nextDueColor(t.next_date)} ${nextDueBg(t.next_date)}`}
@@ -539,12 +550,17 @@ const RecurringTransactions: React.FC = () => {
                           {t.next_date ? format(parseISO(t.next_date), 'MMM d, yyyy') : '-'}
                         </span>
                       </td>
+                      )}
+                      {cRecCol('col-last-run') && (
                       <td className="font-mono text-text-muted text-xs">
                         {t.last_generated ? format(parseISO(t.last_generated), 'MMM d, yyyy') : 'Never'}
                       </td>
+                      )}
+                      {cRecCol('col-end-date') && (
                       <td className="font-mono text-text-muted text-xs">
                         {t.end_date ? format(parseISO(t.end_date), 'MMM d, yyyy') : '-'}
                       </td>
+                      )}
                       <td>
                         {t.is_active ? (
                           <span className="block-badge block-badge-income">active</span>

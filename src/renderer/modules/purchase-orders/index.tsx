@@ -5,6 +5,7 @@ import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { useAppStore } from '../../stores/appStore';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
@@ -122,6 +123,11 @@ interface POListProps {
 
 const POList: React.FC<POListProps> = ({ onNew, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Purchase Orders): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cPoCol = (id: string) => custValues['purchase-orders.' + id] !== false; // default visible
+  const cPoDensity = useCustomizationStore((s) => String(s.get('purchase-orders.po-display-density') ?? 'comfortable'));
+  const cPoFont = cPoDensity === 'compact' ? 11 : cPoDensity === 'spacious' ? 13 : undefined;
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [vendors, setVendors] = useState<Record<string, Vendor>>({});
   const [stats, setStats] = useState<POStats>({
@@ -299,15 +305,15 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
             }
           />
         ) : (
-          <table className="block-table w-full">
+          <table className="block-table w-full" style={{ fontSize: cPoFont }}>
             <thead>
               <tr>
                 <th className="text-[10px]">PO #</th>
-                <th className="text-[10px]">Vendor</th>
-                <th className="text-[10px]">Order Date</th>
-                <th className="text-[10px]">Expected Date</th>
-                <th className="text-[10px] text-right">Total</th>
-                <th className="text-[10px]">Status</th>
+                {cPoCol('po-col-vendor') && <th className="text-[10px]">Vendor</th>}
+                {cPoCol('po-col-order-date') && <th className="text-[10px]">Order Date</th>}
+                {cPoCol('po-col-expected-date') && <th className="text-[10px]">Expected Date</th>}
+                {cPoCol('po-col-total') && <th className="text-[10px] text-right">Total</th>}
+                {cPoCol('po-col-status') && <th className="text-[10px]">Status</th>}
                 <th className="text-[10px]"></th>
               </tr>
             </thead>
@@ -317,17 +323,21 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                   <td className="font-mono text-xs text-accent-blue" onClick={(e) => e.stopPropagation()}>
                     <EntityChip type="purchase_order" id={po.id} label={po.po_number} variant="inline" />
                   </td>
+                  {cPoCol('po-col-vendor') && (
                   <td className="text-xs text-text-primary truncate max-w-[180px]" onClick={(e) => e.stopPropagation()}>
                     {po.vendor_id ? <EntityChip type="vendor" id={po.vendor_id} label={vendors[po.vendor_id]?.name ?? ''} variant="inline" /> : '—'}
                   </td>
-                  <td className="font-mono text-xs text-text-secondary">{formatDate(po.issue_date)}</td>
-                  <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>
-                  <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>
+                  )}
+                  {cPoCol('po-col-order-date') && <td className="font-mono text-xs text-text-secondary">{formatDate(po.issue_date)}</td>}
+                  {cPoCol('po-col-expected-date') && <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>}
+                  {cPoCol('po-col-total') && <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>}
+                  {cPoCol('po-col-status') && (
                   <td>
                     <span className={formatStatus(po.status).className}>
                       {formatStatus(po.status).label}
                     </span>
                   </td>
+                  )}
                   <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="block-btn text-[10px] px-2 py-1"

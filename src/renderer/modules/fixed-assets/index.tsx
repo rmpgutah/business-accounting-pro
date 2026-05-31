@@ -12,6 +12,7 @@ import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { formatCurrency, roundCents } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { useAppStore } from '../../stores/appStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -145,6 +146,11 @@ interface AssetListProps {
 
 const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Fixed Assets): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cFaCol = (id: string) => custValues['fixed-assets.' + id] !== false; // default visible
+  const cFaDensity = useCustomizationStore((s) => String(s.get('fixed-assets.display-density') ?? 'comfortable'));
+  const cFaFont = cFaDensity === 'compact' ? 11 : cFaDensity === 'spacious' ? 13 : undefined;
   const [assets, setAssets] = useState<FixedAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningDep, setRunningDep] = useState(false);
@@ -793,7 +799,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             )}
           </div>
         ) : (
-          <table className="block-table w-full">
+          <table className="block-table w-full" style={{ fontSize: cFaFont }}>
             <thead>
               <tr>
                 <th className="w-8 text-center">
@@ -804,15 +810,15 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                     style={{ accentColor: '#3b82f6' }}
                   />
                 </th>
-                <th>Asset Code</th>
+                {cFaCol('col-asset-tag') && <th>Asset Code</th>}
                 <th>Name</th>
-                <th>Category</th>
+                {cFaCol('col-category') && <th>Category</th>}
                 <th>Condition</th>
-                <th>Purchase Date</th>
-                <th className="text-right">Original Cost</th>
-                <th className="text-right">Acc. Dep.</th>
-                <th className="text-right">Book Value</th>
-                <th>Status</th>
+                {cFaCol('col-acquisition-date') && <th>Purchase Date</th>}
+                {cFaCol('col-acquisition-cost') && <th className="text-right">Original Cost</th>}
+                {cFaCol('col-accumulated-depreciation') && <th className="text-right">Acc. Dep.</th>}
+                {cFaCol('col-net-book-value') && <th className="text-right">Book Value</th>}
+                {cFaCol('col-status') && <th>Status</th>}
                 <th className="text-center">Photo</th>
                 <th className="text-center">Insured</th>
                 <th>Actions</th>
@@ -832,21 +838,25 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                       style={{ accentColor: '#3b82f6' }}
                     />
                   </td>
-                  <td className="font-mono text-xs text-accent-blue">{a.asset_code}</td>
+                  {cFaCol('col-asset-tag') && <td className="font-mono text-xs text-accent-blue">{a.asset_code}</td>}
                   <td className="font-semibold text-text-primary truncate max-w-[200px]">{a.name}</td>
-                  <td><ClassificationBadge def={ASSET_CATEGORY} value={a.category} /></td>
+                  {cFaCol('col-category') && <td><ClassificationBadge def={ASSET_CATEGORY} value={a.category} /></td>}
                   <td><ClassificationBadge def={ASSET_CONDITION} value={(a as any).condition} /></td>
+                  {cFaCol('col-acquisition-date') && (
                   <td className="text-text-secondary text-xs">
                     {a.purchase_date ? format(parseISO(a.purchase_date), 'MMM d, yyyy') : '—'}
                   </td>
-                  <td className="text-right text-text-primary">{fmt.format(a.purchase_price)}</td>
-                  <td className="text-right text-accent-expense">{fmt.format(a.accumulated_depreciation || 0)}</td>
-                  <td className="text-right text-accent-income font-semibold">{fmt.format((a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))))}</td>
+                  )}
+                  {cFaCol('col-acquisition-cost') && <td className="text-right text-text-primary">{fmt.format(a.purchase_price)}</td>}
+                  {cFaCol('col-accumulated-depreciation') && <td className="text-right text-accent-expense">{fmt.format(a.accumulated_depreciation || 0)}</td>}
+                  {cFaCol('col-net-book-value') && <td className="text-right text-accent-income font-semibold">{fmt.format((a.current_book_value ?? ((a.purchase_price || 0) - (a.accumulated_depreciation || 0))))}</td>}
+                  {cFaCol('col-status') && (
                   <td>
                     <span className={`block-badge ${STATUS_COLORS[a.status] || 'block-badge'}`}>
                       {a.status === 'fully_depreciated' ? 'Fully Dep.' : a.status.charAt(0).toUpperCase() + a.status.slice(1)}
                     </span>
                   </td>
+                  )}
                   <td className="text-center">
                     {photoPath ? <Image size={13} className="text-accent-income inline" /> : <span className="text-text-muted">—</span>}
                   </td>
