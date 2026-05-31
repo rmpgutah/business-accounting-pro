@@ -544,5 +544,8 @@ export function upsertRetentionPolicy(p: any): { id: string } {
 }
 
 export function findDocsExceedingRetention(companyId: string): any[] {
-  return db.getDb().prepare(`SELECT d.id, d.name, d.created_at, p.retention_years, p.document_type FROM documents d JOIN document_retention_policies p ON p.document_type = d.document_type WHERE p.company_id = ? AND p.is_active = 1 AND p.auto_delete = 1 AND date(d.created_at, '+' || p.retention_years || ' years') < date('now')`).all(companyId) as any[];
+  // documents has no `name`/`document_type`/`created_at` columns — use
+  // filename, uploaded_at, and entity_type (the only available type dimension)
+  // to match retention policies.
+  return db.getDb().prepare(`SELECT d.id, d.filename AS name, d.uploaded_at AS created_at, p.retention_years, p.document_type FROM documents d JOIN document_retention_policies p ON p.document_type = d.entity_type WHERE p.company_id = ? AND p.is_active = 1 AND p.auto_delete = 1 AND date(d.uploaded_at, '+' || p.retention_years || ' years') < date('now')`).all(companyId) as any[];
 }
