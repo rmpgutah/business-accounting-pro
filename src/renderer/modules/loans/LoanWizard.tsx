@@ -134,11 +134,13 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
     setSaving(true);
     try {
       const payload = { ...form, ...(typeKey === 'heloc' ? { amortization_type: 'interest_only' } : {}), payment_amount: liveCalc?.monthly_payment || 0 };
-      const res: any = await (api as any).invoke?.('loans:save', payload) || await api.rawQuery('SELECT 1', []);
-      // The 'loans:save' channel uses window.electronAPI.invoke directly:
+      // Save exactly once. (Previously this also fired a stray api.invoke('loans:save')
+      // above, creating a duplicate loan on every wizard submit.)
       const saveRes: any = await (window as any).electronAPI.invoke('loans:save', payload);
       if (saveRes?.error) { alert(`Save failed: ${saveRes.error}`); setSaving(false); return; }
-      onSaved(saveRes.id || saveRes.loan_id);
+      const newId = saveRes?.id || saveRes?.loan_id;
+      if (!newId) { alert('Save succeeded but no loan ID was returned.'); setSaving(false); return; }
+      onSaved(newId);
     } catch (e: any) {
       alert(`Save failed: ${e.message}`);
       setSaving(false);

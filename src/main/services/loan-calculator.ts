@@ -119,10 +119,20 @@ export function generateSchedule(input: AmortizationInput): AmortizationRow[] {
     switch (input.amortization_type) {
       case 'interest_only':
         return input.principal * r;        // every payment is just interest
-      case 'balloon':
-        // Balloon: amortize as if standard but for `term_months`,
-        // then a balloon principal payment at the end.
-        return periodicPayment(input.principal - (input.balloon_amount || 0), r, n);
+      case 'balloon': {
+        // Balloon: the final (nth) payment pays off the entire remaining
+        // balance, which must equal the stated balloon_amount. So the
+        // (n-1) regular payments must amortize the principal down to the
+        // balloon. That means amortizing the principal MINUS the balloon's
+        // present value (discounted back over the n-1 regular periods) —
+        // NOT principal − balloon undiscounted, which leaves far more than
+        // the balloon owing at the end (e.g. $28k instead of $20k).
+        const balloon = input.balloon_amount || 0;
+        const regularN = n - 1; // nth payment is the balloon itself
+        if (regularN <= 0) return 0;
+        const factor = r === 0 ? 1 : Math.pow(1 + r, regularN);
+        return periodicPayment(input.principal - balloon / factor, r, regularN);
+      }
       case 'custom':
       case 'standard':
       default:

@@ -58,8 +58,9 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
   const computeScenario = useCallback(async () => {
     if (!data || extraPerPayment <= 0) { setScenario(null); return; }
     const r = await api.loanPayoffScenario(loanId, extraPerPayment);
-    if (!r.error) setScenario(r);
-  }, [data, extraPerPayment, loanId]);
+    if (r?.error) { toast.error('Payoff scenario failed: ' + r.error); setScenario(null); return; }
+    setScenario(r);
+  }, [data, extraPerPayment, loanId, toast]);
 
   if (loading) return <div style={{ padding: 24 }}>Loading…</div>;
   if (!data) return <div style={{ padding: 24, color: 'var(--color-text-muted)' }}>Loan not found</div>;
@@ -774,17 +775,21 @@ const SkipPaymentModal: React.FC<{
 }> = ({ loanId, loan, onClose, onSkipped }) => {
   const toast = useToast();
   const [reason, setReason] = useState('');
+  const [customReason, setCustomReason] = useState('');
   const [capitalize, setCapitalize] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const nextDue = loan.next_payment_due;
   const payment = loan.payment_amount || 0;
 
+  // When "Other" is picked, the real reason comes from the free-text field.
+  const effectiveReason = reason === 'Other' ? customReason.trim() : reason.trim();
+
   const handleSkip = async () => {
-    if (!reason.trim()) { toast.error('Please enter a reason for skipping.'); return; }
+    if (!effectiveReason) { toast.error('Please enter a reason for skipping.'); return; }
     setBusy(true);
     try {
-      const r = await api.loanSkipPayment(loanId, reason.trim(), capitalize);
+      const r = await api.loanSkipPayment(loanId, effectiveReason, capitalize);
       if (r?.error) { toast.error('Skip failed: ' + r.error); return; }
       toast.success(
         `Payment #${r.skipped_payment_number} ($${(r.skipped_amount || 0).toFixed(2)}) on ${r.skipped_due_date} skipped. ` +
@@ -839,7 +844,7 @@ const SkipPaymentModal: React.FC<{
               <option value="Other">Other</option>
             </select>
             {reason === 'Other' && (
-              <input className="block-input" placeholder="Describe the reason..." value="" onChange={(e) => setReason(e.target.value)} />
+              <input className="block-input" placeholder="Describe the reason..." value={customReason} onChange={(e) => setCustomReason(e.target.value)} />
             )}
           </div>
 
@@ -857,7 +862,7 @@ const SkipPaymentModal: React.FC<{
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 }}>
           <button onClick={onClose} className="block-btn">Cancel</button>
-          <button onClick={handleSkip} disabled={busy || !reason.trim()} className="block-btn-primary"
+          <button onClick={handleSkip} disabled={busy || !effectiveReason} className="block-btn-primary"
             style={{ background: '#d97706', borderColor: '#d97706' }}>
             <SkipForward size={12} style={{ marginRight: 4, display: 'inline' }} />
             {busy ? 'Skipping...' : 'Skip This Payment'}
