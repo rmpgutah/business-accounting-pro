@@ -574,7 +574,7 @@ export function checkCreditLimit(customerId: string, additionalCharge: number = 
   const dbi = db.getDb();
   const c = dbi.prepare(`SELECT credit_limit, credit_hold FROM clients WHERE id = ?`).get(customerId) as any;
   if (!c) throw new Error('Customer not found');
-  const open = dbi.prepare(`SELECT COALESCE(SUM(balance), 0) AS t FROM invoices WHERE client_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(customerId) as any;
+  const open = dbi.prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) AS t FROM invoices WHERE client_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(customerId) as any;
   const currentBalance = open.t || 0;
   const totalAfter = currentBalance + additionalCharge;
   const limit = c.credit_limit || Infinity;
@@ -592,11 +592,11 @@ export function calcAgingBuckets(companyId: string, asOfDate?: string): { bucket
   const dbi = db.getDb();
   const date = asOfDate || today();
   const rows = dbi.prepare(`
-    SELECT i.client_id, c.name AS client_name, i.id AS invoice_id, i.invoice_number, i.balance, i.due_date,
+    SELECT i.client_id, c.name AS client_name, i.id AS invoice_id, i.invoice_number, (i.total - i.amount_paid) AS balance, i.due_date,
       CAST(julianday(?) - julianday(i.due_date) AS INTEGER) AS days_overdue
     FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
     WHERE i.company_id = ? AND i.status NOT IN ('paid','void','cancelled')
-      AND (i.deleted_at IS NULL OR i.deleted_at = '') AND i.balance > 0
+      AND (i.deleted_at IS NULL OR i.deleted_at = '') AND (i.total - i.amount_paid) > 0
   `).all(date, companyId) as any[];
 
   const buckets = { '0_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0 };
@@ -628,9 +628,9 @@ export function calcAgingBuckets(companyId: string, asOfDate?: string): { bucket
 // F499 — customer statements
 export function generateStatement(opts: { company_id: string; customer_id: string; period_start: string; period_end: string }): { id: string; closing_balance: number } {
   const dbi = db.getDb();
-  const opening = dbi.prepare(`SELECT COALESCE(SUM(balance), 0) AS b FROM invoices WHERE client_id = ? AND issue_date < ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(opts.customer_id, opts.period_start) as any;
+  const opening = dbi.prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) AS b FROM invoices WHERE client_id = ? AND issue_date < ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(opts.customer_id, opts.period_start) as any;
   const invsT = dbi.prepare(`SELECT COALESCE(SUM(total), 0) AS t FROM invoices WHERE client_id = ? AND issue_date BETWEEN ? AND ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(opts.customer_id, opts.period_start, opts.period_end) as any;
-  const paysT = dbi.prepare(`SELECT COALESCE(SUM(p.amount), 0) AS t FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.client_id = ? AND p.payment_date BETWEEN ? AND ?`).get(opts.customer_id, opts.period_start, opts.period_end) as any;
+  const paysT = dbi.prepare(`SELECT COALESCE(SUM(p.amount), 0) AS t FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.client_id = ? AND p.date BETWEEN ? AND ?`).get(opts.customer_id, opts.period_start, opts.period_end) as any;
   const closing = round2((opening.b || 0) + (invsT.t || 0) - (paysT.t || 0));
   const id = uuid();
   dbi.prepare(`INSERT INTO customer_statements (id, company_id, customer_id, statement_date, period_start, period_end, opening_balance, invoices_total, payments_total, closing_balance, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -659,8 +659,11 @@ export function writeOffBadDebt(opts: any): { id: string } {
   const dbi = db.getDb();
   dbi.prepare(`INSERT INTO bad_debt_writeoffs (id, company_id, customer_id, invoice_id, writeoff_amount, writeoff_date, reason, posted_je_id, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, opts.company_id, opts.customer_id, opts.invoice_id, opts.writeoff_amount || 0, opts.writeoff_date || today(), opts.reason, opts.posted_je_id, now(), opts.created_by);
-  // Mark invoice as written off
-  if (opts.invoice_id) dbi.prepare(`UPDATE invoices SET status = 'written_off', balance = 0, updated_at = ? WHERE id = ?`).run(now(), opts.invoice_id);
+  // Mark invoice as written off. invoices.status has no 'written_off' value
+  // (CHECK allows draft/sent/paid/overdue/cancelled/partial) and no `balance`
+  // column — use 'cancelled' to remove it from open AR; the writeoff record
+  // above preserves the bad-debt detail.
+  if (opts.invoice_id) dbi.prepare(`UPDATE invoices SET status = 'cancelled', updated_at = ? WHERE id = ?`).run(now(), opts.invoice_id);
   return { id };
 }
 
