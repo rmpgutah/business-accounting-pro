@@ -11,7 +11,7 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 import { InvoiceBulkActionBar, OverdueAlertBanner, TopClientsWidget, DSOMiniCard, AgingBucketBar } from './InvoiceUpgradesUI';
 
@@ -1013,7 +1013,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                             background: (TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280') + '22',
                             color: TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280',
                           }}>
-                            {inv.invoice_type.replace('_', ' ')}
+                            {humanizeLabel(inv.invoice_type)}
                           </span>
                         )}
                       </div>

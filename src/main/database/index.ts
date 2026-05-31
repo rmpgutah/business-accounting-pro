@@ -2136,6 +2136,10 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE projects ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE quotes ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE loans ADD COLUMN deleted_at TEXT DEFAULT NULL",
+  // fixed_assets is in TABLES_WITH_DELETED_AT + SOFT_DELETE_TABLES but never
+  // got the column, so db:query auto-filter threw "no such column: deleted_at"
+  // and the Fixed Assets screen failed to load.
+  "ALTER TABLE fixed_assets ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE tags ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE custom_field_definitions ADD COLUMN deleted_at TEXT DEFAULT NULL",
   "ALTER TABLE inventory_items ADD COLUMN deleted_at TEXT DEFAULT NULL",

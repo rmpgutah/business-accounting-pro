@@ -1,5 +1,21 @@
 // src/renderer/lib/format.ts
 
+// ─── Labels ──────────────────────────────────────────────
+// Turn raw enum/status/identifier values into formal, readable English.
+// Replaces "_" and "-" spacers with spaces and Sentence-cases the result, so
+// stored values like "in_collection" or "married_filing_jointly" never leak to
+// the UI as snake_case. Use sentenceCase for body text; for badges/labels that
+// should shout, wrap the output in CSS text-transform: uppercase.
+export function humanizeLabel(value: string | null | undefined): string {
+  if (value == null) return '';
+  const words = String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!words) return '';
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
 // ─── Currency ────────────────────────────────────────────
 const _currencyFmt = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -153,5 +169,6 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 };
 
 export function formatStatus(status: string | null | undefined): { label: string; className: string } {
-  return STATUS_MAP[status ?? ''] ?? { label: status ?? '—', className: 'block-badge' };
+  // Fall back to a humanized label (never raw snake_case) for unmapped statuses.
+  return STATUS_MAP[status ?? ''] ?? { label: status ? humanizeLabel(status) : '—', className: 'block-badge' };
 }

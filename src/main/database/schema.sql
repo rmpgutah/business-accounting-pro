@@ -716,7 +716,8 @@ CREATE TABLE IF NOT EXISTS fixed_assets (
   notes TEXT DEFAULT '',
   custom_fields TEXT DEFAULT '{}',
   created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  deleted_at TEXT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_depreciation_entries (
