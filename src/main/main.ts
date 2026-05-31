@@ -462,7 +462,23 @@ app.whenReady().then(() => {
     if (event.type === 'invoice:paid') {
       const { invoiceId, companyId, amount, stripePaymentId } = event as any;
       try {
-        dbInstance.prepare(`UPDATE invoices SET status = 'paid' WHERE id = ?`).run(invoiceId);
+        // Record the payment idempotently (keyed on the Stripe payment_intent)
+        // and update amount_paid — the canonical balance is total − amount_paid,
+        // so setting status alone left the invoice showing its full balance due.
+        const ins = dbInstance.prepare(`
+          INSERT OR IGNORE INTO payments
+            (id, company_id, invoice_id, amount, date, payment_method, reference, created_at)
+          VALUES (?, ?, ?, ?, date('now'), 'stripe', ?, datetime('now'))
+        `).run(stripePaymentId, companyId, invoiceId, amount, stripePaymentId);
+        if (ins.changes > 0) {
+          dbInstance.prepare(`
+            UPDATE invoices
+               SET amount_paid = MIN(total, COALESCE(amount_paid, 0) + ?),
+                   status = CASE WHEN COALESCE(amount_paid, 0) + ? >= total THEN 'paid' ELSE 'partial' END,
+                   updated_at = datetime('now')
+             WHERE id = ?
+          `).run(amount, amount, invoiceId);
+        }
         for (const w of allWindows) {
           w.webContents.send('sync:invoice-paid', { invoiceId, companyId, amount, stripePaymentId });
         }
