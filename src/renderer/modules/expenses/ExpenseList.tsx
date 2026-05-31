@@ -8,6 +8,7 @@ import { useToast } from '../../components/ToastProvider';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
@@ -106,6 +107,21 @@ const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CHF', 'MXN', 'INR
 
 // Default visible columns (mileage and approval hidden by default)
 const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vendor', 'project', 'amount', 'status', 'receipt', 'taxded', 'billable', 'actions'];
+
+// Maps a table column to its Customization Center option (Expenses → Columns).
+// When the user turns one of these OFF, the column hides regardless of the
+// local column menu. Columns with no entry are local-menu-only.
+const COL_CUSTOMIZATION: Partial<Record<ColKey, string>> = {
+  date: 'expenses.expenses-col-date',
+  category: 'expenses.expenses-col-category',
+  vendor: 'expenses.expenses-col-vendor',
+  project: 'expenses.expenses-col-project',
+  amount: 'expenses.expenses-col-amount',
+  status: 'expenses.expenses-col-status',
+  receipt: 'expenses.expenses-col-receipt',
+  taxded: 'expenses.expenses-col-tax',
+  billable: 'expenses.expenses-col-billable',
+};
 
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
@@ -771,7 +787,17 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     return map;
   }, [expenses]);
 
-  const colVisible = (k: ColKey) => visibleCols.includes(k);
+  // Customization Center overrides: a column hides if its option is OFF,
+  // otherwise falls back to the local column-menu state. Subscribing to
+  // `values` makes this reactive to changes made in the Customization Center.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cDensity = useCustomizationStore((s) => String(s.get('expenses.expenses-density') ?? 'comfortable'));
+  const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
+  const colVisible = (k: ColKey) => {
+    const cid = COL_CUSTOMIZATION[k];
+    if (cid && custValues[cid] === false) return false;
+    return visibleCols.includes(k);
+  };
 
   const renderExpenseRow = (exp: Expense) => {
     const isSelected = selectedIds.has(exp.id);
@@ -1363,7 +1389,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <div className="table-wrap-fade">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cTableFontSize }}>
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>

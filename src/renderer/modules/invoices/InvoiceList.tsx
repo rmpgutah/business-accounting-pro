@@ -150,6 +150,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const cShowIssueDate = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-issue-date')));
   const cShowDueDate = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-due-date')));
   const cShowDaysCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-days-overdue')));
+  const cShowTotalCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-amount')));
+  const cShowBalanceCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-balance-due')));
+  const cShowStatusCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-status')));
   const cDensity = useCustomizationStore((s) => String(s.get('invoicing.display-density') ?? 'comfortable'));
   const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
 
@@ -958,10 +961,10 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 {cShowDueDate && <th>Due Date</th>}
                 {cShowDaysCol && <th>Days</th>}
                 {showPredictedColumn && <th>Predicted Pay</th>}
-                <th className="text-right">Total</th>
+                {cShowTotalCol && <th className="text-right">Total</th>}
                 <th className="text-right">Amount Paid</th>
-                <th className="text-right">Balance Due</th>
-                <th>Status</th>
+                {cShowBalanceCol && <th className="text-right">Balance Due</th>}
+                {cShowStatusCol && <th>Status</th>}
                 <th style={{ width: '60px' }}></th>
               </tr>
             </thead>
@@ -1043,15 +1046,20 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                             : '—'}
                       </td>
                     )}
+                    {cShowTotalCol && (
                     <td className="text-right font-mono text-text-primary">
                       {formatCurrency(inv.total)}
                     </td>
+                    )}
                     <td className="text-right font-mono text-text-secondary">
                       {formatCurrency(inv.amount_paid)}
                     </td>
+                    {cShowBalanceCol && (
                     <td className="text-right font-mono text-text-primary">
                       {formatCurrency(balance)}
                     </td>
+                    )}
+                    {cShowStatusCol && (
                     <td>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={badge.className}>{badge.label}</span>
@@ -1065,6 +1073,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         )}
                       </div>
                     </td>
+                    )}
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       {inv.status === 'overdue' && ((inv.total || 0) - ((inv as any).amount_paid || 0)) > 0.005 && (
                         <button

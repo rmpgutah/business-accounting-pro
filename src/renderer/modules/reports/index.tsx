@@ -6,6 +6,7 @@ import BalanceSheet from './BalanceSheet';
 import ExpenseByCategory from './ExpenseByCategory';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { formatCurrency } from '../../lib/format';
 
 const CashFlowStatement = React.lazy(() => import('./CashFlowStatement'));
@@ -185,6 +186,9 @@ const ReportsModule: React.FC = () => {
   const [activeReport, setActiveReport] = useState<ReportType | null>(null);
   const [favorites, setFavorites] = useState<ReportType[]>(getFavoriteReports);
   const [recentReports, setRecentReports] = useState<ReportType[]>(getRecentReports);
+  // Customization Center (Reports): table density applied to all rendered reports.
+  const cReportsDensity = useCustomizationStore((s) => String(s.get('reports.compact-density') ?? 'comfortable'));
+  const cReportsFont = cReportsDensity === 'compact' ? 12 : cReportsDensity === 'spacious' ? 15 : undefined;
 
   const handleSelect = useCallback((report: ReportType) => {
     addRecentReport(report);
@@ -290,7 +294,7 @@ const ReportsModule: React.FC = () => {
       </div>
 
       {/* Content */}
-      {activeReport ? renderReport() : (
+      {activeReport ? <div style={{ fontSize: cReportsFont }}>{renderReport()}</div> : (
         <div className="space-y-6">
           {/* Quick Financial Stats */}
           <QuickStats />
