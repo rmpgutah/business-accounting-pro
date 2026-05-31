@@ -17718,9 +17718,16 @@ export function registerIpcHandlers(): void {
     const previousHash = existing.content_hash;
     const newHash = computeHash(content);
     const userEmail = getLastLoginEmail() || 'unknown';
+    // INTEGRITY: once a document has signatures, content_hash is the hash the
+    // signatures were computed against. Do NOT overwrite it on edit, or
+    // esign:verify's hashMatch (currentHash === content_hash) becomes a no-op
+    // and a tampered signed document verifies as authentic. Keeping the signed
+    // hash means an edit makes hashMatch fail, correctly flagging tampering.
+    const sigCount = (db.getDb().prepare('SELECT COUNT(*) AS c FROM esign_signatures WHERE document_id = ?').get(id) as any)?.c || 0;
+    const storedHash = sigCount > 0 ? previousHash : newHash;
     db.getDb().prepare(`
       UPDATE esign_documents SET title = ?, description = ?, content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?
-    `).run(title, description, content, newHash, id);
+    `).run(title, description, content, storedHash, id);
     const hashChanged = previousHash !== newHash;
     if (hashChanged) {
       db.getDb().prepare(`
@@ -17810,9 +17817,19 @@ export function registerIpcHandlers(): void {
     const currentHash = computeHash(doc.content);
     const hashMatch = currentHash === doc.content_hash;
     const signatures = db.getDb().prepare('SELECT * FROM esign_signatures WHERE document_id = ? ORDER BY signed_at').all(id) as any[];
-    const signatureValid = signatures.length > 0;
+    // Re-derive each signature's hash (same recipe as esign:sign) and confirm it
+    // still matches what was stored — not just that signatures exist.
+    const signaturesIntact = signatures.length > 0 && signatures.every((s) => {
+      const expected = crypto.createHash('sha256')
+        .update(`${s.typed_name}:${id}:${doc.content_hash}:${s.signed_at}`)
+        .digest('hex');
+      return expected === s.signature_hash;
+    });
+    const signatureValid = signaturesIntact;
     return {
-      verified: hashMatch && signatureValid,
+      // A document is only verified if the content is unchanged, every
+      // signature re-validates, and it hasn't been revoked / reset to pending.
+      verified: hashMatch && signatureValid && doc.status === 'signed',
       hashMatch,
       signatureValid,
       signedCount: signatures.length,

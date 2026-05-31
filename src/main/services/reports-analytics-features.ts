@@ -169,16 +169,28 @@ export function departmentPnL(companyId: string, opts: { start_date: string; end
   const dbi = db.getDb();
   try {
     // Use project as the department/cost-center proxy
+    // Pre-aggregate invoices and expenses in separate subqueries. Joining both
+    // directly to projects fans out (cartesian product of invoices × expenses),
+    // and SUM(DISTINCT) then both under-counts equal amounts and over-counts the
+    // fan-out. One row per project per side avoids that entirely.
     return dbi.prepare(`
       SELECT p.id AS dept_id, p.name AS department,
-        COALESCE(SUM(DISTINCT i.total), 0) AS revenue,
-        COALESCE(SUM(DISTINCT e.amount), 0) AS expenses,
-        COALESCE(SUM(DISTINCT i.total), 0) - COALESCE(SUM(DISTINCT e.amount), 0) AS profit
+        COALESCE(inv.revenue, 0) AS revenue,
+        COALESCE(exp.expenses, 0) AS expenses,
+        COALESCE(inv.revenue, 0) - COALESCE(exp.expenses, 0) AS profit
       FROM projects p
-      LEFT JOIN invoices i ON i.project_id = p.id AND i.issue_date BETWEEN ? AND ?
-      LEFT JOIN expenses e ON e.project_id = p.id AND e.date BETWEEN ? AND ?
+      LEFT JOIN (
+        SELECT project_id, SUM(total) AS revenue FROM invoices
+         WHERE issue_date BETWEEN ? AND ? AND status NOT IN ('void','cancelled')
+           AND (deleted_at IS NULL OR deleted_at = '')
+         GROUP BY project_id
+      ) inv ON inv.project_id = p.id
+      LEFT JOIN (
+        SELECT project_id, SUM(amount) AS expenses FROM expenses
+         WHERE date BETWEEN ? AND ? AND (deleted_at IS NULL OR deleted_at = '')
+         GROUP BY project_id
+      ) exp ON exp.project_id = p.id
       WHERE p.company_id = ?
-      GROUP BY p.id, p.name
       ORDER BY profit DESC
     `).all(opts.start_date, opts.end_date, opts.start_date, opts.end_date, companyId) as any[];
   } catch { return []; }
