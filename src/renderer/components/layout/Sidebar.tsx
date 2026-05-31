@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import logoUrl from '../../assets/rmpg-seal.png';
 import {
+  LayoutGrid as LayoutGridIcon,
   LayoutDashboard,
   BookOpen,
   FileText,
@@ -113,6 +114,7 @@ const sections: NavSection[] = [
       { id: 'audit-trail', label: 'Audit Trail', icon: Shield },
       { id: 'rules', label: 'Rules', icon: Shield },
       { id: 'automations', label: 'Automations', icon: Zap },
+      { id: 'component-library', label: 'Component Library', icon: LayoutGridIcon },
     ],
   },
   {

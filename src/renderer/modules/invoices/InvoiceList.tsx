@@ -148,6 +148,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   // Helper: days outstanding (positive = overdue, negative = due in N days)
   const daysOutstanding = (inv: Invoice): number => {
     if (inv.status === 'paid' || (inv as any).status === 'void' || (inv as any).status === 'cancelled') return 0;
+    // A settled balance is never "outstanding", regardless of a stale status string.
+    if (((inv.total || 0) - ((inv as any).amount_paid || 0)) <= 0.005) return 0;
     if (!inv.due_date) return 0;
     const ms = Date.now() - new Date(inv.due_date).getTime();
     return Math.floor(ms / (1000 * 60 * 60 * 24));
@@ -314,7 +316,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       return s + ((i.total || 0) - (i.amount_paid || 0));
     }, 0);
     const overdue = filtered
-      .filter((i) => i.status === 'overdue')
+      .filter((i) => i.status === 'overdue' && ((i.total || 0) - (i.amount_paid || 0)) > 0.005)
       .reduce((s, i) => s + ((i.total || 0) - (i.amount_paid || 0)), 0);
     const largest = filtered.reduce((m, i) => Math.max(m, i.total || 0), 0);
     // Avg days to pay — only for paid invoices in filtered
@@ -1056,7 +1058,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       </div>
                     </td>
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                      {inv.status === 'overdue' && (
+                      {inv.status === 'overdue' && ((inv.total || 0) - ((inv as any).amount_paid || 0)) > 0.005 && (
                         <button
                           onClick={() => sendToCollections(inv.id)}
                           className="block-btn text-xs"

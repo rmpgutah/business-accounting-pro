@@ -10,6 +10,7 @@ import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
+import { InvoiceStatusBadge, PaymentProgress, DueDateChip } from '../../components/library';
 import EntityTimeline from '../../components/EntityTimeline';
 import EntityChip from '../../components/EntityChip';
 
@@ -720,7 +721,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             <DollarSign size={14} />
             Record Payment
           </button>
-          {invoice.status === 'overdue' && (
+          {invoice.status === 'overdue' && (invoice.total - (invoice.amount_paid || 0)) > 0.005 && (
             <button
               onClick={() => sendToCollections(invoice.id)}
               className="block-btn text-xs flex items-center gap-2"
@@ -965,8 +966,23 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         )}
       </div>
 
-      {/* Aging Banner — for unpaid invoices */}
-      {invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled' && (() => {
+      {/* Payment status overview (library components) */}
+      <div className="block-card p-4 flex flex-wrap items-center gap-4">
+        <InvoiceStatusBadge status={invoice.status as any} />
+        <DueDateChip
+          dueDate={invoice.due_date}
+          paid={(invoice.total - (invoice.amount_paid || 0)) <= 0.005}
+        />
+        <div className="flex-1 min-w-[200px]">
+          <PaymentProgress paid={invoice.amount_paid || 0} total={invoice.total} />
+        </div>
+      </div>
+
+      {/* Aging Banner — for unpaid invoices.
+          Gate on the actual outstanding balance, not just the `status` string:
+          a fully-paid invoice can retain a stale `sent`/`overdue` status, and must
+          never render as overdue. Float-safe epsilon avoids sub-cent residue. */}
+      {(invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled' && (() => {
         const dueDate = new Date(invoice.due_date);
         const days = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
         let label = '';
@@ -1006,8 +1022,8 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         );
       })()}
 
-      {/* Predicted Payment + Engagement Metrics */}
-      {(invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled') && (
+      {/* Predicted Payment + Engagement Metrics — only meaningful while a balance is owed */}
+      {((invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled') && (
         <div className="grid grid-cols-2 gap-4">
           <div className="block-card p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -1086,7 +1102,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             Quick Actions
           </span>
           <div className="flex items-center gap-2 flex-wrap">
-            {invoice.status !== 'paid' && (
+            {(invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (
               <button
                 className="block-btn flex items-center gap-2 text-xs"
                 onClick={handleScheduleReminders}
@@ -1096,7 +1112,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 {schedulingReminders ? 'Scheduling…' : 'Send Reminder'}
               </button>
             )}
-            {invoice.status !== 'paid' && (invoice.late_fee_pct ?? 0) > 0 && (
+            {(invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (invoice.late_fee_pct ?? 0) > 0 && (
               <button
                 className="block-btn flex items-center gap-2 text-xs"
                 onClick={handleApplyLateFee}

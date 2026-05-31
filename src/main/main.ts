@@ -10,6 +10,9 @@ import { runAlertRules } from './crons/alerts';
 import { runOverdueCheck } from './crons/overdue-checker';
 import { runTrashPurge } from './crons/trash-purge';
 import { runIntegrityCheck, runVacuum } from './crons/integrity-check';
+import { runStatusReconcile } from './crons/status-reconcile';
+import { runAutoDunning } from './services/auto-dunning';
+import { runAutomationsByTrigger } from './automations';
 import { initWebhookDispatcher } from './services/webhook-dispatcher';
 import { initQueue, connectWebSocket } from './sync';
 
@@ -201,6 +204,13 @@ let recurringInterval: ReturnType<typeof setInterval> | null = null;
 let notificationInterval: ReturnType<typeof setInterval> | null = null;
 let alertRulesInterval: ReturnType<typeof setInterval> | null = null;
 let overdueCheckInterval: ReturnType<typeof setInterval> | null = null;
+let statusReconcileInterval: ReturnType<typeof setInterval> | null = null;
+let dunningInterval: ReturnType<typeof setInterval> | null = null;
+// Trigger-bucketed runners for the 75 registry automations.
+let automationsHourlyInterval: ReturnType<typeof setInterval> | null = null;
+let automationsDailyInterval: ReturnType<typeof setInterval> | null = null;
+let automationsWeeklyInterval: ReturnType<typeof setInterval> | null = null;
+let automationsMonthlyInterval: ReturnType<typeof setInterval> | null = null;
 let trashPurgeInterval: ReturnType<typeof setInterval> | null = null;
 let integrityCheckInterval: ReturnType<typeof setInterval> | null = null;
 let vacuumInterval: ReturnType<typeof setInterval> | null = null;
@@ -233,6 +243,19 @@ function startBackgroundServices() {
       console.error('Alert rules startup error:', err);
     }
 
+    // Balance-aware status reconcile. Runs BEFORE the overdue stamper so a
+    // fully-paid invoice is corrected settled→paid first and never left
+    // reading 'overdue'. Corrects drift in both directions.
+    try {
+      const sr = runStatusReconcile();
+      if (sr.invoicesFixed > 0 || sr.billsFixed > 0) {
+        console.log(`Status reconcile: fixed ${sr.invoicesFixed} invoices and ${sr.billsFixed} bills across ${sr.companiesScanned} companies`);
+      }
+      if (sr.errors.length) console.warn('Status reconcile errors:', sr.errors);
+    } catch (err) {
+      console.error('Status reconcile startup error:', err);
+    }
+
     // P1.7 — Auto-flip stale 'sent' invoices/bills to 'overdue' so PDFs
     // exported afterward render the OVERDUE stamp correctly. Runs at
     // startup + every 6 hours below.
@@ -244,6 +267,27 @@ function startBackgroundServices() {
       if (overdueResult.errors.length) console.warn('Overdue checker errors:', overdueResult.errors);
     } catch (err) {
       console.error('Overdue checker startup error:', err);
+    }
+
+    // Auto-dunning: queue overdue reminders + surface 90+ collections. Runs
+    // AFTER the overdue stamper so overdue status is already set this cycle.
+    try {
+      const dr = runAutoDunning();
+      if (dr.remindersQueued > 0 || dr.collectionsSuggested > 0) {
+        console.log(`Auto-dunning: ${dr.remindersQueued} reminders queued, ${dr.collectionsSuggested} collections suggested across ${dr.invoicesProcessed} invoices`);
+      }
+      if (dr.errors.length) console.warn('Auto-dunning errors:', dr.errors);
+    } catch (err) {
+      console.error('Auto-dunning startup error:', err);
+    }
+
+    // Registry automations: run the daily bucket once at startup (hourly/
+    // weekly/monthly buckets fire on their own intervals below).
+    try {
+      const ar = runAutomationsByTrigger('daily');
+      console.log(`Automations (daily): ran ${ar.ran}, ok ${ar.okCount}, affected ${ar.totalAffected}`);
+    } catch (err) {
+      console.error('Automations startup error:', err);
     }
 
     // P1.13 — Physically purge soft-deleted records older than the
@@ -302,6 +346,20 @@ function startBackgroundServices() {
     }
   }, 24 * 60 * 60 * 1000);
 
+  // Balance-aware status reconcile: every 6 hours, ahead of the overdue
+  // stamper. Corrects drift in both directions (e.g. clears a stale
+  // 'overdue' on a now-paid invoice).
+  statusReconcileInterval = setInterval(() => {
+    try {
+      const r = runStatusReconcile();
+      if (r.invoicesFixed > 0 || r.billsFixed > 0) {
+        console.log(`Status reconcile (6h): ${r.invoicesFixed} invoices, ${r.billsFixed} bills fixed`);
+      }
+    } catch (err) {
+      console.error('Status reconcile interval error:', err);
+    }
+  }, 6 * 60 * 60 * 1000);
+
   // Auto-overdue checker: every 6 hours. More frequent than the
   // 24h alert cron because users print PDFs throughout the day —
   // a 6h cycle ensures the OVERDUE stamp appears by next print
@@ -316,6 +374,36 @@ function startBackgroundServices() {
       console.error('Overdue checker interval error:', err);
     }
   }, 6 * 60 * 60 * 1000);
+
+  // Auto-dunning: every 24 hours (dunning stages are day-granular).
+  dunningInterval = setInterval(() => {
+    try {
+      const r = runAutoDunning();
+      if (r.remindersQueued > 0 || r.collectionsSuggested > 0) {
+        console.log(`Auto-dunning (24h): ${r.remindersQueued} reminders queued, ${r.collectionsSuggested} collections suggested`);
+      }
+    } catch (err) {
+      console.error('Auto-dunning interval error:', err);
+    }
+  }, 24 * 60 * 60 * 1000);
+
+  // Registry automations — trigger-bucketed schedulers. Each bucket runs all
+  // modules whose `trigger` matches; every run() is best-effort and the
+  // registry guards each call, so one failing module never breaks the batch.
+  const runBucket = (trigger: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
+    try {
+      const r = runAutomationsByTrigger(trigger);
+      if (r.totalAffected > 0 || r.okCount < r.ran) {
+        console.log(`Automations (${trigger}): ran ${r.ran}, ok ${r.okCount}, affected ${r.totalAffected}`);
+      }
+    } catch (err) {
+      console.error(`Automations ${trigger} interval error:`, err);
+    }
+  };
+  automationsHourlyInterval = setInterval(() => runBucket('hourly'), 60 * 60 * 1000);
+  automationsDailyInterval = setInterval(() => runBucket('daily'), 24 * 60 * 60 * 1000);
+  automationsWeeklyInterval = setInterval(() => runBucket('weekly'), 7 * 24 * 60 * 60 * 1000);
+  automationsMonthlyInterval = setInterval(() => runBucket('monthly'), 30 * 24 * 60 * 60 * 1000);
 
   // Trash auto-purge: every 24 hours (nightly). Daily cadence is
   // sufficient since the retention window is days, not hours.
@@ -394,6 +482,18 @@ function stopBackgroundServices() {
     clearInterval(overdueCheckInterval);
     overdueCheckInterval = null;
   }
+  if (statusReconcileInterval) {
+    clearInterval(statusReconcileInterval);
+    statusReconcileInterval = null;
+  }
+  if (dunningInterval) {
+    clearInterval(dunningInterval);
+    dunningInterval = null;
+  }
+  if (automationsHourlyInterval) { clearInterval(automationsHourlyInterval); automationsHourlyInterval = null; }
+  if (automationsDailyInterval) { clearInterval(automationsDailyInterval); automationsDailyInterval = null; }
+  if (automationsWeeklyInterval) { clearInterval(automationsWeeklyInterval); automationsWeeklyInterval = null; }
+  if (automationsMonthlyInterval) { clearInterval(automationsMonthlyInterval); automationsMonthlyInterval = null; }
   if (trashPurgeInterval) {
     clearInterval(trashPurgeInterval);
     trashPurgeInterval = null;

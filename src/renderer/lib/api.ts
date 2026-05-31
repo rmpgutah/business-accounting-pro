@@ -1158,28 +1158,15 @@ const api = {
   // expense to a loan after the fact (very common — user creates
   // expense for "Car Loan Payment - November" before realizing
   // they could attach it to the loan record).
-  lkExpensesForLoan: (loanId: string, opts?: { limit?: number; since?: string }): Promise<any[] | { error: string }> =>
-    window.electronAPI.invoke('lk:expenses-for-loan', { loan_id: loanId, opts: opts || {} }),
-  lkRecordPayment: (opts: { loan_id: string; payment_date: string; amount: number; principal_amount: number; interest_amount: number; escrow_amount?: number; payment_method?: string; reference?: string; category_id?: string; vendor_id?: string }): Promise<any> =>
-    window.electronAPI.invoke('lk:record-payment', opts),
+  // NOTE: the lk* payment/linkage methods (lkExpensesForLoan, lkRecordPayment,
+  // lkLoanContextForExpense, lkLinkageDashboard, lkCashflowTimeline,
+  // lkSuggestLoanForBankTx, lkLinkBankTx, lkAutoGlAccounts, lkGenerateBill) are
+  // defined once below in the "Loan Linkage Wave" block with superset
+  // signatures. Only the two methods unique to this block are kept here.
   lkRetroLinkExpense: (expense_id: string, loan_id: string, loan_payment_id?: string): Promise<any> =>
     window.electronAPI.invoke('lk:retrolink', { expense_id, loan_id, loan_payment_id }),
-  lkLoanContextForExpense: (expenseId: string): Promise<any> =>
-    window.electronAPI.invoke('lk:loan-context-for-expense', { expense_id: expenseId }),
   lkBackfillExpenses: (all?: boolean): Promise<{ created: number; migrated: number; payments_processed: number; created_interest?: number; created_principal?: number; error?: string }> =>
     window.electronAPI.invoke('lk:backfill-expenses', { all: !!all }),
-  lkLinkageDashboard: (): Promise<any> =>
-    window.electronAPI.invoke('lk:linkage-dashboard'),
-  lkCashflowTimeline: (loanId: string, opts?: { since?: string; until?: string }): Promise<any> =>
-    window.electronAPI.invoke('lk:cashflow-timeline', { loan_id: loanId, opts: opts || {} }),
-  lkSuggestLoanForBankTx: (opts: { amount: number; date: string; memo?: string; payee?: string }): Promise<any> =>
-    window.electronAPI.invoke('lk:suggest-loan-for-bank-tx', opts),
-  lkLinkBankTx: (opts: { bank_transaction_id: string; loan_id: string; schedule_id?: string; principal_amount: number; interest_amount: number; escrow_amount?: number; create_expense?: boolean }): Promise<any> =>
-    window.electronAPI.invoke('lk:link-bank-tx', opts),
-  lkAutoGlAccounts: (loanId: string): Promise<any> =>
-    window.electronAPI.invoke('lk:auto-gl-accounts', { loan_id: loanId }),
-  lkGenerateBill: (opts: { loan_id: string; due_date?: string; vendor_id?: string }): Promise<any> =>
-    window.electronAPI.invoke('lk:generate-bill', opts),
   loanPayoffScenario: (loan_id: string, extra_per_payment: number): Promise<{ baseline_total_interest: number; baseline_payoff_date: string; scenario_total_interest: number; scenario_payoff_date: string; interest_saved: number; months_saved: number; error?: string }> =>
     window.electronAPI.invoke('loans:payoff-scenario', { loan_id, extra_per_payment }),
   loansAggregate: (): Promise<{ stats: any; upcoming: any[] } | { error?: string }> =>

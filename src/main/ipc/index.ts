@@ -1172,6 +1172,93 @@ export function registerIpcHandlers(): void {
       return { cleaned: 0, error: err?.message };
     }
   });
+
+  // ── Automation manual-trigger handlers ──────────────────────
+  // Balance-aware invoice/bill status reconcile (also runs on a 6h cron).
+  ipcMain.handle('maintenance:reconcile-status', () => {
+    try {
+      const { runStatusReconcile } = require('../crons/status-reconcile');
+      return runStatusReconcile();
+    } catch (err: any) {
+      return { invoicesFixed: 0, billsFixed: 0, companiesScanned: 0, errors: [err?.message] };
+    }
+  });
+  // Auto-dunning: run now / preview what would be actioned.
+  ipcMain.handle('dunning:run', () => {
+    try {
+      const { runAutoDunning } = require('../services/auto-dunning');
+      return runAutoDunning();
+    } catch (err: any) {
+      return { invoicesProcessed: 0, remindersQueued: 0, collectionsSuggested: 0, errors: [err?.message] };
+    }
+  });
+  ipcMain.handle('dunning:preview', () => {
+    try {
+      const { getDunningPreview } = require('../services/auto-dunning');
+      return getDunningPreview(db.getCurrentCompanyId());
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  // One-click month-end close (dry-run preview + real run).
+  ipcMain.handle('close:preview-month', (_e, { year, month }: { year: number; month: number }) => {
+    try {
+      const { getMonthEndPreview } = require('../services/month-end-close');
+      return getMonthEndPreview(db.getCurrentCompanyId(), year, month);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('close:run-month', (_e, { year, month }: { year: number; month: number }) => {
+    try {
+      const { runMonthEndClose } = require('../services/month-end-close');
+      return runMonthEndClose({ companyId: db.getCurrentCompanyId(), year, month, dryRun: false });
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  // Payroll integrity guard: scan all runs / validate one before posting.
+  ipcMain.handle('payroll:scan-integrity', () => {
+    try {
+      const { scanPayrollIntegrity } = require('../services/payroll-integrity');
+      return scanPayrollIntegrity(db.getCurrentCompanyId());
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('payroll:validate-run', (_e, { runId }: { runId: string }) => {
+    try {
+      const { assertPayrollRunValid } = require('../services/payroll-integrity');
+      return assertPayrollRunValid(runId);
+    } catch (err: any) {
+      return { ok: false, error: err?.message };
+    }
+  });
+  // ── Automation registry (75 modules across 13 domains) ──────
+  ipcMain.handle('automations:list', () => {
+    try {
+      const { listAutomations } = require('../automations');
+      return listAutomations();
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('automations:run', (_e, { id }: { id: string }) => {
+    try {
+      const { runAutomation } = require('../automations');
+      return runAutomation(id, { companyId: db.getCurrentCompanyId() });
+    } catch (err: any) {
+      return { ok: false, affected: 0, detail: err?.message };
+    }
+  });
+  ipcMain.handle('automations:run-trigger', (_e, { trigger }: { trigger: string }) => {
+    try {
+      const { runAutomationsByTrigger } = require('../automations');
+      return runAutomationsByTrigger(trigger, { companyId: db.getCurrentCompanyId() });
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
   registerLoanIpc(ipcMain, { scheduleAutoBackup, findClosedPeriod, postJournalEntry });
 
   // ─── A7: Line-item snippets (reusable templates) ──────

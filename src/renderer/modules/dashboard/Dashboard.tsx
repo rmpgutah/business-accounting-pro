@@ -54,6 +54,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { usePersonalizationStore } from '../../stores/personalizationStore';
 import { formatCurrency, formatDate, percentChange } from '../../lib/format';
+import { MetricHero } from '../../components/library';
 import { fiscalYearStart } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
 import InsightsPanel from '../../components/InsightsPanel';
@@ -917,6 +918,15 @@ const Dashboard: React.FC = () => {
           {rulesActivity.alerts_week > 0 && (
             <span>{rulesActivity.alerts_week} alert{rulesActivity.alerts_week !== 1 ? 's' : ''} fired this week</span>
           )}
+        </div>
+      )}
+
+      {/* Headline metrics — library MetricHero bound to live stats */}
+      {isOn('kpis') && (
+        <div className="grid grid-cols-3 gap-5 no-print">
+          <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" />
+          <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" />
+          <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" />
         </div>
       )}
 
