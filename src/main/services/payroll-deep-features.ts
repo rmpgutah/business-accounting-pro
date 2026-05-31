@@ -38,7 +38,7 @@ function getFedConstants(year: number): { ss_wage_base: number; ss_rate: number;
     const row = db.getDb().prepare('SELECT * FROM federal_payroll_constants WHERE tax_year = ?').get(year) as any;
     if (row) {
       return {
-        ss_wage_base: row.ss_wage_base ?? 168600,
+        ss_wage_base: row.ss_wage_base ?? 182100,
         ss_rate: row.ss_rate ?? 0.062,
         medicare_rate: row.medicare_rate ?? 0.0145,
         addl_medicare_threshold: row.addl_medicare_threshold ?? 200000,
@@ -48,7 +48,7 @@ function getFedConstants(year: number): { ss_wage_base: number; ss_rate: number;
       };
     }
   } catch (_) { /* fall through */ }
-  return { ss_wage_base: 168600, ss_rate: 0.062, medicare_rate: 0.0145, addl_medicare_threshold: 200000, addl_medicare_rate: 0.009, futa_rate: 0.006, futa_wage_base: 7000 };
+  return { ss_wage_base: 182100, ss_rate: 0.062, medicare_rate: 0.0145, addl_medicare_threshold: 200000, addl_medicare_rate: 0.009, futa_rate: 0.006, futa_wage_base: 7000 };
 }
 
 // ════════════════════════════════════════════════════════════════════

@@ -502,9 +502,9 @@ export function submitTimesheet(periodId: string): { total_hours: number; billab
   // Roll up time entries
   const totals = dbi.prepare(`
     SELECT
-      COALESCE(SUM(hours), 0) AS total_hours,
-      COALESCE(SUM(CASE WHEN billable = 1 THEN hours ELSE 0 END), 0) AS billable_hours,
-      COALESCE(SUM(CASE WHEN hours > 8 THEN hours - 8 ELSE 0 END), 0) AS overtime_hours
+      COALESCE(SUM(duration_minutes / 60.0), 0) AS total_hours,
+      COALESCE(SUM(CASE WHEN is_billable = 1 THEN duration_minutes / 60.0 ELSE 0 END), 0) AS billable_hours,
+      COALESCE(SUM(CASE WHEN duration_minutes / 60.0 > 8 THEN duration_minutes / 60.0 - 8 ELSE 0 END), 0) AS overtime_hours
       FROM time_entries
      WHERE employee_id = (SELECT employee_id FROM timesheet_periods WHERE id = ?)
        AND date BETWEEN (SELECT period_start FROM timesheet_periods WHERE id = ?)
@@ -555,9 +555,9 @@ export function rebuildBillableTimeSummary(companyId: string, periodStart: strin
       te.project_id,
       te.employee_id,
       p.client_id,
-      SUM(CASE WHEN te.billable = 1 THEN te.hours ELSE 0 END) AS billable_hours,
-      SUM(CASE WHEN te.billable = 0 OR te.billable IS NULL THEN te.hours ELSE 0 END) AS non_billable_hours,
-      SUM(CASE WHEN te.billable = 1 THEN te.hours * COALESCE(te.hourly_rate, 0) ELSE 0 END) AS billable_amount
+      SUM(CASE WHEN te.is_billable = 1 THEN te.duration_minutes / 60.0 ELSE 0 END) AS billable_hours,
+      SUM(CASE WHEN te.is_billable = 0 OR te.is_billable IS NULL THEN te.duration_minutes / 60.0 ELSE 0 END) AS non_billable_hours,
+      SUM(CASE WHEN te.is_billable = 1 THEN te.duration_minutes / 60.0 * COALESCE(te.hourly_rate, 0) ELSE 0 END) AS billable_amount
       FROM time_entries te
       LEFT JOIN projects p ON p.id = te.project_id
      WHERE te.company_id = ?
@@ -605,7 +605,7 @@ export function captureProjectProfitability(companyId: string, projectId: string
 
   // Labor costs: time_entries * hourly_rate
   const laborRow = dbi.prepare(`
-    SELECT COALESCE(SUM(hours * COALESCE(hourly_rate, 0)), 0) AS labor_costs
+    SELECT COALESCE(SUM(duration_minutes / 60.0 * COALESCE(hourly_rate, 0)), 0) AS labor_costs
       FROM time_entries
      WHERE company_id = ? AND project_id = ?
   `).get(companyId, projectId) as any;

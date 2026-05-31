@@ -239,7 +239,7 @@ export function computeCOGS(companyId: string, periodStart: string, periodEnd: s
     closing = c?.v || 0;
   } catch {}
   // Purchases approximated by sum of bill amounts in period
-  const purch = dbi.prepare(`SELECT COALESCE(SUM(total), 0) AS p FROM bills WHERE company_id = ? AND bill_date BETWEEN ? AND ? AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId, periodStart, periodEnd) as any;
+  const purch = dbi.prepare(`SELECT COALESCE(SUM(total), 0) AS p FROM bills WHERE company_id = ? AND issue_date BETWEEN ? AND ? AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId, periodStart, periodEnd) as any;
   const purchases = purch.p || 0;
   const cogs = round2(opening + purchases - closing);
   return { opening_inventory: round2(opening), purchases: round2(purchases), closing_inventory: round2(closing), cogs };

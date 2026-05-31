@@ -306,12 +306,17 @@ export function recordPaymentRetry(opts: any): { id: string; next_attempt_at: st
 // F462 — partial payment application
 export function applyPartialPayment(invoiceId: string, amount: number): { remaining_balance: number; status: string } {
   const dbi = db.getDb();
-  const inv = dbi.prepare(`SELECT total, balance FROM invoices WHERE id = ?`).get(invoiceId) as any;
+  // The invoices table has no `balance` column — balance is derived as
+  // total − amount_paid (the canonical payment path uses amount_paid). The
+  // old code read/wrote a nonexistent `balance` column and threw on every call.
+  const inv = dbi.prepare(`SELECT total, amount_paid FROM invoices WHERE id = ?`).get(invoiceId) as any;
   if (!inv) throw new Error('Invoice not found');
-  const newBalance = round2((inv.balance || inv.total) - amount);
-  const newStatus = newBalance <= 0 ? 'paid' : 'partial';
-  dbi.prepare(`UPDATE invoices SET balance = ?, status = ?, updated_at = ? WHERE id = ?`).run(Math.max(0, newBalance), newStatus, now(), invoiceId);
-  return { remaining_balance: Math.max(0, newBalance), status: newStatus };
+  const total = round2(inv.total || 0);
+  const newPaid = round2((inv.amount_paid || 0) + amount);
+  const newStatus = newPaid >= total ? 'paid' : 'partial';
+  const remaining = Math.max(0, round2(total - newPaid));
+  dbi.prepare(`UPDATE invoices SET amount_paid = ?, status = ?, updated_at = ? WHERE id = ?`).run(newPaid, newStatus, now(), invoiceId);
+  return { remaining_balance: remaining, status: newStatus };
 }
 
 // F463 — customer credit balance
@@ -333,10 +338,17 @@ export function applyCustomerCredit(opts: { company_id: string; customer_id: str
   const bal = dbi.prepare(`SELECT balance FROM customer_credit_balances WHERE customer_id = ?`).get(opts.customer_id) as any;
   if (!bal || bal.balance <= 0) return { applied_amount: 0, remaining_credit: 0, remaining_invoice_balance: 0 };
   const applied = Math.min(opts.amount, bal.balance);
-  dbi.prepare(`INSERT INTO customer_credit_transactions (id, company_id, customer_id, transaction_type, amount, applied_to_invoice_id, transaction_at) VALUES (?, ?, ?, 'apply', ?, ?, ?)`)
-    .run(uuid(), opts.company_id, opts.customer_id, -applied, opts.invoice_id, now());
-  dbi.prepare(`UPDATE customer_credit_balances SET balance = balance - ?, last_applied_at = ?, updated_at = ? WHERE customer_id = ?`).run(applied, now(), now(), opts.customer_id);
-  const result = applyPartialPayment(opts.invoice_id, applied);
+  // Debit the credit balance and apply it to the invoice ATOMICALLY — otherwise
+  // a failure after the balance is decremented would silently lose the credit
+  // while leaving the invoice unpaid.
+  let result: { remaining_balance: number; status: string } = { remaining_balance: 0, status: 'partial' };
+  const tx = dbi.transaction(() => {
+    dbi.prepare(`INSERT INTO customer_credit_transactions (id, company_id, customer_id, transaction_type, amount, applied_to_invoice_id, transaction_at) VALUES (?, ?, ?, 'apply', ?, ?, ?)`)
+      .run(uuid(), opts.company_id, opts.customer_id, -applied, opts.invoice_id, now());
+    dbi.prepare(`UPDATE customer_credit_balances SET balance = balance - ?, last_applied_at = ?, updated_at = ? WHERE customer_id = ?`).run(applied, now(), now(), opts.customer_id);
+    result = applyPartialPayment(opts.invoice_id, applied);
+  });
+  tx();
   return { applied_amount: applied, remaining_credit: round2(bal.balance - applied), remaining_invoice_balance: result.remaining_balance };
 }
 

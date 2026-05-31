@@ -13716,8 +13716,8 @@ export function registerIpcHandlers(): void {
     if (name.includes('payable') && !name.includes('payroll') && !name.includes('tax')) {
       try {
         const items = db.getDb().prepare(
-          `SELECT id, bill_number AS reference, date, total - COALESCE(amount_paid,0) AS amount, vendor_id, status
-           FROM bills WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
+          `SELECT id, bill_number AS reference, issue_date AS date, total - COALESCE(amount_paid,0) AS amount, vendor_id, status
+           FROM bills WHERE company_id = ? AND issue_date <= ? AND COALESCE(amount_paid,0) < total`
         ).all(companyId, asOfDate) as any[];
         return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
       } catch { return { total: 0, items: [] }; }
@@ -13725,8 +13725,8 @@ export function registerIpcHandlers(): void {
     if (name.includes('inventory') || sub === 'inventory') {
       try {
         const items = db.getDb().prepare(
-          `SELECT id, sku AS reference, name, quantity_on_hand AS qty, unit_cost,
-                  quantity_on_hand * unit_cost AS amount FROM inventory_items WHERE company_id = ?`
+          `SELECT id, sku AS reference, name, quantity AS qty, unit_cost,
+                  quantity * unit_cost AS amount FROM inventory_items WHERE company_id = ?`
         ).all(companyId) as any[];
         return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
       } catch { return { total: 0, items: [] }; }
@@ -14452,8 +14452,8 @@ export function registerIpcHandlers(): void {
       let openBills: any[] = [];
       try {
         openBills = db.getDb().prepare(
-          `SELECT bill_number, date, total - COALESCE(amount_paid,0) AS open_amount, status
-           FROM bills WHERE company_id = ? AND COALESCE(amount_paid,0) < total AND date <= ?`
+          `SELECT bill_number, issue_date AS date, total - COALESCE(amount_paid,0) AS open_amount, status
+           FROM bills WHERE company_id = ? AND COALESCE(amount_paid,0) < total AND issue_date <= ?`
         ).all(companyId, periodEnd) as any[];
       } catch { /* table may not exist */ }
       const openInvoices = db.getDb().prepare(
@@ -14759,7 +14759,7 @@ export function registerIpcHandlers(): void {
         } else if (n.includes('payable')) {
           try {
             const r = db.getDb().prepare(
-              `SELECT SUM(total - COALESCE(amount_paid,0)) AS s FROM bills WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
+              `SELECT SUM(total - COALESCE(amount_paid,0)) AS s FROM bills WHERE company_id = ? AND issue_date <= ? AND COALESCE(amount_paid,0) < total`
             ).get(companyId, asOfDate) as any;
             subTotal = r?.s || 0;
           } catch { /* */ }

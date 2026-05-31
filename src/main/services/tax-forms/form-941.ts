@@ -123,7 +123,11 @@ export function computeForm941(companyId: string, year: number, quarter: 1 | 2 |
     WHERE r.company_id = ?
       AND r.pay_date BETWEEN ? AND ?
       AND COALESCE(r.deleted_at, '') = ''
+    ORDER BY r.pay_date ASC, s.id ASC
   `).all(companyId, range.start, range.end) as any[];
+  // NOTE: ORDER BY guarantees the per-employee ytdAtStart below is taken from
+  // the EARLIEST stub in the quarter, so SS-cap and additional-Medicare
+  // threshold crossings (lines 5a/5d) are computed off the correct baseline.
 
   // Distinct employees who received wages
   const employees = new Set<string>(stubs.map((s) => s.employee_id));
