@@ -23,6 +23,7 @@ import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
@@ -73,6 +74,11 @@ type SortKey =
 // ─── Component ──────────────────────────────────────────
 const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Quotes): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cQuoteCol = (id: string) => custValues['quotes.' + id] !== false; // default visible
+  const cQuoteDensity = useCustomizationStore((s) => String(s.get('quotes.show-quote-list-density') ?? 'comfortable'));
+  const cQuoteFont = cQuoteDensity === 'compact' ? 11 : cQuoteDensity === 'spacious' ? 13 : undefined;
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [salesReps, setSalesReps] = useState<{ id: string; name: string }[]>([]);
   const [search, setSearch] = useState('');
@@ -942,7 +948,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
         />
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cQuoteFont }}>
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>
@@ -955,12 +961,12 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   />
                 </th>
                 <th>Quote #</th>
-                <th>Client</th>
-                <th>Issue Date</th>
-                <th>Valid Until</th>
+                {cQuoteCol('col-client') && <th>Client</th>}
+                {cQuoteCol('col-issue-date') && <th>Issue Date</th>}
+                {cQuoteCol('col-expiry-date') && <th>Valid Until</th>}
                 <th>Expected Close</th>
-                <th className="text-right">Total</th>
-                <th>Status</th>
+                {cQuoteCol('col-amount') && <th className="text-right">Total</th>}
+                {cQuoteCol('col-status') && <th>Status</th>}
                 <th>Prob</th>
                 <th>Days</th>
                 <th style={{ width: '140px' }}>Actions</th>
@@ -1009,6 +1015,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                         {q.quote_number}
                       </span>
                     </td>
+                    {cQuoteCol('col-client') && (
                     <td
                       className="text-text-secondary truncate max-w-[180px]"
                       onClick={(e) => e.stopPropagation()}
@@ -1024,18 +1031,26 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                         '-'
                       )}
                     </td>
+                    )}
+                    {cQuoteCol('col-issue-date') && (
                     <td className="font-mono text-text-secondary text-xs">
                       {formatDate(q.issue_date)}
                     </td>
+                    )}
+                    {cQuoteCol('col-expiry-date') && (
                     <td className="font-mono text-text-secondary text-xs">
                       {q.valid_until ? formatDate(q.valid_until) : '-'}
                     </td>
+                    )}
                     <td className="font-mono text-text-secondary text-xs">
                       {q.expected_close_date ? formatDate(q.expected_close_date) : '-'}
                     </td>
+                    {cQuoteCol('col-amount') && (
                     <td className="text-right font-mono text-text-primary font-semibold">
                       {formatCurrency(q.total)}
                     </td>
+                    )}
+                    {cQuoteCol('col-status') && (
                     <td>
                       <span className="flex items-center gap-1.5">
                         {won && (
@@ -1047,6 +1062,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                         </span>
                       </span>
                     </td>
+                    )}
                     <td>
                       <span
                         className="font-mono text-xs font-semibold"

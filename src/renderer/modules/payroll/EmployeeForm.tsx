@@ -2298,7 +2298,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             <div className="border-t border-border-primary" />
             <DisciplinaryPanel employeeId={employeeId} />
             <div className="border-t border-border-primary" />
-            <CompensationHistoryPanel employeeId={employeeId} currentRate={form.pay_rate} currentPayType={form.pay_type} />
+            <CompensationHistoryPanel employeeId={employeeId} currentRate={Number(form.pay_rate) || 0} currentPayType={form.pay_type} />
             <div className="border-t border-border-primary" />
             <PtoSummaryPanel employeeId={employeeId} />
           </div>

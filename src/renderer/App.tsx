@@ -53,6 +53,8 @@ const RulesModule = lazy(() => import('./modules/rules'));
 const DebtCollectionModule = lazy(() => import('./modules/debt-collection'));
 const QuotesModule = lazy(() => import('./modules/quotes'));
 const EsignModule = lazy(() => import('./modules/esign'));
+const ComponentLibraryModule = lazy(() => import('./modules/component-library/ComponentLibrary'));
+const CustomizationModule = lazy(() => import('./modules/customization/CustomizationCenter'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -83,6 +85,8 @@ const MODULE_NAMES: Record<string, string> = {
   'client-portal': 'Client Portal',
   mobile: 'Mobile',
   settings: 'Settings',
+  'component-library': 'Component Library',
+  customization: 'Customization',
   mileage: 'Mileage Log',
   loans: 'Loans & Debt',
   bills: 'Bills & Accounts Payable',
@@ -145,6 +149,8 @@ const ModuleView: React.FC = () => {
       case 'debt-collection': return <DebtCollectionModule />;
       case 'quotes': return <QuotesModule />;
       case 'esign': return <EsignModule />;
+      case 'component-library': return <ComponentLibraryModule />;
+      case 'customization': return <CustomizationModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">

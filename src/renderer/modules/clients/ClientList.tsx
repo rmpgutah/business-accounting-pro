@@ -5,6 +5,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
@@ -101,6 +102,11 @@ const HealthDot: React.FC<{ lastInvoice: string | null; outstanding: number }> =
 // ─── Component ──────────────────────────────────────────
 const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Clients): column visibility + row density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cCol = (id: string) => custValues['clients.' + id] !== false; // default visible
+  const cClientsDensity = useCustomizationStore((s) => String(s.get('clients.clients-row-density') ?? 'comfortable'));
+  const cClientsFont = cClientsDensity === 'compact' ? 11 : cClientsDensity === 'spacious' ? 13 : undefined;
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -597,7 +603,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       ) : (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
           <div className="overflow-x-auto">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cClientsFont }}>
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>
@@ -611,15 +617,15 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 </th>
                 <th style={{ width: '30px' }} title="Client Health" />
                 <SortableHeader field="name" label="Name" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <SortableHeader field="phone" label="Phone" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                {cCol('clients-col-email') && <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />}
+                {cCol('clients-col-phone') && <SortableHeader field="phone" label="Phone" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />}
+                {cCol('clients-col-status') && <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />}
                 <th>Tier</th>
                 <th>Industry</th>
                 <th>Risk</th>
                 <SortableHeader field="revenue" label="Revenue" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <SortableHeader field="lastActivity" label="Last Invoice" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                {cCol('clients-col-last-invoice') && <SortableHeader field="lastActivity" label="Last Invoice" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />}
+                {cCol('clients-col-payment-terms') && <SortableHeader field="payment_terms" label="Payment Terms" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />}
                 <th>Tags</th>
               </tr>
             </thead>
@@ -651,23 +657,29 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                         <span className="text-text-primary font-medium block truncate max-w-[200px]">{client.name}</span>
                       </div>
                     </td>
-                    <td className="text-text-secondary truncate max-w-[200px]">{client.email || '--'}</td>
-                    <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>
+                    {cCol('clients-col-email') && <td className="text-text-secondary truncate max-w-[200px]">{client.email || '--'}</td>}
+                    {cCol('clients-col-phone') && <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>}
+                    {cCol('clients-col-status') && (
                     <td>
                       <span className={formatStatus(client.status).className}>
                         {formatStatus(client.status).label}
                       </span>
                     </td>
+                    )}
                     <td><ClassificationBadge def={CLIENT_TIER} value={client.tier} /></td>
                     <td><ClassificationBadge def={CLIENT_INDUSTRY} value={client.industry} /></td>
                     <td><ClassificationBadge def={CLIENT_RISK} value={client.risk_rating} /></td>
                     <td className="text-right font-mono text-accent-blue text-xs">{formatCurrency(rev?.revenue ?? 0)}</td>
+                    {cCol('clients-col-last-invoice') && (
                     <td className="text-text-secondary font-mono text-xs">
                       {rev?.last_invoice ? formatDate(rev.last_invoice) : '--'}
                     </td>
+                    )}
+                    {cCol('clients-col-payment-terms') && (
                     <td className="text-text-secondary font-mono">
                       {client.payment_terms ? `Net ${client.payment_terms}` : '--'}
                     </td>
+                    )}
                     <td>
                       {client.tags ? (
                         <div className="flex flex-wrap gap-1">

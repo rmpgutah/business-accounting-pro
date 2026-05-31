@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Users, Plus, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Download, Check, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import {
@@ -71,6 +72,11 @@ const SortableHeader: React.FC<{
 // ─── Component ──────────────────────────────────────────
 const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmployee }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  // Customization Center (Employees & Payroll): column visibility + density.
+  const custValues = useCustomizationStore((s) => s.values);
+  const cEmpCol = (id: string) => custValues['payroll.' + id] !== false; // default visible
+  const cEmpDensity = useCustomizationStore((s) => String(s.get('payroll.payroll-display-density') ?? 'comfortable'));
+  const cEmpFont = cEmpDensity === 'compact' ? 11 : cEmpDensity === 'spacious' ? 13 : undefined;
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -480,7 +486,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
       ) : (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
           <div className="overflow-x-auto">
-          <table className="block-table">
+          <table className="block-table" style={{ fontSize: cEmpFont }}>
             <thead>
               <tr>
                 <th style={{ width: '36px' }}>
@@ -492,18 +498,18 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                   />
                 </th>
                 <SortableHeader field="name" label="Name" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
+                {cEmpCol('payroll-col-email') && <SortableHeader field="email" label="Email" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />}
                 <SortableHeader field="type" label="Type" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="pay_type" label="Pay Type" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="pay_rate" label="Pay Rate" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="pay_schedule" label="Schedule" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
-                <th>Role</th>
-                <th>Dept.</th>
-                <th>Location</th>
+                {cEmpCol('payroll-col-job-title') && <th>Role</th>}
+                {cEmpCol('payroll-col-department') && <th>Dept.</th>}
+                {cEmpCol('payroll-col-location') && <th>Location</th>}
                 <th>Cost Class</th>
-                <th>Last Paid</th>
-                <th className="text-right">YTD Gross</th>
+                {cEmpCol('payroll-col-last-paid') && <th>Last Paid</th>}
+                {cEmpCol('payroll-col-ytd-gross') && <th className="text-right">YTD Gross</th>}
                 <th style={{ width: '60px' }} />
               </tr>
             </thead>
@@ -528,7 +534,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                       <span className="text-text-primary font-medium block truncate max-w-[180px]">{emp.name}</span>
                     </div>
                   </td>
-                  <td className="text-text-secondary truncate max-w-[200px]">{emp.email || '--'}</td>
+                  {cEmpCol('payroll-col-email') && <td className="text-text-secondary truncate max-w-[200px]">{emp.email || '--'}</td>}
                   <td>
                     <span
                       className={
@@ -551,16 +557,20 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                   <td>
                     <ClassificationBadge def={EMPLOYMENT_STATUS} value={emp.status} />
                   </td>
-                  <td><ClassificationBadge def={EMPLOYEE_ROLE} value={emp.role} /></td>
-                  <td><ClassificationBadge def={EMPLOYEE_DEPARTMENT} value={emp.department} /></td>
-                  <td><ClassificationBadge def={EMPLOYEE_WORK_LOCATION} value={emp.work_location} /></td>
+                  {cEmpCol('payroll-col-job-title') && <td><ClassificationBadge def={EMPLOYEE_ROLE} value={emp.role} /></td>}
+                  {cEmpCol('payroll-col-department') && <td><ClassificationBadge def={EMPLOYEE_DEPARTMENT} value={emp.department} /></td>}
+                  {cEmpCol('payroll-col-location') && <td><ClassificationBadge def={EMPLOYEE_WORK_LOCATION} value={emp.work_location} /></td>}
                   <td><ClassificationBadge def={EMPLOYEE_COST_CLASS} value={emp.cost_class} /></td>
+                  {cEmpCol('payroll-col-last-paid') && (
                   <td className="text-xs text-text-muted font-mono">
                     {payrollData[emp.id]?.last_pay_date ? formatDate(payrollData[emp.id].last_pay_date) : '—'}
                   </td>
+                  )}
+                  {cEmpCol('payroll-col-ytd-gross') && (
                   <td className="text-right text-xs font-mono text-text-secondary">
                     {payrollData[emp.id]?.ytd_gross ? formatCurrency(payrollData[emp.id].ytd_gross) : '—'}
                   </td>
+                  )}
                   <td className="text-right opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className="text-accent-blue text-[10px] font-semibold">Edit &rarr;</span>
                   </td>
