@@ -15,8 +15,9 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import { SpendingTimeline, SpendingHeatmap } from './ExpenseVizCharts';
+import { CHART_SERIES } from '../../lib/chart-palette';
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
+const COLORS = CHART_SERIES;
 
 interface Row { date: string; amount: number; category_id?: string; category_name?: string; vendor_name?: string; vendor_id?: string; project_id?: string; is_tax_deductible?: number; miles?: number; mileage_rate?: number; flagged_for_review?: number; id?: string; description?: string; }
 interface CatRow { id: string; name: string; monthly_cap?: number; }

@@ -18,19 +18,9 @@ import { TrendingUp, Target, DollarSign, Clock, Users, BarChart3 } from 'lucide-
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import { CHART_SERIES } from '../../lib/chart-palette';
 
-const COLORS = [
-  '#3b82f6',
-  '#22c55e',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#06b6d4',
-  '#ec4899',
-  '#84cc16',
-  '#f97316',
-  '#14b8a6',
-];
+const COLORS = CHART_SERIES;
 
 interface QuoteRow {
   id: string;
