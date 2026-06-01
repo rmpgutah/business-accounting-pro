@@ -83,9 +83,9 @@ const AggregateDebtChart: React.FC<Props> = ({ data, height = 200 }) => {
         return (
           <g key={'bar' + i}>
             <rect x={x} y={yBottom - principalH} width={barWidth} height={principalH}
-              fill="#16a34a" fillOpacity="0.7" />
+              fill="var(--color-accent-income)" fillOpacity="0.7" />
             <rect x={x} y={yBottom - principalH - interestH} width={barWidth} height={interestH}
-              fill="#dc2626" fillOpacity="0.7" />
+              fill="var(--color-accent-expense)" fillOpacity="0.7" />
           </g>
         );
       })}
@@ -117,9 +117,9 @@ const AggregateDebtChart: React.FC<Props> = ({ data, height = 200 }) => {
 
       {/* Legend */}
       <g transform={'translate(' + (PADDING.left + 8) + ', 8)'}>
-        <rect width="9" height="9" fill="#16a34a" fillOpacity="0.7" />
+        <rect width="9" height="9" fill="var(--color-accent-income)" fillOpacity="0.7" />
         <text x="13" y="8" fontSize="9" fill="var(--color-text-primary)">Principal</text>
-        <rect x="76" width="9" height="9" fill="#dc2626" fillOpacity="0.7" />
+        <rect x="76" width="9" height="9" fill="var(--color-accent-expense)" fillOpacity="0.7" />
         <text x="89" y="8" fontSize="9" fill="var(--color-text-primary)">Interest</text>
         <line x1="148" y1="4" x2="158" y2="4" stroke="var(--accent-primary)" strokeWidth="2" />
         <text x="162" y="8" fontSize="9" fill="var(--color-text-primary)">Total Balance</text>

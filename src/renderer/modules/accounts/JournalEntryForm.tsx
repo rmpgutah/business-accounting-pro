@@ -883,8 +883,13 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           <button onClick={sortByAccountCode} className="text-text-secondary hover:text-text-primary underline">Sort by code</button>
         </div>
 
-        {/* Body */}
-        <fieldset disabled={isLocked} className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        {/* Body — when posted (isLocked) the fieldset disables every control;
+            dim + not-allowed cursor make the read-only state visually obvious. */}
+        <fieldset
+          disabled={isLocked}
+          className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto"
+          style={isLocked ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
+        >
           {errors._form && (
             <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: '6px' }}>
               {errors._form}

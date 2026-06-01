@@ -413,6 +413,13 @@ export const usePersonalizationStore = create<PersonalizationState>()(
           const raw = await api.getSetting(`personalization:${userId}`);
           if (!raw) return;
           const data = JSON.parse(raw);
+          // Upgrade legacy blue-brand accents to the Warm Structured Glass
+          // defaults (mirrors the persist migrate). Cloud settings predate the
+          // retarget, so a straight set() would re-introduce the old blue
+          // --accent-primary on every login, leaving buttons/tabs/toggles blue.
+          if (data?.accents?.primary === '#60a5fa') {
+            data.accents = { ...DEFAULT_ACCENTS };
+          }
           set({ ...data });
         } catch {
           // ignore

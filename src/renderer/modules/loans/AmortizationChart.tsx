@@ -135,9 +135,9 @@ export const AmortizationChart: React.FC<Props> = ({ schedule, height = 280, sho
       ))}
 
       {/* Stacked principal area (top layer) */}
-      <path d={stackArea} fill="#16a34a" fillOpacity="0.35" />
+      <path d={stackArea} fill="var(--color-accent-income)" fillOpacity="0.35" />
       {/* Interest area (bottom layer) */}
-      <path d={interestArea} fill="#dc2626" fillOpacity="0.40" />
+      <path d={interestArea} fill="var(--color-accent-expense)" fillOpacity="0.40" />
 
       {/* Balance line on right axis */}
       <path d={balancePath} fill="none" stroke="var(--accent-primary)" strokeWidth="1.5" />
@@ -170,11 +170,11 @@ export const AmortizationChart: React.FC<Props> = ({ schedule, height = 280, sho
 
       {/* Legend */}
       <g transform={'translate(' + (PADDING.left + 8) + ', 10)'}>
-        <rect width="10" height="10" fill="#dc2626" fillOpacity="0.4" />
+        <rect width="10" height="10" fill="var(--color-accent-expense)" fillOpacity="0.4" />
         <text x="14" y="9" fontSize="10" fill="var(--color-text-primary)">
           Interest {showCumulative ? '(cumulative)' : ''}
         </text>
-        <rect x="100" width="10" height="10" fill="#16a34a" fillOpacity="0.4" />
+        <rect x="100" width="10" height="10" fill="var(--color-accent-income)" fillOpacity="0.4" />
         <text x="114" y="9" fontSize="10" fill="var(--color-text-primary)">
           Principal {showCumulative ? '(cumulative)' : ''}
         </text>

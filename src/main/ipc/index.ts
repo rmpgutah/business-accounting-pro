@@ -1236,7 +1236,14 @@ export function registerIpcHandlers(): void {
     }
   });
   // ── Automation registry (75 modules across 13 domains) ──────
-  ipcMain.handle('automations:list', () => {
+  // NOTE: channel renamed from 'automations:list' to avoid a DUPLICATE
+  // ipcMain.handle registration. The renderer's Automations module uses the
+  // table-based 'automations:list' defined later (automation_rules CRUD);
+  // registering this service-based one under the same channel threw
+  // "Attempted to register a second handler", aborting ALL handler
+  // registration after this point (e.g. accounts:stats). Renamed so the
+  // service-based registry list stays available without colliding.
+  ipcMain.handle('automations:registry-list', () => {
     try {
       const { listAutomations } = require('../automations');
       return listAutomations();
