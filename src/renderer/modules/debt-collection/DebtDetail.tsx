@@ -1813,12 +1813,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             ) : (
               <div className="space-y-2">
                 {disputes.map((d: any) => {
-                  const statusColor: Record<string, string> = { open: '#d97706', investigating: '#3b82f6', resolved: '#16a34a', rejected: '#ef4444' };
+                  const statusColor: Record<string, string> = { open: 'var(--color-accent-warning)', investigating: 'var(--color-accent-blue)', resolved: 'var(--color-accent-income)', rejected: 'var(--color-accent-expense)' };
                   const reasonLabels: Record<string, string> = { not_my_debt: 'Not My Debt', wrong_amount: 'Wrong Amount', already_paid: 'Already Paid', statute_expired: 'Statute Expired', identity_theft: 'Identity Theft', other: 'Other' };
                   return (
                     <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
                       <div className="flex items-center gap-2 min-w-0">
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: (statusColor[d.status] || '#777') + '22', color: statusColor[d.status] || '#777', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[d.status] || 'var(--color-text-muted)'} 14%, transparent)`, color: statusColor[d.status] || 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           {d.status}
                         </span>
                         <span className="text-xs text-text-primary font-medium">{reasonLabels[d.reason] || d.reason}</span>
@@ -2113,13 +2113,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       {installments.map((inst: any, idx: number) => {
                         const isPaid = !!inst.paid;
                         const isOverdue = !isPaid && inst.due_date < today;
-                        const color = isPaid ? '#16a34a' : isOverdue ? '#ef4444' : '#3b82f6';
+                        const color = isPaid ? 'var(--color-accent-income)' : isOverdue ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)';
                         const label = isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Due';
                         return (
                           <div key={inst.id || idx} className="flex items-center justify-between px-2.5 py-1.5 border border-border-primary" style={{ borderRadius: '6px', borderLeftWidth: 3, borderLeftColor: color }}>
                             <span className="text-xs font-mono text-text-secondary">{formatDate(inst.due_date)}</span>
                             <span className="text-xs font-mono font-bold text-text-primary">{formatCurrency(inst.amount || 0)}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: color + '22', color }}>{label}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>{label}</span>
                           </div>
                         );
                       })}

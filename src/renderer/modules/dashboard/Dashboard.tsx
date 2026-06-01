@@ -175,13 +175,13 @@ function dateRange(period: Period): { start: string; end: string } {
 function actionBadgeStyle(action: string): { bg: string; text: string } {
   switch (action) {
     case 'create':
-      return { bg: '#16a34a20', text: '#22c55e' };
+      return { bg: 'var(--color-accent-income-bg)', text: 'var(--color-accent-income)' };
     case 'update':
-      return { bg: '#2563eb20', text: '#3b82f6' };
+      return { bg: 'var(--color-accent-blue-bg)', text: 'var(--color-accent-blue)' };
     case 'delete':
-      return { bg: '#dc262620', text: '#ef4444' };
+      return { bg: 'var(--color-accent-expense-bg)', text: 'var(--color-accent-expense)' };
     default:
-      return { bg: '#6b6b6b20', text: '#6b6b6b' };
+      return { bg: 'rgba(255,255,255,0.06)', text: 'var(--color-text-muted)' };
   }
 }
 
@@ -190,13 +190,13 @@ function actionBadgeStyle(action: string): { bg: string; text: string } {
 // shifted by the local timezone (new Date('2026-04-23') parses as UTC
 // midnight, which becomes the previous day in the Americas).
 function urgencyColor(dueDate: string): string {
-  if (!dueDate) return '#22c55e';
+  if (!dueDate) return 'var(--color-accent-income)';
   const today = startOfDay(new Date());
   const due = startOfDay(parseISO(dueDate));
   const daysLeft = differenceInCalendarDays(due, today);
-  if (daysLeft <= 1) return '#ef4444';
-  if (daysLeft <= 3) return '#f59e0b';
-  return '#22c55e';
+  if (daysLeft <= 1) return 'var(--color-accent-expense)';
+  if (daysLeft <= 3) return 'var(--color-accent-warning)';
+  return 'var(--color-accent-income)';
 }
 
 // ─── Chart Colors ───────────────────────────────────────

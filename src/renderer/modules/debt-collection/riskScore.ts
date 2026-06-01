@@ -1,3 +1,5 @@
+import { CHART_SEVERITY, CHART_INCOME, CHART_SERIES } from '../../lib/chart-palette';
+
 export function calcRiskScore(debt: any, brokenPromisesCount = 0): number {
   let score = 0;
 
@@ -36,10 +38,10 @@ export function calcRiskScore(debt: any, brokenPromisesCount = 0): number {
 }
 
 export function getRiskBadge(score: number): { label: string; color: string } {
-  if (score <= 30) return { label: 'Low', color: '#22c55e' };
-  if (score <= 55) return { label: 'Medium', color: '#d97706' };
-  if (score <= 80) return { label: 'High', color: '#f97316' };
-  return { label: 'Critical', color: '#ef4444' };
+  if (score <= 30) return { label: 'Low', color: CHART_SEVERITY[0] };
+  if (score <= 55) return { label: 'Medium', color: CHART_SEVERITY[1] };
+  if (score <= 80) return { label: 'High', color: CHART_SEVERITY[2] };
+  return { label: 'Critical', color: CHART_SEVERITY[3] };
 }
 
 // ─── Feature 3: Collection Score Algorithm ──────────────────
@@ -95,8 +97,8 @@ export function collectionScore(debt: any, opts: {
 }
 
 export function getCollectionBadge(score: number): { label: string; color: string } {
-  if (score >= 75) return { label: 'Excellent', color: '#22c55e' };
-  if (score >= 50) return { label: 'Good', color: '#3b82f6' };
-  if (score >= 30) return { label: 'Fair', color: '#d97706' };
-  return { label: 'Poor', color: '#ef4444' };
+  if (score >= 75) return { label: 'Excellent', color: CHART_INCOME };
+  if (score >= 50) return { label: 'Good', color: CHART_SERIES[4] };
+  if (score >= 30) return { label: 'Fair', color: CHART_SEVERITY[1] };
+  return { label: 'Poor', color: CHART_SEVERITY[3] };
 }

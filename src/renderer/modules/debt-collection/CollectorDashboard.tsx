@@ -632,7 +632,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
             <Phone size={14} className="text-green-400" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Contact Success Rate</span>
           </div>
-          <p className="text-2xl font-bold font-mono" style={{ color: contactRate != null && contactRate >= 30 ? '#16a34a' : '#f59e0b' }}>
+          <p className="text-2xl font-bold font-mono" style={{ color: contactRate != null && contactRate >= 30 ? 'var(--color-accent-income)' : 'var(--color-accent-warning)' }}>
             {contactRate != null ? `${contactRate}%` : '--'}
           </p>
           <p className="text-[10px] text-text-muted mt-1">Positive outcome contacts</p>
@@ -648,7 +648,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
               <Target size={14} className="text-purple-400" />
               <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Monthly Collection Goal</span>
             </div>
-            <span className="text-xs font-bold font-mono" style={{ color: monthlyGoalPct >= 100 ? '#16a34a' : monthlyGoalPct >= 50 ? '#f59e0b' : '#dc2626' }}>
+            <span className="text-xs font-bold font-mono" style={{ color: monthlyGoalPct >= 100 ? 'var(--color-accent-income)' : monthlyGoalPct >= 50 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)' }}>
               {monthlyGoalPct}%
             </span>
           </div>
@@ -657,7 +657,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
               className="h-full transition-all duration-500"
               style={{
                 width: `${monthlyGoalPct}%`,
-                background: monthlyGoalPct >= 100 ? '#16a34a' : monthlyGoalPct >= 50 ? '#f59e0b' : '#dc2626',
+                background: monthlyGoalPct >= 100 ? 'var(--color-accent-income)' : monthlyGoalPct >= 50 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)',
                 borderRadius: '4px',
               }}
             />
@@ -901,8 +901,8 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                       <span className="text-xs font-medium text-text-primary truncate">{item.debtor_name}</span>
                       <span style={{
                         fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6,
-                        background: isPayment ? '#16a34a22' : '#3b82f622',
-                        color: isPayment ? '#16a34a' : '#3b82f6',
+                        background: isPayment ? 'var(--color-accent-income-bg)' : 'var(--color-accent-blue-bg)',
+                        color: isPayment ? 'var(--color-accent-income)' : 'var(--color-accent-blue)',
                         textTransform: 'uppercase',
                       }}>
                         {isPayment ? 'Payment' : item.comm_type || 'Note'}
@@ -970,15 +970,15 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           </div>
           <div className="max-h-80 overflow-y-auto">
             {recommendations.map((rec: any, idx: number) => {
-              const priorityColors: Record<string, string> = { critical: '#ef4444', high: '#d97706', medium: '#3b82f6' };
-              const color = priorityColors[rec.priority] || '#6b7280';
+              const priorityColors: Record<string, string> = { critical: 'var(--color-accent-expense)', high: 'var(--color-accent-warning)', medium: 'var(--color-accent-blue)' };
+              const color = priorityColors[rec.priority] || 'var(--color-text-muted)';
               return (
                 <div
                   key={rec.debtId + idx}
                   className="flex items-start gap-3 px-4 py-3 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
                   onClick={() => onViewDebt(rec.debtId)}
                 >
-                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: color + '22', color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
                     {rec.priority}
                   </span>
                   <div className="min-w-0 flex-1">
