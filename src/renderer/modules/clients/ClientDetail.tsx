@@ -38,7 +38,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, formatPaymentMethod } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ClientInsights from './ClientInsights';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -331,7 +331,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             );
             if (Array.isArray(payRows)) {
               payRows.forEach((p: any) => {
-                activities.push({ date: p.date, type: 'payment_received', label: `Payment ${formatCurrency(p.amount)} on invoice ${p.invoice_number}${p.payment_method ? ` (${p.payment_method})` : ''}`, amount: p.amount, id: p.id });
+                activities.push({ date: p.date, type: 'payment_received', label: `Payment ${formatCurrency(p.amount)} on invoice ${p.invoice_number}${p.payment_method ? ` (${formatPaymentMethod(p.payment_method)})` : ''}`, amount: p.amount, id: p.id });
               });
             }
           } catch { /* ignore */ }
@@ -516,7 +516,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             <tbody>${paymentRows.map((p: any) => `<tr style="border-bottom: 1px solid #f3f4f6;">
               <td style="padding: 8px 4px;">${p.date}</td>
               <td style="padding: 8px 4px; font-family: monospace;">${p.invoice_number}</td>
-              <td style="padding: 8px 4px; text-transform: capitalize;">${p.payment_method || '--'}</td>
+              <td style="padding: 8px 4px;">${formatPaymentMethod(p.payment_method)}</td>
               <td style="padding: 8px 4px; text-align: right; font-family: monospace;">$${(p.amount ?? 0).toFixed(2)}</td>
             </tr>`).join('')}</tbody>
           </table>

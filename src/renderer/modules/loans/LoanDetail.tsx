@@ -10,6 +10,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw, Pencil, X, Save, SkipForward } from 'lucide-react';
 import api from '../../lib/api';
+import { formatPaymentMethod } from '../../lib/format';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -294,7 +295,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                       </td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{fmt$(p.principal_amount, cur)}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{fmt$(p.interest_amount, cur)}</td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{p.payment_method}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{formatPaymentMethod(p.payment_method)}</td>
                       <td style={{ padding: '3px 6px', fontSize: 10, textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <button
                           onClick={() => setEditPayment({ ...p })}
