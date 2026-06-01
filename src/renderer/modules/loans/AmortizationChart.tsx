@@ -140,7 +140,7 @@ export const AmortizationChart: React.FC<Props> = ({ schedule, height = 280, sho
       <path d={interestArea} fill="#dc2626" fillOpacity="0.40" />
 
       {/* Balance line on right axis */}
-      <path d={balancePath} fill="none" stroke="#2563eb" strokeWidth="1.5" />
+      <path d={balancePath} fill="none" stroke="var(--accent-primary)" strokeWidth="1.5" />
 
       {/* Right Y-axis labels (balance) */}
       {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
@@ -148,7 +148,7 @@ export const AmortizationChart: React.FC<Props> = ({ schedule, height = 280, sho
         const y = PADDING.top + innerH - p * innerH;
         return (
           <text key={'rb' + i} x={PADDING.left + innerW + 6} y={y + 3}
-            fontSize="9" fill="#2563eb" fontFamily="SF Mono, Menlo, monospace">
+            fontSize="9" fill="var(--accent-primary)" fontFamily="SF Mono, Menlo, monospace">
             ${(v / 1000).toFixed(0)}k
           </text>
         );
@@ -178,7 +178,7 @@ export const AmortizationChart: React.FC<Props> = ({ schedule, height = 280, sho
         <text x="114" y="9" fontSize="10" fill="var(--color-text-primary)">
           Principal {showCumulative ? '(cumulative)' : ''}
         </text>
-        <line x1="208" y1="5" x2="218" y2="5" stroke="#2563eb" strokeWidth="2" />
+        <line x1="208" y1="5" x2="218" y2="5" stroke="var(--accent-primary)" strokeWidth="2" />
         <text x="222" y="9" fontSize="10" fill="var(--color-text-primary)">Balance</text>
       </g>
     </svg>

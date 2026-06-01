@@ -40,7 +40,11 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"  # 
 - **Default auth mode**: useState defaults to `'register'` — useEffect switches to `'login'` only if users confirmed in DB
 - **App Translocation**: macOS Gatekeeper moves apps to temp paths; `xattr -cr` after install prevents this
 - **Light-mode color leaks**: Never use `bg-white`, `text-gray-*`, `border-gray-*` — use `bg-bg-*`, `text-text-*`, `border-border-*`
-- **borderRadius**: Use `6px` (glass theme), never `2px` (old blocky theme)
+- **borderRadius**: Use `var(--app-radius)` (theme radius, defaults 6px), never `0`/`2px` (old blocky theme)
+- **Design language = "Warm Structured Glass"**: warm-graphite base, emerald brand, amber highlight, warm-rose negative. Defined in `globals.css` `@theme` + `:root`, retargeted at runtime by `applyPersonalization()`. NEVER hard-code a hex in a `.tsx` — the only places raw hex belongs are `globals.css @theme` and `personalizationStore.ts` (`DEFAULT_ACCENTS`).
+- **Accent tokens**: brand/primary actions/active nav = `var(--accent-primary)` (emerald); income = `var(--color-accent-income)`; expense/negative = `var(--color-accent-expense)` (warm rose); warning = `var(--color-accent-warning)` (amber); informational only = `var(--color-accent-blue)`. There is NO `--color-accent-green`/`--color-accent-red` — use income/expense.
+- **Structured borders**: `--hairline` (subtle separators), `--structure` (panel edges, toolbar/table outer frame), `--grid` (table row/column lines). The `.block-table` class already supplies the structured frame + grid lines + sticky header + hover wash — don't re-style table borders inline.
+- **Leak guard**: `bash scripts/ui-leak-check.sh` reports hard-coded hex / blocky-radius / white-leak counts; keep them from rising.
 
 ## Data Patterns
 
