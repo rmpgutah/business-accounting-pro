@@ -918,7 +918,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                 value={form.probability}
                 onChange={handleChange}
                 className="w-full"
-                style={{ accentColor: '#3b82f6' }}
+                style={{ accentColor: 'var(--accent-primary)' }}
               />
               <div className="flex justify-between text-[9px] text-text-muted mt-1">
                 <span>0%</span>

@@ -513,7 +513,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                         onChange={(e) => { e.stopPropagation(); toggleSelect(project.id); }}
                         onClick={(e) => e.stopPropagation()}
                         className="cursor-pointer mt-0.5 flex-shrink-0"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

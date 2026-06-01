@@ -927,7 +927,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   type="checkbox"
                   checked={followUpDue}
                   onChange={(e) => setFollowUpDue(e.target.checked)}
-                  style={{ accentColor: '#3b82f6' }}
+                  style={{ accentColor: 'var(--accent-primary)' }}
                 />
                 Has Follow-Up Due
               </label>
@@ -957,7 +957,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th>Quote #</th>
@@ -995,7 +995,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                         checked={isSelected}
                         onChange={() => toggleSelect(q.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
                     <td className="font-mono text-text-primary text-xs font-semibold">

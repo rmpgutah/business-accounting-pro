@@ -814,7 +814,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     return (
       <tr key={exp.id} className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`} style={isAnomaly ? { background: 'rgba(239,68,68,0.06)' } : undefined} onClick={() => (onView ? onView(exp.id) : onEdit(exp.id))}>
         <td onClick={(e) => e.stopPropagation()}>
-          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: '#3b82f6' }} />
+          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: 'var(--accent-primary)' }} />
         </td>
         {colVisible('date') && <td className="font-mono text-text-secondary text-xs col-nowrap">{formatDate(exp.date)}</td>}
         {colVisible('description') && (
@@ -1398,7 +1398,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 {colVisible('date') && <th>Date</th>}

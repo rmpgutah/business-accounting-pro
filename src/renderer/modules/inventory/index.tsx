@@ -1021,7 +1021,7 @@ const Inventory: React.FC = () => {
                     type="checkbox"
                     checked={filtered.length > 0 && selectedItemIds.size === filtered.length}
                     onChange={toggleAllItems}
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th className="cursor-pointer select-none" onClick={() => handleInvSort('name')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Name {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
@@ -1055,7 +1055,7 @@ const Inventory: React.FC = () => {
                         type="checkbox"
                         checked={selectedItemIds.has(item.id)}
                         onChange={() => toggleItemSelect(item.id)}
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
                     <td className="text-text-primary font-medium">

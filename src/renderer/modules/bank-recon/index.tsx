@@ -562,7 +562,7 @@ const BankReconModule: React.FC = () => {
       {/* Tab bar */}
       <div
         className="flex border-b border-border-primary"
-        style={{ borderRadius: '0px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         {TABS.map((tab) => (
           <button

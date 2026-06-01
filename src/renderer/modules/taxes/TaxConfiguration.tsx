@@ -313,7 +313,7 @@ const TaxConfiguration: React.FC = () => {
                       ? 'bg-accent-blue text-white'
                       : 'text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors'
                   }`}
-                  style={{ borderRadius: '0px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {y}
                   {y === CURRENT_YEAR && <span className="ml-1 text-[9px] opacity-70">CUR</span>}

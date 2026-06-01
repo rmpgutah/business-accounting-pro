@@ -372,13 +372,13 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                                 className="sr-only peer"
                               />
                               <div
-                                className="w-8 h-4 bg-bg-tertiary rounded-none peer-checked:bg-accent-blue transition-colors relative"
-                                style={{ borderRadius: '6px' }}
+                                className="w-8 h-4 bg-bg-tertiary peer-checked:bg-accent-income transition-colors relative"
+                                style={{ borderRadius: '9999px' }}
                               >
                                 <div
-                                  className="absolute top-0.5 left-0.5 w-3 h-3 bg-text-muted peer-checked:bg-white transition-transform"
+                                  className="absolute top-0.5 left-0.5 w-3 h-3 bg-text-muted peer-checked:bg-text-primary transition-transform"
                                   style={{
-                                    borderRadius: '1px',
+                                    borderRadius: '9999px',
                                     transform: rule.enabled === 1 ? 'translateX(16px)' : 'translateX(0)',
                                     backgroundColor: rule.enabled === 1 ? '#fff' : undefined,
                                   }}

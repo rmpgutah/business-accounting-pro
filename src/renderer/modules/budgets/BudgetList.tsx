@@ -712,7 +712,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                     checked={filtered.length > 0 && selectedIds.size === filtered.length}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th style={{ width: '32px' }}>Risk</th>
@@ -752,7 +752,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
                         checked={selectedIds.has(b.id)}
                         onChange={() => toggleSelect(b.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
                     <td className="text-center">
