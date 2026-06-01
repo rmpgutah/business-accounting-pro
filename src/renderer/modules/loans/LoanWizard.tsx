@@ -17,7 +17,7 @@
 import React, { useMemo, useState } from 'react';
 import { Home, CreditCard, GraduationCap, Car, Briefcase, Hammer, TrendingUp, FileText, Award, Building, ChevronRight, ChevronLeft, Save, X } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeToken } from '../../lib/format';
 
 interface LoanType {
   key: string;
@@ -467,12 +467,12 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
               <div className="lf-stat-card">
                 <div className="lf-stat-label">Rate</div>
                 <div className="lf-stat-value">{(form.interest_rate * 100).toFixed(3)}%</div>
-                <div className="lf-stat-sub">{form.rate_type}</div>
+                <div className="lf-stat-sub">{humanizeToken(form.rate_type)}</div>
               </div>
               <div className="lf-stat-card">
                 <div className="lf-stat-label">Term</div>
                 <div className="lf-stat-value">{form.term_months} mo</div>
-                <div className="lf-stat-sub">{form.payment_frequency} · {form.amortization_type}</div>
+                <div className="lf-stat-sub">{humanizeToken(form.payment_frequency)} · {humanizeToken(form.amortization_type)}</div>
               </div>
               {liveCalc && (
                 <div className="lf-stat-card">

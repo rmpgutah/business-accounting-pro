@@ -5,7 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeToken } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
@@ -1053,7 +1053,7 @@ const GeneralLedger: React.FC = () => {
                   <span className="text-text-muted">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
                   <span className="font-mono text-xs text-text-muted w-16 shrink-0">{acct.account_code}</span>
                   <span className="font-semibold text-text-primary flex-1">{acct.account_name}</span>
-                  <span className="text-[10px] text-text-muted uppercase tracking-wider w-20 text-center">{acct.account_type}</span>
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider w-20 text-center">{humanizeToken(acct.account_type)}</span>
                   <span className="text-xs text-text-muted mr-4">{acct.transactions.length} txn{acct.transactions.length !== 1 ? 's' : ''}</span>
                   <div className="text-right min-w-[120px]">
                     <span className="text-[10px] text-text-muted block">Closing</span>

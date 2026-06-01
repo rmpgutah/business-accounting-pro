@@ -5,7 +5,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeToken } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
@@ -787,7 +787,7 @@ const TrialBalance: React.FC = () => {
                   <tr key={l.account_id} className="hover:bg-bg-hover">
                     <td className="font-mono text-xs text-text-muted">{l.account_code}</td>
                     <td className="text-text-secondary">{l.account_name}{!l.is_active && <span className="ml-2 text-[9px] text-text-muted">inactive</span>}</td>
-                    <td className="text-xs text-text-muted">{l.account_type}</td>
+                    <td className="text-xs text-text-muted">{humanizeToken(l.account_type)}</td>
                     <td className="text-right font-mono text-xs">{dr > 0 ? formatCurrency(dr) : '—'}</td>
                     <td className="text-right font-mono text-xs">{cr > 0 ? formatCurrency(cr) : '—'}</td>
                   </tr>
