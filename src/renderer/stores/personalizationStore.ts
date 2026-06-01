@@ -481,7 +481,16 @@ export function applyPersonalization(state: PersonalizationState): void {
 
   root.setAttribute('data-theme', isDark ? 'dark' : 'light');
 
-  root.style.setProperty('--accent-primary', state.accents.primary);
+  // Self-healing brand normalization. The legacy default brand was a blue
+  // (#60a5fa); the one-shot persist migrate / cloud upgrade can miss installs
+  // whose state arrived via a different path. Coerce the retired blue defaults
+  // to the emerald brand here — the single point where --accent-primary is
+  // applied — so the brand is correct on every render regardless of origin.
+  const LEGACY_BLUE_PRIMARIES = new Set(['#60a5fa', '#3b82f6', '#2563eb']);
+  const brandPrimary = LEGACY_BLUE_PRIMARIES.has((state.accents.primary || '').toLowerCase())
+    ? DEFAULT_ACCENTS.primary
+    : state.accents.primary;
+  root.style.setProperty('--accent-primary', brandPrimary);
   root.style.setProperty('--color-accent-blue', state.accents.blue);
   root.style.setProperty('--color-accent-income', state.accents.income);
   root.style.setProperty('--color-accent-expense', state.accents.expense);
