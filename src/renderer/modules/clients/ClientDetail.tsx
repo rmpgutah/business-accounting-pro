@@ -39,6 +39,7 @@ import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { CHART_INCOME } from '../../lib/chart-palette';
 import { useCompanyStore } from '../../stores/companyStore';
 import ClientInsights from './ClientInsights';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -959,7 +960,7 @@ const RevenueTab: React.FC<{ data: any[] }> = ({ data }) => {
               <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 10, fontFamily: 'monospace' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={48} />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-              <Line type="monotone" dataKey="net" name="Net Revenue" stroke="#34d399" strokeWidth={2} dot={{ fill: '#34d399', r: 3 }} />
+              <Line type="monotone" dataKey="net" name="Net Revenue" stroke={CHART_INCOME} strokeWidth={2} dot={{ fill: CHART_INCOME, r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

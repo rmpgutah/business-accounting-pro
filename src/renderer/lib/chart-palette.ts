@@ -33,6 +33,13 @@ export const CHART_SERIES = [
   '#38bdf8', // cyan
 ];
 
+/**
+ * Severity ramp (good → bad) for aging buckets, risk tiers, heatmaps.
+ * Emerald (healthy) → amber → orange → warm rose → deep rose (most severe).
+ * Index into it by bucket position so all severity viz stays consistent.
+ */
+export const CHART_SEVERITY = ['#34d399', '#f59e0b', '#fb923c', '#fb7185', '#e11d48', '#9f1239'];
+
 /** Chrome for chart frames — warm graphite, matched to the structured-border tokens. */
 export const CHART_GRID = 'rgba(255,255,255,0.06)';     // --hairline
 export const CHART_AXIS = '#9a948a';                     // warm muted tick labels

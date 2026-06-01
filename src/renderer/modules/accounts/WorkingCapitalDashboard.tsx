@@ -7,6 +7,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import { formatCurrency } from '../../lib/format';
+import { CHART_SERIES, CHART_GRID, CHART_AXIS } from '../../lib/chart-palette';
 
 interface Account {
   id: string; code: string; name: string; type: string; subtype: string;
@@ -143,11 +144,11 @@ const WorkingCapitalDashboard: React.FC<{ accounts: Account[]; lines: LineRow[] 
       <Card title="Working Capital Trend — last 12 months">
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={wcTrend}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} />
-            <YAxis stroke="#9ca3af" fontSize={11} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+            <XAxis dataKey="label" stroke={CHART_AXIS} fontSize={11} />
+            <YAxis stroke={CHART_AXIS} fontSize={11} />
             <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
-            <Line type="monotone" dataKey="wc" stroke="#3b82f6" strokeWidth={2} dot={false} name="Working Capital" />
+            <Line type="monotone" dataKey="wc" stroke={CHART_SERIES[2]} strokeWidth={2} dot={false} name="Working Capital" />
           </LineChart>
         </ResponsiveContainer>
       </Card>

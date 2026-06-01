@@ -27,6 +27,7 @@ import { addMonths } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { CHART_AXIS } from '../../lib/chart-palette';
 
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -559,12 +560,12 @@ const Forecasting: React.FC = () => {
             <LineChart data={whatIfChartData}>
               <XAxis
                 dataKey="month"
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: CHART_AXIS, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: CHART_AXIS, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => fmtCompact(v)}
