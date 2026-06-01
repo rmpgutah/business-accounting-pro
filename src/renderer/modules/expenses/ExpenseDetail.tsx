@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -117,10 +117,19 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     } catch {}
   };
 
-  const setStatus = async (status: string) => {
+  // Unified expense lifecycle: Submitted → Approved / Declined → Paid.
+  // approval_status carries the workflow (free-text, no CHECK constraint);
+  // the financial `status` column (pending/approved/paid only) is kept in
+  // sync so reports and the approval queue stay consistent.
+  const transition = async (stage: 'submitted' | 'approved' | 'declined' | 'paid') => {
+    const patch: Record<string, any> =
+      stage === 'approved' ? { approval_status: 'approved', status: 'approved' } :
+      stage === 'declined' ? { approval_status: 'rejected', status: 'pending' } :
+      stage === 'paid'     ? { approval_status: 'approved', status: 'paid' } :
+                             { approval_status: 'submitted', status: 'pending' };
     try {
-      await api.update('expenses', expenseId, { status });
-      await logActivity('status_change', `Status set to ${status}`);
+      await api.update('expenses', expenseId, patch);
+      await logActivity('status_change', `Status → ${stage}`);
       reload();
     } catch (e: any) { alert(e?.message || 'Update failed'); }
   };
@@ -285,12 +294,20 @@ table{width:100%;border-collapse:collapse;}
   if (err) return <ErrorBanner message={err} onDismiss={() => setErr('')} />;
   if (!expense) return <div className="text-text-muted text-sm py-12 text-center">Expense not found.</div>;
 
-  const st = formatStatus(expense.status);
-  const approvalLower = (expense.approval_status || '').toLowerCase();
-  const approvalColor = approvalLower === 'approved' ? '#16a34a' :
-                        approvalLower === 'rejected' ? '#ef4444' :
-                        approvalLower === 'pending' ? '#f59e0b' :
-                        approvalLower === 'submitted' ? '#60a5fa' : '#94a3b8';
+  // Derive ONE lifecycle stage from both fields (Submitted → Approved/Declined → Paid).
+  const stage: 'submitted' | 'approved' | 'declined' | 'paid' = (() => {
+    const a = (expense.approval_status || '').toLowerCase();
+    if (expense.status === 'paid') return 'paid';
+    if (a === 'rejected' || a === 'declined') return 'declined';
+    if (expense.status === 'approved' || a === 'approved') return 'approved';
+    return 'submitted'; // draft / submitted / in_review / needs_info / pending
+  })();
+  const STAGE_META: Record<string, { label: string; color: string }> = {
+    submitted: { label: 'Submitted', color: 'var(--color-accent-warning)' },
+    approved:  { label: 'Approved',  color: 'var(--color-accent-income)' },
+    declined:  { label: 'Declined',  color: 'var(--color-accent-expense)' },
+    paid:      { label: 'Paid',      color: 'var(--color-accent-blue)' },
+  };
 
   const isImageReceipt = !!(expense.receipt_path && /\.(jpe?g|png|gif|webp|bmp)$/i.test(expense.receipt_path));
   const mileageDeduction = (expense.miles || 0) * (expense.mileage_rate || 0.7);
@@ -333,14 +350,31 @@ table{width:100%;border-collapse:collapse;}
           <button onClick={handlePrintVoucher} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             <Printer size={13} /> Voucher
           </button>
-          {expense.status !== 'approved' && (
-            <button onClick={() => setStatus('approved')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-income text-accent-income">
+          {/* Lifecycle actions: Submitted → Approved/Declined → Paid */}
+          {stage === 'submitted' && (<>
+            <button onClick={() => transition('approved')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-income text-accent-income">
               <CheckCircle size={13} /> Approve
             </button>
+            <button onClick={() => transition('declined')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-expense text-accent-expense">
+              <XCircle size={13} /> Decline
+            </button>
+          </>)}
+          {stage === 'approved' && (<>
+            <button onClick={() => transition('paid')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue text-accent-blue">
+              <DollarSign size={13} /> Mark Paid
+            </button>
+            <button onClick={() => transition('declined')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-expense text-accent-expense">
+              <XCircle size={13} /> Decline
+            </button>
+          </>)}
+          {stage === 'declined' && (
+            <button onClick={() => transition('submitted')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+              <RefreshCw size={13} /> Reopen
+            </button>
           )}
-          {expense.status !== 'pending' && (
-            <button onClick={() => setStatus('pending')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-expense">
-              <XCircle size={13} /> Reset
+          {stage === 'paid' && (
+            <button onClick={() => transition('approved')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+              <RefreshCw size={13} /> Unmark Paid
             </button>
           )}
           {!!expense.is_reimbursable && !expense.reimbursed && (
@@ -377,10 +411,25 @@ table{width:100%;border-collapse:collapse;}
         <div className="block-card p-3">
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Status</div>
           <div className="mt-1">
-            <span className={st.className}>{st.label}</span>
+            <span
+              className="block-badge"
+              style={{ color: STAGE_META[stage].color, background: `color-mix(in srgb, ${STAGE_META[stage].color} 14%, transparent)` }}
+            >
+              {STAGE_META[stage].label}
+            </span>
           </div>
-          <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: approvalColor }}>
-            {expense.approval_status ? `Approval: ${expense.approval_status}` : ''}
+          {/* Lifecycle: Submitted → Approved/Declined → Paid (current stage highlighted) */}
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider">
+            {([
+              ['submitted', 'Submitted'],
+              stage === 'declined' ? ['declined', 'Declined'] : ['approved', 'Approved'],
+              ['paid', 'Paid'],
+            ] as Array<[string, string]>).map(([key, label], i) => (
+              <span key={key} className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-text-muted">→</span>}
+                <span style={{ color: key === stage ? STAGE_META[key].color : 'var(--color-text-muted)' }}>{label}</span>
+              </span>
+            ))}
           </div>
         </div>
         <div className="block-card p-3">
@@ -549,7 +598,7 @@ table{width:100%;border-collapse:collapse;}
                   <div style={{
                     width: `${Math.min(100, (project.spent / project.budget) * 100).toFixed(1)}%`,
                     height: '100%',
-                    background: project.spent > project.budget ? '#ef4444' : '#22c55e',
+                    background: project.spent > project.budget ? 'var(--color-accent-expense)' : 'var(--color-accent-income)',
                   }} />
                 </div>
                 <div className="text-[10px] text-text-muted mt-1">
@@ -570,12 +619,12 @@ table{width:100%;border-collapse:collapse;}
           <div className="space-y-2">
             {activity.map((a) => {
               const t = (a.activity_type || '').toLowerCase();
-              const color = t.includes('approve') ? '#16a34a' :
-                            t.includes('reject') ? '#ef4444' :
-                            t.includes('flag') ? '#ef4444' :
-                            t.includes('reimburs') ? '#22c55e' :
-                            t.includes('submit') ? '#60a5fa' :
-                            t.includes('print') ? '#a855f7' : '#94a3b8';
+              const color = t.includes('approve') ? 'var(--color-accent-income)' :
+                            t.includes('reject') ? 'var(--color-accent-expense)' :
+                            t.includes('flag') ? 'var(--color-accent-expense)' :
+                            t.includes('reimburs') ? 'var(--color-accent-income)' :
+                            t.includes('submit') ? 'var(--color-accent-blue)' :
+                            t.includes('print') ? 'var(--color-accent-purple)' : 'var(--color-text-muted)';
               return (
                 <div key={a.id} className="flex items-start gap-3">
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, marginTop: 6, flexShrink: 0 }} />
