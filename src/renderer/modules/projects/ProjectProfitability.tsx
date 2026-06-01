@@ -30,13 +30,13 @@ interface ProfitabilityData {
 
 // ─── Margin Color Helper ────────────────────────────────
 function marginColor(margin: number): string {
-  if (margin >= 20) return '#34d399';   // green
-  if (margin >= 10) return '#fbbf24';   // yellow
-  return '#f87171';                     // red
+  if (margin >= 20) return 'var(--color-accent-income)';   // green
+  if (margin >= 10) return 'var(--color-accent-warning)';   // yellow
+  return 'var(--color-accent-expense)';                     // red
 }
 
 function profitColor(profit: number): string {
-  return profit >= 0 ? '#34d399' : '#f87171';
+  return profit >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)';
 }
 
 // ─── Component ──────────────────────────────────────────
@@ -73,10 +73,10 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
 
   const budgetBarPct = Math.min(data.budget_used_pct, 100);
   const budgetBarColor = data.budget_used_pct > 90
-    ? '#f87171'
+    ? 'var(--color-accent-expense)'
     : data.budget_used_pct > 70
-      ? '#fbbf24'
-      : '#34d399';
+      ? 'var(--color-accent-warning)'
+      : 'var(--color-accent-income)';
 
   return (
     <div className="space-y-4">

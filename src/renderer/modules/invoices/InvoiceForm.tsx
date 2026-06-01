@@ -1084,12 +1084,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           })}
         </div>
         {form.invoice_type === 'credit_note' && (
-          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid #ef4444', borderRadius: 6, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 12, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
             Credit Note — total will be displayed as a negative amount (credit to client)
           </div>
         )}
         {form.invoice_type === 'proforma' && (
-          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid #d97706', borderRadius: 6, fontSize: 12, color: '#d97706', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid var(--color-accent-warning)', borderRadius: 6, fontSize: 12, color: 'var(--color-accent-warning)', fontWeight: 600 }}>
             Proforma — this invoice is preliminary and not a final billing document
           </div>
         )}
@@ -1493,7 +1493,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                                 ? '2px solid var(--color-accent-blue)'
                                 : '1px solid var(--color-border-primary)',
                               width: 14, height: 14, cursor: 'pointer', borderRadius: 6,
-                              backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
+                              backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, var(--color-accent-expense) 45%, var(--color-accent-expense) 55%, transparent 55%)',
                             }}
                           />
                         ))}
@@ -1773,7 +1773,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             </span>
             <span
               className="font-mono text-lg"
-              style={{ color: form.invoice_type === 'credit_note' ? '#22c55e' : 'var(--color-text-primary)' }}
+              style={{ color: form.invoice_type === 'credit_note' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}
             >
               {form.invoice_type === 'credit_note' ? `(${currencyFmt.format(Math.abs(total))}) CR` : currencyFmt.format(total)}
             </span>

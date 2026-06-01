@@ -1124,7 +1124,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
                 className="block-btn block-btn-primary flex items-center gap-1.5"
                 onClick={handleConvertBill}
                 disabled={actionLoading}
-                style={{ background: 'var(--color-accent-income, #22c55e)', color: '#fff' }}
+                style={{ background: 'var(--color-accent-income, var(--color-accent-income))', color: '#fff' }}
               >
                 <FileText size={14} />
                 {actionLoading ? 'Converting...' : 'Convert to Bill'}

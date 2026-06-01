@@ -158,7 +158,7 @@ const REPORTS: ReportCard[] = [
     description:
       'Outstanding bills grouped by age: Current, 1-30, 31-60, 61-90, and 90+ days.',
     icon: CreditCard,
-    accentClass: 'border-l-[#f97316]',
+    accentClass: 'border-l-[var(--color-accent-warning)]',
   },
   {
     id: 'general-ledger',
@@ -166,7 +166,7 @@ const REPORTS: ReportCard[] = [
     description:
       'Complete transaction history for every account with running balances.',
     icon: BookOpen,
-    accentClass: 'border-l-[#8b5cf6]',
+    accentClass: 'border-l-[var(--color-accent-purple)]',
   },
   {
     id: 'expense-by-category',
@@ -174,7 +174,7 @@ const REPORTS: ReportCard[] = [
     description:
       'Visual breakdown of expenses by category with bar chart and percentage of total.',
     icon: PieChart,
-    accentClass: 'border-l-[#a855f7]',
+    accentClass: 'border-l-[var(--color-accent-purple)]',
   },
   {
     id: 'expense-detail',
@@ -189,7 +189,7 @@ const REPORTS: ReportCard[] = [
     description:
       'Tax collected, tax paid, and net tax liability for the selected period.',
     icon: Calculator,
-    accentClass: 'border-l-[#f59e0b]',
+    accentClass: 'border-l-[var(--color-accent-warning)]',
   },
   {
     id: 'financial-statements',
@@ -227,7 +227,7 @@ const REPORTS: ReportCard[] = [
     title: 'Vendor Spend Analysis',
     description: 'Spending by vendor with YoY comparison, top vendors, and payment terms compliance.',
     icon: Building2,
-    accentClass: 'border-l-[#f97316]',
+    accentClass: 'border-l-[var(--color-accent-warning)]',
   },
   {
     id: 'project-profitability',
@@ -255,14 +255,14 @@ const REPORTS: ReportCard[] = [
     title: 'Inventory Valuation',
     description: 'Current inventory value, turnover rate, and cost analysis by item and category.',
     icon: Package,
-    accentClass: 'border-l-[#8b5cf6]',
+    accentClass: 'border-l-[var(--color-accent-purple)]',
   },
   {
     id: 'sales-tax',
     title: 'Sales Tax Report',
     description: 'Sales tax collected, by jurisdiction, with filing period summaries.',
     icon: Receipt,
-    accentClass: 'border-l-[#f59e0b]',
+    accentClass: 'border-l-[var(--color-accent-warning)]',
   },
 ];
 

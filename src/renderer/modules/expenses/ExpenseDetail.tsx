@@ -450,7 +450,7 @@ table{width:100%;border-collapse:collapse;}
 
       {/* Flag banner */}
       {expense.flagged_for_review ? (
-        <div className="block-card p-3 flex items-center gap-3" style={{ borderLeft: '3px solid #ef4444' }}>
+        <div className="block-card p-3 flex items-center gap-3" style={{ borderLeft: '3px solid var(--color-accent-expense)' }}>
           <Flag size={16} className="text-accent-expense" />
           <div className="text-xs flex-1">
             <strong className="text-accent-expense">Flagged for Review.</strong> {expense.flag_reason ? <span className="text-text-secondary">{expense.flag_reason}</span> : null}

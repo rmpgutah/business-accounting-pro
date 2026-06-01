@@ -622,9 +622,9 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
 
   const probColor = (p?: number): string => {
     if (p === undefined) return '#6b7280';
-    if (p >= 70) return '#22c55e';
-    if (p >= 30) return '#f59e0b';
-    return '#ef4444';
+    if (p >= 70) return 'var(--color-accent-income)';
+    if (p >= 30) return 'var(--color-accent-warning)';
+    return 'var(--color-accent-expense)';
   };
 
   if (loading) {
@@ -1007,7 +1007,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                               width: 8,
                               height: 8,
                               borderRadius: '50%',
-                              background: '#ef4444',
+                              background: 'var(--color-accent-expense)',
                               display: 'inline-block',
                             }}
                           />
@@ -1113,7 +1113,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                               borderRadius: '6px',
                               background: 'rgba(59,130,246,0.12)',
                               border: '1px solid rgba(59,130,246,0.25)',
-                              color: '#3b82f6',
+                              color: 'var(--color-accent-blue)',
                             }}
                           >
                             <ArrowRightCircle size={12} />
@@ -1167,7 +1167,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 style={{
                   background: 'rgba(59,130,246,0.15)',
                   border: '1px solid rgba(59,130,246,0.4)',
-                  color: '#3b82f6',
+                  color: 'var(--color-accent-blue)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1224,8 +1224,8 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={() => setShowDeleteConfirm(true)}
                 style={{
                   background: 'transparent',
-                  border: '1px solid #ef4444',
-                  color: '#ef4444',
+                  border: '1px solid var(--color-accent-expense)',
+                  color: 'var(--color-accent-expense)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1281,7 +1281,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={handleBulkApplyTag}
                 disabled={batchLoading || !bulkTagValue.trim()}
                 style={{
-                  background: '#3b82f6',
+                  background: 'var(--color-accent-blue)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',

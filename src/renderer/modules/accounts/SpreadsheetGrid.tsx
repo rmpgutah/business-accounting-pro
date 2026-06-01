@@ -406,7 +406,7 @@ const SpreadsheetGrid: React.FC<Props> = ({
                       textAlign: c.align || (isNum ? 'right' : 'left'),
                       fontFamily: isNum ? 'ui-monospace, monospace' : undefined,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      outline: isActive ? '2px solid #3b82f6' : undefined,
+                      outline: isActive ? '2px solid var(--color-accent-blue)' : undefined,
                       cursor: c.editable ? 'cell' : 'default',
                     }}
                   >
@@ -426,7 +426,7 @@ const SpreadsheetGrid: React.FC<Props> = ({
                         title="Drag to fill"
                         style={{
                           position: 'absolute', right: -2, bottom: -2,
-                          width: 8, height: 8, background: '#3b82f6',
+                          width: 8, height: 8, background: 'var(--color-accent-blue)',
                           cursor: 'crosshair', border: '1px solid white',
                         }}
                       />

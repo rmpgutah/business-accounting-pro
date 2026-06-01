@@ -238,7 +238,7 @@ const TrashSettings: React.FC = () => {
             gap: 8,
             alignItems: 'flex-start',
           }}>
-            <AlertTriangle size={14} style={{ color: 'var(--color-warning, #d97706)', flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={14} style={{ color: 'var(--color-warning, var(--color-accent-warning))', flexShrink: 0, marginTop: 1 }} />
             <div>
               <strong>Auto-cleanup:</strong> Records older than 30 days are physically deleted nightly. To change the retention window, set <code>trash_retention_days</code> in Settings → System (range 1–365).
             </div>

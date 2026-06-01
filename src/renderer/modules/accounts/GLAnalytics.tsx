@@ -548,7 +548,7 @@ const GLAnalytics: React.FC = () => {
             <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} />
             <YAxis stroke="#9ca3af" fontSize={11} />
             <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
-            <Bar dataKey="count" fill="#3b82f6" />
+            <Bar dataKey="count" fill={CHART_SERIES[0]} />
           </BarChart>
         </ResponsiveContainer>
       </Card>
@@ -642,7 +642,7 @@ const GLAnalytics: React.FC = () => {
                 <YAxis stroke="#9ca3af" fontSize={11} />
                 <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="debit" fill="#3b82f6" name="Debits" />
+                <Bar dataKey="debit" fill={CHART_SERIES[0]} name="Debits" />
                 <Bar dataKey="credit" fill="#ef4444" name="Credits" />
                 <Line type="monotone" dataKey="balance" stroke="#22c55e" name="Running Balance" />
               </BarChart>

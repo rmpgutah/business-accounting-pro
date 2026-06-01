@@ -279,10 +279,10 @@ const Inventory: React.FC = () => {
 
   // ─── Stock status helper ──────────────────────────────
   const stockStatus = (item: InventoryItem): { label: string; color: string; bg: string } => {
-    if ((item.quantity || 0) <= 0) return { label: 'Out', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
-    if (item.reorder_point > 0 && item.quantity <= item.reorder_point) return { label: 'Low', color: '#eab308', bg: 'rgba(234,179,8,0.12)' };
-    if (item.reorder_point > 0 && item.quantity >= item.reorder_point * 3) return { label: 'Overstock', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' };
-    return { label: 'In Stock', color: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
+    if ((item.quantity || 0) <= 0) return { label: 'Out', color: 'var(--color-accent-expense)', bg: 'rgba(239,68,68,0.12)' };
+    if (item.reorder_point > 0 && item.quantity <= item.reorder_point) return { label: 'Low', color: 'var(--color-accent-warning)', bg: 'rgba(234,179,8,0.12)' };
+    if (item.reorder_point > 0 && item.quantity >= item.reorder_point * 3) return { label: 'Overstock', color: 'var(--color-accent-blue)', bg: 'rgba(59,130,246,0.12)' };
+    return { label: 'In Stock', color: 'var(--color-accent-income)', bg: 'rgba(34,197,94,0.12)' };
   };
 
   // ─── Category Breakdown ───────────────────────────────
@@ -614,10 +614,10 @@ const Inventory: React.FC = () => {
                 const inStock = items.length - lowStockCount - outOfStockCount - overstockCount;
                 const total = items.length || 1;
                 const segments = [
-                  { label: 'In Stock', count: Math.max(0, inStock), color: '#22c55e' },
-                  { label: 'Low', count: lowStockCount - outOfStockCount > 0 ? lowStockCount - outOfStockCount : Math.max(0, lowStockCount), color: '#eab308' },
-                  { label: 'Out', count: outOfStockCount, color: '#ef4444' },
-                  { label: 'Overstock', count: overstockCount, color: '#3b82f6' },
+                  { label: 'In Stock', count: Math.max(0, inStock), color: 'var(--color-accent-income)' },
+                  { label: 'Low', count: lowStockCount - outOfStockCount > 0 ? lowStockCount - outOfStockCount : Math.max(0, lowStockCount), color: 'var(--color-accent-warning)' },
+                  { label: 'Out', count: outOfStockCount, color: 'var(--color-accent-expense)' },
+                  { label: 'Overstock', count: overstockCount, color: 'var(--color-accent-blue)' },
                 ];
                 return (
                   <div className="space-y-2">

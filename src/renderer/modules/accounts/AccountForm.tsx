@@ -66,7 +66,7 @@ const RANGE_HINTS: Record<AccountType, string> = {
   asset: '1000-1999', liability: '2000-2999', equity: '3000-3999', revenue: '4000-4999', expense: '5000-9999',
 };
 
-const COLOR_PRESETS = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'];
+const COLOR_PRESETS = ['', 'var(--color-accent-expense)', 'var(--color-accent-warning)', 'var(--color-accent-warning)', 'var(--color-accent-income)', '#06b6d4', 'var(--color-accent-blue)', 'var(--color-accent-purple)', '#ec4899', '#6b7280'];
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

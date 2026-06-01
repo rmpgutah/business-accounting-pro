@@ -215,7 +215,7 @@ const DebtCollectionReport: React.FC = () => {
                   const barColors: Record<string, string> = {
                     '0-30 days': 'bg-accent-income',
                     '31-60 days': 'bg-accent-warning',
-                    '61-90 days': 'bg-[#f97316]',
+                    '61-90 days': 'bg-[var(--color-accent-warning)]',
                     '90+ days': 'bg-accent-expense',
                   };
                   return (

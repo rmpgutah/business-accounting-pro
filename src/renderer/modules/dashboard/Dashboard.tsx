@@ -203,7 +203,7 @@ function urgencyColor(dueDate: string): string {
 const PIE_COLORS = CHART_SERIES;
 const TREEMAP_COLORS = [
   ...CHART_SERIES,
-  '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
+  '#ec4899', 'var(--color-accent-purple)', '#14b8a6', 'var(--color-accent-warning)',
 ];
 
 // ─── Custom Tooltips ────────────────────────────────────
@@ -1636,7 +1636,7 @@ const Dashboard: React.FC = () => {
                     <DataBar
                       value={client.total_paid}
                       total={maxClientRevenue}
-                      color="#3b82f6"
+                      color="var(--color-accent-blue)"
                       thickness={6}
                     />
                   </div>

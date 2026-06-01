@@ -92,10 +92,10 @@ export function getInvoicePortalPreview(
 }
 
 const INVOICE_TYPE_COLORS: Record<string, string> = {
-  service:     '#3b82f6',
-  product:     '#8b5cf6',
-  retainer:    '#d97706',
-  credit_note: '#22c55e',
+  service:     'var(--color-accent-blue)',
+  product:     'var(--color-accent-purple)',
+  retainer:    'var(--color-accent-warning)',
+  credit_note: 'var(--color-accent-income)',
   proforma:    '#6b7280',
 };
 
@@ -624,7 +624,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           {invoice.invoice_type && invoice.invoice_type !== 'standard' && (
             <span style={{
               fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase',
-              background: (INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280') + '22',
+              background: `color-mix(in srgb, ${(INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280')} 13%, transparent)`,
               color: INVOICE_TYPE_COLORS[invoice.invoice_type] || '#6b7280',
             }}>
               {humanizeLabel(invoice.invoice_type)}
@@ -636,7 +636,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </span>
           )}
           {debtLink && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '2px 8px', borderRadius: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent-expense)', background: 'rgba(239,68,68,0.1)', padding: '2px 8px', borderRadius: 6 }}>
               In Collections
             </span>
           )}
@@ -914,7 +914,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               </span>
               <span
                 className="font-mono text-lg"
-                style={{ color: invoice.invoice_type === 'credit_note' ? '#22c55e' : 'var(--color-text-primary)' }}
+                style={{ color: invoice.invoice_type === 'credit_note' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}
               >
                 {invoice.invoice_type === 'credit_note'
                   ? `(${formatCurrency(Math.abs(invoice.total))}) CR`
@@ -986,9 +986,9 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         const dueDate = new Date(invoice.due_date);
         const days = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
         let label = '';
-        let color = '#22c55e';
+        let color = 'var(--color-accent-income)';
         let bg = 'rgba(34,197,94,0.10)';
-        let border = '#22c55e';
+        let border = 'var(--color-accent-income)';
         if (days <= 0) {
           label = days === 0 ? 'Due today' : `Due in ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'}`;
         } else if (days <= 30) {
@@ -996,13 +996,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           color = '#facc15'; bg = 'rgba(250,204,21,0.10)'; border = '#facc15';
         } else if (days <= 60) {
           label = `${days} days overdue`;
-          color = '#f97316'; bg = 'rgba(249,115,22,0.10)'; border = '#f97316';
+          color = 'var(--color-accent-warning)'; bg = 'rgba(249,115,22,0.10)'; border = 'var(--color-accent-warning)';
         } else if (days <= 90) {
           label = `${days} days overdue`;
-          color = '#ef4444'; bg = 'rgba(239,68,68,0.10)'; border = '#ef4444';
+          color = 'var(--color-accent-expense)'; bg = 'rgba(239,68,68,0.10)'; border = 'var(--color-accent-expense)';
         } else {
           label = `${days} days overdue — critical`;
-          color = '#dc2626'; bg = 'rgba(220,38,38,0.15)'; border = '#dc2626';
+          color = 'var(--color-accent-expense)'; bg = 'rgba(220,38,38,0.15)'; border = 'var(--color-accent-expense)';
         }
         return (
           <div
@@ -1352,14 +1352,14 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 duplicate_created: <Copy size={12} />,
               };
               const COLORS: Record<string, string> = {
-                sent: '#3b82f6',
-                viewed: '#8b5cf6',
-                paid: '#22c55e',
-                payment_recorded: '#22c55e',
-                reminder_scheduled: '#f59e0b',
-                reminder_sent: '#f59e0b',
-                late_fee_applied: '#ef4444',
-                convert_to_recurring: '#3b82f6',
+                sent: 'var(--color-accent-blue)',
+                viewed: 'var(--color-accent-purple)',
+                paid: 'var(--color-accent-income)',
+                payment_recorded: 'var(--color-accent-income)',
+                reminder_scheduled: 'var(--color-accent-warning)',
+                reminder_sent: 'var(--color-accent-warning)',
+                late_fee_applied: 'var(--color-accent-expense)',
+                convert_to_recurring: 'var(--color-accent-blue)',
                 duplicate_created: '#6b7280',
               };
               const icon = ICONS[a.activity_type] || <Activity size={12} />;
@@ -1439,7 +1439,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   padding: '2px 8px',
                   borderRadius: 999,
                   background: pageAnalysis.straddlers.length > 0 ? 'rgba(217, 119, 6, 0.15)' : 'rgba(22, 163, 74, 0.12)',
-                  color: pageAnalysis.straddlers.length > 0 ? 'var(--color-warning, #d97706)' : 'var(--color-positive, #16a34a)',
+                  color: pageAnalysis.straddlers.length > 0 ? 'var(--color-warning, var(--color-accent-warning))' : 'var(--color-positive, var(--color-accent-income))',
                   letterSpacing: '0.5px',
                 }}>
                   {pageAnalysis.pageCount} page{pageAnalysis.pageCount === 1 ? '' : 's'}
@@ -1467,7 +1467,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               fontSize: 11,
               color: 'var(--color-text-primary)',
             }}>
-              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-warning, #d97706)' }}>
+              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-warning, var(--color-accent-warning))' }}>
                 <AlertTriangle size={12} />
                 {pageAnalysis.straddlers.length} row{pageAnalysis.straddlers.length === 1 ? '' : 's'} will be split across pages
               </div>

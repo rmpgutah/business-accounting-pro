@@ -120,7 +120,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
     >
       <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, margin: 0 }}>{label}</p>
       {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color ?? '#34d399', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: '2px 0 0' }}>
+        <p key={i} style={{ color: p.color ?? 'var(--color-accent-income)', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: '2px 0 0' }}>
           {p.name}: {formatCurrency(p.value)}
         </p>
       ))}
@@ -160,15 +160,15 @@ function computeEngagementScore(
   const monetary = Math.min(30, revenuePercentile * 30);
 
   const score = Math.round(recency + frequency + monetary);
-  if (score >= 70) return { score, label: 'Highly Engaged', color: '#34d399' };
-  if (score >= 40) return { score, label: 'Moderately Engaged', color: '#f59e0b' };
-  return { score, label: 'Low Engagement', color: '#ef4444' };
+  if (score >= 70) return { score, label: 'Highly Engaged', color: 'var(--color-accent-income)' };
+  if (score >= 40) return { score, label: 'Moderately Engaged', color: 'var(--color-accent-warning)' };
+  return { score, label: 'Low Engagement', color: 'var(--color-accent-expense)' };
 }
 
 function getChurnRisk(engagementScore: number, daysSinceLastActivity: number): { label: string; color: string; bg: string } {
-  if (daysSinceLastActivity > 180 || engagementScore < 25) return { label: 'High', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
-  if (daysSinceLastActivity > 90 || engagementScore < 50) return { label: 'Medium', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' };
-  return { label: 'Low', color: '#34d399', bg: 'rgba(52,211,153,0.12)' };
+  if (daysSinceLastActivity > 180 || engagementScore < 25) return { label: 'High', color: 'var(--color-accent-expense)', bg: 'rgba(239,68,68,0.12)' };
+  if (daysSinceLastActivity > 90 || engagementScore < 50) return { label: 'Medium', color: 'var(--color-accent-warning)', bg: 'rgba(245,158,11,0.12)' };
+  return { label: 'Low', color: 'var(--color-accent-income)', bg: 'rgba(52,211,153,0.12)' };
 }
 
 // ─── Component ──────────────────────────────────────────
@@ -763,7 +763,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
                 <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 10, fontFamily: 'monospace' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={48} />
                 <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
                 <Legend wrapperStyle={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }} />
-                <Line type="monotone" dataKey="this_year" name="This Year" stroke="#34d399" strokeWidth={2} dot={{ fill: '#34d399', r: 3 }} />
+                <Line type="monotone" dataKey="this_year" name="This Year" stroke="var(--color-accent-income)" strokeWidth={2} dot={{ fill: 'var(--color-accent-income)', r: 3 }} />
                 <Line type="monotone" dataKey="last_year" name="Last Year" stroke="rgba(255,255,255,0.25)" strokeWidth={1.5} strokeDasharray="4 4" dot={{ fill: 'rgba(255,255,255,0.25)', r: 2 }} />
               </LineChart>
             </ResponsiveContainer>

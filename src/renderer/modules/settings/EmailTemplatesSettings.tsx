@@ -149,8 +149,8 @@ const EmailTemplatesSettings: React.FC = () => {
               style={{
                 borderRadius: '4px',
                 background: t.key === selectedKey ? 'rgba(59,130,246,0.1)' : 'transparent',
-                borderColor: t.key === selectedKey ? '#3b82f6' : 'var(--border-primary)',
-                color: t.key === selectedKey ? '#3b82f6' : 'inherit',
+                borderColor: t.key === selectedKey ? 'var(--color-accent-blue)' : 'var(--border-primary)',
+                color: t.key === selectedKey ? 'var(--color-accent-blue)' : 'inherit',
               }}
               onClick={() => setSelectedKey(t.key)}
             >
@@ -196,7 +196,7 @@ const EmailTemplatesSettings: React.FC = () => {
             </div>
           </div>
           {validation && !validation.ok && (
-            <div className="flex items-start gap-1.5 text-[11px]" style={{ color: '#f59e0b' }}>
+            <div className="flex items-start gap-1.5 text-[11px]" style={{ color: 'var(--color-accent-warning)' }}>
               <AlertTriangle size={12} className="mt-0.5" />
               <span>Unknown tokens in body/subject: {validation.unknown.join(', ')}</span>
             </div>

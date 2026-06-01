@@ -1588,7 +1588,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             )}
             {/* Feature 3 — budget cap warning */}
             {capWarning && (
-              <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: capWarning.over ? '#dc2626' : '#d97706' }}>
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: capWarning.over ? 'var(--color-accent-expense)' : 'var(--color-accent-warning)' }}>
                 <AlertTriangle size={12} />
                 <span>
                   {capWarning.over
@@ -2056,10 +2056,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               {selectedVendor && (
                 <div className="col-span-3 flex items-center gap-3 mt-1">
                   {selectedVendor.is_1099_eligible ? (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>1099-RELEVANT</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-blue) 13%, transparent)', color: 'var(--color-accent-blue)' }}>1099-RELEVANT</span>
                   ) : null}
                   {selectedVendor.is_1099_eligible && selectedVendor.w9_status !== 'collected' && selectedVendor.w9_status !== 'on_file' && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}
                       title="1099-eligible vendor without a W-9 on file — backup withholding may apply">
                       MISSING W-9 — BACKUP WITHHOLDING WARNING
                     </span>

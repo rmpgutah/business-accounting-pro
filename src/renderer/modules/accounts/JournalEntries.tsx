@@ -281,7 +281,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
 
   // F28: Toggle color tag
   const cycleColor = async (entry: JournalEntry) => {
-    const palette = ['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+    const palette = ['', 'var(--color-accent-expense)', 'var(--color-accent-warning)', 'var(--color-accent-income)', 'var(--color-accent-blue)', 'var(--color-accent-purple)'];
     const cur = entry.color || '';
     const next = palette[(palette.indexOf(cur) + 1) % palette.length];
     await api.update('journal_entries', entry.id, { color: next });

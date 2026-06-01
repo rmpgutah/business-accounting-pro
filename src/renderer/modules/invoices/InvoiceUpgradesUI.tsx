@@ -150,11 +150,11 @@ export function AgingBucketBar({ clientId }: { clientId?: string }) {
         {(buckets.b90plus || 0) > 0 && <div className="iu-aging-seg b90plus" style={{ width: `${pct(buckets.b90plus)}%` }} />}
       </div>
       <div className="iu-aging-legend">
-        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: '#22c55e' }}></span>Current {formatCurrency(buckets.current || 0)}</div>
+        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: 'var(--color-accent-income)' }}></span>Current {formatCurrency(buckets.current || 0)}</div>
         <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: '#facc15' }}></span>1-30 {formatCurrency(buckets.b1_30 || 0)}</div>
-        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: '#f59e0b' }}></span>31-60 {formatCurrency(buckets.b31_60 || 0)}</div>
-        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: '#ef4444' }}></span>61-90 {formatCurrency(buckets.b61_90 || 0)}</div>
-        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: '#991b1b' }}></span>90+ {formatCurrency(buckets.b90plus || 0)}</div>
+        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: 'var(--color-accent-warning)' }}></span>31-60 {formatCurrency(buckets.b31_60 || 0)}</div>
+        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: 'var(--color-accent-expense)' }}></span>61-90 {formatCurrency(buckets.b61_90 || 0)}</div>
+        <div className="iu-aging-key"><span className="iu-aging-dot" style={{ background: 'var(--color-accent-expense)' }}></span>90+ {formatCurrency(buckets.b90plus || 0)}</div>
       </div>
     </div>
   );
@@ -183,7 +183,7 @@ export function OverdueAlertBanner() {
   if (dismissed || !overdue || overdue.total <= 0) return null;
   return (
     <div className="iu-banner-overdue">
-      <AlertTriangle size={14} style={{ color: '#ef4444' }} />
+      <AlertTriangle size={14} style={{ color: 'var(--color-accent-expense)' }} />
       <span>
         <strong>{formatCurrency(overdue.total)}</strong> overdue across <strong>{overdue.count}</strong> client{overdue.count === 1 ? '' : 's'}.
       </span>

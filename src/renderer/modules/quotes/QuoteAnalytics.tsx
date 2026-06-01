@@ -70,7 +70,7 @@ const KpiCard: React.FC<{
   hint?: string;
   icon?: React.ReactNode;
   accent?: string;
-}> = ({ label, value, hint, icon, accent = '#3b82f6' }) => (
+}> = ({ label, value, hint, icon, accent = CHART_SERIES[0] }) => (
   <div className="block-card p-4" style={{ borderRadius: '6px' }}>
     <div className="flex items-start justify-between mb-2">
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -384,7 +384,7 @@ const QuoteAnalytics: React.FC = () => {
           value={avgSalesCycle.days ? `${avgSalesCycle.days}d` : '—'}
           hint={`${avgSalesCycle.count} closed deal${avgSalesCycle.count === 1 ? '' : 's'}`}
           icon={<Clock size={14} />}
-          accent="#3b82f6"
+          accent={CHART_SERIES[0]}
         />
         <KpiCard
           label="Forecast (Weighted)"
@@ -446,7 +446,7 @@ const QuoteAnalytics: React.FC = () => {
                 type="monotone"
                 dataKey="wins"
                 name="Wins"
-                stroke="#3b82f6"
+                stroke={CHART_SERIES[0]}
                 strokeWidth={1}
                 dot={{ r: 2 }}
               />
@@ -485,7 +485,7 @@ const QuoteAnalytics: React.FC = () => {
                     fontSize: '12px',
                   }}
                 />
-                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

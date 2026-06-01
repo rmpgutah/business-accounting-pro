@@ -489,7 +489,7 @@ const ExpenseAnalytics: React.FC = () => {
                 <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fill: '#9ca3af', fontSize: 11 }} />
                 <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-                <Bar dataKey="total" fill="#3b82f6" />
+                <Bar dataKey="total" fill={CHART_SERIES[0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -506,7 +506,7 @@ const ExpenseAnalytics: React.FC = () => {
               <XAxis dataKey="label" tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-              <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="total" stroke={CHART_SERIES[0]} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -519,7 +519,7 @@ const ExpenseAnalytics: React.FC = () => {
               <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
               <Legend />
-              <Line type="monotone" dataKey="thisYear" stroke="#3b82f6" strokeWidth={2} dot={false} name="This Year" />
+              <Line type="monotone" dataKey="thisYear" stroke={CHART_SERIES[0]} strokeWidth={2} dot={false} name="This Year" />
               <Line type="monotone" dataKey="lastYear" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Last Year" strokeDasharray="4 4" />
             </LineChart>
           </ResponsiveContainer>
@@ -560,7 +560,7 @@ const ExpenseAnalytics: React.FC = () => {
             <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
             <Tooltip formatter={(v: any) => v == null ? '—' : formatCurrency(Number(v))} />
             <Legend />
-            <Line type="monotone" dataKey="actual" stroke="#3b82f6" strokeWidth={2} dot={false} name="Actual" />
+            <Line type="monotone" dataKey="actual" stroke={CHART_SERIES[0]} strokeWidth={2} dot={false} name="Actual" />
             <Line type="monotone" dataKey="forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Forecast" />
           </LineChart>
         </ResponsiveContainer>

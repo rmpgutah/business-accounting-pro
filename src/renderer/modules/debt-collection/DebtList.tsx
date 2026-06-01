@@ -57,20 +57,20 @@ interface DebtListProps {
 
 // ─── Risk Color Logic (Feature 25) ─────────────────────
 const riskColor = (ageDays: number, balance: number): string => {
-  if (ageDays > 90 || balance > 10000) return '#dc2626'; // red
-  if (ageDays > 60 || balance > 5000) return '#f59e0b'; // orange
-  if (ageDays > 30) return '#eab308'; // yellow
-  return '#22c55e'; // green
+  if (ageDays > 90 || balance > 10000) return 'var(--color-accent-expense)'; // red
+  if (ageDays > 60 || balance > 5000) return 'var(--color-accent-warning)'; // orange
+  if (ageDays > 30) return 'var(--color-accent-warning)'; // yellow
+  return 'var(--color-accent-income)'; // green
 };
 
 // ─── Aging Badge ────────────────────────────────────────
 const getAgingBadge = (delinquencyDate: string): { label: string; color: string; bg: string } => {
   if (!delinquencyDate) return { label: '—', color: 'var(--color-text-muted)', bg: 'transparent' };
   const days = Math.floor((Date.now() - new Date(delinquencyDate).getTime()) / 86400000);
-  if (days <= 30)  return { label: `${days}d`, color: '#16a34a', bg: '#16a34a22' };
-  if (days <= 90)  return { label: `${days}d`, color: '#d97706', bg: '#d9770622' };
-  if (days <= 180) return { label: `${days}d`, color: '#ea580c', bg: '#ea580c22' };
-  return { label: `${days}d`, color: '#dc2626', bg: '#dc262622' };
+  if (days <= 30)  return { label: `${days}d`, color: 'var(--color-accent-income)', bg: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)' };
+  if (days <= 90)  return { label: `${days}d`, color: 'var(--color-accent-warning)', bg: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)' };
+  if (days <= 180) return { label: `${days}d`, color: 'var(--color-accent-warning)', bg: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)' };
+  return { label: `${days}d`, color: 'var(--color-accent-expense)', bg: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)' };
 };
 
 // ─── Priority Colors ────────────────────────────────────
@@ -522,7 +522,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                 <td class="bold">${d.debtor_name}</td>
                 <td class="mono">${src}</td>
                 <td class="text-right mono">${formatCurrency(d.original_amount)}</td>
-                <td class="text-right mono bold" style="color:${d.balance_due > 0 ? '#dc2626' : '#16a34a'}">${formatCurrency(d.balance_due)}</td>
+                <td class="text-right mono bold" style="color:${d.balance_due > 0 ? '#ef4444' : '#22c55e'}">${formatCurrency(d.balance_due)}</td>
                 <td class="mono">${age}d</td>
                 <td>${d.current_stage || '—'}</td>
                 <td>${d.priority || '—'}</td>
@@ -835,7 +835,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Total Collected</p>
         </div>
         <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
-          <p className="text-lg font-bold font-mono" style={{ color: '#8b5cf6' }}>{portfolioStats.recoveryRate}%</p>
+          <p className="text-lg font-bold font-mono" style={{ color: 'var(--color-accent-purple)' }}>{portfolioStats.recoveryRate}%</p>
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Recovery Rate</p>
         </div>
         <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
@@ -843,11 +843,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Avg Balance</p>
         </div>
         <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
-          <p className="text-lg font-bold font-mono" style={{ color: '#dc2626' }}>{formatCurrency(portfolioStats.largest)}</p>
+          <p className="text-lg font-bold font-mono" style={{ color: 'var(--color-accent-expense)' }}>{formatCurrency(portfolioStats.largest)}</p>
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Largest Debt</p>
         </div>
         <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
-          <p className="text-lg font-bold font-mono" style={{ color: '#f59e0b' }}>{portfolioStats.oldestAge}d</p>
+          <p className="text-lg font-bold font-mono" style={{ color: 'var(--color-accent-warning)' }}>{portfolioStats.oldestAge}d</p>
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mt-1">Oldest Account</p>
         </div>
       </div>
@@ -1130,39 +1130,39 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="block truncate max-w-[160px]">{debt.debtor_name}</span>
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-blue) 13%, transparent)', color: 'var(--color-accent-blue)' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
                         )}
                         {!!debt.has_active_promise && !debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>PROMISE</span>
                         )}
                         {!!debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>BROKEN</span>
                         )}
                         {debt.status === 'disputed' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>DISPUTED</span>
                         )}
                         {!!debt.cease_desist_active && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>C&D</span>
                         )}
                         {!!debt.do_not_call && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>DNC</span>
                         )}
                         {!!debt.interest_frozen && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa' }}>FROZEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-blue) 13%, transparent)', color: 'var(--color-accent-blue)' }}>FROZEN</span>
                         )}
                         {debt.statute_of_limitations_date && (() => {
                           const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
                           if (dLeft > 0 && dLeft <= 90) {
-                            const sColor = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : '#d97706';
-                            return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: sColor + '22', color: sColor }}>{dLeft}d SOL</span>;
+                            const sColor = dLeft < 30 ? 'var(--color-accent-expense)' : dLeft < 90 ? 'var(--color-accent-warning)' : 'var(--color-accent-warning)';
+                            return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: `color-mix(in srgb, ${sColor} 13%, transparent)`, color: sColor }}>{dLeft}d SOL</span>;
                           }
                           return null;
                         })()}
                         {debt.currency && debt.currency !== 'USD' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>{debt.currency}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: '#a78bfa' }}>{debt.currency}</span>
                         )}
                       </div>
                     </td>
@@ -1200,7 +1200,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                         return (
                           <span style={{
                             fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6,
-                            background: risk.color + '20', color: risk.color,
+                            background: `color-mix(in srgb, ${risk.color} 13%, transparent)`, color: risk.color,
                           }}>
                             {risk.label}
                           </span>
@@ -1210,7 +1210,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     {/* Feature 26: Last Contact */}
                     <td>
                       {daysSinceContact != null ? (
-                        <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? '#dc2626' : daysSinceContact > 7 ? '#f59e0b' : '#16a34a' }}>
+                        <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? 'var(--color-accent-expense)' : daysSinceContact > 7 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>
                           {daysSinceContact}d ago
                         </span>
                       ) : (
@@ -1286,39 +1286,39 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="block truncate max-w-[160px]">{debt.debtor_name}</span>
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-blue) 13%, transparent)', color: 'var(--color-accent-blue)' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
                         )}
                         {!!debt.has_active_promise && !debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>PROMISE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>PROMISE</span>
                         )}
                         {!!debt.has_broken_promise && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>BROKEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>BROKEN</span>
                         )}
                         {debt.status === 'disputed' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#c084fc' }}>DISPUTED</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>DISPUTED</span>
                         )}
                         {!!debt.cease_desist_active && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>C&D</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>C&D</span>
                         )}
                         {!!debt.do_not_call && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>DNC</span>
                         )}
                         {!!debt.interest_frozen && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa' }}>FROZEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-blue) 13%, transparent)', color: 'var(--color-accent-blue)' }}>FROZEN</span>
                         )}
                         {debt.statute_of_limitations_date && (() => {
                           const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
                           if (dLeft > 0 && dLeft <= 90) {
-                            const sColor = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : '#d97706';
-                            return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: sColor + '22', color: sColor }}>{dLeft}d SOL</span>;
+                            const sColor = dLeft < 30 ? 'var(--color-accent-expense)' : dLeft < 90 ? 'var(--color-accent-warning)' : 'var(--color-accent-warning)';
+                            return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: `color-mix(in srgb, ${sColor} 13%, transparent)`, color: sColor }}>{dLeft}d SOL</span>;
                           }
                           return null;
                         })()}
                         {debt.currency && debt.currency !== 'USD' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>{debt.currency}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: '#a78bfa' }}>{debt.currency}</span>
                         )}
                       </div>
                     </td>
@@ -1338,7 +1338,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                     {/* Last Contact for payables */}
                     <td>
                       {daysSinceContact != null ? (
-                        <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? '#dc2626' : daysSinceContact > 7 ? '#f59e0b' : '#16a34a' }}>
+                        <span className="text-xs font-mono" style={{ color: daysSinceContact > 14 ? 'var(--color-accent-expense)' : daysSinceContact > 7 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>
                           {daysSinceContact}d ago
                         </span>
                       ) : (

@@ -128,11 +128,11 @@ const KpiCard: React.FC<{
   accent?: 'blue' | 'green' | 'red' | 'orange' | 'purple';
 }> = ({ label, value, hint, icon, accent = 'blue' }) => {
   const colors: Record<string, string> = {
-    blue: '#3b82f6',
-    green: '#22c55e',
-    red: '#ef4444',
-    orange: '#f59e0b',
-    purple: '#8b5cf6',
+    blue: 'var(--color-accent-blue)',
+    green: 'var(--color-accent-income)',
+    red: 'var(--color-accent-expense)',
+    orange: 'var(--color-accent-warning)',
+    purple: 'var(--color-accent-purple)',
   };
   return (
     <div className="block-card p-4">
@@ -388,10 +388,10 @@ const InvoicingModule: React.FC = () => {
   // ─── Status distribution stacked bar ────────────────
   const statusOrder: Array<{ key: string; label: string; color: string }> = [
     { key: 'draft', label: 'Draft', color: '#6b7280' },
-    { key: 'sent', label: 'Sent', color: '#3b82f6' },
-    { key: 'partial', label: 'Partial', color: '#f59e0b' },
-    { key: 'paid', label: 'Paid', color: '#22c55e' },
-    { key: 'overdue', label: 'Overdue', color: '#ef4444' },
+    { key: 'sent', label: 'Sent', color: 'var(--color-accent-blue)' },
+    { key: 'partial', label: 'Partial', color: 'var(--color-accent-warning)' },
+    { key: 'paid', label: 'Paid', color: 'var(--color-accent-income)' },
+    { key: 'overdue', label: 'Overdue', color: 'var(--color-accent-expense)' },
     { key: 'void', label: 'Void', color: '#374151' },
   ];
   const totalStatus = statusOrder.reduce((s, x) => s + (statusCounts[x.key] || 0), 0);
@@ -563,19 +563,19 @@ const InvoicingModule: React.FC = () => {
             className="flex items-center justify-between px-4 py-3"
             style={{
               background: 'rgba(239,68,68,0.08)',
-              border: '1px solid #ef4444',
+              border: '1px solid var(--color-accent-expense)',
               borderRadius: 6,
             }}
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle size={16} style={{ color: '#ef4444' }} />
-              <span className="text-sm font-semibold" style={{ color: '#ef4444' }}>
+              <AlertTriangle size={16} style={{ color: 'var(--color-accent-expense)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-accent-expense)' }}>
                 {duplicates.length} potential duplicate invoice{duplicates.length === 1 ? '' : 's'} detected
               </span>
             </div>
             <button
               className="block-btn text-xs"
-              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              style={{ color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
               onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
             >
               Review
@@ -712,11 +712,11 @@ const InvoicingModule: React.FC = () => {
                     '90+': '90+ days',
                   };
                   const colorMap: Record<string, string> = {
-                    current: '#22c55e',
+                    current: 'var(--color-accent-income)',
                     '1-30': '#facc15',
-                    '31-60': '#f59e0b',
-                    '61-90': '#f97316',
-                    '90+': '#ef4444',
+                    '31-60': 'var(--color-accent-warning)',
+                    '61-90': 'var(--color-accent-warning)',
+                    '90+': 'var(--color-accent-expense)',
                   };
                   return (
                     <tr key={b}>

@@ -60,10 +60,10 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ];
 
 const HEALTH_COLORS = {
-  on_track: '#22c55e',
-  warning: '#eab308',
-  critical: '#f97316',
-  over: '#ef4444',
+  on_track: 'var(--color-accent-income)',
+  warning: 'var(--color-accent-warning)',
+  critical: 'var(--color-accent-warning)',
+  over: 'var(--color-accent-expense)',
 };
 
 const computeBudgetHealth = (

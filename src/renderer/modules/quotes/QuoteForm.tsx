@@ -616,7 +616,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               borderRadius: '6px',
               background: 'rgba(59,130,246,0.12)',
               border: '1px solid rgba(59,130,246,0.25)',
-              color: '#3b82f6',
+              color: 'var(--color-accent-blue)',
               cursor: 'pointer',
             }}
           >
@@ -631,10 +631,10 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
         <div
           style={{
             background: 'rgba(34,197,94,0.08)',
-            border: '1px solid #22c55e',
+            border: '1px solid var(--color-accent-income)',
             borderRadius: '6px',
             padding: '12px 16px',
-            color: '#22c55e',
+            color: 'var(--color-accent-income)',
             fontSize: '13px',
             fontWeight: 600,
           }}
@@ -648,14 +648,14 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
         <div
           style={{
             background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '6px',
             padding: '12px 16px',
           }}
         >
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
                 {err}
               </li>
             ))}

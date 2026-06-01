@@ -7,9 +7,9 @@ import { formatCurrency } from '../../lib/format';
 const fmt = { format: (v: number | string | null | undefined) => formatCurrency(v) };
 
 const RESPONSE_BADGE: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: '#d97706' },
-  accepted: { label: 'Accepted', color: '#22c55e' },
-  rejected: { label: 'Rejected', color: '#ef4444' },
+  pending: { label: 'Pending', color: 'var(--color-accent-warning)' },
+  accepted: { label: 'Accepted', color: 'var(--color-accent-income)' },
+  rejected: { label: 'Rejected', color: 'var(--color-accent-expense)' },
 };
 
 interface Props {
@@ -228,7 +228,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                       color: badge.color,
                       padding: '2px 8px',
                       borderRadius: 6,
-                      background: badge.color + '20',
+                      background: `color-mix(in srgb, ${badge.color} 13%, transparent)`,
                     }}
                   >
                     {badge.label}

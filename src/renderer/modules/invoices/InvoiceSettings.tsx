@@ -37,7 +37,7 @@ const HEADER_LAYOUT_OPTIONS = [
 ] as const;
 
 const ACCENT_PRESETS = [
-  '#2563eb', '#7c3aed', '#059669', '#dc2626', '#d97706',
+  'var(--color-accent-blue)', 'var(--color-accent-purple)', 'var(--color-accent-income)', 'var(--color-accent-expense)', 'var(--color-accent-warning)',
   '#0891b2', '#be185d', '#1d4ed8', '#374151', '#065f46',
 ];
 
@@ -56,7 +56,7 @@ type FullSettings = ISettings & {
 };
 
 const DEFAULT_SETTINGS: FullSettings = {
-  accent_color: '#2563eb',
+  accent_color: 'var(--color-accent-blue)',
   secondary_color: '#64748b',
   logo_data: null,
   template_style: 'classic',
@@ -161,7 +161,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
             } catch { /* use defaults */ }
           }
           setSettings({
-            accent_color: data.accent_color || '#2563eb',
+            accent_color: data.accent_color || 'var(--color-accent-blue)',
             secondary_color: data.secondary_color || '#64748b',
             logo_data: data.logo_data || null,
             template_style: data.template_style || 'classic',
@@ -291,7 +291,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
     );
   }
 
-  const accent = settings.accent_color || '#2563eb';
+  const accent = settings.accent_color || 'var(--color-accent-blue)';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -370,7 +370,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                       <button key={color} onClick={() => setSettings((p) => ({ ...p, accent_color: color }))}
                         style={{ width: 26, height: 26, borderRadius: '6px', background: color, border: settings.accent_color === color ? '3px solid var(--color-text-primary)' : '2px solid transparent', cursor: 'pointer', flexShrink: 0 }} title={color} />
                     ))}
-                    <input type="color" value={settings.accent_color || '#2563eb'}
+                    <input type="color" value={settings.accent_color || 'var(--color-accent-blue)'}
                       onChange={(e) => setSettings((p) => ({ ...p, accent_color: e.target.value }))}
                       style={{ width: 36, height: 26, borderRadius: '6px', border: '1px solid var(--color-border-primary)', padding: 2, cursor: 'pointer', background: 'transparent' }} />
                   </div>

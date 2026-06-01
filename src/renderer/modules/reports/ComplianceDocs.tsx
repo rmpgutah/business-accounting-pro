@@ -95,9 +95,9 @@ const ComplianceDocs: React.FC<Props> = ({ onBack }) => {
       {/* Tab pane selector */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--color-border-primary)' }}>
         {([
-          { id: 'missing' as PaneId, label: 'Missing Forms', count: missing.length, icon: AlertTriangle, color: '#dc2626' },
-          { id: 'expiring' as PaneId, label: 'Expiring Soon', count: expiring.length, icon: Clock, color: '#d97706' },
-          { id: 'all' as PaneId, label: 'On File', count: all.length, icon: CheckCircle, color: '#16a34a' },
+          { id: 'missing' as PaneId, label: 'Missing Forms', count: missing.length, icon: AlertTriangle, color: 'var(--color-accent-expense)' },
+          { id: 'expiring' as PaneId, label: 'Expiring Soon', count: expiring.length, icon: Clock, color: 'var(--color-accent-warning)' },
+          { id: 'all' as PaneId, label: 'On File', count: all.length, icon: CheckCircle, color: 'var(--color-accent-income)' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -150,7 +150,7 @@ const ComplianceDocs: React.FC<Props> = ({ onBack }) => {
 const MissingPane: React.FC<{ rows: any[]; onGenerate: (ft: 'W-4' | 'W-9' | 'I-9', pt?: any, pid?: string) => void; generating: string }> = ({ rows, onGenerate, generating }) => {
   if (rows.length === 0) {
     return <div className="block-card" style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 12 }}>
-      <CheckCircle size={32} style={{ color: '#16a34a', margin: '0 auto 8px' }} />
+      <CheckCircle size={32} style={{ color: 'var(--color-accent-income)', margin: '0 auto 8px' }} />
       <div>All required compliance forms are on file. Nice work.</div>
     </div>;
   }
@@ -171,11 +171,11 @@ const MissingPane: React.FC<{ rows: any[]; onGenerate: (ft: 'W-4' | 'W-9' | 'I-9
               <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.person_type}</td>
               <td style={{ padding: '8px 10px', fontSize: 11 }}>
                 {r.required_forms.map((f: string) => (
-                  <span key={f} style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fef2f2', color: '#991b1b', marginRight: 4 }}>{f}</span>
+                  <span key={f} style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fef2f2', color: 'var(--color-accent-expense)', marginRight: 4 }}>{f}</span>
                 ))}
               </td>
               <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.hire_date || '—'}</td>
-              <td style={{ padding: '8px 10px', fontSize: 11, textAlign: 'right', fontWeight: 700, color: r.days_overdue > 0 ? '#dc2626' : 'var(--color-text-muted)' }}>
+              <td style={{ padding: '8px 10px', fontSize: 11, textAlign: 'right', fontWeight: 700, color: r.days_overdue > 0 ? 'var(--color-accent-expense)' : 'var(--color-text-muted)' }}>
                 {r.days_overdue > 0 ? r.days_overdue + ' days' : '—'}
               </td>
               <td style={{ padding: '8px 10px', fontSize: 11 }}>
@@ -205,7 +205,7 @@ const MissingPane: React.FC<{ rows: any[]; onGenerate: (ft: 'W-4' | 'W-9' | 'I-9
 const ExpiringPane: React.FC<{ rows: any[] }> = ({ rows }) => {
   if (rows.length === 0) {
     return <div className="block-card" style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 12 }}>
-      <CheckCircle size={32} style={{ color: '#16a34a', margin: '0 auto 8px' }} />
+      <CheckCircle size={32} style={{ color: 'var(--color-accent-income)', margin: '0 auto 8px' }} />
       <div>No forms expiring in the next 60 days.</div>
     </div>;
   }
@@ -230,7 +230,7 @@ const ExpiringPane: React.FC<{ rows: any[] }> = ({ rows }) => {
                 <td style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700 }}>{r.form_type}</td>
                 <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.effective_date || '—'}</td>
                 <td style={{ padding: '8px 10px', fontSize: 11, fontWeight: 600 }}>{r.expires_at || '—'}</td>
-                <td style={{ padding: '8px 10px', fontSize: 11, textAlign: 'right', fontWeight: 700, color: daysUntil < 14 ? '#dc2626' : daysUntil < 30 ? '#d97706' : 'var(--color-text-muted)' }}>
+                <td style={{ padding: '8px 10px', fontSize: 11, textAlign: 'right', fontWeight: 700, color: daysUntil < 14 ? 'var(--color-accent-expense)' : daysUntil < 30 ? 'var(--color-accent-warning)' : 'var(--color-text-muted)' }}>
                   {daysUntil < 0 ? `${-daysUntil} days overdue` : `${daysUntil} days`}
                 </td>
               </tr>
@@ -269,7 +269,7 @@ const AllPane: React.FC<{ rows: any[] }> = ({ rows }) => {
               <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.effective_date || '—'}</td>
               <td style={{ padding: '8px 10px', fontSize: 11 }}>{r.expires_at || 'Never'}</td>
               <td style={{ padding: '8px 10px', fontSize: 10 }}>
-                <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: r.status === 'current' ? '#ecfdf5' : '#fef2f2', color: r.status === 'current' ? '#065f46' : '#991b1b' }}>
+                <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: r.status === 'current' ? '#ecfdf5' : '#fef2f2', color: r.status === 'current' ? '#065f46' : 'var(--color-accent-expense)' }}>
                   {(r.status || '').toUpperCase()}
                 </span>
               </td>

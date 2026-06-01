@@ -157,9 +157,9 @@ export const IndustryPresetSettings: React.FC = () => {
     description: 'Custom preset for my business',
     icon: 'Briefcase',
     coaTemplateKey: 'service',
-    defaultCategories: [{ name: 'Sample Income', type: 'income', color: '#22c55e', tax_deductible: false }],
+    defaultCategories: [{ name: 'Sample Income', type: 'income', color: 'var(--color-accent-income)', tax_deductible: false }],
     defaultVendors: [{ name: 'Sample Vendor', type: 'service' }],
-    invoiceSettings: { accent_color: '#2563eb', default_due_days: 30 },
+    invoiceSettings: { accent_color: 'var(--color-accent-blue)', default_due_days: 30 },
     defaultDeductions: [],
     industrySpecificFields: [],
     setupHints: [],
@@ -199,7 +199,7 @@ export const IndustryPresetSettings: React.FC = () => {
             padding: '10px 14px',
             background: resultMsg.type === 'ok' ? 'rgba(34,197,94,0.08)' : 'rgba(248,113,113,0.08)',
             border: `1px solid ${resultMsg.type === 'ok' ? 'rgba(34,197,94,0.25)' : 'rgba(248,113,113,0.25)'}`,
-            color: resultMsg.type === 'ok' ? '#22c55e' : '#f87171',
+            color: resultMsg.type === 'ok' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)',
             borderRadius: 6,
           }}
         >

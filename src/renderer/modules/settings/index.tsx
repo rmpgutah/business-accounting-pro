@@ -115,7 +115,7 @@ const VpsBackup: React.FC = () => {
           padding: '10px 14px', marginBottom: '12px', borderRadius: '6px',
           background: result.type === 'success' ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
           border: `1px solid ${result.type === 'success' ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`,
-          color: result.type === 'success' ? '#34d399' : '#f87171',
+          color: result.type === 'success' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)',
           fontSize: '13px',
         }}>
           {result.msg}
@@ -1039,7 +1039,7 @@ export default function SettingsModule() {
           </div>
           <div className="flex items-center gap-3">
             {backupMsg && (
-              <span className="text-xs font-medium" style={{ color: '#22c55e' }}>{backupMsg}</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-accent-income)' }}>{backupMsg}</span>
             )}
             <button
               className="block-btn-success flex items-center gap-1.5"

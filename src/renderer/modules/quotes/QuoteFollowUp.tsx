@@ -181,11 +181,11 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
   ) => {
     const toneColor =
       info.tone === 'danger'
-        ? '#ef4444'
+        ? 'var(--color-accent-expense)'
         : info.tone === 'warn'
-        ? '#f59e0b'
+        ? 'var(--color-accent-warning)'
         : info.tone === 'ok'
-        ? '#22c55e'
+        ? 'var(--color-accent-income)'
         : '#6b7280';
     return (
       <tr key={q.id}>
@@ -273,10 +273,10 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
       <div
         style={{
           background: 'rgba(248,113,113,0.08)',
-          border: '1px solid #ef4444',
+          border: '1px solid var(--color-accent-expense)',
           borderRadius: '6px',
           padding: '12px 16px',
-          color: '#ef4444',
+          color: 'var(--color-accent-expense)',
           fontSize: '13px',
         }}
       >
@@ -414,10 +414,10 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
           }}
         >
           <div className="flex items-center gap-2">
-            <Clock size={14} style={{ color: '#f59e0b' }} />
+            <Clock size={14} style={{ color: 'var(--color-accent-warning)' }} />
             <span
               className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: '#f59e0b' }}
+              style={{ color: 'var(--color-accent-warning)' }}
             >
               Expiring Soon (Sent, Within 7 Days)
             </span>

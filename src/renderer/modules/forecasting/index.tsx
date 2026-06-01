@@ -119,19 +119,19 @@ const SCENARIO_CONFIG: Record<
   conservative: {
     label: 'Conservative',
     multiplier: 0.9,
-    color: '#f59e0b',
+    color: 'var(--color-accent-warning)',
     description: '90% of linear regression projection',
   },
   moderate: {
     label: 'Moderate',
     multiplier: 1.0,
-    color: '#3b82f6',
+    color: 'var(--color-accent-blue)',
     description: 'Linear regression as-is',
   },
   aggressive: {
     label: 'Aggressive',
     multiplier: 1.1,
-    color: '#22c55e',
+    color: 'var(--color-accent-income)',
     description: '110% of linear regression projection',
   },
 };
@@ -436,7 +436,7 @@ const Forecasting: React.FC = () => {
           background: 'rgba(245, 158, 11, 0.08)',
           border: '1px solid rgba(245, 158, 11, 0.3)',
           borderRadius: '6px',
-          color: '#f59e0b',
+          color: 'var(--color-accent-warning)',
         }}
       >
         <strong>Estimate:</strong> All projected figures below are linear-regression forecasts
@@ -714,8 +714,8 @@ const Forecasting: React.FC = () => {
           <div
             className="mt-4 p-3"
             style={{
-              backgroundColor: '#a855f710',
-              border: '1px solid #a855f730',
+              backgroundColor: 'color-mix(in srgb, var(--color-accent-purple) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent-purple) 19%, transparent)',
               borderRadius: '6px',
             }}
           >

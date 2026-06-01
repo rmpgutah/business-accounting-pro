@@ -270,7 +270,7 @@ const CommunicationHours: React.FC<{ debtId: string }> = ({ debtId }) => {
               style={{
                 height: `${Math.max((h.count / maxCount) * 60, h.count > 0 ? 4 : 0)}px`,
                 width: '100%',
-                background: !h.allowed && h.count > 0 ? '#ef4444' : h.allowed ? '#22c55e' : '#1a1a1a',
+                background: !h.allowed && h.count > 0 ? 'var(--color-accent-expense)' : h.allowed ? 'var(--color-accent-income)' : '#1a1a1a',
                 borderRadius: '3px 3px 0 0',
                 transition: 'height 0.3s ease',
                 opacity: h.count === 0 ? 0.3 : 1,
@@ -728,13 +728,13 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
             gap: 8,
             padding: '8px 12px',
             background: 'rgba(239,68,68,0.08)',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: 6,
             marginBottom: 12,
           }}
         >
-          <AlertTriangle size={14} color="#ef4444" />
-          <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+          <AlertTriangle size={14} color="var(--color-accent-expense)" />
+          <span style={{ fontSize: 12, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
             Cease &amp; Desist received — communications restricted
           </span>
         </div>

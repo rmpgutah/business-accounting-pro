@@ -525,10 +525,10 @@ const ReconcileView: React.FC = () => {
                 height: '100%',
                 background:
                   progressPct >= 90
-                    ? '#22c55e'
+                    ? 'var(--color-accent-income)'
                     : progressPct >= 50
-                      ? '#3b82f6'
-                      : '#eab308',
+                      ? 'var(--color-accent-blue)'
+                      : 'var(--color-accent-warning)',
                 transition: 'width 0.3s',
               }}
             />

@@ -95,12 +95,12 @@ const IntegritySettings: React.FC = () => {
       </div>
 
       {result && (
-        <div className="block-card" style={{ padding: 16, borderLeft: '3px solid ' + (result.ok ? 'var(--color-positive)' : 'var(--color-warning, #d97706)') }}>
+        <div className="block-card" style={{ padding: 16, borderLeft: '3px solid ' + (result.ok ? 'var(--color-positive)' : 'var(--color-warning, var(--color-accent-warning))') }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {result.ok ? (
               <ShieldCheck size={16} style={{ color: 'var(--color-positive)' }} />
             ) : (
-              <AlertTriangle size={16} style={{ color: 'var(--color-warning, #d97706)' }} />
+              <AlertTriangle size={16} style={{ color: 'var(--color-warning, var(--color-accent-warning))' }} />
             )}
             <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text-primary)' }}>
               {result.ok ? 'All checks passed' : 'Issues found'}
@@ -123,7 +123,7 @@ const IntegritySettings: React.FC = () => {
           {/* Schema drift */}
           {result.schemaDrift.missingFromExemption.length > 0 && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
-              <div style={{ fontWeight: 700, color: 'var(--color-warning, #d97706)' }}>
+              <div style={{ fontWeight: 700, color: 'var(--color-warning, var(--color-accent-warning))' }}>
                 Tables missing from company-id exemption ({result.schemaDrift.missingFromExemption.length})
               </div>
               <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
@@ -151,7 +151,7 @@ const IntegritySettings: React.FC = () => {
           {/* Orphan FKs */}
           {Object.keys(result.orphans).length > 0 && (
             <div style={{ marginTop: 12, fontSize: 12 }}>
-              <div style={{ fontWeight: 700, color: 'var(--color-warning, #d97706)', marginBottom: 4 }}>
+              <div style={{ fontWeight: 700, color: 'var(--color-warning, var(--color-accent-warning))', marginBottom: 4 }}>
                 Orphan foreign-key references ({Object.keys(result.orphans).length} relationships)
               </div>
               {Object.entries(result.orphans).map(([target, info]) => (
@@ -166,7 +166,7 @@ const IntegritySettings: React.FC = () => {
                     onClick={() => cleanup(target)}
                     disabled={cleaning === target}
                     className="block-btn text-xs flex items-center gap-1.5"
-                    style={{ color: 'var(--color-warning, #d97706)', borderColor: 'var(--color-warning, #d97706)' }}
+                    style={{ color: 'var(--color-warning, var(--color-accent-warning))', borderColor: 'var(--color-warning, var(--color-accent-warning))' }}
                   >
                     <Wrench size={11} />
                     {cleaning === target ? 'Cleaning…' : 'NULL the FK'}
@@ -179,7 +179,7 @@ const IntegritySettings: React.FC = () => {
           {/* PRAGMA foreign_key_check */}
           {result.pragmaFkCheck.length > 0 && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
-              <div style={{ fontWeight: 700, color: 'var(--color-warning, #d97706)' }}>
+              <div style={{ fontWeight: 700, color: 'var(--color-warning, var(--color-accent-warning))' }}>
                 FK constraint violations ({result.pragmaFkCheck.length})
               </div>
               <ul style={{ margin: '4px 0 0 18px', listStyle: 'disc', color: 'var(--color-text-muted)' }}>

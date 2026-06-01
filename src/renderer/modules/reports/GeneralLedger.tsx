@@ -1103,7 +1103,7 @@ const GeneralLedger: React.FC = () => {
                           const hlColor = highlightColorFor(txn);
                           const subtotalDivider = subtotalEvery > 0 && idx > 0 && idx % subtotalEvery === 0;
                           const matched = matchedPairs.get(txn.line_id);
-                          const rowStyle: React.CSSProperties = hlColor ? { background: hlColor + '33' } : {};
+                          const rowStyle: React.CSSProperties = hlColor ? { background: `color-mix(in srgb, ${hlColor} 20%, transparent)` } : {};
                           const approvalLabels = ['', 'Initial', 'Senior', 'Approved'];
                           return (
                             <React.Fragment key={txn.line_id}>
@@ -1303,7 +1303,7 @@ const GeneralLedger: React.FC = () => {
                 ))}
               </tbody>
             </table>
-            <button className="block-btn px-3 py-1 text-xs" onClick={() => setHighlightRules([...highlightRules, { id: `r-${Date.now()}`, field: 'amount', op: 'gt', value: '5000', color: '#ef4444' }])}>+ Add rule</button>
+            <button className="block-btn px-3 py-1 text-xs" onClick={() => setHighlightRules([...highlightRules, { id: `r-${Date.now()}`, field: 'amount', op: 'gt', value: '5000', color: 'var(--color-accent-expense)' }])}>+ Add rule</button>
             <div className="flex justify-end mt-3"><button className="block-btn px-3 py-1 text-xs" onClick={() => setRulesOpen(false)}>Close</button></div>
           </div>
         </div>

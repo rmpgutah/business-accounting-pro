@@ -563,7 +563,7 @@ const ClientsModule: React.FC = () => {
                         const colorMap: Record<string, string> = {
                           low: 'var(--color-accent-income)',
                           medium: 'var(--color-accent-blue)',
-                          high: '#f59e0b',
+                          high: 'var(--color-accent-warning)',
                           critical: 'var(--color-accent-expense)',
                         };
                         return (
@@ -839,7 +839,7 @@ const ClientsModule: React.FC = () => {
                       const colorMap: Record<string, string> = {
                         'On Time': 'var(--color-accent-income)',
                         '1-15 Days Late': 'var(--color-accent-blue)',
-                        '16-30 Days Late': '#f59e0b',
+                        '16-30 Days Late': 'var(--color-accent-warning)',
                         '30+ Days Late': 'var(--color-accent-expense)',
                       };
                       return (

@@ -62,9 +62,9 @@ const periodLabel: Record<string, string> = {
 };
 
 const RISK_COLORS = {
-  low: '#22c55e',
-  medium: '#eab308',
-  high: '#ef4444',
+  low: 'var(--color-accent-income)',
+  medium: 'var(--color-accent-warning)',
+  high: 'var(--color-accent-expense)',
 };
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'over_budget' | 'under_budget';

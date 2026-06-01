@@ -80,10 +80,10 @@ function mergeFields(
 // UI and the resulting PDF visually consistent so the user always knows
 // which severity they're about to send.
 const SEVERITY_STYLES: Record<string, { badge: string; accent: string; icon: string }> = {
-  low:      { badge: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',     accent: '#3b82f6', icon: 'ℹ' },
-  medium:   { badge: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',  accent: '#f59e0b', icon: '⚠' },
-  high:     { badge: 'bg-red-500/15 text-red-400 border border-red-500/30',        accent: '#dc2626', icon: '⚠' },
-  critical: { badge: 'bg-red-700/20 text-red-300 border border-red-700/40',         accent: '#991b1b', icon: '⛔' },
+  low:      { badge: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',     accent: 'var(--color-accent-blue)', icon: 'ℹ' },
+  medium:   { badge: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',  accent: 'var(--color-accent-warning)', icon: '⚠' },
+  high:     { badge: 'bg-red-500/15 text-red-400 border border-red-500/30',        accent: 'var(--color-accent-expense)', icon: '⚠' },
+  critical: { badge: 'bg-red-700/20 text-red-300 border border-red-700/40',         accent: 'var(--color-accent-expense)', icon: '⛔' },
 };
 
 const TEMPLATE_TYPE_HINT: Record<string, string> = {

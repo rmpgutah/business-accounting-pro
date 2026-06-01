@@ -712,7 +712,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                       <div className="flex items-center gap-3">
                         <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Assessed Penalty</label>
                         <label className="flex items-center gap-1 text-[11px] text-text-muted">
-                          <input type="checkbox" checked={form.penalty_waived} onChange={(e) => setForm(f => ({ ...f, penalty_waived: e.target.checked }))} style={{ accentColor: '#16a34a' }} /> Waive
+                          <input type="checkbox" checked={form.penalty_waived} onChange={(e) => setForm(f => ({ ...f, penalty_waived: e.target.checked }))} style={{ accentColor: 'var(--color-accent-income)' }} /> Waive
                         </label>
                       </div>
                       <div className="flex items-center gap-1">
@@ -840,7 +840,7 @@ const PerformanceReviewsPanel: React.FC<{ employeeId: string }> = ({ employeeId 
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Reviewer</label><input className="block-input" placeholder="Manager / supervisor name" value={form.reviewer_name} onChange={e => setForm(f => ({...f, reviewer_name: e.target.value}))} /></div>
           </div>
           <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Overall Rating (1-5)</label>
-            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 6, background: form.overall_rating >= n ? (n <= 2 ? '#dc2626' : n === 3 ? '#3b82f6' : '#16a34a') : 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
+            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 6, background: form.overall_rating >= n ? (n <= 2 ? 'var(--color-accent-expense)' : n === 3 ? 'var(--color-accent-blue)' : 'var(--color-accent-income)') : 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
               <span className="text-xs text-text-muted ml-2 self-center">{RATING_LABELS[form.overall_rating]}</span>
             </div>
           </div>
@@ -1129,7 +1129,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                       </span>
                     ) : (
                       <input type="checkbox" checked={step.done} onChange={(e) => toggle(step.key, e.target.checked)}
-                        style={{ width: 18, height: 18, accentColor: '#16a34a', cursor: 'pointer' }} />
+                        style={{ width: 18, height: 18, accentColor: 'var(--color-accent-income)', cursor: 'pointer' }} />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -1552,7 +1552,7 @@ const ESignModal: React.FC<{
 
         {/* Employer / admin signature */}
         <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
-          <input type="checkbox" checked={addEmployer} onChange={(e) => setAddEmployer(e.target.checked)} style={{ accentColor: '#16a34a' }} />
+          <input type="checkbox" checked={addEmployer} onChange={(e) => setAddEmployer(e.target.checked)} style={{ accentColor: 'var(--color-accent-income)' }} />
           Add employer / authorized representative signature
         </label>
         {addEmployer && (
@@ -1570,7 +1570,7 @@ const ESignModal: React.FC<{
         <p className="text-[10px] text-text-muted">Dates default to today; you may back-date to a past date but not the future.</p>
 
         <label className="flex items-start gap-2 text-xs text-text-secondary">
-          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, accentColor: '#16a34a' }} />
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--color-accent-income)' }} />
           <span>The named parties agree that typing their name constitutes their electronic signature and that they have read and accept this document.</span>
         </label>
 

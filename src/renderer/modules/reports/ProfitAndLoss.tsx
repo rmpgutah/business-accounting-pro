@@ -754,7 +754,7 @@ const ProfitAndLoss: React.FC = () => {
             <KPICard label="Gross Profit" value={grossProfit} subtitle={`${grossMarginPct.toFixed(1)}% margin`} borderColor="border-l-accent-blue" />
             <KPICard label="Operating Expenses" value={totalExpenses} borderColor="border-l-accent-expense" />
             <KPICard label="Net Income" value={netIncome} subtitle={`${netMarginPct.toFixed(1)}% margin`} borderColor="border-l-accent-income" />
-            <KPICard label="EBITDA" value={ebitda} borderColor="border-l-[#8b5cf6]" />
+            <KPICard label="EBITDA" value={ebitda} borderColor="border-l-[var(--color-accent-purple)]" />
           </div>
 
           {/* ─── Operating Ratios Panel ────────────────── */}
@@ -793,9 +793,9 @@ const ProfitAndLoss: React.FC = () => {
                     type="monotone"
                     dataKey="revenue"
                     name="Revenue"
-                    stroke="#22c55e"
+                    stroke="var(--color-accent-income)"
                     strokeWidth={2}
-                    dot={{ r: 3, fill: '#22c55e' }}
+                    dot={{ r: 3, fill: 'var(--color-accent-income)' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -1060,7 +1060,7 @@ const ProfitAndLoss: React.FC = () => {
                     {revExpBarData.map((_entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={index === 0 ? '#22c55e' : index === 1 ? '#ef4444' : '#3b82f6'}
+                        fill={index === 0 ? 'var(--color-accent-income)' : index === 1 ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)'}
                       />
                     ))}
                   </Bar>

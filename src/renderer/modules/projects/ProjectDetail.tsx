@@ -323,9 +323,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           className="text-xs px-3 py-2 font-mono"
           style={{
             background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '6px',
-            color: '#ef4444',
+            color: 'var(--color-accent-expense)',
           }}
         >
           {invoiceError}
@@ -358,14 +358,14 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           value={formatCurrency(stats.profitLoss)}
           accentClass={stats.profitLoss >= 0 ? 'border-l-accent-income' : 'border-l-accent-expense'}
           subtitle={`${stats.profitMargin}% margin`}
-          subtitleColor={stats.profitLoss >= 0 ? '#34d399' : '#f87171'}
+          subtitleColor={stats.profitLoss >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'}
         />
         {stats.budgetUsed !== null && (
           <StatCard
             icon={<DollarSign size={14} />}
             label="Budget Used"
             value={`${stats.budgetUsed}%`}
-            accentClass={parseFloat(stats.budgetUsed!) > 90 ? 'border-l-accent-expense' : parseFloat(stats.budgetUsed!) > 70 ? 'border-l-[#fbbf24]' : 'border-l-accent-income'}
+            accentClass={parseFloat(stats.budgetUsed!) > 90 ? 'border-l-accent-expense' : parseFloat(stats.budgetUsed!) > 70 ? 'border-l-[var(--color-accent-warning)]' : 'border-l-accent-income'}
             subtitle={`${formatCurrency(stats.totalExpenses)} / ${formatCurrency(project?.budget ?? 0)}`}
           />
         )}

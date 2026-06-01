@@ -133,7 +133,7 @@ const PeriodCloseSettings: React.FC = () => {
             color: 'var(--color-text-primary)',
             display: 'flex', gap: 8, alignItems: 'flex-start',
           }}>
-            <AlertTriangle size={14} style={{ color: 'var(--color-warning, #d97706)', flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={14} style={{ color: 'var(--color-warning, var(--color-accent-warning))', flexShrink: 0, marginTop: 1 }} />
             <span>
               After closing, all <strong>invoices, expenses, journal entries, and payments</strong> dated within this range become immutable. Saves and deletes will fail with a clear error pointing back to this setting.
             </span>
@@ -178,7 +178,7 @@ const PeriodCloseSettings: React.FC = () => {
               onClick={() => handleReopen(p.id)}
               disabled={reopeningId === p.id}
               className="block-btn flex items-center gap-1.5 text-xs"
-              style={{ color: 'var(--color-warning, #d97706)', borderColor: 'var(--color-warning, #d97706)' }}
+              style={{ color: 'var(--color-warning, var(--color-accent-warning))', borderColor: 'var(--color-warning, var(--color-accent-warning))' }}
             >
               <Unlock size={12} /> {reopeningId === p.id ? 'Reopening…' : 'Reopen'}
             </button>
@@ -202,7 +202,7 @@ const PeriodCloseSettings: React.FC = () => {
               <div style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>
                 Originally closed: {p.close_reason || '(no reason)'} on {new Date(p.closed_at).toLocaleDateString()}
               </div>
-              <div style={{ color: 'var(--color-warning, #d97706)', marginTop: 1 }}>
+              <div style={{ color: 'var(--color-warning, var(--color-accent-warning))', marginTop: 1 }}>
                 Reopened: {p.reopen_reason || '(no reason)'} on {p.reopened_at ? new Date(p.reopened_at).toLocaleDateString() : '?'}
                 {p.reopened_by ? ' by ' + p.reopened_by : ''}
               </div>

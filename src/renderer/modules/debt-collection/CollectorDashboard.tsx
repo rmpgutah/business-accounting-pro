@@ -88,7 +88,7 @@ const ActionCard: React.FC<{
         {icon}
         <span className="text-sm font-semibold text-text-primary">{title}</span>
       </div>
-      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: color + '22', color, minWidth: 24, textAlign: 'center' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, minWidth: 24, textAlign: 'center' }}>
         {count}
       </span>
     </div>
@@ -136,10 +136,10 @@ const AgingBar: React.FC<{ aging: AgingData }> = ({ aging }) => {
   if (total === 0) return <div className="text-xs text-text-muted text-center py-4">No active debts</div>;
 
   const segments = [
-    { label: '0-30d', count: aging.age_0_30 || 0, color: '#22c55e' },
-    { label: '31-60d', count: aging.age_31_60 || 0, color: '#eab308' },
-    { label: '61-90d', count: aging.age_61_90 || 0, color: '#f59e0b' },
-    { label: '90+d', count: aging.age_90_plus || 0, color: '#dc2626' },
+    { label: '0-30d', count: aging.age_0_30 || 0, color: 'var(--color-accent-income)' },
+    { label: '31-60d', count: aging.age_31_60 || 0, color: 'var(--color-accent-warning)' },
+    { label: '61-90d', count: aging.age_61_90 || 0, color: 'var(--color-accent-warning)' },
+    { label: '90+d', count: aging.age_90_plus || 0, color: 'var(--color-accent-expense)' },
   ];
 
   return (
@@ -566,32 +566,32 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           <KPICard
             label="Total Portfolio"
             value={formatCurrency(kpis.total_portfolio)}
-            color="#3b82f6"
+            color="var(--color-accent-blue)"
             icon={<DollarSign size={16} className="text-blue-400" />}
           />
           <KPICard
             label="Total Collected"
             value={formatCurrency(kpis.total_collected)}
-            color="#16a34a"
+            color="var(--color-accent-income)"
             icon={<TrendingUp size={16} className="text-green-400" />}
           />
           <KPICard
             label="Outstanding"
             value={formatCurrency(kpis.total_outstanding)}
-            color="#dc2626"
+            color="var(--color-accent-expense)"
             icon={<AlertTriangle size={16} className="text-red-400" />}
           />
           <KPICard
             label="Recovery Rate"
             value={`${recoveryRate}%`}
-            color="#8b5cf6"
+            color="var(--color-accent-purple)"
             icon={<Target size={16} className="text-purple-400" />}
           />
           <KPICard
             label="Active Accounts"
             value={String(kpis.active_count)}
             sub={`${kpis.legal_count} legal`}
-            color="#f59e0b"
+            color="var(--color-accent-warning)"
             icon={<Activity size={16} className="text-yellow-400" />}
           />
           <KPICard
@@ -694,10 +694,10 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       {/* Summary badges (original) */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Broken Promises', count: data.brokenPromises.length, color: '#ef4444' },
-          { label: 'Overdue Installments', count: data.overdueInstallments.length, color: '#d97706' },
-          { label: 'Upcoming Hearings', count: data.upcomingHearings.length, color: '#8b5cf6' },
-          { label: 'Follow-ups Due', count: data.followUpsDue.length, color: '#3b82f6' },
+          { label: 'Broken Promises', count: data.brokenPromises.length, color: 'var(--color-accent-expense)' },
+          { label: 'Overdue Installments', count: data.overdueInstallments.length, color: 'var(--color-accent-warning)' },
+          { label: 'Upcoming Hearings', count: data.upcomingHearings.length, color: 'var(--color-accent-purple)' },
+          { label: 'Follow-ups Due', count: data.followUpsDue.length, color: 'var(--color-accent-blue)' },
         ].map((s) => (
           <div key={s.label} className="block-card p-4 text-center">
             <p className="text-2xl font-bold font-mono" style={{ color: s.color }}>{s.count}</p>
@@ -710,12 +710,12 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       <div className="grid grid-cols-2 gap-4">
         {/* Priority Queue */}
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#ef4444' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-expense)' }}>
             <div className="flex items-center gap-2">
               <ArrowUpRight size={16} className="text-red-400" />
               <span className="text-sm font-semibold text-text-primary">Priority Queue</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#ef444422', color: '#ef4444' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>
               {priorityQueue.length}
             </span>
           </div>
@@ -745,12 +745,12 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
 
         {/* Compliance Alerts */}
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#f97316' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-warning)' }}>
             <div className="flex items-center gap-2">
               <Shield size={16} className="text-orange-400" />
               <span className="text-sm font-semibold text-text-primary">Compliance Alerts</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#f9731622', color: '#f97316' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>
               {complianceAlerts.length}
             </span>
           </div>
@@ -760,11 +760,11 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
             <div className="max-h-72 overflow-y-auto">
               {complianceAlerts.map((alert) => {
                 const flags: { label: string; color: string }[] = [];
-                if (alert.cease_desist_active) flags.push({ label: 'C&D ACTIVE', color: '#dc2626' });
+                if (alert.cease_desist_active) flags.push({ label: 'C&D ACTIVE', color: 'var(--color-accent-expense)' });
                 if (alert.statute_of_limitations_date) {
                   const dLeft = Math.ceil((new Date(alert.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
                   if (dLeft < 90) {
-                    const sColor = dLeft < 30 ? '#ef4444' : '#f97316';
+                    const sColor = dLeft < 30 ? 'var(--color-accent-expense)' : 'var(--color-accent-warning)';
                     flags.push({ label: `SOL ${dLeft}d`, color: sColor });
                   }
                 }
@@ -777,7 +777,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                     <p className="text-sm text-text-primary font-medium truncate">{alert.debtor_name}</p>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {flags.map((f) => (
-                        <span key={f.label} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: f.color + '22', color: f.color }}>
+                        <span key={f.label} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: `color-mix(in srgb, ${f.color} 13%, transparent)`, color: f.color }}>
                           {f.label}
                         </span>
                       ))}
@@ -796,7 +796,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           title="Broken Promises"
           icon={<AlertTriangle size={16} className="text-red-400" />}
           count={data.brokenPromises.length}
-          color="#ef4444"
+          color="var(--color-accent-expense)"
           items={data.brokenPromises}
           onView={onViewDebt}
           renderRow={(item) => (
@@ -814,7 +814,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           title="Overdue Installments"
           icon={<Clock size={16} className="text-yellow-500" />}
           count={data.overdueInstallments.length}
-          color="#d97706"
+          color="var(--color-accent-warning)"
           items={data.overdueInstallments}
           onView={onViewDebt}
           renderRow={(item) => (
@@ -832,7 +832,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           title="Upcoming Hearings"
           icon={<Gavel size={16} className="text-purple-400" />}
           count={data.upcomingHearings.length}
-          color="#8b5cf6"
+          color="var(--color-accent-purple)"
           items={data.upcomingHearings}
           onView={onViewDebt}
           renderRow={(item) => (
@@ -850,7 +850,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           title="Follow-ups Due"
           icon={<MessageSquare size={16} className="text-blue-400" />}
           count={data.followUpsDue.length}
-          color="#3b82f6"
+          color="var(--color-accent-blue)"
           items={data.followUpsDue}
           onView={onViewDebt}
           renderRow={(item) => (
@@ -868,12 +868,12 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       {/* Feature 9: Recent Activity Feed */}
       {activityFeed.length > 0 && (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-blue)' }}>
             <div className="flex items-center gap-2">
               <Activity size={16} className="text-blue-400" />
               <span className="text-sm font-semibold text-text-primary">Recent Activity</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#3b82f622', color: '#3b82f6' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-blue) 13%, transparent)', color: 'var(--color-accent-blue)' }}>
               {activityFeed.length}
             </span>
           </div>
@@ -959,12 +959,12 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       {/* Smart Recommendations */}
       {recommendations.length > 0 && (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#8b5cf6' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-purple)' }}>
             <div className="flex items-center gap-2">
               <Zap size={16} className="text-purple-400" />
               <span className="text-sm font-semibold text-text-primary">Smart Recommendations</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#8b5cf622', color: '#8b5cf6' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>
               {recommendations.length}
             </span>
           </div>

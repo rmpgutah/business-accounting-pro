@@ -152,7 +152,7 @@ const StatusBuilderSettings: React.FC = () => {
             <div key={s.id} className="p-2 border border-border-primary text-xs" style={{ borderRadius: '6px' }}>
               <div className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-1" style={{ borderRadius: '4px', background: s.color + '22', color: s.color, border: `1px solid ${s.color}` }}>
+                  <span className="inline-flex items-center gap-1 px-2 py-1" style={{ borderRadius: '4px', background: `color-mix(in srgb, ${s.color} 13%, transparent)`, color: s.color, border: `1px solid ${s.color}` }}>
                     {s.label}
                   </span>
                 </div>
@@ -260,7 +260,7 @@ const WorkflowDiagram: React.FC<{ statuses: CustomStatus[]; transitions: StatusT
           const p = positions[s.key];
           return (
             <g key={s.key} transform={`translate(${p.x},${p.y})`}>
-              <rect width={nodeWidth} height={nodeHeight} rx={4} fill={s.color + '22'} stroke={s.color} strokeWidth="1.5" />
+              <rect width={nodeWidth} height={nodeHeight} rx={4} fill={`color-mix(in srgb, ${s.color} 13%, transparent)`} stroke={s.color} strokeWidth="1.5" />
               <text x={nodeWidth / 2} y={nodeHeight / 2 + 4} textAnchor="middle" fontSize="11" fill={s.color} fontWeight="600">
                 {s.label}
               </text>

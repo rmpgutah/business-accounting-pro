@@ -43,7 +43,7 @@ const scheduleLabels: Record<string, string> = {
   monthly: 'Monthly',
 };
 
-const COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#4f46e5', '#ca8a04'];
+const COLORS = ['var(--color-accent-blue)', 'var(--color-accent-purple)', 'var(--color-accent-income)', 'var(--color-accent-warning)', 'var(--color-accent-expense)', '#0891b2', '#4f46e5', 'var(--color-accent-warning)'];
 
 // ─── Column Header (module-level to avoid re-creation) ──
 const SortableHeader: React.FC<{
@@ -445,7 +445,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
           </select>
           <button
             className="block-btn inline-flex items-center gap-1.5 text-xs"
-            style={{ color: '#dc2626' }}
+            style={{ color: 'var(--color-accent-expense)' }}
             onClick={handleBulkDelete}
           >
             <Trash2 size={12} />

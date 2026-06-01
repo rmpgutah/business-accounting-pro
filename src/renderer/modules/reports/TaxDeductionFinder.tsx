@@ -35,9 +35,9 @@ const fmt$ = (n: number): string => '$' + (n || 0).toLocaleString('en-US', { min
 interface Props { onBack?: () => void }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
-  overlooked: <Sparkles size={14} style={{ color: '#16a34a' }} />,
-  miscategorized: <AlertCircle size={14} style={{ color: '#d97706' }} />,
-  underclaimed: <FileSearch size={14} style={{ color: '#2563eb' }} />,
+  overlooked: <Sparkles size={14} style={{ color: 'var(--color-accent-income)' }} />,
+  miscategorized: <AlertCircle size={14} style={{ color: 'var(--color-accent-warning)' }} />,
+  underclaimed: <FileSearch size={14} style={{ color: 'var(--color-accent-blue)' }} />,
   documentation: <Info size={14} style={{ color: '#64748b' }} />,
 };
 
@@ -94,7 +94,7 @@ const TaxDeductionFinder: React.FC<Props> = ({ onBack }) => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
               <Stat label="Year Scanned" value={String(data.year)} />
               <Stat label="Expenses Reviewed" value={fmt$(data.total_expenses_scanned)} />
-              <Stat label="Potential Deductions" value={fmt$(data.total_potential)} highlight color="#16a34a" />
+              <Stat label="Potential Deductions" value={fmt$(data.total_potential)} highlight color="var(--color-accent-income)" />
             </div>
           </div>
 
@@ -112,7 +112,7 @@ const TaxDeductionFinder: React.FC<Props> = ({ onBack }) => {
               {data.suggestions.map((s, i) => (
                 <div key={i} className="block-card" style={{
                   padding: 16,
-                  borderLeft: '3px solid ' + (s.confidence === 'high' ? '#16a34a' : s.confidence === 'medium' ? '#d97706' : '#94a3b8'),
+                  borderLeft: '3px solid ' + (s.confidence === 'high' ? 'var(--color-accent-income)' : s.confidence === 'medium' ? 'var(--color-accent-warning)' : '#94a3b8'),
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
@@ -128,7 +128,7 @@ const TaxDeductionFinder: React.FC<Props> = ({ onBack }) => {
                       <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)', marginBottom: 2 }}>
                         Potential
                       </div>
-                      <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-income)' }}>
                         {fmt$(s.estimated_value)}
                       </div>
                     </div>
@@ -138,7 +138,7 @@ const TaxDeductionFinder: React.FC<Props> = ({ onBack }) => {
                   </p>
                   <div style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                     <span>Based on {s.supporting_count} transactions ({fmt$(s.supporting_total)})</span>
-                    <span>Confidence: <strong style={{ color: s.confidence === 'high' ? '#16a34a' : s.confidence === 'medium' ? '#d97706' : '#94a3b8' }}>{s.confidence}</strong></span>
+                    <span>Confidence: <strong style={{ color: s.confidence === 'high' ? 'var(--color-accent-income)' : s.confidence === 'medium' ? 'var(--color-accent-warning)' : '#94a3b8' }}>{s.confidence}</strong></span>
                     {s.irs_reference && <span>Reference: <code>{s.irs_reference}</code></span>}
                   </div>
                 </div>

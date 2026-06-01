@@ -238,13 +238,13 @@ export default function CustomReportsModule() {
         <div
           style={{
             background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '6px',
             padding: '12px 16px',
             marginBottom: '16px',
           }}
         >
-          <p style={{ color: '#ef4444', fontSize: '13px', margin: 0 }}>{error}</p>
+          <p style={{ color: 'var(--color-accent-expense)', fontSize: '13px', margin: 0 }}>{error}</p>
         </div>
       )}
 

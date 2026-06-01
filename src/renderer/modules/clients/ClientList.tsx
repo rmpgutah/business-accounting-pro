@@ -82,7 +82,7 @@ const HealthDot: React.FC<{ lastInvoice: string | null; outstanding: number }> =
       color = 'var(--color-accent-income)';
       title = `Active (${daysSince}d ago)`;
     } else if (daysSince <= 90) {
-      color = '#f59e0b';
+      color = 'var(--color-accent-warning)';
       title = `Aging (${daysSince}d ago)`;
     } else {
       color = 'var(--color-accent-expense)';

@@ -563,8 +563,8 @@ const CashFlowStatement: React.FC = () => {
           <div className="grid grid-cols-6 gap-3">
             <KPICard label="Operating CF" value={netOperating} borderColor="border-l-accent-income" />
             <KPICard label="Investing CF" value={netInvesting} borderColor="border-l-accent-blue" />
-            <KPICard label="Financing CF" value={netFinancing} borderColor="border-l-[#8b5cf6]" />
-            <KPICard label="Net Cash Change" value={netChange} borderColor="border-l-[#f59e0b]" />
+            <KPICard label="Financing CF" value={netFinancing} borderColor="border-l-[var(--color-accent-purple)]" />
+            <KPICard label="Net Cash Change" value={netChange} borderColor="border-l-[var(--color-accent-warning)]" />
             <KPICard label="Free Cash Flow" value={freeCashFlow} subtitle="Operating - CapEx" borderColor="border-l-[#06b6d4]" />
             <KPICard
               label="Cash Conversion"

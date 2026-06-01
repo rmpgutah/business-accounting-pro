@@ -40,10 +40,10 @@ type SortKey = 'issue_date' | 'due_date' | 'total' | 'days_outstanding';
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
   standard:    '',
-  service:     '#3b82f6',
-  product:     '#8b5cf6',
-  retainer:    '#d97706',
-  credit_note: '#22c55e',
+  service:     'var(--color-accent-blue)',
+  product:     'var(--color-accent-purple)',
+  retainer:    'var(--color-accent-warning)',
+  credit_note: 'var(--color-accent-income)',
   proforma:    '#6b7280',
 };
 
@@ -179,12 +179,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
   // Helper: risk dot color based on aging
   const riskColor = (inv: Invoice): string => {
-    if (inv.status === 'paid') return '#22c55e';
+    if (inv.status === 'paid') return 'var(--color-accent-income)';
     const d = daysOutstanding(inv);
-    if (d <= 0) return '#22c55e';
+    if (d <= 0) return 'var(--color-accent-income)';
     if (d <= 30) return '#facc15';
-    if (d <= 60) return '#f97316';
-    return '#ef4444';
+    if (d <= 60) return 'var(--color-accent-warning)';
+    return 'var(--color-accent-expense)';
   };
 
   // Overdue → debt conversion
@@ -799,15 +799,15 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 16px', background: 'rgba(239,68,68,0.08)',
-          border: '1px solid #ef4444', borderRadius: 6,
+          border: '1px solid var(--color-accent-expense)', borderRadius: 6,
         }}>
-          <span style={{ fontSize: 13, color: '#ef4444', fontWeight: 600 }}>
+          <span style={{ fontSize: 13, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
             {candidates.length} overdue invoice{candidates.length !== 1 ? 's' : ''} eligible for debt collection
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="block-btn text-xs py-1 px-3"
-              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              style={{ color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
               onClick={() => setShowConvertModal(true)}
             >
               Review
@@ -1023,7 +1023,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span style={{
                             fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, textTransform: 'uppercase',
-                            background: (TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280') + '22',
+                            background: `color-mix(in srgb, ${(TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280')} 13%, transparent)`,
                             color: TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280',
                           }}>
                             {humanizeLabel(inv.invoice_type)}
@@ -1064,12 +1064,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={badge.className}>{badge.label}</span>
                         {(inv as any).dunning_stage > 0 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>
                             {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
                           </span>
                         )}
                         {(inv as any).late_fee_applied === 1 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#f87171' }}>FEE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>FEE</span>
                         )}
                       </div>
                     </td>

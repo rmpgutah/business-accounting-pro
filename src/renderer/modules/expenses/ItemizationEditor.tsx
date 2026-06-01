@@ -609,7 +609,7 @@ export default function ItemizationEditor({
             <span>{formatCurrency(subtotal)}</span>
           </div>
           {totalDiscount > 0 && (
-            <div className="iz-totals-row" style={{ color: '#a855f7' }}>
+            <div className="iz-totals-row" style={{ color: 'var(--color-accent-purple)' }}>
               <span>Discount</span>
               <span>−{formatCurrency(totalDiscount)}</span>
             </div>

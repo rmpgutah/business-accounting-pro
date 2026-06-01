@@ -653,7 +653,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                       </div>
                       <div className="tform-metric">
                         <div className="tform-metric-label">Disputes</div>
-                        <div className="tform-metric-value" style={{ color: perfData.dispute_count > 0 ? '#ef4444' : undefined }}>{perfData.dispute_count}</div>
+                        <div className="tform-metric-value" style={{ color: perfData.dispute_count > 0 ? 'var(--color-accent-expense)' : undefined }}>{perfData.dispute_count}</div>
                       </div>
                     </div>
                   </>

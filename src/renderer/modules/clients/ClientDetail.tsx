@@ -126,7 +126,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
     >
       <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, margin: 0 }}>{label}</p>
       {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color ?? '#34d399', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: '2px 0 0' }}>
+        <p key={i} style={{ color: p.color ?? 'var(--color-accent-income)', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: '2px 0 0' }}>
           {p.name}: {formatCurrency(p.value)}
         </p>
       ))}
@@ -137,9 +137,9 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 // ─── Health Badge ───────────────────────────────────────
 function getHealthBadge(outstanding: number, totalInvoiced: number, avgPaymentDays: number): { label: string; color: string; bg: string } {
   const outstandingRatio = totalInvoiced > 0 ? outstanding / totalInvoiced : 0;
-  if (outstandingRatio > 0.5 || avgPaymentDays > 60) return { label: 'At Risk', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
-  if (outstandingRatio > 0.2 || avgPaymentDays > 30) return { label: 'Watch', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' };
-  return { label: 'Healthy', color: '#34d399', bg: 'rgba(52,211,153,0.12)' };
+  if (outstandingRatio > 0.5 || avgPaymentDays > 60) return { label: 'At Risk', color: 'var(--color-accent-expense)', bg: 'rgba(239,68,68,0.12)' };
+  if (outstandingRatio > 0.2 || avgPaymentDays > 30) return { label: 'Watch', color: 'var(--color-accent-warning)', bg: 'rgba(245,158,11,0.12)' };
+  return { label: 'Healthy', color: 'var(--color-accent-income)', bg: 'rgba(52,211,153,0.12)' };
 }
 
 // ─── Payment Trend ──────────────────────────────────────

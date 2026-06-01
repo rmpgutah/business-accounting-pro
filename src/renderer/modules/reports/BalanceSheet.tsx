@@ -671,8 +671,8 @@ const BalanceSheet: React.FC = () => {
             <KPICard label="Total Assets" value={totalAssets} borderColor="border-l-accent-blue" />
             <KPICard label="Total Liabilities" value={totalLiabilities} borderColor="border-l-accent-expense" />
             <KPICard label="Total Equity" value={totalEquity} borderColor="border-l-accent-income" />
-            <KPICard label="Debt-to-Equity" value={debtToEquity.toFixed(2) + 'x'} borderColor="border-l-[#f59e0b]" isRatio />
-            <KPICard label="Current Ratio" value={currentRatio.toFixed(2) + 'x'} borderColor="border-l-[#8b5cf6]" isRatio />
+            <KPICard label="Debt-to-Equity" value={debtToEquity.toFixed(2) + 'x'} borderColor="border-l-[var(--color-accent-warning)]" isRatio />
+            <KPICard label="Current Ratio" value={currentRatio.toFixed(2) + 'x'} borderColor="border-l-[var(--color-accent-purple)]" isRatio />
             <KPICard label="Working Capital" value={workingCapital} borderColor="border-l-[#06b6d4]" />
           </div>
 

@@ -166,7 +166,7 @@ const VendorSpendReport: React.FC = () => {
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                          <div className="h-full bg-[#f97316] transition-all duration-500" style={{ width: `${barWidth}%`, borderRadius: '6px' }} />
+                          <div className="h-full bg-[var(--color-accent-warning)] transition-all duration-500" style={{ width: `${barWidth}%`, borderRadius: '6px' }} />
                         </div>
                         <span className="text-xs text-text-muted font-mono w-12 text-right">{pct.toFixed(1)}%</span>
                       </div>

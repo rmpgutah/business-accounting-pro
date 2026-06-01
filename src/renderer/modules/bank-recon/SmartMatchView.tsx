@@ -198,7 +198,7 @@ const SmartMatchView: React.FC = () => {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-income)' }}>
                     {fmt$(txn.amount)}
                   </div>
                 </div>
@@ -224,7 +224,7 @@ const SmartMatchView: React.FC = () => {
                       width: 40,
                       height: 40,
                       borderRadius: 4,
-                      background: c.score >= 90 ? '#16a34a' : c.score >= 75 ? '#65a30d' : '#d97706',
+                      background: c.score >= 90 ? 'var(--color-accent-income)' : c.score >= 75 ? '#65a30d' : 'var(--color-accent-warning)',
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',

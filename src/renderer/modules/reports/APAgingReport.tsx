@@ -75,15 +75,15 @@ type Priority = 'critical' | 'high' | 'medium' | 'low';
 
 function getPaymentPriority(daysOutstanding: number, amountDue: number): { priority: Priority; label: string; color: string } {
   if (daysOutstanding > 90 || (daysOutstanding > 60 && amountDue > 5000)) {
-    return { priority: 'critical', label: 'Critical', color: '#ef4444' };
+    return { priority: 'critical', label: 'Critical', color: 'var(--color-accent-expense)' };
   }
   if (daysOutstanding > 60 || (daysOutstanding > 30 && amountDue > 5000)) {
-    return { priority: 'high', label: 'High', color: '#f97316' };
+    return { priority: 'high', label: 'High', color: 'var(--color-accent-warning)' };
   }
   if (daysOutstanding > 30 || amountDue > 10000) {
-    return { priority: 'medium', label: 'Medium', color: '#f59e0b' };
+    return { priority: 'medium', label: 'Medium', color: 'var(--color-accent-warning)' };
   }
-  return { priority: 'low', label: 'Low', color: '#22c55e' };
+  return { priority: 'low', label: 'Low', color: 'var(--color-accent-income)' };
 }
 
 function getBucket(days: number): BucketKey {
