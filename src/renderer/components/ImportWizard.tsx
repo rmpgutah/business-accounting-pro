@@ -110,7 +110,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
               {requiredFields.map(field => (
                 <div key={field} className="flex items-center gap-3 mb-2">
                   <span className="text-xs font-bold w-36 uppercase text-text-secondary">{field}</span>
-                  <select className="border border-border-secondary px-2 py-1.5 text-sm flex-1 focus:outline-none"
+                  <select className="block-select flex-1"
                     value={mapping[field] ?? ''}
                     onChange={e => { setMapping(prev => ({ ...prev, [field]: e.target.value })); setError(''); }}>
                     <option value="">— select column —</option>

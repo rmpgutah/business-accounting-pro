@@ -138,7 +138,7 @@ const StatusBuilderSettings: React.FC = () => {
       <div className="border-t border-border-primary pt-4 space-y-3">
         <div className="flex items-center gap-2">
           <label className="text-xs text-text-muted">Entity:</label>
-          <select className="block-input text-xs" value={entityType} onChange={e => setEntityType(e.target.value)}>
+          <select className="block-select text-xs" value={entityType} onChange={e => setEntityType(e.target.value)}>
             {ENTITIES.map(e => <option key={e} value={e}>{ENTITY_LABELS[e]}</option>)}
           </select>
           <button className="block-btn text-xs ml-auto flex items-center gap-1" onClick={addStatus}>
@@ -190,11 +190,11 @@ const StatusBuilderSettings: React.FC = () => {
           <div className="space-y-1">
             {transitions.map(t => (
               <div key={t.id} className="grid grid-cols-12 gap-2 items-center text-xs">
-                <select className="block-input text-xs col-span-3" value={t.from_status} onChange={e => updateTransition(t.id, 'from_status', e.target.value)}>
+                <select className="block-select text-xs col-span-3" value={t.from_status} onChange={e => updateTransition(t.id, 'from_status', e.target.value)}>
                   {statuses.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
                 <ArrowRight size={12} className="col-span-1 mx-auto text-text-muted" />
-                <select className="block-input text-xs col-span-3" value={t.to_status} onChange={e => updateTransition(t.id, 'to_status', e.target.value)}>
+                <select className="block-select text-xs col-span-3" value={t.to_status} onChange={e => updateTransition(t.id, 'to_status', e.target.value)}>
                   {statuses.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
                 <label className="col-span-1 flex items-center gap-1"><input type="checkbox" checked={!!t.requires_comment} onChange={e => updateTransition(t.id, 'requires_comment', e.target.checked ? 1 : 0)} /> cmt</label>

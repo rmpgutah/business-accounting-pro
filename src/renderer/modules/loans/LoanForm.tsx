@@ -119,7 +119,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
               placeholder="BMO Mortgage 2024 · SBA Equipment Loan" />
           </Field>
           <Field label="Loan Type">
-            <select className="block-input" value={form.loan_type} onChange={(e) => setForm({ ...form, loan_type: e.target.value })}>
+            <select className="block-select" value={form.loan_type} onChange={(e) => setForm({ ...form, loan_type: e.target.value })}>
               <option value="term_loan">Term Loan</option>
               <option value="mortgage">Mortgage</option>
               <option value="auto">Auto</option>
@@ -132,7 +132,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
             </select>
           </Field>
           <Field label="Currency">
-            <select className="block-input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
+            <select className="block-select" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
               {['USD', 'EUR', 'GBP', 'CAD', 'AUD'].map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
@@ -168,7 +168,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
             </div>
           </Field>
           <Field label="Rate Type">
-            <select className="block-input" value={form.rate_type} onChange={(e) => setForm({ ...form, rate_type: e.target.value })}>
+            <select className="block-select" value={form.rate_type} onChange={(e) => setForm({ ...form, rate_type: e.target.value })}>
               <option value="fixed">Fixed</option>
               <option value="variable">Variable</option>
               <option value="arm">ARM</option>
@@ -181,7 +181,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
           <Field label="Payment Frequency">
-            <select className="block-input" value={form.payment_frequency} onChange={(e) => setForm({ ...form, payment_frequency: e.target.value })}>
+            <select className="block-select" value={form.payment_frequency} onChange={(e) => setForm({ ...form, payment_frequency: e.target.value })}>
               <option value="monthly">Monthly</option>
               <option value="biweekly">Bi-weekly</option>
               <option value="weekly">Weekly</option>
@@ -190,7 +190,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
             </select>
           </Field>
           <Field label="Amortization Type">
-            <select className="block-input" value={form.amortization_type} onChange={(e) => setForm({ ...form, amortization_type: e.target.value })}>
+            <select className="block-select" value={form.amortization_type} onChange={(e) => setForm({ ...form, amortization_type: e.target.value })}>
               <option value="standard">Standard</option>
               <option value="interest_only">Interest Only</option>
               <option value="balloon">Balloon</option>

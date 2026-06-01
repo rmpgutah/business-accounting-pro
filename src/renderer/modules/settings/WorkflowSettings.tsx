@@ -100,10 +100,10 @@ const WorkflowSettings: React.FC = () => {
         )}
         {schedules.map(s => (
           <div key={s.id} className="grid grid-cols-12 gap-2 items-center text-xs p-2 border border-border-primary" style={{ borderRadius: '6px' }}>
-            <select className="block-input text-xs col-span-3" value={s.template_key} onChange={e => updateField(s.id, 'template_key', e.target.value)}>
+            <select className="block-select text-xs col-span-3" value={s.template_key} onChange={e => updateField(s.id, 'template_key', e.target.value)}>
               {templates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
-            <select className="block-input text-xs col-span-3" value={s.trigger_event} onChange={e => updateField(s.id, 'trigger_event', e.target.value)}>
+            <select className="block-select text-xs col-span-3" value={s.trigger_event} onChange={e => updateField(s.id, 'trigger_event', e.target.value)}>
               {TRIGGER_EVENTS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
             </select>
             <div className="col-span-2 flex items-center gap-1">
