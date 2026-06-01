@@ -10,7 +10,7 @@ import { Check, Target } from 'lucide-react';
  */
 
 const ACCENT_BLUE = 'var(--color-accent-blue, #3b82f6)';
-const ACCENT_GREEN = 'var(--color-accent-green, #22c55e)';
+const ACCENT_GREEN = 'var(--color-accent-income, #22c55e)';
 const TRACK = 'var(--color-bg-tertiary, #2e2e2e)';
 
 function clampPct(n: number): number {

@@ -265,7 +265,7 @@ export function StepWizardNav({
         const isLast = i === steps.length - 1;
 
         const circleColor = isDone
-          ? 'var(--color-accent-green, #22c55e)'
+          ? 'var(--color-accent-income, #22c55e)'
           : isActive
           ? 'var(--color-accent-blue, #3b82f6)'
           : 'var(--color-bg-tertiary, #2e2e2e)';
@@ -319,7 +319,7 @@ export function StepWizardNav({
                   marginTop: 15,
                   minWidth: 16,
                   backgroundColor: isDone
-                    ? 'var(--color-accent-green, #22c55e)'
+                    ? 'var(--color-accent-income, #22c55e)'
                     : 'var(--color-border-primary, #333)',
                 }}
               />
