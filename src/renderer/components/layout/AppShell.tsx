@@ -31,7 +31,7 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
           tabIndex={-1}
           className="flex-1 overflow-auto"
           style={{
-            background: 'linear-gradient(160deg, #08090c 0%, #0c0e14 40%, #0e1018 100%)',
+            background: 'linear-gradient(160deg, #0f1012 0%, #121319 45%, #141520 100%)',
           }}
         >
           {children}

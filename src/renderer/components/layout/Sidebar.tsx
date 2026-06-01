@@ -188,15 +188,13 @@ const Sidebar: React.FC = () => {
         className={`flex items-center gap-2.5 w-full text-left transition-all duration-200 ${
           sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-2'
         } ${
-          isActive
-            ? 'text-accent-blue border-r-2 border-accent-blue'
-            : 'text-text-secondary hover:text-text-primary border-r-2 border-transparent'
+          isActive ? '' : 'text-text-secondary hover:text-text-primary'
         }`}
         style={isActive ? {
-          background: 'linear-gradient(90deg, transparent, rgba(96,165,250,0.08))',
-          boxShadow: 'inset -2px 0 8px rgba(96,165,250,0.06)',
-          borderRadius: '0px',
-        } : { borderRadius: '0px' }}
+          color: 'var(--accent-primary)',
+          background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-primary) 10%, transparent))',
+          boxShadow: 'inset -2px 0 0 var(--accent-primary)',
+        } : undefined}
         onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
         onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
         title={sidebarCollapsed ? item.label : undefined}
@@ -218,11 +216,10 @@ const Sidebar: React.FC = () => {
         sidebarCollapsed ? 'w-16' : 'w-56'
       }`}
       style={{
-        borderRadius: '0px',
-        background: 'rgba(14, 15, 20, 0.85)',
+        background: 'var(--color-bg-secondary)',
         backdropFilter: 'blur(20px) saturate(1.5)',
         WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: 'var(--structure)',
       }}
     >
       {/* App Header — pt-10 leaves room for macOS traffic lights on hiddenInset title bar */}
@@ -285,7 +282,6 @@ const Sidebar: React.FC = () => {
             <button
               onClick={() => setShowHidden((v) => !v)}
               className="flex items-center gap-2 px-3 py-2 w-full text-text-muted hover:text-text-primary text-left"
-              style={{ borderRadius: '0px' }}
             >
               <MoreHorizontal size={14} />
               <span className="text-[12px]">More ({hidden.length})</span>
