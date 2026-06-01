@@ -58,6 +58,10 @@ import { MetricHero } from '../../components/library';
 import { fiscalYearStart } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
 import InsightsPanel from '../../components/InsightsPanel';
+import {
+  CHART_INCOME, CHART_EXPENSE, CHART_SERIES,
+  CHART_AXIS, CHART_TOOLTIP_BG, CHART_TOOLTIP_BORDER,
+} from '../../lib/chart-palette';
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -196,10 +200,10 @@ function urgencyColor(dueDate: string): string {
 }
 
 // ─── Chart Colors ───────────────────────────────────────
-const PIE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444', '#6b7280'];
+const PIE_COLORS = CHART_SERIES;
 const TREEMAP_COLORS = [
-  '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444',
-  '#06b6d4', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
+  ...CHART_SERIES,
+  '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
 ];
 
 // ─── Custom Tooltips ────────────────────────────────────
@@ -209,8 +213,8 @@ const AreaTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
+        backgroundColor: CHART_TOOLTIP_BG,
+        border: `1px solid ${CHART_TOOLTIP_BORDER}`,
         borderRadius: '6px',
       }}
     >
@@ -231,8 +235,8 @@ const PieTooltip: React.FC<any> = ({ active, payload }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
+        backgroundColor: CHART_TOOLTIP_BG,
+        border: `1px solid ${CHART_TOOLTIP_BORDER}`,
         borderRadius: '6px',
       }}
     >
@@ -248,8 +252,8 @@ const ForecastTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
+        backgroundColor: CHART_TOOLTIP_BG,
+        border: `1px solid ${CHART_TOOLTIP_BORDER}`,
         borderRadius: '6px',
       }}
     >
@@ -277,7 +281,7 @@ const TreemapContent: React.FC<any> = (props: any) => {
         width={width}
         height={height}
         style={{
-          fill: fill || '#3b82f6',
+          fill: fill || CHART_INCOME,
           stroke: '#0a0a0a',
           strokeWidth: 2,
         }}
@@ -1152,22 +1156,22 @@ const Dashboard: React.FC = () => {
             <AreaChart data={cashflow}>
               <defs>
                 <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={CHART_INCOME} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_INCOME} stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="gradExpenses" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={CHART_EXPENSE} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_EXPENSE} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis
                 dataKey="month"
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: CHART_AXIS, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: CHART_AXIS, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
@@ -1176,18 +1180,18 @@ const Dashboard: React.FC = () => {
               <Area
                 type="monotone"
                 dataKey="income"
-                stroke="#22c55e"
+                stroke={CHART_INCOME}
                 strokeWidth={2}
                 fill="url(#gradRevenue)"
-                activeDot={{ r: 4, fill: '#22c55e' }}
+                activeDot={{ r: 4, fill: CHART_INCOME }}
               />
               <Area
                 type="monotone"
                 dataKey="expenses"
-                stroke="#ef4444"
+                stroke={CHART_EXPENSE}
                 strokeWidth={2}
                 fill="url(#gradExpenses)"
-                activeDot={{ r: 4, fill: '#ef4444' }}
+                activeDot={{ r: 4, fill: CHART_EXPENSE }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -1288,18 +1292,18 @@ const Dashboard: React.FC = () => {
                 <AreaChart data={cashForecast}>
                   <defs>
                     <linearGradient id="gradConfidence" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={CHART_SERIES[2]} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={CHART_SERIES[2]} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <XAxis
                     dataKey="month"
-                    tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                    tick={{ fill: CHART_AXIS, fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                    tick={{ fill: CHART_AXIS, fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v: number) => fmtCompact(v)}
@@ -1322,10 +1326,10 @@ const Dashboard: React.FC = () => {
                   <Line
                     type="monotone"
                     dataKey="projected"
-                    stroke="#3b82f6"
+                    stroke={CHART_SERIES[2]}
                     strokeWidth={2}
-                    dot={{ r: 4, fill: '#3b82f6', stroke: '#0a0a0a', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#3b82f6' }}
+                    dot={{ r: 4, fill: CHART_SERIES[2], stroke: '#0a0a0a', strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: CHART_SERIES[2] }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
