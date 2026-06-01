@@ -41,13 +41,12 @@ const StatusBar: React.FC = () => {
 
   return (
     <footer
-      className="flex items-center justify-between h-6 px-3 text-[11px] text-text-muted shrink-0 select-none"
+      className="flex items-center justify-between h-6 px-3 text-[11px] text-text-muted shrink-0 select-none font-mono tabular-nums"
       style={{
-        borderRadius: '0px',
-        background: 'rgba(14, 15, 20, 0.70)',
+        background: 'var(--color-bg-secondary)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        borderTop: '1px solid rgba(255,255,255,0.05)',
+        borderTop: '1px solid var(--structure)',
       }}
     >
       <div className="flex items-center gap-3">

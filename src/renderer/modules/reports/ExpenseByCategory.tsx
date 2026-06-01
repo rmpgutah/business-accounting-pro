@@ -7,6 +7,7 @@ import { formatCurrency } from '../../lib/format';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
+import { CHART_SERIES } from '../../lib/chart-palette';
 
 // ─── Types ──────────────────────────────────────────────
 interface CategoryRow {
@@ -59,10 +60,7 @@ const VendorSpendTable: React.FC<{ startDate: string; endDate: string }> = ({ st
 };
 
 // ─── Bar colors ─────────────────────────────────────────
-const BAR_COLORS = [
-  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#ec4899',
-  '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6', '#e11d48',
-];
+const BAR_COLORS = CHART_SERIES;
 
 // ─── Component ──────────────────────────────────────────
 const ExpenseByCategory: React.FC = () => {

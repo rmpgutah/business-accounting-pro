@@ -826,7 +826,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                 type="checkbox"
                 checked={dueSoon}
                 onChange={(e) => setDueSoon(e.target.checked)}
-                style={{ accentColor: '#3b82f6' }}
+                style={{ accentColor: 'var(--accent-primary)' }}
               />
               Due in 7 days
             </label>
@@ -837,7 +837,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                 type="checkbox"
                 checked={recurringOnly}
                 onChange={(e) => setRecurringOnly(e.target.checked)}
-                style={{ accentColor: '#3b82f6' }}
+                style={{ accentColor: 'var(--accent-primary)' }}
               />
               Recurring only
             </label>
@@ -925,7 +925,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                     }
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th>Bill #</th>
@@ -959,7 +959,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                         checked={selectedIds.has(bill.id)}
                         onChange={() => toggleSelect(bill.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
                     <td className="font-mono text-accent-blue text-xs" onClick={(e) => e.stopPropagation()}>

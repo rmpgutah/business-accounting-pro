@@ -253,14 +253,14 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-text-muted uppercase">Loan Source</label>
-                    <select className="block-input" value={extras.federal_or_private || 'federal'} onChange={e => setExtras({ ...extras, federal_or_private: e.target.value })}>
+                    <select className="block-select" value={extras.federal_or_private || 'federal'} onChange={e => setExtras({ ...extras, federal_or_private: e.target.value })}>
                       <option value="federal">Federal</option>
                       <option value="private">Private</option>
                     </select>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-text-muted uppercase">IDR Plan</label>
-                    <select className="block-input" value={extras.idr_plan || ''} onChange={e => setExtras({ ...extras, idr_plan: e.target.value })}>
+                    <select className="block-select" value={extras.idr_plan || ''} onChange={e => setExtras({ ...extras, idr_plan: e.target.value })}>
                       <option value="">— None (standard) —</option>
                       <option value="PAYE">PAYE</option>
                       <option value="REPAYE">REPAYE</option>
@@ -271,7 +271,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-text-muted uppercase">PSLF Eligible?</label>
-                    <select className="block-input" value={extras.pslf || 'no'} onChange={e => setExtras({ ...extras, pslf: e.target.value })}>
+                    <select className="block-select" value={extras.pslf || 'no'} onChange={e => setExtras({ ...extras, pslf: e.target.value })}>
                       <option value="no">No</option>
                       <option value="yes">Yes (qualifying employer)</option>
                     </select>
@@ -304,7 +304,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-text-muted uppercase">Program</label>
-                    <select className="block-input" value={extras.sba_program || '7a'} onChange={e => setExtras({ ...extras, sba_program: e.target.value })}>
+                    <select className="block-select" value={extras.sba_program || '7a'} onChange={e => setExtras({ ...extras, sba_program: e.target.value })}>
                       <option value="7a">7(a) — General business</option>
                       <option value="504">504 — Real estate / equipment</option>
                       <option value="microloan">Microloan</option>
@@ -339,7 +339,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase">Rate Type</label>
-                <select className="block-input" value={form.rate_type} onChange={e => setForm({ ...form, rate_type: e.target.value })}>
+                <select className="block-select" value={form.rate_type} onChange={e => setForm({ ...form, rate_type: e.target.value })}>
                   <option value="fixed">Fixed</option>
                   <option value="variable">Variable</option>
                   <option value="arm">ARM</option>
@@ -347,7 +347,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase">Frequency</label>
-                <select className="block-input" value={form.payment_frequency} onChange={e => setForm({ ...form, payment_frequency: e.target.value })}>
+                <select className="block-select" value={form.payment_frequency} onChange={e => setForm({ ...form, payment_frequency: e.target.value })}>
                   <option value="monthly">Monthly</option>
                   <option value="biweekly">Bi-weekly</option>
                   <option value="weekly">Weekly</option>
@@ -357,7 +357,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase">Amortization</label>
-                <select className="block-input" value={form.amortization_type} onChange={e => setForm({ ...form, amortization_type: e.target.value })}>
+                <select className="block-select" value={form.amortization_type} onChange={e => setForm({ ...form, amortization_type: e.target.value })}>
                   <option value="standard">Standard</option>
                   <option value="interest_only">Interest-only</option>
                   <option value="balloon">Balloon</option>

@@ -1312,7 +1312,7 @@ const GeneralLedger: React.FC = () => {
       {/* Detail drawer */}
       {drawerLine && (
         <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/50" onClick={() => { setDrawerLine(null); setDrawerData(null); }}>
-          <div className="block-card p-4 w-[420px] h-full overflow-auto" style={{ borderRadius: '0' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[420px] h-full overflow-auto" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Line Detail</h3>
             <p className="text-xs text-text-muted mb-3">{drawerLine.entry_number} — {drawerLine.date} — {drawerLine.account_name}</p>
             <div className="text-xs mb-3">

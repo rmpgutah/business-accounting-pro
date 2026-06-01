@@ -540,7 +540,7 @@ const FinancialStatements: React.FC = () => {
         </div>
         {tab !== 'cash-flow' && (
           <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
-            <input type="checkbox" checked={commonSize} onChange={(e) => setCommonSize(e.target.checked)} style={{ accentColor: '#3b82f6' }} />
+            <input type="checkbox" checked={commonSize} onChange={(e) => setCommonSize(e.target.checked)} style={{ accentColor: 'var(--accent-primary)' }} />
             Common-size %
           </label>
         )}

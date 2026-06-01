@@ -225,12 +225,12 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
       {/* Period selector */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         {activeForm !== 'sales-tax' && (
-          <select className="block-input" value={year} onChange={(e) => setYear(parseInt(e.target.value))} style={{ width: 100 }}>
+          <select className="block-select" value={year} onChange={(e) => setYear(parseInt(e.target.value))} style={{ width: 100 }}>
             {[currentYear - 2, currentYear - 1, currentYear].map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         )}
         {(activeForm === '941' || activeForm === 'schedule-941b') && (
-          <select className="block-input" value={quarter} onChange={(e) => setQuarter(parseInt(e.target.value) as any)} style={{ width: 100 }}>
+          <select className="block-select" value={quarter} onChange={(e) => setQuarter(parseInt(e.target.value) as any)} style={{ width: 100 }}>
             <option value={1}>Q1</option>
             <option value={2}>Q2</option>
             <option value={3}>Q3</option>

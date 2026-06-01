@@ -9,8 +9,8 @@ import { Check, Target } from 'lucide-react';
  * Theme: glass/block tokens (bg-bg-*, text-text-*, border-border-*) + CSS vars.
  */
 
-const ACCENT_BLUE = 'var(--color-accent-blue, #3b82f6)';
-const ACCENT_GREEN = 'var(--color-accent-green, #22c55e)';
+const BRAND_ACCENT = 'var(--accent-primary)';
+const ACCENT_GREEN = 'var(--color-accent-income, #22c55e)';
 const TRACK = 'var(--color-bg-tertiary, #2e2e2e)';
 
 function clampPct(n: number): number {
@@ -37,7 +37,7 @@ export function ProgressRing({
   value = 72,
   size = 140,
   thickness = 12,
-  color = ACCENT_BLUE,
+  color = BRAND_ACCENT,
   trackColor = TRACK,
   label,
   sublabel = 'Complete',
@@ -168,7 +168,7 @@ export interface StepProgressProps {
 export function StepProgress({
   steps = ['Draft', 'Review', 'Approve', 'Filed'],
   current = 2,
-  color = ACCENT_BLUE,
+  color = BRAND_ACCENT,
   className,
 }: StepProgressProps) {
   return (
@@ -246,7 +246,7 @@ export function GaugeMeter({
   value = 58,
   size = 180,
   thickness = 16,
-  color = ACCENT_BLUE,
+  color = BRAND_ACCENT,
   trackColor = TRACK,
   label,
   sublabel = 'Cash runway',
@@ -323,7 +323,7 @@ export function BulletGraph({
   target = 95000,
   max = 120000,
   ranges = [50000, 85000],
-  color = ACCENT_BLUE,
+  color = BRAND_ACCENT,
   format = (n) => `$${(n / 1000).toFixed(0)}k`,
   className,
 }: BulletGraphProps) {

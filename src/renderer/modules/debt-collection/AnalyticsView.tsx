@@ -20,6 +20,9 @@ import {
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import {
+  CHART_SEVERITY, CHART_GRID, CHART_AXIS, CHART_INCOME, CHART_EXPENSE, CHART_NEUTRAL, CHART_SERIES,
+} from '../../lib/chart-palette';
 
 // Perf: module-scoped formatters keep stable identity across renders so recharts
 // doesn't invalidate axis layout each time the parent re-renders.
@@ -50,16 +53,16 @@ interface DebtStats {
 const AGING_BUCKET_ORDER = ['0-30', '31-60', '61-90', '91-120', '121-180', '180+'];
 
 const AGING_COLORS: Record<string, string> = {
-  '0-30': '#22c55e',
-  '31-60': '#eab308',
-  '61-90': '#f97316',
-  '91-120': '#ef4444',
-  '121-180': '#dc2626',
-  '180+': '#991b1b',
+  '0-30': CHART_SEVERITY[0],
+  '31-60': CHART_SEVERITY[1],
+  '61-90': CHART_SEVERITY[2],
+  '91-120': CHART_SEVERITY[3],
+  '121-180': CHART_SEVERITY[4],
+  '180+': CHART_SEVERITY[5],
 };
 
-const CHART_GRID_STROKE = '#2e2e2e';
-const CHART_TICK_FILL = '#8a8a8a';
+const CHART_GRID_STROKE = CHART_GRID;
+const CHART_TICK_FILL = CHART_AXIS;
 const TOOLTIP_STYLE = {
   backgroundColor: '#1a1a1a',
   border: '1px solid #2e2e2e',
@@ -471,8 +474,8 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <Area
                     type="monotone"
                     dataKey="total"
-                    stroke="#22c55e"
-                    fill="#22c55e"
+                    stroke={CHART_INCOME}
+                    fill={CHART_INCOME}
                     fillOpacity={0.15}
                     strokeWidth={2}
                   />
@@ -507,7 +510,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     {agingData.map((entry) => (
                       <Cell
                         key={entry.bucket}
-                        fill={AGING_COLORS[entry.bucket] ?? '#6b7280'}
+                        fill={AGING_COLORS[entry.bucket] ?? CHART_NEUTRAL}
                       />
                     ))}
                   </Bar>
@@ -544,7 +547,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     width={100}
                   />
                   <Tooltip content={<CountTooltip />} />
-                  <Bar dataKey="count" fill="#3b82f6" maxBarSize={24} />
+                  <Bar dataKey="count" fill={CHART_SERIES[2]} maxBarSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -582,7 +585,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     }
                   />
                   <Tooltip content={<CurrencyTooltip />} />
-                  <Bar dataKey="total" fill="#ef4444" maxBarSize={24} />
+                  <Bar dataKey="total" fill={CHART_EXPENSE} maxBarSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -796,7 +799,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     <XAxis dataKey="period" tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} />
                     <YAxis tick={{ fill: CHART_TICK_FILL, fontSize: 11 }} axisLine={{ stroke: CHART_GRID_STROKE }} tickLine={false} tickFormatter={fmtThousands} />
                     <Tooltip content={<CurrencyTooltip />} />
-                    <Bar dataKey="projected" fill="#22c55e" maxBarSize={50} />
+                    <Bar dataKey="projected" fill={CHART_INCOME} maxBarSize={50} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -839,8 +842,8 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line type="monotone" dataKey="rate" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Recovery Rate %" />
-                    <Line type="monotone" dataKey="collected" stroke="#22c55e" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Collected" yAxisId="right" hide />
+                    <Line type="monotone" dataKey="rate" stroke={CHART_SERIES[2]} strokeWidth={2} dot={{ r: 3 }} name="Recovery Rate %" />
+                    <Line type="monotone" dataKey="collected" stroke={CHART_INCOME} strokeWidth={1} strokeDasharray="4 4" dot={false} name="Collected" yAxisId="right" hide />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -912,8 +915,8 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="total" fill="#6b7280" maxBarSize={30} name="Total" />
-                    <Bar dataKey="positive" fill="#22c55e" maxBarSize={30} name="Positive Outcome" />
+                    <Bar dataKey="total" fill={CHART_NEUTRAL} maxBarSize={30} name="Total" />
+                    <Bar dataKey="positive" fill={CHART_INCOME} maxBarSize={30} name="Positive Outcome" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1010,8 +1013,8 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="collected" fill="#22c55e" maxBarSize={20} name="Collected" />
-                    <Bar dataKey="outstanding" fill="#ef4444" maxBarSize={20} name="Outstanding" />
+                    <Bar dataKey="collected" fill={CHART_INCOME} maxBarSize={20} name="Collected" />
+                    <Bar dataKey="outstanding" fill={CHART_EXPENSE} maxBarSize={20} name="Outstanding" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

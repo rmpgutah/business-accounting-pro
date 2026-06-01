@@ -172,11 +172,10 @@ const TopBar: React.FC = () => {
       <header
         className="flex items-center justify-between h-14 px-4 shrink-0"
         style={{
-          borderRadius: '0px',
-          background: 'rgba(14, 15, 20, 0.80)',
+          background: 'var(--color-bg-secondary)',
           backdropFilter: 'blur(20px) saturate(1.5)',
           WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid var(--structure)',
           paddingLeft: navigator.userAgent.includes('Mac') ? '80px' : '16px',
           // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
           WebkitAppRegion: 'drag',
@@ -378,13 +377,13 @@ const TopBar: React.FC = () => {
           {authUser && (
             <div
               className="flex items-center gap-2 px-2 py-1 ml-2"
-              style={{ borderLeft: '1px solid var(--color-border-primary)' }}
+              style={{ borderLeft: '1px solid var(--structure)' }}
             >
               <div
                 className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                 style={{
                   width: '26px', height: '26px', borderRadius: '6px',
-                  background: authUser.avatar_color || '#3b82f6',
+                  background: authUser.avatar_color || 'var(--accent-primary)',
                 }}
               >
                 {authUser.display_name.charAt(0).toUpperCase()}

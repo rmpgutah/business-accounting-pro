@@ -39,14 +39,14 @@ function ActionButton({ action }: { action: HeaderAction }) {
           : 'text-text-secondary hover:text-text-primary')
       }
       style={{
-        borderRadius: RADIUS,
+        borderRadius: 'var(--app-radius, 6px)',
         padding: '7px 12px',
         backgroundColor: primary
-          ? 'var(--color-accent-blue, #3b82f6)'
-          : 'var(--color-bg-tertiary, #2e2e2e)',
+          ? 'var(--accent-primary)'
+          : 'var(--color-bg-tertiary)',
         border: primary
-          ? '1px solid var(--color-accent-blue, #3b82f6)'
-          : '1px solid var(--color-border-primary, #3a3a3a)',
+          ? '1px solid var(--accent-primary)'
+          : '1px solid var(--structure)',
       }}
     >
       {Icon && <Icon size={15} strokeWidth={2} />}
@@ -80,7 +80,7 @@ export function PageHeader({
   return (
     <div
       className={'flex items-start justify-between gap-4 ' + (className ?? '')}
-      style={{ marginBottom: 20 }}
+      style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--structure)' }}
     >
       <div className="flex items-center gap-3 min-w-0">
         {Icon && (
@@ -99,8 +99,8 @@ export function PageHeader({
         )}
         <div className="min-w-0">
           <h1
-            className="text-text-primary font-semibold truncate"
-            style={{ fontSize: 22, lineHeight: 1.2 }}
+            className="text-text-primary font-bold truncate"
+            style={{ fontSize: 24, lineHeight: 1.2, letterSpacing: '-0.01em' }}
           >
             {title}
           </h1>
@@ -278,7 +278,7 @@ export function CommandBar({
               height: 18,
               padding: '0 5px',
               borderRadius: 9,
-              backgroundColor: 'var(--color-accent-blue, #3b82f6)',
+              backgroundColor: 'var(--accent-primary)',
             }}
           >
             {activeFilters}
@@ -349,8 +349,8 @@ export function FilterToolbar({
               ? 'var(--color-bg-tertiary, #2e2e2e)'
               : 'transparent',
             border: f.active
-              ? '1px solid var(--color-accent-blue, #3b82f6)'
-              : '1px solid var(--color-border-primary, #3a3a3a)',
+              ? '1px solid var(--accent-primary)'
+              : '1px solid var(--structure)',
           }}
         >
           <span className="text-text-muted">{f.label}:</span>

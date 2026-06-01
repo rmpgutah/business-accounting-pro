@@ -175,13 +175,13 @@ const LoansModule: React.FC = () => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
             <Stat label="Active Loans" value={String(aggregate.stats.loan_count || 0)} />
-            <Stat label="Total Outstanding" value={fmt$(aggregate.stats.total_outstanding || 0)} highlight color="#dc2626" />
-            <Stat label="Total Paid" value={fmt$(aggregate.stats.total_paid || 0)} color="#16a34a" />
-            <Stat label="Interest Paid" value={fmt$(aggregate.stats.total_interest_paid || 0)} color="#d97706" />
+            <Stat label="Total Outstanding" value={fmt$(aggregate.stats.total_outstanding || 0)} highlight color="var(--color-accent-expense)" />
+            <Stat label="Total Paid" value={fmt$(aggregate.stats.total_paid || 0)} color="var(--color-accent-income)" />
+            <Stat label="Interest Paid" value={fmt$(aggregate.stats.total_interest_paid || 0)} color="var(--color-accent-warning)" />
             <Stat label="Monthly Burn" value={fmt$(aggregate.stats.total_monthly_payment || 0)} />
           </div>
           {aggregate.upcoming?.length > 0 && (
-            <div style={{ marginTop: 14, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 6, borderLeft: '3px solid var(--color-warning, #d97706)' }}>
+            <div style={{ marginTop: 14, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 6, borderLeft: '3px solid var(--color-warning, var(--color-accent-warning))' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Wallet size={12} /> Next 30 days · {aggregate.upcoming.length} payment{aggregate.upcoming.length === 1 ? '' : 's'} · total {fmt$(aggregate.upcoming.reduce((s: number, p: any) => s + Number(p.scheduled_payment), 0))}
               </div>
@@ -257,13 +257,13 @@ const LoansModule: React.FC = () => {
                     </td>
                     <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--color-text-muted)' }}>{l.loan_type.replace(/_/g, ' ')}</td>
                     <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(l.principal, l.currency)}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, color: '#dc2626' }}>{fmt$(l.current_balance, l.currency)}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, color: 'var(--color-accent-expense)' }}>{fmt$(l.current_balance, l.currency)}</td>
                     <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{(l.interest_rate * 100).toFixed(3)}%</td>
                     <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(l.payment_amount, l.currency)}</td>
                     <td style={{ padding: '8px 12px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)' }}>{l.next_payment_due || '—'}</td>
                     <td style={{ padding: '8px 12px', minWidth: 100 }}>
                       <div style={{ height: 4, background: 'var(--color-bg-secondary)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ width: pct + '%', height: '100%', background: '#16a34a', transition: 'width 200ms' }} />
+                        <div style={{ width: pct + '%', height: '100%', background: 'var(--color-accent-income)', transition: 'width 200ms' }} />
                       </div>
                       <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textAlign: 'right', marginTop: 2, fontFamily: 'SF Mono, Menlo, monospace' }}>{pct.toFixed(1)}%</div>
                     </td>

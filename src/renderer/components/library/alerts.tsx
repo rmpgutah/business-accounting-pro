@@ -34,7 +34,7 @@ const VARIANTS: Record<AlertVariant, VariantStyle> = {
     Icon: Info,
   },
   success: {
-    color: 'var(--color-accent-green, #22c55e)',
+    color: 'var(--color-accent-income, #22c55e)',
     bg: 'rgba(34, 197, 94, 0.12)',
     border: 'rgba(34, 197, 94, 0.35)',
     Icon: CheckCircle2,

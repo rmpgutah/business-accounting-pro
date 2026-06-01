@@ -333,7 +333,7 @@ export function MultiSelectChips({
   label = 'Categories',
   options = ['Revenue', 'Payroll', 'Marketing', 'Software', 'Travel', 'Utilities'],
   selected = ['Revenue', 'Software'],
-  accentColor = 'var(--color-accent-green, #22c55e)',
+  accentColor = 'var(--color-accent-income, #22c55e)',
 }: MultiSelectChipsProps) {
   const [picked, setPicked] = useState<string[]>(selected);
 

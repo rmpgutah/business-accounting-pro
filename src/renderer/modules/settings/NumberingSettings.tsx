@@ -140,7 +140,7 @@ const NumberingSettings: React.FC = () => {
               </div>
               <div>
                 <label className="block text-text-muted mb-1">Reset</label>
-                <select className="block-input text-xs w-full" value={seq.reset_frequency} onChange={e => updateField(seq.id, 'reset_frequency', e.target.value as any)}>
+                <select className="block-select text-xs w-full" value={seq.reset_frequency} onChange={e => updateField(seq.id, 'reset_frequency', e.target.value as any)}>
                   <option value="never">Never</option>
                   <option value="yearly">Yearly</option>
                   <option value="quarterly">Quarterly</option>

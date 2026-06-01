@@ -25,8 +25,9 @@ import AnomalyDetector from './AnomalyDetector';
 import WorkingCapitalDashboard from './WorkingCapitalDashboard';
 import JEAuthorLeaderboard from './JEAuthorLeaderboard';
 import PowerFeatures from './PowerFeatures';
+import { CHART_SERIES } from '../../lib/chart-palette';
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
+const COLORS = CHART_SERIES;
 
 interface Account {
   id: string; code: string; name: string; type: string; subtype: string;

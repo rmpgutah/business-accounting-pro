@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
+import { SCHEDULE_C_BY_CATEGORY } from '../services/schedule-c-map';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
@@ -352,16 +353,41 @@ function seedDefaultCategories(companyId: string): { seeded: boolean; count: num
     return { seeded: false, count: existing.cnt };
   }
   const insertStmt = dbInstance.prepare(`
-    INSERT OR IGNORE INTO categories (id, company_id, name, type, color, icon, description, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT OR IGNORE INTO categories (id, company_id, name, type, color, icon, description, schedule_c_line, is_deductible, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
   const insertMany = dbInstance.transaction((rows: typeof DEFAULT_CATEGORIES) => {
     for (const row of rows) {
-      insertStmt.run(uuid(), companyId, row.name, row.type, row.color, row.icon, row.description);
+      const sc = SCHEDULE_C_BY_CATEGORY[row.name];
+      insertStmt.run(
+        uuid(), companyId, row.name, row.type, row.color, row.icon, row.description,
+        sc ? sc.line : '', sc ? (sc.deductible ? 1 : 0) : 1,
+      );
     }
   });
   insertMany(DEFAULT_CATEGORIES);
   return { seeded: true, count: DEFAULT_CATEGORIES.length };
+}
+
+// Backfill Schedule C line + deductibility onto EXISTING categories (companies
+// seeded before the canonical mapping existed). Matches by exact category name
+// and only fills rows whose schedule_c_line is still blank, so it never
+// overwrites a value the user set by hand. Idempotent.
+function backfillCategoryScheduleC(companyId: string): { updated: number } {
+  const dbInstance = db.getDb();
+  const upd = dbInstance.prepare(
+    `UPDATE categories SET schedule_c_line = ?, is_deductible = ?
+       WHERE company_id = ? AND name = ? AND (schedule_c_line IS NULL OR schedule_c_line = '')`
+  );
+  let updated = 0;
+  const tx = dbInstance.transaction(() => {
+    for (const [name, sc] of Object.entries(SCHEDULE_C_BY_CATEGORY)) {
+      const r = upd.run(sc.line, sc.deductible ? 1 : 0, companyId, name);
+      updated += r.changes;
+    }
+  });
+  tx();
+  return { updated };
 }
 
 // ─── Journal Entry Auto-Poster ────────────────────────────
@@ -1236,7 +1262,14 @@ export function registerIpcHandlers(): void {
     }
   });
   // ── Automation registry (75 modules across 13 domains) ──────
-  ipcMain.handle('automations:list', () => {
+  // NOTE: channel renamed from 'automations:list' to avoid a DUPLICATE
+  // ipcMain.handle registration. The renderer's Automations module uses the
+  // table-based 'automations:list' defined later (automation_rules CRUD);
+  // registering this service-based one under the same channel threw
+  // "Attempted to register a second handler", aborting ALL handler
+  // registration after this point (e.g. accounts:stats). Renamed so the
+  // service-based registry list stays available without colliding.
+  ipcMain.handle('automations:registry-list', () => {
     try {
       const { listAutomations } = require('../automations');
       return listAutomations();
@@ -8795,7 +8828,11 @@ export function registerIpcHandlers(): void {
 
   // ─── Categories: Seed Defaults ───────────────────────────
   ipcMain.handle('categories:seed-defaults', (_event, { company_id }: { company_id: string }) => {
-    return seedDefaultCategories(company_id);
+    const result = seedDefaultCategories(company_id);
+    // Always backfill Schedule C lines — covers companies that were seeded
+    // before the canonical mapping existed (fills the "—" lines on boot).
+    const backfill = backfillCategoryScheduleC(company_id);
+    return { ...result, scheduleCBackfilled: backfill.updated };
   });
 
   // ─── Industry Presets: Apply ─────────────────────────────

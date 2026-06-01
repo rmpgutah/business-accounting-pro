@@ -9,6 +9,7 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { CHART_INCOME, CHART_EXPENSE } from '../../lib/chart-palette';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
 
@@ -601,7 +602,7 @@ const CashFlowStatement: React.FC = () => {
                     {monthlyCashFlow.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={entry.netCash >= 0 ? '#22c55e' : '#ef4444'}
+                        fill={entry.netCash >= 0 ? CHART_INCOME : CHART_EXPENSE}
                       />
                     ))}
                   </Bar>

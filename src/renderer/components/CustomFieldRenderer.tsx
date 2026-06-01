@@ -165,7 +165,7 @@ const LookupInput: React.FC<RendererProps> = ({ def, value, onChange, disabled }
   }, [company?.id, meta.table]);
 
   return (
-    <select className={inputCls} value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}>
+    <select className="block-select" value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}>
       <option value="">— select —</option>
       {items.map(it => (
         <option key={it.id} value={it.id}>{it[meta.label] || it.id}</option>
@@ -217,7 +217,7 @@ export const CustomFieldRenderer: React.FC<RendererProps> = ({ def, value, onCha
       return <input type="datetime-local" className={inputCls} value={value ?? ''} onChange={e => onChange(e.target.value)} disabled={disabled} />;
     case 'select':
       return (
-        <select className={inputCls} value={value ?? ''} onChange={e => onChange(e.target.value)} disabled={disabled}>
+        <select className="block-select" value={value ?? ''} onChange={e => onChange(e.target.value)} disabled={disabled}>
           <option value="">—</option>
           {(opts.choices || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>

@@ -457,7 +457,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
             <input type="number" step="0.01" className="block-input" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} />
           </Field>
           <Field label="Method">
-            <select className="block-input" value={method} onChange={(e) => setMethod(e.target.value)}>
+            <select className="block-select" value={method} onChange={(e) => setMethod(e.target.value)}>
               <option value="ach">ACH / Auto-debit</option>
               <option value="check">Check</option>
               <option value="wire">Wire</option>
@@ -684,7 +684,7 @@ const PaymentEditModal: React.FC<{
               onChange={(e) => setForm({ ...form, escrow_amount: parseFloat(e.target.value) || 0 })} />
           </Field>
           <Field label="Method">
-            <select className="block-input" value={form.payment_method}
+            <select className="block-select" value={form.payment_method}
               onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               <option value="ach">ACH / Auto-debit</option>
               <option value="check">Check</option>

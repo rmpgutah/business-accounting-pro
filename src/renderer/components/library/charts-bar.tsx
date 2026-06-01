@@ -9,8 +9,8 @@ import React from 'react';
  */
 
 const ACCENT = 'var(--color-accent-blue, #3b82f6)';
-const ACCENT_GREEN = 'var(--color-accent-green, #22c55e)';
-const ACCENT_RED = 'var(--color-accent-red, #ef4444)';
+const ACCENT_GREEN = 'var(--color-accent-income, #22c55e)';
+const ACCENT_RED = 'var(--color-accent-expense, #ef4444)';
 const TRACK = 'var(--color-bg-tertiary, #2e2e2e)';
 
 /* ------------------------------------------------------------------ */

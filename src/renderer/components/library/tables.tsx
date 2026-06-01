@@ -1,12 +1,12 @@
 import React from 'react';
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, ChevronUp, ChevronDown } from 'lucide-react';
 
 /**
  * Presentational table primitives for the glass/block theme.
  * Every component renders with zero props using believable mock data.
  */
 
-const cellBorder = '1px solid var(--color-border-primary, #2a2a2a)';
+const cellBorder = '1px solid var(--grid)';
 
 // ---------------------------------------------------------------------------
 // DataTableLite — simple striped table
@@ -22,6 +22,13 @@ export interface DataTableLiteProps {
   columns?: DataTableLiteColumn[];
   rows?: Array<Record<string, string | number>>;
   caption?: string;
+  /** When true, renders a shimmer skeleton instead of rows. */
+  loading?: boolean;
+  /** Active sort column key + direction (for header indicator). */
+  sortKey?: string;
+  sortDir?: 'asc' | 'desc';
+  /** When provided, headers become clickable and show a sort caret. */
+  onSort?: (key: string) => void;
   className?: string;
 }
 
@@ -40,6 +47,10 @@ export function DataTableLite({
     { date: '2026-05-29', description: 'Marketing Ads', category: 'Marketing', amount: '$2,310.75' },
   ],
   caption,
+  loading = false,
+  sortKey,
+  sortDir = 'asc',
+  onSort,
   className,
 }: DataTableLiteProps) {
   return (
@@ -49,50 +60,65 @@ export function DataTableLite({
           {caption}
         </div>
       )}
-      <table className="block-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {/* .block-table supplies the structured frame, grid lines, sticky header
+         and hover wash — we only set alignment + sort affordances here. */}
+      <table className="block-table">
         <thead>
           <tr>
-            {columns.map((c) => (
-              <th
-                key={c.key}
-                className="text-text-secondary text-xs uppercase tracking-wide"
-                style={{
-                  textAlign: c.align ?? 'left',
-                  padding: '8px 12px',
-                  borderBottom: cellBorder,
-                  fontWeight: 600,
-                }}
-              >
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c) => {
+              const active = sortKey === c.key;
+              const Caret = sortDir === 'asc' ? ChevronUp : ChevronDown;
+              return (
+                <th
+                  key={c.key}
+                  onClick={onSort ? () => onSort(c.key) : undefined}
+                  style={{
+                    textAlign: c.align ?? 'left',
+                    cursor: onSort ? 'pointer' : undefined,
+                    color: active ? 'var(--color-text-primary)' : undefined,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start' }}>
+                    {c.header}
+                    {active && <Caret size={12} style={{ color: 'var(--accent-primary)' }} />}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
-            <tr
-              key={i}
-              style={{
-                backgroundColor:
-                  i % 2 === 1 ? 'var(--color-bg-secondary, #1c1c1c)' : 'transparent',
-              }}
-            >
-              {columns.map((c) => (
-                <td
-                  key={c.key}
-                  className="text-text-primary text-sm"
-                  style={{
-                    textAlign: c.align ?? 'left',
-                    padding: '8px 12px',
-                    borderBottom: cellBorder,
-                    fontVariantNumeric: c.align === 'right' ? 'tabular-nums' : undefined,
-                  }}
-                >
-                  {row[c.key] ?? '—'}
-                </td>
+          {loading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <tr key={`sk-${i}`}>
+                  {columns.map((c) => (
+                    <td key={c.key}>
+                      <span
+                        className="glass-shimmer"
+                        style={{
+                          display: 'block',
+                          height: 12,
+                          borderRadius: 4,
+                          background: 'var(--skeleton-base)',
+                        }}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            : rows.map((row, i) => (
+                <tr key={i}>
+                  {columns.map((c) => (
+                    <td
+                      key={c.key}
+                      className="text-text-primary text-sm"
+                      style={{ textAlign: c.align ?? 'left' }}
+                    >
+                      {row[c.key] ?? '—'}
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
         </tbody>
       </table>
     </div>
@@ -235,8 +261,8 @@ export function LedgerRow({
   date = '2026-05-31',
   className,
 }: LedgerRowProps) {
-  const debitColor = 'var(--color-accent-green, #22c55e)';
-  const creditColor = 'var(--color-accent-red, #ef4444)';
+  const debitColor = 'var(--color-accent-income)';
+  const creditColor = 'var(--color-accent-expense)';
   return (
     <div
       className={`flex items-center ${className ?? ''}`}
@@ -370,10 +396,10 @@ export function ComparisonTable({
                 : 'flat');
             const trendColor =
               trend === 'up'
-                ? 'var(--color-accent-green, #22c55e)'
+                ? 'var(--color-accent-income)'
                 : trend === 'down'
-                ? 'var(--color-accent-red, #ef4444)'
-                : 'var(--color-text-muted, #6b7280)';
+                ? 'var(--color-accent-expense)'
+                : 'var(--color-text-muted)';
             const TrendIcon = trend === 'up' ? ArrowUp : trend === 'down' ? ArrowDown : Minus;
             return (
               <tr key={i}>

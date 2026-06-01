@@ -125,7 +125,7 @@ const CustomFieldEditor: React.FC = () => {
       {/* Entity type picker */}
       <div className="flex items-center gap-2 flex-wrap">
         <label className="text-xs text-text-muted">Entity:</label>
-        <select className={`${inputCls} w-auto`} value={entityType} onChange={e => setEntityType(e.target.value)}>
+        <select className="block-select w-auto" value={entityType} onChange={e => setEntityType(e.target.value)}>
           {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         <button type="button" onClick={startNew} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
@@ -166,7 +166,7 @@ const CustomFieldEditor: React.FC = () => {
             </div>
             <div>
               <label className="block text-[11px] text-text-muted mb-0.5">Type</label>
-              <select className={inputCls} value={draft.field_type} onChange={e => setDraft({ ...draft, field_type: e.target.value as FieldType })}>
+              <select className="block-select" value={draft.field_type} onChange={e => setDraft({ ...draft, field_type: e.target.value as FieldType })}>
                 {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>

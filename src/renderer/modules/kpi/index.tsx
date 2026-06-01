@@ -27,6 +27,7 @@ import {
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
+import { CHART_INCOME, CHART_EXPENSE } from '../../lib/chart-palette';
 
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -496,7 +497,7 @@ const KPIDashboard: React.FC = () => {
                 <Line
                   type="monotone"
                   dataKey="margin"
-                  stroke="#22c55e"
+                  stroke={CHART_INCOME}
                   strokeWidth={2}
                   dot={{ r: 4, fill: '#22c55e', stroke: '#0a0a0a', strokeWidth: 2 }}
                   activeDot={{ r: 6, fill: '#22c55e' }}
@@ -518,8 +519,8 @@ const KPIDashboard: React.FC = () => {
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} />
                 <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                <Bar dataKey="revenue" fill="#2563eb" radius={[2,2,0,0]} name="Revenue" />
-                <Bar dataKey="expenses" fill="#ef4444" radius={[2,2,0,0]} name="Expenses" />
+                <Bar dataKey="revenue" fill={CHART_INCOME} radius={[2,2,0,0]} name="Revenue" />
+                <Bar dataKey="expenses" fill={CHART_EXPENSE} radius={[2,2,0,0]} name="Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </div>

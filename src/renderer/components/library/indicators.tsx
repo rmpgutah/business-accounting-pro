@@ -14,9 +14,9 @@ import {
 type Tone = 'green' | 'amber' | 'red' | 'blue' | 'muted';
 
 const TONE_VARS: Record<Tone, string> = {
-  green: 'var(--color-accent-green, #22c55e)',
+  green: 'var(--color-accent-income, #22c55e)',
   amber: 'var(--color-accent-amber, #f59e0b)',
-  red: 'var(--color-accent-red, #ef4444)',
+  red: 'var(--color-accent-expense, #ef4444)',
   blue: 'var(--color-accent-blue, #3b82f6)',
   muted: 'var(--color-text-muted, #94a3b8)',
 };

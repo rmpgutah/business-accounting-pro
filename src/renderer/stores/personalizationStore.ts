@@ -46,11 +46,11 @@ export interface NotificationPref {
 }
 
 export const DEFAULT_ACCENTS: AccentSlots = {
-  primary: '#60a5fa',
+  primary: '#10b981',   // emerald brand
   income: '#34d399',
-  expense: '#f87171',
-  warning: '#fbbf24',
-  blue: '#60a5fa',
+  expense: '#fb7185',   // warm rose
+  warning: '#f59e0b',   // amber
+  blue: '#60a5fa',      // informational only
   purple: '#c084fc',
 };
 
@@ -413,6 +413,13 @@ export const usePersonalizationStore = create<PersonalizationState>()(
           const raw = await api.getSetting(`personalization:${userId}`);
           if (!raw) return;
           const data = JSON.parse(raw);
+          // Upgrade legacy blue-brand accents to the Warm Structured Glass
+          // defaults (mirrors the persist migrate). Cloud settings predate the
+          // retarget, so a straight set() would re-introduce the old blue
+          // --accent-primary on every login, leaving buttons/tabs/toggles blue.
+          if (data?.accents?.primary === '#60a5fa') {
+            data.accents = { ...DEFAULT_ACCENTS };
+          }
           set({ ...data });
         } catch {
           // ignore
@@ -421,6 +428,16 @@ export const usePersonalizationStore = create<PersonalizationState>()(
     }),
     {
       name: 'bap-personalization',
+      // Bumped for the Warm Structured Glass retarget: users who never customized
+      // their accent still hold the legacy blue brand in persisted state. Reset the
+      // accent set to the new emerald/amber/rose defaults only if it's untouched.
+      version: 2,
+      migrate: (persisted: any) => {
+        if (persisted?.accents?.primary === '#60a5fa') {
+          persisted.accents = { ...DEFAULT_ACCENTS };
+        }
+        return persisted;
+      },
       // Perf: only persist data fields. Without partialize, every set() rewrites
       // localStorage with all setter closures AND derived state, causing
       // measurable lag on each preference change.
@@ -517,6 +534,9 @@ export function applyPersonalization(state: PersonalizationState): void {
     root.style.setProperty('--color-text-muted', '#94a3b8');
     root.style.setProperty('--color-glass-border', 'rgba(0,0,0,0.08)');
     root.style.setProperty('--color-glass-border-hover', 'rgba(0,0,0,0.14)');
+    root.style.setProperty('--hairline', 'rgba(0,0,0,0.06)');
+    root.style.setProperty('--structure', 'rgba(0,0,0,0.12)');
+    root.style.setProperty('--grid', 'rgba(0,0,0,0.05)');
   } else {
     root.style.removeProperty('--color-bg-primary-solid');
     root.style.removeProperty('--color-bg-primary');
@@ -529,6 +549,9 @@ export function applyPersonalization(state: PersonalizationState): void {
     root.style.removeProperty('--color-text-muted');
     root.style.removeProperty('--color-glass-border');
     root.style.removeProperty('--color-glass-border-hover');
+    root.style.removeProperty('--hairline');
+    root.style.removeProperty('--structure');
+    root.style.removeProperty('--grid');
   }
 }
 

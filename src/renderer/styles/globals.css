@@ -1,21 +1,22 @@
 @import "tailwindcss";
 
 @theme {
-  /* Glass dark theme — translucent layers with blur */
-  --color-bg-primary: #08090c;
-  --color-bg-secondary: rgba(18, 19, 24, 0.80);
-  --color-bg-tertiary: rgba(28, 30, 38, 0.65);
-  --color-bg-elevated: rgba(32, 34, 44, 0.85);
-  --color-bg-hover: rgba(42, 44, 56, 0.60);
+  /* Warm Structured Glass — warm-graphite translucent layers with blur */
+  --color-bg-primary: #0f1012;
+  --color-bg-secondary: rgba(22, 23, 26, 0.80);
+  --color-bg-tertiary: rgba(30, 31, 36, 0.65);
+  --color-bg-elevated: rgba(29, 30, 34, 0.85);
+  --color-bg-hover: rgba(36, 37, 42, 0.60);
 
   /* Solid fallbacks for contexts that need them */
-  --color-bg-primary-solid: #08090c;
-  --color-bg-secondary-solid: #121318;
-  --color-bg-tertiary-solid: #1c1e26;
-  --color-bg-elevated-solid: #20222c;
+  --color-bg-primary-solid: #0f1012;
+  --color-bg-secondary-solid: #16171a;
+  --color-bg-tertiary-solid: #1d1e22;
+  --color-bg-elevated-solid: #1d1e22;
 
+  /* Structured border system — three deliberate weights */
   --color-border-primary: rgba(255, 255, 255, 0.06);
-  --color-border-secondary: rgba(255, 255, 255, 0.10);
+  --color-border-secondary: rgba(255, 255, 255, 0.11);
   --color-border-focus: rgba(255, 255, 255, 0.18);
 
   /* Glass-specific borders (brighter, for frosted surfaces) */
@@ -23,18 +24,20 @@
   --color-glass-border-hover: rgba(255, 255, 255, 0.14);
   --color-glass-shine: rgba(255, 255, 255, 0.04);
 
-  --color-text-primary: #e8eaf0;
-  --color-text-secondary: #9a9db0;
-  --color-text-muted: #5e6178;
+  /* Warm off-white text on warm graphite */
+  --color-text-primary: #ECEAE4;
+  --color-text-secondary: #A8A39A;
+  --color-text-muted: #6B665D;
 
+  /* Accent semantics — emerald income, warm-rose expense, amber highlight */
   --color-accent-income: #34d399;
   --color-accent-income-bg: rgba(52, 211, 153, 0.12);
-  --color-accent-expense: #f87171;
-  --color-accent-expense-bg: rgba(248, 113, 113, 0.12);
+  --color-accent-expense: #fb7185;
+  --color-accent-expense-bg: rgba(251, 113, 133, 0.12);
   --color-accent-blue: #60a5fa;
   --color-accent-blue-bg: rgba(96, 165, 250, 0.12);
-  --color-accent-warning: #fbbf24;
-  --color-accent-warning-bg: rgba(251, 191, 36, 0.12);
+  --color-accent-warning: #f59e0b;
+  --color-accent-warning-bg: rgba(245, 158, 11, 0.12);
   --color-accent-purple: #c084fc;
   --color-accent-purple-bg: rgba(192, 132, 252, 0.12);
 
@@ -47,12 +50,17 @@
    user's prefs (theme, density, font scale, radius, glass intensity).
    Components that opt-in read from these vars instead of hard-coding. */
 :root {
-  --accent-primary: #60a5fa;
+  --accent-primary: #10b981;
   --row-padding-y: 0.5625rem;
   --row-padding-x: 0.875rem;
   --app-radius: 6px;
   --glass-blur: 16px;
   --glass-opacity: 0.80;
+
+  /* Structured-border aliases (dark defaults; light set in applyPersonalization) */
+  --hairline: rgba(255, 255, 255, 0.06);
+  --structure: rgba(255, 255, 255, 0.11);
+  --grid: rgba(255, 255, 255, 0.05);
 }
 
 /* ─── Base ────────────────────────────────────────────── */
@@ -108,9 +116,9 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-bg-secondary);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--color-glass-border);
+  border: 1px solid var(--structure);
   padding: 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--app-radius);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 1px 0 var(--color-glass-shine) inset;
 }
@@ -158,17 +166,17 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.625rem 1.25rem;
   font-weight: 600;
   font-size: 0.875rem;
-  background: linear-gradient(135deg, rgba(96,165,250,0.9), rgba(59,130,246,0.95));
+  background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 78%, #000));
   color: white;
   cursor: pointer;
-  border: 1px solid rgba(96,165,250,0.3);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  border-radius: var(--app-radius);
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-primary) 25%, transparent);
 }
 .block-btn-primary:hover {
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
-  border-color: rgba(96,165,250,0.5);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-primary) 38%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 60%, transparent);
 }
 .block-btn-primary:active {
   transform: translateY(1px);
@@ -178,17 +186,17 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.625rem 1.25rem;
   font-weight: 600;
   font-size: 0.875rem;
-  background: linear-gradient(135deg, rgba(52,211,153,0.9), rgba(34,197,94,0.95));
+  background: linear-gradient(135deg, var(--color-accent-income), color-mix(in srgb, var(--color-accent-income) 78%, #000));
   color: white;
   cursor: pointer;
-  border: 1px solid rgba(52,211,153,0.3);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-accent-income) 45%, transparent);
+  border-radius: var(--app-radius);
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent-income) 25%, transparent);
 }
 .block-btn-success:hover {
-  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.35);
-  border-color: rgba(52,211,153,0.5);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-accent-income) 38%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent-income) 60%, transparent);
 }
 .block-btn-success:active {
   transform: translateY(1px);
@@ -198,17 +206,17 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.625rem 1.25rem;
   font-weight: 600;
   font-size: 0.875rem;
-  background: linear-gradient(135deg, rgba(248,113,113,0.9), rgba(239,68,68,0.95));
+  background: linear-gradient(135deg, var(--color-accent-expense), color-mix(in srgb, var(--color-accent-expense) 75%, #000));
   color: white;
   cursor: pointer;
-  border: 1px solid rgba(248,113,113,0.3);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-accent-expense) 45%, transparent);
+  border-radius: var(--app-radius);
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent-expense) 25%, transparent);
 }
 .block-btn-danger:hover {
-  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
-  border-color: rgba(248,113,113,0.5);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-accent-expense) 38%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent-expense) 60%, transparent);
 }
 .block-btn-danger:active {
   transform: translateY(1px);
@@ -231,8 +239,8 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-text-muted);
 }
 .block-input:focus {
-  border-color: rgba(96, 165, 250, 0.5);
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1), 0 0 12px rgba(96, 165, 250, 0.08);
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 12%, transparent), 0 0 12px color-mix(in srgb, var(--accent-primary) 9%, transparent);
 }
 
 .block-select {
@@ -248,8 +256,8 @@ h1, h2, h3, h4, h5, h6 {
   transition: all 0.2s ease;
 }
 .block-select:focus {
-  border-color: rgba(96, 165, 250, 0.5);
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1), 0 0 12px rgba(96, 165, 250, 0.08);
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 12%, transparent), 0 0 12px color-mix(in srgb, var(--accent-primary) 9%, transparent);
 }
 
 /* ─── Tables ──────────────────────────────────────────── */
@@ -258,27 +266,40 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   text-align: left;
   font-size: 0.875rem;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--structure);
+  border-radius: var(--app-radius);
+  overflow: hidden;
 }
 .block-table th {
-  padding: 0.875rem 1rem;
-  background: rgba(28, 30, 38, 0.50);
+  padding: var(--row-padding-y) var(--row-padding-x);
+  background: var(--color-bg-tertiary);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--color-glass-border);
+  border-bottom: 1px solid var(--structure);
+  border-right: 1px solid var(--grid);
   color: var(--color-text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.6875rem;
   letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .block-table td {
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid var(--color-glass-border);
+  padding: var(--row-padding-y) var(--row-padding-x);
+  border-bottom: 1px solid var(--grid);
+  border-right: 1px solid var(--grid);
+  font-variant-numeric: tabular-nums;
   transition: background-color 0.15s ease;
 }
+.block-table th:last-child,
+.block-table td:last-child { border-right: 0; }
+.block-table tr:last-child td { border-bottom: 0; }
 .block-table tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-hover);
 }
 
 /* ─── Badges ──────────────────────────────────────────── */
@@ -325,9 +346,9 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-bg-secondary);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--color-glass-border);
+  border: 1px solid var(--structure);
   padding: 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--app-radius);
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
@@ -349,6 +370,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 1.5rem;
   font-weight: 700;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 .stat-change {
@@ -370,7 +392,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #e8eaf0, #9a9db0);
+  background: linear-gradient(135deg, #ECEAE4, #A8A39A);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -439,7 +461,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-text-primary);
   background: var(--color-bg-tertiary);
   border: none;
-  border-bottom: 2px solid var(--color-accent-blue);
+  border-bottom: 2px solid var(--accent-primary);
   border-radius: 6px 6px 0 0;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1240,8 +1262,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 .tab-btn:hover { color: var(--color-text-primary); }
 .tab-btn[aria-selected="true"], .tab-btn.is-active {
-  color: var(--sev-info);
-  border-bottom-color: var(--sev-info);
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
 }
 .tab-btn .tab-count {
   display: inline-block;
@@ -1383,7 +1405,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-bg-secondary);
   backdrop-filter: blur(var(--glass-blur-md)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(1.4);
-  border: 1px solid var(--color-glass-border);
+  border: 1px solid var(--structure);
   border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
   display: flex; flex-direction: column; gap: 0.375rem;
@@ -1396,7 +1418,7 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase; letter-spacing: 0.06em;
 }
 .kpi-value {
-  font-size: var(--font-3xl); font-weight: 600;
+  font-size: var(--font-3xl); font-weight: 700;
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -7962,3 +7984,13 @@ td[data-neg="true"]::after,
 .tform-compliance-status.pending { background: var(--color-bg-secondary); color: var(--color-text-muted); }
 .tform-compliance-status.expired { background: rgba(239,68,68,0.15); color: #ef4444; }
 .tform-compliance-status.expiring-soon { background: rgba(245,158,11,0.15); color: #f59e0b; }
+
+/* ─── Reduced-motion safety (Warm Structured Glass) ───── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

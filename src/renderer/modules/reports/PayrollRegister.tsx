@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { CHART_SERIES } from '../../lib/chart-palette';
 
 // ─── Types ──────────────────────────────────────────────
 interface PayStub {
@@ -354,7 +355,7 @@ const PayrollRegister: React.FC = () => {
                       labelStyle={{ color: '#94a3b8' }}
                       formatter={(value: any) => [formatCurrency(Number(value) || 0), 'Gross Payroll']}
                     />
-                    <Bar dataKey="gross" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="gross" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

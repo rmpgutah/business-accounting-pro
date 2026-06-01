@@ -736,7 +736,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                   ? 'bg-accent-blue text-white'
                   : 'text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors'
               }`}
-              style={{ borderRadius: '0px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               {s === 'all' ? 'All' : s === 'fully_depreciated' ? 'Fully Depreciated' : s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
@@ -801,7 +801,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                     type="checkbox"
                     checked={filtered.length > 0 && selectedIds.size === filtered.length}
                     onChange={toggleAllAssets}
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th>Asset Code</th>
@@ -829,7 +829,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                       type="checkbox"
                       checked={selectedIds.has(a.id)}
                       onChange={() => toggleAssetSelect(a.id)}
-                      style={{ accentColor: '#3b82f6' }}
+                      style={{ accentColor: 'var(--accent-primary)' }}
                     />
                   </td>
                   <td className="font-mono text-xs text-accent-blue">{a.asset_code}</td>

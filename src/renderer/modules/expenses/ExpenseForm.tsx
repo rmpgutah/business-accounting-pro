@@ -366,6 +366,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [form, setForm] = useState<ExpenseFormData>({ ...emptyForm });
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [accounts, setAccounts] = useState<DropdownOption[]>([]);
+  // Tracks whether the current account_id was auto-suggested from the category
+  // (so re-picking a category re-suggests, but a manual pick is never clobbered).
+  const [accountAutoSet, setAccountAutoSet] = useState(false);
   const [vendors, setVendors] = useState<Array<DropdownOption & { is_1099_eligible?: number; w9_status?: string }>>([]);
   const [projects, setProjects] = useState<DropdownOption[]>([]);
   const [clients, setClients] = useState<DropdownOption[]>([]);
@@ -613,11 +616,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     categoryMonthlyUsage(activeCompany.id, form.category_id).then(setCategoryUsage);
   }, [activeCompany, form.category_id]);
 
-  // Feature 5 — auto-fill default account when category selected (only if empty)
+  // Feature 5 — suggest the category's default expense account. Re-suggests on
+  // every category change UNLESS the user manually picked an account (tracked
+  // via accountAutoSet), so changing the category narrows the account for you.
   useEffect(() => {
-    if (!selectedCategory || form.account_id) return;
+    if (!selectedCategory) return;
     const def = (selectedCategory as any).default_account_id;
-    if (def) setForm(p => ({ ...p, account_id: def }));
+    if (def && (!form.account_id || accountAutoSet)) {
+      setForm(p => ({ ...p, account_id: def }));
+      setAccountAutoSet(true);
+    }
   }, [form.category_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Feature 17 / 18 — denormalize vendor 1099 / w9 status when vendor changes
@@ -1599,14 +1607,29 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               name="account_id"
               className="block-select"
               value={form.account_id}
-              onChange={handleChange}
+              onChange={(e) => { setAccountAutoSet(false); handleChange(e); }}
             >
               <option value="">Select account...</option>
-              {[...accounts]
-                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-                .map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+              {(() => {
+                const defId = selectedCategory ? (selectedCategory as any).default_account_id : '';
+                const suggested = defId ? accounts.find(a => a.id === defId) : undefined;
+                const sorted = [...accounts].sort((a, b) =>
+                  a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+                return (
+                  <>
+                    {suggested && (
+                      <optgroup label="Suggested for this category">
+                        <option value={suggested.id}>{suggested.name}</option>
+                      </optgroup>
+                    )}
+                    <optgroup label="All accounts">
+                      {sorted.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </optgroup>
+                  </>
+                );
+              })()}
             </select>
           </div>
 

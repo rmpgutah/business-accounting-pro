@@ -612,7 +612,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th style={{ width: '30px' }} title="Client Health" />
@@ -645,7 +645,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                         checked={isSelected}
                         onChange={() => toggleSelect(client.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
                     <td>

@@ -309,8 +309,8 @@ export function SelectField({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange?.(e.target.value)}
-        className="block-input block-select"
-        style={{ borderRadius: 6, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}
+        className="block-select"
+        style={{ borderRadius: 'var(--app-radius)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

@@ -725,7 +725,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 type="checkbox"
                 checked={showPredictedColumn}
                 onChange={(e) => setShowPredictedColumn(e.target.checked)}
-                style={{ accentColor: '#3b82f6' }}
+                style={{ accentColor: 'var(--accent-primary)' }}
               />
               Predicted Pay Date
             </label>
@@ -951,7 +951,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
                 <th style={{ width: '24px' }} title="Risk indicator"></th>
@@ -1002,7 +1002,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         checked={isSelected}
                         onChange={() => toggleSelect(inv.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
                     <td>

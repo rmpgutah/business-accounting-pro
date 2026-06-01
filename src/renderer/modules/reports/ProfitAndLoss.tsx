@@ -14,6 +14,7 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
+import { CHART_SERIES } from '../../lib/chart-palette';
 
 // ─── Types ──────────────────────────────────────────────
 interface LineItem {
@@ -54,10 +55,7 @@ function fmtNeg(value: number): React.ReactElement {
 }
 
 // ─── Chart theme colors ────────────────────────────────
-const CHART_COLORS = [
-  '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-];
+const CHART_COLORS = CHART_SERIES;
 
 // ─── KPI Card ───────────────────────────────────────────
 const KPICard: React.FC<{

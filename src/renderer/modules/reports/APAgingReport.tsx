@@ -9,6 +9,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
+import { CHART_SEVERITY } from '../../lib/chart-palette';
 
 // ─── Types ──────────────────────────────────────────────
 interface BillRow {
@@ -54,11 +55,11 @@ const BUCKET_LABELS: Record<BucketKey, string> = {
 };
 
 const BUCKET_COLORS: Record<BucketKey, string> = {
-  current: '#22c55e',
-  '1-30': '#3b82f6',
-  '31-60': '#f59e0b',
-  '61-90': '#f97316',
-  '90+': '#ef4444',
+  current: CHART_SEVERITY[0],
+  '1-30': CHART_SEVERITY[1],
+  '31-60': CHART_SEVERITY[2],
+  '61-90': CHART_SEVERITY[3],
+  '90+': CHART_SEVERITY[4],
 };
 
 const BUCKET_BADGE_CLASS: Record<BucketKey, string> = {
