@@ -155,3 +155,21 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 export function formatStatus(status: string | null | undefined): { label: string; className: string } {
   return STATUS_MAP[status ?? ''] ?? { label: status ?? '—', className: 'block-badge' };
 }
+
+// Humanize a raw enum-style token (e.g. 'debit_card' → 'Debit Card',
+// 'ach_transfer' → 'ACH Transfer'). Recognized acronyms are upper-cased.
+const ACRONYMS = new Set(['ach', 'eft', 'po', 'cc', 'us', 'usd', 'id']);
+export function humanizeToken(value: string | null | undefined): string {
+  if (!value) return '—';
+  return String(value)
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
+/** Friendly label for an expense/payment method enum. */
+export function formatPaymentMethod(method: string | null | undefined): string {
+  return humanizeToken(method);
+}

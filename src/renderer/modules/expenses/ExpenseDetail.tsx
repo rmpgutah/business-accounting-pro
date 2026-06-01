@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, formatPaymentMethod, humanizeToken } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -201,9 +201,9 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
       ['Project', e.project_name || '—'],
       ['Description', e.description || '—'],
       ['Reference', e.reference || '—'],
-      ['Payment Method', e.payment_method || '—'],
-      ['Status', e.status || '—'],
-      ['Approval Status', e.approval_status || '—'],
+      ['Payment Method', formatPaymentMethod(e.payment_method)],
+      ['Status', humanizeToken(e.status)],
+      ['Approval Status', humanizeToken(e.approval_status)],
       ['Currency', e.currency || 'USD'],
       ['Exchange Rate', String(e.exchange_rate || 1)],
       ['Tax Amount', formatCurrency(e.tax_amount || 0)],
@@ -216,8 +216,10 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
       ['Merchant Location', e.merchant_location || '—'],
       ['Submitted', created],
     ];
+    const esc = (s: string) =>
+      String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
     const rowsHtml = lineItems
-      .map(([k, v]) => `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:11px;color:#555;width:180px;">${k}</td><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px;color:#111;">${v}</td></tr>`)
+      .map(([k, v]) => `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:11px;color:#555;width:180px;">${esc(k)}</td><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px;color:#111;">${esc(v)}</td></tr>`)
       .join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expense Voucher</title>
 <style>body{font-family:'Helvetica Neue',Arial,sans-serif;color:#111;margin:32px;}
@@ -450,7 +452,7 @@ table{width:100%;border-collapse:collapse;}
               : <span className="text-text-muted">—</span>}
           </Field>
           <Field label="Tax Amount">{formatCurrency(expense.tax_amount || 0)}</Field>
-          <Field label="Payment Method">{expense.payment_method || '—'}</Field>
+          <Field label="Payment Method">{formatPaymentMethod(expense.payment_method)}</Field>
           <Field label="Reference">{expense.reference || '—'}</Field>
           <Field label="Billable">{expense.is_billable ? 'Yes' : 'No'}</Field>
           <Field label="Reimbursable">{expense.is_reimbursable ? (expense.reimbursed ? `Reimbursed ${expense.reimbursed_date || ''}` : 'Pending') : 'No'}</Field>
