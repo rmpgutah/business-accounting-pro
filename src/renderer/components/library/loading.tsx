@@ -231,7 +231,7 @@ export interface SpinnerInlineProps {
 export function SpinnerInline({
   text = 'Loading…',
   size = 16,
-  color = 'var(--color-accent-blue, #3b82f6)',
+  color = 'var(--accent-primary)',
   className,
 }: SpinnerInlineProps) {
   return (
@@ -324,7 +324,7 @@ export function ProgressOverlay({
               size={28}
               style={{
                 animation: 'bapSpin 0.9s linear infinite',
-                color: 'var(--color-accent-blue, #3b82f6)',
+                color: 'var(--accent-primary)',
               }}
             />
           </div>
@@ -362,7 +362,7 @@ export function ProgressOverlay({
                   width: `${clamped}%`,
                   height: '100%',
                   borderRadius: 6,
-                  background: 'var(--color-accent-blue, #3b82f6)',
+                  background: 'var(--accent-primary)',
                   transition: 'width 0.3s ease',
                 }}
               />
