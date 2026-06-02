@@ -1358,14 +1358,18 @@ export function registerIpcHandlers(): void {
       const data = { ...payload, company_id: cid };
       if (payload.id) {
         db.update('line_item_snippets', payload.id, data);
+        scheduleAutoBackup();
         return db.getById('line_item_snippets', payload.id);
       }
-      return db.create('line_item_snippets', data);
+      const created = db.create('line_item_snippets', data);
+      scheduleAutoBackup();
+      return created;
     } catch (err: any) { return { error: err?.message }; }
   });
   ipcMain.handle('snippets:delete', (_event, { id }: { id: string }) => {
     try {
       db.removeHard('line_item_snippets', id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -3917,9 +3921,12 @@ export function registerIpcHandlers(): void {
       };
       if (payload.id) {
         db.update('mileage_log', payload.id, data);
+        scheduleAutoBackup();
         return db.getById('mileage_log', payload.id);
       }
-      return db.create('mileage_log', data);
+      const created = db.create('mileage_log', data);
+      scheduleAutoBackup();
+      return created;
     } catch (err: any) {
       return { error: err?.message };
     }
@@ -3927,6 +3934,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('mileage:delete', (_event, { id }: { id: string }) => {
     try {
       db.removeHard('mileage_log', id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
       return { error: err?.message };
@@ -4011,9 +4019,11 @@ export function registerIpcHandlers(): void {
           enabled: payload.enabled ?? 1,
           description: payload.description ?? '',
         });
+        scheduleAutoBackup();
         return { ok: true, id: payload.id };
       }
       const r = db.create('webhook_subscriptions', { ...payload, company_id: cid });
+      scheduleAutoBackup();
       return { ok: true, id: r.id };
     } catch (err: any) {
       return { error: err?.message };
@@ -4022,6 +4032,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('webhooks:delete', (_event, { id }: { id: string }) => {
     try {
       db.removeHard('webhook_subscriptions', id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
       return { error: err?.message };
@@ -5706,6 +5717,7 @@ export function registerIpcHandlers(): void {
     for (const r of reminders) {
       stmt.run(uuid(), invoiceId, r.type, r.date.toISOString().split('T')[0]);
     }
+    scheduleAutoBackup();
     return { scheduled: reminders.length };
   });
 
@@ -5844,9 +5856,12 @@ export function registerIpcHandlers(): void {
     try {
       if (data.id) {
         db.update('invoice_catalog_items', data.id, data);
+        scheduleAutoBackup();
         return db.getById('invoice_catalog_items', data.id);
       }
-      return db.create('invoice_catalog_items', { ...data, company_id: companyId });
+      const created = db.create('invoice_catalog_items', { ...data, company_id: companyId });
+      scheduleAutoBackup();
+      return created;
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
@@ -5855,6 +5870,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('invoice:catalog-delete', (_event, id: string) => {
     try {
       db.remove('invoice_catalog_items', id);
+      scheduleAutoBackup();
       return { success: true };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
@@ -6146,6 +6162,7 @@ export function registerIpcHandlers(): void {
         'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
         [userId, companyId, role || 'owner']
       );
+      scheduleAutoBackup();
     } catch (_) {
       // FOREIGN KEY failure: user not in DB (stale session). Company still usable.
     }
@@ -6160,6 +6177,7 @@ export function registerIpcHandlers(): void {
     try {
       db.execQuery('DELETE FROM user_companies WHERE user_id = ?', [userId]);
       db.execQuery('DELETE FROM users WHERE id = ?', [userId]);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err) {
       console.error('auth:delete-account failed:', err);
@@ -6302,6 +6320,7 @@ export function registerIpcHandlers(): void {
       }
     }
 
+    if (imported > 0) scheduleAutoBackup();
     return { imported, skipped, errors: importErrors.slice(0, 20), total: rows.length };
   });
 
@@ -8332,6 +8351,7 @@ export function registerIpcHandlers(): void {
       }
     });
     seedTx();
+    scheduleAutoBackup();
     return { success: true, year };
   });
 
@@ -8987,6 +9007,7 @@ export function registerIpcHandlers(): void {
       apply();
 
       try { db.logAudit(companyId, 'companies', companyId, 'industry-preset-applied'); } catch { /* audit best-effort */ }
+      scheduleAutoBackup();
       return { success: true, summary };
     } catch (err) {
       console.error('industry:apply-preset failed:', err);
@@ -9019,6 +9040,7 @@ export function registerIpcHandlers(): void {
     db.getDb().prepare(
       `UPDATE automation_rules SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?`
     ).run(ruleId);
+    scheduleAutoBackup();
   });
 
   ipcMain.handle('automations:run-log', (_e, ruleId: string) =>
@@ -9043,6 +9065,7 @@ export function registerIpcHandlers(): void {
         is_active: 1,
         company_id: companyId,
       });
+      scheduleAutoBackup();
       return record;
     } catch (err: any) {
       return { error: err.message };
@@ -9053,6 +9076,7 @@ export function registerIpcHandlers(): void {
     try {
       db.getDb().prepare(`DELETE FROM automation_rules WHERE id = ?`).run(ruleId);
       db.getDb().prepare(`DELETE FROM automation_run_log WHERE rule_id = ?`).run(ruleId);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
       return { error: err.message };
@@ -9064,6 +9088,7 @@ export function registerIpcHandlers(): void {
       db.getDb().prepare(
         `UPDATE automation_rules SET name=?, trigger_type=?, trigger_config=?, conditions=?, actions=? WHERE id=?`
       ).run(name, trigger_type, trigger_config || '{}', conditions || '[]', actions || '[]', id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
       return { error: err.message };
@@ -9081,6 +9106,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('intelligence:dismiss-anomaly', (_e, id: string) => {
     db.getDb().prepare(`UPDATE financial_anomalies SET dismissed = 1 WHERE id = ?`).run(id);
+    scheduleAutoBackup();
   });
 
   // ─── Inventory Stock Movements ─────────────────────────
@@ -9119,6 +9145,7 @@ export function registerIpcHandlers(): void {
         return { ok: true, newQuantity: item?.quantity ?? 0, reorderPoint: item?.reorder_point ?? 0 };
       });
       const r = adjust();
+      scheduleAutoBackup();
       // Reactive engine: emit inventory.received / low_stock / out_of_stock.
       try {
         if (companyId && itemId) {
@@ -9642,6 +9669,7 @@ export function registerIpcHandlers(): void {
     );
     const rounded = Math.round(interest * 100) / 100;
     db.getDb().prepare('UPDATE debts SET interest_accrued = ?, balance_due = original_amount + ? + fees_accrued - payments_made, updated_at = datetime(\'now\') WHERE id = ?').run(rounded, rounded, debtId);
+    scheduleAutoBackup();
     return { interest: rounded, total: debt.original_amount + rounded + debt.fees_accrued - debt.payments_made };
   });
 
@@ -9708,7 +9736,9 @@ export function registerIpcHandlers(): void {
       return { imported };
     });
 
-    return importTx();
+    const result = importTx();
+    if (result.imported > 0) scheduleAutoBackup();
+    return result;
   });
 
   ipcMain.handle('debt:generate-demand-letter', (_event, { debtId, templateId }: { debtId: string; templateId: string }) => {
@@ -10005,6 +10035,7 @@ export function registerIpcHandlers(): void {
     ];
     const stmt = db.getDb().prepare('INSERT INTO debt_automation_rules (id, company_id, from_stage, to_stage, days_after_entry, action, require_review) VALUES (?, ?, ?, ?, ?, ?, ?)');
     for (const d of defaults) stmt.run(uuid(), companyId, d.from, d.to, d.days, d.action, d.review);
+    scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:seed-templates', (_event, { companyId }: { companyId: string }) => {
@@ -10029,6 +10060,7 @@ export function registerIpcHandlers(): void {
     ];
     const stmt = db.getDb().prepare('INSERT INTO debt_templates (id, company_id, name, type, subject, body, severity, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, 1)');
     for (const t of templates) stmt.run(uuid(), companyId, t.name, t.type, t.subject, t.body, t.severity);
+    scheduleAutoBackup();
   });
 
   ipcMain.handle('debt:run-escalation', (_event, { companyId }: { companyId: string }) => {
@@ -10066,6 +10098,7 @@ export function registerIpcHandlers(): void {
       }
     });
     escalateTx();
+    if (advanced > 0) scheduleAutoBackup();
     return { advanced, flagged };
   });
 
@@ -10750,6 +10783,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:reject-match', (_event, { matchId }: { matchId: string }) => {
     try {
       db.getDb().prepare('UPDATE debt_payment_matches SET status = ? WHERE id = ?').run('rejected', matchId);
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) {
       return { error: err.message };
@@ -10936,11 +10970,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:campaign-save', (_event, data: Record<string, any>) => {
     try {
       const companyId = db.getCurrentCompanyId();
-      if (data.id) {
-        return db.update('debt_campaigns', data.id, data);
-      } else {
-        return db.create('debt_campaigns', { ...data, company_id: companyId });
-      }
+      const result = data.id
+        ? db.update('debt_campaigns', data.id, data)
+        : db.create('debt_campaigns', { ...data, company_id: companyId });
+      scheduleAutoBackup();
+      return result;
     } catch (err: any) {
       return { error: err.message };
     }
@@ -11186,6 +11220,7 @@ export function registerIpcHandlers(): void {
     });
 
     const convertResult = convertTx();
+    scheduleAutoBackup();
     // Reactive engine: emit quote.converted for workflows.
     try {
       if (companyId && quoteId && convertResult?.invoice_id) {
@@ -11379,8 +11414,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('payroll:pto-policy-save', (_event, data: Record<string, any>) => {
     try {
       const companyId = db.getCurrentCompanyId();
-      if (data.id) return db.update('pto_policies', data.id, data);
-      return db.create('pto_policies', { ...data, company_id: companyId });
+      const result = data.id
+        ? db.update('pto_policies', data.id, data)
+        : db.create('pto_policies', { ...data, company_id: companyId });
+      scheduleAutoBackup();
+      return result;
     } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
   });
 
@@ -11542,6 +11580,7 @@ export function registerIpcHandlers(): void {
       });
       tx(expenseIds);
       db.logAudit(companyId, 'reimbursement_batch', id, 'create', { employee_id: employeeId, total, count: expenseIds.length });
+      scheduleAutoBackup();
       return { id, total, count: expenseIds.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11552,6 +11591,7 @@ export function registerIpcHandlers(): void {
       const dbi = db.getDb();
       dbi.prepare(`UPDATE reimbursement_batches SET status='paid', paid_date=date('now'), payroll_run_id=? WHERE id=?`).run(payrollRunId, batchId);
       dbi.prepare(`UPDATE expenses SET payroll_run_id=? WHERE reimbursement_batch_id=?`).run(payrollRunId, batchId);
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11644,6 +11684,7 @@ export function registerIpcHandlers(): void {
       if (comment) {
         db.create('expense_comments', { expense_id: expenseId, user_id: userId, body: `[${decision}] ${comment}` });
       }
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11655,6 +11696,7 @@ export function registerIpcHandlers(): void {
       dbi.prepare('DELETE FROM expense_approval_steps WHERE expense_id=?').run(expenseId);
       const ins = dbi.prepare(`INSERT INTO expense_approval_steps (id, expense_id, step_order, approver_id, status) VALUES (?,?,?,?, 'pending')`);
       approverIds.forEach((aid, idx) => ins.run(uuid(), expenseId, idx, aid));
+      scheduleAutoBackup();
       return { success: true, count: approverIds.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11684,6 +11726,7 @@ export function registerIpcHandlers(): void {
       const row = db.create('expense_comments', { expense_id: expenseId, user_id: userId, body });
       const exp = db.getDb().prepare('SELECT company_id FROM expenses WHERE id=?').get(expenseId) as any;
       if (exp) db.logAudit(exp.company_id, 'expense', expenseId, 'update', { _action: 'comment', body });
+      scheduleAutoBackup();
       return { comment: row };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11723,10 +11766,12 @@ export function registerIpcHandlers(): void {
       if (threshold > 0 && Number(exp.amount) < threshold) {
         dbi.prepare(`UPDATE expenses SET approval_status='approved', status='approved', submitted_at=datetime('now'), approved_by='auto', approved_date=date('now') WHERE id=?`).run(expenseId);
         db.logAudit(exp.company_id, 'expense', expenseId, 'update', { _action: 'auto_approve', previous_status: previousStatus, new_status: 'approved', submitted_by: submittedBy });
+        scheduleAutoBackup();
         return { success: true, autoApproved: true };
       } else {
         dbi.prepare(`UPDATE expenses SET approval_status='submitted', submitted_at=datetime('now'), approver_id=? WHERE id=?`).run(finalApprover, expenseId);
         db.logAudit(exp.company_id, 'expense', expenseId, 'update', { _action: 'submit', previous_status: previousStatus, new_status: 'submitted', approver_id: finalApprover });
+        scheduleAutoBackup();
         return { success: true, approverId: finalApprover };
       }
     } catch (err: any) { return { error: err?.message }; }
@@ -11766,6 +11811,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('expense:lock', (_event, { expenseId, locked }: { expenseId: string; locked: boolean }) => {
     try {
       db.getDb().prepare('UPDATE expenses SET is_locked=? WHERE id=?').run(locked ? 1 : 0, expenseId);
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11876,6 +11922,7 @@ export function registerIpcHandlers(): void {
         dbi.prepare('DELETE FROM accounts WHERE id = ?').run(sourceId);
       });
       tx();
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message || String(err) }; }
   });
@@ -11886,6 +11933,7 @@ export function registerIpcHandlers(): void {
       const stmt = dbi.prepare("UPDATE accounts SET is_active = ?, updated_at = datetime('now') WHERE id = ?");
       const tx = dbi.transaction((rows: string[]) => { for (const id of rows) stmt.run(isActive ? 1 : 0, id); });
       tx(ids);
+      scheduleAutoBackup();
       return { success: true, count: ids.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11916,6 +11964,7 @@ export function registerIpcHandlers(): void {
       db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: accountId, debit: acctDebit, credit: acctCredit, description: 'Opening balance' });
       db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: obe.id, debit: obeDebit, credit: obeCredit, description: 'Opening balance offset' });
       db.getDb().prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      scheduleAutoBackup();
       return { success: true, entry_id: jeId };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -11955,6 +12004,7 @@ export function registerIpcHandlers(): void {
       if (reNet > 0) db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: re.id, debit: 0, credit: reNet, description: 'Net income to RE' });
       else if (reNet < 0) db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: re.id, debit: -reNet, credit: 0, description: 'Net loss to RE' });
       db.getDb().prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      scheduleAutoBackup();
       return { success: true, entry_id: jeId, accounts_closed: accts.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12025,6 +12075,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      if (created > 0) scheduleAutoBackup();
       return { success: true, created };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12087,6 +12138,7 @@ export function registerIpcHandlers(): void {
          VALUES (?,?,?,?,?,?,?,?)`
       ).run(id, companyId, periodStart || '', periodEnd || '', periodEnd || '', lockedBy || '', reason || '', reason || '');
       db.logAudit(companyId, 'period_lock', id, 'create', { periodStart, periodEnd, reason });
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12099,6 +12151,7 @@ export function registerIpcHandlers(): void {
         `UPDATE period_locks SET unlocked_at = datetime('now'), unlocked_by = ?, unlock_reason = ? WHERE id = ?`
       ).run(unlockedBy || '', reason || '', lockId);
       db.logAudit(lock.company_id, 'period_lock', lockId, override ? 'override' : 'unlock', { reason, by: unlockedBy });
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12121,6 +12174,7 @@ export function registerIpcHandlers(): void {
         db.getDb().prepare(
           `UPDATE period_close_checklist SET completed_at = ?, completed_by = ?, skipped = ?, note = ? WHERE id = ?`
         ).run(completed ? now : '', by || '', skipped ? 1 : 0, note || '', existing.id);
+        scheduleAutoBackup();
         return { id: existing.id };
       }
       const id = uuid();
@@ -12128,6 +12182,7 @@ export function registerIpcHandlers(): void {
         `INSERT INTO period_close_checklist (id, company_id, period_label, item_key, item_label, completed_at, completed_by, skipped, note)
          VALUES (?,?,?,?,?,?,?,?,?)`
       ).run(id, companyId, periodLabel, itemKey, itemLabel, completed ? now : '', by || '', skipped ? 1 : 0, note || '');
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12221,6 +12276,7 @@ export function registerIpcHandlers(): void {
       closeTx();
 
       db.logAudit(companyId, 'period_close', logId, 'create', { periodStart, periodEnd, netIncome: preview.netIncome, jeId });
+      scheduleAutoBackup();
       return { ok: true, journalEntryId: jeId, netIncome: preview.netIncome, logId };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12336,6 +12392,7 @@ export function registerIpcHandlers(): void {
         data.reconciledBy || '', data.notes || '', JSON.stringify(data.matches || [])
       );
       db.logAudit(data.companyId, 'account_reconciliation', id, 'create', { accountId: data.accountId, asOfDate: data.asOfDate });
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12524,6 +12581,7 @@ export function registerIpcHandlers(): void {
         lines++;
       }
       if (lines > 0) dbi.prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      scheduleAutoBackup();
       return { success: true, entry_id: jeId, accounts_revalued: lines };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12594,6 +12652,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      if (created > 0) scheduleAutoBackup();
       return { success: true, created, skipped };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12664,6 +12723,7 @@ export function registerIpcHandlers(): void {
       const tx = dbi.transaction((ids: string[]) => { for (const id of ids) stmt.run(targetAccountId, id); });
       tx(matchIds);
       db.logAudit(companyId, 'account', sourceAccountId, 'update', { _action: 'split', moved: matchIds.length, to: targetAccountId });
+      if (matchIds.length > 0) scheduleAutoBackup();
       return { success: true, moved: matchIds.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12676,6 +12736,7 @@ export function registerIpcHandlers(): void {
       if (!acct) return { error: 'Account not found' };
       dbi.prepare("UPDATE accounts SET code = ?, updated_at = datetime('now') WHERE id = ?").run(newCode, accountId);
       db.logAudit(companyId, 'account', accountId, 'update', { _action: 'renumber', old_code: acct.code, new_code: newCode });
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12684,12 +12745,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('accounts:soft-delete', (_e, { accountId }: { accountId: string }) => {
     try {
       db.getDb().prepare("UPDATE accounts SET deleted_at = datetime('now'), is_active = 0 WHERE id = ?").run(accountId);
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message }; }
   });
   ipcMain.handle('accounts:restore', (_e, { accountId }: { accountId: string }) => {
     try {
       db.getDb().prepare("UPDATE accounts SET deleted_at = '', is_active = 1 WHERE id = ?").run(accountId);
+      scheduleAutoBackup();
       return { success: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12724,6 +12787,7 @@ export function registerIpcHandlers(): void {
         db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: obe.id, debit: offset < 0 ? -offset : 0, credit: offset > 0 ? offset : 0, description: 'OBE offset' });
       }
       dbi.prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
+      scheduleAutoBackup();
       return { success: true, entry_id: jeId, applied, skipped };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12748,6 +12812,7 @@ export function registerIpcHandlers(): void {
         for (const a of accts) upsert.run(uuid(), d, a.id, Number(a.bal) || 0);
       });
       tx();
+      scheduleAutoBackup();
       return { success: true, count: accts.length, date: d };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12859,6 +12924,7 @@ export function registerIpcHandlers(): void {
         dbInstance.prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(newId);
         count++;
       }
+      if (count > 0) scheduleAutoBackup();
       return { count };
     } catch (err: any) { return { error: err?.message || 'undo failed' }; }
   });
@@ -12900,6 +12966,7 @@ export function registerIpcHandlers(): void {
         `INSERT INTO je_history (id, je_id, version, snapshot_json, changed_by) VALUES (?, ?, ?, ?, ?)`
       ).run(uuid(), jeId, version, JSON.stringify({ entry: je, lines }), userId || '');
       dbi.prepare(`UPDATE journal_entries SET version = ? WHERE id = ?`).run(version + 1, jeId);
+      scheduleAutoBackup();
       return { ok: true, version };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12938,6 +13005,7 @@ export function registerIpcHandlers(): void {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(uuid(), h.je_id, l.account_id, l.debit || 0, l.credit || 0, l.description || '', i, l.line_memo || '');
       }
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -12969,6 +13037,7 @@ export function registerIpcHandlers(): void {
       ).run(id, companyId, periodStart || '', periodEnd || '', periodEnd || '', lockedBy || '', reason || '', reason || '',
             lockLevel === 'soft' ? 'soft' : 'hard');
       db.logAudit(companyId, 'period_lock', id, 'create', { periodStart, periodEnd, reason, lockLevel });
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13085,6 +13154,7 @@ export function registerIpcHandlers(): void {
         } catch { /* table may not exist */ }
       }
       db.getDb().prepare(`UPDATE period_close_log SET roll_forward_done = 1 WHERE id = ?`).run(logId);
+      scheduleAutoBackup();
       return { ok: true, snapshotCount: count };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13134,6 +13204,7 @@ export function registerIpcHandlers(): void {
         `UPDATE period_close_log SET reopened_at = datetime('now'), reopened_by = ? WHERE id = ?`
       ).run(reopenedBy || '', logId);
       db.logAudit(log.company_id, 'period_close', logId, 'reopen', { reason, reopenedBy });
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13153,6 +13224,7 @@ export function registerIpcHandlers(): void {
          VALUES (?,?,?,?,datetime('now'),?,0,1)`
       ).run(logId, companyId, periodStart, periodEnd, closedBy || '');
       db.logAudit(companyId, 'period_close', logId, 'short_period_close', { periodStart, periodEnd, reason });
+      scheduleAutoBackup();
       return { ok: true, logId };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13204,6 +13276,7 @@ export function registerIpcHandlers(): void {
               payload.amount || 0, payload.note || '', payload.status || 'open',
               payload.confidence || 0, payload.delta || 0, payload.rolledFromId || '');
       }
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13264,6 +13337,7 @@ export function registerIpcHandlers(): void {
         `INSERT INTO recon_imports (id, company_id, account_id, as_of_date, statement_balance, rows_json, imported_by)
          VALUES (?,?,?,?,?,?,?)`
       ).run(id, companyId, accountId, asOfDate || '', statementBalance || 0, JSON.stringify(rows || []), importedBy || '');
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13344,12 +13418,13 @@ export function registerIpcHandlers(): void {
            VALUES (?,?,?,?,?,?)`
         ).run(id, data.companyId, data.accountId, f, data.threshold || 0, data.nextDue || nextStr);
       }
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('recon:schedule-delete', (_e, { id }: any) => {
-    try { db.getDb().prepare(`DELETE FROM recon_schedule WHERE id = ?`).run(id); return { ok: true }; }
+    try { db.getDb().prepare(`DELETE FROM recon_schedule WHERE id = ?`).run(id); scheduleAutoBackup(); return { ok: true }; }
     catch (err: any) { return { error: err?.message }; }
   });
 
@@ -13406,12 +13481,13 @@ export function registerIpcHandlers(): void {
            VALUES (?,?,?,?,?,?,?)`
         ).run(id, data.companyId, data.code || '', data.description || '', data.owner || '', data.frequency || '', data.risk || '');
       }
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('sox:control-delete', (_e, { id }: any) => {
-    try { db.getDb().prepare(`DELETE FROM sox_controls WHERE id = ?`).run(id); return { ok: true }; }
+    try { db.getDb().prepare(`DELETE FROM sox_controls WHERE id = ?`).run(id); scheduleAutoBackup(); return { ok: true }; }
     catch (err: any) { return { error: err?.message }; }
   });
 
@@ -13433,6 +13509,7 @@ export function registerIpcHandlers(): void {
             data.testedAt || localToday(),
             data.result || 'pass', data.evidence || '', data.notes || '');
       db.getDb().prepare(`UPDATE sox_controls SET last_reviewed_at = datetime('now') WHERE id = ?`).run(data.controlId);
+      scheduleAutoBackup();
       return { id };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13505,6 +13582,7 @@ export function registerIpcHandlers(): void {
       set('je_two_factor_threshold', String(data.twoFactorThreshold || 0));
       set('je_comment_threshold', String(data.commentThreshold || 0));
       set('je_block_self_approval', data.blockSelfApproval ? '1' : '0');
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13551,6 +13629,7 @@ export function registerIpcHandlers(): void {
       }
       db.logAudit(je.company_id, 'journal_entry', journalEntryId, 'approve',
         { approver, comment, total, fullyApproved, approverCount: approvers.size });
+      scheduleAutoBackup();
       return { ok: true, fullyApproved, approverCount: approvers.size };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13793,6 +13872,7 @@ export function registerIpcHandlers(): void {
           } catch {}
         }
       }
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13815,6 +13895,7 @@ export function registerIpcHandlers(): void {
           success++;
         } catch (e: any) { errors.push({ id, error: e?.message }); }
       }
+      if (success > 0) scheduleAutoBackup();
       return { ok: true, success, errors };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13865,6 +13946,7 @@ export function registerIpcHandlers(): void {
     try {
       if (id) db.update('number_sequences', id, data);
       else db.create('number_sequences', data);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13904,6 +13986,7 @@ export function registerIpcHandlers(): void {
         reserved.push({ value: next, number, reserved_at: new Date().toISOString() });
         db.getDb().prepare(`UPDATE number_sequences SET reserved_json = ? WHERE id = ?`).run(JSON.stringify(reserved), seq.id);
       }
+      scheduleAutoBackup();
       return { number, value: next };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13918,6 +14001,7 @@ export function registerIpcHandlers(): void {
       let cv = seq.current_value || 0;
       if (cv === value) cv -= 1;
       db.getDb().prepare(`UPDATE number_sequences SET reserved_json = ?, current_value = ? WHERE id = ?`).run(JSON.stringify(reserved), cv, seq.id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -13985,6 +14069,7 @@ export function registerIpcHandlers(): void {
         }
         db.getDb().prepare(`UPDATE number_sequences SET current_value = ?, updated_at = datetime('now') WHERE id = ?`).run(n - 1, seq.id);
       }
+      if (!dryRun && changes.length > 0) scheduleAutoBackup();
       return { ok: true, changes, count: changes.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14145,6 +14230,7 @@ export function registerIpcHandlers(): void {
       } else {
         db.create('email_templates', data);
       }
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14176,6 +14262,7 @@ export function registerIpcHandlers(): void {
         available_tokens_json: data.available_tokens_json, default_to: data.default_to,
         default_cc: data.default_cc, default_bcc: data.default_bcc, label: data.label,
       });
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14240,6 +14327,7 @@ export function registerIpcHandlers(): void {
           status: 'opened_in_client',
           template_key: templateKey,
         });
+        scheduleAutoBackup();
       } catch {}
       return { ok: true, to, subject, body };
     } catch (err: any) { return { error: err?.message }; }
@@ -14317,32 +14405,34 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('tags:group-create', (_e, data: any) => {
-    try { return db.create('tag_groups', data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.create('tag_groups', data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:group-update', (_e, { id, data }: any) => {
-    try { return db.update('tag_groups', id, data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.update('tag_groups', id, data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:group-delete', (_e, { id }: { id: string }) => {
     try {
       db.getDb().prepare(`UPDATE tags SET group_id = NULL WHERE group_id = ?`).run(id);
       db.remove('tag_groups', id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:create', (_e, data: any) => {
-    try { return db.create('tags', data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.create('tags', data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:update', (_e, { id, data }: { id: string; data: any }) => {
-    try { return db.update('tags', id, data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.update('tags', id, data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:rename', (_e, { id, name }: { id: string; name: string }) => {
     try {
       db.getDb().prepare(`UPDATE tags SET name = ? WHERE id = ?`).run(name, id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14350,6 +14440,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tags:soft-delete', (_e, { id }: { id: string }) => {
     try {
       db.getDb().prepare(`UPDATE tags SET deleted_at = datetime('now') WHERE id = ?`).run(id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14357,6 +14448,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tags:restore', (_e, { id }: { id: string }) => {
     try {
       db.getDb().prepare(`UPDATE tags SET deleted_at = NULL WHERE id = ?`).run(id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14377,6 +14469,7 @@ export function registerIpcHandlers(): void {
         d.prepare(`DELETE FROM tags WHERE id = ?`).run(sourceId);
       });
       tx();
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14407,6 +14500,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14424,6 +14518,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      scheduleAutoBackup();
       return { ok: true, count: (entityIds?.length || 0) * (tagIds?.length || 0) };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14438,6 +14533,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14483,15 +14579,15 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('tags:rule-create', (_e, data: any) => {
-    try { return db.create('tag_rules', data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.create('tag_rules', data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:rule-update', (_e, { id, data }: any) => {
-    try { return db.update('tag_rules', id, data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.update('tag_rules', id, data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:rule-delete', (_e, { id }: any) => {
-    try { db.remove('tag_rules', id); return { ok: true }; } catch (err: any) { return { error: err?.message }; }
+    try { db.remove('tag_rules', id); scheduleAutoBackup(); return { ok: true }; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('tags:run-rules', (_e, { companyId, entityType, entity }: { companyId: string; entityType: string; entity: any }) => {
@@ -14512,6 +14608,7 @@ export function registerIpcHandlers(): void {
           applied.push(r.then_apply_tag_id);
         }
       }
+      if (applied.length > 0) scheduleAutoBackup();
       return { applied };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14567,6 +14664,7 @@ export function registerIpcHandlers(): void {
           .run(uuid(), companyId, name, color, findGroup(groupName), sortOrder);
         imported++;
       }
+      if (imported > 0) scheduleAutoBackup();
       return { imported };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14584,16 +14682,17 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('customFields:create', (_e, data: any) => {
-    try { return db.create('custom_field_definitions', data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.create('custom_field_definitions', data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('customFields:update', (_e, { id, data }: any) => {
-    try { return db.update('custom_field_definitions', id, data); } catch (err: any) { return { error: err?.message }; }
+    try { const r = db.update('custom_field_definitions', id, data); scheduleAutoBackup(); return r; } catch (err: any) { return { error: err?.message }; }
   });
 
   ipcMain.handle('customFields:delete', (_e, { id }: any) => {
     try {
       db.getDb().prepare(`UPDATE custom_field_definitions SET deleted_at = datetime('now') WHERE id = ?`).run(id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14651,6 +14750,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14720,6 +14820,7 @@ export function registerIpcHandlers(): void {
         }
       });
       tx();
+      if (ids.length > 0) scheduleAutoBackup();
       return { ok: true, updated: ids.length };
     } catch (err: any) { return { error: err?.message }; }
   });
@@ -14801,17 +14902,20 @@ export function registerIpcHandlers(): void {
       dbI.prepare(
         `UPDATE custom_shortcuts SET command_id = ?, params_json = ?, updated_at = datetime('now') WHERE id = ?`
       ).run(command_id, JSON.stringify(params || {}), existing.id);
+      scheduleAutoBackup();
       return { success: true, id: existing.id };
     }
     const id = uuid();
     dbI.prepare(
       `INSERT INTO custom_shortcuts (id, user_id, key_combo, command_id, params_json) VALUES (?, ?, ?, ?, ?)`
     ).run(id, user_id || 'anon', key_combo, command_id, JSON.stringify(params || {}));
+    scheduleAutoBackup();
     return { success: true, id };
   });
 
   ipcMain.handle('shortcut:delete', (_event, { id }: { id: string }) => {
     db.getDb().prepare(`DELETE FROM custom_shortcuts WHERE id = ?`).run(id);
+    scheduleAutoBackup();
     return { success: true };
   });
 
@@ -15616,6 +15720,7 @@ export function registerIpcHandlers(): void {
           is_complete: done ? 1 : 0, completed_at: done ? new Date().toISOString() : null,
         });
       }
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
       return { error: err?.message };
