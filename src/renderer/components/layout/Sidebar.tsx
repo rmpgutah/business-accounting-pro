@@ -40,6 +40,7 @@ import {
   Scale,
   FileCheck,
   PenTool,
+  Car,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -77,6 +78,7 @@ const sections: NavSection[] = [
       { id: 'projects', label: 'Projects', icon: FolderKanban },
       { id: 'inventory', label: 'Inventory', icon: Package },
       { id: 'fixed-assets', label: 'Fixed Assets', icon: Boxes },
+      { id: 'mileage', label: 'Mileage', icon: Car },
     ],
   },
   {

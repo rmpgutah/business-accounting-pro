@@ -318,6 +318,18 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
 // Anything that is append-only by design (logs, audit trails, history) belongs here,
 // plus child/junction tables that don't track row-level update timestamps.
 export const TABLES_WITHOUT_UPDATED_AT = new Set([
+  // ── Workflow / config tables that have no updated_at column ──────
+  // These are listed in TABLES_WITHOUT_COMPANY_ID (or neither set) but
+  // were never added here, so db.update() appended ", updated_at = ..."
+  // and crashed with "no such column: updated_at". `custom_statuses`
+  // is hit live via Settings → Status Builder (StatusBuilderSettings
+  // saves through db:update); the rest are latent until a generic
+  // update path reaches them.
+  'custom_statuses',
+  'invoice_line_items',
+  'custom_field_defs',
+  'saved_views',
+  'approval_queue',
   // ── Employee equipment + custom penalties (no updated_at column) ──
   // Without these, db.update() appends `, updated_at = datetime('now')`
   // and crashes with "no such column: updated_at" on edit.

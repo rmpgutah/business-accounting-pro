@@ -12,13 +12,13 @@ const entityModuleMap: Record<string, string> = {
   projects: 'projects',
   budget: 'budgets',
   budgets: 'budgets',
-  bank_account: 'banking',
-  bank_accounts: 'banking',
+  bank_account: 'bank-recon',
+  bank_accounts: 'bank-recon',
   recurring_templates: 'recurring',
   payment: 'invoicing',
   payments: 'invoicing',
-  vendor: 'vendors',
-  vendors: 'vendors',
+  vendor: 'expenses',
+  vendors: 'expenses',
   employee: 'payroll',
   employees: 'payroll',
   debt: 'debt-collection',
@@ -56,11 +56,11 @@ export function useNavigation() {
     },
     goToBankAccount: (id: string) => {
       navParams.set('bankId', id);
-      setModule('banking');
+      setModule('bank-recon');
     },
     goToVendor: (vendorId: string) => {
       navParams.set('vendorId', vendorId);
-      setModule('vendors');
+      setModule('expenses');
     },
     goToEmployee: (employeeId: string) => {
       navParams.set('employeeId', employeeId);

@@ -8,6 +8,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { usePersonalizationStore } from '../../stores/personalizationStore';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
 import TrashBin from '../TrashBin';
 
 // Map quick-action ID -> icon + handler. The TopBar consumes the user's
@@ -38,6 +39,7 @@ const TopBar: React.FC = () => {
   const searchResults = useAppStore((s) => s.searchResults);
   const setSearchResults = useAppStore((s) => s.setSearchResults);
   const setModule = useAppStore((s) => s.setModule);
+  const { goToEntity } = useNavigation();
   const notificationCount = useAppStore((s) => s.notificationCount);
   const quickActions = usePersonalizationStore((s) => s.quickActions);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -468,8 +470,11 @@ const TopBar: React.FC = () => {
                       key={result.id}
                       className="flex flex-col w-full px-4 py-2 text-left hover:bg-bg-hover transition-colors"
                       onClick={() => {
+                        // Result `type` is one of client/invoice/expense/project,
+                        // all keyed in navigation's entityModuleMap, so goToEntity
+                        // routes to the right module and stashes the focus param.
+                        goToEntity(result.type, result.id);
                         closeSearch();
-                        // Navigation to result can be handled by consumer
                       }}
                     >
                       <span className="text-sm text-text-primary">{result.title}</span>

@@ -3814,12 +3814,16 @@ export function registerIpcHandlers(): void {
           }
 
           if (!dryRun) {
-            // Record payment
+            // Record payment. The real table is `payments` (there is no
+            // `invoice_payments` table); columns match the canonical insert
+            // used elsewhere (e.g. the manual record-payment handler). The
+            // bank-transaction link is kept on bank_transactions.matched_entry_id
+            // below, so no bank_transaction_id column is needed here.
             const pid = uuid();
             dbi.prepare(
-              "INSERT INTO invoice_payments (id, invoice_id, payment_date, amount, method, reference, bank_transaction_id) " +
+              "INSERT INTO payments (id, company_id, invoice_id, amount, date, payment_method, reference) " +
               "VALUES (?, ?, ?, ?, ?, ?, ?)"
-            ).run(pid, top.invoice_id, t.date, t.amount, 'bank_transfer', (t.description || '').slice(0, 60), t.id);
+            ).run(pid, cid, top.invoice_id, t.amount, t.date, 'bank_transfer', (t.description || '').slice(0, 60));
 
             // Update invoice
             const newPaid = Number(top.amount_paid) + t.amount;
@@ -8361,11 +8365,20 @@ export function registerIpcHandlers(): void {
     const constants = dbInstance.prepare('SELECT * FROM federal_payroll_constants WHERE tax_year = ?').get(year) as any;
     if (!constants) return { federal: 0, ss: 0, medicare: 0, total: 0 };
 
-    const brackets = dbInstance.prepare('SELECT * FROM federal_tax_brackets WHERE tax_year = ? AND filing_status = ? ORDER BY bracket_min').all(year, filingStatus) as any[];
+    // The UI sends `married_filing_jointly`/`married_filing_separately`, but
+    // federal_tax_brackets is keyed by the DB spelling (`married_jointly`/
+    // `married_separately`). Without this translation the bracket query below
+    // matched 0 rows for married filers → federal withholding silently 0.
+    const dbFilingStatus = ({
+      married_filing_jointly: 'married_jointly',
+      married_filing_separately: 'married_separately',
+    } as Record<string, string>)[filingStatus] ?? filingStatus;
+
+    const brackets = dbInstance.prepare('SELECT * FROM federal_tax_brackets WHERE tax_year = ? AND filing_status = ? ORDER BY bracket_min').all(year, dbFilingStatus) as any[];
 
     // Annualize
     const annualized = grossPay * 26; // biweekly assumption
-    const stdDed = filingStatus === 'married_jointly' ? constants.standard_deduction_married : filingStatus === 'head_of_household' ? constants.standard_deduction_hoh : constants.standard_deduction_single;
+    const stdDed = dbFilingStatus === 'married_jointly' ? constants.standard_deduction_married : dbFilingStatus === 'head_of_household' ? constants.standard_deduction_hoh : constants.standard_deduction_single;
     const taxableAnnual = Math.max(0, annualized - stdDed - (allowances * 4300));
 
     let annualFederal = 0;
