@@ -99,7 +99,7 @@ export const WIDGET_CATALOG: { id: string; name: string; description: string }[]
 
 export const DEFAULT_SIDEBAR_ORDER: string[] = [
   'dashboard', 'accounts', 'invoicing', 'expenses', 'clients', 'quotes',
-  'payroll', 'time-tracking', 'projects', 'inventory', 'fixed-assets',
+  'payroll', 'time-tracking', 'projects', 'inventory', 'fixed-assets', 'mileage',
   // Finance group — Loans must be in this list; the Sidebar render also
   // auto-appends any missing ALL_ITEMS as a safety net for existing users
   // whose persisted sidebarOrder predates the Loans module.

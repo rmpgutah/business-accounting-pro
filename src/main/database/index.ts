@@ -1592,7 +1592,7 @@ export function initDatabase(): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_expenses_co_vendor_date ON expenses(company_id, vendor_id, date)",
   "CREATE INDEX IF NOT EXISTS idx_journal_entries_co_date ON journal_entries(company_id, date)",
   "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC)",
-  "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON invoice_payments(invoice_id, payment_date)",
+  "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id, date)",
   "CREATE INDEX IF NOT EXISTS idx_clients_co_name ON clients(company_id, name)",
   "CREATE INDEX IF NOT EXISTS idx_vendors_co_name ON vendors(company_id, name)",
 

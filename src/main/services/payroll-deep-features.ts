@@ -262,6 +262,22 @@ export function seedFederalTaxTables(year: number) {
       { fs: 'married_filing_jointly', lo: 383900, hi: 487450, rate: 0.32, base: 78221 },
       { fs: 'married_filing_jointly', lo: 487450, hi: 731200, rate: 0.35, base: 111357 },
       { fs: 'married_filing_jointly', lo: 731200, hi: null, rate: 0.37, base: 196669.50 },
+      // Head of Household (2024 IRS brackets)
+      { fs: 'head_of_household', lo: 0, hi: 16550, rate: 0.10, base: 0 },
+      { fs: 'head_of_household', lo: 16550, hi: 63100, rate: 0.12, base: 1655 },
+      { fs: 'head_of_household', lo: 63100, hi: 100500, rate: 0.22, base: 7241 },
+      { fs: 'head_of_household', lo: 100500, hi: 191950, rate: 0.24, base: 15469 },
+      { fs: 'head_of_household', lo: 191950, hi: 243700, rate: 0.32, base: 37417 },
+      { fs: 'head_of_household', lo: 243700, hi: 609350, rate: 0.35, base: 53977 },
+      { fs: 'head_of_household', lo: 609350, hi: null, rate: 0.37, base: 181954.50 },
+      // Married Filing Separately (2024 IRS brackets — lower bands mirror Single)
+      { fs: 'married_filing_separately', lo: 0, hi: 11600, rate: 0.10, base: 0 },
+      { fs: 'married_filing_separately', lo: 11600, hi: 47150, rate: 0.12, base: 1160 },
+      { fs: 'married_filing_separately', lo: 47150, hi: 100525, rate: 0.22, base: 5426 },
+      { fs: 'married_filing_separately', lo: 100525, hi: 191950, rate: 0.24, base: 17168.50 },
+      { fs: 'married_filing_separately', lo: 191950, hi: 243725, rate: 0.32, base: 39110.50 },
+      { fs: 'married_filing_separately', lo: 243725, hi: 365600, rate: 0.35, base: 55678.50 },
+      { fs: 'married_filing_separately', lo: 365600, hi: null, rate: 0.37, base: 98334.75 },
     ];
     const stmt = dbConn.prepare(`INSERT INTO federal_tax_tables (id, tax_year, filing_status, bracket_low, bracket_high, rate, base_tax, period_type) VALUES (?, ?, ?, ?, ?, ?, ?, 'annual')`);
     for (const b of brackets) stmt.run(uuid(), year, b.fs, b.lo, b.hi, b.rate, b.base);
@@ -275,7 +291,21 @@ export function calculateFederalWithholding(employeeId: string, periodTaxable: n
     // Approximation: annualize the period taxable amount, look up bracket, divide back
     const periodsPerYear = 26; // assumes biweekly; production code should resolve from pay_periods.frequency
     const annualized = periodTaxable * periodsPerYear;
-    const brackets = db.getDb().prepare('SELECT * FROM federal_tax_tables WHERE tax_year = ? AND filing_status = ? ORDER BY bracket_low ASC').all(year, filingStatus) as any[];
+    // W-4 records store `single` / `married` / `head_of_household` (plus a few
+    // legacy spellings); federal_tax_tables is keyed by `single` /
+    // `married_filing_jointly` / `married_filing_separately` /
+    // `head_of_household`. Without this translation every non-single employee
+    // matched 0 bracket rows and silently dropped to the flat-10% fallback.
+    const tableFilingStatus = ({
+      married: 'married_filing_jointly',
+      married_joint: 'married_filing_jointly',
+      married_jointly: 'married_filing_jointly',
+      married_separate: 'married_filing_separately',
+      married_separately: 'married_filing_separately',
+      head_household: 'head_of_household',
+      hoh: 'head_of_household',
+    } as Record<string, string>)[filingStatus] ?? filingStatus;
+    const brackets = db.getDb().prepare('SELECT * FROM federal_tax_tables WHERE tax_year = ? AND filing_status = ? ORDER BY bracket_low ASC').all(year, tableFilingStatus) as any[];
     if (brackets.length === 0) return { amount: round2(periodTaxable * 0.10), method: 'fallback_10pct' };
     let annualTax = 0;
     for (const b of brackets) {
