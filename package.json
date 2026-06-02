@@ -66,6 +66,7 @@
     "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",
+    "terser": "^5.48.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.5",
     "wait-on": "^9.0.4",
