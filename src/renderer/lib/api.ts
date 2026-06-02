@@ -446,6 +446,10 @@ const api = {
     window.electronAPI.invoke('assets:schedule', { assetId }),
   assetsRunDepreciation: (periodDate: string) =>
     window.electronAPI.invoke('assets:run-depreciation', { periodDate }),
+  // hard:true permanently deletes the asset + its depreciation history;
+  // hard:false (default) soft-deletes to Trash (recoverable 30 days).
+  deleteAsset: (id: string, hard?: boolean): Promise<{ ok?: boolean; hard?: boolean; asset_name?: string; depreciation_entries_removed?: number; error?: string }> =>
+    window.electronAPI.invoke('assets:delete', { id, hard }),
 
   // ─── Bank Rules ────────────────────────────────────
   bankRulesApply: () =>

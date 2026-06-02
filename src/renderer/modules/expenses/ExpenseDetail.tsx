@@ -465,7 +465,7 @@ table{width:100%;border-collapse:collapse;}
           </div>
           <div className="flex-1">
             <h2 className="module-title text-text-primary">{expense.description || '(no description)'}</h2>
-            <p className="text-xs text-text-muted mt-0.5">{formatDate(expense.date)} &middot; <span className={st.className}>{st.label}</span></p>
+            <p className="text-xs text-text-muted mt-0.5">{formatDate(expense.date)} &middot; <span className="block-badge" style={{ color: STAGE_META[stage].color, background: `color-mix(in srgb, ${STAGE_META[stage].color} 14%, transparent)` }}>{STAGE_META[stage].label}</span></p>
           </div>
           <div className="text-right">
             <div className="text-xs uppercase font-bold text-text-muted">Total</div>

@@ -1039,6 +1039,46 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // ─── Fixed Asset delete (dedicated, supports full/permanent delete) ──
+  // The generic db:delete only SOFT-deletes fixed_assets (it's in
+  // SOFT_DELETE_TABLES → row kept, recoverable from Trash for 30 days). This
+  // handler lets the user FULLY delete an asset: { hard:true } physically
+  // removes the asset AND its depreciation history (asset_depreciation_entries,
+  // via cleanupReferencesBeforeDelete) using the same removeHard path as
+  // trash:purge. { hard:false } falls back to the recoverable soft delete.
+  ipcMain.handle('assets:delete', (_event, { id, hard }: { id: string; hard?: boolean }) => {
+    try {
+      if (!id) return { error: 'No asset id' };
+      const companyId = db.getCurrentCompanyId();
+      const asset = db.getById('fixed_assets', id) as any;
+      if (!asset) return { error: 'Asset not found' };
+
+      // Count depreciation rows that will be removed (for an honest UI message).
+      let depEntries = 0;
+      try {
+        depEntries = (db.getDb().prepare(
+          'SELECT COUNT(*) AS c FROM asset_depreciation_entries WHERE asset_id = ?'
+        ).get(id) as any)?.c || 0;
+      } catch { /* table may not exist */ }
+
+      if (hard) {
+        // True physical delete: clear FK children first, then remove the row.
+        cleanupReferencesBeforeDelete('fixed_assets', id);
+        db.removeHard('fixed_assets', id);
+      } else {
+        db.remove('fixed_assets', id); // soft delete → Trash (recoverable)
+      }
+
+      if (companyId) { try { db.logAudit(companyId, 'fixed_assets', id, hard ? 'hard_delete' : 'delete'); } catch { /* non-fatal */ } }
+      syncPush({ table: 'fixed_assets', operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+
+      return { ok: true, hard: !!hard, asset_name: asset.name || asset.asset_code || id, depreciation_entries_removed: hard ? depEntries : 0 };
+    } catch (err: any) {
+      return { error: err?.message || 'Delete failed' };
+    }
+  });
+
   // ─── P1.13: Trash (soft-delete recovery) ──────────────
   // Read-side counterpart to db.remove() now that supported tables
   // soft-delete. The Trash UI calls these to list / restore / purge

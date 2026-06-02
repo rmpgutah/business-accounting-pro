@@ -422,10 +422,18 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this asset? This cannot be undone.')) return;
+    if (!confirm(
+      'Permanently delete this asset?\n\n' +
+      'This fully removes the asset record AND its entire depreciation history. ' +
+      'It cannot be undone (the asset will NOT be recoverable from Trash).'
+    )) return;
     try {
-      await api.remove('fixed_assets', id);
-      showToast('Asset deleted.', true);
+      const res = await api.deleteAsset(id, true);
+      if (res?.error) { showToast(res.error, false); return; }
+      const depMsg = res?.depreciation_entries_removed
+        ? ` (${res.depreciation_entries_removed} depreciation entr${res.depreciation_entries_removed === 1 ? 'y' : 'ies'} removed)`
+        : '';
+      showToast(`Asset permanently deleted${depMsg}.`, true);
       load();
     } catch {
       showToast('Delete failed.', false);
