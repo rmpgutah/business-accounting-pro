@@ -289,10 +289,13 @@ const TopBar: React.FC = () => {
                   className="absolute right-0 mt-2 w-96 z-50 overflow-hidden"
                   style={{
                     borderRadius: '10px',
-                    background: 'rgba(20, 22, 30, 0.96)',
+                    // Solid elevated token — popover sits inside the header's own
+                    // backdrop-filter, where a nested blur silently no-ops in Chromium,
+                    // so opacity must not depend on it (text would bleed through otherwise).
+                    background: 'var(--color-bg-elevated-solid)',
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    border: '1px solid var(--structure)',
                     boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
                   }}
                 >
