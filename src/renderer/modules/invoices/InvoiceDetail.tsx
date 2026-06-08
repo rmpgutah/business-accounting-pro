@@ -79,7 +79,7 @@ export function getInvoicePortalPreview(
       <div><span className="text-text-muted">Bill to:</span> {client?.name ?? '—'}</div>
       <div><span className="text-text-muted">Issued:</span> {invoice.issue_date || '—'}</div>
       <div><span className="text-text-muted">Due:</span> {invoice.due_date || '—'}</div>
-      <div><span className="text-text-muted">Status:</span> {invoice.status}</div>
+      <div><span className="text-text-muted">Status:</span> {formatStatus(invoice.status).label}</div>
       <div><span className="text-text-muted">Total:</span> {(invoice.currency ?? 'USD')} {invoice.total?.toFixed(2)}</div>
       <div><span className="text-text-muted">Paid:</span> {(invoice.currency ?? 'USD')} {invoice.amount_paid?.toFixed(2)}</div>
       {invoice.terms && <div><span className="text-text-muted">Terms:</span> {invoice.terms}</div>}
@@ -1174,7 +1174,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               {payments.map((p) => (
                 <tr key={p.id}>
                   <td className="text-text-secondary">{formatDate(p.date)}</td>
-                  <td className="text-text-secondary capitalize">{p.payment_method}</td>
+                  <td className="text-text-secondary capitalize">{humanizeLabel(p.payment_method)}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
                     {formatCurrency(p.amount)}

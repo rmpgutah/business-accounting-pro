@@ -28,7 +28,7 @@ import EntityChip from '../../components/EntityChip';
 import PaymentPlanCard from './PaymentPlanCard';
 import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useNavigation } from '../../lib/navigation';
@@ -1311,7 +1311,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           <div className="block-card p-6">
             <SectionLabel>Debt Information</SectionLabel>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <InfoRow label="Type"><span className="capitalize">{debt.type}</span></InfoRow>
+              <InfoRow label="Type"><span className="capitalize">{humanizeLabel(debt.type)}</span></InfoRow>
               <InfoRow label="Status">
                 <span className={statusBadge.className}>{statusBadge.label}</span>
               </InfoRow>
@@ -1819,7 +1819,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
                       <div className="flex items-center gap-2 min-w-0">
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[d.status] || 'var(--color-text-muted)'} 14%, transparent)`, color: statusColor[d.status] || 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          {d.status}
+                          {formatStatus(d.status).label}
                         </span>
                         <span className="text-xs text-text-primary font-medium">{reasonLabels[d.reason] || d.reason}</span>
                         {d.description && <span className="text-xs text-text-muted truncate ml-1">— {d.description.slice(0, 50)}</span>}

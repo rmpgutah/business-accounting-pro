@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
 interface EmailLogEntry {
@@ -207,7 +208,7 @@ export default function EmailModule() {
                     </td>
                     <td>
                       <span className={`${entry.status === 'sent' ? 'block-badge-income' : 'block-badge-expense'} capitalize`}>
-                        {entry.status}
+                        {formatStatus(entry.status).label}
                       </span>
                     </td>
                     <td className="text-text-muted text-xs">{entry.sent_at}</td>

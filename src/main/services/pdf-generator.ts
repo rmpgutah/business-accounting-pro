@@ -5,6 +5,7 @@
  */
 // BrowserWindow is no longer needed directly — rendering now goes through
 // the shared helper in print-preview.ts.
+import { formatStatusLabel } from '../../shared/utils';
 
 // ─── HTML escape helper (XSS prevention) ────────────────
 function esc(s: string | null | undefined): string {
@@ -208,7 +209,7 @@ export function buildInvoiceHTML(
     <div class="invoice-block">
       <div class="invoice-title">Invoice</div>
       <div class="invoice-number">#${esc(invoice.invoice_number || '')}</div>
-      <div class="status-badge" style="background:${sc.bg};color:${sc.color};">${esc((invoice.status || 'draft').toUpperCase())}</div>
+      <div class="status-badge" style="background:${sc.bg};color:${sc.color};">${esc(formatStatusLabel(invoice.status || 'draft'))}</div>
     </div>
   </div>
 

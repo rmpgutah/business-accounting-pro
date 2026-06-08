@@ -558,7 +558,7 @@ tfoot td{font-weight:700;border-top:2px solid #0f172a;border-bottom:none}
 ${sorted
   .map(
     (q) =>
-      `<tr><td>${q.quote_number || ''}</td><td>${q.client_name || '-'}</td><td>${formatDate(q.issue_date)}</td><td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td><td><span class="status">${q.status}</span></td><td>${q.probability ?? '-'}%</td><td class="right">${formatCurrency(q.total)}</td></tr>`
+      `<tr><td>${q.quote_number || ''}</td><td>${q.client_name || '-'}</td><td>${formatDate(q.issue_date)}</td><td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td><td><span class="status">${formatStatus(q.status).label}</span></td><td>${q.probability ?? '-'}%</td><td class="right">${formatCurrency(q.total)}</td></tr>`
   )
   .join('')}
 </tbody>

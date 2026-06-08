@@ -54,6 +54,7 @@ import type { Form1094CData } from './form-1094c';
 import type { Form1095CData } from './form-1095c';
 import type { FormSS4Data, Form2553Data, Form8832Data, Form8822BData } from './entity-lifecycle';
 import type { TC40Data, TC20Data, TC20SData, TC65Data, TC62MData, TC941Data } from './utah-forms';
+import { titleCaseLabel } from '../../../shared/utils';
 
 type DailyLiability = Schedule941BDailyLiability;
 
@@ -2303,7 +2304,7 @@ ${scheduleLines([
 
 export function tc40HTML(data: TC40Data): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Utah TC-40 ${data.year} — ${escape(data.taxpayer_name)}</title>${SHARED_HEAD}</head>
-<body>${scheduleHeader('Utah TC-40 — Utah Individual Income Tax Return', `Tax Year ${data.year} · Filing status ${escape(data.filing_status).toUpperCase()} · Flat 4.55% rate`, data.taxpayer_name, data.year)}
+<body>${scheduleHeader('Utah TC-40 — Utah Individual Income Tax Return', `Tax Year ${data.year} · Filing status ${escape(titleCaseLabel(data.filing_status))} · Flat 4.55% rate`, data.taxpayer_name, data.year)}
 ${scheduleWarnings(data.warnings)}
 ${scheduleLines([
   ['1', 'Filing status code', data.line1_filing_status],

@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 import StripeExplorer from './StripeExplorer';
@@ -366,7 +366,7 @@ const StripeSyncModule: React.FC = () => {
                     </td>
                     <td>
                       <span className={`${typeBadgeClass(txn.type)} capitalize`}>
-                        {txn.type}
+                        {humanizeLabel(txn.type)}
                       </span>
                     </td>
                     <td className="font-mono text-right">

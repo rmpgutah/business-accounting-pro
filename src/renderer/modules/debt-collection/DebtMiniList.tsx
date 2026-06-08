@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { calcRiskScore, getRiskBadge } from './riskScore';
 
@@ -141,7 +141,7 @@ const DebtMiniList: React.FC<DebtMiniListProps> = ({ activeDebtId, onSelect }) =
                   />
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-[10px] text-text-muted capitalize">{d.type}</span>
+                  <span className="text-[10px] text-text-muted capitalize">{humanizeLabel(d.type)}</span>
                   <span className="text-xs font-mono text-text-secondary">
                     {formatCurrency(d.balance_due)}
                   </span>

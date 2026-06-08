@@ -3,7 +3,7 @@ import { FileText, Check, AlertTriangle, Eye, Printer, Mail, ClipboardCheck } fr
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
@@ -342,7 +342,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                     style={{ borderRadius: '4px' }}
                   >
                     <span aria-hidden>{sev.icon}</span>
-                    {tpl.severity}
+                    {humanizeLabel(tpl.severity)}
                   </span>
                 </div>
                 {hint && (

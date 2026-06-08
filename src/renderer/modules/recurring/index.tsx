@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
+import { formatStatus } from '../../lib/format';
 import { useNavigation } from '../../lib/navigation';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -664,7 +665,7 @@ const RecurringTransactions: React.FC = () => {
                           h.status === 'overdue' ? 'block-badge-expense' :
                           'block-badge-warning'
                         }`}>
-                          <span className="capitalize">{h.status}</span>
+                          <span className="capitalize">{formatStatus(h.status).label}</span>
                         </span>
                       </td>
                       <td className="text-text-secondary text-xs">{h.client_name || '-'}</td>

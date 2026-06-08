@@ -7,7 +7,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { ImportWizard } from '../../components/ImportWizard';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -647,7 +647,7 @@ const AccountRow: React.FC<{
         </div>
         {(account.monthly_cap || 0) > 0 && <BudgetRibbon account={account as any} />}
       </td>
-      <td className="px-4 py-2 text-xs text-text-secondary capitalize">{account.type}</td>
+      <td className="px-4 py-2 text-xs text-text-secondary capitalize">{humanizeLabel(account.type)}</td>
       <td className="px-4 py-2 text-xs text-text-muted">{account.subtype || '-'}</td>
       <td className="px-4 py-2 text-xs text-text-muted font-mono">{account.last_txn_date || '-'}</td>
       <td className="px-4 py-2 text-right font-mono text-xs text-text-primary" onClick={(e) => e.stopPropagation()}>

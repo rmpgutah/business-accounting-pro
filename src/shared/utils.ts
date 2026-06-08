@@ -66,3 +66,48 @@ export function sumFinite(values: (number | null | undefined)[]): number {
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
+
+// ─── Label formatting ────────────────────────────────────
+// Turn raw enum/status values (stored lowercase / snake_case in SQLite) into
+// formal, readable English for display in the UI and generated documents.
+// Pure and dependency-free so BOTH the main and renderer processes can use
+// them. The renderer additionally has humanizeLabel/formatStatus in
+// src/renderer/lib/format.ts (kept behaviorally in sync with these); these
+// shared copies exist for the main process, which cannot import renderer code.
+
+const LABEL_SPACER = /[_-]+/g;
+
+/** Sentence case: "in_collection" → "In collection". */
+export function humanizeLabel(value: string | null | undefined): string {
+  if (value == null) return '';
+  const words = String(value).replace(LABEL_SPACER, ' ').replace(/\s+/g, ' ').trim();
+  if (!words) return '';
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
+/** Title Case: "married_filing_jointly" → "Married Filing Jointly". */
+export function titleCaseLabel(value: string | null | undefined): string {
+  if (value == null) return '';
+  return String(value)
+    .replace(LABEL_SPACER, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+// Title-cased labels for the common status enums shared across documents.
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', partial: 'Partial',
+  void: 'Void', cancelled: 'Cancelled',
+  pending: 'Pending', pending_approval: 'Pending Approval',
+  approved: 'Approved', rejected: 'Rejected',
+};
+
+/** Formal label for a status enum (mapped Title Case, else title-cased fallback). */
+export function formatStatusLabel(status: string | null | undefined): string {
+  if (!status) return '';
+  return STATUS_LABELS[status] ?? titleCaseLabel(status);
+}

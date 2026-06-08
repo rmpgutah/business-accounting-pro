@@ -11,7 +11,7 @@ import RowTypeToolbar from './RowTypeToolbar';
 import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
 import type { LineRowType } from '../../../shared/types';
 import ErrorBanner from '../../components/ErrorBanner';
-import { roundCents } from '../../lib/format';
+import { roundCents, formatStatus } from '../../lib/format';
 import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
@@ -1994,7 +1994,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                     <div>
                       <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{d.invoice_number}</div>
                       <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                        {d.status} · saved {ageDays === 0 ? 'today' : `${ageDays} day${ageDays === 1 ? '' : 's'} ago`}
+                        {formatStatus(d.status).label} · saved {ageDays === 0 ? 'today' : `${ageDays} day${ageDays === 1 ? '' : 's'} ago`}
                         {d.due_date ? ` · due ${d.due_date}` : ''}
                       </div>
                     </div>

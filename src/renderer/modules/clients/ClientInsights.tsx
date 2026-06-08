@@ -30,7 +30,7 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -733,7 +733,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
               {data.status_breakdown.map((entry) => (
                 <div key={entry.status} className="flex items-center justify-between">
                   <span className={`${STATUS_BADGE[entry.status] ?? 'block-badge'} capitalize`}>
-                    {entry.status}
+                    {formatStatus(entry.status).label}
                   </span>
                   <span className="text-xs font-mono text-text-secondary font-bold">
                     {entry.count}

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { generateReportHTML, type ReportColumn, type ReportSummary } from '../../lib/print-templates';
 import ErrorBanner from '../../components/ErrorBanner';
 
@@ -475,7 +475,7 @@ const TaxReports: React.FC = () => {
       const daysSinceHire = e.start_date ? Math.ceil((today.getTime() - new Date(e.start_date).getTime()) / (1000 * 60 * 60 * 24)) : 0;
       const isOld = received && (today.getTime() - new Date(received).getTime()) > 365 * 24 * 60 * 60 * 1000;
       const status = !received ? 'MISSING' : isOld ? 'OUTDATED' : 'Current';
-      return `<tr${!received || isOld ? ' style="background:#fef2f2;"' : ''}><td>${esc(e.name)}</td><td>${status}</td><td>${e.w4_filing_status || 'N/A'}</td><td>${received || 'N/A'}</td><td class="text-right">${daysSinceHire}</td></tr>`;
+      return `<tr${!received || isOld ? ' style="background:#fef2f2;"' : ''}><td>${esc(e.name)}</td><td>${status}</td><td>${e.w4_filing_status ? esc(humanizeLabel(e.w4_filing_status)) : 'N/A'}</td><td>${received || 'N/A'}</td><td class="text-right">${daysSinceHire}</td></tr>`;
     }).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: 'Inter', -apple-system, sans-serif; color: #1e293b; font-size: 12px; padding: 40px; background: #fff; }
@@ -964,7 +964,7 @@ const TaxReports: React.FC = () => {
                                     Filing Status
                                   </span>
                                   <p className="text-text-primary mt-0.5">
-                                    {emp.w4_filing_status || 'Not set'}
+                                    {emp.w4_filing_status ? humanizeLabel(emp.w4_filing_status) : 'Not set'}
                                   </p>
                                 </div>
                                 <div>
@@ -1074,7 +1074,7 @@ const TaxReports: React.FC = () => {
                   {contractorData.map((c) => (
                     <tr key={c.id}>
                       <td className="text-sm font-medium text-text-primary">{c.name}</td>
-                      <td className="text-sm text-text-secondary capitalize">{c.type}</td>
+                      <td className="text-sm text-text-secondary capitalize">{humanizeLabel(c.type)}</td>
                       <td className="text-right font-mono text-sm text-text-secondary">{formatCurrency(c.total_paid)}</td>
                       <td className="text-right text-xs">
                         {c.total_paid >= 600 ? (
@@ -1171,7 +1171,7 @@ const TaxReports: React.FC = () => {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-income/10 text-accent-income border-accent-income/20" style={{ borderRadius: '6px' }}>Current</span>
                           )}
                         </td>
-                        <td className="text-sm text-text-secondary">{emp.w4_filing_status || 'N/A'}</td>
+                        <td className="text-sm text-text-secondary">{emp.w4_filing_status ? humanizeLabel(emp.w4_filing_status) : 'N/A'}</td>
                         <td className="text-sm text-text-secondary">{received || 'N/A'}</td>
                         <td className="text-right font-mono text-sm text-text-secondary">{daysSinceHire}</td>
                       </tr>
