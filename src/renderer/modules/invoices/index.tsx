@@ -14,6 +14,7 @@ import {
   Send,
   Bell,
   Printer,
+  Sparkles,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -24,9 +25,10 @@ import InvoiceForm from './InvoiceForm';
 import InvoiceDetail from './InvoiceDetail';
 import InvoiceSettings from './InvoiceSettings';
 import CatalogManager from './CatalogManager';
+import InvoicesUpgradesPanel from './upgrades';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics';
+type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics' | 'upgrades';
 type InvoiceView = 'list' | 'detail' | 'form';
 
 type View =
@@ -1053,9 +1055,58 @@ const InvoicingModule: React.FC = () => {
             label="Analytics"
             onClick={() => setTab('analytics')}
           />
+          <TabBtn
+            active={false}
+            icon={<Sparkles size={14} />}
+            label="Upgrades"
+            onClick={() => setTab('upgrades')}
+          />
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           {renderInvoicesTab()}
+        </div>
+      </div>
+    );
+  }
+
+  // Upgrades tab: render with a thin tab strip above the self-scrolling panel.
+  if (tab === 'upgrades') {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-1 border-b border-border-primary px-6 pt-4">
+          <TabBtn
+            active={false}
+            icon={<LayoutDashboard size={14} />}
+            label="Dashboard"
+            onClick={() => setTab('dashboard')}
+          />
+          <TabBtn
+            active={false}
+            icon={<FileText size={14} />}
+            label="Invoices"
+            onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
+          />
+          <TabBtn
+            active={false}
+            icon={<Repeat size={14} />}
+            label="Recurring"
+            onClick={() => setTab('recurring')}
+          />
+          <TabBtn
+            active={false}
+            icon={<BarChart3 size={14} />}
+            label="Analytics"
+            onClick={() => setTab('analytics')}
+          />
+          <TabBtn
+            active={true}
+            icon={<Sparkles size={14} />}
+            label="Upgrades"
+            onClick={() => setTab('upgrades')}
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <InvoicesUpgradesPanel />
         </div>
       </div>
     );
@@ -1088,6 +1139,12 @@ const InvoicingModule: React.FC = () => {
           icon={<BarChart3 size={14} />}
           label="Analytics"
           onClick={() => setTab('analytics')}
+        />
+        <TabBtn
+          active={false}
+          icon={<Sparkles size={14} />}
+          label="Upgrades"
+          onClick={() => setTab('upgrades')}
         />
       </div>
 

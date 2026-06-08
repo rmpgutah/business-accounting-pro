@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard } from 'lucide-react';
+import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard, Sparkles } from 'lucide-react';
 import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
 import ExpenseDetail from './ExpenseDetail';
@@ -11,13 +11,14 @@ import ExpenseAuditReport from './ExpenseAuditReport';
 import ExpenseCategorySettings from './ExpenseCategorySettings';
 import ExpenseApprovalQueue from './ExpenseApprovalQueue';
 import ReimbursementRun from './ReimbursementRun';
+import ExpensesUpgradesPanel from './upgrades';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics';
+type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'upgrades';
 type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -303,6 +304,12 @@ const ExpensesModule: React.FC = () => {
           icon={<Settings size={16} />}
           label="Settings"
           onClick={() => switchTab('settings')}
+        />
+        <TabBtn
+          active={tab === 'upgrades'}
+          icon={<Sparkles size={16} />}
+          label="Upgrades"
+          onClick={() => switchTab('upgrades')}
         />
       </div>
 
@@ -669,6 +676,8 @@ const ExpensesModule: React.FC = () => {
       {tab === 'settings' && (
         <ExpenseCategorySettings onBack={() => setTab('expenses')} />
       )}
+
+      {tab === 'upgrades' && <ExpensesUpgradesPanel />}
 
       {/* Vendor Modal */}
       {vendorModalOpen && (
