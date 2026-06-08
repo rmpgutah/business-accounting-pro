@@ -439,6 +439,47 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
       )) as any[] || [];
     } catch { /* ignore */ }
 
+    // ── Client Details: every field with em-dash backfill so the grid keeps
+    // its structure (no collapsing gaps on blank values). ──
+    const cdash = (v: any): string => {
+      if (v === 0) return '0';
+      if (v === null || v === undefined || v === '') return '—';
+      return String(v);
+    };
+    const cAddr = [client.address_line1, client.address_line2].filter(Boolean).join(', ') || '—';
+    const cCityLine = [client.city, client.state, client.zip].filter(Boolean).join(', ') || '—';
+    let cTags = '—';
+    try {
+      const t = JSON.parse(client.tags || '[]');
+      if (Array.isArray(t) && t.length) cTags = t.join(', ');
+    } catch { /* ignore */ }
+    const cStatus = client.status ? client.status.charAt(0).toUpperCase() + client.status.slice(1) : '—';
+    const cType = client.type ? client.type.charAt(0).toUpperCase() + client.type.slice(1) : '—';
+    const clientDetailRows: Array<[string, string]> = [
+      ['Type', cType],
+      ['Status', cStatus],
+      ['Email', cdash(client.email)],
+      ['Phone', cdash(client.phone)],
+      ['Payment Terms', client.payment_terms != null ? `Net ${client.payment_terms}` : '—'],
+      ['Tax ID', cdash(client.tax_id)],
+      ['Address', cAddr],
+      ['City / State / ZIP', cCityLine],
+      ['Country', cdash(client.country)],
+      ['Tags', cTags],
+      ['Client Since', client.created_at ? new Date(client.created_at).toLocaleDateString() : '—'],
+      ['Notes', cdash(client.notes)],
+    ];
+    const clientDetailsBlock = `
+        <div style="margin-bottom: 30px;">
+          <h3 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #666; margin-bottom: 12px;">Client Details</h3>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 24px;">
+            ${clientDetailRows.map(([k, v]) => `<div>
+              <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 600;">${k}</div>
+              <div style="font-size: 13px; color: #1a1a2e; font-weight: 600; margin-top: 2px; word-break: break-word;">${v}</div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+
     const html = `
       <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px;">
         <div style="border-bottom: 3px solid #1a1a2e; padding-bottom: 20px; margin-bottom: 30px;">
@@ -451,6 +492,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
           ${client.phone ? `<p style="margin: 2px 0; color: #666; font-size: 13px;">${client.phone}</p>` : ''}
           ${client.address_line1 ? `<p style="margin: 2px 0; color: #666; font-size: 13px;">${client.address_line1}${client.city ? `, ${client.city}` : ''}${client.state ? `, ${client.state}` : ''} ${client.zip || ''}</p>` : ''}
         </div>
+        ${clientDetailsBlock}
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px;">
           <div style="background: #f0fdf4; padding: 16px; border-radius: 6px; text-align: center;">
             <div style="font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em;">Total Invoiced</div>

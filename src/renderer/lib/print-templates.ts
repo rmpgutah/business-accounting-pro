@@ -1714,8 +1714,10 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     ${isQuote
       ? `<div class="fd-meta-row"><span class="lbl">Valid Until</span><span class="val">${fmtDate(invoice.valid_until || '')}</span></div>`
       : `<div class="fd-meta-row"><span class="lbl">${isCreditNote ? 'Ref Invoice' : 'Due Date'}</span><span class="val">${isCreditNote ? esc(invoice.reference_invoice_number || '—') : fmtDate(invoice.due_date)}</span></div>`}
-    ${invoice.po_number ? `<div class="fd-meta-row"><span class="lbl">PO Number</span><span class="val">${esc(invoice.po_number)}</span></div>` : ''}
-    ${invoice.job_reference ? `<div class="fd-meta-row"><span class="lbl">Project</span><span class="val">${esc(invoice.job_reference)}</span></div>` : ''}
+    <div class="fd-meta-row"><span class="lbl">PO Number</span><span class="val">${esc(invoice.po_number || '—')}</span></div>
+    <div class="fd-meta-row"><span class="lbl">Project</span><span class="val">${esc(invoice.job_reference || '—')}</span></div>
+    ${!isQuote && !isCreditNote ? `<div class="fd-meta-row"><span class="lbl">Status</span><span class="val">${esc(invoice.status ? String(invoice.status).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—')}</span></div>` : ''}
+    ${invoice.sent_date ? `<div class="fd-meta-row"><span class="lbl">Sent</span><span class="val">${fmtDate(invoice.sent_date)}</span></div>` : ''}
     <div class="fd-meta-row"><span class="lbl">Currency</span><span class="val">${esc(invoice.currency || 'USD')}</span></div>
     <div class="fd-meta-row"><span class="lbl">Terms</span><span class="val">${esc(invoice.terms || (isQuote ? 'Quote' : 'Net 30'))}</span></div>
   </div>
