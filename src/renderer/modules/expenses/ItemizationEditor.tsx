@@ -35,6 +35,10 @@ export interface IzLine {
   category_id?: string;
   project_id?: string;
   client_id?: string;
+  // Per-line billing: when is_billable is true, this line is billable/rebillable
+  // to the selected client_id (vs. a company-only cost). Used for reporting and
+  // reimbursable/rebill filtering.
+  is_billable?: boolean;
   discount_amount?: number;
   discount_percent?: number;
   is_tax_deductible?: boolean;
@@ -63,7 +67,7 @@ const makeId = () => crypto.randomUUID();
 const emptyLine = (): IzLine => ({
   id: makeId(), description: '', quantity: 1, unit_price: 0, amount: 0, account_id: '',
   tax_rate: 0, tax_amount: 0, tax_jurisdictions: [],
-  category_id: '', project_id: '', client_id: '',
+  category_id: '', project_id: '', client_id: '', is_billable: false,
   discount_amount: 0, discount_percent: 0,
   is_tax_deductible: true, is_tax_exempt: false,
   notes: '', item_type: 'item', tags: [],
@@ -112,6 +116,7 @@ export default function ItemizationEditor({
   // Build lookup maps so we can show names in tooltips
   const categoryNames = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories]);
   const projectNames = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p.name])), [projects]);
+  const clientNames = useMemo(() => Object.fromEntries(clients.map(c => [c.id, c.name])), [clients]);
 
   // ── Derived totals ─────────────────────────────────────────────
   const lineEffective = useMemo(() => lineItems.map(li => {
@@ -499,11 +504,17 @@ export default function ItemizationEditor({
             </div>
 
             {/* Discount / flags / metadata badges (always visible when applicable) */}
-            {(eff.discount > 0 || li.tags?.length || li.item_type === 'service' || li.item_type === 'reimbursement' || li.is_tax_exempt || li.is_tax_deductible === false) && (
+            {(eff.discount > 0 || li.tags?.length || li.item_type === 'service' || li.item_type === 'reimbursement' || li.is_tax_exempt || li.is_tax_deductible === false || li.is_billable) && (
               <div className="iz-sub-row">
                 {eff.discount > 0 && (
                   <span className="iz-discount-badge">
                     −{formatCurrency(eff.discount)}{li.discount_percent ? ` (${li.discount_percent}%)` : ''}
+                  </span>
+                )}
+                {li.is_billable && (
+                  <span className="iz-type-pill" style={{ color: 'var(--color-accent-income)', borderColor: 'var(--color-accent-income)' }}
+                    title="Billable to client">
+                    BILLABLE{li.client_id && clientNames[li.client_id] ? ` → ${clientNames[li.client_id]}` : ''}
                   </span>
                 )}
                 {li.item_type === 'service' && <span className="iz-type-pill svc">SERVICE</span>}
@@ -549,6 +560,12 @@ export default function ItemizationEditor({
                     <input type="checkbox" checked={li.is_tax_deductible !== false}
                       onChange={(e) => updateLine(idx, { is_tax_deductible: e.target.checked })} />
                     Tax-deductible
+                  </label>
+                  <label className="text-[10px] flex items-center gap-1 text-text-secondary"
+                    title="Bill this line to the selected client (vs. a company-only cost)">
+                    <input type="checkbox" checked={!!li.is_billable}
+                      onChange={(e) => updateLine(idx, { is_billable: e.target.checked })} />
+                    Billable to client
                   </label>
                   <input type="text" className="block-input text-xs" placeholder="Notes / memo"
                     value={li.notes || ''}

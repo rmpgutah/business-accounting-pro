@@ -680,6 +680,8 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expense_line_items ADD COLUMN tags TEXT DEFAULT '[]'",
   "ALTER TABLE expense_line_items ADD COLUMN tax_amount REAL DEFAULT 0",
   "ALTER TABLE expense_line_items ADD COLUMN tax_jurisdictions TEXT DEFAULT '[]'",
+  // Per-line billing: 1 = this line is billable/rebillable to client_id; 0 = company-only cost.
+  "ALTER TABLE expense_line_items ADD COLUMN is_billable INTEGER DEFAULT 0",
   "ALTER TABLE expenses ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
   "ALTER TABLE expenses ADD COLUMN schedule_c_line TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN foreign_tax_amount REAL DEFAULT 0",
@@ -9220,7 +9222,7 @@ export function initDatabase(): Database.Database {
   // SQLite's built-in PRAGMA user_version rather than a `schema_migrations`
   // table because it requires zero extra DDL and is atomic per pragma write.
   try {
-    const SCHEMA_VERSION = 5;
+    const SCHEMA_VERSION = 6;
     const row = db.pragma('user_version', { simple: true }) as number;
     const currentVersion = typeof row === 'number' ? row : 0;
 
@@ -9333,20 +9335,14 @@ export function initDatabase(): Database.Database {
         const dbI = getDb();
         const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
-        // 3a) Normalize line-item tax_rate convention. The ItemizationEditor
-        // treats tax_rate as a PERCENTAGE (it divides by 100), but legacy
-        // import/rule flows stored it as a FRACTION (e.g. 0.0765 for 7.65%).
-        // Left as-is, opening such an expense in the editor mis-displays tax
-        // and re-saving would corrupt the (correct) stored tax_amount. We
-        // convert any fractional rate (0 < rate < 1) to percentage form so the
-        // entire app converges on the editor's convention. All observed legacy
-        // rates are < 0.09, so the < 1 guard never touches real percentages.
-        try {
-          const n1 = dbI.prepare(
-            `UPDATE expense_line_items SET tax_rate = tax_rate * 100 WHERE tax_rate > 0 AND tax_rate < 1`
-          ).run();
-          if (n1.changes > 0) console.log(`[schema v3] Normalized ${n1.changes} line-item tax_rate(s) from fraction to percentage.`);
-        } catch (e: any) { console.warn('[schema v3] tax_rate normalize failed:', e?.message); }
+        // 3a) [DISABLED — see schema v5] This step previously multiplied
+        // line-item tax_rate by 100 to "normalize" fractions to percentages.
+        // That was WRONG: ExpenseForm intentionally stores tax_rate as a
+        // DECIMAL FRACTION and converts ×100 on load / ÷100 on save (the
+        // "TAX-RATE UNIT BOUNDARY"). Multiplying the stored value made the
+        // editor show 765% for a 7.65% rate. The corruption is repaired by the
+        // v5 migration below; this normalization is intentionally a no-op now
+        // so fresh installs are never corrupted.
 
         const preTaxOf = (li: any): number => {
           const gross = (Number(li.quantity) || 1) * (Number(li.unit_price) || 0);
@@ -9505,6 +9501,28 @@ export function initDatabase(): Database.Database {
         if (repaired > 0) console.log(`[schema v5] Regenerated amortization schedule for ${repaired} balloon loan(s).`);
       } catch (balloonErr: any) {
         console.warn('[schema v5] Failed to regenerate balloon loan schedules:', balloonErr?.message);
+      }
+    }
+
+    // Version 6: REPAIR line-item tax_rate corrupted by the old schema-v3 step
+    // (now disabled). ExpenseForm stores tax_rate as a DECIMAL FRACTION
+    // (0.0765 for 7.65%) and converts ×100 on load / ÷100 on save. The v3 step
+    // multiplied stored fractions by 100, leaving some rows at 7.65 etc., which
+    // the editor then loaded as 765%. A legitimate stored rate is always < 1
+    // (a decimal fraction); any value ≥ 1 is corrupted, so divide it back by
+    // 100. Idempotent: after the fix all rates are < 1 and are never touched
+    // again. Note: stored tax_amount and expense.amount were computed from the
+    // trustworthy tax_amount column (not tax_rate), so they remain correct —
+    // only the tax_rate column needs restoring.
+    if (currentVersion < 6) {
+      try {
+        const dbI = getDb();
+        const res = dbI.prepare(
+          `UPDATE expense_line_items SET tax_rate = tax_rate / 100.0 WHERE tax_rate >= 1`
+        ).run();
+        if (res.changes > 0) console.log(`[schema v6] Restored ${res.changes} line-item tax_rate(s) to decimal-fraction form.`);
+      } catch (txErr: any) {
+        console.warn('[schema v6] Failed to restore line-item tax_rate:', txErr?.message);
       }
     }
 
