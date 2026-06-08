@@ -834,7 +834,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-8 space-y-8 overflow-y-auto h-full">
+    <div className="space-y-8 overflow-y-auto h-full" style={{ padding: 'calc(2rem * var(--cust-density-scale, 1))' }}>
       {/* Print-only corporate header */}
       <PrintReportHeader title="Dashboard" periodEnd={new Date()} />
       <div className="max-w-[1400px] mx-auto space-y-8">
@@ -927,7 +927,7 @@ const Dashboard: React.FC = () => {
 
       {/* Headline metrics — library MetricHero bound to live stats */}
       {isOn('kpis') && (
-        <div className="grid grid-cols-3 gap-5 no-print">
+        <div className="grid grid-cols-3 no-print" style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
           <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" />
           <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" />
           <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" />
@@ -938,7 +938,7 @@ const Dashboard: React.FC = () => {
           collapse to inline summary text in print via .report-summary-tiles.
           Visibility controlled by user dashboard prefs. */}
       {isOn('kpis') && (
-      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} gap-5 report-summary-tiles`}>
+      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
         <KpiTile
           label="Revenue"
           value={stats.revenue}

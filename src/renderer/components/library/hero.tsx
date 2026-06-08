@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -231,16 +232,21 @@ export function MetricHero({
   const up = deltaPct >= 0;
   const DeltaIcon = up ? ArrowUpRight : ArrowDownRight;
   const deltaColor = up ? 'var(--color-accent-income)' : 'var(--color-accent-expense)';
+  // Unique gradient id per instance — a shared id makes every MetricHero on the
+  // page reuse the first one's <defs>, which can blank or mis-color the fill.
+  const gradId = useId();
 
-  // build sparkline path
+  // build sparkline path. Inset by half the stroke width so the 2px line never
+  // clips against the SVG edges once overflow is hidden.
+  const sw = 2;
   const w = 120;
   const h = 40;
   const max = Math.max(...spark, 1);
   const min = Math.min(...spark, 0);
   const range = max - min || 1;
   const pts = spark.map((v, i) => {
-    const x = spark.length > 1 ? (i / (spark.length - 1)) * w : 0;
-    const y = h - ((v - min) / range) * h;
+    const x = sw / 2 + (spark.length > 1 ? (i / (spark.length - 1)) * (w - sw) : 0);
+    const y = sw / 2 + (h - sw) - ((v - min) / range) * (h - sw);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const linePath = `M ${pts.join(' L ')}`;
@@ -276,15 +282,15 @@ export function MetricHero({
             <span className="text-xs text-text-muted">{deltaLabel}</span>
           </div>
         </div>
-        <svg width={w} height={h} style={{ flexShrink: 0, overflow: 'visible' }}>
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ flexShrink: 0, overflow: 'hidden' }} role="img" aria-label={`${label} trend`}>
           <defs>
-            <linearGradient id="metricHeroFill" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={a.fg} stopOpacity={0.28} />
               <stop offset="100%" stopColor={a.fg} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <path d={areaPath} fill="url(#metricHeroFill)" />
-          <path d={linePath} fill="none" stroke={a.fg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={areaPath} fill={`url(#${gradId})`} />
+          <path d={linePath} fill="none" stroke={a.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
     </div>
