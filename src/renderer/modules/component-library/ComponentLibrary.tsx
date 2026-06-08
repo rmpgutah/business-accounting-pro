@@ -152,7 +152,17 @@ export default function ComponentLibrary() {
             {g.items.map(([name, Comp]) => (
               <div key={name} className="block-card p-4 flex flex-col gap-3" style={{ borderRadius: 6 }}>
                 <span className="text-[10px] font-mono text-text-muted uppercase tracking-wide">{name}</span>
-                <div className="flex-1 flex items-center justify-center min-h-[64px] overflow-hidden">
+                {/* Containment sandbox: some library components are full-screen
+                    fixed/absolute overlays (modals, toasts, loaders). A CSS
+                    `transform` makes this div the containing block for any
+                    position:fixed descendant, so those overlays are clipped to
+                    the preview cell instead of taking over (and trapping) the
+                    whole app. overflow:hidden clips; pointer-events:none stops a
+                    demo modal from capturing clicks; maxHeight caps tall demos. */}
+                <div
+                  className="flex-1 flex items-center justify-center min-h-[64px] overflow-hidden relative"
+                  style={{ transform: 'translateZ(0)', contain: 'layout paint', pointerEvents: 'none', maxHeight: 240 }}
+                >
                   <CellBoundary name={name}>
                     <Comp />
                   </CellBoundary>
