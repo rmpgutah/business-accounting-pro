@@ -203,6 +203,11 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     const e = expense;
     const company = activeCompany;
     const created = e.created_at ? formatDate(e.created_at) : '—';
+    // FINAL-PRICE: the voucher's headline amount is the true cost INCLUDING tax
+    // (amount + tax − discount), not the pre-tax subtotal.
+    const vGross = (e.amount || 0) + (e.tax_amount || 0);
+    const vDisc = Math.min(vGross, (e.discount_amount || 0) + vGross * ((e.discount_percent || 0) / 100));
+    const vTotal = Math.max(0, vGross - vDisc);
     const lineItems: Array<[string, string]> = [
       ['Date', formatDate(e.date)],
       ['Vendor', e.vendor_name || '—'],
@@ -245,8 +250,9 @@ table{width:100%;border-collapse:collapse;}
     <div style="font-size:11px;color:#666;margin-top:4px;">Voucher ID: ${e.id}</div>
   </div>
   <div style="text-align:right;">
-    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Amount</div>
-    <div class="amount">${formatCurrency(e.amount || 0)}</div>
+    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Total${(e.tax_amount || 0) > 0 ? ' (incl. tax)' : ''}</div>
+    <div class="amount">${formatCurrency(vTotal)}</div>
+    <div style="font-size:11px;color:#666;margin-top:4px;">Subtotal ${formatCurrency(e.amount || 0)} + Tax ${formatCurrency(e.tax_amount || 0)}</div>
   </div>
 </div>
 <table>${rowsHtml}</table>
@@ -399,7 +405,7 @@ table{width:100%;border-collapse:collapse;}
               return Math.max(0, gross - flat - gross * (pct / 100));
             })())}
           </div>
-          {((expense as any).tax_amount || 0) > 0 && (
+          {(
             <div className="text-[10px] text-text-muted mt-1">
               Subtotal {formatCurrency(expense.amount || 0)} + Tax {formatCurrency((expense as any).tax_amount || 0)}
             </div>

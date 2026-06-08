@@ -5014,9 +5014,16 @@ export function generateExpenseReceiptHTML(
   const docCurrency = expense.currency || 'USD';
   const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
 
-  const total = Number(expense.amount || expense.total || 0);
+  // FINAL-PRICE: expense.amount is the PRE-TAX subtotal and tax_amount is the
+  // tax, so the final cost ALWAYS adds tax on top (amount + tax − discount).
+  // Tax is shown whether the expense was entered tax-inclusive or -exclusive.
   const tax = Number(expense.tax_amount || 0);
-  const subtotal = Number(expense.subtotal || (total - tax));
+  const subtotal = Number(expense.amount || expense.subtotal || 0);
+  const expDiscFlat = Number(expense.discount_amount || 0);
+  const expDiscPct = Number(expense.discount_percent || 0);
+  const grossWithTax = subtotal + tax;
+  const expDiscountTotal = Math.min(grossWithTax, expDiscFlat + grossWithTax * (expDiscPct / 100));
+  const total = Math.max(0, grossWithTax - expDiscountTotal);
 
   const reimbStatus = expense.reimbursement_status || expense.status || 'pending';
   const reimbColor =
@@ -5115,11 +5122,12 @@ ${linesHTML}
 <div style="overflow:hidden;margin-top:14px;">
   <div class="fd-totals-card">
     <div class="totals-rows">
-      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
+      <div class="totals-row"><span>Subtotal (pre-tax)</span><span class="val">${fmt(subtotal)}</span></div>
+      <div class="totals-row"><span>Tax${expense.tax_inclusive ? ' (incl.)' : ''}</span><span class="val">${fmt(tax)}</span></div>
+      ${expDiscountTotal > 0 ? `<div class="totals-row" style="color:#16a34a;"><span>Discount</span><span class="val">−${fmt(expDiscountTotal)}</span></div>` : ''}
     </div>
     <div class="totals-grand">
-      <div class="lbl">Total Expense</div>
+      <div class="lbl">Total Expense${tax > 0 ? ' (incl. tax)' : ''}</div>
       <div class="val">${fmt(total)}</div>
     </div>
   </div>
