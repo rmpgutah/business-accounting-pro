@@ -9,6 +9,7 @@ import ClientsUpgradesPart1 from './ClientsUpgrades.part1';
 import ClientsUpgradesPart2 from './ClientsUpgrades.part2';
 import ClientsUpgradesPart3 from './ClientsUpgrades.part3';
 import ClientsUpgradesPart4 from './ClientsUpgrades.part4';
+import ClientsUpgradesPart5 from './ClientsUpgrades.part5';
 
 const ClientsUpgradesPanel: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ const ClientsUpgradesPanel: React.FC = () => {
       <ClientsUpgradesPart2 />
       <ClientsUpgradesPart3 />
       <ClientsUpgradesPart4 />
+      <ClientsUpgradesPart5 />
     </div>
   );
 };
