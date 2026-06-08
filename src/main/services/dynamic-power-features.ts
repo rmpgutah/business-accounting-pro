@@ -81,7 +81,7 @@ export function predictPaymentDate(companyId: string, invoiceId: string): { pred
   const inv = dbi.prepare(`SELECT client_id, issue_date, due_date FROM invoices WHERE id = ?`).get(invoiceId) as any;
   if (!inv || !inv.client_id) return { predicted_payment_date: null, confidence: 0, avg_days_to_pay: 0, sample_size: 0 };
   // Average days from issue to payment for this client's past invoices
-  const stats = dbi.prepare(`SELECT AVG(julianday(p.payment_date) - julianday(i.issue_date)) AS avg_days, COUNT(*) AS n FROM invoices i JOIN payments p ON p.invoice_id = i.id WHERE i.company_id = ? AND i.client_id = ? AND i.status = 'paid'`).get(companyId, inv.client_id) as any;
+  const stats = dbi.prepare(`SELECT AVG(julianday(p.date) - julianday(i.issue_date)) AS avg_days, COUNT(*) AS n FROM invoices i JOIN payments p ON p.invoice_id = i.id WHERE i.company_id = ? AND i.client_id = ? AND i.status = 'paid'`).get(companyId, inv.client_id) as any;
   const avgDays = Math.round(stats.avg_days || 0);
   if (!avgDays || stats.n === 0) return { predicted_payment_date: inv.due_date, confidence: 0, avg_days_to_pay: 0, sample_size: 0 };
   const d = new Date(inv.issue_date + 'T12:00:00Z');
@@ -168,7 +168,7 @@ function daysBetween(d1: string, d2: string): number {
 // F307 — calculateLatePaymentRisk
 export function calculateLatePaymentRisk(companyId: string, customerId: string): { risk_score: number; risk_level: string; factors: string[] } {
   const dbi = db.getDb();
-  const stats = dbi.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN julianday(COALESCE((SELECT MAX(payment_date) FROM payments WHERE invoice_id = invoices.id), date('now'))) - julianday(due_date) > 0 THEN 1 ELSE 0 END) AS late_count, AVG(CASE WHEN julianday(COALESCE((SELECT MAX(payment_date) FROM payments WHERE invoice_id = invoices.id), date('now'))) - julianday(due_date) > 0 THEN julianday(COALESCE((SELECT MAX(payment_date) FROM payments WHERE invoice_id = invoices.id), date('now'))) - julianday(due_date) END) AS avg_days_late FROM invoices WHERE company_id = ? AND client_id = ?`).get(companyId, customerId) as any;
+  const stats = dbi.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN julianday(COALESCE((SELECT MAX(date) FROM payments WHERE invoice_id = invoices.id), date('now'))) - julianday(due_date) > 0 THEN 1 ELSE 0 END) AS late_count, AVG(CASE WHEN julianday(COALESCE((SELECT MAX(date) FROM payments WHERE invoice_id = invoices.id), date('now'))) - julianday(due_date) > 0 THEN julianday(COALESCE((SELECT MAX(date) FROM payments WHERE invoice_id = invoices.id), date('now'))) - julianday(due_date) END) AS avg_days_late FROM invoices WHERE company_id = ? AND client_id = ?`).get(companyId, customerId) as any;
   const total = stats.total || 0;
   const lateRate = total > 0 ? (stats.late_count || 0) / total : 0;
   const avgDaysLate = stats.avg_days_late || 0;

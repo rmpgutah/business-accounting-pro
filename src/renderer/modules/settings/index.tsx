@@ -446,14 +446,32 @@ export default function SettingsModule() {
   };
 
   const handleSaveUtahConfig = async () => {
-    await api.taxSaveUtahConfig(taxYear, {
-      flat_rate: parseFloat(utahConfig.flat_rate) / 100,
-      personal_exemption_credit: parseFloat(utahConfig.personal_exemption_credit),
-      sui_rate: parseFloat(utahConfig.sui_rate) / 100,
-      sui_wage_base: parseFloat(utahConfig.sui_wage_base),
-      wc_rate: parseFloat(utahConfig.wc_rate) / 100,
-      wc_class_code: utahConfig.wc_class_code,
-    });
+    // Validate before persisting. parseFloat('') is NaN, and saving NaN here
+    // corrupts every Utah payroll calculation (NaN propagates through net pay
+    // and tax withholding). Reject non-finite / out-of-range input instead —
+    // mirrors the validation in saveTaxRates above.
+    const pct = (label: string, raw: string): number => {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 100) throw new Error(`${label} must be a number between 0 and 100.`);
+      return n / 100;
+    };
+    const amount = (label: string, raw: string): number => {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0) throw new Error(`${label} must be a non-negative number.`);
+      return n;
+    };
+    try {
+      await api.taxSaveUtahConfig(taxYear, {
+        flat_rate: pct('Flat rate', utahConfig.flat_rate),
+        personal_exemption_credit: amount('Personal exemption credit', utahConfig.personal_exemption_credit),
+        sui_rate: pct('SUI rate', utahConfig.sui_rate),
+        sui_wage_base: amount('SUI wage base', utahConfig.sui_wage_base),
+        wc_rate: pct('Workers-comp rate', utahConfig.wc_rate),
+        wc_class_code: utahConfig.wc_class_code,
+      });
+    } catch (err: any) {
+      alert(err?.message || 'Invalid Utah payroll configuration values.');
+    }
   };
 
   // ─── Save helpers ─────────────────────────────────────

@@ -150,7 +150,7 @@ export function crossReferenceEntity(companyId: string, entityType: string, enti
       result.bills = dbi.prepare(`SELECT id, bill_number, total, status FROM bills WHERE company_id = ? AND vendor_id = ? AND (deleted_at IS NULL OR deleted_at = '') ORDER BY bill_date DESC LIMIT 50`).all(companyId, entityId) as any[];
       result.expenses = dbi.prepare(`SELECT id, description, amount, date FROM expenses WHERE company_id = ? AND vendor_id = ? AND (deleted_at IS NULL OR deleted_at = '') ORDER BY date DESC LIMIT 50`).all(companyId, entityId) as any[];
     } else if (entityType === 'invoice') {
-      result.payments = dbi.prepare(`SELECT * FROM payments WHERE invoice_id = ? ORDER BY payment_date DESC`).all(entityId) as any[];
+      result.payments = dbi.prepare(`SELECT * FROM payments WHERE invoice_id = ? ORDER BY date DESC`).all(entityId) as any[];
     }
   } catch {}
   return result;

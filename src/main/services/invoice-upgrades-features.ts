@@ -633,10 +633,14 @@ export function bulkApplyPayment(opts: { client_id: string; payment_amount: numb
         const newPaid = round2((inv.amount_paid || 0) + apply);
         const status = newPaid >= (inv.total || 0) - 0.005 ? 'paid' : 'partial';
         dbi.prepare(`UPDATE invoices SET amount_paid = ?, status = ?, updated_at = ? WHERE id = ?`).run(newPaid, status, now(), inv.id);
-        try {
-          dbi.prepare(`INSERT INTO invoice_payments (id, company_id, invoice_id, amount, payment_date, payment_method) VALUES (?, ?, ?, ?, ?, ?)`)
-            .run(uuid(), cid, inv.id, apply, opts.payment_date || today(), opts.payment_method || 'manual');
-        } catch (_) {/* table may not exist */}
+        // Record the payment to the real `payments` table (the previous code
+        // INSERTed into a non-existent `invoice_payments` table inside a
+        // swallow-all catch, so every invoice was marked paid with NO payment
+        // record — no audit trail, no reversibility). No try/catch: inside the
+        // surrounding transaction, a failed insert correctly rolls back the
+        // matching amount_paid update.
+        dbi.prepare(`INSERT INTO payments (id, company_id, invoice_id, amount, date, payment_method) VALUES (?, ?, ?, ?, ?, ?)`)
+          .run(uuid(), cid, inv.id, apply, opts.payment_date || today(), opts.payment_method || 'manual');
         allocations.push({ invoice_id: inv.id, invoice_number: inv.invoice_number, applied: apply, new_status: status });
         remaining = round2(remaining - apply);
       }

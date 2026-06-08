@@ -3829,8 +3829,9 @@ export function registerIpcHandlers(): void {
               "VALUES (?, ?, ?, ?, ?, ?, ?)"
             ).run(pid, cid, top.invoice_id, t.amount, t.date, 'bank_transfer', (t.description || '').slice(0, 60));
 
-            // Update invoice
-            const newPaid = Number(top.amount_paid) + t.amount;
+            // Update invoice. Round to cents so repeated auto-matches don't
+            // accumulate binary-float drift in amount_paid (0.1 + 0.2 = 0.300…04).
+            const newPaid = Math.round((Number(top.amount_paid) + t.amount) * 100) / 100;
             const newStatus = newPaid + 0.005 >= top.total ? 'paid' : 'partial';
             dbi.prepare(
               "UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
