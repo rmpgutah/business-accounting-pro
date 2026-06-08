@@ -10515,7 +10515,7 @@ export function registerIpcHandlers(): void {
       const rows = dbInstance.prepare(`
         SELECT
           u.id as collector_id,
-          u.name as collector_name,
+          u.display_name as collector_name,
           COUNT(DISTINCT d.id) as active_cases,
           COALESCE(SUM(d.original_amount), 0) as total_owed,
           COALESCE(SUM(d.payments_made), 0) as total_collected,
@@ -10530,7 +10530,7 @@ export function registerIpcHandlers(): void {
         FROM users u
         INNER JOIN debts d ON d.assigned_collector_id = u.id AND d.company_id = ?
         ${dateFilter}
-        GROUP BY u.id, u.name
+        GROUP BY u.id, u.display_name
         ORDER BY total_collected DESC
       `).all(companyId);
       return rows;

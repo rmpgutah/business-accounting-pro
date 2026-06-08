@@ -34,7 +34,12 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
             background: 'linear-gradient(160deg, #0f1012 0%, #121319 45%, #141520 100%)',
           }}
         >
-          {children}
+          {/* Content width honors the "Use full window width" / "Max content
+              width" customization options (Dashboard › Layout) via the
+              --app-content-max-width CSS var set by applyCustomizationGlobals. */}
+          <div style={{ maxWidth: 'var(--app-content-max-width, 1440px)', marginInline: 'auto', width: '100%' }}>
+            {children}
+          </div>
         </main>
 
         <StatusBar />

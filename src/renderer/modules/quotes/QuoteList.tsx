@@ -124,7 +124,7 @@ const QuoteList: React.FC<QuoteListProps> = ({ onNew, onEdit, onView }) => {
         if (cancelled) return;
         setQuotes(Array.isArray(raw) ? raw : []);
         setSalesReps(
-          Array.isArray(users) ? users.map((u: any) => ({ id: u.id, name: u.name || u.email || u.id })) : []
+          Array.isArray(users) ? users.map((u: any) => ({ id: u.id, name: u.display_name || u.name || u.email || u.id })) : []
         );
       } catch (err: any) {
         console.error('Failed to load quotes:', err);

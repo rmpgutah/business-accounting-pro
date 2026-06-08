@@ -750,7 +750,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             {/* Feature 29: Batch Assign Collector */}
             <select className="block-select text-xs" style={{ width: 'auto', minWidth: 140 }} value={bulkAssignCollector} onChange={(e) => setBulkAssignCollector(e.target.value)}>
               <option value="">Assign Collector...</option>
-              {[...users].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {[...users].sort((a, b) => (a.display_name || a.name || '').localeCompare(b.display_name || b.name || '', undefined, { sensitivity: 'base' })).map(u => <option key={u.id} value={u.id}>{u.display_name || u.name || u.email}</option>)}
             </select>
             {bulkAssignCollector && (
               <button className="block-btn-primary text-xs py-1 px-3" onClick={handleBulkAssign} disabled={bulkProcessing}>Assign</button>
