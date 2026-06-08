@@ -218,6 +218,8 @@ export interface MetricHeroProps {
   deltaLabel?: string;
   spark?: number[];
   accentColor?: AccentKey;
+  /** When provided, the card becomes clickable (cursor + hover lift). */
+  onClick?: () => void;
 }
 
 export function MetricHero({
@@ -227,6 +229,7 @@ export function MetricHero({
   deltaLabel = 'vs last quarter',
   spark = [12, 18, 15, 22, 19, 28, 26, 34, 31, 40],
   accentColor = 'income',
+  onClick,
 }: MetricHeroProps) {
   const a = accent(accentColor);
   const up = deltaPct >= 0;
@@ -253,7 +256,14 @@ export function MetricHero({
   const areaPath = `${linePath} L ${w},${h} L 0,${h} Z`;
 
   return (
-    <div className="block-card" style={{ padding: 24, borderRadius: 6 }}>
+    <div
+      className={`block-card${onClick ? ' cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''}`}
+      style={{ padding: 24, borderRadius: 6 }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+    >
       <div className="flex items-start justify-between" style={{ gap: 16 }}>
         <div>
           <div className="text-xs uppercase text-text-secondary" style={{ letterSpacing: '0.08em' }}>
