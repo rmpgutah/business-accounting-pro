@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { FileText, Gavel, Clock, Scale, Package, DollarSign, Printer, Calculator, Link2, Users, Activity } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import DemandLetterGenerator from './DemandLetterGenerator';
 import CourtFilingTracker from './CourtFilingTracker';
 import StatuteTracker from './StatuteTracker';
@@ -368,7 +368,7 @@ const GarnishmentCalculator: React.FC = () => {
             </div>
           </div>
           <div className="text-xs text-text-muted">
-            Limiting factor: <strong className="text-text-secondary">{result.method}</strong>
+            Limiting factor: <strong className="text-text-secondary">{humanizeLabel(result.method)}</strong>
           </div>
           {parseFloat(judgmentAmount) > 0 && result.maxGarnishment > 0 && (
             <div className="text-xs text-text-muted">

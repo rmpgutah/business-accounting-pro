@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatStatus } from '../../lib/format';
+import { formatStatus, humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
 interface EmailLogEntry {
@@ -204,7 +204,7 @@ export default function EmailModule() {
                     <td className="text-text-primary truncate max-w-[200px]">{entry.recipient}</td>
                     <td className="text-text-secondary truncate max-w-[220px]">{entry.subject}</td>
                     <td>
-                      <span className="block-badge-blue">{entry.entity_type}</span>
+                      <span className="block-badge-blue">{humanizeLabel(entry.entity_type)}</span>
                     </td>
                     <td>
                       <span className={`${entry.status === 'sent' ? 'block-badge-income' : 'block-badge-expense'} capitalize`}>

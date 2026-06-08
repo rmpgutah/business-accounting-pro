@@ -15,7 +15,7 @@ import ExpensesUpgradesPanel from './upgrades';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'upgrades';
@@ -402,7 +402,7 @@ const ExpensesModule: React.FC = () => {
                         const maxPm = Math.max(...paymentMethods.map(p => p.total || 0), 1);
                         return paymentMethods.map((pm, i) => (
                           <div key={i} className="flex items-center gap-3">
-                            <div className="text-xs text-text-secondary w-28 truncate capitalize">{pm.method}</div>
+                            <div className="text-xs text-text-secondary w-28 truncate capitalize">{humanizeLabel(pm.method)}</div>
                             <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: '3px' }}>
                               <div
                                 style={{

@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Edit2, Merge, RefreshCw, Download, Upload, Tag as TagIcon, Settings as SettingsIcon, BarChart2 } from 'lucide-react';
 import api from '../lib/api';
+import { humanizeLabel } from '../lib/format';
 import { useCompanyStore } from '../stores/companyStore';
 import { TagChip, TAG_PALETTE, type TagRecord } from './TagPicker';
 
@@ -329,7 +330,7 @@ const TagManager: React.FC = () => {
                   return (
                     <tr key={r.id} className="border-b border-border-primary/50">
                       <td className="py-1 px-2 text-text-primary">{r.name}</td>
-                      <td className="py-1 px-2 text-text-muted">{r.entity_type}</td>
+                      <td className="py-1 px-2 text-text-muted">{humanizeLabel(r.entity_type)}</td>
                       <td className="py-1 px-2">{tag ? <TagChip tag={tag} small /> : <span className="text-text-muted">(missing)</span>}</td>
                       <td className="py-1 px-2">
                         <input type="checkbox" checked={!!r.is_active} onChange={() => handleToggleRule(r)} />

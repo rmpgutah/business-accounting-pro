@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import RelatedPanel from '../../components/RelatedPanel';
@@ -499,7 +499,7 @@ table{width:100%;border-collapse:collapse;}
               : <span className="text-text-muted">—</span>}
           </Field>
           <Field label="Tax Amount">{formatCurrency(expense.tax_amount || 0)}</Field>
-          <Field label="Payment Method">{expense.payment_method || '—'}</Field>
+          <Field label="Payment Method">{expense.payment_method ? humanizeLabel(expense.payment_method) : "—"}</Field>
           <Field label="Reference">{expense.reference || '—'}</Field>
           <Field label="Billable">{expense.is_billable ? 'Yes' : 'No'}</Field>
           <Field label="Reimbursable">{expense.is_reimbursable ? (expense.reimbursed ? `Reimbursed ${expense.reimbursed_date || ''}` : 'Pending') : 'No'}</Field>
