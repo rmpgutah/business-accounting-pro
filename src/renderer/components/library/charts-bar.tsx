@@ -61,21 +61,27 @@ export function BarChartMini({
           {title}
         </div>
       )}
-      <svg width="100%" viewBox={`0 0 ${w} ${chartH + (showLabels ? 22 : 0)}`} aria-hidden="true">
+      <svg width="100%" viewBox={`0 0 ${w} ${chartH + 14 + (showLabels ? 22 : 0)}`} role="img" aria-label={title || 'Bar chart'}>
         {data.map((d, i) => {
+          // Reserve a 14px band at the top for the value label so the tallest
+          // bar's number never clips.
           const h = (d.value / max) * (chartH - 8);
           const x = gap + i * (barW + gap);
-          const y = chartH - h;
+          const y = chartH - h + 14;
           return (
             <g key={i}>
-              <rect x={x} y={0} width={barW} height={chartH} rx={4} fill={TRACK} opacity={0.4} />
+              <rect x={x} y={14} width={barW} height={chartH - 8} rx={4} fill={TRACK} opacity={0.4} />
               <rect x={x} y={y} width={barW} height={h} rx={4} fill={color}>
                 <title>{`${d.label}: ${valueFormat(d.value)}`}</title>
               </rect>
+              {/* value on top of the bar — informational at a glance */}
+              <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={9} fontWeight={700} fill="var(--color-text-primary, #e8eaf0)">
+                {valueFormat(d.value)}
+              </text>
               {showLabels && (
                 <text
                   x={x + barW / 2}
-                  y={chartH + 15}
+                  y={chartH + 29}
                   textAnchor="middle"
                   fontSize={10}
                   fill="var(--color-text-muted, #9ca3af)"
