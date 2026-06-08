@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Scale, Save, ArrowRightLeft, RefreshCw, Star, Upload, Download, Bell, Layers, History, ListChecks } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
 
@@ -415,7 +415,7 @@ const AccountReconciliation: React.FC = () => {
           const overdue = s.next_due && s.next_due <= todayLocal();
           return (
             <div key={s.id} className={`flex justify-between py-1 border-b border-border-primary text-xs ${overdue ? 'text-red-400' : ''}`}>
-              <span>{s.code} {s.name} · {s.frequency} · threshold {formatCurrency(s.threshold || 0)}</span>
+              <span>{s.code} {s.name} · {humanizeLabel(s.frequency)} · threshold {formatCurrency(s.threshold || 0)}</span>
               <span>Next: {s.next_due || '—'} {overdue && <span className="ml-1 px-1 bg-red-500/20">DUE</span>}</span>
               <button onClick={() => deleteSchedule(s.id)} className="text-text-muted hover:text-red-400">×</button>
             </div>
@@ -423,7 +423,7 @@ const AccountReconciliation: React.FC = () => {
         })}
       </div>
 
-      {account && <div className="text-[11px] text-text-muted">Account type: {account.type} / {account.subtype}</div>}
+      {account && <div className="text-[11px] text-text-muted">Account type: {humanizeLabel(account.type)} / {account.subtype}</div>}
     </div>
   );
 };

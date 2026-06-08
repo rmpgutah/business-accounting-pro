@@ -3,7 +3,7 @@ import { ArrowLeft, BarChart3, TrendingUp, TrendingDown, AlertTriangle } from 'l
 import { addMonths, format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -254,7 +254,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
           </span>
         )}
         <span className={`block-badge ${budget.status === 'active' ? 'block-badge-income' : 'block-badge-warning'} capitalize`}>
-          {budget.status}
+          {formatStatus(budget.status).label}
         </span>
         {onEdit && (
           <button className="block-btn flex items-center gap-2 text-xs" onClick={() => onEdit(budgetId)}>

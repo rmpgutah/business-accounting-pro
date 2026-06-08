@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Users, Plus, Pencil, Trash2, FileText, Laptop, ShieldCheck, PenTool, X, CheckCircle2 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 
@@ -325,7 +325,7 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             {deductions.map((d: any) => (
               <tr key={d.id}>
                 <td className="text-text-primary font-medium">{d.name}</td>
-                <td className="capitalize">{d.type}</td>
+                <td className="capitalize">{humanizeLabel(d.type)}</td>
                 <td className="font-mono">{d.calculation === 'percentage' ? `${d.amount}%` : formatCurrency(d.amount)}</td>
                 <td>{d.is_pretax ? 'Pre-Tax' : 'Post-Tax'}</td>
                 <td>{d.is_active ? <span className="block-badge block-badge-income">Active</span> : <span className="block-badge">Inactive</span>}</td>
@@ -861,7 +861,7 @@ const PerformanceReviewsPanel: React.FC<{ employeeId: string }> = ({ employeeId 
       {items.length === 0 && !showForm ? <p className="text-sm text-text-muted">No performance reviews on record.</p> : (
         <div className="overflow-x-auto"><table className="block-table"><thead><tr><th>Date</th><th>Period</th><th>Reviewer</th><th>Rating</th><th>Status</th><th style={{width:80}}>Actions</th></tr></thead><tbody>
           {items.sort((a: any, b: any) => (b.review_date || '').localeCompare(a.review_date || '')).map((it: any) => (
-            <tr key={it.id}><td className="font-mono text-xs">{formatDate(it.review_date)}</td><td className="text-xs">{it.review_period || '—'}</td><td className="text-xs">{it.reviewer_name || '—'}</td><td>{ratingBadge(it.overall_rating)}</td><td className="text-xs capitalize">{it.status}</td><td><div className="flex gap-1"><button className="text-text-muted hover:text-accent-blue p-0.5" onClick={() => handleEdit(it)}><Pencil size={12}/></button><button className="text-text-muted hover:text-accent-expense p-0.5" onClick={() => handleDelete(it.id)}><Trash2 size={12}/></button></div></td></tr>
+            <tr key={it.id}><td className="font-mono text-xs">{formatDate(it.review_date)}</td><td className="text-xs">{it.review_period || '—'}</td><td className="text-xs">{it.reviewer_name || '—'}</td><td>{ratingBadge(it.overall_rating)}</td><td className="text-xs capitalize">{formatStatus(it.status).label}</td><td><div className="flex gap-1"><button className="text-text-muted hover:text-accent-blue p-0.5" onClick={() => handleEdit(it)}><Pencil size={12}/></button><button className="text-text-muted hover:text-accent-expense p-0.5" onClick={() => handleDelete(it.id)}><Trash2 size={12}/></button></div></td></tr>
           ))}</tbody></table></div>
       )}
     </div>

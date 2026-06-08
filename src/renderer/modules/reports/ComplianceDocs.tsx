@@ -12,6 +12,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { FileText, Download, AlertTriangle, ChevronLeft, Clock, CheckCircle, FilePlus } from 'lucide-react';
 import api from '../../lib/api';
+import { formatStatus } from '../../lib/format';
 import { useToast } from '../../components/ToastProvider';
 
 type FormType = 'W-4' | 'W-9' | 'I-9';
@@ -270,7 +271,7 @@ const AllPane: React.FC<{ rows: any[] }> = ({ rows }) => {
               <td style={{ padding: '8px 10px', fontSize: 11 }}>{r.expires_at || 'Never'}</td>
               <td style={{ padding: '8px 10px', fontSize: 10 }}>
                 <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: r.status === 'current' ? '#ecfdf5' : '#fef2f2', color: r.status === 'current' ? '#065f46' : '#991b1b' }}>
-                  {(r.status || '').toUpperCase()}
+                  {formatStatus(r.status || '').label}
                 </span>
               </td>
             </tr>
