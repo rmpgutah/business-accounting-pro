@@ -5038,6 +5038,48 @@ export function generateExpenseReceiptHTML(
 
   const generated = new Date().toLocaleString('en-US');
 
+  // ── Details & Classification: every available field, blanks backfilled with
+  // an em dash so the grid structure is retained (no collapsing gaps). ──
+  const dash = (v: any): string => {
+    if (v === 0) return '0';
+    if (v === null || v === undefined || v === '') return '—';
+    return String(v);
+  };
+  const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const reimbursableLabel = expense.is_reimbursable
+    ? (expense.reimbursed ? `Reimbursed${expense.reimbursed_date ? ' ' + fmtDateMaybe(expense.reimbursed_date) : ''}` : 'Pending')
+    : 'No';
+  const exch = Number(expense.exchange_rate || 1);
+  const miles = Number(expense.miles || 0);
+  const detailRows: Array<[string, string]> = [
+    ['Payment Method', expense.payment_method ? titleCase(String(expense.payment_method)) : '—'],
+    ['Status', expense.status ? titleCase(String(expense.status)) : '—'],
+    ['Approval', expense.approval_status ? titleCase(String(expense.approval_status)) : '—'],
+    ['Project', dash(expense.project_name)],
+    ['Billable', expense.is_billable ? 'Yes' : 'No'],
+    ['Reimbursable', reimbursableLabel],
+    ['Tax-Deductible', expense.is_tax_deductible === 0 ? 'No' : 'Yes'],
+    ['Tax Amount', fmt(tax)],
+    ['Tip Amount', fmt(Number(expense.tip_amount || 0))],
+    ['Currency', String(expense.currency || 'USD')],
+    ['Exchange Rate', exch && exch !== 1 ? exch.toFixed(4) : '—'],
+    ['Schedule C Line', dash(expense.schedule_c_line)],
+    ['Mileage', miles > 0 ? `${miles.toFixed(1)} mi @ $${Number(expense.mileage_rate || 0.7).toFixed(2)}` : '—'],
+    ['Merchant Location', dash(expense.merchant_location)],
+    ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
+    ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
+  ];
+  const detailsHTML = `
+<div style="margin-top:14px;">
+  <div class="section-label">Details &amp; Classification</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px 18px;margin-top:8px;">
+    ${detailRows.map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>
+</div>`;
+
   return `<!doctype html><html><head><meta charset="utf-8"><title>Expense ${esc(expense.reference || expense.id || '')}</title>
 <style>${baseStyles}</style></head>
 <body><div class="rpt-page" style="padding:32px 36px;">
@@ -5058,6 +5100,8 @@ export function generateExpenseReceiptHTML(
   <div class="fd-meta-row"><span class="lbl">Date</span><span class="val">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</span></div>
   <div class="fd-meta-row"><span class="lbl">Reference</span><span class="val">${esc(expense.reference || '—')}</span></div>
 </div>
+
+${detailsHTML}
 
 ${expense.description ? `<div style="margin-bottom:14px;">
   <div class="section-label">Description</div>

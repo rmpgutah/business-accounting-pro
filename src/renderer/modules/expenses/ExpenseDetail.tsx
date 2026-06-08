@@ -506,6 +506,14 @@ table{width:100%;border-collapse:collapse;}
           <Field label="Merchant Location">
             {expense.merchant_location ? <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-text-muted" />{expense.merchant_location}</span> : '—'}
           </Field>
+          <Field label="Status">{expense.status ? expense.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}</Field>
+          <Field label="Approval Status">{expense.approval_status ? expense.approval_status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}</Field>
+          <Field label="Tax-Deductible">{expense.is_tax_deductible === 0 ? 'No' : 'Yes'}</Field>
+          <Field label="Tip Amount">{formatCurrency(expense.tip_amount || 0)}</Field>
+          <Field label="Currency">{expense.currency || 'USD'}{expense.exchange_rate && expense.exchange_rate !== 1 ? ` · @ ${Number(expense.exchange_rate).toFixed(4)}` : ''}</Field>
+          <Field label="Schedule C Line">{expense.schedule_c_line || '—'}</Field>
+          <Field label="Recurring">{expense.is_recurring ? 'Yes' : 'No'}</Field>
+          <Field label="Submitted">{expense.created_at ? formatDate(expense.created_at) : '—'}</Field>
         </div>
       </div>
 
