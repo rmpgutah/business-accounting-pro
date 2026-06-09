@@ -185,6 +185,8 @@ function renderNav(brand: string, active?: string): string {
     ${item('/app/taxes', 'Tax', 'taxes')}
     ${item('/app/recurring', 'Recurring', 'recurring')}
     ${item('/app/debt-collection', 'Collections', 'debt-collection')}
+    ${item('/app/bank', 'Bank', 'bank')}
+    ${item('/app/email', 'Email', 'email')}
     ${item('/app/audit', 'Audit', 'audit')}
     ${item('/app/notifications', 'Inbox', 'notifications')}
     ${item('/app/settings', 'Settings', 'settings')}

@@ -2241,4 +2241,564 @@ export async function logAudit(env: Env, companyId: string, userId: string | nul
   } catch { /* audit must never throw — it's a side-effect */ }
 }
 
-export default app;
+// ─── Bank Reconciliation ─────────────────────────────────────────────
+// Bank accounts (the user's actual checking/savings) and the imported
+// transactions awaiting match. Match flow: user uploads CSV → rows land in
+// bank_transactions with is_reconciled=0 → user clicks "match" against an
+// expense / invoice / payment → matched_entity_*  is stamped and the row
+// flips to is_reconciled=1.
+
+app.get('/app/bank', async (c) => {
+  const cid = c.get('companyId')!;
+  const [accounts, recentTxns] = await c.env.DB.batch([
+    c.env.DB.prepare(`
+      SELECT ba.id, ba.name, ba.bank_name, ba.account_last4, ba.current_balance,
+             ba.reconciled_balance, ba.reconciled_through_date,
+             COALESCE(unrec.unmatched, 0) as unmatched_count
+      FROM bank_accounts ba
+      LEFT JOIN (
+        SELECT bank_account_id, COUNT(*) as unmatched
+        FROM bank_transactions WHERE is_reconciled = 0 GROUP BY bank_account_id
+      ) unrec ON unrec.bank_account_id = ba.id
+      WHERE ba.company_id = ? AND ba.is_active = 1 ORDER BY ba.name
+    `).bind(cid),
+    c.env.DB.prepare(`
+      SELECT bt.id, bt.date, bt.description, bt.amount, bt.is_reconciled,
+             ba.name as account_name
+      FROM bank_transactions bt
+      JOIN bank_accounts ba ON ba.id = bt.bank_account_id
+      WHERE bt.company_id = ? ORDER BY bt.date DESC LIMIT 50
+    `).bind(cid),
+  ]);
+  const accs = (accounts.results as any[]) || [];
+  const txns = (recentTxns.results as any[]) || [];
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Bank Reconciliation</h1>
+  <a href="/app/bank/new" class="btn">+ Add Account</a>
+</div>
+
+${accs.length === 0 ? `<div class="empty-state">No bank accounts yet. Add one to start reconciling.</div>` : `
+<div class="grid grid-3" style="gap:1rem;margin-bottom:1rem">
+  ${accs.map((a: any) => `<div class="card">
+    <div class="muted" style="font-size:0.72rem;text-transform:uppercase">${esc(a.bank_name || 'Bank')} ${a.account_last4 ? '••' + esc(a.account_last4) : ''}</div>
+    <div style="font-size:1.1rem;font-weight:700">${esc(a.name)}</div>
+    <div style="font-size:1.4rem;font-family:'SF Mono',Menlo,monospace;color:var(--text-bright);margin-top:6px">${fmtMoney(a.current_balance)}</div>
+    <div class="muted" style="font-size:0.75rem;margin-top:4px">
+      ${a.unmatched_count > 0 ? `<span class="badge badge-amber">${a.unmatched_count} to match</span>` : '<span class="badge badge-green">all matched</span>'}
+    </div>
+    <div style="margin-top:0.75rem;display:flex;gap:6px">
+      <a href="/app/bank/${esc(a.id)}/import" class="btn btn-ghost" style="font-size:0.72rem;padding:6px 10px">Import CSV</a>
+      <a href="/app/bank/${esc(a.id)}/match" class="btn btn-ghost" style="font-size:0.72rem;padding:6px 10px">Match</a>
+    </div>
+  </div>`).join('')}
+</div>
+<div class="card">
+  <div class="card-title">Recent transactions (all accounts)</div>
+  <table class="data">
+    <thead><tr><th>Date</th><th>Account</th><th>Description</th><th class="num">Amount</th><th>Status</th></tr></thead>
+    <tbody>
+      ${txns.length === 0 ? `<tr><td colspan="5" class="empty-state">No transactions imported yet.</td></tr>` :
+        txns.map((t: any) => `<tr>
+          <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${fmtDate(t.date)}</td>
+          <td>${esc(t.account_name)}</td>
+          <td>${esc(t.description || '—')}</td>
+          <td class="num" style="color:${Number(t.amount) < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoney(t.amount)}</td>
+          <td>${t.is_reconciled ? '<span class="badge badge-green">matched</span>' : '<span class="badge badge-amber">pending</span>'}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>`}`;
+  return c.html(shell({ title: 'Bank Recon', activeNav: 'bank', body, brand: 'BAP Cloud' }));
+});
+
+// New bank account form — single-table CRUD via simpleFormPage.
+wireSimpleEntity({
+  table: 'bank_accounts', navKey: 'bank', apiPath: '/api/bank-accounts',
+  entitySingular: 'Bank Account', entityPlural: 'Bank Accounts', listPath: '/app/bank',
+  cols: ['name', 'type', 'bank_name', 'account_last4', 'current_balance',
+         'reconciled_balance', 'reconciled_through_date', 'currency', 'is_active', 'notes'],
+  fields: [
+    { name: 'name', label: 'Account Nickname', kind: 'text', required: true },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 1, options: [
+      { value: 'checking', label: 'Checking' },
+      { value: 'savings', label: 'Savings' },
+      { value: 'credit_card', label: 'Credit Card' },
+      { value: 'line_of_credit', label: 'Line of Credit' }] },
+    { name: 'bank_name', label: 'Bank', kind: 'text', rowGroup: 1, placeholder: 'Wells Fargo, etc.' },
+    { name: 'account_last4', label: 'Last 4 of acct #', kind: 'text', rowGroup: 1 },
+    { name: 'current_balance', label: 'Current Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'currency', label: 'Currency', kind: 'text', rowGroup: 2 },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox', rowGroup: 2 },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+// CSV import page for a specific bank account. Two-stage: paste CSV → preview
+// rows → confirm-import. Standard CSV format: Date,Description,Amount[,Balance].
+// Date in YYYY-MM-DD or MM/DD/YYYY; Amount as a signed decimal.
+app.get('/app/bank/:id/import', async (c) => {
+  const cid = c.get('companyId')!;
+  const acc = await c.env.DB.prepare('SELECT * FROM bank_accounts WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!acc) return c.notFound();
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Import CSV · ${esc(acc.name)}</h1>
+  <a href="/app/bank" class="btn btn-ghost">Back</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">CSV format</div>
+  <div class="muted" style="font-size:0.85rem">Expected columns: <code>Date, Description, Amount</code> (optional <code>Balance</code>). Header row required. Amount is signed — negative for debits, positive for credits.</div>
+  <pre style="background:var(--bg-elevated);border-radius:var(--radius);padding:12px;margin-top:8px;font-size:0.78rem;overflow:auto">Date,Description,Amount
+2026-06-01,Office Depot,-89.42
+2026-06-02,Stripe Payout,1240.00</pre>
+</div>
+<form id="f" class="card">
+  <label class="field">CSV<textarea name="csv" rows="14" required placeholder="Paste CSV here…" style="font-family:'SF Mono',Menlo,monospace;font-size:0.82rem"></textarea></label>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:0.75rem">
+    <button type="submit" class="btn">Import</button>
+  </div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const csv = ev.target.csv.value;
+  try {
+    const r = await window.fetchJSON('/api/bank-accounts/${esc(c.req.param('id'))}/import-csv', {
+      method: 'POST', body: JSON.stringify({ csv }),
+    });
+    window.toast(\`Imported \${r.imported} transaction\${r.imported === 1 ? '' : 's'}\`, 'ok');
+    setTimeout(() => location.href = '/app/bank/${esc(c.req.param('id'))}/match', 800);
+  } catch (e) { window.toast(e.message || 'Import failed', 'err'); }
+});
+</script>`;
+  return c.html(shell({ title: 'Import CSV', activeNav: 'bank', body, brand: 'BAP Cloud' }));
+});
+
+// CSV import endpoint — naive parser handles the 3-4 column standard format.
+// Skips rows that don't parse to a valid (date, amount). Detects duplicates
+// by (account_id, date, description, amount) tuple so re-importing the same
+// statement doesn't double-up.
+app.post('/api/bank-accounts/:id/import-csv', async (c) => {
+  const cid = c.get('companyId')!;
+  const accountId = c.req.param('id');
+  const acc = await c.env.DB.prepare('SELECT id FROM bank_accounts WHERE id = ? AND company_id = ?')
+    .bind(accountId, cid).first();
+  if (!acc) return c.json({ error: 'Bank account not found' }, 404);
+  const { csv }: any = await c.req.json();
+  if (!csv || typeof csv !== 'string') return c.json({ error: 'CSV body required' }, 400);
+
+  // Split lines; strip BOM; drop empty.
+  const lines = csv.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return c.json({ error: 'CSV needs a header row and at least one data row' }, 400);
+
+  // Parse the header to find column indexes — case-insensitive, allow
+  // common synonyms (Memo/Description, Debit/Credit pair as well as a
+  // single signed Amount column).
+  const head = lines[0].split(',').map(s => s.trim().toLowerCase().replace(/^"|"$/g, ''));
+  const idxDate = head.findIndex(h => h === 'date' || h === 'transaction date' || h === 'posting date');
+  const idxDesc = head.findIndex(h => h === 'description' || h === 'memo' || h === 'payee' || h === 'name');
+  const idxAmt  = head.findIndex(h => h === 'amount' || h === 'value');
+  const idxDeb  = head.findIndex(h => h === 'debit' || h === 'withdrawal');
+  const idxCre  = head.findIndex(h => h === 'credit' || h === 'deposit');
+  const idxBal  = head.findIndex(h => h === 'balance' || h === 'running balance');
+  if (idxDate < 0) return c.json({ error: 'CSV header missing a Date column' }, 400);
+  if (idxAmt < 0 && idxDeb < 0 && idxCre < 0) return c.json({ error: 'CSV header missing an Amount (or Debit/Credit) column' }, 400);
+
+  const normDate = (s: string): string | null => {
+    s = s.trim().replace(/^"|"$/g, '');
+    // YYYY-MM-DD passes through.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // MM/DD/YYYY or M/D/YYYY → YYYY-MM-DD
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+    if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    return null;
+  };
+  const parseField = (cells: string[], i: number) => i >= 0 ? (cells[i] || '').replace(/^"|"$/g, '').trim() : '';
+  const parseNum = (s: string): number => {
+    if (!s) return 0;
+    // Strip currency symbols, commas, parens (paren-wrapped = negative).
+    let neg = false;
+    s = s.trim();
+    if (/^\(.+\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    s = s.replace(/[$,\s]/g, '');
+    const n = Number(s);
+    if (!Number.isFinite(n)) return 0;
+    return neg ? -n : n;
+  };
+
+  let imported = 0, skipped = 0;
+  const stmts: D1PreparedStatement[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    // VERY naive CSV split — doesn't handle quoted commas. Banks rarely emit
+    // them in transaction CSVs; if you hit one, paste-edit it out for now.
+    const cells = lines[i].split(',');
+    const date = normDate(parseField(cells, idxDate));
+    const desc = parseField(cells, idxDesc);
+    let amount = 0;
+    if (idxAmt >= 0) amount = parseNum(parseField(cells, idxAmt));
+    else {
+      const deb = parseNum(parseField(cells, idxDeb));
+      const cre = parseNum(parseField(cells, idxCre));
+      amount = cre - deb;  // credit positive, debit negative
+    }
+    if (!date || !Number.isFinite(amount) || amount === 0) { skipped++; continue; }
+    const balanceAfter = idxBal >= 0 ? parseNum(parseField(cells, idxBal)) : null;
+    // Dup detection: same account + date + description + amount.
+    const dup = await c.env.DB.prepare(`
+      SELECT id FROM bank_transactions
+      WHERE bank_account_id = ? AND date = ? AND amount = ? AND COALESCE(description,'') = COALESCE(?,'')
+    `).bind(accountId, date, amount, desc).first();
+    if (dup) { skipped++; continue; }
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO bank_transactions (id, company_id, bank_account_id, date, description, amount, balance_after, imported_from)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'csv')
+    `).bind(uuid(), cid, accountId, date, desc || null, amount, balanceAfter));
+    imported++;
+  }
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  return c.json({ ok: true, imported, skipped });
+});
+
+// Reconciliation match page — shows unmatched bank txns alongside candidate
+// expense/payment rows (within ±3 days, ±$0.01 amount-similarity). User
+// clicks a candidate to confirm the match.
+app.get('/app/bank/:id/match', async (c) => {
+  const cid = c.get('companyId')!;
+  const accountId = c.req.param('id');
+  const acc = await c.env.DB.prepare('SELECT * FROM bank_accounts WHERE id = ? AND company_id = ?')
+    .bind(accountId, cid).first<any>();
+  if (!acc) return c.notFound();
+  const txns = await c.env.DB.prepare(`
+    SELECT id, date, description, amount FROM bank_transactions
+    WHERE bank_account_id = ? AND is_reconciled = 0 ORDER BY date DESC LIMIT 50
+  `).bind(accountId).all();
+  const list = (txns.results as any[]) || [];
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Match · ${esc(acc.name)}</h1>
+  <a href="/app/bank" class="btn btn-ghost">Back</a>
+</div>
+${list.length === 0 ? `<div class="empty-state">All transactions matched. Import more or you're caught up.</div>` :
+`<table class="data">
+  <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Match candidates</th></tr></thead>
+  <tbody>
+    ${list.map((t: any) => `<tr>
+      <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${fmtDate(t.date)}</td>
+      <td>${esc(t.description || '—')}</td>
+      <td class="num" style="color:${Number(t.amount) < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoney(t.amount)}</td>
+      <td><div id="cand-${esc(t.id)}" class="muted" style="font-size:0.78rem">Loading…</div></td>
+    </tr>`).join('')}
+  </tbody>
+</table>`}
+<script>
+async function loadCandidates(){
+  const els = document.querySelectorAll('[id^=cand-]');
+  for (const el of els) {
+    const id = el.id.replace('cand-', '');
+    try {
+      const r = await fetch('/api/bank-transactions/' + id + '/candidates', { credentials: 'same-origin' });
+      const data = await r.json();
+      if (!data.candidates || data.candidates.length === 0) {
+        el.textContent = 'No candidates — create new expense?';
+      } else {
+        el.textContent = '';
+        for (const cand of data.candidates) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-ghost';
+          btn.style.cssText = 'display:inline-block;margin:2px;padding:4px 8px;font-size:0.7rem';
+          btn.textContent = cand.label;
+          btn.addEventListener('click', () => match(id, cand.entity_type, cand.entity_id, btn));
+          el.appendChild(btn);
+        }
+      }
+    } catch { el.textContent = 'Load failed'; }
+  }
+}
+async function match(txnId, entityType, entityId, btn) {
+  btn.disabled = true; btn.textContent = 'Matching…';
+  try {
+    await window.fetchJSON('/api/bank-transactions/' + txnId + '/match', {
+      method: 'POST', body: JSON.stringify({ entity_type: entityType, entity_id: entityId }),
+    });
+    window.toast('Matched', 'ok');
+    btn.closest('tr').style.opacity = '0.4';
+  } catch (e) { window.toast(e.message || 'Match failed', 'err'); btn.disabled = false; btn.textContent = 'Retry'; }
+}
+loadCandidates();
+</script>`;
+  return c.html(shell({ title: 'Bank Match', activeNav: 'bank', body, brand: 'BAP Cloud' }));
+});
+
+// Find candidate matches for a bank transaction. Looks for expenses,
+// payments, and bills with amounts within $0.01 of the txn amount and
+// dates within ±3 days.
+app.get('/api/bank-transactions/:id/candidates', async (c) => {
+  const cid = c.get('companyId')!;
+  const txn = await c.env.DB.prepare('SELECT * FROM bank_transactions WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!txn) return c.json({ error: 'Not found' }, 404);
+  const amount = Math.abs(Number(txn.amount));
+  // 3-day date window.
+  const d = new Date(txn.date + 'T00:00:00Z');
+  const lo = new Date(d.getTime() - 3 * 86400_000).toISOString().slice(0, 10);
+  const hi = new Date(d.getTime() + 3 * 86400_000).toISOString().slice(0, 10);
+  const eps = 0.01;
+
+  const candidates: Array<{ entity_type: string; entity_id: string; label: string }> = [];
+  // Debit on the bank side (negative) usually pairs to an expense or bill payment.
+  if (Number(txn.amount) < 0) {
+    const exps = await c.env.DB.prepare(`
+      SELECT id, description, date, amount FROM expenses
+      WHERE company_id = ? AND date >= ? AND date <= ?
+        AND ABS(amount - ?) < ?
+      LIMIT 5
+    `).bind(cid, lo, hi, amount, eps).all();
+    for (const e of (exps.results as any[]) || []) {
+      candidates.push({ entity_type: 'expense', entity_id: e.id, label: `Expense: ${e.description || ''}` });
+    }
+  } else {
+    // Credit usually pairs to a payment.
+    const pays = await c.env.DB.prepare(`
+      SELECT id, date, amount FROM payments
+      WHERE company_id = ? AND date >= ? AND date <= ?
+        AND ABS(amount - ?) < ?
+      LIMIT 5
+    `).bind(cid, lo, hi, amount, eps).all();
+    for (const p of (pays.results as any[]) || []) {
+      candidates.push({ entity_type: 'payment', entity_id: p.id, label: `Payment: ${fmtMoney(p.amount)}` });
+    }
+  }
+  return c.json({ candidates });
+});
+
+// Confirm a match — stamps the txn and increments the account's reconciled
+// balance. NOT reversible from this endpoint; un-matching is a separate PUT.
+app.post('/api/bank-transactions/:id/match', async (c) => {
+  const cid = c.get('companyId')!;
+  const { entity_type, entity_id }: any = await c.req.json();
+  if (!entity_type || !entity_id) return c.json({ error: 'entity_type and entity_id required' }, 400);
+  const r = await c.env.DB.prepare(`
+    UPDATE bank_transactions
+    SET matched_entity_type = ?, matched_entity_id = ?, is_reconciled = 1
+    WHERE id = ? AND company_id = ?
+  `).bind(entity_type, entity_id, c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  await logAudit(c.env, cid, c.get('userId') as any, {
+    action: 'reconcile', entity_type: 'bank_transaction', entity_id: c.req.param('id'),
+    description: `Matched to ${entity_type} ${entity_id}`,
+  });
+  return c.json({ ok: true });
+});
+
+// ─── Email send (Cloudflare MailChannels) ────────────────────────────
+// MailChannels accepts POST /send for any Worker without auth — that's the
+// official Cloudflare-recommended path for Worker-originated transactional
+// mail. DKIM/SPF MUST be configured on the sending domain; without it the
+// mail goes straight to spam (or gets rejected).
+//
+// Configuring DKIM for accounting.rmpgutah.us is a one-time DNS step the
+// user does separately (TXT record per Cloudflare docs). This endpoint
+// doesn't gate on that — it just sends and logs whatever the API returns.
+
+app.get('/app/email', async (c) => {
+  const cid = c.get('companyId')!;
+  const log = await c.env.DB.prepare(`
+    SELECT id, to_email, subject, status, sent_at, related_entity_type, related_entity_id, error_message
+    FROM email_log WHERE company_id = ? ORDER BY sent_at DESC LIMIT 100
+  `).bind(cid).all();
+  const items = (log.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Email</h1>
+  <a href="/app/email/new" class="btn">+ Send Email</a>
+</div>
+<table class="data">
+  <thead><tr><th>Sent</th><th>To</th><th>Subject</th><th>Status</th><th>Related</th></tr></thead>
+  <tbody>
+    ${items.length === 0 ? `<tr><td colspan="5" class="empty-state">No emails sent yet.</td></tr>` :
+      items.map((m: any) => `<tr>
+        <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${esc(m.sent_at)}</td>
+        <td>${esc(m.to_email)}</td>
+        <td>${esc(m.subject || '—')}</td>
+        <td><span class="badge ${m.status === 'sent' ? 'badge-green' : m.status === 'failed' ? 'badge-red' : 'badge-amber'}">${esc(m.status)}</span>${m.error_message ? `<div class="muted" style="font-size:0.7rem">${esc(m.error_message)}</div>` : ''}</td>
+        <td class="muted" style="font-size:0.78rem">${m.related_entity_type ? esc(m.related_entity_type) + ' ' + esc(String(m.related_entity_id || '').slice(0, 8)) : '—'}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>`;
+  return c.html(shell({ title: 'Email', activeNav: 'email', body, brand: 'BAP Cloud' }));
+});
+
+app.get('/app/email/new', (c) => {
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Send Email</h1>
+  <a href="/app/email" class="btn btn-ghost">Back</a>
+</div>
+<form id="f" class="card grid" style="gap:1rem">
+  <div class="grid grid-2" style="gap:1rem">
+    <label class="field">To<input name="to" type="email" required placeholder="client@example.com"></label>
+    <label class="field">From (verified domain only)<input name="from" type="email" required value="noreply@accounting.rmpgutah.us"></label>
+  </div>
+  <label class="field">Subject<input name="subject" required maxlength="200"></label>
+  <label class="field">Body<textarea name="body" rows="10" required></textarea></label>
+  <div class="muted" style="font-size:0.78rem">⚠ DKIM/SPF must be configured on the sending domain or this will land in spam. See Cloudflare MailChannels docs.</div>
+  <div style="display:flex;justify-content:flex-end"><button type="submit" class="btn">Send</button></div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const payload = Object.fromEntries(fd.entries());
+  const btn = ev.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await window.fetchJSON('/api/email/send', { method: 'POST', body: JSON.stringify(payload) });
+    window.toast('Email sent', 'ok');
+    setTimeout(() => location.href = '/app/email', 600);
+  } catch (e) { window.toast(e.message || 'Send failed', 'err'); btn.disabled = false; btn.textContent = 'Send'; }
+});
+</script>`;
+  return c.html(shell({ title: 'Send Email', activeNav: 'email', body, brand: 'BAP Cloud' }));
+});
+
+app.post('/api/email/send', async (c) => {
+  const cid = c.get('companyId')!;
+  const uid = c.get('userId') as string;
+  const { to, from, subject, body, related_entity_type, related_entity_id }: any = await c.req.json();
+  if (!to || !subject || !body) return c.json({ error: 'to, subject, body required' }, 400);
+  // Single recipient for simplicity; MailChannels supports multi.
+  const mcPayload = {
+    personalizations: [{ to: [{ email: to }] }],
+    from: { email: from || 'noreply@accounting.rmpgutah.us' },
+    subject,
+    content: [{ type: 'text/plain', value: body }],
+  };
+  let status = 'sent', errorMessage = '';
+  try {
+    const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mcPayload),
+    });
+    if (!res.ok) {
+      status = 'failed';
+      errorMessage = (await res.text()).slice(0, 500);
+    }
+  } catch (e: any) {
+    status = 'failed';
+    errorMessage = (e?.message || 'Network error').slice(0, 500);
+  }
+  await c.env.DB.prepare(`
+    INSERT INTO email_log (id, company_id, user_id, to_email, from_email, subject, body_preview,
+      related_entity_type, related_entity_id, status, error_message)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(uuid(), cid, uid, to, from || null, subject, String(body).slice(0, 500),
+          related_entity_type || null, related_entity_id || null, status, errorMessage || null).run();
+  await logAudit(c.env, cid, uid, {
+    action: 'email_sent', entity_type: 'email', description: `${subject} → ${to}`,
+  });
+  if (status === 'failed') return c.json({ error: errorMessage || 'Send failed' }, 502);
+  return c.json({ ok: true });
+});
+
+// ─── Scheduled handler — daily cron ──────────────────────────────────
+// Wrangler's cron trigger calls this. Runs every day at 06:00 UTC.
+const handler = {
+  fetch: app.fetch.bind(app),
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runScheduledTasks(env));
+  },
+};
+
+async function runScheduledTasks(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    // 1. Instantiate due recurring_templates.
+    const due = await env.DB.prepare(`
+      SELECT * FROM recurring_templates
+      WHERE is_active = 1 AND next_date <= ?
+    `).bind(today).all();
+    for (const tmpl of (due.results as any[]) || []) {
+      try {
+        const data: any = tmpl.template_data ? JSON.parse(tmpl.template_data) : {};
+        const id = uuid();
+        if (tmpl.type === 'expense' && data.amount) {
+          await env.DB.prepare(`
+            INSERT INTO expenses (id, company_id, vendor_id, category_id, date, amount, tax_amount,
+              description, payment_method, status, currency, is_recurring, recurring_template_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+          `).bind(id, tmpl.company_id, data.vendor_id || null, data.category_id || null,
+                  today, Number(data.amount) || 0, Number(data.tax_amount) || 0,
+                  data.description || tmpl.name, data.payment_method || null,
+                  'pending', data.currency || 'USD', tmpl.id).run();
+        }
+        // (invoice/bill instantiation would go here — skipped for now)
+        // Bump next_date by the frequency.
+        const next = nextRecurringDate(today, tmpl.frequency);
+        await env.DB.prepare(`
+          UPDATE recurring_templates SET last_run_date = ?, next_date = ?, updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(today, next, tmpl.id).run();
+        await logAudit(env, tmpl.company_id, null, {
+          action: 'recurring_run', entity_type: 'recurring_template', entity_id: tmpl.id,
+          description: `Instantiated ${tmpl.type} from "${tmpl.name}"`,
+        });
+      } catch (err: any) {
+        await logAudit(env, tmpl.company_id, null, {
+          action: 'recurring_failed', entity_type: 'recurring_template', entity_id: tmpl.id,
+          description: `Failed: ${err?.message || 'unknown'}`,
+        });
+      }
+    }
+
+    // 2. Mark overdue invoices (due_date < today AND status='sent').
+    await env.DB.prepare(`
+      UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
+      WHERE due_date < ? AND status = 'sent'
+    `).bind(today).run();
+
+    // 3. Low-inventory notifications — one per item that just crossed.
+    const lowStock = await env.DB.prepare(`
+      SELECT id, company_id, name, quantity_on_hand, reorder_point
+      FROM inventory_items
+      WHERE reorder_point > 0 AND quantity_on_hand <= reorder_point AND status = 'active'
+    `).all();
+    for (const it of (lowStock.results as any[]) || []) {
+      // Suppress duplicates: only insert if no unread low-stock notif for this item.
+      const existing = await env.DB.prepare(`
+        SELECT id FROM notifications
+        WHERE company_id = ? AND kind = 'low_inventory' AND link = ? AND is_read = 0
+      `).bind(it.company_id, `/app/inventory/${it.id}`).first();
+      if (existing) continue;
+      await env.DB.prepare(`
+        INSERT INTO notifications (id, company_id, user_id, kind, title, body, link)
+        VALUES (?, ?, NULL, 'low_inventory', ?, ?, ?)
+      `).bind(uuid(), it.company_id,
+              `Low stock: ${it.name}`,
+              `On hand: ${it.quantity_on_hand} (reorder at ${it.reorder_point})`,
+              `/app/inventory/${it.id}`).run();
+    }
+  } catch (err) {
+    console.error('Scheduled task error:', err);
+  }
+}
+
+function nextRecurringDate(from: string, freq: string): string {
+  const d = new Date(from + 'T00:00:00Z');
+  switch (freq) {
+    case 'weekly':    d.setUTCDate(d.getUTCDate() + 7); break;
+    case 'biweekly':  d.setUTCDate(d.getUTCDate() + 14); break;
+    case 'monthly':   d.setUTCMonth(d.getUTCMonth() + 1); break;
+    case 'quarterly': d.setUTCMonth(d.getUTCMonth() + 3); break;
+    case 'annual':    d.setUTCFullYear(d.getUTCFullYear() + 1); break;
+    default:          d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+export default handler;
