@@ -293,10 +293,41 @@ app.get('/app/invoices/:id', async (c) => {
 
 // ─── /api/* — JSON endpoints used by the SPA bits ───────────
 app.use('/api/*', async (c, next) => {
-  // Sync endpoints carry their own token; everything else needs a user session.
+  // Sync endpoints carry their own token; health + stripe webhook authenticate
+  // themselves; everything else needs a user session.
   if (c.req.path.startsWith('/api/sync/')) return next();
+  if (c.req.path === '/api/health') return next();
+  if (c.req.path === '/api/stripe/webhook') return next();
   return requireUserAPI(c, next);
 });
+
+// Health endpoint for the desktop's "Test Connection" button. Authenticates
+// the DESKTOP_SYNC_TOKEN via the Authorization: Bearer header so the desktop
+// verifies reachability AND credential validity in one request. Unauthenticated
+// probes get a different shape so uptime monitors can ping without leaking
+// whether a particular token would have worked.
+app.get('/api/health', async (c) => {
+  const auth = c.req.header('authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(auth);
+  const supplied = m ? m[1].trim() : '';
+  const expected = c.env.DESKTOP_SYNC_TOKEN || '';
+  if (!supplied) {
+    return c.json({ ok: true, mode: 'public', service: 'bap-cloud' });
+  }
+  if (!expected || !healthEqualCT(supplied, expected)) {
+    return c.json({ ok: false, error: 'Invalid sync token' }, 401);
+  }
+  return c.json({ ok: true, mode: 'authenticated', service: 'bap-cloud', environment: c.env.ENVIRONMENT });
+});
+
+// Local constant-time string compare so /api/health doesn't depend on a helper
+// declared elsewhere in module order.
+function healthEqualCT(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
 // Save a new expense from the capture form.
 app.post('/api/expenses', async (c) => {

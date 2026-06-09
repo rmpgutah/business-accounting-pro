@@ -5175,7 +5175,7 @@ export function generateExpenseReceiptHTML(
   ${expense.payment_method ? `<div class="fd-meta-row"><span class="lbl">Payment Method</span><span class="val">${esc(formatPaymentMethod(expense.payment_method))}</span></div>` : ''}
   ${expense.merchant_location ? `<div class="fd-meta-row"><span class="lbl">Merchant Location</span><span class="val">${esc(expense.merchant_location)}</span></div>` : ''}
   ${expense.geo_location_name ? `<div class="fd-meta-row"><span class="lbl">GPS / Location</span><span class="val">${esc(expense.geo_location_name)}</span></div>` : ''}
-  ${shipping > 0 && expense.shipping_speed ? `<div class="fd-meta-row"><span class="lbl">Shipping Speed</span><span class="val">${esc(expense.shipping_speed)}</span></div>` : ''}
+  ${expense.shipping_speed ? `<div class="fd-meta-row"><span class="lbl">Shipping Speed</span><span class="val">${esc(expense.shipping_speed)}</span></div>` : ''}
 </div>
 
 ${detailsHTML}
