@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import { expenseGrandTotal } from './expense-helpers';
