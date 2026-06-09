@@ -35,8 +35,12 @@ export interface DocumentRow {
 }
 
 export interface DocFormConfig {
-  // Used in URLs + headings ("bill", "quote")
+  // Used in headings ("bill", "quote")
   kind: 'bill' | 'quote';
+  // Optional API path override (defaults to '/api/' + kind + 's'). Used by
+  // Purchase Orders which want /api/purchase-orders but otherwise reuse
+  // the bill-shape form (vendor party, line items, totals).
+  apiPath?: string;
   // "Bills (AP)" vs "Quotes"
   pluralLabel: string;
   // Sidebar nav key
@@ -131,6 +135,9 @@ const isEdit = ${isEdit ? 'true' : 'false'};
 const id = ${isEdit ? JSON.stringify(r.id) : 'null'};
 const KIND = ${JSON.stringify(cfg.kind)};
 const NAV = ${JSON.stringify(cfg.navKey)};
+// API_BASE is what we POST/PUT/DELETE against. Defaults to /api/<kind>s
+// but POs override it to /api/purchase-orders.
+const API_BASE = ${JSON.stringify(cfg.apiPath || ('/api/' + cfg.kind + 's'))};
 const PARTY_FIELD = ${JSON.stringify(cfg.partyField)};
 const SECONDARY_DATE_FIELD = ${JSON.stringify(cfg.secondaryDateField)};
 const NUMBER_FIELD = ${JSON.stringify(cfg.kind === 'bill' ? 'bill_number' : 'quote_number')};
@@ -238,7 +245,7 @@ document.getElementById('f').addEventListener('submit', async function(ev){
     });
   });
   const payload = Object.assign({}, header, { lines });
-  const url = isEdit ? '/api/' + KIND + 's/' + id : '/api/' + KIND + 's';
+  const url = isEdit ? API_BASE + '/' + id : API_BASE;
   try {
     await window.fetchJSON(url, { method: isEdit ? 'PUT' : 'POST', body: JSON.stringify(payload) });
     window.toast((KIND === 'bill' ? 'Bill' : 'Quote') + ' saved', 'ok');
@@ -248,7 +255,7 @@ document.getElementById('f').addEventListener('submit', async function(ev){
 const del = document.getElementById('del');
 if (del) del.addEventListener('click', async function(){
   if (!confirm('Delete this ' + KIND + '?')) return;
-  try { await window.fetchJSON('/api/' + KIND + 's/' + id, { method: 'DELETE' });
+  try { await window.fetchJSON(API_BASE + '/' + id, { method: 'DELETE' });
     location.href = '/app/' + NAV;
   } catch (e) { window.toast(e.message || 'Delete failed', 'err'); }
 });

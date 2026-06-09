@@ -27,6 +27,8 @@ import { employeeFormPage } from './ui/employee-form';
 import { timeFormPage } from './ui/time-form';
 import { projectFormPage } from './ui/project-form';
 import { documentFormPage } from './ui/document-form';
+import { simpleFormPage, type SimpleField } from './ui/generic-form';
+import { shell } from './ui/shell';
 
 export interface Env {
   DB: D1Database;
@@ -1305,5 +1307,560 @@ function constantTimeStrEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+// ─── Purchase Orders (re-uses documentFormPage like bills/quotes) ───
+const PO_DOC_CFG = {
+  kind: 'bill' as const,  // Reuses bill-shape (vendor-side); we override the path bits below
+  apiPath: '/api/purchase-orders',
+  pluralLabel: 'Purchase Orders',
+  navKey: 'purchase-orders',
+  partyLabel: 'Vendor' as const,
+  partyField: 'vendor_id' as const,
+  parties: [] as Array<{ id: string; name: string }>,
+  statusOptions: ['draft', 'sent', 'received', 'cancelled', 'closed'],
+  numberLabel: 'PO #',
+  secondaryDateLabel: 'Expected Date',
+  secondaryDateField: 'due_date' as const,  // mapped to expected_date in saveDoc
+};
+app.get('/app/purchase-orders', async (c) => listingPage(c, 'Purchase Orders', 'purchase-orders', `
+  SELECT po.id, po.po_number, po.date, po.expected_date, po.status, po.total,
+         v.name as vendor_name
+  FROM purchase_orders po LEFT JOIN vendors v ON v.id = po.vendor_id
+  WHERE po.company_id = ? ORDER BY po.date DESC`,
+  ['#', 'Vendor', 'Date', 'Expected', 'Status', 'Total'],
+  (r: any) => [
+    `<a href="/app/purchase-orders/${esc(r.id)}">${esc(r.po_number || r.id.slice(0, 8))}</a>`,
+    esc(r.vendor_name || '—'),
+    fmtDate(r.date), fmtDate(r.expected_date),
+    `<span class="badge ${r.status === 'closed' || r.status === 'received' ? 'badge-green' : r.status === 'cancelled' ? 'badge-red' : 'badge-blue'}">${esc(r.status)}</span>`,
+    fmtMoney(r.total),
+  ],
+  '/app/purchase-orders/new',
+));
+
+// ─── Inventory listing ──────────────────────────────────────
+app.get('/app/inventory', async (c) => listingPage(c, 'Inventory', 'inventory', `
+  SELECT id, sku, name, quantity_on_hand, unit_cost, unit_price, reorder_point, status
+  FROM inventory_items WHERE company_id = ? ORDER BY name`,
+  ['SKU', 'Name', 'On Hand', 'Cost', 'Price', 'Status'],
+  (r: any) => [
+    esc(r.sku || '—'),
+    `<a href="/app/inventory/${esc(r.id)}">${esc(r.name)}</a>`,
+    String(r.quantity_on_hand ?? 0) + (r.reorder_point > 0 && r.quantity_on_hand <= r.reorder_point ? ' <span class="badge badge-amber">low</span>' : ''),
+    fmtMoney(r.unit_cost), fmtMoney(r.unit_price),
+    `<span class="badge">${esc(r.status)}</span>`,
+  ],
+  '/app/inventory/new',
+));
+
+// ─── Fixed Assets listing ───────────────────────────────────
+app.get('/app/fixed-assets', async (c) => listingPage(c, 'Fixed Assets', 'fixed-assets', `
+  SELECT id, name, category, purchase_date, purchase_cost, current_value, status
+  FROM fixed_assets WHERE company_id = ? ORDER BY purchase_date DESC`,
+  ['Name', 'Category', 'Purchased', 'Cost', 'Current', 'Status'],
+  (r: any) => [
+    `<a href="/app/fixed-assets/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.category || '—'),
+    fmtDate(r.purchase_date),
+    fmtMoney(r.purchase_cost), fmtMoney(r.current_value),
+    `<span class="badge">${esc(r.status)}</span>`,
+  ],
+  '/app/fixed-assets/new',
+));
+
+// ─── Loans listing ──────────────────────────────────────────
+app.get('/app/loans', async (c) => listingPage(c, 'Loans', 'loans', `
+  SELECT id, name, lender_name, principal, current_balance, interest_rate, status
+  FROM loans WHERE company_id = ? ORDER BY name`,
+  ['Name', 'Lender', 'Principal', 'Balance', 'Rate', 'Status'],
+  (r: any) => [
+    `<a href="/app/loans/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.lender_name || '—'),
+    fmtMoney(r.principal), fmtMoney(r.current_balance),
+    ((r.interest_rate || 0) * 100).toFixed(2) + '%',
+    `<span class="badge">${esc(r.status)}</span>`,
+  ],
+  '/app/loans/new',
+));
+
+// ─── Budgets listing ────────────────────────────────────────
+app.get('/app/budgets', async (c) => listingPage(c, 'Budgets', 'budgets', `
+  SELECT b.id, b.name, b.period, b.budget_amount, b.start_date, b.end_date,
+         c.name as category_name
+  FROM budgets b LEFT JOIN categories c ON c.id = b.category_id
+  WHERE b.company_id = ? ORDER BY b.start_date DESC`,
+  ['Name', 'Category', 'Period', 'Amount', 'Range'],
+  (r: any) => [
+    `<a href="/app/budgets/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.category_name || '—'),
+    `<span class="badge">${esc(r.period)}</span>`,
+    fmtMoney(r.budget_amount),
+    fmtDate(r.start_date) + (r.end_date ? ' → ' + fmtDate(r.end_date) : ''),
+  ],
+  '/app/budgets/new',
+));
+
+// ─── Chart of Accounts (GL) listing ─────────────────────────
+app.get('/app/accounts', async (c) => listingPage(c, 'Chart of Accounts', 'accounts', `
+  SELECT id, code, name, type, subtype, balance, is_active
+  FROM accounts WHERE company_id = ? ORDER BY code, name`,
+  ['Code', 'Name', 'Type', 'Subtype', 'Balance'],
+  (r: any) => [
+    esc(r.code || '—'),
+    `<a href="/app/accounts/${esc(r.id)}">${esc(r.name)}</a>`,
+    `<span class="badge">${esc(r.type)}</span>`,
+    esc(r.subtype || '—'),
+    fmtMoney(r.balance),
+  ],
+  '/app/accounts/new',
+));
+
+// ─── Reports — Profit & Loss + Expense Summary ──────────────
+// Computed inline from invoices + expenses; no Chart-of-Accounts dependency.
+// Period is configurable via ?period=ytd|month|quarter (default ytd).
+app.get('/app/reports', async (c) => {
+  const cid = c.get('companyId')!;
+  const period = c.req.query('period') || 'ytd';
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  let start: string;
+  let end: string = now.toISOString().slice(0, 10);
+  if (period === 'month') start = `${year}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  else if (period === 'quarter') {
+    const qStartMonth = Math.floor(now.getUTCMonth() / 3) * 3 + 1;
+    start = `${year}-${String(qStartMonth).padStart(2, '0')}-01`;
+  } else start = `${year}-01-01`;
+
+  const [income, expense, byCat] = await c.env.DB.batch([
+    c.env.DB.prepare(`
+      SELECT COALESCE(SUM(amount_paid), 0) as paid, COALESCE(SUM(total), 0) as billed
+      FROM invoices WHERE company_id = ? AND date >= ? AND date <= ?
+    `).bind(cid, start, end),
+    c.env.DB.prepare(`
+      SELECT COALESCE(SUM(amount), 0) as subtotal, COALESCE(SUM(tax_amount), 0) as tax,
+             COALESCE(SUM(shipping_amount), 0) as shipping
+      FROM expenses WHERE company_id = ? AND date >= ? AND date <= ?
+    `).bind(cid, start, end),
+    c.env.DB.prepare(`
+      SELECT COALESCE(c.name, 'Uncategorized') as category, COALESCE(SUM(e.amount), 0) as total
+      FROM expenses e LEFT JOIN categories c ON c.id = e.category_id
+      WHERE e.company_id = ? AND e.date >= ? AND e.date <= ?
+      GROUP BY c.id ORDER BY total DESC LIMIT 20
+    `).bind(cid, start, end),
+  ]);
+  const inc = (income.results as any[])[0] || { paid: 0, billed: 0 };
+  const exp = (expense.results as any[])[0] || { subtotal: 0, tax: 0, shipping: 0 };
+  const cats = (byCat.results as any[]) || [];
+  const revenue = Number(inc.paid || 0);
+  const expenses = Number(exp.subtotal || 0) + Number(exp.tax || 0) + Number(exp.shipping || 0);
+  const netProfit = revenue - expenses;
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Reports</h1>
+  <div style="display:flex;gap:8px">
+    <a class="btn ${period === 'month' ? '' : 'btn-ghost'}" href="?period=month">Month</a>
+    <a class="btn ${period === 'quarter' ? '' : 'btn-ghost'}" href="?period=quarter">Quarter</a>
+    <a class="btn ${period === 'ytd' ? '' : 'btn-ghost'}" href="?period=ytd">YTD</a>
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Profit &amp; Loss · ${esc(start)} → ${esc(end)}</div>
+  <div class="grid grid-3" style="gap:1rem;margin-top:1rem">
+    <div><div class="muted" style="font-size:0.75rem;text-transform:uppercase">Revenue</div>
+      <div style="font-size:1.6rem;font-weight:700;color:var(--green)">${fmtMoney(revenue)}</div>
+      <div class="muted" style="font-size:0.75rem">paid · billed ${fmtMoney(Number(inc.billed || 0))}</div></div>
+    <div><div class="muted" style="font-size:0.75rem;text-transform:uppercase">Expenses</div>
+      <div style="font-size:1.6rem;font-weight:700;color:var(--red)">${fmtMoney(expenses)}</div>
+      <div class="muted" style="font-size:0.75rem">incl. ${fmtMoney(Number(exp.tax || 0))} tax · ${fmtMoney(Number(exp.shipping || 0))} ship</div></div>
+    <div><div class="muted" style="font-size:0.75rem;text-transform:uppercase">Net</div>
+      <div style="font-size:1.6rem;font-weight:700;color:${netProfit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(netProfit)}</div>
+      <div class="muted" style="font-size:0.75rem">${revenue > 0 ? ((netProfit / revenue) * 100).toFixed(1) + '% margin' : '—'}</div></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Expenses by Category</div>
+  <table class="data">
+    <thead><tr><th>Category</th><th class="num">Total</th><th class="num">% of Total</th></tr></thead>
+    <tbody>
+      ${cats.length === 0 ? '<tr><td colspan="3" class="empty-state">No expenses in this period.</td></tr>' :
+        cats.map((r: any) => `<tr>
+          <td>${esc(r.category)}</td>
+          <td class="num">${fmtMoney(r.total)}</td>
+          <td class="num">${expenses > 0 ? ((Number(r.total) / expenses) * 100).toFixed(1) + '%' : '—'}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>`;
+  return c.html(shell({ title: 'Reports', activeNav: 'reports', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Settings page (company info + key/value settings) ──────
+app.get('/app/settings', async (c) => {
+  const cid = c.get('companyId')!;
+  const [company, settings] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(cid),
+    c.env.DB.prepare('SELECT key, value FROM settings WHERE company_id = ?').bind(cid),
+  ]);
+  const co = (company.results as any[])[0] || {};
+  const sMap = Object.fromEntries(((settings.results as any[]) || []).map((r: any) => [r.key, r.value]));
+  const body = `
+<div class="page-header"><h1 class="page-title">Settings</h1></div>
+<form id="f" class="card grid" style="gap:1rem">
+  <div class="card-title">Company</div>
+  <label class="field">Company Name<input name="company_name" required value="${esc(co.name || '')}"></label>
+  <div class="grid grid-2" style="gap:1rem">
+    <label class="field">Email<input name="company_email" type="email" value="${esc(co.email || '')}"></label>
+    <label class="field">Phone<input name="company_phone" value="${esc(co.phone || '')}"></label>
+  </div>
+  <label class="field">Address<textarea name="company_address" rows="3">${esc(co.address || '')}</textarea></label>
+  <div class="grid grid-2" style="gap:1rem">
+    <label class="field">Tax ID / EIN<input name="company_tax_id" value="${esc(co.tax_id || '')}"></label>
+    <label class="field">Currency<input name="company_currency" maxlength="4" value="${esc(co.currency || 'USD')}"></label>
+  </div>
+
+  <div class="card-title" style="margin-top:1rem">App Preferences</div>
+  <label class="field">Default Invoice Terms<textarea name="default_invoice_terms" rows="2">${esc(sMap.default_invoice_terms || '')}</textarea></label>
+  <label class="field">Default Invoice Notes<textarea name="default_invoice_notes" rows="2">${esc(sMap.default_invoice_notes || '')}</textarea></label>
+  <div style="display:flex;justify-content:flex-end"><button type="submit" class="btn">Save Settings</button></div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const payload = Object.fromEntries(fd.entries());
+  try {
+    await window.fetchJSON('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
+    window.toast('Settings saved', 'ok');
+  } catch (e) { window.toast(e.message || 'Save failed', 'err'); }
+});
+</script>`;
+  return c.html(shell({ title: 'Settings', activeNav: 'settings', body, brand: 'BAP Cloud' }));
+});
+
+app.put('/api/settings', async (c) => {
+  const cid = c.get('companyId')!;
+  const b: any = await c.req.json();
+  const stmts: D1PreparedStatement[] = [];
+  if (b.company_name) {
+    stmts.push(c.env.DB.prepare(`
+      UPDATE companies SET name = ?, email = ?, phone = ?, address = ?, tax_id = ?, currency = ?
+      WHERE id = ?
+    `).bind(b.company_name, b.company_email || null, b.company_phone || null,
+            b.company_address || null, b.company_tax_id || null,
+            b.company_currency || 'USD', cid));
+  }
+  for (const k of ['default_invoice_terms', 'default_invoice_notes']) {
+    const v = (b[k] ?? '').toString();
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO settings (id, company_id, key, value, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+    `).bind(uuid(), cid, k, v));
+  }
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  return c.json({ ok: true });
+});
+
+// ─── PURCHASE ORDERS new/edit + CRUD ────────────────────────
+// Reuses the bills code path but maps over a different table.
+app.get('/app/purchase-orders/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const vendors = await c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  // Override the form's nav target so document-form.ts emits the right URL.
+  const cfg = { ...PO_DOC_CFG, parties: (vendors.results as any) || [], navKey: 'purchase-orders' };
+  return c.html(documentFormPage(null, [], cfg as any, new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/purchase-orders/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [po, lines, vendors] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM po_line_items WHERE po_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (po.results as any[])?.[0];
+  if (!row) return c.notFound();
+  // Map po_number → number, expected_date → due_date (the form's secondary date slot).
+  const normalized = { ...row, number: row.po_number, due_date: row.expected_date };
+  const cfg = { ...PO_DOC_CFG, parties: (vendors.results as any) || [] };
+  return c.html(documentFormPage(normalized, (lines.results as any) || [], cfg as any, new Date().toISOString().slice(0, 10)));
+});
+app.post('/api/purchase-orders', async (c) => savePO(c, null));
+app.put('/api/purchase-orders/:id', async (c) => savePO(c, c.req.param('id')));
+app.delete('/api/purchase-orders/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const id = c.req.param('id');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM po_line_items WHERE po_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM purchase_orders WHERE id = ? AND company_id = ?').bind(id, cid),
+  ]);
+  return c.json({ ok: true });
+});
+async function savePO(c: any, idOrNull: string | null): Promise<Response> {
+  const cid = c.get('companyId')!;
+  const b: any = await c.req.json();
+  if (!b.vendor_id) return c.json({ error: 'Vendor is required' }, 400);
+  const lines: any[] = Array.isArray(b.lines) ? b.lines : [];
+  if (lines.length === 0) return c.json({ error: 'At least one line item is required' }, 400);
+  const { subtotal, tax, total } = computeInvoiceTotals(lines, Number(b.shipping_amount || 0), Number(b.discount || 0));
+  const id = idOrNull || uuid();
+  const stmts: D1PreparedStatement[] = [];
+  if (idOrNull) {
+    stmts.push(c.env.DB.prepare(`
+      UPDATE purchase_orders SET vendor_id = ?, po_number = ?, date = ?, expected_date = ?, status = ?,
+        subtotal = ?, tax_amount = ?, shipping_amount = ?, discount = ?, total = ?,
+        currency = ?, notes = ?, terms = ?, updated_at = datetime('now')
+      WHERE id = ? AND company_id = ?
+    `).bind(b.vendor_id, b.bill_number || b.po_number || null, b.date, b.due_date || b.expected_date || null,
+            b.status || 'draft', subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+            b.currency || 'USD', b.notes || null, b.terms || null, id, cid));
+    stmts.push(c.env.DB.prepare('DELETE FROM po_line_items WHERE po_id = ?').bind(id));
+  } else {
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO purchase_orders (id, company_id, vendor_id, po_number, date, expected_date, status,
+        subtotal, tax_amount, shipping_amount, discount, total, currency, notes, terms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, cid, b.vendor_id, b.bill_number || b.po_number || null, b.date,
+            b.due_date || b.expected_date || null, b.status || 'draft',
+            subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+            b.currency || 'USD', b.notes || null, b.terms || null));
+  }
+  lines.forEach((l, i) => {
+    const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+    const taxA = amt * (Number(l.tax_rate || 0) / 100);
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO po_line_items (id, po_id, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+            Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+  });
+  await c.env.DB.batch(stmts);
+  return c.json({ ok: true, id, total });
+}
+
+// ─── Generic single-table CRUD (inventory, fixed_assets, loans,
+//     budgets, accounts, categories, recurring_templates, debts) ────
+// Wires up: GET /app/<navKey>/new + /app/<navKey>/:id with simpleFormPage,
+// plus POST /api/<navKey> + PUT/DELETE /api/<navKey>/:id.
+interface SimpleEntity {
+  table: string;
+  navKey: string;
+  apiPath: string;
+  entitySingular: string;
+  entityPlural: string;
+  listPath: string;
+  // SQL column list used in INSERT/UPDATE (must match the form's `name` keys).
+  cols: string[];
+  // Form field definitions
+  fields: SimpleField[];
+  // Optional extra ON DELETE cleanup statements (e.g. cascade null on child FKs).
+  onDelete?: (id: string, cid: string, db: any) => any[];
+}
+
+function wireSimpleEntity(e: SimpleEntity) {
+  const cfg = {
+    entitySingular: e.entitySingular,
+    entityPlural: e.entityPlural,
+    apiPath: e.apiPath,
+    navKey: e.navKey,
+    listPath: e.listPath,
+    fields: e.fields,
+  };
+  app.get(`/app/${e.navKey}/new`, (c) => c.html(simpleFormPage(null, cfg)));
+  app.get(`/app/${e.navKey}/:id`, async (c) => {
+    const cid = c.get('companyId')!;
+    const row = await c.env.DB.prepare(`SELECT * FROM ${e.table} WHERE id = ? AND company_id = ?`)
+      .bind(c.req.param('id'), cid).first<any>();
+    if (!row) return c.notFound();
+    return c.html(simpleFormPage(row, cfg));
+  });
+  app.post(e.apiPath, async (c) => {
+    const cid = c.get('companyId')!;
+    const b: any = await c.req.json();
+    const id = uuid();
+    await c.env.DB.prepare(
+      `INSERT INTO ${e.table} (id, company_id, ${e.cols.join(',')}) VALUES (?, ?, ${e.cols.map(() => '?').join(',')})`
+    ).bind(id, cid, ...e.cols.map(col => b[col] ?? null)).run();
+    return c.json({ ok: true, id });
+  });
+  app.put(`${e.apiPath}/:id`, async (c) => {
+    const cid = c.get('companyId')!;
+    const b: any = await c.req.json();
+    const sets = e.cols.map(col => `${col} = ?`).join(', ');
+    const r = await c.env.DB.prepare(
+      `UPDATE ${e.table} SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+    ).bind(...e.cols.map(col => b[col] ?? null), c.req.param('id'), cid).run();
+    if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+    return c.json({ ok: true });
+  });
+  app.delete(`${e.apiPath}/:id`, async (c) => {
+    const cid = c.get('companyId')!;
+    const id = c.req.param('id');
+    const extras = e.onDelete ? e.onDelete(id, cid, c.env.DB) : [];
+    await c.env.DB.batch([
+      ...extras,
+      c.env.DB.prepare(`DELETE FROM ${e.table} WHERE id = ? AND company_id = ?`).bind(id, cid),
+    ]);
+    return c.json({ ok: true });
+  });
+}
+
+wireSimpleEntity({
+  table: 'inventory_items', navKey: 'inventory', apiPath: '/api/inventory',
+  entitySingular: 'Inventory Item', entityPlural: 'Inventory', listPath: '/app/inventory',
+  cols: ['sku', 'name', 'description', 'unit_cost', 'unit_price', 'quantity_on_hand',
+         'reorder_point', 'unit_of_measure', 'category', 'status'],
+  fields: [
+    { name: 'name', label: 'Name', kind: 'text', required: true },
+    { name: 'sku', label: 'SKU', kind: 'text', rowGroup: 1 },
+    { name: 'category', label: 'Category', kind: 'text', rowGroup: 1 },
+    { name: 'description', label: 'Description', kind: 'textarea' },
+    { name: 'unit_cost', label: 'Unit Cost', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'unit_price', label: 'Unit Price', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'quantity_on_hand', label: 'Qty on Hand', kind: 'number', coerce: 'number', step: '1', rowGroup: 3 },
+    { name: 'reorder_point', label: 'Reorder Point', kind: 'number', coerce: 'number', step: '1', rowGroup: 3 },
+    { name: 'unit_of_measure', label: 'UoM', kind: 'text', placeholder: 'each, lb, hr, …', rowGroup: 3 },
+    { name: 'status', label: 'Status', kind: 'select', options: [
+      { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }] },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'fixed_assets', navKey: 'fixed-assets', apiPath: '/api/fixed-assets',
+  entitySingular: 'Fixed Asset', entityPlural: 'Fixed Assets', listPath: '/app/fixed-assets',
+  cols: ['name', 'category', 'purchase_date', 'purchase_cost', 'current_value',
+         'useful_life_years', 'depreciation_method', 'accumulated_depreciation',
+         'serial_number', 'location', 'status', 'notes'],
+  fields: [
+    { name: 'name', label: 'Name', kind: 'text', required: true },
+    { name: 'category', label: 'Category', kind: 'text', placeholder: 'Vehicles, Equipment, Furniture…', rowGroup: 1 },
+    { name: 'serial_number', label: 'Serial Number', kind: 'text', rowGroup: 1 },
+    { name: 'purchase_date', label: 'Purchase Date', kind: 'date', rowGroup: 2 },
+    { name: 'purchase_cost', label: 'Purchase Cost', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'current_value', label: 'Current Value', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'useful_life_years', label: 'Useful Life (years)', kind: 'number', coerce: 'integer', step: '1', rowGroup: 3 },
+    { name: 'depreciation_method', label: 'Depreciation', kind: 'select', rowGroup: 3, options: [
+      { value: 'straight_line', label: 'Straight Line' },
+      { value: 'declining_balance', label: 'Declining Balance' },
+      { value: 'macrs', label: 'MACRS' },
+      { value: 'none', label: 'None' }] },
+    { name: 'accumulated_depreciation', label: 'Accum. Depreciation', kind: 'number', coerce: 'number', rowGroup: 3 },
+    { name: 'location', label: 'Location', kind: 'text', rowGroup: 4 },
+    { name: 'status', label: 'Status', kind: 'select', rowGroup: 4, options: [
+      { value: 'active', label: 'Active' }, { value: 'disposed', label: 'Disposed' }, { value: 'sold', label: 'Sold' }] },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'loans', navKey: 'loans', apiPath: '/api/loans',
+  entitySingular: 'Loan', entityPlural: 'Loans', listPath: '/app/loans',
+  cols: ['name', 'lender_name', 'loan_type', 'principal', 'current_balance',
+         'interest_rate', 'rate_type', 'start_date', 'term_months', 'payment_amount',
+         'status', 'notes'],
+  fields: [
+    { name: 'name', label: 'Loan Name', kind: 'text', required: true, rowGroup: 1 },
+    { name: 'lender_name', label: 'Lender', kind: 'text', rowGroup: 1 },
+    { name: 'loan_type', label: 'Type', kind: 'select', rowGroup: 2, options: [
+      { value: 'term_loan', label: 'Term Loan' },
+      { value: 'mortgage', label: 'Mortgage' },
+      { value: 'sba', label: 'SBA Loan' },
+      { value: 'line_of_credit', label: 'Line of Credit' },
+      { value: 'auto', label: 'Auto Loan' },
+      { value: 'other', label: 'Other' }] },
+    { name: 'principal', label: 'Original Principal', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'current_balance', label: 'Current Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'interest_rate', label: 'Interest Rate (decimal, e.g. 0.0675)', kind: 'number', coerce: 'number', step: '0.0001', rowGroup: 3 },
+    { name: 'rate_type', label: 'Rate Type', kind: 'select', rowGroup: 3, options: [
+      { value: 'fixed', label: 'Fixed' }, { value: 'variable', label: 'Variable' }] },
+    { name: 'term_months', label: 'Term (months)', kind: 'number', coerce: 'integer', step: '1', rowGroup: 3 },
+    { name: 'start_date', label: 'Start Date', kind: 'date', rowGroup: 4 },
+    { name: 'payment_amount', label: 'Monthly Payment', kind: 'number', coerce: 'number', rowGroup: 4 },
+    { name: 'status', label: 'Status', kind: 'select', rowGroup: 4, options: [
+      { value: 'active', label: 'Active' },
+      { value: 'paid_off', label: 'Paid Off' },
+      { value: 'refinanced', label: 'Refinanced' }] },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'budgets', navKey: 'budgets', apiPath: '/api/budgets',
+  entitySingular: 'Budget', entityPlural: 'Budgets', listPath: '/app/budgets',
+  cols: ['name', 'period', 'category_id', 'budget_amount', 'start_date', 'end_date', 'notes'],
+  fields: [
+    { name: 'name', label: 'Budget Name', kind: 'text', required: true },
+    { name: 'period', label: 'Period', kind: 'select', rowGroup: 1, options: [
+      { value: 'monthly', label: 'Monthly' },
+      { value: 'quarterly', label: 'Quarterly' },
+      { value: 'annual', label: 'Annual' }] },
+    { name: 'budget_amount', label: 'Budget Amount', kind: 'number', coerce: 'number', rowGroup: 1 },
+    { name: 'category_id', label: 'Category ID (optional)', kind: 'text', placeholder: 'Leave empty for all categories', rowGroup: 2 },
+    { name: 'start_date', label: 'Start Date', kind: 'date', required: true, rowGroup: 2 },
+    { name: 'end_date', label: 'End Date', kind: 'date', rowGroup: 2 },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'accounts', navKey: 'accounts', apiPath: '/api/accounts',
+  entitySingular: 'Account', entityPlural: 'Chart of Accounts', listPath: '/app/accounts',
+  cols: ['code', 'name', 'type', 'subtype', 'description', 'is_active', 'balance', 'parent_id'],
+  fields: [
+    { name: 'code', label: 'Account Code', kind: 'text', placeholder: 'e.g. 1000', rowGroup: 1 },
+    { name: 'name', label: 'Account Name', kind: 'text', required: true, rowGroup: 1 },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 2, options: [
+      { value: 'asset', label: 'Asset' },
+      { value: 'liability', label: 'Liability' },
+      { value: 'equity', label: 'Equity' },
+      { value: 'income', label: 'Income' },
+      { value: 'expense', label: 'Expense' }] },
+    { name: 'subtype', label: 'Subtype', kind: 'text', placeholder: 'current_asset, etc.', rowGroup: 2 },
+    { name: 'balance', label: 'Opening Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'description', label: 'Description', kind: 'textarea' },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox' },
+  ],
+});
+
+// Sidebar ordering puts Reports/Settings AFTER the entity modules but those
+// routes are registered above; the page-handlers below are extras (debts,
+// categories, recurring) the sidebar doesn't yet expose but the API does.
+wireSimpleEntity({
+  table: 'debts', navKey: 'debts', apiPath: '/api/debts',
+  entitySingular: 'Debt', entityPlural: 'Debts', listPath: '/app/debts',
+  cols: ['client_id', 'account_name', 'principal', 'current_balance', 'stage',
+         'status', 'origin_invoice_id', 'interest_rate', 'start_date', 'notes'],
+  fields: [
+    { name: 'account_name', label: 'Account Name', kind: 'text', required: true },
+    { name: 'client_id', label: 'Client ID (optional)', kind: 'text', rowGroup: 1 },
+    { name: 'origin_invoice_id', label: 'Origin Invoice ID', kind: 'text', rowGroup: 1 },
+    { name: 'principal', label: 'Principal', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'current_balance', label: 'Current Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'interest_rate', label: 'Interest Rate', kind: 'number', coerce: 'number', step: '0.0001', rowGroup: 2 },
+    { name: 'stage', label: 'Stage', kind: 'select', rowGroup: 3, options: [
+      'reminder', 'warning', 'final_notice', 'demand_letter', 'collections_agency', 'legal_action', 'judgment', 'garnishment'
+    ].map(s => ({ value: s, label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) })) },
+    { name: 'status', label: 'Status', kind: 'select', rowGroup: 3, options: [
+      { value: 'active', label: 'Active' }, { value: 'settled', label: 'Settled' }, { value: 'closed', label: 'Closed' }] },
+    { name: 'start_date', label: 'Start Date', kind: 'date', rowGroup: 3 },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'categories', navKey: 'categories', apiPath: '/api/categories',
+  entitySingular: 'Category', entityPlural: 'Categories', listPath: '/app/categories',
+  cols: ['name', 'type', 'color', 'icon', 'description', 'monthly_cap', 'is_active'],
+  fields: [
+    { name: 'name', label: 'Name', kind: 'text', required: true, rowGroup: 1 },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 1, options: [
+      { value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }] },
+    { name: 'color', label: 'Color', kind: 'text', placeholder: '#10b981', rowGroup: 2 },
+    { name: 'icon', label: 'Icon', kind: 'text', placeholder: 'Emoji or name', rowGroup: 2 },
+    { name: 'monthly_cap', label: 'Monthly Cap (optional)', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'description', label: 'Description', kind: 'textarea' },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox' },
+  ],
+});
 
 export default app;
