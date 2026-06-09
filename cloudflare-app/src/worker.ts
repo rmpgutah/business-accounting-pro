@@ -540,7 +540,52 @@ app.get('/app/invoices/:id', async (c) => {
 app.use('/api/*', async (c, next) => {
   // Sync endpoints carry their own token; everything else needs a user session.
   if (c.req.path.startsWith('/api/sync/')) return next();
+  if (c.req.path === '/api/health') return next();
+  if (c.req.path === '/api/stripe/webhook') return next();
   return requireUserAPI(c, next);
+});
+
+// Audit middleware — auto-logs every mutation (POST/PUT/DELETE) under /api/*
+// AFTER the handler returns 2xx. Entity type is derived from the second path
+// segment ('clients' → 'client'); entity id is the third segment or the
+// `id` field in the response body for creates. Read-only methods are not
+// logged here. Failed handlers (4xx/5xx) skip logging so audit only
+// reflects events that actually happened.
+app.use('/api/*', async (c, next) => {
+  const method = c.req.method;
+  await next();
+  if (!['POST', 'PUT', 'DELETE'].includes(method)) return;
+  if (c.res.status >= 400) return;
+  const path = c.req.path;
+  // Skip auth endpoints and the special-purpose ones that already log inline.
+  if (path.startsWith('/api/sync/') || path === '/api/health' || path === '/api/stripe/webhook'
+      || path === '/api/email/send' || path.includes('/match')
+      || path === '/api/settings' || path === '/api/notifications/mark-all-read') return;
+  const cid = c.get('companyId') as string | undefined;
+  const uid = c.get('userId') as string | undefined;
+  if (!cid) return;
+  // Derive entity_type from '/api/<entity>/...' — singularize trailing 's'.
+  const seg = path.split('/').filter(Boolean);
+  if (seg.length < 2) return;
+  let entityType = seg[1];
+  if (entityType.endsWith('ies')) entityType = entityType.slice(0, -3) + 'y';
+  else if (entityType.endsWith('s')) entityType = entityType.slice(0, -1);
+  const entityId = seg.length >= 3 ? seg[2] : undefined;
+  // For POST creates, try to extract id from the response (we already wrote it).
+  let resolvedId = entityId;
+  if (!resolvedId && method === 'POST') {
+    try {
+      // Clone the response so we don't consume the original stream.
+      const cloned = c.res.clone();
+      const body = await cloned.json<any>();
+      if (body?.id) resolvedId = String(body.id);
+    } catch { /* ignore non-JSON responses */ }
+  }
+  const action = method === 'POST' ? 'create' : method === 'PUT' ? 'update' : 'delete';
+  await logAudit(c.env, cid, uid || null, {
+    action, entity_type: entityType, entity_id: resolvedId,
+    description: `${action} ${entityType}${resolvedId ? ' ' + resolvedId.slice(0, 8) : ''}`,
+  });
 });
 
 // Save a new expense from the capture form.
@@ -2736,8 +2781,72 @@ async function runScheduledTasks(env: Env): Promise<void> {
                   today, Number(data.amount) || 0, Number(data.tax_amount) || 0,
                   data.description || tmpl.name, data.payment_method || null,
                   'pending', data.currency || 'USD', tmpl.id).run();
+        } else if (tmpl.type === 'invoice' && Array.isArray(data.lines) && data.lines.length > 0) {
+          // Instantiate an invoice with its lines from template_data.
+          const totals = { subtotal: 0, tax: 0 };
+          for (const l of data.lines) {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            totals.subtotal += amt;
+            totals.tax += amt * (Number(l.tax_rate || 0) / 100);
+          }
+          const ship = Number(data.shipping_amount || 0);
+          const disc = Number(data.discount || 0);
+          const total = Math.max(0, totals.subtotal + totals.tax + ship - disc);
+          const inserts: D1PreparedStatement[] = [
+            env.DB.prepare(`
+              INSERT INTO invoices (id, company_id, client_id, invoice_number, date, due_date, status,
+                subtotal, tax_amount, shipping_amount, discount, total, amount_paid, currency, notes, terms)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            `).bind(id, tmpl.company_id, data.client_id || null,
+                    data.invoice_number || `${tmpl.name.slice(0, 8)}-${today}`,
+                    today, data.due_date || null, 'draft',
+                    Math.round(totals.subtotal * 100) / 100, Math.round(totals.tax * 100) / 100,
+                    ship, disc, total, data.currency || 'USD',
+                    data.notes || null, data.terms || null),
+          ];
+          data.lines.forEach((l: any, i: number) => {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            const taxA = amt * (Number(l.tax_rate || 0) / 100);
+            inserts.push(env.DB.prepare(`
+              INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+                    Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+          });
+          await env.DB.batch(inserts);
+        } else if (tmpl.type === 'bill' && Array.isArray(data.lines) && data.lines.length > 0) {
+          const totals = { subtotal: 0, tax: 0 };
+          for (const l of data.lines) {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            totals.subtotal += amt;
+            totals.tax += amt * (Number(l.tax_rate || 0) / 100);
+          }
+          const ship = Number(data.shipping_amount || 0);
+          const disc = Number(data.discount || 0);
+          const total = Math.max(0, totals.subtotal + totals.tax + ship - disc);
+          const inserts: D1PreparedStatement[] = [
+            env.DB.prepare(`
+              INSERT INTO bills (id, company_id, vendor_id, bill_number, date, due_date, status,
+                subtotal, tax_amount, shipping_amount, discount, total, amount_paid, currency, notes, terms)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            `).bind(id, tmpl.company_id, data.vendor_id || null,
+                    data.bill_number || `${tmpl.name.slice(0, 8)}-${today}`,
+                    today, data.due_date || null, 'open',
+                    Math.round(totals.subtotal * 100) / 100, Math.round(totals.tax * 100) / 100,
+                    ship, disc, total, data.currency || 'USD',
+                    data.notes || null, data.terms || null),
+          ];
+          data.lines.forEach((l: any, i: number) => {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            const taxA = amt * (Number(l.tax_rate || 0) / 100);
+            inserts.push(env.DB.prepare(`
+              INSERT INTO bill_line_items (id, bill_id, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+                    Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+          });
+          await env.DB.batch(inserts);
         }
-        // (invoice/bill instantiation would go here — skipped for now)
         // Bump next_date by the frequency.
         const next = nextRecurringDate(today, tmpl.frequency);
         await env.DB.prepare(`
@@ -2787,6 +2896,140 @@ async function runScheduledTasks(env: Env): Promise<void> {
     console.error('Scheduled task error:', err);
   }
 }
+
+// ─── Stripe Sync ─────────────────────────────────────────────────────
+// Pulls recent Charge objects from Stripe and inserts them as payments,
+// linking to invoices by metadata.invoice_id (set when the portal Checkout
+// session was created). Differs from the webhook path in that this is a
+// *catch-up* sync — if the webhook missed a delivery (or if the user just
+// connected Stripe), running this fills in the gaps.
+//
+// Stripe key is read from the env secret STRIPE_SECRET_KEY. The user sets
+// it once via `wrangler secret put STRIPE_SECRET_KEY` (not via the UI —
+// secrets shouldn't transit the JSON API).
+
+app.get('/app/stripe', async (c) => {
+  const cid = c.get('companyId')!;
+  const recentPayments = await c.env.DB.prepare(`
+    SELECT p.id, p.date, p.amount, p.stripe_pi_id, p.notes, i.invoice_number
+    FROM payments p
+    LEFT JOIN invoices i ON i.id = p.invoice_id
+    WHERE p.company_id = ? AND p.payment_method = 'stripe'
+    ORDER BY p.date DESC LIMIT 50
+  `).bind(cid).all();
+  const payments = (recentPayments.results as any[]) || [];
+  const totalStripe = payments.reduce((s, p: any) => s + Number(p.amount || 0), 0);
+  const hasKey = !!c.env.STRIPE_SECRET_KEY;
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Stripe Sync</h1>
+  ${hasKey ? `<button id="sync" class="btn">Sync recent payments</button>` : ''}
+</div>
+${!hasKey ? `<div class="error-banner" style="margin-bottom:1rem">
+  Stripe key not configured. Run <code>wrangler secret put STRIPE_SECRET_KEY</code> on the cloud-app deployment, then redeploy.
+</div>` : ''}
+<div class="grid grid-2" style="gap:1rem;margin-bottom:1rem">
+  <div class="card">
+    <div class="muted" style="font-size:0.72rem;text-transform:uppercase">Stripe payments recorded</div>
+    <div style="font-size:1.8rem;font-weight:800;color:var(--green)">${fmtMoney(totalStripe)}</div>
+    <div class="muted" style="font-size:0.75rem">${payments.length} payment${payments.length === 1 ? '' : 's'}</div>
+  </div>
+  <div class="card">
+    <div class="muted" style="font-size:0.72rem;text-transform:uppercase">Webhook</div>
+    <div style="font-size:1rem;font-weight:600;color:var(--text-bright);margin-top:6px">checkout.session.completed</div>
+    <div class="muted" style="font-size:0.75rem">Endpoint URL · https://accounting.rmpgutah.us/api/stripe/webhook</div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Recent Stripe payments</div>
+  <table class="data">
+    <thead><tr><th>Date</th><th>Invoice</th><th class="num">Amount</th><th>Payment Intent</th></tr></thead>
+    <tbody>
+      ${payments.length === 0 ? `<tr><td colspan="4" class="empty-state">No Stripe payments yet.</td></tr>` :
+        payments.map((p: any) => `<tr>
+          <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${fmtDate(p.date)}</td>
+          <td>${p.invoice_number ? `<a href="/app/invoices/${esc(p.id)}">${esc(p.invoice_number)}</a>` : '—'}</td>
+          <td class="num">${fmtMoney(p.amount)}</td>
+          <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${esc(String(p.stripe_pi_id || '—').slice(0, 28))}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+<script>
+const sync = document.getElementById('sync');
+if (sync) sync.addEventListener('click', async () => {
+  sync.disabled = true; sync.textContent = 'Syncing…';
+  try {
+    const r = await window.fetchJSON('/api/stripe/sync', { method: 'POST', body: '{}' });
+    window.toast(\`\${r.imported} new · \${r.skipped} already recorded\`, 'ok');
+    setTimeout(() => location.reload(), 800);
+  } catch (e) { window.toast(e.message || 'Sync failed', 'err'); sync.disabled = false; sync.textContent = 'Sync recent payments'; }
+});
+</script>`;
+  return c.html(shell({ title: 'Stripe', activeNav: 'stripe', body, brand: 'BAP Cloud' }));
+});
+
+// Pull recent charges from Stripe. Catches up after a missed webhook.
+// Pages through up to 100 charges in one call; the user can re-run for more.
+app.post('/api/stripe/sync', async (c) => {
+  const cid = c.get('companyId')!;
+  const key = c.env.STRIPE_SECRET_KEY;
+  if (!key) return c.json({ error: 'STRIPE_SECRET_KEY not configured' }, 400);
+
+  // Last sync cursor — stored as the most-recent payment's stripe_pi_id we've
+  // seen. Stripe charges are listed in descending order, so we walk forward
+  // until we hit a known one.
+  const res = await fetch('https://api.stripe.com/v1/charges?limit=100', {
+    headers: { 'Authorization': `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    return c.json({ error: `Stripe API ${res.status}: ${errText.slice(0, 300)}` }, 502);
+  }
+  const payload: any = await res.json();
+  const charges: any[] = payload.data || [];
+
+  let imported = 0, skipped = 0, unmatched = 0;
+  const stmts: D1PreparedStatement[] = [];
+  for (const ch of charges) {
+    if (!ch.paid || ch.refunded) { skipped++; continue; }
+    const pi = ch.payment_intent || ch.id;
+    // Dup check — payments.stripe_pi_id is our natural idempotency key.
+    const dup = await c.env.DB.prepare('SELECT id FROM payments WHERE stripe_pi_id = ?').bind(pi).first();
+    if (dup) { skipped++; continue; }
+
+    const invoiceId = ch.metadata?.invoice_id || null;
+    // If no invoice linked, skip — we don't want orphan payments. Could add
+    // a "Stripe payments awaiting invoice" page later.
+    if (!invoiceId) { unmatched++; continue; }
+    // Verify the invoice belongs to this company; never attribute another
+    // tenant's payment even if a metadata.invoice_id leaks.
+    const inv = await c.env.DB.prepare('SELECT id FROM invoices WHERE id = ? AND company_id = ?')
+      .bind(invoiceId, cid).first();
+    if (!inv) { unmatched++; continue; }
+
+    const amount = (Number(ch.amount) || 0) / 100;
+    const date = new Date(ch.created * 1000).toISOString().slice(0, 10);
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO payments (id, company_id, invoice_id, date, amount, payment_method, stripe_pi_id, notes)
+      VALUES (?, ?, ?, ?, ?, 'stripe', ?, ?)
+    `).bind(uuid(), cid, invoiceId, date, amount, pi, `Stripe charge ${ch.id}${ch.description ? ' · ' + ch.description : ''}`));
+    stmts.push(c.env.DB.prepare(`
+      UPDATE invoices SET amount_paid = amount_paid + ?,
+        status = CASE WHEN amount_paid + ? >= total THEN 'paid' ELSE 'partial' END,
+        updated_at = datetime('now')
+      WHERE id = ? AND company_id = ?
+    `).bind(amount, amount, invoiceId, cid));
+    imported++;
+  }
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  await logAudit(c.env, cid, c.get('userId') as any, {
+    action: 'stripe_sync', entity_type: 'system',
+    description: `Imported ${imported} · skipped ${skipped} · unmatched ${unmatched}`,
+  });
+  return c.json({ ok: true, imported, skipped, unmatched, total_seen: charges.length });
+});
 
 function nextRecurringDate(from: string, freq: string): string {
   const d = new Date(from + 'T00:00:00Z');
