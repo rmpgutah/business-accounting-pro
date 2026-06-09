@@ -565,10 +565,10 @@ const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => 
                 {exp.description || '--'}
               </td>
               <td className="text-text-secondary text-xs">
-                {(exp as any).category_name || (exp as any).category || '--'}
+                {exp.category_name || exp.category || '--'}
               </td>
               <td className="text-text-secondary text-xs">
-                {(exp as any).vendor_name || (exp as any).vendor || '--'}
+                {exp.vendor_name || exp.vendor || '--'}
               </td>
               <td className="text-right font-mono text-xs text-accent-expense">
                 {formatCurrency(exp.amount ?? 0)}

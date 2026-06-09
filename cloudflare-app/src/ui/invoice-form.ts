@@ -262,7 +262,7 @@ if (del) del.addEventListener('click', async function(){
 
 function lineRow(l: InvoiceLine): string {
   const inp = (name: string, val: string | number | undefined, num = false) =>
-    `<input class="lf${num ? ' num' : ''}" name="${name}"${num ? ' type="number" step="0.01" min="0"' : ''} value="${escapeHTML(String(val ?? ''))}" style="width:100%;background:transparent;border:1px solid var(--border);border-radius:var(--radius);padding:6px;color:var(--text-bright);${num ? 'text-align:right' : ''}">`;
+    `<input class="lf${num ? ' num' : ''}" name="${name}"${num ? ' type="number" step="0.01" min="0"' : ''} value="${escapeHTML(String(val ?? ''))}" style="width:100%;background:transparent;border:1px solid var(--border);border-radius:2px;padding:6px;color:var(--text-bright);${num ? 'text-align:right' : ''}">`;
   return `<tr>
     <td>${inp('li_description', l.description)}</td>
     <td>${inp('li_quantity', l.quantity ?? 1, true)}</td>

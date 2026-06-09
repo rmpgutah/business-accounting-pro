@@ -141,6 +141,7 @@ interface ExpenseLineItem {
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
+  is_billable?: boolean;
   billed_invoice_id?: string | null;
 }
 
@@ -879,6 +880,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 notes: l.notes || '',
                 item_type: (l.item_type as any) || 'item',
                 tags: parseJSON<string[]>(l.tags, []),
+                is_billable: !!l.is_billable,
                 billed_invoice_id: l.billed_invoice_id || null,
               })));
               setUseLineItems(true);
@@ -1173,8 +1175,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             notes: li.notes || null,
             item_type: li.item_type || 'item',
             tags: JSON.stringify(li.tags || []),
-            // billed_invoice_id stamp survives re-saves so the billable
-            // bundler IPC keeps treating this line as "already invoiced".
+            // Per-line billable. Persists the flag and any prior invoice
+            // stamp so re-saving doesn't unmark already-billed lines.
+            is_billable: li.is_billable ? 1 : 0,
             billed_invoice_id: li.billed_invoice_id || null,
           }))
         : [];

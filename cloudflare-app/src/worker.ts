@@ -293,107 +293,10 @@ app.get('/app/invoices/:id', async (c) => {
 
 // ─── /api/* — JSON endpoints used by the SPA bits ───────────
 app.use('/api/*', async (c, next) => {
-  // Sync endpoints carry their own token; health + stripe webhook + bootstrap
-  // authenticate themselves; everything else needs a user session.
+  // Sync endpoints carry their own token; everything else needs a user session.
   if (c.req.path.startsWith('/api/sync/')) return next();
-  if (c.req.path === '/api/health') return next();
-  if (c.req.path === '/api/stripe/webhook') return next();
-  if (c.req.path === '/api/auth/bootstrap') return next();
   return requireUserAPI(c, next);
 });
-
-// Bootstrap user accounts from the desktop. Lets a customer skip the cloud
-// "Create account" page and instead sign in with the SAME email + password
-// they already use on the desktop. The desktop sends its users + companies
-// + user_companies rows, authenticated via the shared DESKTOP_SYNC_TOKEN.
-//
-// The password_hash format from the desktop is "<saltHex>:<hashHex>" (pbkdf2-
-// SHA512); verifyPassword in src/auth.ts handles that format alongside the
-// cloud-native "pbkdf2$..." format, so transferred hashes work unmodified.
-//
-// Upsert semantics: re-running bootstrap with the same payload updates the
-// existing rows (password change + display-name change on the desktop side
-// propagate). Never destructive — does NOT delete cloud users not in the
-// desktop set, because a customer may have invited cloud-only collaborators.
-app.post('/api/auth/bootstrap', async (c) => {
-  const auth = c.req.header('authorization') || '';
-  const m = /^Bearer\s+(.+)$/i.exec(auth);
-  const supplied = m ? m[1].trim() : '';
-  if (!supplied || !healthEqualCT(supplied, c.env.DESKTOP_SYNC_TOKEN || '')) {
-    return c.json({ error: 'Invalid sync token' }, 401);
-  }
-  const body = await c.req.json<{
-    users?: Array<{ id: string; email: string; display_name?: string; password_hash: string; role?: string }>;
-    companies?: Array<{ id: string; name: string; email?: string; phone?: string; address?: string; tax_id?: string; currency?: string }>;
-    user_companies?: Array<{ user_id: string; company_id: string; role?: string }>;
-  }>();
-  const users = body.users || [];
-  const companies = body.companies || [];
-  const memberships = body.user_companies || [];
-
-  const stmts: D1PreparedStatement[] = [];
-  // Companies first so the user_companies FK has something to point at.
-  for (const co of companies) {
-    if (!co.id || !co.name) continue;
-    stmts.push(c.env.DB.prepare(`
-      INSERT INTO companies (id, name, email, phone, address, tax_id, currency)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name, email = excluded.email, phone = excluded.phone,
-        address = excluded.address, tax_id = excluded.tax_id,
-        currency = COALESCE(excluded.currency, companies.currency)
-    `).bind(co.id, co.name, co.email || null, co.phone || null, co.address || null, co.tax_id || null, co.currency || 'USD'));
-  }
-  for (const u of users) {
-    if (!u.id || !u.email || !u.password_hash) continue;
-    stmts.push(c.env.DB.prepare(`
-      INSERT INTO users (id, email, password_hash, name, role)
-      VALUES (?, lower(?), ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        email = excluded.email, password_hash = excluded.password_hash,
-        name = excluded.name, role = excluded.role
-    `).bind(u.id, u.email, u.password_hash, u.display_name || null, u.role || 'owner'));
-  }
-  for (const uc of memberships) {
-    if (!uc.user_id || !uc.company_id) continue;
-    stmts.push(c.env.DB.prepare(`
-      INSERT INTO user_companies (user_id, company_id, role)
-      VALUES (?, ?, ?)
-      ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role
-    `).bind(uc.user_id, uc.company_id, uc.role || 'owner'));
-  }
-  if (stmts.length === 0) return c.json({ ok: true, imported: { users: 0, companies: 0, memberships: 0 } });
-  await c.env.DB.batch(stmts);
-  return c.json({ ok: true, imported: { users: users.length, companies: companies.length, memberships: memberships.length } });
-});
-
-// Health endpoint for the desktop's "Test Connection" button. Authenticates
-// the DESKTOP_SYNC_TOKEN via the Authorization: Bearer header so the desktop
-// verifies reachability AND credential validity in one request. Unauthenticated
-// probes get a different shape so uptime monitors can ping without leaking
-// whether a particular token would have worked.
-app.get('/api/health', async (c) => {
-  const auth = c.req.header('authorization') || '';
-  const m = /^Bearer\s+(.+)$/i.exec(auth);
-  const supplied = m ? m[1].trim() : '';
-  const expected = c.env.DESKTOP_SYNC_TOKEN || '';
-  if (!supplied) {
-    return c.json({ ok: true, mode: 'public', service: 'bap-cloud' });
-  }
-  if (!expected || !healthEqualCT(supplied, expected)) {
-    return c.json({ ok: false, error: 'Invalid sync token' }, 401);
-  }
-  return c.json({ ok: true, mode: 'authenticated', service: 'bap-cloud', environment: c.env.ENVIRONMENT });
-});
-
-// Local constant-time string compare so /api/health doesn't depend on a helper
-// declared elsewhere in module order.
-function healthEqualCT(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 // Save a new expense from the capture form.
 app.post('/api/expenses', async (c) => {
