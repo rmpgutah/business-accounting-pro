@@ -1,0 +1,23 @@
+{
+  "name": "bap-cloudflare",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Business Accounting Pro — Cloudflare Worker + D1 backend serving accounting.rmpgutah.us",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply bap_db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply bap_db --local",
+    "db:seed": "wrangler d1 execute bap_db --remote --file=migrations/0002_seed.sql",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^3.90.0"
+  }
+}

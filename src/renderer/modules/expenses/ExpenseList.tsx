@@ -19,6 +19,7 @@ import BulkEditModal from './BulkEditModal';
 import CreditCardImportModal from './CreditCardImportModal';
 import { BulkPasteModal, QuickAddBar, ReceiptThumb } from './CaptureFeatures';
 import { BulkActionBar, SmartFiltersDropdown, TopVendorsWidget, MissingReceiptsBanner } from './ExpenseUpgradesUI';
+import { expenseGrandTotal } from './expense-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -35,6 +36,8 @@ interface Expense {
   amount: number;
   tax_amount?: number;
   tax_inclusive?: number;
+  shipping_amount?: number;
+  shipping_tax_amount?: number;
   discount_amount?: number;
   discount_percent?: number;
   status: 'pending' | 'approved' | 'paid' | 'rejected';
@@ -126,20 +129,10 @@ const COL_CUSTOMIZATION: Partial<Record<ColKey, string>> = {
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
 
-// FINAL-PRICE rule v3: amount + tax − header_discount = total, ALWAYS.
-//
-// Discount math: applied AFTER tax (does NOT reduce taxable base) for parity
-// with the invoice form. Both $ flat AND % apply independently — if both are
-// set, they both subtract. Negative totals are clamped to 0 (a discount can
-// never make an expense's value negative; that would be a credit memo
-// scenario which lives elsewhere).
-function expenseDisplayTotal(e: { amount?: number; tax_amount?: number; discount_amount?: number; discount_percent?: number }): number {
-  const grossTotal = (e.amount || 0) + (e.tax_amount || 0);
-  const flat = e.discount_amount || 0;
-  const pct = e.discount_percent || 0;
-  const pctOff = grossTotal * (pct / 100);
-  return Math.max(0, grossTotal - flat - pctOff);
-}
+// FINAL-PRICE rule v4: amount + tax + shipping + shipping_tax − header_discount.
+// Delegates to the shared expenseGrandTotal helper so the list, detail header,
+// and print/voucher templates all reconcile to the same number.
+const expenseDisplayTotal = expenseGrandTotal;
 const COLS_KEY = (uid: string) => `expense_cols_${uid}`;
 
 interface ExpenseListProps {

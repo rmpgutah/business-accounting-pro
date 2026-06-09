@@ -6,9 +6,10 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatPaymentMethod, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
+import { expenseGrandTotal } from './expense-helpers';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import EntityChip from '../../components/EntityChip';
@@ -44,7 +45,14 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     try {
       setLoading(true);
       const rows = await api.rawQuery(
-        `SELECT e.*, c.name as category_name, v.name as vendor_name, p.name as project_name
+        `SELECT e.*, c.name as category_name,
+                v.name as vendor_name,
+                v.address as vendor_address,
+                v.phone as vendor_phone,
+                v.email as vendor_email,
+                v.website as vendor_website,
+                v.tax_id as vendor_tax_id,
+                p.name as project_name
          FROM expenses e
          LEFT JOIN categories c ON c.id = e.category_id
          LEFT JOIN vendors v ON v.id = e.vendor_id
@@ -198,31 +206,51 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     );
   };
 
-  // Print Receipt Voucher (Change 45)
-  const buildVoucherHTML = (): string => {
+  // Print Receipt Voucher (Change 45). Accepts the loaded vendor record so
+  // address/phone/email/tax_id surface on the printed voucher alongside the
+  // expense fields.
+  const buildVoucherHTML = (vendor?: any): string => {
     const e = expense;
     const company = activeCompany;
     const created = e.created_at ? formatDate(e.created_at) : '—';
     const lineItems: Array<[string, string]> = [
       ['Date', formatDate(e.date)],
-      ['Vendor', e.vendor_name || '—'],
+      ['Vendor', vendor?.name || e.vendor_name || '—'],
+      // Vendor contact block — only emitted when fields are populated, so a
+      // vendor with no address doesn't leave dash rows on the voucher.
+      ...(vendor?.address ? [['Vendor Address', String(vendor.address)] as [string, string]] : []),
+      ...(vendor?.phone ? [['Vendor Phone', String(vendor.phone)] as [string, string]] : []),
+      ...(vendor?.email ? [['Vendor Email', String(vendor.email)] as [string, string]] : []),
+      ...(vendor?.website ? [['Vendor Website', String(vendor.website)] as [string, string]] : []),
+      ...(vendor?.tax_id ? [['Vendor Tax ID', String(vendor.tax_id)] as [string, string]] : []),
       ['Category', e.category_name || '—'],
       ['Project', e.project_name || '—'],
       ['Description', e.description || '—'],
       ['Reference', e.reference || '—'],
-      ['Payment Method', e.payment_method || '—'],
-      ['Status', e.status || '—'],
-      ['Approval Status', e.approval_status || '—'],
+      ['Payment Method', formatPaymentMethod(e.payment_method)],
+      ['Status', humanizeLabel(e.status) || '—'],
+      ['Approval Status', humanizeLabel(e.approval_status) || '—'],
       ['Currency', e.currency || 'USD'],
       ['Exchange Rate', String(e.exchange_rate || 1)],
+      ['Subtotal', formatCurrency(e.amount || 0)],
       ['Tax Amount', formatCurrency(e.tax_amount || 0)],
       ['Tip Amount', formatCurrency(e.tip_amount || 0)],
+      // Shipping & Handling — only surfaced when present, with speed/scope detail.
+      ...((e.shipping_amount || 0) > 0 ? [
+        ['Shipping & Handling', formatCurrency(e.shipping_amount || 0) +
+          ((e.shipping_tax_amount || 0) > 0 ? ` (+ ${formatCurrency(e.shipping_tax_amount)} tax)` : '')] as [string, string],
+        ['Shipping Speed', e.shipping_speed || '—'] as [string, string],
+        ['Shipping Applies To', e.shipping_scope === 'item' ? 'Single item' : 'Whole order'] as [string, string],
+      ] : []),
+      ['Grand Total', formatCurrency(expenseGrandTotal(e))],
       ['Tax Deductible', e.is_tax_deductible === 0 ? 'No' : 'Yes'],
       ['Schedule C Line', e.schedule_c_line || '—'],
       ['Billable', e.is_billable ? 'Yes' : 'No'],
       ['Reimbursable', e.is_reimbursable ? (e.reimbursed ? 'Reimbursed' : 'Pending') : 'No'],
+      ['Markup %', (e.markup_pct || 0) > 0 ? `${e.markup_pct}%` : '—'],
       ['Mileage', (e.miles || 0) > 0 ? `${(e.miles || 0).toFixed(1)} mi @ $${(e.mileage_rate || 0.7).toFixed(2)}` : '—'],
       ['Merchant Location', e.merchant_location || '—'],
+      ['GPS / Location Name', e.geo_location_name || '—'],
       ['Submitted', created],
     ];
     const rowsHtml = lineItems
@@ -246,7 +274,7 @@ table{width:100%;border-collapse:collapse;}
   </div>
   <div style="text-align:right;">
     <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Amount</div>
-    <div class="amount">${formatCurrency(e.amount || 0)}</div>
+    <div class="amount">${formatCurrency(expenseGrandTotal(e))}</div>
   </div>
 </div>
 <table>${rowsHtml}</table>
@@ -276,7 +304,12 @@ table{width:100%;border-collapse:collapse;}
 
   const handlePrintVoucher = async () => {
     try {
-      await api.printPreview(buildVoucherHTML(), `Voucher ${expense.id}`);
+      // Load the vendor record so its address/phone/email/tax_id appear on the
+      // voucher. Falls back gracefully if the vendor lookup fails.
+      const vendor = expense.vendor_id
+        ? await api.get('vendors', expense.vendor_id).catch(() => null)
+        : null;
+      await api.printPreview(buildVoucherHTML(vendor), `Voucher ${expense.id}`);
       await logActivity('voucher_printed', 'Voucher printed');
     } catch (e: any) { setErr(e?.message || 'Voucher preview failed'); }
   };
@@ -389,19 +422,15 @@ table{width:100%;border-collapse:collapse;}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="block-card p-3">
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total (incl. Tax)</div>
-          {/* FINAL-PRICE v3: amount + tax − header_discount (flat + %).
-              Discount applied AFTER tax to match invoice convention. */}
+          {/* FINAL-PRICE v4: amount + tax + shipping + shipping_tax − discount. */}
           <div className="text-2xl font-mono font-bold text-accent-expense mt-1">
-            {formatCurrency((() => {
-              const gross = (expense.amount || 0) + ((expense as any).tax_amount || 0);
-              const flat = (expense as any).discount_amount || 0;
-              const pct = (expense as any).discount_percent || 0;
-              return Math.max(0, gross - flat - gross * (pct / 100));
-            })())}
+            {formatCurrency(expenseGrandTotal(expense as any))}
           </div>
-          {((expense as any).tax_amount || 0) > 0 && (
+          {(((expense as any).tax_amount || 0) > 0 || ((expense as any).shipping_amount || 0) > 0) && (
             <div className="text-[10px] text-text-muted mt-1">
-              Subtotal {formatCurrency(expense.amount || 0)} + Tax {formatCurrency((expense as any).tax_amount || 0)}
+              Subtotal {formatCurrency(expense.amount || 0)}
+              {((expense as any).tax_amount || 0) > 0 && <> + Tax {formatCurrency((expense as any).tax_amount || 0)}</>}
+              {((expense as any).shipping_amount || 0) > 0 && <> + Ship {formatCurrency(((expense as any).shipping_amount || 0) + ((expense as any).shipping_tax_amount || 0))}</>}
             </div>
           )}
           {(expense.currency && expense.currency !== 'USD') && (
@@ -470,17 +499,13 @@ table{width:100%;border-collapse:collapse;}
           <div className="text-right">
             <div className="text-xs uppercase font-bold text-text-muted">Total</div>
             <div className="text-2xl font-mono font-bold text-accent-expense">
-              {/* FINAL-PRICE v3: amount + tax − discount. */}
-              {formatCurrency((() => {
-                const gross = (expense.amount || 0) + ((expense as any).tax_amount || 0);
-                const flat = (expense as any).discount_amount || 0;
-                const pct = (expense as any).discount_percent || 0;
-                return Math.max(0, gross - flat - gross * (pct / 100));
-              })())}
+              {/* FINAL-PRICE v4: amount + tax + shipping + shipping_tax − discount. */}
+              {formatCurrency(expenseGrandTotal(expense as any))}
             </div>
-            {((expense as any).tax_amount || 0) > 0 && (
+            {(((expense as any).tax_amount || 0) > 0 || ((expense as any).shipping_amount || 0) > 0) && (
               <div className="text-[10px] text-text-muted mt-0.5">
-                incl. {formatCurrency((expense as any).tax_amount || 0)} tax
+                {((expense as any).tax_amount || 0) > 0 && <>incl. {formatCurrency((expense as any).tax_amount || 0)} tax</>}
+                {((expense as any).shipping_amount || 0) > 0 && <>{((expense as any).tax_amount || 0) > 0 ? ' · ' : ''}{formatCurrency(((expense as any).shipping_amount || 0) + ((expense as any).shipping_tax_amount || 0))} shipping</>}
               </div>
             )}
           </div>
@@ -499,14 +524,57 @@ table{width:100%;border-collapse:collapse;}
               : <span className="text-text-muted">—</span>}
           </Field>
           <Field label="Tax Amount">{formatCurrency(expense.tax_amount || 0)}</Field>
-          <Field label="Payment Method">{expense.payment_method || '—'}</Field>
+          <Field label="Payment Method">{formatPaymentMethod(expense.payment_method)}</Field>
           <Field label="Reference">{expense.reference || '—'}</Field>
           <Field label="Billable">{expense.is_billable ? 'Yes' : 'No'}</Field>
           <Field label="Reimbursable">{expense.is_reimbursable ? (expense.reimbursed ? `Reimbursed ${expense.reimbursed_date || ''}` : 'Pending') : 'No'}</Field>
           <Field label="Merchant Location">
             {expense.merchant_location ? <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-text-muted" />{expense.merchant_location}</span> : '—'}
           </Field>
+          <Field label="GPS / Location Name">
+            {(expense as any).geo_location_name ? <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-text-muted" />{(expense as any).geo_location_name}</span> : '—'}
+          </Field>
+          {((expense as any).markup_pct || 0) > 0 && (
+            <Field label="Markup %">{(expense as any).markup_pct}%</Field>
+          )}
+          {((expense as any).shipping_amount || 0) > 0 && (
+            <Field label="Shipping & Handling">
+              {formatCurrency((expense as any).shipping_amount || 0)}
+              {((expense as any).shipping_tax_amount || 0) > 0 && <span className="text-text-muted"> + {formatCurrency((expense as any).shipping_tax_amount)} tax</span>}
+              {(expense as any).shipping_speed && <span className="text-text-muted"> · {(expense as any).shipping_speed}</span>}
+              {(expense as any).shipping_scope === 'item' && <span className="text-text-muted"> · item-level</span>}
+            </Field>
+          )}
         </div>
+
+        {/* Vendor Details — surfaces the vendor's address/contact/tax_id on the
+            expense log so the record is self-contained for audit/reimbursement
+            review. Only renders when at least one field is populated. */}
+        {(expense.vendor_id && (
+          (expense as any).vendor_address || (expense as any).vendor_phone ||
+          (expense as any).vendor_email || (expense as any).vendor_website ||
+          (expense as any).vendor_tax_id
+        )) ? (
+          <div className="mt-4 pt-4 border-t border-border-primary">
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
+              Vendor Details
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+              {(expense as any).vendor_address && (
+                <Field label="Address">
+                  <span className="inline-flex items-start gap-1">
+                    <MapPin size={11} className="text-text-muted mt-0.5 flex-shrink-0" />
+                    <span style={{ whiteSpace: 'pre-line' }}>{(expense as any).vendor_address}</span>
+                  </span>
+                </Field>
+              )}
+              {(expense as any).vendor_phone && <Field label="Phone">{(expense as any).vendor_phone}</Field>}
+              {(expense as any).vendor_email && <Field label="Email">{(expense as any).vendor_email}</Field>}
+              {(expense as any).vendor_website && <Field label="Website">{(expense as any).vendor_website}</Field>}
+              {(expense as any).vendor_tax_id && <Field label="Tax ID / EIN">{(expense as any).vendor_tax_id}</Field>}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Mileage Calculator (Change 35) */}

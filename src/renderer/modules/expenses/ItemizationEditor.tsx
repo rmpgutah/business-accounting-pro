@@ -22,6 +22,117 @@ import { ChevronDown, ChevronUp, Copy, GripVertical, Plus, Save, SplitSquareHori
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 
+// Inline jurisdiction picker. Replaces the prior prompt()-based add flow with
+// a real dropdown of US state presets, a custom-entry escape hatch, and a
+// pinned recent-jurisdictions list (per session) for fast repeat entry.
+const JURISDICTION_RECENT_KEY = 'iz_recent_jurisdictions';
+function loadRecentJurisdictions(): Array<{ jurisdiction: string; rate: number }> {
+  try {
+    const raw = sessionStorage.getItem(JURISDICTION_RECENT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, 6) : [];
+  } catch { return []; }
+}
+function pushRecentJurisdiction(j: { jurisdiction: string; rate: number }) {
+  try {
+    const list = loadRecentJurisdictions().filter(x => x.jurisdiction !== j.jurisdiction);
+    list.unshift(j);
+    sessionStorage.setItem(JURISDICTION_RECENT_KEY, JSON.stringify(list.slice(0, 6)));
+  } catch { /* ignore quota */ }
+}
+
+const JurisdictionPicker: React.FC<{
+  onPick: (j: { jurisdiction: string; rate: number; amount: number }) => void;
+  onClose: () => void;
+}> = ({ onPick, onClose }) => {
+  const [mode, setMode] = useState<'preset' | 'custom'>('preset');
+  const [stateCode, setStateCode] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [customRate, setCustomRate] = useState('');
+  const recent = loadRecentJurisdictions();
+
+  const submit = (jurisdiction: string, rate: number) => {
+    if (!jurisdiction.trim() || !Number.isFinite(rate)) return;
+    const j = { jurisdiction: jurisdiction.trim(), rate, amount: 0 };
+    pushRecentJurisdiction({ jurisdiction: j.jurisdiction, rate });
+    onPick(j);
+    onClose();
+  };
+
+  return (
+    <div className="block-card p-3" style={{ position: 'absolute', zIndex: 30, minWidth: 320, marginTop: 4 }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex gap-1">
+          <button type="button" className={`text-[10px] px-2 py-1 uppercase font-bold ${mode === 'preset' ? 'bg-accent-blue text-white' : 'text-text-secondary'}`}
+            style={{ borderRadius: 4 }}
+            onClick={() => setMode('preset')}>US State</button>
+          <button type="button" className={`text-[10px] px-2 py-1 uppercase font-bold ${mode === 'custom' ? 'bg-accent-blue text-white' : 'text-text-secondary'}`}
+            style={{ borderRadius: 4 }}
+            onClick={() => setMode('custom')}>Custom</button>
+        </div>
+        <button type="button" className="text-text-muted hover:text-text-primary" onClick={onClose} title="Close">
+          <X size={12} />
+        </button>
+      </div>
+
+      {mode === 'preset' && (
+        <div className="space-y-2">
+          <select className="block-select text-xs w-full" value={stateCode}
+            onChange={e => setStateCode(e.target.value)}>
+            <option value="">— Choose a state —</option>
+            {US_STATE_TAX_PRESETS.map(s => (
+              <option key={s.code} value={s.code}>
+                {s.name} ({s.rate.toFixed(2)}%)
+              </option>
+            ))}
+          </select>
+          <button type="button" className="block-btn text-xs w-full"
+            disabled={!stateCode}
+            onClick={() => {
+              const p = US_STATE_TAX_PRESETS.find(s => s.code === stateCode);
+              if (p) submit(`${p.code} State`, p.rate);
+            }}>
+            Add {stateCode || 'State'} Tax
+          </button>
+        </div>
+      )}
+
+      {mode === 'custom' && (
+        <div className="space-y-2">
+          <input type="text" className="block-input text-xs w-full"
+            placeholder="Jurisdiction (e.g. Los Angeles County)"
+            value={customName} onChange={e => setCustomName(e.target.value)} />
+          <input type="number" step="0.001" min="0" className="block-input text-xs w-full"
+            placeholder="Rate % (e.g. 2.25)"
+            value={customRate} onChange={e => setCustomRate(e.target.value)} />
+          <button type="button" className="block-btn text-xs w-full"
+            disabled={!customName.trim() || !customRate}
+            onClick={() => submit(customName, parseFloat(customRate) || 0)}>
+            Add Jurisdiction
+          </button>
+        </div>
+      )}
+
+      {recent.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-border-primary">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted mb-1">Recent</div>
+          <div className="flex flex-wrap gap-1">
+            {recent.map((r, i) => (
+              <button key={i} type="button"
+                className="text-[10px] px-2 py-0.5 bg-bg-tertiary border border-border-primary hover:border-accent-blue"
+                style={{ borderRadius: 3 }}
+                onClick={() => submit(r.jurisdiction, r.rate)}>
+                {r.jurisdiction} <span className="text-text-muted">{r.rate.toFixed(2)}%</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export interface IzLine {
   id: string;
   description: string;
@@ -42,6 +153,11 @@ export interface IzLine {
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
+  // Bill this line to its client_id. Independent of the header is_billable
+  // flag so a single expense can mix billable + non-billable items.
+  is_billable?: boolean;
+  // Stamped when this line is added to an invoice. Suppresses re-billing.
+  billed_invoice_id?: string | null;
 }
 
 interface Option { id: string; name: string; }
@@ -58,6 +174,64 @@ interface Props {
   userId?: string;
 }
 
+// US state sales-tax presets for the per-line Jurisdiction picker. Rates are
+// the BASE state rates only — counties/cities stack on top via additional
+// entries the user can add manually. Source: state revenue departments,
+// effective 2026. Update as rates change. Includes DC; territories omitted.
+const US_STATE_TAX_PRESETS: Array<{ code: string; name: string; rate: number }> = [
+  { code: 'AL', name: 'Alabama', rate: 4.00 },
+  { code: 'AK', name: 'Alaska', rate: 0.00 },
+  { code: 'AZ', name: 'Arizona', rate: 5.60 },
+  { code: 'AR', name: 'Arkansas', rate: 6.50 },
+  { code: 'CA', name: 'California', rate: 7.25 },
+  { code: 'CO', name: 'Colorado', rate: 2.90 },
+  { code: 'CT', name: 'Connecticut', rate: 6.35 },
+  { code: 'DE', name: 'Delaware', rate: 0.00 },
+  { code: 'DC', name: 'District of Columbia', rate: 6.00 },
+  { code: 'FL', name: 'Florida', rate: 6.00 },
+  { code: 'GA', name: 'Georgia', rate: 4.00 },
+  { code: 'HI', name: 'Hawaii', rate: 4.00 },
+  { code: 'ID', name: 'Idaho', rate: 6.00 },
+  { code: 'IL', name: 'Illinois', rate: 6.25 },
+  { code: 'IN', name: 'Indiana', rate: 7.00 },
+  { code: 'IA', name: 'Iowa', rate: 6.00 },
+  { code: 'KS', name: 'Kansas', rate: 6.50 },
+  { code: 'KY', name: 'Kentucky', rate: 6.00 },
+  { code: 'LA', name: 'Louisiana', rate: 4.45 },
+  { code: 'ME', name: 'Maine', rate: 5.50 },
+  { code: 'MD', name: 'Maryland', rate: 6.00 },
+  { code: 'MA', name: 'Massachusetts', rate: 6.25 },
+  { code: 'MI', name: 'Michigan', rate: 6.00 },
+  { code: 'MN', name: 'Minnesota', rate: 6.875 },
+  { code: 'MS', name: 'Mississippi', rate: 7.00 },
+  { code: 'MO', name: 'Missouri', rate: 4.225 },
+  { code: 'MT', name: 'Montana', rate: 0.00 },
+  { code: 'NE', name: 'Nebraska', rate: 5.50 },
+  { code: 'NV', name: 'Nevada', rate: 6.85 },
+  { code: 'NH', name: 'New Hampshire', rate: 0.00 },
+  { code: 'NJ', name: 'New Jersey', rate: 6.625 },
+  { code: 'NM', name: 'New Mexico', rate: 4.875 },
+  { code: 'NY', name: 'New York', rate: 4.00 },
+  { code: 'NC', name: 'North Carolina', rate: 4.75 },
+  { code: 'ND', name: 'North Dakota', rate: 5.00 },
+  { code: 'OH', name: 'Ohio', rate: 5.75 },
+  { code: 'OK', name: 'Oklahoma', rate: 4.50 },
+  { code: 'OR', name: 'Oregon', rate: 0.00 },
+  { code: 'PA', name: 'Pennsylvania', rate: 6.00 },
+  { code: 'RI', name: 'Rhode Island', rate: 7.00 },
+  { code: 'SC', name: 'South Carolina', rate: 6.00 },
+  { code: 'SD', name: 'South Dakota', rate: 4.20 },
+  { code: 'TN', name: 'Tennessee', rate: 7.00 },
+  { code: 'TX', name: 'Texas', rate: 6.25 },
+  { code: 'UT', name: 'Utah', rate: 4.85 },
+  { code: 'VT', name: 'Vermont', rate: 6.00 },
+  { code: 'VA', name: 'Virginia', rate: 5.30 },
+  { code: 'WA', name: 'Washington', rate: 6.50 },
+  { code: 'WV', name: 'West Virginia', rate: 6.00 },
+  { code: 'WI', name: 'Wisconsin', rate: 5.00 },
+  { code: 'WY', name: 'Wyoming', rate: 4.00 },
+];
+
 const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
 const makeId = () => crypto.randomUUID();
 const emptyLine = (): IzLine => ({
@@ -67,6 +241,7 @@ const emptyLine = (): IzLine => ({
   discount_amount: 0, discount_percent: 0,
   is_tax_deductible: true, is_tax_exempt: false,
   notes: '', item_type: 'item', tags: [],
+  is_billable: false, billed_invoice_id: null,
 });
 
 export default function ItemizationEditor({
@@ -78,6 +253,9 @@ export default function ItemizationEditor({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [tplMenuOpen, setTplMenuOpen] = useState(false);
+  // Which line's jurisdiction picker is open. Stores the line id so the picker
+  // floats next to the right row even when reordered.
+  const [jurisdictionPickerFor, setJurisdictionPickerFor] = useState<string | null>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkPasteText, setBulkPasteText] = useState('');
@@ -550,6 +728,23 @@ export default function ItemizationEditor({
                       onChange={(e) => updateLine(idx, { is_tax_deductible: e.target.checked })} />
                     Tax-deductible
                   </label>
+                  {/* Per-line billable-to-client. When checked + client_id set,
+                      this line gets pulled into that client's next invoice via
+                      the 'Create Invoice from Expenses' flow. Disabled with a
+                      hint once billed_invoice_id is stamped (already invoiced). */}
+                  <label className="text-[10px] flex items-center gap-1 text-text-secondary"
+                    title={li.billed_invoice_id
+                      ? 'Already invoiced — uncheck not available'
+                      : !li.client_id
+                        ? 'Pick a Client first to bill this line'
+                        : 'Bill this line to the selected client'}>
+                    <input type="checkbox"
+                      checked={!!li.is_billable}
+                      disabled={!!li.billed_invoice_id || !li.client_id}
+                      onChange={(e) => updateLine(idx, { is_billable: e.target.checked })} />
+                    Bill to client
+                    {li.billed_invoice_id && <span className="text-accent-income"> · invoiced</span>}
+                  </label>
                   <input type="text" className="block-input text-xs" placeholder="Notes / memo"
                     value={li.notes || ''}
                     onChange={(e) => updateLine(idx, { notes: e.target.value })} />
@@ -571,16 +766,20 @@ export default function ItemizationEditor({
                     </button>
                   </span>
                 ))}
-                <button type="button" className="iz-more-toggle"
-                  onClick={() => {
-                    const label = prompt('Jurisdiction name (e.g. "CA State"):');
-                    if (!label) return;
-                    const rateStr = prompt('Rate as PERCENT (e.g. 7.25):');
-                    const rate = parseFloat(rateStr || '0') || 0;
-                    updateLine(idx, { tax_jurisdictions: [...(li.tax_jurisdictions || []), { jurisdiction: label, rate, amount: 0 }] });
-                  }}>
-                  <Plus size={10} /> Jurisdiction
-                </button>
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <button type="button" className="iz-more-toggle"
+                    onClick={() => setJurisdictionPickerFor(jurisdictionPickerFor === li.id ? null : li.id)}>
+                    <Plus size={10} /> Jurisdiction
+                  </button>
+                  {jurisdictionPickerFor === li.id && (
+                    <JurisdictionPicker
+                      onPick={(j) => updateLine(idx, {
+                        tax_jurisdictions: [...(li.tax_jurisdictions || []), j],
+                      })}
+                      onClose={() => setJurisdictionPickerFor(null)}
+                    />
+                  )}
+                </div>
               </div>
             )}
           </React.Fragment>

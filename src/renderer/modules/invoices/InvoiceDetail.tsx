@@ -8,7 +8,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency, formatStatus, formatDate, humanizeLabel } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import { InvoiceStatusBadge, PaymentProgress, DueDateChip } from '../../components/library';
 import EntityTimeline from '../../components/EntityTimeline';
@@ -1174,7 +1174,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               {payments.map((p) => (
                 <tr key={p.id}>
                   <td className="text-text-secondary">{formatDate(p.date)}</td>
-                  <td className="text-text-secondary capitalize">{p.payment_method}</td>
+                  <td className="text-text-secondary">{formatPaymentMethod(p.payment_method)}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
                     {formatCurrency(p.amount)}

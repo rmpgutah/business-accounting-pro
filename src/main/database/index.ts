@@ -7790,6 +7790,28 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expenses ADD COLUMN geo_lat REAL",
   "ALTER TABLE expenses ADD COLUMN geo_lng REAL",
   "ALTER TABLE expenses ADD COLUMN geo_location_name TEXT",
+  // Shipping & Handling — order-level amount with optional per-item attribution.
+  // shipping_scope: 'order' (default) applies to the whole expense; 'item'
+  // attributes it to a single line via shipping_line_ref (a line-item id).
+  // shipping_taxable drives whether shipping_tax_amount is computed at save time.
+  // Per-line billable-to-client. Independent of the header is_billable so a
+  // single expense can mix billable and non-billable items. billed_invoice_id
+  // marks lines (or whole expenses) that have already been added to an
+  // invoice, so the billable bundler doesn't double-bill.
+  "ALTER TABLE expense_line_items ADD COLUMN is_billable INTEGER DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN billed_invoice_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN billed_invoice_id TEXT",
+  // Mileage trips: same billable-to-client flow as expense line items.
+  // is_billable + client_id → pulled into invoice:from-billable-expenses with
+  // billed_invoice_id stamped on bundle to prevent re-billing.
+  "ALTER TABLE mileage_log ADD COLUMN is_billable INTEGER DEFAULT 0",
+  "ALTER TABLE mileage_log ADD COLUMN billed_invoice_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN shipping_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN shipping_tax_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN shipping_speed TEXT",
+  "ALTER TABLE expenses ADD COLUMN shipping_taxable INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN shipping_scope TEXT DEFAULT 'order'",
+  "ALTER TABLE expenses ADD COLUMN shipping_line_ref TEXT",
   `CREATE TABLE IF NOT EXISTS expense_voice_memos (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL,

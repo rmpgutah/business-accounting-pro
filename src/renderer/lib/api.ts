@@ -553,6 +553,8 @@ const api = {
     window.electronAPI.invoke('record:clone', { table, id }),
   invoiceFromTimeEntries: (project_id: string, company_id: string) =>
     window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
+  invoiceFromBillableExpenses: (opts: { client_id?: string; project_id?: string; company_id: string }) =>
+    window.electronAPI.invoke('invoice:from-billable-expenses', opts),
 
   // ─── Debt Collection ─────────────────────────
   debtStats: (companyId: string): Promise<{
