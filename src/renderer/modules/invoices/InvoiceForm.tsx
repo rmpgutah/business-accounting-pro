@@ -711,7 +711,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   }, [form.invoice_type]);
 
   const removeLine = useCallback(
-    (index: number) => setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index))),
+    (index: number) => {
+      // Behavior › Confirm before deleting — gated for line removal so a
+      // misclick on the trash icon doesn't wipe a populated row. Empty
+      // rows (no description AND no amount) skip the prompt entirely.
+      // Reading via the setter avoids depending on `lines` in deps, which
+      // would otherwise re-create this callback on every keystroke.
+      setLines((prev) => {
+        if (prev.length <= 1) return prev;
+        const line = prev[index];
+        const isEmpty = !line?.description && !Number(line?.unit_price) && !Number(line?.quantity);
+        if (!isEmpty && getInvoicingPrefs().confirmBeforeDelete) {
+          if (!confirm('Delete this line item?')) return prev;
+        }
+        return prev.filter((_, i) => i !== index);
+      });
+    },
     []
   );
 
@@ -812,11 +827,46 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   }, [overIndex, dragIndex]);
 
   // ─── Form field helpers ──────────────────────────────
+  // `dirtyRef` tracks whether the user has changed *anything* since this
+  // form was mounted. Used by the warn-unsaved behavior preference to
+  // gate beforeunload prompts and the back-button confirm. A ref (not
+  // state) so flipping it doesn't cause a re-render — only the unload
+  // handler ever reads it.
+  const dirtyRef = useRef(false);
+  const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
+
   const updateField = useCallback(
-    (field: keyof InvoiceFormData, value: string | number) =>
-      setForm((prev) => ({ ...prev, [field]: value })),
+    (field: keyof InvoiceFormData, value: string | number) => {
+      dirtyRef.current = true;
+      setForm((prev) => ({ ...prev, [field]: value }));
+    },
     []
   );
+
+  // Behavior › Warn about unsaved changes — install a beforeunload guard
+  // that fires only when the user has actually touched something and the
+  // preference is on. Uninstalled on unmount so other pages aren't
+  // affected.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      if (!getInvoicingPrefs().warnUnsaved) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Wrap the parent-provided onBack so the warn-unsaved preference applies
+  // to in-app navigation too (the beforeunload only catches window-level
+  // closes). The wrapped version is what the back button calls.
+  const guardedBack = useCallback(() => {
+    if (dirtyRef.current && getInvoicingPrefs().warnUnsaved) {
+      if (!confirm('Discard unsaved changes to this invoice?')) return;
+    }
+    onBack();
+  }, [onBack]);
 
   // Smart due date: auto-calculate from terms when user changes terms dropdown
   const handleTermsChange = useCallback(
@@ -1031,6 +1081,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       if (showSchedule && milestones.length > 0) {
         await api.savePaymentSchedule(savedId, milestones).catch(console.error);
       }
+      // Clear dirty so the warn-unsaved guard doesn't fire on navigation.
+      dirtyRef.current = false;
       onSaved(savedId);
     } catch (err) {
       console.error('Failed to save invoice:', err);
@@ -1935,7 +1987,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         style={{ flexShrink: 0, padding: '0 24px', borderBottom: '1px solid var(--color-border-primary)' }}
       >
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back">
+          <button onClick={guardedBack} className="block-btn p-2" title="Back">
             <ArrowLeft size={16} />
           </button>
           <h1 className="module-title text-text-primary">

@@ -98,6 +98,30 @@ export function applyCustomizationGlobals(): void {
     const c = val('dashboard', id);
     if (isHex(c)) root.style.setProperty(cssVar, c);
   }
+
+  // ── Invoicing accessibility & global affordances ─────────────────────
+  // These are scoped to the invoicing section in the Customization Center
+  // but their effect is most useful when applied app-wide — they're CSS-
+  // expressible and the user almost certainly wants them everywhere.
+  const fontScale = Number(val('invoicing', 'a11y-font-scale'));
+  if (Number.isFinite(fontScale) && fontScale >= 50 && fontScale <= 250) {
+    root.style.setProperty('--cust-font-scale', String(fontScale / 100));
+  }
+  // Reduced motion → matches the data attribute pattern other features use
+  // (see existing `data-density`). Components and Tailwind classes can key
+  // off this with a sibling selector like `[data-reduce-motion="on"] *`.
+  root.setAttribute(
+    'data-reduce-motion',
+    bool('invoicing', 'a11y-reduce-motion') ? 'on' : 'off',
+  );
+  root.setAttribute(
+    'data-high-contrast',
+    bool('invoicing', 'a11y-high-contrast') ? 'on' : 'off',
+  );
+  root.setAttribute(
+    'data-focus-visible',
+    bool('invoicing', 'a11y-focus-outline') ? 'on' : 'off',
+  );
 }
 
 let unsubscribe: (() => void) | null = null;

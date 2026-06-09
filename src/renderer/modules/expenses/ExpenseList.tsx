@@ -9,6 +9,11 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCustomizationStore } from '../../stores/customizationStore';
+import {
+  useExpensesPrefs,
+  formatExpenseAmount,
+  formatExpenseDate,
+} from '../../customization/expenses-prefs';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
@@ -791,7 +796,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   // otherwise falls back to the local column-menu state. Subscribing to
   // `values` makes this reactive to changes made in the Customization Center.
   const custValues = useCustomizationStore((s) => s.values);
-  const cDensity = useCustomizationStore((s) => String(s.get('expenses.expenses-density') ?? 'comfortable'));
+  // Typed pref bag — replaces the scattered `s.get('expenses.…')` reads
+  // and adds sticky-header / zebra / rows-per-page support.
+  const xprefs = useExpensesPrefs();
+  const cDensity = xprefs.density;
   const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
   const colVisible = (k: ColKey) => {
     const cid = COL_CUSTOMIZATION[k];
@@ -816,7 +824,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         <td onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: 'var(--accent-primary)' }} />
         </td>
-        {colVisible('date') && <td className="font-mono text-text-secondary text-xs col-nowrap">{formatDate(exp.date)}</td>}
+        {colVisible('date') && <td className="font-mono text-text-secondary text-xs col-nowrap">{formatExpenseDate(exp.date)}</td>}
         {colVisible('description') && (
           <td className="text-text-primary font-medium">
             {isEditingDesc ? (
@@ -924,12 +932,12 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                    explains the breakdown. */
                 onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'amount', exp.amount); }}
                 title={(exp.tax_amount || 0) > 0
-                  ? `Total ${formatCurrency(expenseDisplayTotal(exp))} = Subtotal ${formatCurrency(exp.amount || 0)} + Tax ${formatCurrency(exp.tax_amount || 0)}\nDouble-click to edit subtotal only.`
+                  ? `Total ${formatExpenseAmount(expenseDisplayTotal(exp))} = Subtotal ${formatExpenseAmount(exp.amount || 0)} + Tax ${formatExpenseAmount(exp.tax_amount || 0)}\nDouble-click to edit subtotal only.`
                   : 'Double-click to edit'}
               >
                 {/* FINAL-PRICE display: amount + tax. Legacy tax_inclusive rows stored
                     amount = total already, so don't double-count by adding tax again. */}
-                {formatCurrency(expenseDisplayTotal(exp))}
+                {formatExpenseAmount(expenseDisplayTotal(exp))}
               </span>
             )}
           </td>
@@ -1034,10 +1042,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         </div>
       </div>
 
-      {/* Summary Bar */}
-      {expenseSummary && (
+      {/* Summary Bar + quick-stats strip — both gated by
+          Customization › Expenses › Display › Show summary cards header. */}
+      {xprefs.showSummaryCards && expenseSummary && (
         <SummaryBar items={[
-          { label: 'This Month', value: formatCurrency(expenseSummary.month_total), tooltip: 'Total expenses recorded in the current calendar month' },
+          { label: 'This Month', value: formatExpenseAmount(expenseSummary.month_total), tooltip: 'Total expenses recorded in the current calendar month' },
           { label: 'Top Category', value: expenseSummary.top_category ?? '—' },
           ...(Number(expenseSummary.over_budget_count) > 0
             ? [{ label: 'Over Budget', value: `${expenseSummary.over_budget_count} categories`, accent: 'red' as const, tooltip: 'Categories where spending this month exceeds the budget line' }]
@@ -1046,12 +1055,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       )}
 
       {/* Quick stats strip (feature 18) */}
+      {xprefs.showSummaryCards && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 report-summary-tiles">
-        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">This Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.thisMonth)}</div></div>
-        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Last Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.lastMonth)}</div></div>
+        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">This Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatExpenseAmount(quickStats.thisMonth)}</div></div>
+        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Last Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatExpenseAmount(quickStats.lastMonth)}</div></div>
         <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Pending</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{quickStats.pending}</div></div>
-        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Reimbursable</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.reimbursable)}</div></div>
+        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Reimbursable</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatExpenseAmount(quickStats.reimbursable)}</div></div>
       </div>
+      )}
 
       {/* Stripe refund capture banner (feature 23) */}
       {unmatchedRefunds.length > 0 && (
@@ -1388,9 +1399,22 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         />
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <div className="table-wrap-fade">
-          <table className="block-table" style={{ fontSize: cTableFontSize }}>
-            <thead>
+          <div
+            className="table-wrap-fade"
+            style={xprefs.stickyHeader ? { maxHeight: '70vh', overflowY: 'auto' } : undefined}
+          >
+          <table
+            className="block-table"
+            style={{ fontSize: cTableFontSize }}
+            data-zebra={xprefs.zebra ? 'on' : 'off'}
+          >
+            <thead
+              style={
+                xprefs.stickyHeader
+                  ? { position: 'sticky', top: 0, zIndex: 2, background: 'var(--color-bg-secondary)' }
+                  : undefined
+              }
+            >
               <tr>
                 <th style={{ width: '40px' }}>
                   <input
