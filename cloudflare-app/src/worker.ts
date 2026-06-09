@@ -3258,6 +3258,252 @@ wireSimpleEntity({
   ],
 });
 
+// ─── Report Builder ──────────────────────────────────────────────────
+// Lets users build aggregation reports without writing SQL. The UI captures
+// a config object — { source, group_by, aggregations, filters } — and the
+// Worker translates it into a parameterized SQL query.
+//
+// SAFETY: every column / table identifier is validated against an allowlist
+// before substitution. Filter values are parameter-bound. There's NO free-text
+// SQL surface from the UI — that would be an immediate SQL injection vector.
+
+interface ReportConfig {
+  source: string;                        // 'expenses' | 'invoices' | 'bills' | 'time_entries' | …
+  group_by: string[];                    // columns to GROUP BY
+  aggregations: Array<{ column: string; fn: 'sum' | 'count' | 'avg' | 'min' | 'max'; alias?: string }>;
+  filters?: Array<{ column: string; op: string; value: any }>;
+  order_by?: { column: string; dir?: 'asc' | 'desc' };
+  limit?: number;
+}
+
+// Allowed sources and their column allowlists. Anything not in the list
+// gets rejected. Easier-to-trust list than parsing the live schema.
+const REPORT_SOURCES: Record<string, { cols: string[]; numericCols: string[] }> = {
+  expenses: {
+    cols: ['id', 'date', 'amount', 'tax_amount', 'shipping_amount', 'description',
+           'vendor_id', 'category_id', 'project_id', 'client_id', 'payment_method', 'status', 'currency'],
+    numericCols: ['amount', 'tax_amount', 'shipping_amount'],
+  },
+  invoices: {
+    cols: ['id', 'date', 'due_date', 'invoice_number', 'client_id', 'subtotal', 'tax_amount',
+           'shipping_amount', 'discount', 'total', 'amount_paid', 'status', 'currency'],
+    numericCols: ['subtotal', 'tax_amount', 'shipping_amount', 'discount', 'total', 'amount_paid'],
+  },
+  bills: {
+    cols: ['id', 'date', 'due_date', 'bill_number', 'vendor_id', 'subtotal', 'tax_amount',
+           'shipping_amount', 'discount', 'total', 'amount_paid', 'status', 'currency'],
+    numericCols: ['subtotal', 'tax_amount', 'shipping_amount', 'discount', 'total', 'amount_paid'],
+  },
+  time_entries: {
+    cols: ['id', 'date', 'employee_id', 'project_id', 'client_id', 'duration_minutes',
+           'hourly_rate', 'is_billable', 'is_invoiced'],
+    numericCols: ['duration_minutes', 'hourly_rate'],
+  },
+  mileage_log: {
+    cols: ['id', 'trip_date', 'purpose', 'miles', 'rate_per_mile', 'deduction_amount',
+           'is_billable', 'project_id', 'client_id'],
+    numericCols: ['miles', 'rate_per_mile', 'deduction_amount'],
+  },
+};
+
+function buildReportSQL(cfg: ReportConfig): { sql: string; bindings: any[] } | { error: string } {
+  const src = REPORT_SOURCES[cfg.source];
+  if (!src) return { error: `Unknown source: ${cfg.source}` };
+  const validCol = (c: string) => src.cols.includes(c);
+
+  // SELECT clause: grouping columns first, then aggregations.
+  const selectParts: string[] = [];
+  for (const g of cfg.group_by || []) {
+    if (!validCol(g)) return { error: `Invalid group_by column: ${g}` };
+    selectParts.push(g);
+  }
+  const aggs = cfg.aggregations || [];
+  for (const a of aggs) {
+    if (!validCol(a.column)) return { error: `Invalid aggregation column: ${a.column}` };
+    const fn = a.fn.toLowerCase();
+    if (!['sum', 'count', 'avg', 'min', 'max'].includes(fn)) return { error: `Invalid aggregation fn: ${a.fn}` };
+    if (fn !== 'count' && !src.numericCols.includes(a.column)) {
+      return { error: `${a.column} is not numeric — only count is allowed` };
+    }
+    const alias = (a.alias || `${fn}_${a.column}`).replace(/[^a-zA-Z0-9_]/g, '_');
+    selectParts.push(`${fn.toUpperCase()}(${a.column}) AS ${alias}`);
+  }
+  if (selectParts.length === 0) return { error: 'At least one group_by or aggregation is required' };
+
+  let sql = `SELECT ${selectParts.join(', ')} FROM ${cfg.source} WHERE company_id = ?`;
+  const bindings: any[] = [];  // company_id is bound by the caller
+
+  // Filters — each one is a parameter-bound condition.
+  for (const f of cfg.filters || []) {
+    if (!validCol(f.column)) return { error: `Invalid filter column: ${f.column}` };
+    const opMap: Record<string, string> = {
+      eq: '=', ne: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=',
+      like: 'LIKE', is_null: 'IS NULL', is_not_null: 'IS NOT NULL',
+    };
+    const sqlOp = opMap[f.op];
+    if (!sqlOp) return { error: `Invalid filter op: ${f.op}` };
+    if (f.op === 'is_null' || f.op === 'is_not_null') {
+      sql += ` AND ${f.column} ${sqlOp}`;
+    } else {
+      sql += ` AND ${f.column} ${sqlOp} ?`;
+      bindings.push(f.value);
+    }
+  }
+
+  if ((cfg.group_by || []).length > 0) {
+    sql += ` GROUP BY ${cfg.group_by.join(', ')}`;
+  }
+
+  if (cfg.order_by?.column) {
+    if (!validCol(cfg.order_by.column) && !aggs.find(a => (a.alias || `${a.fn}_${a.column}`) === cfg.order_by!.column)) {
+      return { error: `Invalid order_by column: ${cfg.order_by.column}` };
+    }
+    sql += ` ORDER BY ${cfg.order_by.column} ${cfg.order_by.dir === 'desc' ? 'DESC' : 'ASC'}`;
+  }
+
+  const lim = Math.min(Math.max(Number(cfg.limit || 100), 1), 1000);
+  sql += ` LIMIT ${lim}`;
+
+  return { sql, bindings };
+}
+
+// /app/report-builder — saved reports list + new/edit form
+app.get('/app/report-builder', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, name, description, chart_type, is_pinned, updated_at
+    FROM saved_reports WHERE company_id = ? ORDER BY is_pinned DESC, name
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Report Builder</h1>
+  <a href="/app/report-builder/new" class="btn">+ New Report</a>
+</div>
+${items.length === 0 ? `
+<div class="card">
+  <div class="card-title">Build aggregation reports from your data</div>
+  <p class="muted" style="font-size:0.9rem">Pick a source table (expenses, invoices, time, …), choose columns to group by, add aggregations (SUM, COUNT, AVG), and optional filters. The result table renders inline; save it to re-run later.</p>
+  <div style="margin-top:1rem"><a href="/app/report-builder/new" class="btn">Build your first report</a></div>
+</div>` : `
+<div class="grid grid-2" style="gap:1rem">
+  ${items.map((r: any) => `<div class="card">
+    <div style="display:flex;align-items:start;gap:8px">
+      <div style="flex:1">
+        <div style="font-size:1rem;font-weight:700">${esc(r.name)}${r.is_pinned ? ' ★' : ''}</div>
+        ${r.description ? `<div class="muted" style="font-size:0.85rem;margin-top:2px">${esc(r.description)}</div>` : ''}
+        <div class="muted" style="font-size:0.72rem;margin-top:8px"><code>${esc(r.chart_type)}</code> · updated ${esc(r.updated_at)}</div>
+      </div>
+      <a href="/app/report-builder/${esc(r.id)}/run" class="btn btn-ghost" style="font-size:0.78rem">Run</a>
+      <a href="/app/report-builder/${esc(r.id)}" class="btn btn-ghost" style="font-size:0.78rem">Edit</a>
+    </div>
+  </div>`).join('')}
+</div>`}`;
+  return c.html(shell({ title: 'Report Builder', activeNav: 'report-builder', body, brand: 'BAP Cloud' }));
+});
+
+wireSimpleEntity({
+  table: 'saved_reports', navKey: 'report-builder', apiPath: '/api/report-builder',
+  entitySingular: 'Saved Report', entityPlural: 'Saved Reports', listPath: '/app/report-builder',
+  cols: ['name', 'description', 'config', 'chart_type', 'is_pinned'],
+  fields: [
+    { name: 'name', label: 'Report Name', kind: 'text', required: true },
+    { name: 'description', label: 'Description', kind: 'text' },
+    { name: 'chart_type', label: 'Display', kind: 'select', rowGroup: 1, options: [
+      { value: 'table', label: 'Table' },
+      { value: 'bar', label: 'Bar chart (top-10)' }] },
+    { name: 'is_pinned', label: 'Pinned', kind: 'checkbox', coerce: 'checkbox', rowGroup: 1 },
+    { name: 'config', label: 'Config (JSON)', kind: 'textarea',
+      placeholder: '{"source":"expenses","group_by":["category_id"],"aggregations":[{"column":"amount","fn":"sum"}],"order_by":{"column":"sum_amount","dir":"desc"}}' },
+  ],
+});
+
+// Run a saved report — executes the SQL and renders the result.
+app.get('/app/report-builder/:id/run', async (c) => {
+  const cid = c.get('companyId')!;
+  const rep = await c.env.DB.prepare('SELECT * FROM saved_reports WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!rep) return c.notFound();
+
+  let cfg: ReportConfig;
+  try { cfg = JSON.parse(rep.config || '{}'); }
+  catch { return c.html(shell({ title: 'Report Error', activeNav: 'report-builder', body: `<div class="error-banner">Bad JSON in report config</div>`, brand: 'BAP Cloud' })); }
+
+  const built = buildReportSQL(cfg);
+  if ('error' in built) {
+    return c.html(shell({
+      title: 'Report Error', activeNav: 'report-builder', brand: 'BAP Cloud',
+      body: `<div class="page-header"><h1 class="page-title">${esc(rep.name)}</h1>
+        <a href="/app/report-builder/${esc(rep.id)}" class="btn btn-ghost">Edit</a></div>
+        <div class="error-banner">${esc(built.error)}</div>`,
+    }));
+  }
+
+  let rows: any[] = [];
+  let runError = '';
+  try {
+    const result = await c.env.DB.prepare(built.sql).bind(cid, ...built.bindings).all();
+    rows = (result.results as any[]) || [];
+  } catch (err: any) {
+    runError = err?.message || 'Query failed';
+  }
+
+  // Render either a table or a horizontal bar chart for the top-10 rows.
+  // Bar chart uses inline SVG to avoid a charting library.
+  let resultHTML = '';
+  if (runError) {
+    resultHTML = `<div class="error-banner">${esc(runError)}</div>`;
+  } else if (rows.length === 0) {
+    resultHTML = `<div class="empty-state">No rows.</div>`;
+  } else if (rep.chart_type === 'bar') {
+    const cols = Object.keys(rows[0]);
+    // Pick the first non-numeric column as label, last as value.
+    const valueCol = cols[cols.length - 1];
+    const labelCol = cols[0];
+    const top = rows.slice(0, 10);
+    const max = Math.max(1, ...top.map(r => Number(r[valueCol]) || 0));
+    resultHTML = `<div class="card"><div class="card-title">${esc(valueCol)} by ${esc(labelCol)}</div>
+      ${top.map(r => {
+        const val = Number(r[valueCol]) || 0;
+        const pct = (val / max) * 100;
+        return `<div style="display:grid;grid-template-columns:160px 1fr 100px;gap:8px;align-items:center;padding:6px 0">
+          <div style="font-size:0.85rem;color:var(--text)">${esc(String(r[labelCol] ?? '—').slice(0, 22))}</div>
+          <div style="background:var(--bg-elevated);border-radius:var(--radius);height:18px;overflow:hidden">
+            <div style="width:${pct.toFixed(1)}%;height:100%;background:var(--accent);"></div>
+          </div>
+          <div class="num muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.85rem">${fmtMoney(val)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else {
+    const cols = Object.keys(rows[0]);
+    resultHTML = `<div class="card"><table class="data">
+      <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${cols.map(col => {
+        const v = r[col];
+        const numeric = typeof v === 'number';
+        return `<td${numeric ? ' class="num"' : ''}>${esc(numeric ? fmtMoney(v) : String(v ?? '—'))}</td>`;
+      }).join('')}</tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">${esc(rep.name)}</h1>
+  <div style="display:flex;gap:8px">
+    <a href="/app/report-builder/${esc(rep.id)}" class="btn btn-ghost">Edit</a>
+    <a href="/app/report-builder" class="btn btn-ghost">Back</a>
+  </div>
+</div>
+${rep.description ? `<div class="muted" style="margin-bottom:1rem">${esc(rep.description)}</div>` : ''}
+${resultHTML}
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Query</div>
+  <pre style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem;background:var(--bg-elevated);padding:12px;border-radius:var(--radius);overflow:auto">${esc(built.sql)}</pre>
+</div>`;
+  return c.html(shell({ title: rep.name, activeNav: 'report-builder', body, brand: 'BAP Cloud' }));
+});
+
 function nextRecurringDate(from: string, freq: string): string {
   const d = new Date(from + 'T00:00:00Z');
   switch (freq) {

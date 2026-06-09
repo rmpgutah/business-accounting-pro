@@ -180,6 +180,7 @@ function renderNav(brand: string, active?: string): string {
     ${item('/app/budgets', 'Budgets', 'budgets')}
     ${item('/app/accounts', 'GL', 'accounts')}
     ${item('/app/reports', 'Reports', 'reports')}
+    ${item('/app/report-builder', 'Builder', 'report-builder')}
     ${item('/app/kpi', 'KPI', 'kpi')}
     ${item('/app/forecasting', 'Forecast', 'forecasting')}
     ${item('/app/taxes', 'Tax', 'taxes')}
