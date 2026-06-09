@@ -9399,6 +9399,61 @@ export function registerIpcHandlers(): void {
     return { id: newId };
   });
 
+  // ─── Cloud bootstrap ────────────────────────────────────
+  // Push local users + companies + user_companies up to the configured cloud
+  // sync URL so the customer can sign in to the cloud with the SAME email +
+  // password they already use on the desktop. The cloud verifies password
+  // hashes in BOTH formats (pbkdf2-SHA256 cloud-native, pbkdf2-SHA512 from
+  // here), so the hashes transfer 1:1 — no password reset needed.
+  // Idempotent on the cloud side; safe to re-run after adding new local users.
+  ipcMain.handle('cloud:bootstrap-users', async () => {
+    try {
+      const rawDb = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      // Settings are company-scoped. Cloud Sync settings live on whichever
+      // company is currently active when the user clicks Save in the UI.
+      const readSetting = (k: string): string => {
+        const row = rawDb.prepare('SELECT value FROM settings WHERE company_id = ? AND key = ?').get(companyId, k) as any;
+        return row?.value || '';
+      };
+      const url = readSetting('cloud_sync_url').trim().replace(/\/$/, '');
+      const token = readSetting('cloud_sync_token').trim();
+      if (!url) return { error: 'Cloud Sync URL not set in API & Integrations.' };
+      if (!token) return { error: 'Cloud Sync Token not set in API & Integrations.' };
+      const users = rawDb.prepare(`
+        SELECT id, email, display_name, password_hash, role
+        FROM users
+      `).all() as any[];
+      const companies = rawDb.prepare(`
+        SELECT id, name, email, phone, address, tax_id, currency
+        FROM companies
+      `).all() as any[];
+      const userCompanies = rawDb.prepare(`
+        SELECT user_id, company_id, role
+        FROM user_companies
+      `).all() as any[];
+
+      if (users.length === 0) {
+        return { error: 'No local users to push. Register an account on the desktop first.' };
+      }
+
+      const res = await fetch(url + '/api/auth/bootstrap', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users, companies, user_companies: userCompanies }),
+      });
+      const text = await res.text();
+      let body: any;
+      try { body = JSON.parse(text); } catch { body = { error: text || 'Non-JSON response' }; }
+      if (!res.ok) {
+        return { error: body?.error || ('Cloud responded with HTTP ' + res.status) };
+      }
+      return { ok: true, imported: body?.imported, status: res.status };
+    } catch (err: any) {
+      return { error: err?.message || 'Bootstrap failed' };
+    }
+  });
+
   ipcMain.handle('invoice:from-time-entries', (_event, { project_id, company_id }: { project_id: string; company_id: string }) => {
     const entries = db.getDb().prepare(`
       SELECT te.*, e.name as employee_name, e.pay_rate, p.client_id, p.name as project_name

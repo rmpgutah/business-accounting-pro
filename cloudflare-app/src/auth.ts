@@ -35,23 +35,51 @@ export async function hashPassword(password: string): Promise<string> {
   return `pbkdf2$200000$${b64uEncode(salt)}$${b64uEncode(derived)}`;
 }
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  // Format 1 — desktop-imported: "<saltHex>:<hashHex>" produced by the
+  // Electron app's crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').
+  // Detect by the ':' separator + hex shape; verify with the same KDF params.
+  if (stored.indexOf(':') > 0 && stored.indexOf('$') === -1) {
+    const [saltHex, hashHex] = stored.split(':');
+    if (!saltHex || !hashHex || !/^[0-9a-f]+$/i.test(saltHex) || !/^[0-9a-f]+$/i.test(hashHex)) {
+      return false;
+    }
+    const salt = hexDecode(saltHex);
+    const expected = hexDecode(hashHex);
+    // Desktop derives 64 bytes = 512 bits with SHA-512, 100k iters.
+    const got = await deriveBitsSHA(password, salt, 100_000, 512, 'SHA-512');
+    return constantTimeEqual(new Uint8Array(got), expected);
+  }
+  // Format 2 — cloud-native: "pbkdf2$<iters>$<saltB64u>$<hashB64u>" (SHA-256).
   const parts = stored.split('$');
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
   const iters = parseInt(parts[1], 10);
   if (!Number.isFinite(iters) || iters < 10000) return false;
   const salt = b64uDecode(parts[2]);
   const expected = b64uDecode(parts[3]);
-  const got = await deriveBits(password, salt, iters);
+  const got = await deriveBitsSHA(password, salt, iters, 256, 'SHA-256');
   return constantTimeEqual(new Uint8Array(got), expected);
 }
 async function deriveBits(password: string, salt: Uint8Array, iters: number): Promise<ArrayBuffer> {
+  return deriveBitsSHA(password, salt, iters, 256, 'SHA-256');
+}
+// Parameterized over hash + output length so we can verify both the cloud's
+// SHA-256/256-bit hashes and the desktop's SHA-512/512-bit hashes with one
+// implementation.
+async function deriveBitsSHA(
+  password: string, salt: Uint8Array, iters: number, bits: number, hash: 'SHA-256' | 'SHA-512',
+): Promise<ArrayBuffer> {
   const key = await crypto.subtle.importKey(
     'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
   );
   return crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: iters, hash: 'SHA-256' },
-    key, 256
+    { name: 'PBKDF2', salt, iterations: iters, hash },
+    key, bits
   );
+}
+function hexDecode(s: string): Uint8Array {
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+  return out;
 }
 function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;

@@ -555,6 +555,8 @@ const api = {
     window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
   invoiceFromBillableExpenses: (opts: { client_id?: string; project_id?: string; company_id: string }) =>
     window.electronAPI.invoke('invoice:from-billable-expenses', opts),
+  cloudBootstrapUsers: () =>
+    window.electronAPI.invoke('cloud:bootstrap-users'),
 
   // ─── Debt Collection ─────────────────────────
   debtStats: (companyId: string): Promise<{

@@ -27,6 +27,8 @@ export default function ApiModule() {
   const [cloudTokenVisible, setCloudTokenVisible] = useState(false);
   const [cloudTesting, setCloudTesting] = useState(false);
   const [cloudTestResult, setCloudTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapResult, setBootstrapResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const loadSettings = useCallback(async () => {
     if (!activeCompany) return;
@@ -122,6 +124,30 @@ export default function ApiModule() {
       setTimeout(() => setCloudSaved(false), 2000);
     } catch (err: any) {
       alert('Failed to save cloud sync settings: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  // Push local user accounts (with their pbkdf2 hashes) to the cloud so the
+  // cloud accepts the user's existing desktop credentials at sign-in. The
+  // cloud's verifyPassword handles both hash formats. Idempotent.
+  const bootstrapToCloud = async () => {
+    setBootstrapping(true);
+    setBootstrapResult(null);
+    try {
+      const r = await api.cloudBootstrapUsers();
+      if (r?.error) {
+        setBootstrapResult({ ok: false, msg: r.error });
+      } else {
+        const imp = r?.imported || {};
+        setBootstrapResult({
+          ok: true,
+          msg: `Synced ${imp.users || 0} user${imp.users === 1 ? '' : 's'} · ${imp.companies || 0} compan${imp.companies === 1 ? 'y' : 'ies'}. Sign in to the cloud with your desktop password.`,
+        });
+      }
+    } catch (err: any) {
+      setBootstrapResult({ ok: false, msg: err?.message || 'Bootstrap failed' });
+    } finally {
+      setBootstrapping(false);
     }
   };
 
@@ -289,11 +315,23 @@ export default function ApiModule() {
                 <RefreshCw size={12} className={cloudTesting ? 'animate-spin' : ''} />
                 {cloudTesting ? 'Testing...' : 'Test Connection'}
               </button>
+              <button className="block-btn text-xs flex items-center gap-1" onClick={bootstrapToCloud}
+                disabled={!cloudUrl.trim() || !cloudToken.trim() || bootstrapping}
+                title="Push your desktop user accounts (with password hashes) to the cloud so you can sign in there with the SAME email and password you use here">
+                <Cloud size={12} className={bootstrapping ? 'animate-pulse' : ''} />
+                {bootstrapping ? 'Syncing...' : 'Sync Accounts to Cloud'}
+              </button>
             </div>
             {cloudTestResult && (
               <p className={`text-xs flex items-center gap-1 ${cloudTestResult.ok ? 'text-accent-income' : 'text-accent-expense'}`}>
                 {cloudTestResult.ok ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
                 {cloudTestResult.msg}
+              </p>
+            )}
+            {bootstrapResult && (
+              <p className={`text-xs flex items-center gap-1 ${bootstrapResult.ok ? 'text-accent-income' : 'text-accent-expense'}`}>
+                {bootstrapResult.ok ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                {bootstrapResult.msg}
               </p>
             )}
           </div>

@@ -80,7 +80,7 @@ export function expenseCapturePage(opts: ExpenseCaptureOptions): string {
   <div>
     <div class="card-title">Receipt (optional)</div>
     <input id="receipt" type="file" accept="image/*,application/pdf" capture="environment"
-      style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:2px;padding:10px;color:var(--text-bright);width:100%">
+      style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-bright);width:100%">
     <div class="muted" style="font-size:0.75rem;margin-top:6px">Photos use your camera on mobile. Uploads after the expense saves.</div>
   </div>
 
