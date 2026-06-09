@@ -472,7 +472,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
               <div className="lf-stat-card">
                 <div className="lf-stat-label">Term</div>
                 <div className="lf-stat-value">{form.term_months} mo</div>
-                <div className="lf-stat-sub">{form.payment_frequency} · {form.amortization_type}</div>
+                <div className="lf-stat-sub">{humanizeLabel(form.payment_frequency)} · {humanizeLabel(form.amortization_type)}</div>
               </div>
               {liveCalc && (
                 <div className="lf-stat-card">

@@ -2389,7 +2389,7 @@ html.theme-transition, html.theme-transition * {
   font-size: var(--font-3xs);
   font-weight: 600;
   border-radius: var(--radius-full);
-  text-transform: lowercase;
+  text-transform: capitalize;
   letter-spacing: 0.02em;
   border: 1px solid transparent;
   white-space: nowrap;

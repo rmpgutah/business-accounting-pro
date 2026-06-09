@@ -137,6 +137,7 @@ interface ExpenseLineItem {
   discount_percent?: number;
   is_tax_deductible?: boolean;
   is_tax_exempt?: boolean;
+  is_billable?: boolean;
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
@@ -875,6 +876,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 discount_percent: l.discount_percent || 0,
                 is_tax_deductible: l.is_tax_deductible == null ? true : !!l.is_tax_deductible,
                 is_tax_exempt: !!l.is_tax_exempt,
+                is_billable: !!l.is_billable,
                 notes: l.notes || '',
                 item_type: (l.item_type as any) || 'item',
                 tags: parseJSON<string[]>(l.tags, []),
@@ -1169,6 +1171,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             discount_percent: li.discount_percent || 0,
             is_tax_deductible: li.is_tax_deductible === false ? 0 : 1,
             is_tax_exempt: li.is_tax_exempt ? 1 : 0,
+            is_billable: li.is_billable ? 1 : 0,
             notes: li.notes || null,
             item_type: li.item_type || 'item',
             tags: JSON.stringify(li.tags || []),

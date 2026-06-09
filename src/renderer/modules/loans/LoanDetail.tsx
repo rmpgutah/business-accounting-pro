@@ -15,6 +15,7 @@ import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import { formatStatus, humanizeLabel } from '../../lib/format';
 
 interface Props {
   loanId: string;
@@ -295,7 +296,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                       </td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{fmt$(p.principal_amount, cur)}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{fmt$(p.interest_amount, cur)}</td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{formatPaymentMethod(p.payment_method)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{humanizeLabel(p.payment_method)}</td>
                       <td style={{ padding: '3px 6px', fontSize: 10, textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <button
                           onClick={() => setEditPayment({ ...p })}
@@ -970,7 +971,7 @@ const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string; refreshK
                     <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#f59e0b' }}>{interest > 0 ? fmt(interest) : '—'}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#6366f1' }}>{principal > 0 ? fmt(principal) : '—'}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{fmt(e.amount || 0)}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{e.status}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{formatStatus(e.status).label}</td>
                   </tr>
                 );
               })}

@@ -3829,8 +3829,9 @@ export function registerIpcHandlers(): void {
               "VALUES (?, ?, ?, ?, ?, ?, ?)"
             ).run(pid, cid, top.invoice_id, t.amount, t.date, 'bank_transfer', (t.description || '').slice(0, 60));
 
-            // Update invoice
-            const newPaid = Number(top.amount_paid) + t.amount;
+            // Update invoice. Round to cents so repeated auto-matches don't
+            // accumulate binary-float drift in amount_paid (0.1 + 0.2 = 0.300…04).
+            const newPaid = Math.round((Number(top.amount_paid) + t.amount) * 100) / 100;
             const newStatus = newPaid + 0.005 >= top.total ? 'paid' : 'partial';
             dbi.prepare(
               "UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
@@ -10683,7 +10684,7 @@ export function registerIpcHandlers(): void {
       const rows = dbInstance.prepare(`
         SELECT
           u.id as collector_id,
-          u.name as collector_name,
+          u.display_name as collector_name,
           COUNT(DISTINCT d.id) as active_cases,
           COALESCE(SUM(d.original_amount), 0) as total_owed,
           COALESCE(SUM(d.payments_made), 0) as total_collected,
@@ -10698,7 +10699,7 @@ export function registerIpcHandlers(): void {
         FROM users u
         INNER JOIN debts d ON d.assigned_collector_id = u.id AND d.company_id = ?
         ${dateFilter}
-        GROUP BY u.id, u.name
+        GROUP BY u.id, u.display_name
         ORDER BY total_collected DESC
       `).all(companyId);
       return rows;

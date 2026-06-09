@@ -5,7 +5,7 @@ import {
   ArrowUpRight, Activity, Target, Users, Printer
 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 
@@ -979,7 +979,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                   onClick={() => onViewDebt(rec.debtId)}
                 >
                   <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
-                    {rec.priority}
+                    {humanizeLabel(rec.priority)}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-text-primary font-medium">{rec.debtorName}</p>

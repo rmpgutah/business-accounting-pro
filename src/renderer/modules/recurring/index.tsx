@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
+import { formatStatus, humanizeLabel } from '../../lib/format';
 import { useNavigation } from '../../lib/navigation';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -526,7 +527,7 @@ const RecurringTransactions: React.FC = () => {
                     <tr key={t.id}>
                       <td className="text-text-primary font-medium truncate max-w-[200px]">{t.name}</td>
                       <td>
-                        <span className={typeBadge[t.type] || 'block-badge capitalize'}>{t.type}</span>
+                        <span className={typeBadge[t.type] || 'block-badge capitalize'}>{humanizeLabel(t.type)}</span>
                       </td>
                       <td className="text-text-secondary">
                         {frequencyLabel[t.frequency] || t.frequency}
@@ -664,7 +665,7 @@ const RecurringTransactions: React.FC = () => {
                           h.status === 'overdue' ? 'block-badge-expense' :
                           'block-badge-warning'
                         }`}>
-                          <span className="capitalize">{h.status}</span>
+                          <span className="capitalize">{formatStatus(h.status).label}</span>
                         </span>
                       </td>
                       <td className="text-text-secondary text-xs">{h.client_name || '-'}</td>

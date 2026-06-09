@@ -76,3 +76,12 @@ export const useCustomizationStore = create<CustomizationState>()(
 export function getCustomization(section: string, id: string): Value | undefined {
   return useCustomizationStore.getState().get(optionKey(section, id));
 }
+
+/**
+ * Reactive read hook — re-renders the component when this option changes.
+ * The single-line way for any module to honor a customization option:
+ *   const density = useCustomization<string>('expenses', 'expenses-density');
+ */
+export function useCustomization<T extends Value = Value>(section: string, id: string): T {
+  return useCustomizationStore((s) => s.get(optionKey(section, id))) as T;
+}

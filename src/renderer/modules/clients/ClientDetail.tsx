@@ -38,7 +38,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
-import { formatCurrency, formatDate, formatStatus, formatPaymentMethod } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import { CHART_INCOME } from '../../lib/chart-palette';
 import { useCompanyStore } from '../../stores/companyStore';
 import ClientInsights from './ClientInsights';
@@ -332,7 +332,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             );
             if (Array.isArray(payRows)) {
               payRows.forEach((p: any) => {
-                activities.push({ date: p.date, type: 'payment_received', label: `Payment ${formatCurrency(p.amount)} on invoice ${p.invoice_number}${p.payment_method ? ` (${formatPaymentMethod(p.payment_method)})` : ''}`, amount: p.amount, id: p.id });
+                activities.push({ date: p.date, type: 'payment_received', label: `Payment ${formatCurrency(p.amount)} on invoice ${p.invoice_number}${p.payment_method ? ` (${humanizeLabel(p.payment_method)})` : ''}`, amount: p.amount, id: p.id });
               });
             }
           } catch { /* ignore */ }
@@ -364,7 +364,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             );
             if (Array.isArray(commRows)) {
               commRows.forEach((c: any) => {
-                activities.push({ date: c.logged_at, type: 'communication', label: `${c.direction === 'outbound' ? 'Sent' : 'Received'} ${c.type}${c.subject ? `: ${c.subject}` : ''}`, id: c.id });
+                activities.push({ date: c.logged_at, type: 'communication', label: `${c.direction === 'outbound' ? 'Sent' : 'Received'} ${humanizeLabel(c.type)}${c.subject ? `: ${c.subject}` : ''}`, id: c.id });
               });
             }
           } catch { /* ignore */ }
@@ -439,6 +439,47 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
       )) as any[] || [];
     } catch { /* ignore */ }
 
+    // ── Client Details: every field with em-dash backfill so the grid keeps
+    // its structure (no collapsing gaps on blank values). ──
+    const cdash = (v: any): string => {
+      if (v === 0) return '0';
+      if (v === null || v === undefined || v === '') return '—';
+      return String(v);
+    };
+    const cAddr = [client.address_line1, client.address_line2].filter(Boolean).join(', ') || '—';
+    const cCityLine = [client.city, client.state, client.zip].filter(Boolean).join(', ') || '—';
+    let cTags = '—';
+    try {
+      const t = JSON.parse(client.tags || '[]');
+      if (Array.isArray(t) && t.length) cTags = t.join(', ');
+    } catch { /* ignore */ }
+    const cStatus = client.status ? client.status.charAt(0).toUpperCase() + client.status.slice(1) : '—';
+    const cType = client.type ? client.type.charAt(0).toUpperCase() + client.type.slice(1) : '—';
+    const clientDetailRows: Array<[string, string]> = [
+      ['Type', cType],
+      ['Status', cStatus],
+      ['Email', cdash(client.email)],
+      ['Phone', cdash(client.phone)],
+      ['Payment Terms', client.payment_terms != null ? `Net ${client.payment_terms}` : '—'],
+      ['Tax ID', cdash(client.tax_id)],
+      ['Address', cAddr],
+      ['City / State / ZIP', cCityLine],
+      ['Country', cdash(client.country)],
+      ['Tags', cTags],
+      ['Client Since', client.created_at ? new Date(client.created_at).toLocaleDateString() : '—'],
+      ['Notes', cdash(client.notes)],
+    ];
+    const clientDetailsBlock = `
+        <div style="margin-bottom: 30px;">
+          <h3 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #666; margin-bottom: 12px;">Client Details</h3>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 24px;">
+            ${clientDetailRows.map(([k, v]) => `<div>
+              <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 600;">${k}</div>
+              <div style="font-size: 13px; color: #1a1a2e; font-weight: 600; margin-top: 2px; word-break: break-word;">${v}</div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+
     const html = `
       <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px;">
         <div style="border-bottom: 3px solid #1a1a2e; padding-bottom: 20px; margin-bottom: 30px;">
@@ -451,6 +492,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
           ${client.phone ? `<p style="margin: 2px 0; color: #666; font-size: 13px;">${client.phone}</p>` : ''}
           ${client.address_line1 ? `<p style="margin: 2px 0; color: #666; font-size: 13px;">${client.address_line1}${client.city ? `, ${client.city}` : ''}${client.state ? `, ${client.state}` : ''} ${client.zip || ''}</p>` : ''}
         </div>
+        ${clientDetailsBlock}
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px;">
           <div style="background: #f0fdf4; padding: 16px; border-radius: 6px; text-align: center;">
             <div style="font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em;">Total Invoiced</div>
@@ -499,7 +541,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               <td style="padding: 8px 4px; font-family: monospace;">${inv.invoice_number}</td>
               <td style="padding: 8px 4px;">${inv.issue_date}</td>
               <td style="padding: 8px 4px;">${inv.due_date}</td>
-              <td style="padding: 8px 4px; text-transform: capitalize;">${inv.status}</td>
+              <td style="padding: 8px 4px; text-transform: capitalize;">${formatStatus(inv.status).label}</td>
               <td style="padding: 8px 4px; text-align: right; font-family: monospace;">$${(inv.total ?? 0).toFixed(2)}</td>
               <td style="padding: 8px 4px; text-align: right; font-family: monospace;">$${(inv.amount_paid ?? 0).toFixed(2)}</td>
             </tr>`).join('')}</tbody>
@@ -517,7 +559,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             <tbody>${paymentRows.map((p: any) => `<tr style="border-bottom: 1px solid #f3f4f6;">
               <td style="padding: 8px 4px;">${p.date}</td>
               <td style="padding: 8px 4px; font-family: monospace;">${p.invoice_number}</td>
-              <td style="padding: 8px 4px;">${formatPaymentMethod(p.payment_method)}</td>
+              <td style="padding: 8px 4px; text-transform: capitalize;">${humanizeLabel(p.payment_method) || '--'}</td>
               <td style="padding: 8px 4px; text-align: right; font-family: monospace;">$${(p.amount ?? 0).toFixed(2)}</td>
             </tr>`).join('')}</tbody>
           </table>
@@ -634,7 +676,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
                 </span>
               </div>
               <p className="text-xs text-text-muted uppercase tracking-wider mb-3">
-                <span className="capitalize">{client.type}</span> {client.tax_id ? `· Tax ID: ${client.tax_id}` : ''}
+                <span className="capitalize">{humanizeLabel(client.type)}</span> {client.tax_id ? `· Tax ID: ${client.tax_id}` : ''}
                 {/* Feature 33: Client since */}
                 {client.created_at && (
                   <> &middot; Client since {formatDate(client.created_at, { style: 'short' })}</>
@@ -1054,7 +1096,7 @@ const InvoicesTable: React.FC<{ data: any[]; onNavigate?: (id: string) => void }
                   : 'block-badge-warning'
               }`}
             >
-              <span className="capitalize">{inv.status}</span>
+              <span className="capitalize">{formatStatus(inv.status).label}</span>
             </span>
           </td>
           <td className="font-mono text-text-primary">{formatCurrency(inv.total ?? 0)}</td>

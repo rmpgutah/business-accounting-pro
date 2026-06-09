@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
+import { humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
 
@@ -258,7 +259,7 @@ const AuditTrail: React.FC = () => {
                       </div>
                     </td>
                     <td>
-                      <span className="block-badge block-badge-purple">{entry.entity_type}</span>
+                      <span className="block-badge block-badge-purple">{humanizeLabel(entry.entity_type)}</span>
                     </td>
                     <td className="font-mono text-text-muted text-xs">
                       {entry.entity_id

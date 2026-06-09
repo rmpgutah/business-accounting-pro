@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, FileSearch, Receipt, Users, FileText, Download, Grid, ClipboardCheck, Mail, Hash, KeyRound, LayoutDashboard } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
 
@@ -173,7 +173,7 @@ const TaxLineExport: React.FC<{ companyId: string }> = ({ companyId }) => {
             <tr key={i} className="border-t border-border-primary">
               <td className="p-1.5">{r.tax_line}</td>
               <td>{r.code} {r.name}</td>
-              <td>{r.type}</td>
+              <td>{humanizeLabel(r.type)}</td>
               <td className="text-right">{formatCurrency(r.net || 0)}</td>
             </tr>
           ))}
@@ -478,7 +478,7 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
                 <td className="p-1.5">{c.code}</td>
                 <td>{c.description}</td>
                 <td>{c.owner}</td>
-                <td>{c.frequency}</td>
+                <td>{humanizeLabel(c.frequency)}</td>
                 <td>{c.risk}</td>
                 <td className={c.last_result === 'pass' ? 'text-green-400' : c.last_result === 'fail' ? 'text-red-400' : 'text-text-muted'}>
                   {c.last_result || 'untested'} ({c.test_count || 0})

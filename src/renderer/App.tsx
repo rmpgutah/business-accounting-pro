@@ -11,6 +11,7 @@ import { registerKeyboardShortcuts, registerCmdSGuard, MODULE_ORDER } from './li
 import { QuickCreate } from './components/QuickCreate';
 import CommandPalette from './components/CommandPalette';
 import { usePersonalizationStore, applyPersonalization, applyModuleAccent } from './stores/personalizationStore';
+import { subscribeCustomizationGlobals } from './customization/applyGlobals';
 import PersonalizationWizard from './components/onboarding/PersonalizationWizard';
 import OnboardingWizard from './components/OnboardingWizard';
 import { useOnboarding } from './modules/companies/useOnboarding';
@@ -194,6 +195,12 @@ const App: React.FC = () => {
   // ─── Onboarding wizard (industry preset + setup) ─────────
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const onboarding = useOnboarding(activeCompany?.id || null);
+
+  // ─── Customization: push global-impact options onto :root CSS vars and
+  // keep them live as the Customization Center changes them. ──
+  useEffect(() => {
+    subscribeCustomizationGlobals();
+  }, []);
 
   // ─── Personalization: apply CSS vars whenever prefs change ──
   const personalization = usePersonalizationStore();

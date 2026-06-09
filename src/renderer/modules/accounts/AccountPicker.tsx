@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, humanizeLabel } from '../../lib/format';
 
 interface Account {
   id: string; code: string; name: string; type: string;
@@ -97,7 +97,7 @@ const AccountPicker: React.FC<Props> = ({ value, onChange, placeholder = 'Type c
             >
               <div className="flex flex-col">
                 <span className="font-mono">{a.code} <span className="text-text-secondary">{a.name}</span></span>
-                <span className="text-text-muted uppercase text-[10px]">{a.type}</span>
+                <span className="text-text-muted uppercase text-[10px]">{humanizeLabel(a.type)}</span>
               </div>
               <span className="font-mono text-text-muted">{formatCurrency(a.balance)}</span>
             </button>

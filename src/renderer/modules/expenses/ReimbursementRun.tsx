@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Wallet, Download, Printer, AlertTriangle, FileText, Banknote } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 
 interface Employee { id: string; name: string; email?: string; }
 interface Balance { employee_id: string; employee_name: string; expense_count: number; balance: number; }
@@ -235,7 +235,7 @@ const ReimbursementRun: React.FC = () => {
                   <td className="text-xs text-text-muted">{b.period_start || '—'} → {b.period_end || '—'}</td>
                   <td className="text-right font-mono">{formatCurrency(b.total_amount)}</td>
                   <td className="text-xs">{b.expense_count}</td>
-                  <td className="text-xs uppercase">{b.status}</td>
+                  <td className="text-xs uppercase">{humanizeLabel(b.status)}</td>
                   <td className="text-xs text-accent-blue">View</td>
                 </tr>
               ))}

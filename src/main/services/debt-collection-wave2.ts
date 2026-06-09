@@ -15,7 +15,7 @@ const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
 export function debtDashboard(cid: string) {
   const dbi = db.getDb();
   const active = dbi.prepare(`SELECT COUNT(*) c, COALESCE(SUM(balance_due),0) t FROM debts WHERE company_id = ? AND status IN ('active','in_collection','legal')`).get(cid) as any;
-  const collected30d = (dbi.prepare(`SELECT COALESCE(SUM(dp.amount),0) t FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND dp.payment_date >= date('now','-30 days')`).get(cid) as any)?.t || 0;
+  const collected30d = (dbi.prepare(`SELECT COALESCE(SUM(dp.amount),0) t FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND dp.received_date >= date('now','-30 days')`).get(cid) as any)?.t || 0;
   const settled = (dbi.prepare(`SELECT COUNT(*) c FROM debts WHERE company_id = ? AND status = 'settled'`).get(cid) as any)?.c || 0;
   const writtenOff = (dbi.prepare(`SELECT COUNT(*) c FROM debts WHERE company_id = ? AND status = 'written_off'`).get(cid) as any)?.c || 0;
   const disputed = (dbi.prepare(`SELECT COUNT(*) c FROM debts WHERE company_id = ? AND status = 'disputed'`).get(cid) as any)?.c || 0;
@@ -36,7 +36,7 @@ export function collectionRate(cid: string) {
   return { totalOriginal: round2(totalOwed), totalCollected: round2(totalCollected), collectionRate: totalOwed > 0 ? round2((totalCollected / totalOwed) * 100) : 0 };
 }
 export function monthlyCollections(cid: string, months = 12) {
-  return db.getDb().prepare(`SELECT strftime('%Y-%m', dp.payment_date) AS month, COUNT(*) AS payments, ROUND(SUM(dp.amount),2) AS total FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND dp.payment_date >= date('now', '-' || ? || ' months') GROUP BY month ORDER BY month`).all(cid, months);
+  return db.getDb().prepare(`SELECT strftime('%Y-%m', dp.received_date) AS month, COUNT(*) AS payments, ROUND(SUM(dp.amount),2) AS total FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND dp.received_date >= date('now', '-' || ? || ' months') GROUP BY month ORDER BY month`).all(cid, months);
 }
 export function topDebtors(cid: string, limit = 15) { return db.getDb().prepare(`SELECT id, debtor_name, balance_due, original_amount, status, current_stage, priority, delinquent_date FROM debts WHERE company_id = ? AND status IN ('active','in_collection','legal') ORDER BY balance_due DESC LIMIT ?`).all(cid, limit); }
 export function debtTrend(cid: string) {
@@ -116,7 +116,7 @@ export function activityTimeline(debtId: string) {
   const events: any[] = [];
   const comms = dbi.prepare('SELECT contact_date AS date, contact_type AS type, notes AS detail FROM debt_communications WHERE debt_id = ? ORDER BY contact_date DESC').all(debtId) as any[];
   comms.forEach(c => events.push({ ...c, category: 'communication' }));
-  const payments = dbi.prepare('SELECT payment_date AS date, amount, payment_method FROM debt_payments WHERE debt_id = ? ORDER BY payment_date DESC').all(debtId) as any[];
+  const payments = dbi.prepare('SELECT received_date AS date, amount, payment_method FROM debt_payments WHERE debt_id = ? ORDER BY received_date DESC').all(debtId) as any[];
   payments.forEach(p => events.push({ date: p.date, type: 'payment', detail: `$${round2(p.amount)} via ${p.payment_method || 'unknown'}`, category: 'payment' }));
   const notes = dbi.prepare('SELECT created_at AS date, note_text AS detail, created_by FROM debt_notes WHERE debt_id = ? ORDER BY created_at DESC').all(debtId) as any[];
   notes.forEach(n => events.push({ ...n, type: 'note', category: 'note' }));
@@ -129,7 +129,7 @@ export function disputesList(cid: string) { return db.getDb().prepare(`SELECT dd
 export function openDisputes(cid: string) { return db.getDb().prepare(`SELECT dd.*, d.debtor_name, d.balance_due FROM debt_disputes dd JOIN debts d ON d.id = dd.debt_id WHERE d.company_id = ? AND dd.status IN ('open','investigating') ORDER BY dd.dispute_date`).all(cid); }
 export function evidenceList(debtId: string) { return db.getDb().prepare('SELECT * FROM debt_evidence WHERE debt_id = ? ORDER BY created_at DESC').all(debtId); }
 export function legalActionsList(debtId: string) { return db.getDb().prepare('SELECT * FROM debt_legal_actions WHERE debt_id = ? ORDER BY action_date DESC').all(debtId); }
-export function paymentHistory(debtId: string) { return db.getDb().prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY payment_date DESC').all(debtId); }
+export function paymentHistory(debtId: string) { return db.getDb().prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY received_date DESC').all(debtId); }
 export function settlementsList(cid: string) { return db.getDb().prepare(`SELECT ds.*, d.debtor_name FROM debt_settlements ds JOIN debts d ON d.id = ds.debt_id WHERE d.company_id = ? ORDER BY ds.created_at DESC`).all(cid); }
 
 // ════════════════════════════════════════════════════════════
@@ -331,7 +331,7 @@ export function debtorProfile(debtId: string) {
   const dbi = db.getDb();
   const debt = dbi.prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
   if (!debt) return null;
-  const payments = dbi.prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY payment_date DESC').all(debtId);
+  const payments = dbi.prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY received_date DESC').all(debtId);
   const communications = dbi.prepare('SELECT * FROM debt_communications WHERE debt_id = ? ORDER BY contact_date DESC').all(debtId);
   const promises = dbi.prepare('SELECT * FROM debt_promises WHERE debt_id = ? ORDER BY promise_date DESC').all(debtId);
   const disputes = dbi.prepare('SELECT * FROM debt_disputes WHERE debt_id = ? ORDER BY dispute_date DESC').all(debtId);
@@ -361,7 +361,7 @@ export function debtExportData(cid: string) {
   return db.getDb().prepare(`SELECT debtor_name, debtor_email, debtor_phone, type, status, current_stage, priority, original_amount, balance_due, payments_made, interest_accrued, fees_accrued, due_date, delinquent_date, jurisdiction, assigned_to FROM debts WHERE company_id = ? ORDER BY balance_due DESC`).all(cid);
 }
 export function monthlyPerformanceReport(cid: string) {
-  return db.getDb().prepare(`SELECT strftime('%Y-%m', dp.payment_date) AS month, COUNT(DISTINCT dp.debt_id) AS debts_with_payment, COUNT(*) AS payment_count, ROUND(SUM(dp.amount),2) AS total_collected FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND dp.payment_date >= date('now','-12 months') GROUP BY month ORDER BY month`).all(cid);
+  return db.getDb().prepare(`SELECT strftime('%Y-%m', dp.received_date) AS month, COUNT(DISTINCT dp.debt_id) AS debts_with_payment, COUNT(*) AS payment_count, ROUND(SUM(dp.amount),2) AS total_collected FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND dp.received_date >= date('now','-12 months') GROUP BY month ORDER BY month`).all(cid);
 }
 export function debtConcentration(cid: string) {
   const debts = db.getDb().prepare(`SELECT balance_due FROM debts WHERE company_id = ? AND status IN ('active','in_collection','legal') ORDER BY balance_due DESC`).all(cid) as any[];
@@ -370,7 +370,7 @@ export function debtConcentration(cid: string) {
   return { totalDebts: debts.length, totalOutstanding: round2(total), top10PctConcentration: total > 0 ? round2((top10pct / total) * 100) : 0 };
 }
 export function avgDaysToCollect(cid: string) {
-  return db.getDb().prepare(`SELECT ROUND(AVG(julianday(dp.payment_date) - julianday(d.delinquent_date)),0) AS avg_days, COUNT(*) AS sample FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND d.delinquent_date IS NOT NULL`).get(cid);
+  return db.getDb().prepare(`SELECT ROUND(AVG(julianday(dp.received_date) - julianday(d.delinquent_date)),0) AS avg_days, COUNT(*) AS sample FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? AND d.delinquent_date IS NOT NULL`).get(cid);
 }
 export function debtPortfolioHealth(cid: string) {
   const dashboard = debtDashboard(cid);
@@ -385,7 +385,7 @@ export function debtPortfolioHealth(cid: string) {
   };
 }
 export function quarterlyCollectionReport(cid: string) {
-  return db.getDb().prepare(`SELECT strftime('%Y', dp.payment_date) || '-Q' || ((CAST(strftime('%m', dp.payment_date) AS INTEGER) - 1) / 3 + 1) AS quarter, COUNT(DISTINCT dp.debt_id) AS debts_collected, ROUND(SUM(dp.amount),2) AS total FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? GROUP BY quarter ORDER BY quarter DESC`).all(cid);
+  return db.getDb().prepare(`SELECT strftime('%Y', dp.received_date) || '-Q' || ((CAST(strftime('%m', dp.received_date) AS INTEGER) - 1) / 3 + 1) AS quarter, COUNT(DISTINCT dp.debt_id) AS debts_collected, ROUND(SUM(dp.amount),2) AS total FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.company_id = ? GROUP BY quarter ORDER BY quarter DESC`).all(cid);
 }
 export function fullDebtReport(cid: string) {
   return { portfolio: portfolioSummary(cid), dashboard: debtDashboard(cid), aging: debtAgingBuckets(cid), recovery: recoveryRate(cid), compliance: fdcpaComplianceCheck(cid), risk: riskDistribution(cid), writeoffs: writeoffSummary(cid), settlements: settlementSummary(cid), paymentPlans: paymentPlanSummary(cid) };

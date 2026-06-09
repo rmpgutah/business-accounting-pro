@@ -73,7 +73,7 @@ export function authPortalUser(email: string, password: string, companyId: strin
 
 // F382-F384 — portal invoices, payments, payment history
 export function listPortalInvoices(customerId: string): any[] {
-  return db.getDb().prepare(`SELECT id, invoice_number, total, balance, status, issue_date, due_date FROM invoices WHERE client_id = ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '') ORDER BY due_date ASC`).all(customerId) as any[];
+  return db.getDb().prepare(`SELECT id, invoice_number, total, (total - COALESCE(amount_paid,0)) AS balance, status, issue_date, due_date FROM invoices WHERE client_id = ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '') ORDER BY due_date ASC`).all(customerId) as any[];
 }
 
 export function recordPortalPayment(opts: { company_id: string; portal_user_id: string; invoice_id?: string; amount: number; payment_method: string; stripe_payment_id?: string }): { id: string } {
@@ -90,8 +90,8 @@ export function listPortalPaymentHistory(portalUserId: string, limit: number = 5
 // F385 — account statement
 export function generateCustomerStatement(companyId: string, customerId: string, periodStart: string, periodEnd: string): any {
   const dbi = db.getDb();
-  const invoices = dbi.prepare(`SELECT id, invoice_number, issue_date, total, balance FROM invoices WHERE company_id = ? AND client_id = ? AND issue_date BETWEEN ? AND ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '') ORDER BY issue_date`).all(companyId, customerId, periodStart, periodEnd) as any[];
-  const payments = dbi.prepare(`SELECT p.id, p.payment_date, p.amount, i.invoice_number FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.company_id = ? AND i.client_id = ? AND p.payment_date BETWEEN ? AND ? ORDER BY p.payment_date`).all(companyId, customerId, periodStart, periodEnd) as any[];
+  const invoices = dbi.prepare(`SELECT id, invoice_number, issue_date, total, (total - COALESCE(amount_paid,0)) AS balance FROM invoices WHERE company_id = ? AND client_id = ? AND issue_date BETWEEN ? AND ? AND status NOT IN ('void','cancelled') AND (deleted_at IS NULL OR deleted_at = '') ORDER BY issue_date`).all(companyId, customerId, periodStart, periodEnd) as any[];
+  const payments = dbi.prepare(`SELECT p.id, p.date AS payment_date, p.amount, i.invoice_number FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.company_id = ? AND i.client_id = ? AND p.date BETWEEN ? AND ? ORDER BY p.date`).all(companyId, customerId, periodStart, periodEnd) as any[];
   const totalInvoiced = invoices.reduce((s, i) => s + (i.total || 0), 0);
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0);
   return { customer_id: customerId, period_start: periodStart, period_end: periodEnd, invoices, payments, total_invoiced: round2(totalInvoiced), total_paid: round2(totalPaid), outstanding: round2(totalInvoiced - totalPaid) };
@@ -203,8 +203,8 @@ export function listVendorInvoiceSubmissions(companyId: string, opts?: { status?
 // F394 — payment status visibility (read-only for vendor)
 export function vendorPaymentStatus(companyId: string, vendorId: string): any {
   const dbi = db.getDb();
-  const open = dbi.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(balance), 0) AS total FROM bills WHERE company_id = ? AND vendor_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId, vendorId) as any;
-  const recent = dbi.prepare(`SELECT id, bill_number, total, balance, status, due_date FROM bills WHERE company_id = ? AND vendor_id = ? AND (deleted_at IS NULL OR deleted_at = '') ORDER BY bill_date DESC LIMIT 25`).all(companyId, vendorId) as any[];
+  const open = dbi.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(total - COALESCE(amount_paid,0)), 0) AS total FROM bills WHERE company_id = ? AND vendor_id = ? AND status NOT IN ('paid','void','cancelled') AND (deleted_at IS NULL OR deleted_at = '')`).get(companyId, vendorId) as any;
+  const recent = dbi.prepare(`SELECT id, bill_number, total, (total - COALESCE(amount_paid,0)) AS balance, status, due_date FROM bills WHERE company_id = ? AND vendor_id = ? AND (deleted_at IS NULL OR deleted_at = '') ORDER BY issue_date DESC LIMIT 25`).all(companyId, vendorId) as any[];
   return { open_count: open.n, open_total: open.total, recent_bills: recent };
 }
 

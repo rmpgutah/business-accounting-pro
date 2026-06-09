@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import ErrorBanner from '../../components/ErrorBanner';
 import AnomalyDetector from './AnomalyDetector';
@@ -839,7 +839,7 @@ const GLAnalytics: React.FC = () => {
             <tbody>
               {commonSize.rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="uppercase">{r.type}</td>
+                  <td className="uppercase">{humanizeLabel(r.type)}</td>
                   <td className="font-mono">{r.code}</td>
                   <td>{r.name}</td>
                   <td className="text-right font-mono">{formatCurrency(r.amount)}</td>
@@ -865,7 +865,7 @@ const GLAnalytics: React.FC = () => {
             <tbody>
               {comparativeBS.map((r) => (
                 <tr key={r.id}>
-                  <td className="uppercase">{r.type}</td>
+                  <td className="uppercase">{humanizeLabel(r.type)}</td>
                   <td className="font-mono">{r.code}</td>
                   <td>{r.name}</td>
                   <td className="text-right font-mono">{formatCurrency(r.current)}</td>

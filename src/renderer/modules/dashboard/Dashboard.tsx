@@ -834,7 +834,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-8 space-y-8 overflow-y-auto h-full">
+    <div className="space-y-8 overflow-y-auto h-full" style={{ padding: 'calc(2rem * var(--cust-density-scale, 1))' }}>
       {/* Print-only corporate header */}
       <PrintReportHeader title="Dashboard" periodEnd={new Date()} />
       <div className="max-w-[1400px] mx-auto space-y-8">
@@ -927,18 +927,21 @@ const Dashboard: React.FC = () => {
 
       {/* Headline metrics — library MetricHero bound to live stats */}
       {isOn('kpis') && (
-        <div className="grid grid-cols-3 gap-5 no-print">
-          <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" />
-          <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" />
-          <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" />
+        <div className="grid grid-cols-4 no-print" style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
+          <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" accentColor="income" onClick={() => setModule('invoicing')} />
+          <MetricHero label="Expenses" value={formatCurrency(stats.expenses)} deltaPct={stats.expensesChange} deltaLabel="vs prior period" accentColor="expense" onClick={() => setModule('expenses')} />
+          <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" accentColor="blue" onClick={() => setModule('reports')} />
+          <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" accentColor="warning" onClick={() => { sessionStorage.setItem('nav:invoiceFilter', 'overdue'); setModule('invoicing'); }} />
         </div>
       )}
 
-      {/* Stat Cards — refactored to <KpiTile> (feature 13 demo) so they
-          collapse to inline summary text in print via .report-summary-tiles.
-          Visibility controlled by user dashboard prefs. */}
+      {/* Print-only KPI summary. On screen the headline MetricHero strip above
+          carries these numbers (Revenue/Expenses/Net Income/Outstanding), so
+          this duplicate set is hidden on screen (.print-only) and only renders
+          in print/PDF, where .report-summary-tiles collapses it to an inline
+          summary line. */}
       {isOn('kpis') && (
-      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} gap-5 report-summary-tiles`}>
+      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles print-only`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
         <KpiTile
           label="Revenue"
           value={stats.revenue}

@@ -103,7 +103,7 @@ const QuoteAnalytics: React.FC = () => {
             `SELECT q.id, q.quote_number, q.status, q.issue_date, q.sent_date, q.won_date,
                     q.total, q.probability, q.sales_rep_id,
                     q.lost_reason, q.deal_size_category, q.client_id,
-                    u.name as sales_rep_name,
+                    u.display_name as sales_rep_name,
                     c.name as client_name
              FROM quotes q
              LEFT JOIN users u ON u.id = q.sales_rep_id
@@ -129,7 +129,7 @@ const QuoteAnalytics: React.FC = () => {
               `SELECT q.id, q.quote_number, q.status, q.issue_date, q.sent_date, q.won_date,
                       q.total, q.probability, q.sales_rep_id,
                       q.lost_reason, q.deal_size_category, q.client_id,
-                      u.name as sales_rep_name,
+                      u.display_name as sales_rep_name,
                       c.name as client_name
                FROM quotes q
                LEFT JOIN users u ON u.id = q.sales_rep_id

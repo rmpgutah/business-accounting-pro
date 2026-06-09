@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatPaymentMethod, humanizeLabel } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { generateExpenseReceiptHTML } from '../../lib/print-templates';
 import { expenseGrandTotal } from './expense-helpers';
@@ -213,6 +213,11 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
     const e = expense;
     const company = activeCompany;
     const created = e.created_at ? formatDate(e.created_at) : '—';
+    // FINAL-PRICE: the voucher's headline amount is the true cost INCLUDING tax
+    // (amount + tax − discount), not the pre-tax subtotal.
+    const vGross = (e.amount || 0) + (e.tax_amount || 0);
+    const vDisc = Math.min(vGross, (e.discount_amount || 0) + vGross * ((e.discount_percent || 0) / 100));
+    const vTotal = Math.max(0, vGross - vDisc);
     const lineItems: Array<[string, string]> = [
       ['Date', formatDate(e.date)],
       ['Vendor', vendor?.name || e.vendor_name || '—'],
@@ -273,8 +278,9 @@ table{width:100%;border-collapse:collapse;}
     <div style="font-size:11px;color:#666;margin-top:4px;">Voucher ID: ${e.id}</div>
   </div>
   <div style="text-align:right;">
-    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Amount</div>
-    <div class="amount">${formatCurrency(expenseGrandTotal(e))}</div>
+    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Total${(e.tax_amount || 0) > 0 ? ' (incl. tax)' : ''}</div>
+    <div class="amount">${formatCurrency(vTotal)}</div>
+    <div style="font-size:11px;color:#666;margin-top:4px;">Subtotal ${formatCurrency(e.amount || 0)} + Tax ${formatCurrency(e.tax_amount || 0)}</div>
   </div>
 </div>
 <table>${rowsHtml}</table>
@@ -426,7 +432,7 @@ table{width:100%;border-collapse:collapse;}
           <div className="text-2xl font-mono font-bold text-accent-expense mt-1">
             {formatCurrency(expenseGrandTotal(expense as any))}
           </div>
-          {(((expense as any).tax_amount || 0) > 0 || ((expense as any).shipping_amount || 0) > 0) && (
+          {(
             <div className="text-[10px] text-text-muted mt-1">
               Subtotal {formatCurrency(expense.amount || 0)}
               {((expense as any).tax_amount || 0) > 0 && <> + Tax {formatCurrency((expense as any).tax_amount || 0)}</>}
@@ -524,27 +530,21 @@ table{width:100%;border-collapse:collapse;}
               : <span className="text-text-muted">—</span>}
           </Field>
           <Field label="Tax Amount">{formatCurrency(expense.tax_amount || 0)}</Field>
-          <Field label="Payment Method">{formatPaymentMethod(expense.payment_method)}</Field>
+          <Field label="Payment Method">{expense.payment_method ? humanizeLabel(expense.payment_method) : "—"}</Field>
           <Field label="Reference">{expense.reference || '—'}</Field>
           <Field label="Billable">{expense.is_billable ? 'Yes' : 'No'}</Field>
           <Field label="Reimbursable">{expense.is_reimbursable ? (expense.reimbursed ? `Reimbursed ${expense.reimbursed_date || ''}` : 'Pending') : 'No'}</Field>
           <Field label="Merchant Location">
             {expense.merchant_location ? <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-text-muted" />{expense.merchant_location}</span> : '—'}
           </Field>
-          <Field label="GPS / Location Name">
-            {(expense as any).geo_location_name ? <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-text-muted" />{(expense as any).geo_location_name}</span> : '—'}
-          </Field>
-          {((expense as any).markup_pct || 0) > 0 && (
-            <Field label="Markup %">{(expense as any).markup_pct}%</Field>
-          )}
-          {((expense as any).shipping_amount || 0) > 0 && (
-            <Field label="Shipping & Handling">
-              {formatCurrency((expense as any).shipping_amount || 0)}
-              {((expense as any).shipping_tax_amount || 0) > 0 && <span className="text-text-muted"> + {formatCurrency((expense as any).shipping_tax_amount)} tax</span>}
-              {(expense as any).shipping_speed && <span className="text-text-muted"> · {(expense as any).shipping_speed}</span>}
-              {(expense as any).shipping_scope === 'item' && <span className="text-text-muted"> · item-level</span>}
-            </Field>
-          )}
+          <Field label="Status">{expense.status ? expense.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}</Field>
+          <Field label="Approval Status">{expense.approval_status ? expense.approval_status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}</Field>
+          <Field label="Tax-Deductible">{expense.is_tax_deductible === 0 ? 'No' : 'Yes'}</Field>
+          <Field label="Tip Amount">{formatCurrency(expense.tip_amount || 0)}</Field>
+          <Field label="Currency">{expense.currency || 'USD'}{expense.exchange_rate && expense.exchange_rate !== 1 ? ` · @ ${Number(expense.exchange_rate).toFixed(4)}` : ''}</Field>
+          <Field label="Schedule C Line">{expense.schedule_c_line || '—'}</Field>
+          <Field label="Recurring">{expense.is_recurring ? 'Yes' : 'No'}</Field>
+          <Field label="Submitted">{expense.created_at ? formatDate(expense.created_at) : '—'}</Field>
         </div>
 
         {/* Vendor Details — surfaces the vendor's address/contact/tax_id on the

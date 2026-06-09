@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { FileText, Gavel, Clock, Scale, Package, DollarSign, Printer, Calculator, Link2, Users, Activity } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import DemandLetterGenerator from './DemandLetterGenerator';
 import CourtFilingTracker from './CourtFilingTracker';
 import StatuteTracker from './StatuteTracker';
@@ -368,7 +368,7 @@ const GarnishmentCalculator: React.FC = () => {
             </div>
           </div>
           <div className="text-xs text-text-muted">
-            Limiting factor: <strong className="text-text-secondary">{result.method}</strong>
+            Limiting factor: <strong className="text-text-secondary">{humanizeLabel(result.method)}</strong>
           </div>
           {parseFloat(judgmentAmount) > 0 && result.maxGarnishment > 0 && (
             <div className="text-xs text-text-muted">
@@ -454,7 +454,7 @@ const LienFilingStatus: React.FC<{ companyId: string }> = ({ companyId }) => {
                 <td className="text-sm text-text-secondary font-mono">{l.filing_date || '-'}</td>
                 <td className="text-center">
                   <span className={`text-[10px] font-semibold px-2 py-0.5 ${statusColor(l.status)}`} style={{ borderRadius: 4 }}>
-                    {(l.status || 'unknown').toUpperCase()}
+                    {formatStatus(l.status || 'unknown').label}
                   </span>
                 </td>
                 <td className="text-xs text-text-muted max-w-[200px] truncate">{l.description || '-'}</td>
@@ -532,7 +532,7 @@ const LegalTimeline: React.FC<{ debtId: string }> = ({ debtId }) => {
                     a.status === 'pending' ? 'text-yellow-500 bg-yellow-500/10' :
                     'text-text-muted bg-bg-tertiary'
                   }`} style={{ borderRadius: 4 }}>
-                    {(a.status || 'pending').toUpperCase()}
+                    {formatStatus(a.status || 'pending').label}
                   </span>
                   {a.amount > 0 && (
                     <span className="text-xs font-mono text-text-secondary ml-auto">{formatCurrency(a.amount)}</span>
@@ -703,7 +703,7 @@ const PrintLegalSummary: React.FC<{ companyId: string }> = ({ companyId }) => {
       data.forEach((d: any, i: number) => {
         sections.push(`<tr style="background:${i % 2 ? '#f9f9f9' : '#fff'}">
           <td style="padding:4px 6px;border-bottom:1px solid #eee;">${d.debtor_name}</td>
-          <td style="padding:4px 6px;border-bottom:1px solid #eee;">${d.status}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;">${formatStatus(d.status).label}</td>
           <td style="padding:4px 6px;border-bottom:1px solid #eee;">${formatCurrency(d.original_amount)}</td>
           <td style="padding:4px 6px;border-bottom:1px solid #eee;">${formatCurrency(d.balance_due)}</td>
           <td style="padding:4px 6px;border-bottom:1px solid #eee;">${formatCurrency(d.legal_costs)}</td>

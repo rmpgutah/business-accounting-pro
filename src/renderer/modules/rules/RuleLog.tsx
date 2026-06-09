@@ -1,7 +1,7 @@
 // src/renderer/modules/rules/RuleLog.tsx
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { formatDate } from '../../lib/format';
+import { formatDate, formatStatus } from '../../lib/format';
 
 interface LogEntry { id: string; ran_at: string; status: string; detail: string; }
 interface Props {
@@ -47,7 +47,7 @@ export const RuleLog: React.FC<Props> = ({ entries, onDelete, onClearAll }) => {
             <tr key={e.id} className="border-b border-border-primary">
               <td className="py-2 pr-4 text-text-muted">{formatDate(e.ran_at)}</td>
               <td className="py-2 pr-4">
-                <span className={`px-2 py-0.5 font-bold uppercase text-xs ${STATUS_CLS[e.status] ?? STATUS_CLS.SKIP}`}>{e.status}</span>
+                <span className={`px-2 py-0.5 font-bold uppercase text-xs ${STATUS_CLS[e.status] ?? STATUS_CLS.SKIP}`}>{formatStatus(e.status).label}</span>
               </td>
               <td className="py-2 text-text-secondary">{e.detail}</td>
               {onDelete && (

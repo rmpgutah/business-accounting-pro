@@ -1733,8 +1733,10 @@ ${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
     ${isQuote
       ? `<div class="fd-meta-row"><span class="lbl">Valid Until</span><span class="val">${fmtDate(invoice.valid_until || '')}</span></div>`
       : `<div class="fd-meta-row"><span class="lbl">${isCreditNote ? 'Ref Invoice' : 'Due Date'}</span><span class="val">${isCreditNote ? esc(invoice.reference_invoice_number || '—') : fmtDate(invoice.due_date)}</span></div>`}
-    ${invoice.po_number ? `<div class="fd-meta-row"><span class="lbl">PO Number</span><span class="val">${esc(invoice.po_number)}</span></div>` : ''}
-    ${invoice.job_reference ? `<div class="fd-meta-row"><span class="lbl">Project</span><span class="val">${esc(invoice.job_reference)}</span></div>` : ''}
+    <div class="fd-meta-row"><span class="lbl">PO Number</span><span class="val">${esc(invoice.po_number || '—')}</span></div>
+    <div class="fd-meta-row"><span class="lbl">Project</span><span class="val">${esc(invoice.job_reference || '—')}</span></div>
+    ${!isQuote && !isCreditNote ? `<div class="fd-meta-row"><span class="lbl">Status</span><span class="val">${esc(invoice.status ? String(invoice.status).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—')}</span></div>` : ''}
+    ${invoice.sent_date ? `<div class="fd-meta-row"><span class="lbl">Sent</span><span class="val">${fmtDate(invoice.sent_date)}</span></div>` : ''}
     <div class="fd-meta-row"><span class="lbl">Currency</span><span class="val">${esc(invoice.currency || 'USD')}</span></div>
     <div class="fd-meta-row"><span class="lbl">Terms</span><span class="val">${esc(invoice.terms || (isQuote ? 'Quote' : 'Net 30'))}</span></div>
   </div>
@@ -5031,17 +5033,16 @@ export function generateExpenseReceiptHTML(
   const docCurrency = expense.currency || 'USD';
   const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
 
-  // FINAL-PRICE v4 (mirrors expenseGrandTotal): amount is the goods SUBTOTAL,
-  // tax_amount the goods tax, shipping_* added on top, header discount last.
-  const subtotal = Number(expense.amount || 0);
+  // FINAL-PRICE: expense.amount is the PRE-TAX subtotal and tax_amount is the
+  // tax, so the final cost ALWAYS adds tax on top (amount + tax − discount).
+  // Tax is shown whether the expense was entered tax-inclusive or -exclusive.
   const tax = Number(expense.tax_amount || 0);
-  const shipping = Number(expense.shipping_amount || 0);
-  const shippingTax = Number(expense.shipping_tax_amount || 0);
-  const discFlat = Number(expense.discount_amount || 0);
-  const discPct = Number(expense.discount_percent || 0);
-  const grossBeforeDisc = subtotal + tax + shipping + shippingTax;
-  const total = Math.max(0, grossBeforeDisc - discFlat - grossBeforeDisc * (discPct / 100));
-  const discountTotal = Math.round((discFlat + grossBeforeDisc * (discPct / 100)) * 100) / 100;
+  const subtotal = Number(expense.amount || expense.subtotal || 0);
+  const expDiscFlat = Number(expense.discount_amount || 0);
+  const expDiscPct = Number(expense.discount_percent || 0);
+  const grossWithTax = subtotal + tax;
+  const expDiscountTotal = Math.min(grossWithTax, expDiscFlat + grossWithTax * (expDiscPct / 100));
+  const total = Math.max(0, grossWithTax - expDiscountTotal);
 
   const reimbStatus = expense.reimbursement_status || expense.status || 'pending';
   const reimbColor =
@@ -5105,6 +5106,48 @@ export function generateExpenseReceiptHTML(
 
   const generated = new Date().toLocaleString('en-US');
 
+  // ── Details & Classification: every available field, blanks backfilled with
+  // an em dash so the grid structure is retained (no collapsing gaps). ──
+  const dash = (v: any): string => {
+    if (v === 0) return '0';
+    if (v === null || v === undefined || v === '') return '—';
+    return String(v);
+  };
+  const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const reimbursableLabel = expense.is_reimbursable
+    ? (expense.reimbursed ? `Reimbursed${expense.reimbursed_date ? ' ' + fmtDateMaybe(expense.reimbursed_date) : ''}` : 'Pending')
+    : 'No';
+  const exch = Number(expense.exchange_rate || 1);
+  const miles = Number(expense.miles || 0);
+  const detailRows: Array<[string, string]> = [
+    ['Payment Method', expense.payment_method ? titleCase(String(expense.payment_method)) : '—'],
+    ['Status', expense.status ? titleCase(String(expense.status)) : '—'],
+    ['Approval', expense.approval_status ? titleCase(String(expense.approval_status)) : '—'],
+    ['Project', dash(expense.project_name)],
+    ['Billable', expense.is_billable ? 'Yes' : 'No'],
+    ['Reimbursable', reimbursableLabel],
+    ['Tax-Deductible', expense.is_tax_deductible === 0 ? 'No' : 'Yes'],
+    ['Tax Amount', fmt(tax)],
+    ['Tip Amount', fmt(Number(expense.tip_amount || 0))],
+    ['Currency', String(expense.currency || 'USD')],
+    ['Exchange Rate', exch && exch !== 1 ? exch.toFixed(4) : '—'],
+    ['Schedule C Line', dash(expense.schedule_c_line)],
+    ['Mileage', miles > 0 ? `${miles.toFixed(1)} mi @ $${Number(expense.mileage_rate || 0.7).toFixed(2)}` : '—'],
+    ['Merchant Location', dash(expense.merchant_location)],
+    ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
+    ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
+  ];
+  const detailsHTML = `
+<div style="margin-top:14px;">
+  <div class="section-label">Details &amp; Classification</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px 18px;margin-top:8px;">
+    ${detailRows.map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>
+</div>`;
+
   return `<!doctype html><html><head><meta charset="utf-8"><title>Expense ${esc(expense.reference || expense.id || '')}</title>
 <style>${baseStyles}</style></head>
 <body><div class="rpt-page" style="padding:32px 36px;">
@@ -5135,6 +5178,8 @@ export function generateExpenseReceiptHTML(
   ${shipping > 0 && expense.shipping_speed ? `<div class="fd-meta-row"><span class="lbl">Shipping Speed</span><span class="val">${esc(expense.shipping_speed)}</span></div>` : ''}
 </div>
 
+${detailsHTML}
+
 ${expense.description ? `<div style="margin-bottom:14px;">
   <div class="section-label">Description</div>
   <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(expense.description)}</div>
@@ -5145,14 +5190,12 @@ ${linesHTML}
 <div style="overflow:hidden;margin-top:14px;">
   <div class="fd-totals-card">
     <div class="totals-rows">
-      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
-      ${shipping > 0 ? `<div class="totals-row"><span>Shipping &amp; Handling${expense.shipping_scope === 'item' ? ' (item)' : ''}</span><span class="val">${fmt(shipping)}</span></div>` : ''}
-      ${shippingTax > 0 ? `<div class="totals-row"><span>Shipping Tax</span><span class="val">${fmt(shippingTax)}</span></div>` : ''}
-      ${discountTotal > 0 ? `<div class="totals-row"><span>Discount</span><span class="val">−${fmt(discountTotal)}</span></div>` : ''}
+      <div class="totals-row"><span>Subtotal (pre-tax)</span><span class="val">${fmt(subtotal)}</span></div>
+      <div class="totals-row"><span>Tax${expense.tax_inclusive ? ' (incl.)' : ''}</span><span class="val">${fmt(tax)}</span></div>
+      ${expDiscountTotal > 0 ? `<div class="totals-row" style="color:#16a34a;"><span>Discount</span><span class="val">−${fmt(expDiscountTotal)}</span></div>` : ''}
     </div>
     <div class="totals-grand">
-      <div class="lbl">Total Expense</div>
+      <div class="lbl">Total Expense${tax > 0 ? ' (incl. tax)' : ''}</div>
       <div class="val">${fmt(total)}</div>
     </div>
   </div>

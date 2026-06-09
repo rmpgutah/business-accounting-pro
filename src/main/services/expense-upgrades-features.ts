@@ -415,7 +415,7 @@ export function createApprovalDelegation(opts: { delegator_user_id: string; dele
 // F883: Get approval history for an expense (timeline view)
 export function getApprovalHistory(expenseId: string) {
   try {
-    return db.getDb().prepare(`SELECT h.*, u.name actor_name FROM expense_approval_history h
+    return db.getDb().prepare(`SELECT h.*, u.display_name actor_name FROM expense_approval_history h
       LEFT JOIN users u ON h.actor_user_id = u.id
       WHERE h.expense_id = ? AND h.company_id = ?
       ORDER BY h.created_at ASC`)

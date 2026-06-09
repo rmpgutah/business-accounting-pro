@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
-import { formatStatus } from '../../lib/format';
+import { formatStatus, humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
@@ -489,13 +489,13 @@ const AutomationSettings: React.FC<AutomationSettingsProps> = ({ onClose }) => {
                             className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase border ${TYPE_COLORS[t.type] || 'block-badge'}`}
                             style={{ borderRadius: '6px' }}
                           >
-                            {t.type.replace(/_/g, ' ')}
+                            {humanizeLabel(t.type)}
                           </span>
                           <span
                             className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase border ${SEVERITY_COLORS[t.severity] || 'block-badge'}`}
                             style={{ borderRadius: '6px' }}
                           >
-                            {t.severity}
+                            {humanizeLabel(t.severity)}
                           </span>
                         </div>
                         <button
