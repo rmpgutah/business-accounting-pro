@@ -46,6 +46,25 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+// Surface actual error messages instead of the bare "Internal Server Error"
+// HTML page. JSON endpoints get a structured {error, where} payload; HTML
+// page errors get a small inline notice. The full stack still lands in the
+// wrangler tail logs so we can trace causes without exposing internals to
+// the browser console.
+app.onError((err, c) => {
+  console.error('Worker error:', err?.stack || err);
+  const accept = c.req.header('accept') || '';
+  const path = c.req.path;
+  const wantsJSON = accept.includes('application/json') || path.startsWith('/api/') || path.startsWith('/auth/');
+  if (wantsJSON) {
+    return c.json({
+      error: (err && (err as any).message) || 'Unknown error',
+      where: path,
+    }, 500);
+  }
+  return c.text('Internal Server Error: ' + ((err && (err as any).message) || 'unknown'), 500);
+});
+
 // ─── Auth middleware ────────────────────────────────────────
 async function requireUser(c: any, next: () => Promise<void>): Promise<Response | void> {
   const token = readSessionCookie(c.req.header('cookie') ?? null);

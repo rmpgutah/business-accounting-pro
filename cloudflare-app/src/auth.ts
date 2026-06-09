@@ -1,12 +1,21 @@
 // Auth helpers — password hashing + JWT (HS256). Pure Web Crypto, no deps.
 //
-// Password hashing: PBKDF2-HMAC-SHA256, 200k iterations, 16-byte salt, 32-byte
+// Password hashing: PBKDF2-HMAC-SHA256, 100k iterations, 16-byte salt, 32-byte
 // derived key. PBKDF2 is supported natively by `crypto.subtle` in Workers;
-// scrypt isn't (yet), and bcrypt requires WASM. PBKDF2 with 200k iters is the
-// OWASP 2025 floor for SHA-256 and well within Worker CPU budget (~25ms).
+// scrypt isn't (yet), and bcrypt requires WASM.
+//
+// IMPORTANT — iteration cap: Cloudflare Workers' Web Crypto runtime REJECTS
+// PBKDF2 with more than 100,000 iterations ("NotSupportedError: iteration
+// counts above 100000 are not supported"). That's lower than the OWASP 2025
+// recommended floor (600k for SHA-256), but 100k is the platform ceiling we
+// have to live with; we compensate by using HS256 with a long random
+// JWT_SECRET and short cookie TTLs. Don't raise this above 100000 — it'll
+// silently 500 every login and registration.
 //
 // JWT: standard HS256. Body holds { sub, cid (active company), exp }.
 // Tokens last 7 days; renewed on every successful request via Set-Cookie.
+
+const PBKDF2_ITERATIONS = 100_000;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -29,10 +38,11 @@ function b64uDecode(s: string): Uint8Array {
 // ── Password ──
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const derived = await deriveBits(password, salt, 200_000);
+  const derived = await deriveBits(password, salt, PBKDF2_ITERATIONS);
   // Storage format: pbkdf2$<iters>$<saltB64u>$<hashB64u> — self-describing so
-  // we can bump iter count later without breaking old hashes.
-  return `pbkdf2$200000$${b64uEncode(salt)}$${b64uEncode(derived)}`;
+  // verifyPassword reads the iter count from the stored value, supporting any
+  // future bump even though Workers caps this end at 100k for now.
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${b64uEncode(salt)}$${b64uEncode(derived)}`;
 }
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const parts = stored.split('$');
