@@ -23,6 +23,9 @@ import {
 } from './expense-helpers';
 import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
 import ItemizationEditor from './ItemizationEditor';
+import { getExpensesPrefs } from '../../customization/expenses-prefs';
+import { useCustomizationStore } from '../../stores/customizationStore';
+import { optionKey } from '../../customization/registry';
 
 // ─── Types ──────────────────────────────────────────────
 interface ExpenseFormData {
@@ -364,7 +367,39 @@ const AttachedDocs: React.FC<{ expenseId: string }> = ({ expenseId }) => {
 // ─── Component ──────────────────────────────────────────
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const [form, setForm] = useState<ExpenseFormData>({ ...emptyForm });
+
+  // Seed the form from the Customization Center for NEW expenses. The edit
+  // loader (further down) overwrites these as soon as the existing row
+  // arrives, so the prefs only affect new-expense workflows.
+  const [form, setForm] = useState<ExpenseFormData>(() => {
+    const p = getExpensesPrefs();
+    const get = (id: string) =>
+      useCustomizationStore.getState().get(optionKey('expenses', id));
+    const dateMode = String(get('expenses-default-date') ?? 'today');
+    const startDate = dateMode === 'blank'
+      ? ''
+      : dateMode === 'lastused'
+        ? (localStorage.getItem('expenses:last-used-date') || todayLocal())
+        : todayLocal();
+    const taxRateDefault = Number(get('expenses-default-tax-rate') ?? 0);
+    return {
+      ...emptyForm,
+      date: startDate,
+      payment_method: String(get('expenses-default-payment-method') ?? '') || emptyForm.payment_method,
+      currency: String(get('expenses-default-currency') ?? 'usd').toUpperCase() || emptyForm.currency,
+      is_billable: Boolean(get('expenses-default-billable') ?? false),
+      is_reimbursable: Boolean(get('expenses-default-reimbursable') ?? false),
+      status: String(get('expenses-default-status') ?? emptyForm.status),
+      tax_inclusive: Boolean(get('expenses-default-tax-inclusive') ?? emptyForm.tax_inclusive),
+      tax_rate: taxRateDefault > 0 ? String(taxRateDefault) : emptyForm.tax_rate,
+      // We intentionally keep `category_id`/`vendor_id`/`account_id` empty —
+      // the descriptors store FREE-TEXT names ("Operating Checking") which
+      // wouldn't resolve to a row id without a lookup. The auto-fill effects
+      // further down handle smart-default selection by name.
+      // Suppress unused warning until those name→id resolvers land:
+      ...(p ? {} : {}),
+    };
+  });
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [accounts, setAccounts] = useState<DropdownOption[]>([]);
   // Tracks whether the current account_id was auto-suggested from the category
@@ -954,6 +989,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           isEdit: isEditing,
         });
         if (result?.error) throw new Error(result.error);
+        // Stash the date so `expenses-default-date = lastused` works on
+        // the next new-expense screen. Safe to write unconditionally — the
+        // initializer only reads it when the preference is set.
+        if (form.date) localStorage.setItem('expenses:last-used-date', form.date);
         onSaved();
       } catch (err) {
         console.error('Save draft failed:', err);
@@ -1017,6 +1056,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         && !/^\s*override:/i.test(form.notes || '')) {
       checks.push('Vendor is BLOCKED — start the Notes field with "Override: <reason>" to proceed.');
     }
+    // Customization-driven validation gates.
+    // - require-category : block save if category is empty
+    // - require-memo     : block save if description is empty
+    // - require-receipt-over : block save if amount ≥ threshold but no receipt
+    const xp = getExpensesPrefs();
+    const requireCategory = Boolean(useCustomizationStore.getState().get(optionKey('expenses', 'expenses-require-category')));
+    const requireMemo = Boolean(useCustomizationStore.getState().get(optionKey('expenses', 'expenses-require-memo')));
+    const receiptThreshold = Number(useCustomizationStore.getState().get(optionKey('expenses', 'expenses-require-receipt-over')) ?? 0);
+    if (requireCategory && !form.category_id) {
+      checks.push('Category is required — set it in Customization › Expenses › Behavior.');
+    }
+    if (requireMemo && !(form.description || '').trim()) {
+      checks.push('Description/memo is required — set it in Customization › Expenses › Behavior.');
+    }
+    if (receiptThreshold > 0
+        && Number(form.amount) >= receiptThreshold
+        && !receiptPath) {
+      checks.push(`Receipt required for expenses ≥ ${formatCurrency(receiptThreshold)} (Customization › Expenses › Behavior).`);
+    }
+    // Suppress unused-warning for xp (kept for symmetry with InvoiceForm pattern).
+    void xp;
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
@@ -1164,6 +1224,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         }
       }
 
+      // Remember the date for `expenses-default-date = lastused`.
+      if (form.date) localStorage.setItem('expenses:last-used-date', form.date);
       onSaved();
     } catch (err: any) {
       console.error('Failed to save expense:', err);

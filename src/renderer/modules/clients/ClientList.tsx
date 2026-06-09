@@ -6,6 +6,13 @@ import api from '../../lib/api';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useCustomizationStore } from '../../stores/customizationStore';
+import {
+  useClientsPrefs,
+  formatClientAmount,
+  formatClientDate,
+  formatClientPhone,
+  formatClientName,
+} from '../../customization/clients-prefs';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
@@ -105,7 +112,10 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
   // Customization Center (Clients): column visibility + row density.
   const custValues = useCustomizationStore((s) => s.values);
   const cCol = (id: string) => custValues['clients.' + id] !== false; // default visible
-  const cClientsDensity = useCustomizationStore((s) => String(s.get('clients.clients-row-density') ?? 'comfortable'));
+  // Typed pref bag — adds rows-per-page, zebra, sticky-header,
+  // show-quick-stats, highlight-overdue on top of the existing density.
+  const cprefs = useClientsPrefs();
+  const cClientsDensity = cprefs.density;
   const cClientsFont = cClientsDensity === 'compact' ? 11 : cClientsDensity === 'spacious' ? 13 : undefined;
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -501,10 +511,10 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         </div>
       )}
 
-      {/* Summary Bar (overdue) */}
-      {clientSummary && (
+      {/* Summary Bar (overdue) — gated by Display › Show quick stats bar. */}
+      {cprefs.showQuickStats && clientSummary && (
         <SummaryBar items={[
-          { label: 'Total Receivables', value: formatCurrency(clientSummary.total_receivables), accent: 'orange', tooltip: 'Sum of all outstanding invoice balances across overdue clients' },
+          { label: 'Total Receivables', value: formatClientAmount(clientSummary.total_receivables), accent: 'orange', tooltip: 'Sum of all outstanding invoice balances across overdue clients' },
           { label: 'Clients Overdue', value: String(clientSummary.overdue_clients ?? 0), accent: Number(clientSummary.overdue_clients) > 0 ? 'red' as const : 'default' as const, tooltip: 'Number of clients with at least one overdue invoice' },
         ]} />
       )}
@@ -602,10 +612,24 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-          <div className="overflow-x-auto">
-          <table className="block-table" style={{ fontSize: cClientsFont }}>
-            <thead>
+          <div
+            className="overflow-x-auto"
+            style={cprefs.stickyHeader ? { maxHeight: '70vh', overflowY: 'auto' } : undefined}
+          >
+          <table
+            className="block-table"
+            style={{ fontSize: cClientsFont }}
+            data-zebra={cprefs.zebra ? 'on' : 'off'}
+          >
+            <thead
+              style={
+                cprefs.stickyHeader
+                  ? { position: 'sticky', top: 0, zIndex: 2, background: 'var(--color-bg-secondary)' }
+                  : undefined
+              }
+            >
               <tr>
+                {cprefs.showRowNumbers && <th style={{ width: '36px' }}>#</th>}
                 <th style={{ width: '40px' }}>
                   <input
                     type="checkbox"
@@ -630,15 +654,32 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               </tr>
             </thead>
             <tbody>
-              {filtered.map((client) => {
+              {/* Rows-per-page slicing honors Customization › Clients ›
+                  Display › Rows per page. The zebra stripe is inlined to
+                  guarantee precedence over Tailwind's selected-row class. */}
+              {filtered.slice(0, cprefs.rowsPerPage || filtered.length).map((client, rowIdx) => {
                 const isSelected = selectedIds.has(client.id);
                 const rev = revenueMap.get(client.id);
+                // RevenueData doesn't carry an `overdue` field today; risk_rating
+                // is the closest signal we have to "this client needs attention".
+                // When the AR aggregate query starts returning overdue totals
+                // per client, swap this for the real number.
+                const isHighRisk = String(client.risk_rating || '').toLowerCase() === 'high';
+                const rowBg = isSelected
+                  ? undefined
+                  : cprefs.highlightOverdue && isHighRisk
+                    ? 'rgba(239, 68, 68, 0.06)'
+                    : cprefs.zebra && rowIdx % 2 === 1
+                      ? 'rgba(255, 255, 255, 0.02)'
+                      : undefined;
                 return (
                   <tr
                     key={client.id}
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
+                    style={{ background: rowBg }}
                     onClick={() => onSelectClient(client.id)}
                   >
+                    {cprefs.showRowNumbers && <td className="text-text-muted text-xs">{rowIdx + 1}</td>}
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
@@ -654,11 +695,16 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     <td>
                       <div className="flex items-center gap-2">
                         <UserCircle size={16} className="text-text-muted shrink-0" />
-                        <span className="text-text-primary font-medium block truncate max-w-[200px]">{client.name}</span>
+                        <span
+                          className="text-text-primary font-medium block truncate"
+                          style={{ maxWidth: cprefs.truncateLongNames ? `${cprefs.nameMaxLength * 9}px` : undefined }}
+                        >
+                          {formatClientName({ fullName: client.name, company: (client as any).company })}
+                        </span>
                       </div>
                     </td>
                     {cCol('clients-col-email') && <td className="text-text-secondary truncate max-w-[200px]">{client.email || '--'}</td>}
-                    {cCol('clients-col-phone') && <td className="text-text-secondary font-mono text-xs">{client.phone || '--'}</td>}
+                    {cCol('clients-col-phone') && <td className="text-text-secondary font-mono text-xs">{client.phone ? formatClientPhone(client.phone) : '--'}</td>}
                     {cCol('clients-col-status') && (
                     <td>
                       <span className={formatStatus(client.status).className}>
@@ -669,10 +715,10 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     <td><ClassificationBadge def={CLIENT_TIER} value={client.tier} /></td>
                     <td><ClassificationBadge def={CLIENT_INDUSTRY} value={client.industry} /></td>
                     <td><ClassificationBadge def={CLIENT_RISK} value={client.risk_rating} /></td>
-                    <td className="text-right font-mono text-accent-blue text-xs">{formatCurrency(rev?.revenue ?? 0)}</td>
+                    <td className="text-right font-mono text-accent-blue text-xs">{formatClientAmount(rev?.revenue ?? 0)}</td>
                     {cCol('clients-col-last-invoice') && (
                     <td className="text-text-secondary font-mono text-xs">
-                      {rev?.last_invoice ? formatDate(rev.last_invoice) : '--'}
+                      {rev?.last_invoice ? formatClientDate(rev.last_invoice) : '--'}
                     </td>
                     )}
                     {cCol('clients-col-payment-terms') && (
