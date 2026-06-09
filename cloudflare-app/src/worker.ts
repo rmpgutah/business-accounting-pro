@@ -586,6 +586,30 @@ app.use('/api/*', async (c, next) => {
     action, entity_type: entityType, entity_id: resolvedId,
     description: `${action} ${entityType}${resolvedId ? ' ' + resolvedId.slice(0, 8) : ''}`,
   });
+
+  // Fire automation rules. Only on create/update — delete events don't have
+  // a record to evaluate conditions against. The trigger string follows the
+  // convention "<entityType>.<action>" (e.g. "expense.create").
+  if (resolvedId && (action === 'create' || action === 'update')) {
+    const trigger = `${entityType}.${action}`;
+    // Fetch the just-written record so rules can read its fields. Use a
+    // best-effort lookup; if the table doesn't follow the standard naming,
+    // pass an empty record so 'is_set'-style conditions still work.
+    const tableMap: Record<string, string> = {
+      expense: 'expenses', invoice: 'invoices', bill: 'bills',
+      client: 'clients', vendor: 'vendors', quote: 'quotes',
+    };
+    const table = tableMap[entityType];
+    let record: any = { id: resolvedId };
+    if (table) {
+      try {
+        record = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? AND company_id = ?`)
+          .bind(resolvedId, cid).first() || record;
+      } catch { /* unknown table — fall through with id-only record */ }
+    }
+    // waitUntil so rule execution doesn't delay the response.
+    c.executionCtx.waitUntil(runRulesForEvent(c.env, cid, uid || null, trigger, entityType, resolvedId, record));
+  }
 });
 
 // Save a new expense from the capture form.
@@ -3029,6 +3053,209 @@ app.post('/api/stripe/sync', async (c) => {
     description: `Imported ${imported} · skipped ${skipped} · unmatched ${unmatched}`,
   });
   return c.json({ ok: true, imported, skipped, unmatched, total_seen: charges.length });
+});
+
+// ─── Rules / Automations engine ──────────────────────────────────────
+// Trigger events are emitted from the audit middleware after each mutation
+// (e.g. 'expense.create'). The engine fetches active rules matching the
+// trigger, evaluates their conditions against the entity record, and
+// executes their actions. Failed actions log to audit but don't roll back.
+
+const SUPPORTED_TRIGGERS = [
+  'expense.create', 'expense.update',
+  'invoice.create', 'invoice.update', 'invoice.overdue',
+  'bill.create', 'bill.update',
+  'client.create', 'vendor.create',
+] as const;
+
+interface RuleCondition { field: string; op: string; value: any; }
+interface RuleAction {
+  kind: 'notify' | 'set_field' | 'send_email' | 'add_tag';
+  // notify
+  title?: string; body?: string; link?: string;
+  // set_field
+  field?: string; value?: any;
+  // send_email
+  to?: string; subject?: string; body_template?: string;
+  // add_tag
+  tag?: string;
+}
+
+function evalCondition(rec: any, cond: RuleCondition): boolean {
+  const v = rec?.[cond.field];
+  switch (cond.op) {
+    case 'eq': return v == cond.value;
+    case 'ne': return v != cond.value;
+    case 'gt': return Number(v) > Number(cond.value);
+    case 'gte': return Number(v) >= Number(cond.value);
+    case 'lt': return Number(v) < Number(cond.value);
+    case 'lte': return Number(v) <= Number(cond.value);
+    case 'contains': return String(v ?? '').toLowerCase().includes(String(cond.value).toLowerCase());
+    case 'is_set': return v != null && v !== '';
+    case 'is_empty': return v == null || v === '';
+    default: return false;
+  }
+}
+
+async function runRulesForEvent(env: Env, companyId: string, userId: string | null, trigger: string,
+                                entityType: string, entityId: string, record: any): Promise<void> {
+  try {
+    const rules = await env.DB.prepare(`
+      SELECT * FROM rules WHERE company_id = ? AND trigger = ? AND is_active = 1
+    `).bind(companyId, trigger).all();
+    for (const rule of (rules.results as any[]) || []) {
+      let conditions: RuleCondition[] = [];
+      let actions: RuleAction[] = [];
+      try {
+        conditions = JSON.parse(rule.conditions || '[]');
+        actions = JSON.parse(rule.actions || '[]');
+      } catch { continue; }
+      // ALL conditions must pass (AND semantics).
+      if (conditions.length > 0 && !conditions.every(c => evalCondition(record, c))) continue;
+
+      let ranCount = 0;
+      for (const action of actions) {
+        try {
+          await executeAction(env, companyId, userId, action, entityType, entityId, record, rule.name);
+          ranCount++;
+        } catch (err: any) {
+          await logAudit(env, companyId, null, {
+            action: 'rule_action_failed', entity_type: 'rule', entity_id: rule.id,
+            description: `${rule.name}: action ${action.kind} failed: ${err?.message || 'unknown'}`,
+          });
+        }
+      }
+      await env.DB.prepare(`
+        UPDATE rules SET run_count = run_count + 1, last_run_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(rule.id).run();
+      await logAudit(env, companyId, null, {
+        action: 'rule_run', entity_type: 'rule', entity_id: rule.id,
+        description: `${rule.name}: ${ranCount}/${actions.length} actions on ${entityType} ${entityId.slice(0, 8)}`,
+      });
+    }
+  } catch (err) {
+    console.error('Rules engine error:', err);
+  }
+}
+
+async function executeAction(env: Env, companyId: string, userId: string | null,
+                             action: RuleAction, entityType: string, entityId: string,
+                             record: any, ruleName: string): Promise<void> {
+  switch (action.kind) {
+    case 'notify': {
+      await env.DB.prepare(`
+        INSERT INTO notifications (id, company_id, user_id, kind, title, body, link)
+        VALUES (?, ?, NULL, 'rule', ?, ?, ?)
+      `).bind(uuid(), companyId,
+              action.title || ruleName,
+              action.body || `Rule "${ruleName}" matched ${entityType} ${entityId.slice(0, 8)}`,
+              action.link || `/app/${entityType}s/${entityId}`).run();
+      break;
+    }
+    case 'set_field': {
+      if (!action.field) throw new Error('set_field requires field');
+      // Map entity_type to its table; only allow tables the engine knows.
+      const tableMap: Record<string, string> = {
+        expense: 'expenses', invoice: 'invoices', bill: 'bills', client: 'clients', vendor: 'vendors',
+      };
+      const table = tableMap[entityType];
+      if (!table) throw new Error(`Cannot set field on ${entityType}`);
+      await env.DB.prepare(`UPDATE ${table} SET ${action.field} = ?, updated_at = datetime('now') WHERE id = ? AND company_id = ?`)
+        .bind(action.value ?? null, entityId, companyId).run();
+      break;
+    }
+    case 'send_email': {
+      if (!action.to) throw new Error('send_email requires to');
+      // Interpolate {{field}} placeholders in subject + body from the record.
+      const interp = (s: string) => s.replace(/\{\{(\w+)\}\}/g, (_, k) => String(record?.[k] ?? ''));
+      const subject = interp(action.subject || `[${ruleName}] ${entityType} ${entityId.slice(0, 8)}`);
+      const body = interp(action.body_template || `Rule ${ruleName} matched ${entityType} ${entityId}.`);
+      const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: action.to }] }],
+          from: { email: 'noreply@accounting.rmpgutah.us' },
+          subject,
+          content: [{ type: 'text/plain', value: body }],
+        }),
+      });
+      if (!res.ok) throw new Error(`MailChannels ${res.status}`);
+      await env.DB.prepare(`
+        INSERT INTO email_log (id, company_id, user_id, to_email, from_email, subject, body_preview,
+          related_entity_type, related_entity_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent')
+      `).bind(uuid(), companyId, userId, action.to, 'noreply@accounting.rmpgutah.us',
+              subject, body.slice(0, 500), entityType, entityId).run();
+      break;
+    }
+    case 'add_tag': {
+      // For now, add_tag only supports entities with a 'tags' column. Many
+      // entities don't on the cloud schema yet — silently no-op for those.
+      if (!action.tag) return;
+      const supported = ['expenses', 'invoices'];
+      const tableMap: Record<string, string> = { expense: 'expenses', invoice: 'invoices' };
+      const table = tableMap[entityType];
+      if (!table || !supported.includes(table)) return;
+      // Tag column doesn't exist on cloud's expenses/invoices yet — skip.
+      return;
+    }
+  }
+}
+
+// /app/automations — list + create simple rules.
+app.get('/app/automations', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, name, description, trigger, is_active, run_count, last_run_at
+    FROM rules WHERE company_id = ? ORDER BY updated_at DESC
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Automations</h1>
+  <a href="/app/automations/new" class="btn">+ New Rule</a>
+</div>
+<table class="data">
+  <thead><tr><th>Name</th><th>Trigger</th><th class="num">Runs</th><th>Last run</th><th>Active</th></tr></thead>
+  <tbody>
+    ${items.length === 0 ? `<tr><td colspan="5" class="empty-state">No rules yet. Create one to auto-tag expenses, notify on big invoices, etc.</td></tr>` :
+      items.map((r: any) => `<tr>
+        <td><a href="/app/automations/${esc(r.id)}">${esc(r.name)}</a>${r.description ? `<div class="muted" style="font-size:0.78rem">${esc(r.description)}</div>` : ''}</td>
+        <td><code style="font-size:0.78rem">${esc(r.trigger)}</code></td>
+        <td class="num">${String(r.run_count || 0)}</td>
+        <td class="muted" style="font-size:0.78rem">${r.last_run_at || '—'}</td>
+        <td>${r.is_active ? '<span class="badge badge-green">on</span>' : '<span class="badge">off</span>'}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">How rules work</div>
+  <div class="muted" style="font-size:0.85rem">
+    Each rule has a <strong>trigger</strong> (event name like <code>expense.create</code>), optional <strong>conditions</strong>
+    (all must pass), and <strong>actions</strong> (executed in order). Failed actions log to Audit but don't roll back.
+    Supported actions: <code>notify</code> · <code>set_field</code> · <code>send_email</code>.
+  </div>
+</div>`;
+  return c.html(shell({ title: 'Automations', activeNav: 'automations', body, brand: 'BAP Cloud' }));
+});
+
+wireSimpleEntity({
+  table: 'rules', navKey: 'automations', apiPath: '/api/automations',
+  entitySingular: 'Rule', entityPlural: 'Rules', listPath: '/app/automations',
+  cols: ['name', 'description', 'trigger', 'conditions', 'actions', 'is_active'],
+  fields: [
+    { name: 'name', label: 'Rule Name', kind: 'text', required: true },
+    { name: 'description', label: 'Description', kind: 'text' },
+    { name: 'trigger', label: 'Trigger', kind: 'select', options:
+      SUPPORTED_TRIGGERS.map(t => ({ value: t, label: t })) },
+    { name: 'conditions', label: 'Conditions (JSON array)', kind: 'textarea',
+      placeholder: '[{"field":"amount","op":"gt","value":1000}]' },
+    { name: 'actions', label: 'Actions (JSON array)', kind: 'textarea',
+      placeholder: '[{"kind":"notify","title":"Big expense","body":"Over $1000"}]' },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox' },
+  ],
 });
 
 function nextRecurringDate(from: string, freq: string): string {
