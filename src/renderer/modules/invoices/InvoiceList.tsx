@@ -15,6 +15,12 @@ import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../l
 import EntityChip from '../../components/EntityChip';
 import { InvoiceBulkActionBar, OverdueAlertBanner, TopClientsWidget, DSOMiniCard, AgingBucketBar } from './InvoiceUpgradesUI';
 import { useCustomizationStore } from '../../stores/customizationStore';
+import {
+  useInvoicingPrefs,
+  getInvoicingPrefs,
+  formatInvoiceAmount,
+  formatInvoiceDate,
+} from '../../customization/invoicing-prefs';
 
 // ─── Types ─────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -124,7 +130,16 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   const [amountMax, setAmountMax] = useState<string>('');
   const [tagFilter, setTagFilter] = useState<string>('');
   const [salesRepFilter, setSalesRepFilter] = useState<string>('');
-  const [sortKey, setSortKey] = useState<SortKey>('issue_date');
+  // Initial sort honors Customization › Invoicing › Sorting & Filtering.
+  // The pref's enum includes values (invoice_number, client, status) that
+  // don't map to the existing SortKey type — fall back to issue_date when
+  // the user's choice isn't supported by the current sort engine. Lazy
+  // initializer so the prefs are read once on mount, not every render.
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const p = getInvoicingPrefs();
+    const allowed: SortKey[] = ['issue_date', 'due_date', 'total', 'days_outstanding'];
+    return (allowed as string[]).includes(p.sortField) ? (p.sortField as SortKey) : 'issue_date';
+  });
   const [showPredictedColumn, setShowPredictedColumn] = useState(false);
   const [predictedDates, setPredictedDates] = useState<Record<string, string>>({});
   const [bulkTagText, setBulkTagText] = useState<string>('');
@@ -147,14 +162,27 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   };
 
   // Live customization preferences (Customization Center → Invoicing).
-  const cShowIssueDate = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-issue-date')));
-  const cShowDueDate = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-due-date')));
-  const cShowDaysCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-days-overdue')));
-  const cShowTotalCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-amount')));
-  const cShowBalanceCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-balance-due')));
-  const cShowStatusCol = useCustomizationStore((s) => Boolean(s.get('invoicing.columns-show-status')));
-  const cDensity = useCustomizationStore((s) => String(s.get('invoicing.display-density') ?? 'comfortable'));
+  // All column/display toggles + formatting prefs come through here. The
+  // hook subscribes to the whole `values` map so changes apply instantly.
+  const prefs = useInvoicingPrefs();
+  const cShowIssueDate = prefs.cols.issueDate;
+  const cShowDueDate = prefs.cols.dueDate;
+  const cShowDaysCol = prefs.cols.daysOverdue;
+  const cShowTotalCol = prefs.cols.amount;
+  const cShowBalanceCol = prefs.cols.balanceDue;
+  const cShowStatusCol = prefs.cols.status;
+  const cDensity = prefs.density;
   const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
+  const rowPadStyle: React.CSSProperties = prefs.compactRows
+    ? { lineHeight: 1.2 }
+    : cDensity === 'spacious'
+      ? { lineHeight: 1.7 }
+      : {};
+  const amountAlignClass = prefs.amountAlign === 'left'
+    ? 'text-left'
+    : prefs.amountAlign === 'center'
+      ? 'text-center'
+      : 'text-right';
 
   // Helper: days outstanding (positive = overdue, negative = due in N days)
   const daysOutstanding = (inv: Invoice): number => {
@@ -655,20 +683,22 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       )}
 
-      {/* Summary Bar */}
-      {invoiceSummary && (
+      {/* Summary Bar — togglable via Customization › Invoicing › Display ›
+          Show totals bar. */}
+      {prefs.showTotalsBar && invoiceSummary && (
         <SummaryBar items={[
-          { label: 'Outstanding', value: formatCurrency(invoiceSummary.outstanding), accent: 'orange', tooltip: 'Total unpaid invoices not yet overdue' },
-          { label: 'Overdue', value: formatCurrency(invoiceSummary.overdue), accent: 'red', tooltip: 'Invoices past their due date with remaining balance' },
-          { label: 'Collected This Month', value: formatCurrency(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
+          { label: 'Outstanding', value: formatInvoiceAmount(invoiceSummary.outstanding), accent: 'orange', tooltip: 'Total unpaid invoices not yet overdue' },
+          { label: 'Overdue', value: formatInvoiceAmount(invoiceSummary.overdue), accent: 'red', tooltip: 'Invoices past their due date with remaining balance' },
+          { label: 'Collected This Month', value: formatInvoiceAmount(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
         ]} />
       )}
 
-      {/* Invoice Upgrades Wave (F893-F922) — insights row + overdue alert */}
+      {/* Invoice Upgrades Wave (F893-F922) — insights row + overdue alert.
+          AgingBucketBar is gated by Display › Show aging buckets. */}
       <OverdueAlertBanner />
       <div className="grid grid-cols-3 gap-3" style={{ marginBottom: 8 }}>
         <DSOMiniCard periodDays={90} />
-        <AgingBucketBar />
+        {prefs.showAgingBuckets ? <AgingBucketBar /> : <div />}
         <TopClientsWidget limit={5} />
       </div>
 
@@ -876,10 +906,11 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       )}
 
-      {/* Tabs + Search */}
+      {/* Tabs + Search — quick-filter chip row hidden via
+          Customization › Invoicing › Display › Show quick filter chips. */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex gap-1">
-          {TABS.map((tab) => (
+          {prefs.showQuickFilters && TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -941,9 +972,25 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="block-table" style={{ fontSize: cTableFontSize }}>
-            <thead>
+          {/* Sticky header is gated on `display-sticky-header`. When on, the
+              scroll container caps height so the thead can pin at the top. */}
+          <div
+            className="overflow-x-auto"
+            style={prefs.stickyHeader ? { maxHeight: '70vh', overflowY: 'auto' } : undefined}
+          >
+          <table
+            className="block-table"
+            style={{ fontSize: cTableFontSize }}
+            data-zebra={prefs.zebra ? 'on' : 'off'}
+            data-compact={prefs.compactRows ? 'on' : 'off'}
+          >
+            <thead
+              style={
+                prefs.stickyHeader
+                  ? { position: 'sticky', top: 0, zIndex: 2, background: 'var(--color-bg-secondary)' }
+                  : undefined
+              }
+            >
               <tr>
                 <th style={{ width: '40px' }}>
                   <input
@@ -961,19 +1008,24 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 {cShowDueDate && <th>Due Date</th>}
                 {cShowDaysCol && <th>Days</th>}
                 {showPredictedColumn && <th>Predicted Pay</th>}
-                {cShowTotalCol && <th className="text-right">Total</th>}
-                <th className="text-right">Amount Paid</th>
-                {cShowBalanceCol && <th className="text-right">Balance Due</th>}
+                {cShowTotalCol && <th className={amountAlignClass}>Total</th>}
+                <th className={amountAlignClass}>Amount Paid</th>
+                {cShowBalanceCol && <th className={amountAlignClass}>Balance Due</th>}
                 {cShowStatusCol && <th>Status</th>}
                 <th style={{ width: '60px' }}></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((inv) => {
+              {/* Pagination is honored via `rowsPerPage` from the customization
+                  preferences. The "All" tab still shows everything when the
+                  user has set a value of 0 by overriding the descriptor's
+                  min (which we clamp on input). */}
+              {filtered.slice(0, prefs.rowsPerPage || filtered.length).map((inv, rowIdx) => {
                 const balance = inv.total - inv.amount_paid;
                 const badge = formatStatus(inv.status);
                 const isSelected = selectedIds.has(inv.id);
                 const days = daysOutstanding(inv);
+                const isOverdue = inv.status !== 'paid' && days > prefs.overdueGraceDays;
                 const daysLabel = inv.status === 'paid'
                   ? '—'
                   : days > 0
@@ -990,11 +1042,22 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       : days > 0
                         ? 'text-accent-warning'
                         : 'text-text-secondary';
+                // Row tint precedence: selected > overdue highlight > zebra.
+                // Inline background wins because Tailwind's bg classes would
+                // be overridden by the higher-specificity inline value anyway.
+                const rowBg = isSelected
+                  ? undefined // handled via Tailwind class below
+                  : prefs.overdueHighlight && isOverdue
+                    ? 'rgba(239, 68, 68, 0.06)'
+                    : prefs.zebra && rowIdx % 2 === 1
+                      ? 'rgba(255, 255, 255, 0.02)'
+                      : undefined;
                 return (
                   <tr
                     key={inv.id}
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onViewInvoice(inv.id)}
+                    style={{ ...rowPadStyle, background: rowBg }}
                   >
                     <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -1034,29 +1097,29 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     <td onClick={(e) => e.stopPropagation()}>
                       <EntityChip type="client" id={inv.client_id} label={clientMap.get(inv.client_id) ?? 'Unknown'} variant="inline" />
                     </td>
-                    {cShowIssueDate && <td className="text-text-secondary">{formatDate(inv.issue_date)}</td>}
-                    {cShowDueDate && <td className="text-text-secondary">{formatDate(inv.due_date)}</td>}
+                    {cShowIssueDate && <td className="text-text-secondary">{formatInvoiceDate(inv.issue_date)}</td>}
+                    {cShowDueDate && <td className="text-text-secondary">{formatInvoiceDate(inv.due_date)}</td>}
                     {cShowDaysCol && <td className={`text-xs font-semibold ${daysColor}`}>{daysLabel}</td>}
                     {showPredictedColumn && (
                       <td className="text-text-muted text-xs">
                         {predictedDates[inv.id] === undefined
                           ? '…'
                           : predictedDates[inv.id]
-                            ? formatDate(predictedDates[inv.id])
+                            ? formatInvoiceDate(predictedDates[inv.id])
                             : '—'}
                       </td>
                     )}
                     {cShowTotalCol && (
-                    <td className="text-right font-mono text-text-primary">
-                      {formatCurrency(inv.total)}
+                    <td className={`${amountAlignClass} font-mono text-text-primary`}>
+                      {formatInvoiceAmount(inv.total)}
                     </td>
                     )}
-                    <td className="text-right font-mono text-text-secondary">
-                      {formatCurrency(inv.amount_paid)}
+                    <td className={`${amountAlignClass} font-mono text-text-secondary`}>
+                      {formatInvoiceAmount(inv.amount_paid)}
                     </td>
                     {cShowBalanceCol && (
-                    <td className="text-right font-mono text-text-primary">
-                      {formatCurrency(balance)}
+                    <td className={`${amountAlignClass} font-mono text-text-primary`}>
+                      {formatInvoiceAmount(balance)}
                     </td>
                     )}
                     {cShowStatusCol && (

@@ -13,6 +13,12 @@ import type { LineRowType } from '../../../shared/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import { roundCents, formatStatus } from '../../lib/format';
 import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
+import {
+  useInvoicingPrefs,
+  getInvoicingPrefs,
+  buildInvoiceNumber,
+  termsValueToLabel,
+} from '../../customization/invoicing-prefs';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -170,9 +176,13 @@ let lineIdCounter = 0;
 const newLineItem = (rowType: LineRowType = 'item', defaultUnitLabel = ''): LineItem => ({
   id: `new-${++lineIdCounter}`,
   description: '',
-  quantity: 1,
+  // Default-line-quantity honours Customization › Invoicing › Defaults.
+  // Read non-reactively here because newLineItem() is called outside React's
+  // render path (from button handlers); the prefs snapshot is always current
+  // because the store is the source of truth.
+  quantity: getInvoicingPrefs().defaultQuantity,
   unit_price: 0,
-  tax_rate: 0,
+  tax_rate: getInvoicingPrefs().defaultTaxRate,
   account_id: '',
   row_type: rowType,
   unit_label: defaultUnitLabel,
@@ -187,6 +197,11 @@ const newLineItem = (rowType: LineRowType = 'item', defaultUnitLabel = ''): Line
 });
 
 const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
+  // Numbering preferences (prefix/suffix/pad/year-month) come from the
+  // Customization Center; the sequence integer is derived from the most
+  // recent invoice's trailing digits to avoid collisions even after the
+  // user changes their prefix mid-stream.
+  let seq = 1001;
   try {
     const rows = await api.rawQuery(
       'SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
@@ -194,11 +209,11 @@ const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
     );
     if (rows && rows.length > 0) {
       const last = rows[0].invoice_number as string;
-      const match = last.match(/(\d+)$/);
-      if (match) return `INV-${parseInt(match[1], 10) + 1}`;
+      const match = last.match(/(\d+)(?!.*\d)/); // trailing run of digits
+      if (match) seq = parseInt(match[1], 10) + 1;
     }
   } catch { /* fall through */ }
-  return 'INV-1001';
+  return buildInvoiceNumber(seq);
 };
 
 // DATE: Item #2 — local time today.
@@ -341,29 +356,42 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   const [duplicateCandidates, setDuplicateCandidates] = useState<Array<{ id: string; invoice_number: string; total: number; due_date: string; status: string; created_at: string }>>([]);
   const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false);
 
-  const [form, setForm] = useState<InvoiceFormData>({
-    client_id: '',
-    invoice_number: '',
-    issue_date: todayISO(),
-    due_date: addDays(todayISO(), 30),
-    terms: 'Net 30',
-    discount: 0,
-    notes: '',
-    terms_text: '',
-    status: 'draft',
-    internal_notes: '',
-    po_number: '',
-    job_reference: '',
-    late_fee_pct: 0,
-    late_fee_grace_days: 0,
-    discount_pct: 0,
-    invoice_type: 'standard',
-    currency: 'USD',
-    shipping_amount: 0,
-    custom_field_1: '',
-    custom_field_2: '',
-    custom_field_3: '',
-    custom_field_4: '',
+  // Reactive prefs — used in render for column-style toggles, shipping
+  // visibility, manual-override lock, etc.
+  const prefs = useInvoicingPrefs();
+
+  const [form, setForm] = useState<InvoiceFormData>(() => {
+    // Seed the form from the Customization Center for NEW invoices. Edit
+    // mode overwrites these immediately via the loader below, so it's safe
+    // to use prefs as the genesis state in both flows.
+    const p = getInvoicingPrefs();
+    const t = termsValueToLabel(p.paymentTerms);
+    return {
+      client_id: '',
+      invoice_number: '',
+      issue_date: todayISO(),
+      // Due-days override wins when set explicitly; otherwise follow the
+      // chosen payment-terms enum so the two prefs stay consistent.
+      due_date: addDays(todayISO(), p.defaultDueDays !== 30 ? p.defaultDueDays : t.days),
+      terms: t.label,
+      discount: 0,
+      notes: p.defaultNotes,
+      terms_text: p.defaultTerms,
+      status: 'draft',
+      internal_notes: '',
+      po_number: '',
+      job_reference: '',
+      late_fee_pct: 0,
+      late_fee_grace_days: 0,
+      discount_pct: p.defaultDiscountRate,
+      invoice_type: 'standard',
+      currency: 'USD',
+      shipping_amount: 0,
+      custom_field_1: '',
+      custom_field_2: '',
+      custom_field_3: '',
+      custom_field_4: '',
+    };
   });
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
@@ -1129,7 +1157,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           {/* Invoice Number */}
           <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">Invoice Number</label>
-            <input type="text" className="block-input" value={form.invoice_number} onChange={(e) => updateField('invoice_number', e.target.value)} />
+            <input
+              type="text"
+              className="block-input"
+              value={form.invoice_number}
+              onChange={(e) => updateField('invoice_number', e.target.value)}
+              readOnly={!prefs.allowManualNumberOverride}
+              title={!prefs.allowManualNumberOverride ? 'Manual override is disabled in Customization › Invoicing › Numbering' : undefined}
+              style={!prefs.allowManualNumberOverride ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
+            />
           </div>
 
           {/* Issue Date */}
@@ -1752,17 +1788,22 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               <span className="font-mono">−{currencyFmt.format(headerPctDiscount)}</span>
             </div>
           )}
-          <div className="flex justify-between text-sm items-center">
-            <span className="text-text-secondary">Shipping</span>
-            <input
-              type="number"
-              step="0.01"
-              className="block-input text-right font-mono w-28"
-              value={form.shipping_amount || ''}
-              placeholder="0.00"
-              onChange={(e) => setForm(p => ({ ...p, shipping_amount: parseFloat(e.target.value) || 0 }))}
-            />
-          </div>
+          {/* Shipping row — surfaces only when Defaults › Include shipping
+              field is on, OR when the invoice already has a shipping amount
+              (so a saved invoice never silently loses its shipping line). */}
+          {(prefs.includeShipping || (form.shipping_amount || 0) > 0) && (
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-text-secondary">Shipping</span>
+              <input
+                type="number"
+                step="0.01"
+                className="block-input text-right font-mono w-28"
+                value={form.shipping_amount || ''}
+                placeholder="0.00"
+                onChange={(e) => setForm(p => ({ ...p, shipping_amount: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+          )}
           <div
             className="flex justify-between text-sm font-bold pt-3"
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
