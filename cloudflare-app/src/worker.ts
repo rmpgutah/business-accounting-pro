@@ -1863,4 +1863,382 @@ wireSimpleEntity({
   ],
 });
 
+// ─── KPI Dashboard — aggregate widgets for the active period ────────
+// Pulls revenue / expenses / cash position / receivables / payables and
+// renders them as a 4×2 grid of metric cards. SQL aggregates only — no
+// stored snapshots — so values are always live.
+app.get('/app/kpi', async (c) => {
+  const cid = c.get('companyId')!;
+  const now = new Date();
+  const ytdStart = `${now.getUTCFullYear()}-01-01`;
+  const today = now.toISOString().slice(0, 10);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000).toISOString().slice(0, 10);
+
+  const [revYTD, expYTD, recvOpen, payOpen, invCount, invLast30] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount_paid),0) as v FROM invoices WHERE company_id=? AND date>=?').bind(cid, ytdStart),
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount),0) + COALESCE(SUM(tax_amount),0) + COALESCE(SUM(shipping_amount),0) as v FROM expenses WHERE company_id=? AND date>=?').bind(cid, ytdStart),
+    c.env.DB.prepare('SELECT COALESCE(SUM(total - amount_paid),0) as v FROM invoices WHERE company_id=? AND status IN (?,?,?)').bind(cid, 'sent', 'overdue', 'partial'),
+    c.env.DB.prepare('SELECT COALESCE(SUM(total - amount_paid),0) as v FROM bills WHERE company_id=? AND status IN (?,?)').bind(cid, 'open', 'overdue'),
+    c.env.DB.prepare('SELECT COUNT(*) as v FROM invoices WHERE company_id=?').bind(cid),
+    c.env.DB.prepare('SELECT COUNT(*) as v FROM invoices WHERE company_id=? AND date>=?').bind(cid, thirtyDaysAgo),
+  ]);
+  const v = (rs: any) => Number((rs.results as any[])[0]?.v || 0);
+  const revenue = v(revYTD);
+  const expenses = v(expYTD);
+  const profit = revenue - expenses;
+  const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  const card = (label: string, value: string, color = 'var(--text-bright)', sub = '') =>
+    `<div class="card"><div class="muted" style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em">${esc(label)}</div>
+      <div style="font-size:1.6rem;font-weight:800;color:${color};margin-top:6px">${esc(value)}</div>
+      ${sub ? `<div class="muted" style="font-size:0.72rem;margin-top:4px">${esc(sub)}</div>` : ''}</div>`;
+
+  const body = `
+<div class="page-header"><h1 class="page-title">KPI Dashboard</h1>
+  <div class="muted" style="font-size:0.85rem">${esc(ytdStart)} → ${esc(today)}</div>
+</div>
+<div class="grid grid-4" style="gap:1rem;margin-bottom:1rem">
+  ${card('Revenue YTD', fmtMoney(revenue), 'var(--green)')}
+  ${card('Expenses YTD', fmtMoney(expenses), 'var(--red)')}
+  ${card('Net Profit', fmtMoney(profit), profit >= 0 ? 'var(--green)' : 'var(--red)', margin.toFixed(1) + '% margin')}
+  ${card('Cash Position', fmtMoney(revenue - expenses - v(recvOpen)), 'var(--text-bright)', 'rough estimate')}
+</div>
+<div class="grid grid-4" style="gap:1rem">
+  ${card('Accounts Receivable', fmtMoney(v(recvOpen)), 'var(--amber)', 'unpaid invoices')}
+  ${card('Accounts Payable', fmtMoney(v(payOpen)), 'var(--red)', 'unpaid bills')}
+  ${card('Invoices (all-time)', String(v(invCount)))}
+  ${card('Invoices last 30d', String(v(invLast30)))}
+</div>`;
+  return c.html(shell({ title: 'KPI', activeNav: 'kpi', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Forecasting — 6-month moving-average projection ────────────────
+// Takes the last 6 closed months of revenue + expenses, runs a simple
+// moving-average forward 3 months. Renders a tiny inline SVG sparkline
+// — no external charting library, ~80 lines of SVG path math.
+app.get('/app/forecasting', async (c) => {
+  const cid = c.get('companyId')!;
+  const now = new Date();
+  // 9 months: 6 historical for the average, 3 projection. month strings YYYY-MM.
+  const months: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+
+  const [revRows, expRows] = await c.env.DB.batch([
+    c.env.DB.prepare(`
+      SELECT substr(date,1,7) as m, COALESCE(SUM(amount_paid),0) as v
+      FROM invoices WHERE company_id=? AND date>=?
+      GROUP BY substr(date,1,7) ORDER BY m
+    `).bind(cid, months[0] + '-01'),
+    c.env.DB.prepare(`
+      SELECT substr(date,1,7) as m, COALESCE(SUM(amount + tax_amount + shipping_amount),0) as v
+      FROM expenses WHERE company_id=? AND date>=?
+      GROUP BY substr(date,1,7) ORDER BY m
+    `).bind(cid, months[0] + '-01'),
+  ]);
+  const revByMonth = Object.fromEntries(((revRows.results as any[]) || []).map((r: any) => [r.m, Number(r.v)]));
+  const expByMonth = Object.fromEntries(((expRows.results as any[]) || []).map((r: any) => [r.m, Number(r.v)]));
+  const revSeries = months.map(m => revByMonth[m] || 0);
+  const expSeries = months.map(m => expByMonth[m] || 0);
+  // Projection: 6-month average extended 3 months forward.
+  const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
+  const revFcAvg = avg(revSeries);
+  const expFcAvg = avg(expSeries);
+
+  // Build sparkline SVG (250×60).
+  const sparkline = (series: number[], projected: number, color: string): string => {
+    const all = [...series, projected, projected, projected];
+    const max = Math.max(1, ...all);
+    const pts = all.map((v, i) => `${(i / (all.length - 1)) * 250},${60 - (v / max) * 55}`);
+    const histPath = `M ${pts.slice(0, 6).join(' L ')}`;
+    const fcPath = `M ${pts.slice(5).join(' L ')}`;
+    return `<svg width="250" height="60" viewBox="0 0 250 60" style="margin-top:8px">
+      <path d="${histPath}" fill="none" stroke="${color}" stroke-width="2"/>
+      <path d="${fcPath}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="4,3" opacity="0.6"/>
+    </svg>`;
+  };
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Forecasting</h1>
+  <div class="muted" style="font-size:0.85rem">6-month history → 3-month projection · moving average</div>
+</div>
+<div class="grid grid-2" style="gap:1rem">
+  <div class="card">
+    <div class="card-title">Revenue trend</div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--green)">${fmtMoney(revFcAvg)}</div>
+    <div class="muted" style="font-size:0.75rem">projected monthly avg next 3 months</div>
+    ${sparkline(revSeries, revFcAvg, '#34d399')}
+    <div class="muted" style="font-size:0.7rem;margin-top:6px">${esc(months.join(' · '))}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Expense trend</div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--red)">${fmtMoney(expFcAvg)}</div>
+    <div class="muted" style="font-size:0.75rem">projected monthly avg next 3 months</div>
+    ${sparkline(expSeries, expFcAvg, '#fb7185')}
+    <div class="muted" style="font-size:0.7rem;margin-top:6px">${esc(months.join(' · '))}</div>
+  </div>
+</div>
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Projected Net</div>
+  <div style="font-size:2rem;font-weight:800;color:${revFcAvg - expFcAvg >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(revFcAvg - expFcAvg)}</div>
+  <div class="muted" style="font-size:0.8rem">monthly · simple moving-average · no seasonality adjustment</div>
+</div>`;
+  return c.html(shell({ title: 'Forecasting', activeNav: 'forecasting', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Audit Trail — paginated log viewer ─────────────────────────────
+app.get('/app/audit', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, user_id, action, entity_type, entity_id, description, created_at
+    FROM audit_log WHERE company_id = ?
+    ORDER BY created_at DESC LIMIT 200
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header"><h1 class="page-title">Audit Trail</h1>
+  <div class="muted" style="font-size:0.85rem">Latest 200 events</div>
+</div>
+<table class="data">
+  <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
+  <tbody>
+    ${items.length === 0 ? `<tr><td colspan="4" class="empty-state">No audit events yet.</td></tr>` :
+      items.map((r: any) => `<tr>
+        <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${esc(r.created_at)}</td>
+        <td><span class="badge ${r.action === 'delete' ? 'badge-red' : r.action === 'create' ? 'badge-green' : 'badge-blue'}">${esc(r.action)}</span></td>
+        <td><span class="muted">${esc(r.entity_type)}</span>${r.entity_id ? ` <code style="font-size:0.75rem">${esc(String(r.entity_id).slice(0, 8))}</code>` : ''}</td>
+        <td>${esc(r.description || '—')}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>`;
+  return c.html(shell({ title: 'Audit', activeNav: 'audit', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Notifications — listing + mark-as-read ─────────────────────────
+app.get('/app/notifications', async (c) => {
+  const cid = c.get('companyId')!;
+  const uid = c.get('userId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, kind, title, body, link, is_read, created_at
+    FROM notifications WHERE company_id = ? AND (user_id = ? OR user_id IS NULL)
+    ORDER BY created_at DESC LIMIT 100
+  `).bind(cid, uid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Notifications</h1>
+  <button id="markAll" class="btn btn-ghost">Mark all read</button>
+</div>
+<div class="card">
+  ${items.length === 0 ? `<div class="empty-state">No notifications.</div>` :
+    items.map((n: any) => `<div style="display:flex;gap:1rem;padding:0.75rem 0;border-bottom:1px solid var(--border)${n.is_read ? '' : ';background:rgba(96,165,250,0.04)'}">
+      <div style="flex:1">
+        <div style="font-weight:600;color:var(--text-bright)">${esc(n.title)}${n.is_read ? '' : ' <span class="badge badge-blue" style="font-size:0.6rem">new</span>'}</div>
+        ${n.body ? `<div class="muted" style="font-size:0.85rem;margin-top:2px">${esc(n.body)}</div>` : ''}
+        <div class="muted" style="font-size:0.72rem;margin-top:4px;font-family:'SF Mono',Menlo,monospace">${esc(n.created_at)}${n.link ? ` · <a href="${esc(n.link)}">Open</a>` : ''}</div>
+      </div>
+    </div>`).join('')}
+</div>
+<script>
+document.getElementById('markAll').addEventListener('click', async () => {
+  try { await window.fetchJSON('/api/notifications/mark-all-read', { method: 'POST', body: '{}' });
+    location.reload();
+  } catch (e) { window.toast(e.message || 'Failed', 'err'); }
+});
+</script>`;
+  return c.html(shell({ title: 'Notifications', activeNav: 'notifications', body, brand: 'BAP Cloud' }));
+});
+
+app.post('/api/notifications/mark-all-read', async (c) => {
+  const cid = c.get('companyId')!;
+  const uid = c.get('userId')!;
+  await c.env.DB.prepare(`
+    UPDATE notifications SET is_read = 1, read_at = datetime('now')
+    WHERE company_id = ? AND (user_id = ? OR user_id IS NULL) AND is_read = 0
+  `).bind(cid, uid).run();
+  return c.json({ ok: true });
+});
+
+// ─── Schedule C report — IRS Form 1040 Schedule C aggregator ────────
+// Maps expense.schedule_c_line (1–32) to Schedule C box totals. The desktop
+// stores this on each expense; the cloud reads it as-is on synced rows.
+// Output is a printable rollup, not a filled PDF (that's filing-tier work).
+app.get('/app/taxes', async (c) => {
+  const cid = c.get('companyId')!;
+  const year = c.req.query('year') || String(new Date().getUTCFullYear());
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+
+  const [income, byLine, totalExpenses] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount_paid),0) as v FROM invoices WHERE company_id=? AND date>=? AND date<=?`).bind(cid, start, end),
+    c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(schedule_c_line, ''), 'unassigned') as line,
+             COALESCE(SUM(amount),0) as total, COUNT(*) as n
+      FROM expenses WHERE company_id=? AND date>=? AND date<=? AND (is_tax_deductible IS NULL OR is_tax_deductible = 1)
+      GROUP BY line ORDER BY line
+    `).bind(cid, start, end),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM expenses WHERE company_id=? AND date>=? AND date<=? AND (is_tax_deductible IS NULL OR is_tax_deductible = 1)`).bind(cid, start, end),
+  ]);
+  // Line names per the IRS Form 1040 Schedule C (Part II expenses) — abridged.
+  // Stored as strings on the desktop so this mapping intentionally mirrors them.
+  const SC_LABELS: Record<string, string> = {
+    '8': 'Advertising', '9': 'Car & truck', '10': 'Commissions/fees',
+    '11': 'Contract labor', '12': 'Depletion', '13': 'Depreciation',
+    '14': 'Employee benefit programs', '15': 'Insurance (other than health)',
+    '16a': 'Interest (mortgage)', '16b': 'Interest (other)', '17': 'Legal & professional',
+    '18': 'Office expense', '19': 'Pension & profit-sharing',
+    '20a': 'Rent (vehicles/equipment)', '20b': 'Rent (other property)',
+    '21': 'Repairs & maintenance', '22': 'Supplies', '23': 'Taxes & licenses',
+    '24a': 'Travel', '24b': 'Meals (deductible portion)', '25': 'Utilities',
+    '26': 'Wages', '27a': 'Other expenses',
+    'unassigned': 'Unassigned',
+  };
+  const rev = Number((income.results as any[])[0]?.v || 0);
+  const exp = Number((totalExpenses.results as any[])[0]?.v || 0);
+  const net = rev - exp;
+  const lines = (byLine.results as any[]) || [];
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Tax · Schedule C ${esc(year)}</h1>
+  <div style="display:flex;gap:8px">
+    ${['2024','2025','2026'].map(y => `<a class="btn ${y === year ? '' : 'btn-ghost'}" href="?year=${y}">${y}</a>`).join('')}
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Summary · ${esc(start)} → ${esc(end)}</div>
+  <div class="grid grid-3" style="gap:1rem;margin-top:1rem">
+    <div><div class="muted" style="font-size:0.72rem;text-transform:uppercase">Gross receipts (Line 1)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:var(--green)">${fmtMoney(rev)}</div></div>
+    <div><div class="muted" style="font-size:0.72rem;text-transform:uppercase">Total deductible (Line 28)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:var(--red)">${fmtMoney(exp)}</div></div>
+    <div><div class="muted" style="font-size:0.72rem;text-transform:uppercase">Net profit (Line 31)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(net)}</div></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">By Schedule C line</div>
+  <table class="data">
+    <thead><tr><th>Line</th><th>Description</th><th class="num">Entries</th><th class="num">Total</th></tr></thead>
+    <tbody>
+      ${lines.length === 0 ? `<tr><td colspan="4" class="empty-state">No deductible expenses in ${esc(year)}.</td></tr>` :
+        lines.map((l: any) => `<tr>
+          <td><code>${esc(l.line)}</code></td>
+          <td>${esc(SC_LABELS[l.line] || '—')}</td>
+          <td class="num">${String(l.n)}</td>
+          <td class="num">${fmtMoney(l.total)}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+<div class="muted" style="margin-top:1rem;font-size:0.75rem">Aggregator only. For e-filing, export this and your books to a tax preparer or filing service. Cells map to IRS Form 1040 Schedule C, Part II. Confirm with your CPA.</div>`;
+  return c.html(shell({ title: 'Tax', activeNav: 'taxes', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Recurring Templates listing + CRUD ─────────────────────────────
+app.get('/app/recurring', async (c) => listingPage(c, 'Recurring', 'recurring', `
+  SELECT id, type, name, frequency, next_date, is_active, last_run_date
+  FROM recurring_templates WHERE company_id = ? ORDER BY next_date`,
+  ['Type', 'Name', 'Frequency', 'Next run', 'Last run', 'Active'],
+  (r: any) => [
+    `<span class="badge">${esc(r.type)}</span>`,
+    `<a href="/app/recurring/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.frequency),
+    fmtDate(r.next_date),
+    r.last_run_date ? fmtDate(r.last_run_date) : '—',
+    r.is_active ? '✓' : '—',
+  ],
+  '/app/recurring/new',
+));
+
+wireSimpleEntity({
+  table: 'recurring_templates', navKey: 'recurring', apiPath: '/api/recurring',
+  entitySingular: 'Recurring Template', entityPlural: 'Recurring', listPath: '/app/recurring',
+  cols: ['type', 'name', 'frequency', 'next_date', 'is_active', 'template_data'],
+  fields: [
+    { name: 'name', label: 'Template Name', kind: 'text', required: true },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 1, options: [
+      { value: 'expense', label: 'Expense' },
+      { value: 'invoice', label: 'Invoice' },
+      { value: 'bill', label: 'Bill' }] },
+    { name: 'frequency', label: 'Frequency', kind: 'select', rowGroup: 1, options: [
+      { value: 'weekly', label: 'Weekly' },
+      { value: 'biweekly', label: 'Bi-weekly' },
+      { value: 'monthly', label: 'Monthly' },
+      { value: 'quarterly', label: 'Quarterly' },
+      { value: 'annual', label: 'Annual' }] },
+    { name: 'next_date', label: 'Next Run', kind: 'date', required: true, rowGroup: 2 },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox', rowGroup: 2 },
+    { name: 'template_data', label: 'Template Data (JSON)', kind: 'textarea',
+      placeholder: '{"vendor_id":"…","amount":120,"description":"Monthly subscription"}' },
+  ],
+});
+
+// ─── Debt Collection workflow page ──────────────────────────────────
+const DEBT_STAGE_ORDER = ['reminder','warning','final_notice','demand_letter','collections_agency','legal_action','judgment','garnishment'];
+app.get('/app/debt-collection', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT d.id, d.account_name, d.principal, d.current_balance, d.stage, d.status,
+           d.interest_rate, d.start_date,
+           c.name as client_name
+    FROM debts d LEFT JOIN clients c ON c.id = d.client_id
+    WHERE d.company_id = ? AND d.status = 'active' ORDER BY d.current_balance DESC
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const totalOutstanding = items.reduce((s, r: any) => s + Number(r.current_balance || 0), 0);
+  // Bucket by stage for the funnel display.
+  const byStage = Object.fromEntries(DEBT_STAGE_ORDER.map(s => [s, [] as any[]]));
+  for (const r of items) (byStage[r.stage] || (byStage[r.stage] = [])).push(r);
+
+  const body = `
+<div class="page-header"><h1 class="page-title">Debt Collection</h1>
+  <a class="btn" href="/app/debts/new">+ New Debt</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="muted" style="font-size:0.72rem;text-transform:uppercase">Total outstanding · ${items.length} active</div>
+  <div style="font-size:1.8rem;font-weight:800;color:var(--red)">${fmtMoney(totalOutstanding)}</div>
+</div>
+<div class="grid" style="gap:1rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+  ${DEBT_STAGE_ORDER.map(stage => {
+    const list = byStage[stage] || [];
+    if (list.length === 0) return '';
+    const stageTotal = list.reduce((s, r: any) => s + Number(r.current_balance || 0), 0);
+    return `<div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between">
+        <span>${esc(stage.replace(/_/g, ' '))}</span>
+        <span class="muted">${list.length}</span>
+      </div>
+      <div class="muted" style="font-size:0.75rem">${fmtMoney(stageTotal)}</div>
+      ${list.map((r: any) => `<div style="padding:0.5rem 0;border-top:1px solid var(--border);font-size:0.85rem">
+        <a href="/app/debts/${esc(r.id)}">${esc(r.account_name)}</a>
+        <div class="muted" style="font-size:0.75rem">${esc(r.client_name || '—')} · ${fmtMoney(r.current_balance)}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join('')}
+</div>
+${items.length === 0 ? '<div class="empty-state">No active debts.</div>' : ''}`;
+  return c.html(shell({ title: 'Debt Collection', activeNav: 'debt-collection', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Audit-log helper — call from any mutation to record an event ───
+// Exported for future use; the existing CRUD routes will pick it up in a
+// follow-up that adds before/after hooks. For now, /app/audit reads the
+// table whether or not it has rows yet.
+export async function logAudit(env: Env, companyId: string, userId: string | null, params: {
+  action: string; entity_type: string; entity_id?: string; description?: string; metadata?: any;
+}): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO audit_log (id, company_id, user_id, action, entity_type, entity_id, description, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(uuid(), companyId, userId, params.action, params.entity_type,
+            params.entity_id || null, params.description || null,
+            params.metadata ? JSON.stringify(params.metadata) : null).run();
+  } catch { /* audit must never throw — it's a side-effect */ }
+}
+
 export default app;
