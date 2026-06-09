@@ -165,8 +165,13 @@ function renderNav(brand: string, active?: string): string {
     ${item('/app/dashboard', 'Dashboard', 'dashboard')}
     ${item('/app/expenses', 'Expenses', 'expenses')}
     ${item('/app/invoices', 'Invoices', 'invoices')}
+    ${item('/app/bills', 'Bills', 'bills')}
+    ${item('/app/quotes', 'Quotes', 'quotes')}
     ${item('/app/clients', 'Clients', 'clients')}
     ${item('/app/vendors', 'Vendors', 'vendors')}
+    ${item('/app/projects', 'Projects', 'projects')}
+    ${item('/app/time', 'Time', 'time')}
+    ${item('/app/employees', 'Employees', 'employees')}
     ${item('/app/mileage', 'Mileage', 'mileage')}
     <a href="/auth/logout" class="btn-nav">Sign out</a>
   </div>

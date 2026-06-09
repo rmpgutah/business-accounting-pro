@@ -23,6 +23,10 @@ import { clientFormPage } from './ui/client-form';
 import { vendorFormPage } from './ui/vendor-form';
 import { mileageFormPage } from './ui/mileage-form';
 import { invoiceFormPage } from './ui/invoice-form';
+import { employeeFormPage } from './ui/employee-form';
+import { timeFormPage } from './ui/time-form';
+import { projectFormPage } from './ui/project-form';
+import { documentFormPage } from './ui/document-form';
 
 export interface Env {
   DB: D1Database;
@@ -235,6 +239,226 @@ app.get('/app/vendors', async (c) => listingPage(c, 'Vendors', 'vendors', `
   (r: any) => [`<a href="/app/vendors/${esc(r.id)}">${esc(r.name)}</a>`, esc(r.email || '—'), esc(r.phone || '—'), esc(r.status)],
   '/app/vendors/new',
 ));
+
+// ─── Bills (AP) listing + form ────────────────────────────
+app.get('/app/bills', async (c) => listingPage(c, 'Bills', 'bills', `
+  SELECT b.id, b.bill_number, b.date, b.due_date, b.status, b.total, b.amount_paid,
+         v.name as vendor_name
+  FROM bills b
+  LEFT JOIN vendors v ON v.id = b.vendor_id
+  WHERE b.company_id = ? ORDER BY b.date DESC, b.id DESC`,
+  ['#', 'Vendor', 'Date', 'Due', 'Status', 'Total'],
+  (r: any) => [
+    `<a href="/app/bills/${esc(r.id)}">${esc(r.bill_number || r.id.slice(0, 8))}</a>`,
+    esc(r.vendor_name || '—'),
+    fmtDate(r.date), fmtDate(r.due_date),
+    `<span class="badge ${r.status === 'paid' ? 'badge-green' : r.status === 'overdue' ? 'badge-red' : 'badge-amber'}">${esc(r.status)}</span>`,
+    fmtMoney(r.total),
+  ],
+  '/app/bills/new',
+));
+
+// ─── Quotes listing + form ────────────────────────────────
+app.get('/app/quotes', async (c) => listingPage(c, 'Quotes', 'quotes', `
+  SELECT q.id, q.quote_number, q.date, q.expires_date, q.status, q.total,
+         c.name as client_name
+  FROM quotes q
+  LEFT JOIN clients c ON c.id = q.client_id
+  WHERE q.company_id = ? ORDER BY q.date DESC, q.id DESC`,
+  ['#', 'Client', 'Date', 'Expires', 'Status', 'Total'],
+  (r: any) => [
+    `<a href="/app/quotes/${esc(r.id)}">${esc(r.quote_number || r.id.slice(0, 8))}</a>`,
+    esc(r.client_name || '—'),
+    fmtDate(r.date), fmtDate(r.expires_date),
+    `<span class="badge ${r.status === 'accepted' ? 'badge-green' : r.status === 'declined' ? 'badge-red' : 'badge-blue'}">${esc(r.status)}</span>`,
+    fmtMoney(r.total),
+  ],
+  '/app/quotes/new',
+));
+
+// ─── Projects listing + form ──────────────────────────────
+app.get('/app/projects', async (c) => listingPage(c, 'Projects', 'projects', `
+  SELECT p.id, p.name, p.status, p.budget, p.start_date, p.end_date,
+         c.name as client_name
+  FROM projects p
+  LEFT JOIN clients c ON c.id = p.client_id
+  WHERE p.company_id = ? ORDER BY p.name`,
+  ['Name', 'Client', 'Status', 'Budget', 'Dates'],
+  (r: any) => [
+    `<a href="/app/projects/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.client_name || '—'),
+    `<span class="badge">${esc(r.status)}</span>`,
+    fmtMoney(r.budget),
+    esc(fmtDate(r.start_date)) + (r.end_date ? ' → ' + esc(fmtDate(r.end_date)) : ''),
+  ],
+  '/app/projects/new',
+));
+
+// ─── Time entries listing + form ──────────────────────────
+app.get('/app/time', async (c) => listingPage(c, 'Time', 'time', `
+  SELECT t.id, t.date, t.duration_minutes, t.description, t.is_billable, t.is_invoiced, t.hourly_rate,
+         e.name as employee_name, p.name as project_name, c.name as client_name
+  FROM time_entries t
+  LEFT JOIN employees e ON e.id = t.employee_id
+  LEFT JOIN projects p ON p.id = t.project_id
+  LEFT JOIN clients c ON c.id = t.client_id
+  WHERE t.company_id = ? ORDER BY t.date DESC LIMIT 300`,
+  ['Date', 'Employee', 'Project', 'Hours', 'Rate', 'Billable'],
+  (r: any) => [
+    fmtDate(r.date),
+    `<a href="/app/time/${esc(r.id)}">${esc(r.employee_name || '—')}</a>`,
+    esc(r.project_name || r.client_name || '—'),
+    String(((r.duration_minutes || 0) / 60).toFixed(2)),
+    fmtMoney(r.hourly_rate),
+    r.is_invoiced ? '✓ inv.' : r.is_billable ? '✓' : '—',
+  ],
+  '/app/time/new',
+));
+
+// ─── Employees listing + form ─────────────────────────────
+app.get('/app/employees', async (c) => listingPage(c, 'Employees', 'employees', `
+  SELECT id, name, email, role, pay_rate, pay_type, status FROM employees
+  WHERE company_id = ? ORDER BY name`,
+  ['Name', 'Email', 'Role', 'Pay'],
+  (r: any) => [
+    `<a href="/app/employees/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.email || '—'),
+    esc(r.role || '—'),
+    fmtMoney(r.pay_rate) + ' / ' + esc(r.pay_type || 'hourly'),
+  ],
+  '/app/employees/new',
+));
+
+// ─── Bills new/edit/show pages ────────────────────────────
+const BILL_DOC_CFG = {
+  kind: 'bill' as const,
+  pluralLabel: 'Bills (AP)',
+  navKey: 'bills',
+  partyLabel: 'Vendor' as const,
+  partyField: 'vendor_id' as const,
+  parties: [] as Array<{ id: string; name: string }>,
+  statusOptions: ['open', 'paid', 'overdue', 'void'],
+  numberLabel: 'Bill #',
+  secondaryDateLabel: 'Due Date',
+  secondaryDateField: 'due_date' as const,
+};
+app.get('/app/bills/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const vendors = await c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(documentFormPage(null, [],
+    { ...BILL_DOC_CFG, parties: (vendors.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/bills/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [bill, lines, vendors] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM bills WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM bill_line_items WHERE bill_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (bill.results as any[])?.[0];
+  if (!row) return c.notFound();
+  // Project the bill_number column onto generic 'number' field for the form.
+  const normalized = { ...row, number: row.bill_number };
+  return c.html(documentFormPage(normalized, (lines.results as any) || [],
+    { ...BILL_DOC_CFG, parties: (vendors.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+
+// ─── Quotes new/edit/show pages ───────────────────────────
+const QUOTE_DOC_CFG = {
+  kind: 'quote' as const,
+  pluralLabel: 'Quotes',
+  navKey: 'quotes',
+  partyLabel: 'Client' as const,
+  partyField: 'client_id' as const,
+  parties: [] as Array<{ id: string; name: string }>,
+  statusOptions: ['draft', 'sent', 'accepted', 'declined', 'expired'],
+  numberLabel: 'Quote #',
+  secondaryDateLabel: 'Expires',
+  secondaryDateField: 'expires_date' as const,
+};
+app.get('/app/quotes/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const clients = await c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(documentFormPage(null, [],
+    { ...QUOTE_DOC_CFG, parties: (clients.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/quotes/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [quote, lines, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM quotes WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (quote.results as any[])?.[0];
+  if (!row) return c.notFound();
+  const normalized = { ...row, number: row.quote_number };
+  return c.html(documentFormPage(normalized, (lines.results as any) || [],
+    { ...QUOTE_DOC_CFG, parties: (clients.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+
+// ─── Projects new/edit pages ──────────────────────────────
+app.get('/app/projects/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const clients = await c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(projectFormPage(null, (clients.results as any) || [], new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/projects/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [proj, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM projects WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (proj.results as any[])?.[0];
+  if (!row) return c.notFound();
+  return c.html(projectFormPage(row, (clients.results as any) || [], new Date().toISOString().slice(0, 10)));
+});
+
+// ─── Time entries new/edit pages ──────────────────────────
+app.get('/app/time/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const [emps, projects, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT id, name, pay_rate FROM employees WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  return c.html(timeFormPage(null,
+    (emps.results as any) || [],
+    (projects.results as any) || [],
+    (clients.results as any) || [],
+    new Date().toISOString().slice(0, 10),
+  ));
+});
+app.get('/app/time/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [entry, emps, projects, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM time_entries WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT id, name, pay_rate FROM employees WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (entry.results as any[])?.[0];
+  if (!row) return c.notFound();
+  return c.html(timeFormPage(row,
+    (emps.results as any) || [],
+    (projects.results as any) || [],
+    (clients.results as any) || [],
+    new Date().toISOString().slice(0, 10),
+  ));
+});
+
+// ─── Employees new/edit pages ─────────────────────────────
+app.get('/app/employees/new', (c) => c.html(employeeFormPage(null)));
+app.get('/app/employees/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const row = await c.env.DB.prepare('SELECT * FROM employees WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!row) return c.notFound();
+  return c.html(employeeFormPage(row));
+});
 app.get('/app/mileage', async (c) => listingPage(c, 'Mileage', 'mileage', `
   SELECT id, trip_date, purpose, miles, deduction_amount, is_billable, billed_invoice_id
   FROM mileage_log WHERE company_id = ? ORDER BY trip_date DESC LIMIT 200`,
@@ -813,6 +1037,191 @@ app.delete('/api/invoices/:id', async (c) => {
   ]);
   return c.json({ ok: true });
 });
+
+// ─── Employees CRUD ─────────────────────────────────────────
+const EMP_FIELDS = ['name', 'email', 'phone', 'role', 'pay_rate', 'pay_type', 'hire_date', 'status', 'notes'];
+app.post('/api/employees', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  if (!b.name) return c.json({ error: 'Name is required' }, 400);
+  const id = uuid();
+  await c.env.DB.prepare(
+    `INSERT INTO employees (id, company_id, ${EMP_FIELDS.join(',')}) VALUES (?, ?, ${EMP_FIELDS.map(() => '?').join(',')})`
+  ).bind(id, cid, ...EMP_FIELDS.map(f => b[f] ?? null)).run();
+  return c.json({ ok: true, id });
+});
+app.put('/api/employees/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  const sets = EMP_FIELDS.map(f => `${f} = ?`).join(', ');
+  const r = await c.env.DB.prepare(
+    `UPDATE employees SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+  ).bind(...EMP_FIELDS.map(f => b[f] ?? null), c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/api/employees/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE time_entries SET employee_id = NULL WHERE employee_id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('DELETE FROM employees WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ─── Projects CRUD ──────────────────────────────────────────
+const PROJECT_FIELDS = ['client_id', 'name', 'description', 'status', 'budget', 'budget_type', 'start_date', 'end_date', 'hourly_rate'];
+app.post('/api/projects', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  if (!b.name) return c.json({ error: 'Name is required' }, 400);
+  const id = uuid();
+  await c.env.DB.prepare(
+    `INSERT INTO projects (id, company_id, ${PROJECT_FIELDS.join(',')}) VALUES (?, ?, ${PROJECT_FIELDS.map(() => '?').join(',')})`
+  ).bind(id, cid, ...PROJECT_FIELDS.map(f => b[f] ?? null)).run();
+  return c.json({ ok: true, id });
+});
+app.put('/api/projects/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  const sets = PROJECT_FIELDS.map(f => `${f} = ?`).join(', ');
+  const r = await c.env.DB.prepare(
+    `UPDATE projects SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+  ).bind(...PROJECT_FIELDS.map(f => b[f] ?? null), c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/api/projects/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE expenses SET project_id = NULL WHERE project_id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('UPDATE time_entries SET project_id = NULL WHERE project_id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('DELETE FROM projects WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ─── Time entries CRUD ──────────────────────────────────────
+const TIME_FIELDS = ['employee_id', 'project_id', 'client_id', 'date', 'duration_minutes',
+  'description', 'is_billable', 'hourly_rate'];
+app.post('/api/time', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  if (!b.employee_id || !b.date || !(b.duration_minutes > 0)) {
+    return c.json({ error: 'Employee, date, and a non-zero duration are required' }, 400);
+  }
+  const id = uuid();
+  await c.env.DB.prepare(
+    `INSERT INTO time_entries (id, company_id, ${TIME_FIELDS.join(',')}) VALUES (?, ?, ${TIME_FIELDS.map(() => '?').join(',')})`
+  ).bind(id, cid, ...TIME_FIELDS.map(f => b[f] ?? null)).run();
+  return c.json({ ok: true, id });
+});
+app.put('/api/time/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  const sets = TIME_FIELDS.map(f => `${f} = ?`).join(', ');
+  const r = await c.env.DB.prepare(
+    `UPDATE time_entries SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+  ).bind(...TIME_FIELDS.map(f => b[f] ?? null), c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/api/time/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  await c.env.DB.prepare('DELETE FROM time_entries WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).run();
+  return c.json({ ok: true });
+});
+
+// ─── Bills CRUD ─────────────────────────────────────────────
+app.post('/api/bills', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'bills', 'bill_line_items', null);
+});
+app.put('/api/bills/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'bills', 'bill_line_items', c.req.param('id'));
+});
+app.delete('/api/bills/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const id = c.req.param('id');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM bill_line_items WHERE bill_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM bills WHERE id = ? AND company_id = ?').bind(id, cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ─── Quotes CRUD ────────────────────────────────────────────
+app.post('/api/quotes', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'quotes', 'quote_line_items', null);
+});
+app.put('/api/quotes/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'quotes', 'quote_line_items', c.req.param('id'));
+});
+app.delete('/api/quotes/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const id = c.req.param('id');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM quote_line_items WHERE quote_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM quotes WHERE id = ? AND company_id = ?').bind(id, cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// Shared bills/quotes create-or-update. The two entities differ only in
+// table name, line-item table name, party FK column (vendor_id / client_id),
+// secondary date column (due_date / expires_date), and number column
+// (bill_number / quote_number) — everything else is identical.
+async function saveDoc(c: any, cid: string, table: 'bills' | 'quotes', linesTable: string, idOrNull: string | null): Promise<Response> {
+  const b: any = await c.req.json();
+  const partyField = table === 'bills' ? 'vendor_id' : 'client_id';
+  const numberField = table === 'bills' ? 'bill_number' : 'quote_number';
+  const secondaryDateField = table === 'bills' ? 'due_date' : 'expires_date';
+  if (!b[partyField]) return c.json({ error: (table === 'bills' ? 'Vendor' : 'Client') + ' is required' }, 400);
+  const lines: any[] = Array.isArray(b.lines) ? b.lines : [];
+  if (lines.length === 0) return c.json({ error: 'At least one line item is required' }, 400);
+  const { subtotal, tax, total } = computeInvoiceTotals(lines, Number(b.shipping_amount || 0), Number(b.discount || 0));
+
+  const id = idOrNull || uuid();
+  const stmts: D1PreparedStatement[] = [];
+  if (idOrNull) {
+    stmts.push(c.env.DB.prepare(`
+      UPDATE ${table} SET ${partyField} = ?, ${numberField} = ?, date = ?, ${secondaryDateField} = ?, status = ?,
+        subtotal = ?, tax_amount = ?, shipping_amount = ?, discount = ?, total = ?,
+        currency = ?, notes = ?, terms = ?, updated_at = datetime('now')
+      WHERE id = ? AND company_id = ?
+    `).bind(
+      b[partyField], b[numberField] || null, b.date, b[secondaryDateField] || null, b.status || (table === 'bills' ? 'open' : 'draft'),
+      subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+      b.currency || 'USD', b.notes || null, b.terms || null, id, cid,
+    ));
+    stmts.push(c.env.DB.prepare(`DELETE FROM ${linesTable} WHERE ${table === 'bills' ? 'bill_id' : 'quote_id'} = ?`).bind(id));
+  } else {
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO ${table} (id, company_id, ${partyField}, ${numberField}, date, ${secondaryDateField}, status,
+        subtotal, tax_amount, shipping_amount, discount, total, amount_paid, currency, notes, terms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+    `).bind(
+      id, cid, b[partyField], b[numberField] || null, b.date, b[secondaryDateField] || null, b.status || (table === 'bills' ? 'open' : 'draft'),
+      subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+      b.currency || 'USD', b.notes || null, b.terms || null,
+    ));
+  }
+  lines.forEach((l, i) => {
+    const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+    const taxA = amt * (Number(l.tax_rate || 0) / 100);
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO ${linesTable} (id, ${table === 'bills' ? 'bill_id' : 'quote_id'}, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+      Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+  });
+  await c.env.DB.batch(stmts);
+  return c.json({ ok: true, id, total });
+}
 
 function computeInvoiceTotals(lines: Array<any>, shipping: number, discount: number) {
   let subtotal = 0, tax = 0;
