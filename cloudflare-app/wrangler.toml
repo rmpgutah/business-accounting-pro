@@ -15,8 +15,11 @@ compatibility_date = "2026-06-01"
 # auth module's password verification path does.
 compatibility_flags = ["nodejs_compat"]
 
-# Production route. The Worker handles every path on the subdomain so it can
-# serve both the HTML UI and the /api/* endpoints from one origin (no CORS).
+# Production route. We use a Worker Route + a manually-added AAAA DNS record
+# (`accounting` → `100::`, proxied) instead of a Custom Domain because the
+# Custom Domain path on this account left the Workers-managed DNS record in
+# a stuck state where the domain was "enabled" but DNS never served. The
+# Route + manual DNS combo is the deterministic alternative.
 routes = [
   { pattern = "accounting.rmpgutah.us/*", zone_name = "rmpgutah.us" },
 ]
@@ -27,7 +30,7 @@ routes = [
 [[d1_databases]]
 binding = "DB"
 database_name = "bap_db"
-database_id = "REPLACE_WITH_D1_ID_AFTER_wrangler_d1_create"
+database_id = "9d4e8ec2-09fa-483f-9270-48bda67ca4cb"
 
 # R2 bucket for receipt uploads and desktop backup payloads. Replace bucket name
 # if you prefer a different one; create with `wrangler r2 bucket create bap-files`.
@@ -39,7 +42,7 @@ bucket_name = "bap-files"
 # with `wrangler kv:namespace create SESSIONS` and paste the ID.
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "REPLACE_WITH_KV_ID_AFTER_wrangler_kv_namespace_create"
+id = "80d2753794c3434aa35a3c39d12e3fdd"
 
 # Secrets — set via `wrangler secret put <NAME>`:
 #   JWT_SECRET         — signing key for auth tokens (32+ random bytes)
