@@ -10,6 +10,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ChevronLeft, Edit, DollarSign, TrendingDown, Trash2, Plus, Download, RefreshCw, Pencil, X, Save, SkipForward } from 'lucide-react';
 import api from '../../lib/api';
+import { formatPaymentMethod } from '../../lib/format';
 import { useToast } from '../../components/ToastProvider';
 import AmortizationChart from './AmortizationChart';
 import RelatedPanel from '../../components/RelatedPanel';

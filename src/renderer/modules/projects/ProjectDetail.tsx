@@ -155,7 +155,17 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
              ORDER BY te.date DESC`,
             [cid, projectId]
           ),
-          api.query('expenses', { company_id: cid, project_id: projectId }),
+          // CLAUDE.md: db:query returns flat rows — use rawQuery + JOINs so the
+          // expenses tab shows Category and Vendor names instead of "--".
+          api.rawQuery(
+            `SELECT e.*, c.name as category_name, v.name as vendor_name
+             FROM expenses e
+             LEFT JOIN categories c ON c.id = e.category_id
+             LEFT JOIN vendors v ON v.id = e.vendor_id
+             WHERE e.company_id = ? AND e.project_id = ?
+             ORDER BY e.date DESC`,
+            [cid, projectId]
+          ),
           api.query('invoices', { company_id: cid }),
           api.query('invoice_line_items', { project_id: projectId }),
         ]);
@@ -238,6 +248,32 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
     }
   };
 
+  // ─── Create Invoice from Billable Expenses ─────────────
+  // Pulls header-billable expenses AND per-line billable items for this
+  // project into an invoice prefill, applying each source's markup_pct.
+  const handleCreateInvoiceFromExpenses = async () => {
+    if (!project?.id || !activeCompany) return;
+    setInvoiceError(null);
+    setCreatingInvoice(true);
+    try {
+      const result = await api.invoiceFromBillableExpenses({
+        project_id: project.id,
+        company_id: activeCompany.id,
+      });
+      if (result?.error) {
+        setInvoiceError(result.error);
+        return;
+      }
+      localStorage.setItem('invoiceFormPrefill', JSON.stringify(result));
+      sessionStorage.setItem('nav:invoiceNew', '1');
+      nav.goTo('invoicing');
+    } catch (err: any) {
+      setInvoiceError(err?.message ?? 'Failed to create invoice from billable expenses.');
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
+
   // ─── Loading State ────────────────────────────────────
   if (loading) {
     return (
@@ -306,6 +342,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           >
             <FilePlus size={13} />
             {creatingInvoice ? 'Building...' : 'Create Invoice from Time'}
+          </button>
+          <button
+            onClick={handleCreateInvoiceFromExpenses}
+            disabled={creatingInvoice}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-accent-income text-white text-xs font-bold uppercase hover:opacity-90 disabled:opacity-50"
+            style={{ borderRadius: '6px' }}
+            title="Bundle billable expense items into a new invoice for this project's client">
+            <FilePlus size={13} />
+            {creatingInvoice ? 'Building...' : 'Create Invoice from Expenses'}
           </button>
           <button
             onClick={() => onEdit(project.id)}
@@ -520,10 +565,10 @@ const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => 
                 {exp.description || '--'}
               </td>
               <td className="text-text-secondary text-xs">
-                {exp.category || '--'}
+                {exp.category_name || exp.category || '--'}
               </td>
               <td className="text-text-secondary text-xs">
-                {exp.vendor || '--'}
+                {exp.vendor_name || exp.vendor || '--'}
               </td>
               <td className="text-right font-mono text-xs text-accent-expense">
                 {formatCurrency(exp.amount ?? 0)}

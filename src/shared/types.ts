@@ -181,6 +181,18 @@ export interface Expense {
   recurring_template_id: string | null;
   tags: string[];
   custom_fields: Record<string, any>;
+  // Location / markup (DB columns that the form reads & writes).
+  merchant_location?: string;
+  geo_location_name?: string;
+  markup_pct?: number;
+  // Shipping & Handling. shipping_amount/shipping_tax_amount are added on top
+  // of amount+tax_amount for the grand total (see expenseGrandTotal).
+  shipping_amount?: number;
+  shipping_tax_amount?: number;
+  shipping_speed?: string;
+  shipping_taxable?: number;
+  shipping_scope?: 'order' | 'item';
+  shipping_line_ref?: string | null;
   created_at: string;
   updated_at: string;
 }
