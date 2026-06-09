@@ -20,6 +20,7 @@ function Control({ opt }: { opt: CustomizationOption }) {
     const on = Boolean(value);
     return (
       <button
+        type="button"
         onClick={() => setValue(key, !on)}
         className="relative inline-flex items-center"
         style={{
@@ -29,8 +30,10 @@ function Control({ opt }: { opt: CustomizationOption }) {
           background: on ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)',
           border: '1px solid var(--color-border-primary)',
           transition: 'background 0.15s',
+          cursor: 'pointer',
         }}
         aria-pressed={on}
+        aria-label={opt.label}
         title={opt.id}
       >
         <span
@@ -51,7 +54,7 @@ function Control({ opt }: { opt: CustomizationOption }) {
     return (
       <select
         className="block-input text-xs"
-        value={String(value)}
+        value={String(value ?? opt.default)}
         onChange={(e) => setValue(key, e.target.value)}
         style={{ maxWidth: 180 }}
       >
@@ -64,37 +67,79 @@ function Control({ opt }: { opt: CustomizationOption }) {
     );
   }
   if (opt.type === 'number') {
+    // Clamp to descriptor min/max on commit so invalid values can't sneak in
+    // via keyboard or paste. The intermediate edit state is allowed (browser
+    // accepts the typed digits) — clamping happens on the resolved number.
+    const commit = (raw: string) => {
+      let n = Number(raw);
+      if (!Number.isFinite(n)) n = Number(opt.default);
+      if (typeof opt.min === 'number' && n < opt.min) n = opt.min;
+      if (typeof opt.max === 'number' && n > opt.max) n = opt.max;
+      setValue(key, n);
+    };
     return (
       <input
         type="number"
         className="block-input text-xs"
-        value={Number(value)}
+        value={Number(value ?? opt.default)}
         min={opt.min}
         max={opt.max}
         step={opt.step}
-        onChange={(e) => setValue(key, Number(e.target.value))}
+        onChange={(e) => commit(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
         style={{ maxWidth: 100 }}
       />
     );
   }
   if (opt.type === 'color') {
+    // Guard against undefined — controlled <input type="color"> must have a
+    // valid 7-char hex string at all times to avoid React's controlled/
+    // uncontrolled warning.
+    const v = typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
+      ? value
+      : String(opt.default);
     return (
-      <input
-        type="color"
-        value={String(value)}
-        onChange={(e) => setValue(key, e.target.value)}
-        style={{ width: 34, height: 26, borderRadius: 6, background: 'transparent', border: 'none' }}
-      />
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={v}
+          onChange={(e) => setValue(key, e.target.value)}
+          style={{ width: 34, height: 26, borderRadius: 6, background: 'transparent', border: 'none', cursor: 'pointer' }}
+          aria-label={opt.label}
+        />
+        <span className="text-[10px] font-mono text-text-muted">{v}</span>
+      </div>
     );
   }
   return (
     <input
       type="text"
       className="block-input text-xs"
-      value={String(value ?? '')}
+      value={String(value ?? opt.default ?? '')}
       onChange={(e) => setValue(key, e.target.value)}
       style={{ maxWidth: 180 }}
     />
+  );
+}
+
+// "Edited" pill — surfaces which rows have been overridden from default.
+function EditedPill({ onReset }: { onReset: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReset}
+      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5"
+      style={{
+        borderRadius: 4,
+        background: 'rgba(96,165,250,0.12)',
+        color: 'var(--color-accent-blue)',
+        border: '1px solid rgba(96,165,250,0.25)',
+        cursor: 'pointer',
+      }}
+      title="Edited — click to reset this option"
+    >
+      Edited ↺
+    </button>
   );
 }
 
@@ -102,7 +147,28 @@ export default function CustomizationCenter() {
   const [activeSection, setActiveSection] = useState(SECTIONS[0]?.section ?? '');
   const [query, setQuery] = useState('');
   const resetSection = useCustomizationStore((s) => s.resetSection);
-  const overrideCount = useCustomizationStore((s) => Object.keys(s.values).length);
+  const resetOne = useCustomizationStore((s) => s.reset);
+  const overrides = useCustomizationStore((s) => s.values);
+  const overrideCount = Object.keys(overrides).length;
+
+  // Per-section override counts for the rail badge — computed once per
+  // overrides change rather than per render.
+  const sectionOverrideCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const k of Object.keys(overrides)) {
+      const dot = k.indexOf('.');
+      if (dot < 0) continue;
+      const sec = k.slice(0, dot);
+      m[sec] = (m[sec] || 0) + 1;
+    }
+    return m;
+  }, [overrides]);
+
+  const resetAll = () => {
+    if (!overrideCount) return;
+    if (!confirm(`Reset all ${overrideCount} customized option${overrideCount === 1 ? '' : 's'} back to defaults?`)) return;
+    useCustomizationStore.setState({ values: {} });
+  };
 
   const section = useMemo(
     () => SECTIONS.find((s) => s.section === activeSection) ?? SECTIONS[0],
@@ -147,7 +213,22 @@ export default function CustomizationCenter() {
             }}
           >
             <span className="truncate">{s.label}</span>
-            <span className="text-[10px] text-text-muted ml-2">{s.options.length}</span>
+            <span className="flex items-center gap-1.5 ml-2">
+              {sectionOverrideCounts[s.section] ? (
+                <span
+                  className="text-[9px] font-bold px-1 py-0.5"
+                  style={{
+                    borderRadius: 4,
+                    background: 'rgba(96,165,250,0.15)',
+                    color: 'var(--color-accent-blue)',
+                  }}
+                  title={`${sectionOverrideCounts[s.section]} customized in this section`}
+                >
+                  {sectionOverrideCounts[s.section]}
+                </span>
+              ) : null}
+              <span className="text-[10px] text-text-muted">{s.options.length}</span>
+            </span>
           </button>
         ))}
       </aside>
@@ -176,9 +257,20 @@ export default function CustomizationCenter() {
             <button
               className="block-btn text-xs flex items-center gap-1.5"
               onClick={() => resetSection(section.section)}
+              disabled={!sectionOverrideCounts[section.section]}
               title="Reset this section to defaults"
+              style={{ opacity: sectionOverrideCounts[section.section] ? 1 : 0.45 }}
             >
               <RotateCcw size={12} /> Reset section
+            </button>
+            <button
+              className="block-btn text-xs flex items-center gap-1.5"
+              onClick={resetAll}
+              disabled={!overrideCount}
+              title="Reset every customized option across all sections"
+              style={{ opacity: overrideCount ? 1 : 0.45 }}
+            >
+              <RotateCcw size={12} /> Reset all
             </button>
           </div>
         </div>
@@ -192,23 +284,35 @@ export default function CustomizationCenter() {
               {group} <span className="text-text-muted">({items.length})</span>
             </h2>
             <div className="space-y-1">
-              {items.map((opt) => (
-                <div
-                  key={opt.id}
-                  className="flex items-center justify-between gap-4 px-3 py-2"
-                  style={{ borderRadius: 6 }}
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm text-text-primary truncate">{opt.label}</div>
-                    {opt.description && (
-                      <div className="text-xs text-text-muted truncate">{opt.description}</div>
-                    )}
+              {items.map((opt) => {
+                const k = optionKey(opt.section, opt.id);
+                const isEdited = Object.prototype.hasOwnProperty.call(overrides, k);
+                return (
+                  <div
+                    key={opt.id}
+                    className="flex items-center justify-between gap-4 px-3 py-2"
+                    style={{
+                      borderRadius: 6,
+                      background: isEdited ? 'rgba(96,165,250,0.04)' : 'transparent',
+                    }}
+                  >
+                    <div className="min-w-0 flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm text-text-primary truncate flex items-center gap-2">
+                          {opt.label}
+                          {isEdited && <EditedPill onReset={() => resetOne(k)} />}
+                        </div>
+                        {opt.description && (
+                          <div className="text-xs text-text-muted truncate">{opt.description}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <Control opt={opt} />
+                    </div>
                   </div>
-                  <div className="shrink-0">
-                    <Control opt={opt} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}
