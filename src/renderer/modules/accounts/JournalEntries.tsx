@@ -816,6 +816,17 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
                 <td className="px-4 py-2 text-right font-mono text-xs">{formatCurrency(entry.total_credit ?? 0)}</td>
                 <td className="px-4 py-2 text-center">
                   <div className="flex items-center justify-center gap-1 flex-wrap">
+                    {/* Integrity flags — surface broken entries (unbalanced or
+                        zero-line shells left by the old one-sided reversal bug)
+                        so they can be unposted and deleted. */}
+                    {Math.abs((entry.total_debit ?? 0) - (entry.total_credit ?? 0)) > 0.005 && (
+                      <span title={`Debits ${formatCurrency(entry.total_debit ?? 0)} ≠ credits ${formatCurrency(entry.total_credit ?? 0)} — this entry corrupts the trial balance. Unpost and fix or delete it.`}
+                            className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-expense/20 text-accent-expense" style={{ borderRadius: '4px' }}>⚠ UNBALANCED</span>
+                    )}
+                    {(entry.total_debit ?? 0) === 0 && (entry.total_credit ?? 0) === 0 && (
+                      <span title="No line amounts — likely an empty shell from a failed operation. Safe to delete."
+                            className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-warning/20 text-accent-warning" style={{ borderRadius: '4px' }}>⚠ EMPTY</span>
+                    )}
                     {entry.is_adjusting === 1 && (
                       <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: '4px' }}>ADJ</span>
                     )}
