@@ -267,7 +267,17 @@ const PayrollModule: React.FC = () => {
     const stubFocus = consumeFocusEntity('pay_stub');
     if (stubFocus) {
       setViewStubId(stubFocus.id);
+      return;
     }
+    // payroll_run rows (from the pay-stub entity graph) land on History
+    // with the run expanded. toggleExpandRun (not bare setExpandedRunId)
+    // so the stub rows are actually fetched, not an empty expansion.
+    const runFocus = consumeFocusEntity('payroll_run');
+    if (runFocus) {
+      setActiveTab('history');
+      toggleExpandRun(runFocus.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumeFocusEntity]);
 
   // ─── Expand a run to see pay stubs ────────────────────

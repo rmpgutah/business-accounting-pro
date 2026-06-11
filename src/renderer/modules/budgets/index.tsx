@@ -17,6 +17,7 @@ import BudgetForm from './BudgetForm';
 import BudgetDetail from './BudgetDetail';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 type View = 'list' | 'new' | 'edit' | 'detail';
@@ -99,6 +100,16 @@ const BudgetModule: React.FC = () => {
     setSelectedBudgetId(id);
     setView('detail');
   };
+
+  // Cross-module deep link from RelatedPanel/EntityChip → open budget detail.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('budget');
+    if (focus) {
+      setSelectedBudgetId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   const handleCreated = (id: string) => {
     setSelectedBudgetId(id);

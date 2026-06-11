@@ -36,6 +36,7 @@ const MODULE_FOR: Record<string, string> = {
   fixed_asset: 'fixed-assets',
   bank_account: 'bank-recon',
   bank_transaction: 'bank-recon',
+  loan: 'loans',
   stripe_object: 'stripe-sync',
 };
 
