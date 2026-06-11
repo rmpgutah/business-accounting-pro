@@ -11,11 +11,12 @@ import EmployeeForm from './EmployeeForm';
 import PayrollRunner from './PayrollRunner';
 import PayStubView from './PayStubView';
 import PtoDashboard from './PtoDashboard';
+import HrPortal from './HrPortal';
 import ErrorBanner from '../../components/ErrorBanner';
 import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto';
+type Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto' | 'hr-portal';
 
 interface PayrollRun {
   id: string;
@@ -539,6 +540,7 @@ const PayrollModule: React.FC = () => {
     { key: 'run', label: 'Run Payroll', icon: <Calculator size={14} /> },
     { key: 'history', label: 'History', icon: <FileText size={14} /> },
     { key: 'pto', label: 'PTO', icon: <DollarSign size={14} /> },
+    { key: 'hr-portal', label: 'HR Portal', icon: <Users size={14} /> },
   ];
 
   // ─── Render ─────────────────────────────────────────
@@ -742,6 +744,7 @@ const PayrollModule: React.FC = () => {
 
         {/* PTO Tab */}
         {activeTab === 'pto' && <PtoDashboard />}
+        {activeTab === 'hr-portal' && <HrPortal />}
 
         {/* ─── History Tab ─────────────────────────────── */}
         {activeTab === 'history' && (

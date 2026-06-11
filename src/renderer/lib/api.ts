@@ -671,6 +671,30 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // ── HR PORTAL ──────────────────────────────────────────
+  // (hr:portal-* namespace — hrDirectory/hrEmployeeSnapshot below belong
+  // to the earlier HR analytics wave and hit different handlers.)
+  hrPortalSnapshot: (employeeId: string): Promise<any> =>
+    window.electronAPI.invoke('hr:portal-snapshot', { employee_id: employeeId }),
+  hrPortalDirectory: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:portal-directory'),
+  hrAnnouncementsList: (opts?: { include_expired?: boolean }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:list', opts || {}),
+  hrAnnouncementSave: (payload: { id?: string; title: string; body?: string; category?: string; priority?: string; requires_ack?: boolean; pinned?: boolean; effective_date?: string; expires_date?: string }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:save', payload),
+  hrAnnouncementDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:delete', { id }),
+  hrAnnouncementAck: (announcementId: string, employeeId: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:ack', { announcement_id: announcementId, employee_id: employeeId }),
+  hrAnnouncementAcks: (announcementId: string): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:acks', { announcement_id: announcementId }),
+  hrAdvanceToDebt: (advanceId: string): Promise<{ ok?: boolean; debt_id?: string; already_linked?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:advance-to-debt', { advance_id: advanceId }),
+  hrEmployeeDebtSummary: (): Promise<{ count?: number; total_balance?: number; by_employee?: any[]; error?: string }> =>
+    window.electronAPI.invoke('hr:employee-debt-summary'),
+  hrEmployeeRecordData: (employeeId: string): Promise<any> =>
+    window.electronAPI.invoke('hr:employee-record-data', { employee_id: employeeId }),
+
   // ── DEBT COLLECTION COSTS + EXPENSE ALLOCATIONS ───────
   debtCollectionCosts: (debtId: string): Promise<{ costs?: any[]; summary?: any; error?: string }> =>
     window.electronAPI.invoke('debts:collection-costs', { debt_id: debtId }),

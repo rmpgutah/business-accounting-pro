@@ -9246,6 +9246,36 @@ export function initDatabase(): Database.Database {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
+
+  // ─── HR Portal Wave ───────────────────────────────────────────────
+  // Company announcements board with per-employee acknowledgment
+  // tracking ("read receipts" for policy updates, meeting notices…).
+  `CREATE TABLE IF NOT EXISTS hr_announcements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT DEFAULT '',
+    category TEXT DEFAULT 'general',
+    priority TEXT DEFAULT 'normal',
+    requires_ack INTEGER DEFAULT 0,
+    pinned INTEGER DEFAULT 0,
+    effective_date TEXT,
+    expires_date TEXT,
+    created_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS hr_announcement_acks (
+    id TEXT PRIMARY KEY,
+    announcement_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    acked_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(announcement_id, employee_id)
+  )`,
+  // Employee↔Debt integration: a pay advance can be escalated into a
+  // formal debt-collection case (debtor_type='employee'). Soft FK keeps
+  // the link traceable in both directions.
+  "ALTER TABLE pay_advances ADD COLUMN related_debt_id TEXT",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
