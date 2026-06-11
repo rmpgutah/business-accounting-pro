@@ -24,6 +24,7 @@ import {
 import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
 import ItemizationEditor from './ItemizationEditor';
 import { getExpensesPrefs } from '../../customization/expenses-prefs';
+import AllocationEditor from './AllocationEditor';
 import { useCustomizationStore } from '../../stores/customizationStore';
 import { optionKey } from '../../customization/registry';
 
@@ -87,6 +88,13 @@ interface ExpenseFormData {
   // this expense is treated as the interest-portion bookkeeping of a loan
   // payment and is surfaced on the Loan Detail page.
   related_loan_id: string;
+  // Debt-Collection Expense Wave — soft FK to a debt-collection case.
+  // Collection costs (court fees, process servers, skip tracing…) link to
+  // the debt they were incurred for; recoverable ones can be rolled into
+  // the debtor's balance from the Collection Costs panel on DebtDetail.
+  related_debt_id: string;
+  collection_cost_type: string;
+  is_recoverable: boolean;
   // Merchant / location / markup fields — user-facing columns that existed
   // in the DB but had no form input until now.
   merchant_location: string;
@@ -336,6 +344,9 @@ const emptyForm: ExpenseFormData = {
   discount_amount: '',
   discount_percent: '',
   related_loan_id: '',
+  related_debt_id: '',
+  collection_cost_type: '',
+  is_recoverable: false,
   merchant_location: '',
   geo_location_name: '',
   markup_pct: '',
@@ -411,6 +422,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   // Loan Linkage: loans list for the "Linked to Loan" picker. Only active
   // loans are loaded — closed/refinanced loans rarely need new payment links.
   const [loans, setLoans] = useState<Array<{ id: string; name: string }>>([]);
+  // Debt Linkage: open debt-collection cases for the "Collection Cost"
+  // picker + allocation targets. Settled/written-off cases excluded.
+  const [debts, setDebts] = useState<Array<{ id: string; name: string }>>([]);
+  // Allocation splits — loaded for edits, persisted after the expense saves.
+  const [allocations, setAllocations] = useState<import('./AllocationEditor').AllocationRow[]>([]);
+  const [showAllocations, setShowAllocations] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
@@ -732,6 +749,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         api.rawQuery(`SELECT id, name FROM loans WHERE company_id = ? AND status = 'active' AND (deleted_at IS NULL) ORDER BY name`, [cid])
           .then((r: any) => { if (!cancelled) setLoans(Array.isArray(r) ? r : []); })
           .catch(() => {});
+        // Debt Linkage: open collection cases for the collection-cost picker
+        // and as allocation targets. debtor_name doubles as the display name.
+        api.rawQuery(
+          `SELECT id, debtor_name AS name FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') ORDER BY debtor_name`,
+          [cid]
+        )
+          .then((r: any) => { if (!cancelled) setDebts(Array.isArray(r) ? r : []); })
+          .catch(() => {});
         // Tag autocomplete corpus (#22)
         api.rawQuery('SELECT tags FROM expenses WHERE company_id = ? AND tags IS NOT NULL', [cid])
           .then((rows: any[]) => {
@@ -827,6 +852,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               discount_percent: existing.discount_percent ? String(existing.discount_percent) : '',
               // Loan Linkage — soft FK
               related_loan_id: existing.related_loan_id || '',
+              // Debt-Collection linkage
+              related_debt_id: existing.related_debt_id || '',
+              collection_cost_type: existing.collection_cost_type || '',
+              is_recoverable: !!existing.is_recoverable,
               merchant_location: existing.merchant_location || '',
               geo_location_name: existing.geo_location_name || '',
               markup_pct: existing.markup_pct != null ? String(existing.markup_pct) : '',
@@ -852,6 +881,25 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               const recj = typeof existing.receipts_json === 'string' ? JSON.parse(existing.receipts_json) : (existing.receipts_json || []);
               setExtraReceipts(Array.isArray(recj) ? recj : []);
             } catch { setExtraReceipts([]); }
+            // Load allocation splits for this expense (replace-all model —
+            // whatever is in the editor at save time becomes the truth).
+            api.expenseAllocationsGet(expenseId)
+              .then((allocs: any) => {
+                if (cancelled || !Array.isArray(allocs)) return;
+                if (allocs.length > 0) {
+                  setAllocations(allocs.map((a: any) => ({
+                    target_type: a.target_type || 'custom',
+                    target_id: a.target_id || '',
+                    target_name: a.target_name || '',
+                    percent: Number(a.percent) || 0,
+                    amount: Number(a.amount) || 0,
+                    is_billable: !!a.is_billable,
+                    note: a.note || '',
+                  })));
+                  setShowAllocations(true);
+                }
+              })
+              .catch(() => {});
             if (existing.lost_receipt_affidavit) {
               try { setAffidavit(JSON.parse(existing.lost_receipt_affidavit)); } catch { /* */ }
             }
@@ -953,6 +1001,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
           discount_percent: parseFloat(form.discount_percent) || 0,
           related_loan_id: form.related_loan_id || null,
+          related_debt_id: form.related_debt_id || null,
+          collection_cost_type: form.related_debt_id ? (form.collection_cost_type || 'other') : '',
+          is_recoverable: form.related_debt_id && form.is_recoverable ? 1 : 0,
           merchant_location: form.merchant_location.trim() || null,
           geo_location_name: form.geo_location_name.trim() || null,
           markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
@@ -1157,6 +1208,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         vendor_is_1099: selectedVendor?.is_1099_eligible ? 1 : 0,
         vendor_w9_status: selectedVendor?.w9_status || '',
         lost_receipt_affidavit: requiresAffidavit ? JSON.stringify(affidavit) : '',
+        // Debt-Collection Expense Wave — collection-cost linkage
+        related_debt_id: form.related_debt_id || null,
+        collection_cost_type: form.related_debt_id ? (form.collection_cost_type || 'other') : '',
+        is_recoverable: form.related_debt_id && form.is_recoverable ? 1 : 0,
       };
 
       const lineItemsPayload = useLineItems
@@ -1196,6 +1251,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         isEdit: isEditing,
       });
       if (result?.error) throw new Error(result.error);
+
+      // Persist allocation splits (replace-all). Non-fatal: the expense is
+      // already saved; an allocation failure surfaces as a banner instead
+      // of rolling the whole save back.
+      const savedExpenseId = result?.id || (isEditing ? expenseId : null);
+      if (savedExpenseId && (allocations.length > 0 || showAllocations)) {
+        try {
+          const ar = await api.expenseAllocationsSave(savedExpenseId, allocations);
+          if (ar?.error) {
+            // Stay on the form so the user can correct the split — the
+            // expense row itself saved fine.
+            setErrors([`Expense saved, but allocations failed: ${ar.error}`]);
+            setSaving(false);
+            return;
+          }
+        } catch (e: any) {
+          setErrors([`Expense saved, but allocations failed: ${e?.message || e}`]);
+          setSaving(false);
+          return;
+        }
+      }
 
       // Capture #14: create recurring template if requested
       if (makeRecurring && !isEditing && activeCompany && result?.id) {
@@ -1567,6 +1643,106 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               </details>
             </div>
           )}
+
+          {/* Debt-Collection Expense Wave — link this expense to a debt case
+              as a COLLECTION COST (court fees, process server, skip tracing…).
+              Recoverable costs can be rolled into the debtor's balance from
+              the Collection Costs panel on the Debt Detail page. */}
+          {debts.length > 0 && (
+            <div className="col-span-3">
+              <details className="block-card p-2" style={{ borderRadius: 6 }} open={!!form.related_debt_id}>
+                <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
+                  Collection Cost (Debt Case)
+                  {form.related_debt_id && (
+                    <span className="ml-2 text-accent-blue normal-case font-normal">
+                      {debts.find(d => d.id === form.related_debt_id)?.name || form.related_debt_id}
+                      {form.is_recoverable && <span className="ml-1 text-accent-income">· recoverable</span>}
+                    </span>
+                  )}
+                </summary>
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Debt Case</label>
+                    <select
+                      className="block-input"
+                      value={form.related_debt_id}
+                      onChange={(e) => setForm(p => ({ ...p, related_debt_id: e.target.value }))}
+                    >
+                      <option value="">— Not a collection cost —</option>
+                      {debts.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Cost Type</label>
+                    <select
+                      className="block-input"
+                      value={form.collection_cost_type}
+                      disabled={!form.related_debt_id}
+                      onChange={(e) => setForm(p => ({ ...p, collection_cost_type: e.target.value }))}
+                    >
+                      <option value="">— Select type —</option>
+                      <option value="court_fee">Court Fee</option>
+                      <option value="filing_fee">Filing Fee</option>
+                      <option value="legal_fee">Legal / Attorney Fee</option>
+                      <option value="process_server">Process Server</option>
+                      <option value="skip_tracing">Skip Tracing</option>
+                      <option value="agency_commission">Agency Commission</option>
+                      <option value="credit_report">Credit Report</option>
+                      <option value="postage">Postage / Certified Mail</option>
+                      <option value="travel">Travel</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="self-end pb-1">
+                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none" title="The contract or judgment allows charging this cost back to the debtor">
+                      <input
+                        type="checkbox"
+                        checked={form.is_recoverable}
+                        disabled={!form.related_debt_id}
+                        onChange={(e) => setForm(p => ({ ...p, is_recoverable: e.target.checked }))}
+                        className="accent-accent-blue"
+                      />
+                      <span className="text-text-secondary">Recoverable from debtor</span>
+                    </label>
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
+
+          {/* Expense Allocation Engine — split this expense across clients,
+              projects, debt cases, departments, or custom buckets by percent
+              or fixed amount. Splits persist to expense_allocations after
+              the expense saves; reports aggregate by target. */}
+          <div className="col-span-3">
+            <details
+              className="block-card p-2"
+              style={{ borderRadius: 6 }}
+              open={showAllocations}
+              onToggle={(e) => setShowAllocations((e.target as HTMLDetailsElement).open)}
+            >
+              <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
+                Allocations / Cost Splitting
+                {allocations.length > 0 && (
+                  <span className="ml-2 text-accent-blue normal-case font-normal">
+                    {allocations.length} split{allocations.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </summary>
+              <div className="mt-2">
+                <AllocationEditor
+                  expenseTotal={roundCents(parseFloat(form.amount) || 0)}
+                  rows={allocations}
+                  onChange={setAllocations}
+                  clients={clients}
+                  projects={projects}
+                  debts={debts}
+                />
+              </div>
+            </details>
+          </div>
 
           {/* Line Items Toggle + Editor — full width */}
           <div className="col-span-3">

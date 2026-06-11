@@ -671,6 +671,28 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // ── DEBT COLLECTION COSTS + EXPENSE ALLOCATIONS ───────
+  debtCollectionCosts: (debtId: string): Promise<{ costs?: any[]; summary?: any; error?: string }> =>
+    window.electronAPI.invoke('debts:collection-costs', { debt_id: debtId }),
+  debtApplyRecoverableCosts: (debtId: string): Promise<{ ok?: boolean; applied?: number; count?: number; error?: string }> =>
+    window.electronAPI.invoke('debts:apply-recoverable-costs', { debt_id: debtId }),
+  debtCollectionCostAnalytics: (): Promise<{ by_type?: any[]; by_debt?: any[]; portfolio?: any; error?: string }> =>
+    window.electronAPI.invoke('debts:collection-cost-analytics'),
+  expenseSetRecovery: (payload: { expense_id: string; recovery_status: string; recovered_amount?: number; recovered_date?: string }): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('expenses:set-recovery', payload),
+  expenseAllocationsGet: (expenseId: string): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('expenses:allocations:get', { expense_id: expenseId }),
+  expenseAllocationsSave: (expenseId: string, allocations: any[]): Promise<{ ok?: boolean; count?: number; error?: string }> =>
+    window.electronAPI.invoke('expenses:allocations:save', { expense_id: expenseId, allocations }),
+  expenseAllocationSummary: (opts?: { target_type?: string; from?: string; to?: string }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('expenses:allocation-summary', opts || {}),
+  expenseAllocTemplatesList: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('expense-alloc-templates:list'),
+  expenseAllocTemplateSave: (payload: { id?: string; name: string; splits: any[] }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('expense-alloc-templates:save', payload),
+  expenseAllocTemplateDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('expense-alloc-templates:delete', { id }),
+
   // ── LOAN TRACKING ──────────────────────────────────────
   loansList: (opts?: { status?: string }): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('loans:list', opts || {}),

@@ -9187,6 +9187,65 @@ export function initDatabase(): Database.Database {
   // underlying invoice is hard-deleted, the token becomes dangling and
   // the schema validator flags it as an orphan FK. Idempotent + safe.
   "DELETE FROM invoice_tokens WHERE invoice_id NOT IN (SELECT id FROM invoices)",
+
+  // ─── Debt-Collection Expense Wave ─────────────────────────────────
+  // Soft FK linking an expense to a debt-collection case (mirrors the
+  // related_loan_id pattern). Collection costs — court fees, process
+  // servers, skip tracing, agency commissions — are real expenses that
+  // belong to a specific debt; linking them enables cost-to-collect
+  // ROI per case and (where the jurisdiction allows) rolling
+  // recoverable costs into the debtor's balance.
+  "ALTER TABLE expenses ADD COLUMN related_debt_id TEXT",
+  // What kind of collection cost this is. '' for normal expenses.
+  // court_fee | filing_fee | legal_fee | process_server | skip_tracing |
+  // agency_commission | credit_report | postage | travel | other
+  "ALTER TABLE expenses ADD COLUMN collection_cost_type TEXT DEFAULT ''",
+  // Recoverable = the contract/judgment allows charging this cost back
+  // to the debtor. Recoverable costs can be applied to the debt balance.
+  "ALTER TABLE expenses ADD COLUMN is_recoverable INTEGER DEFAULT 0",
+  // '' | pending | recovered | unrecoverable — tracks whether the cost
+  // was actually collected back from the debtor.
+  "ALTER TABLE expenses ADD COLUMN recovery_status TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN recovered_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN recovered_date TEXT",
+  // Set once the cost has been rolled into debts.fees_accrued so the
+  // apply-recoverable action is idempotent (never double-counts).
+  "ALTER TABLE expenses ADD COLUMN added_to_debt INTEGER DEFAULT 0",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_related_debt ON expenses(related_debt_id)",
+
+  // ─── Expense Allocation Engine ────────────────────────────────────
+  // Split a single expense across multiple targets (clients, projects,
+  // debts, departments, custom buckets) by percent or fixed amount.
+  // Denormalized count on the expense row so lists can show an
+  // allocation indicator without joining.
+  "ALTER TABLE expenses ADD COLUMN allocation_count INTEGER DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS expense_allocations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT NOT NULL,
+    target_type TEXT NOT NULL DEFAULT 'client',
+    target_id TEXT DEFAULT '',
+    target_name TEXT DEFAULT '',
+    percent REAL DEFAULT 0,
+    amount REAL DEFAULT 0,
+    is_billable INTEGER DEFAULT 0,
+    billed_invoice_id TEXT,
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_expense_alloc_expense ON expense_allocations(expense_id)",
+  "CREATE INDEX IF NOT EXISTS idx_expense_alloc_target ON expense_allocations(company_id, target_type, target_id)",
+  // Saved split presets (e.g. "60/40 Office Split") — splits stored as
+  // JSON [{target_type, target_id, target_name, percent}].
+  `CREATE TABLE IF NOT EXISTS expense_allocation_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    splits TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
