@@ -155,7 +155,20 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
              ORDER BY te.date DESC`,
             [cid, projectId]
           ),
-          api.query('expenses', { company_id: cid, project_id: projectId }),
+          // JOIN categories + vendors so the Expenses tab shows NAMES — the
+          // raw expense row only carries category_id/vendor_id FKs, which
+          // left the Category/Vendor columns rendering "--" for every row.
+          api.rawQuery(
+            `SELECT e.*,
+                    c.name AS category,
+                    v.name AS vendor
+             FROM expenses e
+             LEFT JOIN categories c ON c.id = e.category_id
+             LEFT JOIN vendors v ON v.id = e.vendor_id
+             WHERE e.company_id = ? AND e.project_id = ? AND COALESCE(e.deleted_at, '') = ''
+             ORDER BY e.date DESC`,
+            [cid, projectId]
+          ),
           api.query('invoices', { company_id: cid }),
           api.query('invoice_line_items', { project_id: projectId }),
         ]);
@@ -176,10 +189,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         // Time entries already filtered by project in the SQL query
         setTimeEntries(Array.isArray(allTimeEntries) ? allTimeEntries : []);
 
-        const projectExpenses = Array.isArray(allExpenses)
-          ? allExpenses.filter((e: any) => e.project_id === projectId)
-          : [];
-        setExpenses(projectExpenses);
+        // Already scoped to this project by the SQL WHERE clause.
+        setExpenses(Array.isArray(allExpenses) ? allExpenses : []);
 
         // Filter line items by project, then find matching invoices
         const projectLineItems = Array.isArray(allLineItems)
