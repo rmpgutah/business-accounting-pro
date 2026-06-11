@@ -5,6 +5,7 @@ import ExpenseForm from './ExpenseForm';
 import ExpenseDetail from './ExpenseDetail';
 import ExpenseAnalytics from './ExpenseAnalytics';
 import ExpenseInsights from './ExpenseInsights';
+import ExpenseCompliance from './ExpenseCompliance';
 import VendorList from './VendorList';
 import VendorForm from './VendorForm';
 import VendorDetail from './VendorDetail';
@@ -19,7 +20,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'insights' | 'upgrades';
+type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'insights' | 'compliance' | 'upgrades';
 type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -305,6 +306,12 @@ const ExpensesModule: React.FC = () => {
           icon={<Lightbulb size={16} />}
           label="Insights"
           onClick={() => switchTab('insights')}
+        />
+        <TabBtn
+          active={tab === 'compliance'}
+          icon={<ShieldCheck size={16} />}
+          label="Compliance"
+          onClick={() => switchTab('compliance')}
         />
         <TabBtn
           active={tab === 'settings'}
@@ -654,6 +661,7 @@ const ExpensesModule: React.FC = () => {
 
       {tab === 'analytics' && <ExpenseAnalytics />}
       {tab === 'insights' && <ExpenseInsights onViewExpense={handleEditExpense} />}
+      {tab === 'compliance' && <ExpenseCompliance onViewExpense={handleEditExpense} />}
 
       {tab === 'vendors' && vendorView === 'list' && (
         <VendorList
