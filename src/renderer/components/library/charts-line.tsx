@@ -151,6 +151,7 @@ export function LineChartMini({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       className={className}
+      style={{ maxWidth: '100%', height: 'auto' }}
       role="img"
       aria-label={`Line chart, latest ${valueFormat(last)}`}
     >
@@ -245,6 +246,7 @@ export function AreaChartMini({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       className={className}
+      style={{ maxWidth: '100%', height: 'auto' }}
       role="img"
       aria-label={`Area chart, latest ${valueFormat(last)}`}
     >
@@ -313,6 +315,7 @@ export function Sparkline({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       className={className}
+      style={{ maxWidth: '100%', height: 'auto' }}
       role="img"
       aria-label={`Sparkline, latest ${valueFormat(final)}`}
     >
@@ -369,6 +372,7 @@ export function TrendLine({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       className={className}
+      style={{ maxWidth: '100%', height: 'auto' }}
       role="img"
       aria-label={`Trend line ${resolvedLabel}, latest ${valueFormat(final)}`}
     >
@@ -452,8 +456,8 @@ export function MultiSeriesLine({
   const lastB = seriesB[seriesB.length - 1] ?? 0;
 
   return (
-    <div className={className} style={{ width }}>
-      <svg width={width} height={chartH} viewBox={`0 0 ${width} ${chartH}`} role="img" aria-label="Multi-series line chart">
+    <div className={className} style={{ width, maxWidth: '100%' }}>
+      <svg width={width} height={chartH} viewBox={`0 0 ${width} ${chartH}`} style={{ maxWidth: '100%', height: 'auto' }} role="img" aria-label="Multi-series line chart">
         {showGrid &&
           gridLines.map((g) => (
             <line

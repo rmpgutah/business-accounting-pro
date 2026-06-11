@@ -290,7 +290,7 @@ export function ColumnSpark({
   const barW = n > 0 ? (width - gap * (n - 1)) / n : width;
 
   const svg = (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: '100%', height: 'auto' }} aria-hidden="true">
       {values.map((v, i) => {
         const h = Math.max(1, (v / max) * height);
         const x = i * (barW + gap);
