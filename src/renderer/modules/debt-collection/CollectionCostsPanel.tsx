@@ -118,8 +118,13 @@ const CollectionCostsPanel: React.FC<Props> = ({ debtId, onBalanceChanged }) => 
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3" style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-primary)' }}>
-          <Stat label="Total Spend" value={fmt$(summary.total_costs)} />
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3" style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-primary)' }}>
+          <Stat
+            label="Total Spend"
+            value={fmt$(summary.total_costs)}
+            color={summary.over_budget ? '#dc2626' : undefined}
+            title={summary.over_budget ? `OVER BUDGET — cap is ${fmt$(summary.expense_budget)}` : undefined}
+          />
           <Stat label="Recoverable" value={fmt$(summary.recoverable)} color="#16a34a" />
           <Stat label="Applied to Balance" value={fmt$(summary.applied_to_debt)} />
           <Stat label="Recovered" value={fmt$(summary.recovered)} color="#16a34a" />
@@ -129,6 +134,30 @@ const CollectionCostsPanel: React.FC<Props> = ({ debtId, onBalanceChanged }) => 
             color={summary.roi != null && summary.roi < 1 ? '#dc2626' : '#16a34a'}
             title={summary.cost_to_collect_pct != null ? `Cost-to-collect: ${summary.cost_to_collect_pct}% of recovered dollars` : 'No payments collected yet'}
           />
+          {/* Spend budget — click to set/change the cap for this case. */}
+          <button
+            type="button"
+            onClick={async () => {
+              const raw = prompt('Collection spend budget for this case ($, 0 = no cap):', String(summary.expense_budget || 0));
+              if (raw == null) return;
+              const r = await api.debtSetExpenseBudget(debtId, parseFloat(raw) || 0);
+              if (r?.error) toast.error(r.error); else { toast.success('Budget updated'); load(); }
+            }}
+            className="text-left"
+            title="Click to set the collection-spend cap for this case"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <Stat
+              label="Spend Budget"
+              value={summary.expense_budget > 0 ? fmt$(summary.expense_budget) : 'Set cap…'}
+              color={summary.over_budget ? '#dc2626' : undefined}
+            />
+          </button>
+        </div>
+      )}
+      {summary?.over_budget && (
+        <div style={{ padding: '6px 14px', fontSize: 10, fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.08)', borderBottom: '1px solid var(--color-border-primary)' }}>
+          ⚠ Collection spend {fmt$(summary.total_costs)} exceeds this case's budget of {fmt$(summary.expense_budget)} — review before incurring further costs.
         </div>
       )}
 

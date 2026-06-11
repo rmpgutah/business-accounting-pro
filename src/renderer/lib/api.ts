@@ -695,6 +695,28 @@ const api = {
   hrEmployeeRecordData: (employeeId: string): Promise<any> =>
     window.electronAPI.invoke('hr:employee-record-data', { employee_id: employeeId }),
 
+  // ── DEBT WAVE: scoring, action queue, budgets, withholding ──
+  debtScoreAll: (): Promise<{ scored?: number; debts?: any[]; error?: string }> =>
+    window.electronAPI.invoke('debt:score-all'),
+  debtActionQueue: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('debt:action-queue'),
+  debtSetExpenseBudget: (debtId: string, budget: number): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('debt:set-expense-budget', { debt_id: debtId, budget }),
+  debtMarkCostsUnrecoverable: (debtId: string): Promise<{ ok?: boolean; updated?: number; error?: string }> =>
+    window.electronAPI.invoke('debts:mark-costs-unrecoverable', { debt_id: debtId }),
+  expensesBulkLinkDebt: (payload: { expense_ids: string[]; debt_id: string; cost_type?: string; is_recoverable?: boolean }): Promise<{ ok?: boolean; updated?: number; error?: string }> =>
+    window.electronAPI.invoke('expenses:bulk-link-debt', payload),
+  hrWithholdingList: (opts?: { employee_id?: string; debt_id?: string }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:list', opts || {}),
+  hrWithholdingSave: (payload: { id?: string; employee_id: string; debt_id: string; per_pay_amount: number; start_date?: string; agreement_signed_date?: string; notes?: string }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:save', payload),
+  hrWithholdingStop: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:stop', { id }),
+  hrWithholdingRecordDeduction: (payload: { withholding_id: string; amount?: number; pay_date?: string }): Promise<{ ok?: boolean; applied?: number; new_balance?: number; completed?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:record-deduction', payload),
+  hrWithholdingAgreementData: (withholdingId: string): Promise<any> =>
+    window.electronAPI.invoke('hr:withholding:agreement-data', { withholding_id: withholdingId }),
+
   // ── DEBT COLLECTION COSTS + EXPENSE ALLOCATIONS ───────
   debtCollectionCosts: (debtId: string): Promise<{ costs?: any[]; summary?: any; error?: string }> =>
     window.electronAPI.invoke('debts:collection-costs', { debt_id: debtId }),

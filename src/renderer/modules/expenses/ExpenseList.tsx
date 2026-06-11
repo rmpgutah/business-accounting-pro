@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText, Settings, Star, ChevronDown, ChevronRight, Edit, Banknote, CreditCard, Save } from 'lucide-react';
+import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText, Settings, Star, ChevronDown, ChevronRight, Edit, Banknote, CreditCard, Save, Scale } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
@@ -1553,6 +1553,43 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px' }}
           >
             <Edit size={13} /> Bulk Edit
+          </button>
+
+          {/* Debt Wave: bulk-link selected expenses to a debt case as
+              collection costs. Prompts for the case (by debtor name),
+              defaults type 'other' + recoverable. */}
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            disabled={batchLoading}
+            onClick={async () => {
+              try {
+                const debts = await api.rawQuery(
+                  "SELECT id, debtor_name FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') ORDER BY debtor_name",
+                  [activeCompany?.id]
+                );
+                if (!Array.isArray(debts) || debts.length === 0) { alert('No open debt cases.'); return; }
+                const list = debts.map((d: any, i: number) => `${i + 1}. ${d.debtor_name}`).join('\n');
+                const pick = prompt(`Link ${selectedIds.size} expense(s) to which debt case?\n\n${list}\n\nEnter number:`);
+                if (pick == null) return;
+                const idx = parseInt(pick, 10) - 1;
+                if (!(idx >= 0 && idx < debts.length)) { alert('Invalid selection.'); return; }
+                const recoverable = confirm('Mark these costs as RECOVERABLE from the debtor?\n\nOK = recoverable · Cancel = non-recoverable');
+                const r = await api.expensesBulkLinkDebt({
+                  expense_ids: Array.from(selectedIds),
+                  debt_id: (debts[idx] as any).id,
+                  cost_type: 'other',
+                  is_recoverable: recoverable,
+                });
+                if (r?.error) alert(r.error);
+                else { setSelectedIds(new Set()); reload(); }
+              } catch (e: any) {
+                alert(e?.message || 'Bulk link failed');
+              }
+            }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px' }}
+            title="Link selected expenses to a debt-collection case as collection costs"
+          >
+            <Scale size={13} /> Link to Debt
           </button>
 
           {/* Mass status change (feature 25) */}

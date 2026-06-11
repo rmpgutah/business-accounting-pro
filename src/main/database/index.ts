@@ -9276,6 +9276,37 @@ export function initDatabase(): Database.Database {
   // formal debt-collection case (debtor_type='employee'). Soft FK keeps
   // the link traceable in both directions.
   "ALTER TABLE pay_advances ADD COLUMN related_debt_id TEXT",
+
+  // ─── Debt Collections 200 Wave ────────────────────────────────────
+  // Per-case collection-cost budget cap. The Collection Costs panel
+  // warns when linked expense spend exceeds this (0 = no cap).
+  "ALTER TABLE debts ADD COLUMN expense_budget REAL DEFAULT 0",
+  // Collectability score 0-100 (-1 = never scored). Computed by
+  // debt:score-all from age, stage, payment recency, promise history,
+  // and balance size. Persisted so lists can sort without recomputing.
+  "ALTER TABLE debts ADD COLUMN collectability_score REAL DEFAULT -1",
+  "ALTER TABLE debts ADD COLUMN score_updated_at TEXT",
+  // Wage-withholding agreements: employee authorizes a per-paycheck
+  // deduction applied to a specific debt case. Printable agreement form
+  // (generateWageWithholdingAgreementHTML) documents the authorization.
+  `CREATE TABLE IF NOT EXISTS employee_wage_withholdings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    debt_id TEXT NOT NULL,
+    per_pay_amount REAL NOT NULL DEFAULT 0,
+    start_date TEXT,
+    end_date TEXT,
+    total_withheld REAL DEFAULT 0,
+    deduction_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    agreement_signed_date TEXT,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_wage_withholding_employee ON employee_wage_withholdings(employee_id)",
+  "CREATE INDEX IF NOT EXISTS idx_wage_withholding_debt ON employee_wage_withholdings(debt_id)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

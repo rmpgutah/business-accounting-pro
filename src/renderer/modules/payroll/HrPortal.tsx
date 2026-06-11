@@ -15,7 +15,7 @@ import {
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import { useAppStore } from '../../stores/appStore';
-import { generateEmployeeRecordHTML } from '../../lib/print-templates';
+import { generateEmployeeRecordHTML, generateWageWithholdingAgreementHTML } from '../../lib/print-templates';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 interface DirectoryRow {
@@ -42,6 +42,15 @@ const HrPortal: React.FC = () => {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [showCompose, setShowCompose] = useState(false);
   const [compose, setCompose] = useState({ title: '', body: '', category: 'general', priority: 'normal', requires_ack: false, pinned: false });
+
+  // Wage withholdings for the selected employee
+  const [withholdings, setWithholdings] = useState<any[]>([]);
+
+  const loadWithholdings = useCallback(async (empId: string) => {
+    if (!empId) { setWithholdings([]); return; }
+    const r = await api.hrWithholdingList({ employee_id: empId });
+    setWithholdings(Array.isArray(r) ? r : []);
+  }, []);
 
   const loadDirectory = useCallback(async () => {
     const r = await api.hrPortalDirectory();
@@ -74,7 +83,43 @@ const HrPortal: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { if (selectedId) loadSnapshot(selectedId); }, [selectedId, loadSnapshot]);
+  useEffect(() => {
+    if (selectedId) { loadSnapshot(selectedId); loadWithholdings(selectedId); }
+  }, [selectedId, loadSnapshot, loadWithholdings]);
+
+  // Set up a per-paycheck withholding agreement against an employee debt case.
+  const createWithholding = async (debtId: string) => {
+    const raw = prompt('Per-paycheck deduction amount ($):');
+    if (raw == null) return;
+    const amount = parseFloat(raw) || 0;
+    if (amount <= 0) { toast.error('Amount must be positive'); return; }
+    const r = await api.hrWithholdingSave({
+      employee_id: selectedId, debt_id: debtId, per_pay_amount: amount,
+      start_date: new Date().toISOString().slice(0, 10),
+    });
+    if (r?.error) toast.error(r.error);
+    else { toast.success('Withholding agreement created'); loadWithholdings(selectedId); }
+  };
+
+  const recordDeduction = async (w: any) => {
+    if (!confirm(`Record a ${formatCurrency(w.per_pay_amount)} payroll deduction against this debt?`)) return;
+    const r = await api.hrWithholdingRecordDeduction({ withholding_id: w.id });
+    if (r?.error) toast.error(r.error);
+    else {
+      toast.success(r.completed
+        ? `Final deduction of ${formatCurrency(r.applied || 0)} — debt cleared!`
+        : `Deducted ${formatCurrency(r.applied || 0)} · balance ${formatCurrency(r.new_balance || 0)}`);
+      await Promise.all([loadWithholdings(selectedId), loadSnapshot(selectedId)]);
+      api.hrEmployeeDebtSummary().then((s) => { if (s && !s.error) setDebtSummary(s); }).catch(() => {});
+    }
+  };
+
+  const printAgreement = async (w: any) => {
+    const data = await api.hrWithholdingAgreementData(w.id);
+    if (data?.error) { toast.error(data.error); return; }
+    const html = generateWageWithholdingAgreementHTML(data);
+    await api.printPreview(html, `Wage Withholding Agreement — ${data.employee?.name || ''}`);
+  };
 
   const printRecord = async () => {
     if (!selectedId) return;
@@ -221,20 +266,75 @@ const HrPortal: React.FC = () => {
                   )}
                 </div>
               ))}
-              {(snapshot.debts || []).map((d: any) => (
-                <div key={d.id} className="flex items-center justify-between gap-2 text-xs flex-wrap" style={{ padding: '4px 0', borderTop: '1px solid var(--color-border-primary)' }}>
-                  <div>
-                    <span className="font-mono font-bold text-accent-expense">{formatCurrency(d.balance_due)}</span>
-                    <span className="text-text-muted"> debt case · stage {String(d.current_stage || '').replace(/_/g, ' ')} · {formatCurrency(d.payments_made)} repaid</span>
+              {(snapshot.debts || []).map((d: any) => {
+                const hasActiveWithholding = withholdings.some((w) => w.debt_id === d.id && w.status === 'active');
+                return (
+                  <div key={d.id} className="flex items-center justify-between gap-2 text-xs flex-wrap" style={{ padding: '4px 0', borderTop: '1px solid var(--color-border-primary)' }}>
+                    <div>
+                      <span className="font-mono font-bold text-accent-expense">{formatCurrency(d.balance_due)}</span>
+                      <span className="text-text-muted"> debt case · stage {String(d.current_stage || '').replace(/_/g, ' ')} · {formatCurrency(d.payments_made)} repaid</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {!hasActiveWithholding && (d.balance_due || 0) > 0 && (
+                        <button className="block-btn text-[10px]" onClick={() => createWithholding(d.id)} title="Set up a voluntary per-paycheck deduction toward this debt">
+                          Set Up Withholding
+                        </button>
+                      )}
+                      <button
+                        className="block-btn text-[10px] flex items-center gap-1"
+                        onClick={() => { setFocusEntity({ type: 'debt', id: d.id }); setModule('debt-collection'); }}
+                      >
+                        Open Case <ChevronRight size={10} />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    className="block-btn text-[10px] flex items-center gap-1"
-                    onClick={() => { setFocusEntity({ type: 'debt', id: d.id }); setModule('debt-collection'); }}
-                  >
-                    Open Case <ChevronRight size={10} />
-                  </button>
+                );
+              })}
+
+              {/* Wage withholding agreements — per-paycheck deductions
+                  applied to debt cases. Record Deduction posts a debt
+                  payment (method 'garnishment') and auto-completes the
+                  agreement when the balance clears. */}
+              {withholdings.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--color-border-primary)', paddingTop: 8 }}>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted mb-1.5">Wage Withholding Agreements</div>
+                  {withholdings.map((w) => (
+                    <div key={w.id} className="flex items-center justify-between gap-2 text-xs flex-wrap" style={{ padding: '3px 0' }}>
+                      <div>
+                        <span className="font-mono font-bold">{formatCurrency(w.per_pay_amount)}</span>
+                        <span className="text-text-muted">/paycheck · {formatCurrency(w.total_withheld)} withheld over {w.deduction_count || 0} deduction{(w.deduction_count || 0) !== 1 ? 's' : ''}</span>
+                        <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{
+                          borderRadius: 4,
+                          background: w.status === 'active' ? '#16a34a22' : w.status === 'completed' ? '#2563eb22' : '#94a3b822',
+                          color: w.status === 'active' ? '#16a34a' : w.status === 'completed' ? '#60a5fa' : '#94a3b8',
+                        }}>{w.status}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {w.status === 'active' && (
+                          <>
+                            <button className="block-btn-primary text-[10px]" onClick={() => recordDeduction(w)} title="Record this paycheck's deduction as a debt payment">
+                              Record Deduction
+                            </button>
+                            <button
+                              className="block-btn text-[10px]"
+                              onClick={async () => {
+                                if (!confirm('Stop this withholding agreement? The remaining debt stays open.')) return;
+                                await api.hrWithholdingStop(w.id);
+                                loadWithholdings(selectedId);
+                              }}
+                            >
+                              Stop
+                            </button>
+                          </>
+                        )}
+                        <button className="block-btn text-[10px] flex items-center gap-1" onClick={() => printAgreement(w)} title="Print the signed authorization form">
+                          <Printer size={10} /> Agreement
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}

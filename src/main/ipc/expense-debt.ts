@@ -55,7 +55,7 @@ export function registerExpenseDebtIpc(ipcMain: IpcMain, deps: ExpenseDebtIpcDep
       `).all(cid, debt_id) as any[];
 
       const debt = dbi.prepare(
-        'SELECT id, debtor_name, original_amount, payments_made, balance_due, fees_accrued, status FROM debts WHERE id = ? AND company_id = ?'
+        'SELECT id, debtor_name, original_amount, payments_made, balance_due, fees_accrued, status, COALESCE(expense_budget, 0) AS expense_budget FROM debts WHERE id = ? AND company_id = ?'
       ).get(debt_id, cid) as any;
       if (!debt) return { error: 'Debt not found' };
 
@@ -92,6 +92,8 @@ export function registerExpenseDebtIpc(ipcMain: IpcMain, deps: ExpenseDebtIpcDep
           cost_to_collect_pct: costToCollect,
           payments_made: debt.payments_made || 0,
           balance_due: debt.balance_due || 0,
+          expense_budget: debt.expense_budget || 0,
+          over_budget: (debt.expense_budget || 0) > 0 && totalCosts > debt.expense_budget,
         },
       };
     } catch (err: any) {

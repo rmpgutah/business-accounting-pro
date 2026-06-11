@@ -668,6 +668,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         status: 'written_off',
         write_off_reason: writeOffReason.trim(),
       });
+      // Debt Wave: a written-off debt's recoverable collection costs are by
+      // definition unrecoverable — flip every still-pending linked cost so
+      // expense reports stop counting them as future recoveries.
+      await api.debtMarkCostsUnrecoverable(debtId).catch(() => {});
       setShowWriteOff(false);
       setWriteOffReason('');
       triggerRefresh();
