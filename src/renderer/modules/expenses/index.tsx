@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard, Sparkles } from 'lucide-react';
+import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard, Sparkles, Lightbulb } from 'lucide-react';
 import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
 import ExpenseDetail from './ExpenseDetail';
 import ExpenseAnalytics from './ExpenseAnalytics';
+import ExpenseInsights from './ExpenseInsights';
 import VendorList from './VendorList';
 import VendorForm from './VendorForm';
 import VendorDetail from './VendorDetail';
@@ -18,7 +19,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'upgrades';
+type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'insights' | 'upgrades';
 type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -298,6 +299,12 @@ const ExpensesModule: React.FC = () => {
           icon={<BarChart3 size={16} />}
           label="Analytics"
           onClick={() => switchTab('analytics')}
+        />
+        <TabBtn
+          active={tab === 'insights'}
+          icon={<Lightbulb size={16} />}
+          label="Insights"
+          onClick={() => switchTab('insights')}
         />
         <TabBtn
           active={tab === 'settings'}
@@ -646,6 +653,7 @@ const ExpensesModule: React.FC = () => {
       )}
 
       {tab === 'analytics' && <ExpenseAnalytics />}
+      {tab === 'insights' && <ExpenseInsights onViewExpense={handleEditExpense} />}
 
       {tab === 'vendors' && vendorView === 'list' && (
         <VendorList

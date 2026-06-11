@@ -1128,6 +1128,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     }
     // Suppress unused-warning for xp (kept for symmetry with InvoiceForm pattern).
     void xp;
+    // Expense policy engine (ex:check-policy) — company-defined policies
+    // (max amounts, receipt thresholds) block the save with named
+    // violations. Engine is optional: any failure (no policies table,
+    // no policies defined) silently passes.
+    try {
+      const pol = await api.exCheckPolicy({ amount: parseFloat(form.amount) || 0, category_id: form.category_id || undefined });
+      if (pol?.hasViolation && Array.isArray(pol.violations)) checks.push(...pol.violations);
+    } catch { /* policy engine optional */ }
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
