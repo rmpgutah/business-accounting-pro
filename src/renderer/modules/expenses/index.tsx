@@ -171,7 +171,7 @@ const ExpensesModule: React.FC = () => {
     let cancelled = false;
     api.rawQuery(
       `SELECT
-         SUM(CASE WHEN (receipt_path IS NULL OR receipt_path = '') AND amount >= 25 THEN 1 ELSE 0 END) +
+         SUM(CASE WHEN receipt_path IS NULL AND amount >= 25 THEN 1 ELSE 0 END) +
          SUM(CASE WHEN category_id IS NULL OR category_id = '' THEN 1 ELSE 0 END) AS c
        FROM expenses
        WHERE company_id = ? AND status != 'void' AND (deleted_at IS NULL)`,
