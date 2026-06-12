@@ -21,7 +21,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'expenses' | 'review' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'insights' | 'compliance' | 'upgrades';
+type Tab = 'dashboard' | 'expenses' | 'review' | 'vendors' | 'approvals' | 'reimbursement' | 'settings' | 'insights' | 'compliance' | 'upgrades';
 type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -54,6 +54,8 @@ const TabBtn: React.FC<{
 // ─── Main Module ────────────────────────────────────────
 const ExpensesModule: React.FC = () => {
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [insightsView, setInsightsView] = useState<'overview' | 'charts'>('overview');
+  const [complianceView, setComplianceView] = useState<'compliance' | 'audit'>('compliance');
   const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   // Dashboard state
@@ -324,18 +326,6 @@ const ExpensesModule: React.FC = () => {
           onClick={() => switchTab('reimbursement')}
         />
         <TabBtn
-          active={tab === 'audit'}
-          icon={<ShieldCheck size={16} />}
-          label="Audit Log"
-          onClick={() => switchTab('audit')}
-        />
-        <TabBtn
-          active={tab === 'analytics'}
-          icon={<BarChart3 size={16} />}
-          label="Analytics"
-          onClick={() => switchTab('analytics')}
-        />
-        <TabBtn
           active={tab === 'insights'}
           icon={<Lightbulb size={16} />}
           label="Insights"
@@ -401,7 +391,7 @@ const ExpensesModule: React.FC = () => {
                 <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => switchTab('reimbursement')}>
                   <DollarSign size={14} /> Run Reimbursement
                 </button>
-                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => switchTab('analytics')}>
+                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => { switchTab('insights'); setInsightsView('charts'); }}>
                   <BarChart3 size={14} /> View Analytics
                 </button>
               </div>
@@ -700,9 +690,30 @@ const ExpensesModule: React.FC = () => {
         />
       )}
 
-      {tab === 'analytics' && <ExpenseAnalytics />}
-      {tab === 'insights' && <ExpenseInsights onViewExpense={handleEditExpense} />}
-      {tab === 'compliance' && <ExpenseCompliance onViewExpense={handleEditExpense} />}
+      {tab === 'insights' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <button className={`block-btn text-xs ${insightsView === 'overview' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setInsightsView('overview')}>Overview</button>
+            <button className={`block-btn text-xs ${insightsView === 'charts' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setInsightsView('charts')}>Charts</button>
+          </div>
+          {insightsView === 'overview' ? <ExpenseInsights onViewExpense={handleEditExpense} /> : <ExpenseAnalytics />}
+        </div>
+      )}
+      {tab === 'compliance' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <button className={`block-btn text-xs ${complianceView === 'compliance' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setComplianceView('compliance')}>Compliance</button>
+            <button className={`block-btn text-xs ${complianceView === 'audit' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setComplianceView('audit')}>Audit Log</button>
+          </div>
+          {complianceView === 'compliance'
+            ? <ExpenseCompliance onViewExpense={handleEditExpense} />
+            : <ExpenseAuditReport onBack={() => setComplianceView('compliance')} />}
+        </div>
+      )}
 
       {tab === 'vendors' && vendorView === 'list' && (
         <VendorList
@@ -725,10 +736,6 @@ const ExpensesModule: React.FC = () => {
       {tab === 'approvals' && <ExpenseApprovalQueue />}
 
       {tab === 'reimbursement' && <ReimbursementRun />}
-
-      {tab === 'audit' && (
-        <ExpenseAuditReport onBack={() => setTab('expenses')} />
-      )}
 
       {tab === 'settings' && (
         <ExpenseSettings onBack={() => setTab('expenses')} />
