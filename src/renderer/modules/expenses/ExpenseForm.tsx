@@ -448,6 +448,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
   // ── new state ──
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('');
+  const [suggestedCategory, setSuggestedCategory] = useState<{ id: string; name: string } | null>(null);
   const [categoryUsage, setCategoryUsage] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [showAffidavit, setShowAffidavit] = useState(false);
@@ -615,6 +616,29 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggested]);
+
+  // Suggested-category chip: vendor's historically most-used category,
+  // offered (never auto-applied) when a vendor is set and category is empty.
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeCompany || !form.vendor_id || form.category_id) {
+      setSuggestedCategory(null);
+      return;
+    }
+    api.rawQuery(
+      `SELECT e.category_id AS id, c.name AS name, COUNT(*) AS uses
+       FROM expenses e JOIN categories c ON c.id = e.category_id
+       WHERE e.company_id = ? AND e.vendor_id = ? AND e.category_id IS NOT NULL AND e.category_id != ''
+         AND e.deleted_at IS NULL
+       GROUP BY e.category_id ORDER BY uses DESC LIMIT 1`,
+      [activeCompany.id, form.vendor_id]
+    ).then((r: any) => {
+      if (cancelled) return;
+      const row = Array.isArray(r) ? r[0] : null;
+      setSuggestedCategory(row?.id ? { id: row.id, name: row.name } : null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeCompany, form.vendor_id, form.category_id]);
 
   // Capture #11: prior expense lookup for "copy from prior" / auto-fill
   useEffect(() => {
@@ -1824,6 +1848,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 <option key={c.id} value={c.id}>{c.fullPath}</option>
               ))}
             </select>
+            {suggestedCategory && (
+              <button
+                type="button"
+                className="flex items-center gap-1 mt-1 px-2 py-1 text-[11px] text-accent-primary border border-border-primary hover:border-accent-primary transition-colors"
+                style={{ borderRadius: 'var(--app-radius)' }}
+                onClick={() => setForm(f => ({ ...f, category_id: suggestedCategory.id }))}
+              >
+                <Sparkles size={11} /> Suggested: {suggestedCategory.name}
+              </button>
+            )}
             {/* Feature 2 — color dot */}
             {selectedCategory && (
               <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-muted">
