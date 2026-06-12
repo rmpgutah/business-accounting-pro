@@ -43,6 +43,8 @@ interface Expense {
   amount: number;
   tax_amount?: number;
   tax_inclusive?: number;
+  shipping_amount?: number;
+  shipping_tax_amount?: number;
   discount_amount?: number;
   discount_percent?: number;
   status: 'pending' | 'approved' | 'paid' | 'rejected';

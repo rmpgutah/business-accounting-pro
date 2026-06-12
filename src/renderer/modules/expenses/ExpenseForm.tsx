@@ -34,6 +34,13 @@ import {
 } from './form/formShared';
 import AttachedDocs from './form/AttachedDocs';
 
+// Shipping speed presets. Free-form not needed — these cover carrier tiers and
+// the "no shipping" cases (digital goods / in-store pickup).
+const SHIPPING_SPEEDS = [
+  'Standard', 'Economy', 'Expedited', 'Two-Day', 'Overnight',
+  'Freight / LTL', 'In-Store Pickup', 'Digital / No Shipping',
+];
+
 interface ExpenseFormProps {
   expenseId?: string | null;
   onBack: () => void;
@@ -538,6 +545,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               merchant_location: existing.merchant_location || '',
               geo_location_name: existing.geo_location_name || '',
               markup_pct: existing.markup_pct != null ? String(existing.markup_pct) : '',
+              shipping_amount: existing.shipping_amount ? String(existing.shipping_amount) : '',
+              shipping_speed: existing.shipping_speed || '',
+              shipping_taxable: !!existing.shipping_taxable,
+              shipping_scope: existing.shipping_scope === 'item' ? 'item' : 'order',
+              shipping_line_ref: existing.shipping_line_ref || '',
               employee_id: existing.employee_id || '',
               entry_mode: (existing.entry_mode as any) || 'standard',
               odometer_start: existing.odometer_start?.toString() || '',
@@ -615,6 +627,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 notes: l.notes || '',
                 item_type: (l.item_type as any) || 'item',
                 tags: parseJSON<string[]>(l.tags, []),
+                is_billable: !!l.is_billable,
+                billed_invoice_id: l.billed_invoice_id || null,
               })));
               setUseLineItems(true);
             }
@@ -687,6 +701,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           geo_location_name: form.geo_location_name.trim() || null,
           markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
           employee_id: form.employee_id || null,
+          shipping_amount: roundCents(parseFloat(form.shipping_amount) || 0),
+          shipping_speed: form.shipping_speed || null,
+          shipping_taxable: form.shipping_taxable ? 1 : 0,
+          shipping_scope: form.shipping_scope,
+          shipping_line_ref: form.shipping_scope === 'item' ? (form.shipping_line_ref || null) : null,
           entry_mode: form.entry_mode,
           odometer_start: parseFloat(form.odometer_start) || 0,
           odometer_end: parseFloat(form.odometer_end) || 0,
@@ -909,6 +928,21 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         related_debt_id: form.related_debt_id || null,
         collection_cost_type: form.related_debt_id ? (form.collection_cost_type || 'other') : '',
         is_recoverable: form.related_debt_id && form.is_recoverable ? 1 : 0,
+        // REGRESSION FIX: these rode only in the draft payload, so a real save
+        // wiped them. Keep both payloads in sync — see the draft path above.
+        merchant_location: form.merchant_location.trim() || null,
+        geo_location_name: form.geo_location_name.trim() || null,
+        markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
+        related_loan_id: form.related_loan_id || null,
+        employee_id: form.employee_id || null,
+        discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
+        discount_percent: parseFloat(form.discount_percent) || 0,
+        // Shipping & Handling — order-level amount + optional per-item ref.
+        shipping_amount: roundCents(parseFloat(form.shipping_amount) || 0),
+        shipping_speed: form.shipping_speed || null,
+        shipping_taxable: form.shipping_taxable ? 1 : 0,
+        shipping_scope: form.shipping_scope,
+        shipping_line_ref: form.shipping_scope === 'item' ? (form.shipping_line_ref || null) : null,
       };
 
       const lineItemsPayload = useLineItems
@@ -938,6 +972,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             notes: li.notes || null,
             item_type: li.item_type || 'item',
             tags: JSON.stringify(li.tags || []),
+            // Per-line billable. Persists the flag and any prior invoice
+            // stamp so re-saving doesn't unmark already-billed lines.
+            is_billable: li.is_billable ? 1 : 0,
+            billed_invoice_id: li.billed_invoice_id || null,
           }))
         : [];
 
@@ -1268,11 +1306,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     const headerFlat = parseFloat(form.discount_amount) || 0;
                     const headerPct = parseFloat(form.discount_percent) || 0;
                     const postLineDiscount = Math.max(0, gross - lineDisc);
-                    const postTax = postLineDiscount + tax;
+                    // Shipping & Handling preview: estimate shipping tax at the
+                    // effective goods rate (matches the server's save-time calc).
+                    const shipping = parseFloat(form.shipping_amount) || 0;
+                    const effRate = postLineDiscount > 0 ? tax / postLineDiscount : 0;
+                    const shippingTax = form.shipping_taxable ? roundCents(shipping * effRate) : 0;
+                    const postTax = postLineDiscount + tax + shipping + shippingTax;
                     const headerPctOff = postTax * (headerPct / 100);
                     const finalTotal = Math.max(0, postTax - headerFlat - headerPctOff);
                     const totalDiscount = lineDisc + headerFlat + headerPctOff;
-                    if (totalDiscount <= 0) return null;
+                    if (totalDiscount <= 0 && shipping <= 0) return null;
                     return (
                       <div className="text-[10px] text-text-muted font-mono space-y-0.5">
                         <div className="flex justify-between gap-3"><span>Subtotal</span><span>{formatCurrency(gross)}</span></div>
@@ -1284,6 +1327,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                         )}
                         {tax > 0 && (
                           <div className="flex justify-between gap-3"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
+                        )}
+                        {shipping > 0 && (
+                          <div className="flex justify-between gap-3"><span>Shipping &amp; Handling</span><span>{formatCurrency(shipping)}</span></div>
+                        )}
+                        {shippingTax > 0 && (
+                          <div className="flex justify-between gap-3"><span>Shipping tax</span><span>{formatCurrency(shippingTax)}</span></div>
                         )}
                         {(headerFlat > 0 || headerPctOff > 0) && (
                           <div className="flex justify-between gap-3 text-accent-blue">
@@ -1742,6 +1791,67 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               <input type="number" step="0.1" min="0" className="block-input" placeholder="0"
                 value={form.markup_pct} onChange={e => setForm(p => ({ ...p, markup_pct: e.target.value }))} style={{ paddingRight: 24 }} />
               <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 11 }}>%</span>
+            </div>
+          </div>
+
+          {/* ── Shipping & Handling ───────────────────────────── */}
+          <div className="col-span-3 border border-border-primary p-3" style={{ borderRadius: 'var(--app-radius)' }}>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+              Shipping &amp; Handling
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Amount</label>
+                <div className="relative">
+                  <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input type="number" step="0.01" min="0" className="block-input pl-8" placeholder="0.00"
+                    value={form.shipping_amount}
+                    onChange={e => setForm(p => ({ ...p, shipping_amount: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Shipping Speed</label>
+                <select className="block-select" value={form.shipping_speed}
+                  onChange={e => setForm(p => ({ ...p, shipping_speed: e.target.value }))}>
+                  <option value="">— Speed —</option>
+                  {SHIPPING_SPEEDS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-xs cursor-pointer pb-2">
+                  <input type="checkbox" checked={form.shipping_taxable}
+                    onChange={e => setForm(p => ({ ...p, shipping_taxable: e.target.checked }))}
+                    className="accent-accent-blue" />
+                  <span className="font-semibold uppercase tracking-wider">Shipping is taxable</span>
+                </label>
+              </div>
+            </div>
+            {/* Scope: whole order vs a single line item (only meaningful when itemizing) */}
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Applies to:</span>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="radio" name="shipping_scope" checked={form.shipping_scope === 'order'}
+                  onChange={() => setForm(p => ({ ...p, shipping_scope: 'order', shipping_line_ref: '' }))}
+                  className="accent-accent-blue" />
+                <span>Whole order</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ opacity: useLineItems && lineItems.length > 0 ? 1 : 0.5 }}>
+                <input type="radio" name="shipping_scope" disabled={!useLineItems || lineItems.length === 0}
+                  checked={form.shipping_scope === 'item'}
+                  onChange={() => setForm(p => ({ ...p, shipping_scope: 'item' }))}
+                  className="accent-accent-blue" />
+                <span>A single item</span>
+              </label>
+              {form.shipping_scope === 'item' && useLineItems && lineItems.length > 0 && (
+                <select className="block-select" style={{ width: 'auto', minWidth: 220 }}
+                  value={form.shipping_line_ref}
+                  onChange={e => setForm(p => ({ ...p, shipping_line_ref: e.target.value }))}>
+                  <option value="">— Choose line item —</option>
+                  {lineItems.map((li, i) => (
+                    <option key={li.id} value={li.id}>{`#${i + 1} ${li.description || '(untitled)'}`}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 

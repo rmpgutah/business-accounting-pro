@@ -4446,6 +4446,25 @@ export function registerIpcHandlers(): void {
           expenseData.tax_amount = round2(lineItems.reduce((sum: number, li: any) => sum + lineTax(li), 0));
         }
 
+        // Shipping & Handling tax. Shipping is stored SEPARATELY from amount/
+        // tax_amount (so the goods subtotal and goods tax stay clean); the
+        // display layer adds shipping_amount + shipping_tax_amount on top. When
+        // shipping_taxable is set, we tax it at the EFFECTIVE goods rate
+        // (goods tax ÷ goods subtotal) rather than any single header rate —
+        // this is unambiguous across the inconsistent tax_rate storage and
+        // matches the blended rate the buyer actually paid. Non-taxable
+        // shipping (or a zero amount) yields zero shipping tax.
+        const shippingAmt = round2(Number(expenseData.shipping_amount || 0));
+        const shippingTaxable = expenseData.shipping_taxable === 1 || expenseData.shipping_taxable === true;
+        if (shippingAmt > 0 && shippingTaxable) {
+          const goodsSub = Number(expenseData.amount || 0);
+          const goodsTax = Number(expenseData.tax_amount || 0);
+          const effRate = goodsSub > 0 ? goodsTax / goodsSub : 0;
+          expenseData.shipping_tax_amount = round2(shippingAmt * effRate);
+        } else {
+          expenseData.shipping_tax_amount = 0;
+        }
+
         if (isEdit && expenseId) {
           db.update('expenses', expenseId, expenseData);
           savedId = expenseId;
@@ -9386,6 +9405,61 @@ export function registerIpcHandlers(): void {
     return { id: newId };
   });
 
+  // ─── Cloud bootstrap ────────────────────────────────────
+  // Push local users + companies + user_companies up to the configured cloud
+  // sync URL so the customer can sign in to the cloud with the SAME email +
+  // password they already use on the desktop. The cloud verifies password
+  // hashes in BOTH formats (pbkdf2-SHA256 cloud-native, pbkdf2-SHA512 from
+  // here), so the hashes transfer 1:1 — no password reset needed.
+  // Idempotent on the cloud side; safe to re-run after adding new local users.
+  ipcMain.handle('cloud:bootstrap-users', async () => {
+    try {
+      const rawDb = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      // Settings are company-scoped. Cloud Sync settings live on whichever
+      // company is currently active when the user clicks Save in the UI.
+      const readSetting = (k: string): string => {
+        const row = rawDb.prepare('SELECT value FROM settings WHERE company_id = ? AND key = ?').get(companyId, k) as any;
+        return row?.value || '';
+      };
+      const url = readSetting('cloud_sync_url').trim().replace(/\/$/, '');
+      const token = readSetting('cloud_sync_token').trim();
+      if (!url) return { error: 'Cloud Sync URL not set in API & Integrations.' };
+      if (!token) return { error: 'Cloud Sync Token not set in API & Integrations.' };
+      const users = rawDb.prepare(`
+        SELECT id, email, display_name, password_hash, role
+        FROM users
+      `).all() as any[];
+      const companies = rawDb.prepare(`
+        SELECT id, name, email, phone, address, tax_id, currency
+        FROM companies
+      `).all() as any[];
+      const userCompanies = rawDb.prepare(`
+        SELECT user_id, company_id, role
+        FROM user_companies
+      `).all() as any[];
+
+      if (users.length === 0) {
+        return { error: 'No local users to push. Register an account on the desktop first.' };
+      }
+
+      const res = await fetch(url + '/api/auth/bootstrap', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users, companies, user_companies: userCompanies }),
+      });
+      const text = await res.text();
+      let body: any;
+      try { body = JSON.parse(text); } catch { body = { error: text || 'Non-JSON response' }; }
+      if (!res.ok) {
+        return { error: body?.error || ('Cloud responded with HTTP ' + res.status) };
+      }
+      return { ok: true, imported: body?.imported, status: res.status };
+    } catch (err: any) {
+      return { error: err?.message || 'Bootstrap failed' };
+    }
+  });
+
   ipcMain.handle('invoice:from-time-entries', (_event, { project_id, company_id }: { project_id: string; company_id: string }) => {
     const entries = db.getDb().prepare(`
       SELECT te.*, e.name as employee_name, e.pay_rate, p.client_id, p.name as project_name
@@ -9409,6 +9483,155 @@ export function registerIpcHandlers(): void {
       tax_rate: 0,
     }));
     return { client_id, lines, entry_ids: entries.map((e: any) => e.id) };
+  });
+
+  // ─── Invoice from billable expenses ─────────────────────
+  // Bundles unbilled billable expense items into an invoice prefill. Two
+  // billable modes mix here:
+  //   1. WHOLE EXPENSE — expense.is_billable=1: every line becomes an invoice
+  //      line at the expense's amount (or per-line amount if itemized), with
+  //      optional markup_pct applied.
+  //   2. PER LINE — expense_line_items.is_billable=1 on a non-billable header:
+  //      only those specific lines surface.
+  // billed_invoice_id (on either row) suppresses re-billing.
+  ipcMain.handle('invoice:from-billable-expenses', (_event, { client_id, project_id, company_id }: {
+    client_id?: string; project_id?: string; company_id: string;
+  }) => {
+    const rawDb = db.getDb();
+    const whereClient = client_id ? 'AND e.client_id = ?' : '';
+    const whereProject = project_id ? 'AND e.project_id = ?' : '';
+    const params: any[] = [company_id];
+    if (client_id) params.push(client_id);
+    if (project_id) params.push(project_id);
+
+    // Lines from header-billable expenses (no per-line client_id needed)
+    const headerLines = rawDb.prepare(`
+      SELECT e.id as expense_id, e.description as expense_desc, e.date,
+             e.amount as expense_amount, e.tax_amount as expense_tax,
+             e.markup_pct, e.client_id, e.project_id,
+             li.id as line_id, li.description as line_desc,
+             li.quantity, li.unit_price, li.amount as line_amount,
+             li.is_billable as line_billable, li.billed_invoice_id as line_billed
+      FROM expenses e
+      LEFT JOIN expense_line_items li ON li.expense_id = e.id
+      WHERE e.company_id = ?
+        ${whereClient}
+        ${whereProject}
+        AND e.is_billable = 1
+        AND (e.billed_invoice_id IS NULL OR e.billed_invoice_id = '')
+    `).all(...params) as any[];
+
+    // Lines from per-line-billable rows on header-NON-billable expenses
+    const perLineBillable = rawDb.prepare(`
+      SELECT e.id as expense_id, e.description as expense_desc, e.date,
+             e.markup_pct, e.client_id, e.project_id,
+             li.id as line_id, li.description as line_desc,
+             li.quantity, li.unit_price, li.amount as line_amount,
+             li.is_billable as line_billable, li.billed_invoice_id as line_billed
+      FROM expense_line_items li
+      JOIN expenses e ON e.id = li.expense_id
+      WHERE e.company_id = ?
+        ${whereClient}
+        ${whereProject}
+        AND (e.is_billable = 0 OR e.is_billable IS NULL)
+        AND li.is_billable = 1
+        AND (li.billed_invoice_id IS NULL OR li.billed_invoice_id = '')
+    `).all(...params) as any[];
+
+    const lines: any[] = [];
+    const expenseIds = new Set<string>();
+    const lineIds = new Set<string>();
+
+    // Header-billable: prefer line breakdown when present, else single-line
+    // fallback using the expense amount.
+    const byExpense = new Map<string, any[]>();
+    for (const r of headerLines) {
+      if (!byExpense.has(r.expense_id)) byExpense.set(r.expense_id, []);
+      byExpense.get(r.expense_id)!.push(r);
+    }
+    for (const [expenseId, rows] of byExpense) {
+      const first = rows[0];
+      const markup = 1 + (Number(first.markup_pct || 0) / 100);
+      const hasLines = rows.some(r => r.line_id);
+      if (hasLines) {
+        for (const r of rows.filter(r => r.line_id)) {
+          lines.push({
+            description: `${first.expense_desc || 'Expense'} — ${r.line_desc || ''}`.trim(),
+            quantity: Number(r.quantity || 1),
+            unit_price: Number((r.unit_price || 0)) * markup,
+            tax_rate: 0,
+          });
+          lineIds.add(r.line_id);
+        }
+      } else {
+        lines.push({
+          description: first.expense_desc || `Expense ${first.date || ''}`,
+          quantity: 1,
+          unit_price: Number(first.expense_amount || 0) * markup,
+          tax_rate: 0,
+        });
+      }
+      expenseIds.add(expenseId);
+    }
+
+    // Per-line billable on otherwise non-billable expenses
+    for (const r of perLineBillable) {
+      const markup = 1 + (Number(r.markup_pct || 0) / 100);
+      lines.push({
+        description: `${r.expense_desc || 'Expense'} — ${r.line_desc || ''}`.trim(),
+        quantity: Number(r.quantity || 1),
+        unit_price: Number(r.unit_price || 0) * markup,
+        tax_rate: 0,
+      });
+      lineIds.add(r.line_id);
+    }
+
+    // Billable mileage trips for the same client/project. Mileage is billed at
+    // the IRS rate stored on each trip; no markup is applied — clients see the
+    // statutory rate so this is auditable for reimbursement disputes.
+    const mileageParams: any[] = [company_id];
+    if (client_id) mileageParams.push(client_id);
+    if (project_id) mileageParams.push(project_id);
+    const mileageRows = rawDb.prepare(`
+      SELECT id, trip_date, purpose, start_location, end_location,
+             miles, rate_per_mile, deduction_amount, client_id, project_id
+      FROM mileage_log
+      WHERE company_id = ?
+        ${client_id ? 'AND client_id = ?' : ''}
+        ${project_id ? 'AND project_id = ?' : ''}
+        AND is_billable = 1
+        AND (billed_invoice_id IS NULL OR billed_invoice_id = '')
+    `).all(...mileageParams) as any[];
+    const mileageIds: string[] = [];
+    for (const m of mileageRows) {
+      const route = [m.start_location, m.end_location].filter(Boolean).join(' → ');
+      const desc = `Mileage · ${m.trip_date}${m.purpose ? ` — ${m.purpose}` : ''}${route ? ` (${route})` : ''}`;
+      lines.push({
+        description: desc,
+        quantity: Number(m.miles || 0),
+        unit_price: Number(m.rate_per_mile || 0),
+        tax_rate: 0,
+      });
+      mileageIds.push(m.id);
+    }
+
+    if (lines.length === 0) {
+      return { error: 'No unbilled billable expenses or mileage for this selection.' };
+    }
+
+    // Resolve the client to attach (caller-supplied wins; else first source row)
+    const resolvedClient = client_id
+      || headerLines[0]?.client_id
+      || perLineBillable[0]?.client_id
+      || mileageRows[0]?.client_id
+      || '';
+    return {
+      client_id: resolvedClient,
+      lines,
+      expense_ids: Array.from(expenseIds),
+      line_ids: Array.from(lineIds),
+      mileage_ids: mileageIds,
+    };
   });
 
   // ─── Debt Collection ────────────────────────────────────

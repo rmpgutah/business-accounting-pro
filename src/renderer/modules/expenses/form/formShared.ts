@@ -76,6 +76,14 @@ export interface ExpenseFormData {
   geo_location_name: string;
   markup_pct: string;
   employee_id: string;
+  // Shipping & Handling. shipping_scope 'order' applies to the whole expense;
+  // 'item' attributes it to the line in shipping_line_ref. shipping_taxable
+  // makes the server compute shipping tax at the effective goods rate.
+  shipping_amount: string;
+  shipping_speed: string;
+  shipping_taxable: boolean;
+  shipping_scope: 'order' | 'item';
+  shipping_line_ref: string;
 }
 
 export interface DropdownOption {
@@ -106,6 +114,7 @@ export interface ExpenseLineItem {
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
+  billed_invoice_id?: string | null;
 }
 
 export function newLineItem(): ExpenseLineItem {
@@ -323,4 +332,9 @@ export const emptyForm: ExpenseFormData = {
   geo_location_name: '',
   markup_pct: '',
   employee_id: '',
+  shipping_amount: '',
+  shipping_speed: '',
+  shipping_taxable: false,
+  shipping_scope: 'order',
+  shipping_line_ref: '',
 };
