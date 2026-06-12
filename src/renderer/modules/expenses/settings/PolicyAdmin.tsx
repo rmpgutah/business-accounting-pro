@@ -35,6 +35,7 @@ const PolicyAdmin: React.FC = () => {
   const [draft, setDraft] = useState({ ...emptyDraft });
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!activeCompany) return;
@@ -52,17 +53,27 @@ const PolicyAdmin: React.FC = () => {
 
   const save = useCallback(async () => {
     if (!draft.policy_name.trim()) return;
+    setErrorMsg(null);
     setBusy(true);
     try {
-      await api.featExpPolicyUpsert({
+      const res = await api.featExpPolicyUpsert({
         policy_name: draft.policy_name.trim(),
         scope: draft.category_id ? 'category' : 'global',
         category_id: draft.category_id || null,
+        vendor_id: null,
+        employee_id: null,
         max_per_expense: draft.max_per_expense ? parseFloat(draft.max_per_expense) : null,
+        max_per_day: null,
+        max_per_month: null,
         requires_receipt: draft.requires_receipt,
+        requires_approval_over: null,
         enforcement: draft.enforcement,
         is_active: true,
       });
+      if (res?.error) {
+        setErrorMsg(String(res.error));
+        return;
+      }
       setDraft({ ...emptyDraft });
       setShowForm(false);
       await reload();
@@ -72,17 +83,22 @@ const PolicyAdmin: React.FC = () => {
   }, [draft, reload]);
 
   const toggleActive = useCallback(async (p: Policy) => {
+    setErrorMsg(null);
     setBusy(true);
     try {
       // expense_policies is not writable via generic db:update (not in the IPC
       // VALID_TABLES allowlist) — toggle through the dedicated upsert handler,
       // passing the full row. upsertExpensePolicy maps booleans strictly
       // (`=== false` / `!== false`), so coerce the 0/1 ints to booleans.
-      await api.featExpPolicyUpsert({
+      const res = await api.featExpPolicyUpsert({
         ...p,
         requires_receipt: !!p.requires_receipt,
         is_active: !p.is_active,
       });
+      if (res?.error) {
+        setErrorMsg(String(res.error));
+        return;
+      }
       await reload();
     } finally {
       setBusy(false);
@@ -135,6 +151,12 @@ const PolicyAdmin: React.FC = () => {
             </select>
             <button className="block-btn-primary text-xs" disabled={busy || !draft.policy_name.trim()} onClick={save}>Save</button>
           </div>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="px-4 py-2 text-xs border-b border-border-primary" style={{ color: 'var(--color-accent-expense)' }}>
+          {errorMsg}
         </div>
       )}
 
