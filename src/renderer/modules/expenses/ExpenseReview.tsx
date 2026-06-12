@@ -60,7 +60,7 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
         api.exUncategorized().catch(() => []),
         api.query('categories', { company_id: activeCompany.id, type: 'expense' }).catch(() => []),
       ]);
-      setMissing(Array.isArray(miss) ? miss : []);
+      setMissing(Array.isArray(miss) ? miss.filter((r: any) => r.status !== 'void') : []);
       setUncategorized(Array.isArray(uncat) ? uncat : []);
       setCategories(Array.isArray(cats) ? cats : []);
     } finally {
