@@ -1864,8 +1864,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             {suggestedCategory && (
               <button
                 type="button"
-                className="flex items-center gap-1 mt-1 px-2 py-1 text-[11px] text-accent-primary border border-border-primary hover:border-accent-primary transition-colors"
-                style={{ borderRadius: 'var(--app-radius)' }}
+                className="flex items-center gap-1 mt-1 px-2 py-1 text-[11px] border border-border-primary transition-colors"
+                style={{ borderRadius: 'var(--app-radius)', color: 'var(--accent-primary)' }}
                 onClick={() => setForm(f => ({ ...f, category_id: suggestedCategory.id }))}
               >
                 <Sparkles size={11} /> Suggested: {suggestedCategory.name}
