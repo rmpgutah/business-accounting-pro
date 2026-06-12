@@ -47,6 +47,8 @@ const EmptyRow: React.FC<{ label: string }> = ({ label }) => (
   </div>
 );
 
+const CHILD_KEYS = ['dups', 'anom', 'subs', 'stale'] as const;
+
 const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,7 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
 
   const childTotal = Object.values(childCounts).reduce((s, n) => s + n, 0);
   const total = missing.length + uncategorized.length + childTotal;
+  const childrenReady = CHILD_KEYS.every((k) => childCounts[k] !== undefined);
 
   useEffect(() => {
     onCountsChange?.(total);
@@ -132,7 +135,7 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
         </div>
       </div>
 
-      {total === 0 && (
+      {childrenReady && !loading && total === 0 && (
         <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <CheckCircle2 size={28} className="text-accent-income mx-auto mb-2" />
           <div className="text-sm font-semibold text-text-primary">All clear</div>
