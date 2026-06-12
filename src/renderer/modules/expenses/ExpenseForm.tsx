@@ -21,7 +21,6 @@ import {
   CategoryRow, buildCategoryTree, flattenCategoryTree, suggestCategoryForVendor,
   categoryMonthlyUsage, parseJSON, CustomFieldDef,
 } from './expense-helpers';
-import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
 import ItemizationEditor from './ItemizationEditor';
 import { getExpensesPrefs } from '../../customization/expenses-prefs';
 import AllocationEditor from './AllocationEditor';
@@ -272,16 +271,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     if (!form.vendor_id) { setSuggestedCategoryId(''); return; }
     suggestCategoryForVendor(form.vendor_id).then(id => setSuggestedCategoryId(id || ''));
   }, [form.vendor_id]);
-
-  // IntelligenceService smart-default: auto-fill category when vendor changes
-  // and no category is yet selected. Uses the IPC-backed pattern store.
-  const suggested = useSuggestedCategory(form.vendor_id);
-  useEffect(() => {
-    if (suggested && !form.category_id) {
-      setForm(f => ({ ...f, category_id: suggested }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggested]);
 
   // Suggested-category chip: vendor's historically most-used category,
   // offered (never auto-applied) when a vendor is set and category is empty.
