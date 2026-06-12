@@ -3025,7 +3025,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ex:batch-approve', (_e, { expenseIds, approvedBy }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchApprove(c, expenseIds, approvedBy) : {}; });
   ipcMain.handle('ex:batch-reject', (_e, { expenseIds, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchReject(c, expenseIds, reason) : {}; });
   ipcMain.handle('ex:generate-report', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().generateExpenseReport(c, p) : {}; });
-  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().voidExpense(c, expenseId, reason) : {}; });
+  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().voidExpense(c, expenseId, reason); scheduleAutoBackup(); return r; });
   ipcMain.handle('ex:split-expense', (_e, { expenseId, splits }: any) => ex3().splitExpense(expenseId, splits));
   ipcMain.handle('ex:request-clarification', (_e, { expenseId, question }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().requestClarification(c, expenseId, question) : {}; });
   ipcMain.handle('ex:submit-on-behalf', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().submitOnBehalf(c, p.data, p.onBehalfOf) : {}; });
