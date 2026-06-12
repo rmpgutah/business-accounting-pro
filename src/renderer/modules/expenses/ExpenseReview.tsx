@@ -78,10 +78,10 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
     const res: any = await api.openFileDialog({
       filters: [{ name: 'Receipts', extensions: ['png', 'jpg', 'jpeg', 'pdf', 'heic', 'webp'] }],
     });
-    if (!res?.filePath) return;
+    if (!res?.path) return;
     setBusyId(expenseId);
     try {
-      await api.update('expenses', expenseId, { receipt_path: res.filePath });
+      await api.update('expenses', expenseId, { receipt_path: res.path });
       setMissing((rows) => rows.filter((r) => r.id !== expenseId));
     } finally {
       setBusyId(null);
