@@ -10,7 +10,7 @@ import VendorList from './VendorList';
 import VendorForm from './VendorForm';
 import VendorDetail from './VendorDetail';
 import ExpenseAuditReport from './ExpenseAuditReport';
-import ExpenseCategorySettings from './ExpenseCategorySettings';
+import ExpenseSettings from './settings/ExpenseSettings';
 import ExpenseApprovalQueue from './ExpenseApprovalQueue';
 import ReimbursementRun from './ReimbursementRun';
 import ExpenseReview from './ExpenseReview';
@@ -731,7 +731,7 @@ const ExpensesModule: React.FC = () => {
       )}
 
       {tab === 'settings' && (
-        <ExpenseCategorySettings onBack={() => setTab('expenses')} />
+        <ExpenseSettings onBack={() => setTab('expenses')} />
       )}
 
       {tab === 'upgrades' && <ExpensesUpgradesPanel />}
