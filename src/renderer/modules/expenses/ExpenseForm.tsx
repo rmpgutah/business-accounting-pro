@@ -1171,7 +1171,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     setErrors([]);
 
     // Save-time nudge for the $25–$75 band (≥$75 is already covered by the affidavit requirement)
-    if (!receiptPath && amountValue >= REVIEW_RECEIPT_THRESHOLD && amountValue <= IRS_RECEIPT_THRESHOLD) {
+    if (!isEditing && !receiptPath && amountValue >= REVIEW_RECEIPT_THRESHOLD && amountValue <= IRS_RECEIPT_THRESHOLD) {
       const proceed = window.confirm(
         `No receipt attached for a ${formatCurrency(amountValue)} expense.\n\n` +
         'It will appear in the Review inbox until a receipt is attached.\n\n' +
