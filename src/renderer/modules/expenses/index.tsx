@@ -13,6 +13,7 @@ import ExpenseAuditReport from './ExpenseAuditReport';
 import ExpenseCategorySettings from './ExpenseCategorySettings';
 import ExpenseApprovalQueue from './ExpenseApprovalQueue';
 import ReimbursementRun from './ReimbursementRun';
+import ExpenseReview from './ExpenseReview';
 import ExpensesUpgradesPanel from './upgrades';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -20,7 +21,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'insights' | 'compliance' | 'upgrades';
+type Tab = 'dashboard' | 'expenses' | 'review' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'insights' | 'compliance' | 'upgrades';
 type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -28,8 +29,9 @@ const TabBtn: React.FC<{
   active: boolean;
   icon: React.ReactNode;
   label: string;
+  badge?: number;
   onClick: () => void;
-}> = ({ active, icon, label, onClick }) => (
+}> = ({ active, icon, label, badge, onClick }) => (
   <button
     onClick={onClick}
     className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
@@ -37,10 +39,15 @@ const TabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
+    {badge != null && badge > 0 && (
+      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-bg-tertiary text-accent-warning border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
+        {badge}
+      </span>
+    )}
   </button>
 );
 
@@ -154,6 +161,26 @@ const ExpensesModule: React.FC = () => {
   const [expenseView, setExpenseView] = useState<ExpenseView>('list');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseKey, setExpenseKey] = useState(0);
+
+  // Review badge count
+  const [reviewCount, setReviewCount] = useState<number>(0);
+
+  // Lightweight badge count (single query, not the full queues)
+  useEffect(() => {
+    if (!activeCompany) return;
+    let cancelled = false;
+    api.rawQuery(
+      `SELECT
+         SUM(CASE WHEN (receipt_path IS NULL OR receipt_path = '') AND amount >= 25 THEN 1 ELSE 0 END) +
+         SUM(CASE WHEN category_id IS NULL OR category_id = '' THEN 1 ELSE 0 END) AS c
+       FROM expenses
+       WHERE company_id = ? AND status != 'void' AND (deleted_at IS NULL)`,
+      [activeCompany.id]
+    ).then((r: any) => {
+      if (!cancelled) setReviewCount(Array.isArray(r) ? (r[0]?.c ?? 0) : 0);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeCompany, tab, expenseKey]);
 
   // Vendor view state
   const [vendorView, setVendorView] = useState<'list' | 'detail'>('list');
@@ -270,6 +297,13 @@ const ExpensesModule: React.FC = () => {
           icon={<Receipt size={16} />}
           label="Expenses"
           onClick={() => switchTab('expenses')}
+        />
+        <TabBtn
+          active={tab === 'review'}
+          icon={<CheckSquare size={16} />}
+          label="Review"
+          badge={reviewCount}
+          onClick={() => switchTab('review')}
         />
         <TabBtn
           active={tab === 'vendors'}
@@ -656,6 +690,13 @@ const ExpensesModule: React.FC = () => {
           expenseId={editingExpenseId}
           onBack={handleExpenseBack}
           onEdit={handleEditExpense}
+        />
+      )}
+
+      {tab === 'review' && (
+        <ExpenseReview
+          onViewExpense={(id) => { setTab('expenses'); handleEditExpense(id); }}
+          onCountsChange={setReviewCount}
         />
       )}
 
