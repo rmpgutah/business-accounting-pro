@@ -3,6 +3,10 @@ import { Paperclip, FolderOpen, CheckCircle2, Tag } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
+import DuplicatesSection from './review/DuplicatesSection';
+import StalePendingSection from './review/StalePendingSection';
+import AnomaliesSection from './review/AnomaliesSection';
+import SubscriptionsSection from './review/SubscriptionsSection';
 
 interface Props {
   onViewExpense?: (id: string) => void;
@@ -50,6 +54,10 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
   const [uncategorized, setUncategorized] = useState<UncategorizedRow[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [childCounts, setChildCounts] = useState<Record<string, number>>({});
+  const setChildCount = useCallback((key: string, n: number) => {
+    setChildCounts((c) => (c[key] === n ? c : { ...c, [key]: n }));
+  }, []);
 
   const reload = useCallback(async () => {
     if (!activeCompany) return;
@@ -70,9 +78,12 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
 
   useEffect(() => { reload(); }, [reload]);
 
+  const childTotal = Object.values(childCounts).reduce((s, n) => s + n, 0);
+  const total = missing.length + uncategorized.length + childTotal;
+
   useEffect(() => {
-    onCountsChange?.(missing.length + uncategorized.length);
-  }, [missing.length, uncategorized.length, onCountsChange]);
+    onCountsChange?.(total);
+  }, [missing.length, uncategorized.length, childTotal, onCountsChange]);
 
   const attachReceipt = useCallback(async (expenseId: string) => {
     const res: any = await api.openFileDialog({
@@ -98,8 +109,6 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
       setBusyId(null);
     }
   }, []);
-
-  const total = missing.length + uncategorized.length;
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading review queue...</div>;
@@ -217,6 +226,12 @@ const ExpenseReview: React.FC<Props> = ({ onViewExpense, onCountsChange }) => {
           </table>
         )}
       </SectionCard>
+
+      {/* Duplicate / anomaly / subscription / stale-pending queues */}
+      <DuplicatesSection onCount={(n) => setChildCount('dups', n)} onViewExpense={onViewExpense} />
+      <AnomaliesSection onCount={(n) => setChildCount('anom', n)} onViewExpense={onViewExpense} />
+      <SubscriptionsSection onCount={(n) => setChildCount('subs', n)} />
+      <StalePendingSection onCount={(n) => setChildCount('stale', n)} onViewExpense={onViewExpense} />
     </div>
   );
 };
