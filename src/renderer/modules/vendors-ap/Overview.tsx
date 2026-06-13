@@ -34,6 +34,7 @@ const Overview: React.FC<{ onViewVendor?: (id: string) => void }> = ({ onViewVen
   const open = (id: string) => { if (id && onViewVendor) onViewVendor(id); };
   const maxType = Math.max(1, ...byType.map((t: any) => t.count || 0));
   const maxLoc = Math.max(1, ...byLocation.map((t: any) => t.count || 0));
+  // AP aging from featApAgingChart (bills.balance-based); differs slightly from vn: outstanding (total − amount_paid). Display label is "AP Aging".
   const apTotal = apAging.reduce((s, b: any) => s + (b.total || b.amount || 0), 0);
 
   return (

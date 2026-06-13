@@ -14,6 +14,8 @@ const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorI
   const [payHistory, setPayHistory] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
+  const [w9recs, setW9recs] = useState<any[]>([]);
+  const [policies, setPolicies] = useState<any[]>([]);
   const [noteDraft, setNoteDraft] = useState('');
   const nav = useNavigation();
 
@@ -30,6 +32,8 @@ const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorI
     api.vnPaymentHistory(vendorId).then(arr(setPayHistory)).catch(quiet);
     api.vnNotes(vendorId).then(arr(setNotes)).catch(quiet);
     api.vnActivityLog(vendorId).then(arr(setActivity)).catch(quiet);
+    api.vnW9Records(vendorId).then(arr(setW9recs)).catch(quiet);
+    api.vnInsurancePolicies(vendorId).then(arr(setPolicies)).catch(quiet);
     return () => { cancelled = true; };
   }, [vendorId]);
 
@@ -96,12 +100,25 @@ const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorI
         </Section>
       </div>
 
-      {/* Compliance snapshot */}
+      {/* Compliance snapshot — prefers dedicated multi-record tables, falls back to legacy snapshot */}
       <Section title="Compliance" icon={<ShieldCheck size={13} style={{ color: TOK.income }} />}>
         <div className="grid md:grid-cols-3 gap-3 p-3 text-[12px]">
           <div>
             <div className="text-[9px] font-bold uppercase text-text-muted">Insurance (COI)</div>
-            <div style={{ color: ins.isExpired ? TOK.expense : 'var(--color-text-primary)' }}>{ins.coiExpiry ? `expires ${formatDate(ins.coiExpiry)}${ins.isExpired ? ' · EXPIRED' : ''}` : 'No COI on file'}</div>
+            {policies.length > 0 ? (
+              <div className="space-y-0.5">
+                {policies.slice(0, 3).map((p: any, i: number) => {
+                  const expired = p.expiration_date && p.expiration_date < new Date().toISOString().slice(0, 10);
+                  return (
+                    <div key={i} style={{ color: expired ? TOK.expense : 'var(--color-text-primary)' }}>
+                      {(p.policy_type || 'Policy')}{p.carrier ? ` · ${p.carrier}` : ''} — exp {p.expiration_date ? formatDate(p.expiration_date) : '—'}{expired ? ' · EXPIRED' : ''}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ color: ins.isExpired ? TOK.expense : 'var(--color-text-primary)' }}>{ins.coiExpiry ? `expires ${formatDate(ins.coiExpiry)}${ins.isExpired ? ' · EXPIRED' : ''}` : 'No COI on file'}</div>
+            )}
           </div>
           <div>
             <div className="text-[9px] font-bold uppercase text-text-muted">Contract</div>
@@ -109,7 +126,11 @@ const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorI
           </div>
           <div>
             <div className="text-[9px] font-bold uppercase text-text-muted">W-9</div>
-            <div>{tax.taxIdLast4 ? `TIN •••${tax.taxIdLast4}` : 'No TIN on file'}</div>
+            {w9recs.length > 0 ? (
+              <div>{w9recs[0].legal_name || 'On file'}{w9recs[0].tin_type ? ` · ${w9recs[0].tin_type}` : ''}{w9recs[0].received_date ? ` · rec'd ${formatDate(w9recs[0].received_date)}` : ''}</div>
+            ) : (
+              <div>{tax.taxIdLast4 ? `TIN •••${tax.taxIdLast4}` : 'No TIN on file'}</div>
+            )}
           </div>
         </div>
       </Section>
