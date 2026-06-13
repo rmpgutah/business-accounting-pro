@@ -54,6 +54,25 @@ export function buildPortalUrl(base: string | null | undefined, token: string): 
   return `${noTrail}/${token}`;
 }
 
+// ─── Payment Method Formatter ─────────────────────────────────
+// Mirrors src/renderer/lib/format.ts → formatPaymentMethod. Print templates
+// can't import from the React/Vite side, so the map is duplicated here. Keep
+// the two in sync when adding methods.
+const PRINT_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Cash', check: 'Check', credit_card: 'Credit Card', debit_card: 'Debit Card',
+  bank_transfer: 'Bank Transfer', ach: 'ACH', wire: 'Wire Transfer', wire_transfer: 'Wire Transfer',
+  paypal: 'PayPal', venmo: 'Venmo', zelle: 'Zelle', apple_pay: 'Apple Pay', google_pay: 'Google Pay',
+  stripe: 'Stripe', square: 'Square', cashapp: 'Cash App', money_order: 'Money Order',
+  cashiers_check: "Cashier's Check", gift_card: 'Gift Card', store_credit: 'Store Credit', other: 'Other',
+};
+function formatPaymentMethod(value: string | null | undefined): string {
+  if (!value) return '—';
+  const key = String(value).toLowerCase().trim();
+  if (PRINT_PAYMENT_METHOD_LABELS[key]) return PRINT_PAYMENT_METHOD_LABELS[key];
+  // Fallback: humanize raw snake_case so unmapped values never leak underscores.
+  return String(value).replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // ─── Currency Formatter ──────────────────────────────────────
 // formatCurrency guards against Infinity/NaN/non-finite values that would
 // otherwise render as "$NaN" or "$∞" in customer-facing PDFs.
@@ -5034,14 +5053,54 @@ export function generateExpenseReceiptHTML(
   const receiptHTML = safeImg(expense.receipt_path || expense.receipt_data || null, 'Receipt',
     'max-width:100%;max-height:380px;object-fit:contain;border:1px solid #e2e8f0;padding:6px;background:#fff;');
 
+  // Line items table — surface per-line notations (tags + notes) directly
+  // beneath the description so the printed record is auditable: each purchase
+  // line carries its own context, not just the rolled-up expense description.
+  // tags is stored as a JSON array string; notes is plain text.
+  const renderLineMeta = (l: any): string => {
+    let tags: string[] = [];
+    if (Array.isArray(l.tags)) {
+      tags = l.tags.filter((t: any) => t != null && String(t).trim() !== '');
+    } else if (typeof l.tags === 'string' && l.tags.trim() && l.tags.trim() !== '[]') {
+      try {
+        const parsed = JSON.parse(l.tags);
+        if (Array.isArray(parsed)) tags = parsed.filter((t: any) => t != null && String(t).trim() !== '');
+      } catch {
+        // tags may also be stored as a comma-separated string in legacy rows
+        tags = l.tags.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
+    const notes = (l.notes || '').toString().trim();
+    if (tags.length === 0 && !notes) return '';
+    const tagsHTML = tags.length > 0
+      ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;">${tags.map(t =>
+          `<span style="display:inline-block;padding:1px 6px;font-size:9px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:3px;">${esc(t)}</span>`
+        ).join('')}</div>`
+      : '';
+    const notesHTML = notes
+      ? `<div style="margin-top:3px;font-size:10px;color:#64748b;font-style:italic;white-space:pre-line;">${esc(notes)}</div>`
+      : '';
+    return tagsHTML + notesHTML;
+  };
+
   const linesHTML = (lineItems && lineItems.length > 0) ? `
     <table style="margin-top:12px;">
-      <thead><tr><th>Description</th><th class="text-right">Amount</th></tr></thead>
+      <thead><tr><th>Description</th><th class="text-right" style="width:80px;">Qty</th><th class="text-right" style="width:110px;">Unit Price</th><th class="text-right" style="width:110px;">Amount</th></tr></thead>
       <tbody>
-        ${lineItems.map((l: any) => `<tr>
-          <td>${esc(l.description || '')}</td>
-          <td class="text-right font-bold">${fmt(Number(l.amount || 0))}</td>
-        </tr>`).join('')}
+        ${lineItems.map((l: any) => {
+          const qty = Number(l.quantity || 1);
+          const unit = Number(l.unit_price || 0);
+          const amt = Number(l.amount || 0);
+          return `<tr>
+            <td>
+              <div>${esc(l.description || '')}</div>
+              ${renderLineMeta(l)}
+            </td>
+            <td class="text-right">${qty}</td>
+            <td class="text-right">${fmt(unit)}</td>
+            <td class="text-right font-bold">${fmt(amt)}</td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>` : '';
 
@@ -5105,9 +5164,18 @@ export function generateExpenseReceiptHTML(
 
 <div class="fd-meta-strip">
   <div class="fd-meta-row"><span class="lbl">Vendor</span><span class="val">${esc(vendor?.name || expense.vendor_name || '—')}</span></div>
+  ${vendor?.address ? `<div class="fd-meta-row"><span class="lbl">Vendor Address</span><span class="val" style="white-space:pre-line;">${esc(vendor.address)}</span></div>` : ''}
+  ${vendor?.phone ? `<div class="fd-meta-row"><span class="lbl">Vendor Phone</span><span class="val">${esc(vendor.phone)}</span></div>` : ''}
+  ${vendor?.email ? `<div class="fd-meta-row"><span class="lbl">Vendor Email</span><span class="val">${esc(vendor.email)}</span></div>` : ''}
+  ${vendor?.website ? `<div class="fd-meta-row"><span class="lbl">Vendor Website</span><span class="val">${esc(vendor.website)}</span></div>` : ''}
+  ${vendor?.tax_id ? `<div class="fd-meta-row"><span class="lbl">Vendor Tax ID</span><span class="val">${esc(vendor.tax_id)}</span></div>` : ''}
   <div class="fd-meta-row"><span class="lbl">Category</span><span class="val">${esc(expense.category || expense.category_name || '—')}</span></div>
   <div class="fd-meta-row"><span class="lbl">Date</span><span class="val">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</span></div>
   <div class="fd-meta-row"><span class="lbl">Reference</span><span class="val">${esc(expense.reference || '—')}</span></div>
+  ${expense.payment_method ? `<div class="fd-meta-row"><span class="lbl">Payment Method</span><span class="val">${esc(formatPaymentMethod(expense.payment_method))}</span></div>` : ''}
+  ${expense.merchant_location ? `<div class="fd-meta-row"><span class="lbl">Merchant Location</span><span class="val">${esc(expense.merchant_location)}</span></div>` : ''}
+  ${expense.geo_location_name ? `<div class="fd-meta-row"><span class="lbl">GPS / Location</span><span class="val">${esc(expense.geo_location_name)}</span></div>` : ''}
+  ${shipping > 0 && expense.shipping_speed ? `<div class="fd-meta-row"><span class="lbl">Shipping Speed</span><span class="val">${esc(expense.shipping_speed)}</span></div>` : ''}
 </div>
 
 ${detailsHTML}

@@ -62,6 +62,11 @@ const api = {
 
   // Search
   globalSearch: (query: string) => window.electronAPI.invoke('search:global', query),
+  searchIndex: (query: string, limit?: number) =>
+    window.electronAPI.invoke('search:index', { query, limit }),
+  searchBackfill: () => window.electronAPI.invoke('search:backfill'),
+  invokeAction: (actionId: string, params?: any) =>
+    window.electronAPI.invoke('action:invoke', { actionId, params }),
 
   // Notifications
   listNotifications: (unreadOnly?: boolean) =>
@@ -533,6 +538,8 @@ const api = {
     window.electronAPI.invoke('intelligence:dismiss-anomaly', id),
   cashProjection: (days: number): Promise<{ inflow: any[]; outflow: any[] }> =>
     window.electronAPI.invoke('intelligence:cash-projection', { days }),
+  entityHint: (entityType: string, id: string): Promise<string> =>
+    window.electronAPI.invoke('intelligence:entity-hint', { entityType, id }),
 
   // Rules Engine
   listRules: (company_id: string, category?: string) =>
@@ -553,6 +560,8 @@ const api = {
     window.electronAPI.invoke('record:clone', { table, id }),
   invoiceFromTimeEntries: (project_id: string, company_id: string) =>
     window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
+  invoiceFromBillableExpenses: (opts: { client_id?: string; project_id?: string; company_id: string }) =>
+    window.electronAPI.invoke('invoice:from-billable-expenses', opts),
 
   // ─── Debt Collection ─────────────────────────
   debtStats: (companyId: string): Promise<{
@@ -814,6 +823,9 @@ const api = {
   vnPaymentTermsBreakdown: () => window.electronAPI.invoke('vn:payment-terms'),
   vnPortfolioSummary: () => window.electronAPI.invoke('vn:portfolio-summary'),
   vnQuarterlySpend: (vendorId: string) => window.electronAPI.invoke('vn:quarterly-spend', { vendorId }),
+  vnDisputes: (vendorId?: string) => window.electronAPI.invoke('vn:disputes', { vendorId }),
+  vnW9Records: (vendorId: string) => window.electronAPI.invoke('vn:w9-records', { vendorId }),
+  vnInsurancePolicies: (vendorId: string) => window.electronAPI.invoke('vn:insurance-policies', { vendorId }),
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   dcDashboard: () => window.electronAPI.invoke('dc:dashboard'),
@@ -2786,6 +2798,8 @@ const api = {
   featVendorPayStatus: (vendor_id: string) => window.electronAPI.invoke('feat:vendor-pay:status', { vendor_id }),
   featVendorAchSubmit: (opts: any) => window.electronAPI.invoke('feat:vendor-ach:submit', opts),
   featVendorAchApprove: (id: string, approved_by: string) => window.electronAPI.invoke('feat:vendor-ach:approve', { id, approved_by }),
+  featVendorAchReject: (id: string, rejected_by: string) => window.electronAPI.invoke('feat:vendor-ach:reject', { id, rejected_by }),
+  featVendorAchList: (opts?: any) => window.electronAPI.invoke('feat:vendor-ach:list', opts || {}),
   featVendor1099Download: (opts: any) => window.electronAPI.invoke('feat:vendor-1099:download', opts),
   featVendorAttestSubmit: (opts: any) => window.electronAPI.invoke('feat:vendor-attest:submit', opts),
 
