@@ -1599,13 +1599,17 @@ export function generatePayStubHTML(
   ytd: YtdData,
   company: any
 ): string {
-  const companyName = esc(company?.name || 'Company');
-  const companyLegal = esc(company?.legal_name || '');
-  const companyAddr = esc([company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip]
-    .filter(Boolean).join(', '));
-  const companyPhone = esc(company?.phone || '');
-  const companyEmail = esc(company?.email || '');
+  // ── CLASSIC THEME: Arial + pure black/white. ──
 
+  const coName = company?.name || 'Company';
+  const coDetailHtml = [
+    company?.legal_name ? cesc(company.legal_name) : '',
+    [company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip].filter(Boolean).map(cesc).join(', '),
+    [company?.phone, company?.email].filter(Boolean).map(cesc).join(' &middot; '),
+  ].filter(Boolean).join('<br>');
+  const logoData = company?.logo_data ?? company?.logo ?? null;
+
+  // ── Math (unchanged) ──
   const taxDed = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
   const preTax = stub.pretax_deductions ?? 0;
   const postTax = stub.posttax_deductions ?? 0;
@@ -1623,21 +1627,16 @@ export function generatePayStubHTML(
   const overtimePay = isSalaried ? 0 : effectiveRate * 1.5 * hoursOvertime;
 
   // ── Extended metadata ──
-  const department = esc(stub.department || '');
-  const jobTitle = esc(stub.job_title || '');
   const payType = stub.pay_type === 'salary' ? 'Salary' : stub.pay_type === 'hourly' ? 'Hourly' : '';
   const payRate = stub.pay_rate ?? 0;
   const payScheduleLabels: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-Weekly', semimonthly: 'Semi-Monthly', monthly: 'Monthly' };
   const payScheduleLabel = payScheduleLabels[stub.pay_schedule || ''] || '';
   const filingStatusLabels: Record<string, string> = { single: 'Single', married: 'Married Filing Jointly', head_of_household: 'Head of Household', married_joint: 'Married Filing Jointly', married_separate: 'Married Filing Separately', head_household: 'Head of Household' };
-  const filingLabel = filingStatusLabels[stub.filing_status || ''] || esc(stub.filing_status || '');
-  const hireDate = esc(stub.hire_date || '');
-  const empType = esc(stub.employment_type || '');
+  const filingLabel = filingStatusLabels[stub.filing_status || ''] || cesc(stub.filing_status || '');
   const runTypeLabels: Record<string, string> = { regular: 'Regular', bonus: 'Bonus', correction: 'Correction', 'off-cycle': 'Off-Cycle' };
   const runTypeLabel = runTypeLabels[stub.run_type || 'regular'] || 'Regular';
   const periodsPerYr = stub.pay_periods_per_year ?? 26;
-  const employerEIN = esc(stub.employer_ein || '');
-  const stateName = esc(stub.state_name || 'Utah');
+  const stateName = stub.state_name || 'Utah';
 
   // Parse deduction detail JSON
   let deductionItems: [string, number][] = [];
@@ -1649,8 +1648,6 @@ export function generatePayStubHTML(
   }
 
   // ── PRIVACY: enforce last-4-only rendering for SSN and bank account ──
-  // Even if a caller mistakenly hands us a full SSN or full account number,
-  // we strip everything except the trailing 4 digits before rendering.
   const last4 = (raw: string | undefined | null): string => {
     if (!raw) return '';
     const digits = String(raw).replace(/\D/g, '');
@@ -1660,8 +1657,6 @@ export function generatePayStubHTML(
   const ssnDisplay = ssnLast4 ? `XXX-XX-${ssnLast4}` : '';
   const bankAcctLast4 = last4(stub.bank_account_last4 || stub.account_number);
   const bankAcctDisplay = bankAcctLast4 ? `••••${bankAcctLast4}` : '';
-  const employeeAddress = esc(stub.employee_address || '');
-  const employeeIdShort = esc(stub.employee_id_short || '');
 
   // ── Employer contributions (informational, NOT deducted from pay) ──
   const empSS = stub.employer_social_security ?? 0;
@@ -1673,64 +1668,7 @@ export function generatePayStubHTML(
   const employerTotal = empSS + empMed + empFuta + empSuta + empMatch + empHealth;
   const hasEmployerContribs = employerTotal > 0;
 
-  // ── Feature #6: deductions donut (gross → taxes / pre-tax / post-tax / net) ──
-  const psAccent = '#16a34a';
-  const deductionsDonutHTML = stub.gross_pay > 0 ? (() => {
-    const segs = [
-      { value: taxDed, color: '#dc2626', label: 'Taxes' },
-      { value: preTax, color: '#7c3aed', label: 'Pre-Tax' },
-      { value: postTax, color: '#0891b2', label: 'Post-Tax' },
-      { value: stub.net_pay, color: psAccent, label: 'Net' },
-    ];
-    if (segs.reduce((s, x) => s + x.value, 0) <= 0) return '';
-    const netPctOfGross = stub.gross_pay > 0 ? (stub.net_pay / stub.gross_pay) * 100 : 0;
-    return `<div style="display:flex;align-items:center;gap:14px;margin:14px 0;padding:10px 14px;border:1px solid #e2e8f0;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-      ${svgDonut(segs, 96, `${netPctOfGross.toFixed(0)}%`, 'Net')}
-      <div style="flex:1;font-size:10px;color:#475569;line-height:1.6;">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:4px;">Gross → Net Breakdown</div>
-        ${segs.filter(s => s.value > 0).map(s => `<div style="display:flex;justify-content:space-between;gap:12px;"><span><span style="display:inline-block;width:8px;height:8px;background:${s.color};margin-right:5px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)}</span><span style="font-variant-numeric:tabular-nums;">${fmt(s.value)} (${(s.value / stub.gross_pay * 100).toFixed(1)}%)</span></div>`).join('')}
-      </div>
-    </div>`;
-  })() : '';
-
-  // ── Feature #15: rate-of-pay visual (regular vs OT) ──
-  const ratePayHTML = (!isSalaried && hoursOvertime > 0 && (regularPay + overtimePay) > 0) ? (() => {
-    const total = regularPay + overtimePay;
-    const regPct = (regularPay / total) * 100;
-    const otPct = (overtimePay / total) * 100;
-    return `<div style="margin:8px 0 14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <div style="display:flex;justify-content:space-between;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:4px;">
-        <span>Earnings Composition</span>
-        <span style="color:#0f172a;">${fmt(total)}</span>
-      </div>
-      <div style="display:flex;height:10px;border:1px solid #cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div title="Regular" style="width:${regPct.toFixed(2)}%;background:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-        <div title="Overtime" style="width:${otPct.toFixed(2)}%;background:#d97706;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:#475569;margin-top:4px;font-variant-numeric:tabular-nums;">
-        <span><span style="display:inline-block;width:8px;height:8px;background:#0f172a;margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>Regular ${hoursRegular.toFixed(2)}h × ${fmt(effectiveRate)} = ${fmt(regularPay)}</span>
-        <span><span style="display:inline-block;width:8px;height:8px;background:#d97706;margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>OT ${hoursOvertime.toFixed(2)}h × ${fmt(effectiveRate * 1.5)} = ${fmt(overtimePay)}</span>
-      </div>
-    </div>`;
-  })() : '';
-
-  // ── Feature #18: net-of-gross horizontal indicator ──
-  const netOfGrossPct = stub.gross_pay > 0 ? (stub.net_pay / stub.gross_pay) * 100 : 0;
-  const netOfGrossHTML = stub.gross_pay > 0 ? `
-    <div style="margin-top:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <div style="display:flex;justify-content:space-between;font-size:8px;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;font-weight:700;margin-bottom:3px;">
-        <span>Net of Gross</span><span>${netOfGrossPct.toFixed(0)}%</span>
-      </div>
-      <div style="height:6px;background:rgba(255,255,255,0.3);border-radius:3px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="width:${netOfGrossPct.toFixed(2)}%;height:100%;background:${psAccent};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-      </div>
-    </div>` : '';
-
-  // ── Feature #7: YTD vs annualized projection bars ──
-  // Use period_end fraction of year as projection denominator.
-  // period_end may arrive as ISO ("2026-04-15") OR pre-formatted ("Apr 15, 2026")
-  // because callers sometimes hand display-ready dates. Try both safely so the
-  // year-fraction projection doesn't go to NaN.
+  // ── Year fraction for annualized projections (unchanged math) ──
   const periodEndDate = (() => {
     const raw = stub.period_end || '';
     if (!raw) return new Date();
@@ -1741,872 +1679,384 @@ export function generatePayStubHTML(
   const yStart = new Date(periodEndDate.getFullYear(), 0, 1).getTime();
   const yEnd = new Date(periodEndDate.getFullYear() + 1, 0, 1).getTime();
   const yearFrac = Math.max(0.01, Math.min(1, (periodEndDate.getTime() - yStart) / (yEnd - yStart)));
-  const ytdBar = (ytdVal: number, annualized: number, color: string) => {
-    if (annualized <= 0) return '';
-    const pct = Math.min(100, (ytdVal / annualized) * 100);
-    return `<div style="height:4px;background:#e2e8f0;width:60px;display:inline-block;vertical-align:middle;margin-left:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><div style="height:100%;width:${pct.toFixed(1)}%;background:${color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div></div>`;
-  };
-  const ytdProgressHTML = ytd.gross_pay > 0 ? (() => {
-    const annualGross = ytd.gross_pay / yearFrac;
-    const annualNet = ytd.net_pay / yearFrac;
-    const annualTax = ytdTotalDed / yearFrac;
-    return `<div style="margin:6px 0 14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-size:9px;color:#475569;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:6px;">YTD Progress · Annualized Projection (${(yearFrac * 100).toFixed(0)}% of year elapsed)</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;"><span>Gross</span><span style="font-variant-numeric:tabular-nums;">${fmt(ytd.gross_pay)} of ~${fmt(annualGross)}${ytdBar(ytd.gross_pay, annualGross, '#0f172a')}</span></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;"><span>Taxes</span><span style="font-variant-numeric:tabular-nums;">${fmt(ytdTotalDed)} of ~${fmt(annualTax)}${ytdBar(ytdTotalDed, annualTax, '#dc2626')}</span></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;"><span>Net</span><span style="font-variant-numeric:tabular-nums;">${fmt(ytd.net_pay)} of ~${fmt(annualNet)}${ytdBar(ytd.net_pay, annualNet, psAccent)}</span></div>
-    </div>`;
-  })() : '';
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: letter; margin: 0.4in 0.5in; }
-  body {
-    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-    color: #1e293b;
-    font-size: 12px;
-    line-height: 1.5;
-    background: #fff;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    padding: 0;
+  // ── Effective tax rates (data preserved; color→plain-text in classic) ──
+  const effFedRate = stub.gross_pay > 0 ? (stub.federal_tax / stub.gross_pay * 100).toFixed(2) : '0.00';
+  const effStateRate = stub.gross_pay > 0 ? (stub.state_tax / stub.gross_pay * 100).toFixed(2) : '0.00';
+  const effFicaRate = stub.gross_pay > 0 ? ((stub.social_security + stub.medicare) / stub.gross_pay * 100).toFixed(2) : '0.00';
+  const effTotalRate = stub.gross_pay > 0 ? (taxDed / stub.gross_pay * 100).toFixed(2) : '0.00';
+
+  // ── FICA wage base tracker (data preserved; progress bar→text in classic) ──
+  const ssPct = Math.min(100, (ytd.gross_pay / 182100) * 100);
+  const medPct = Math.min(100, (ytd.gross_pay / 200000) * 100);
+
+  // ── Net of gross % (data preserved; bar→text in classic) ──
+  const netOfGrossPct = stub.gross_pay > 0 ? (stub.net_pay / stub.gross_pay * 100).toFixed(1) : '0.0';
+
+  // ── Earnings composition: regular vs OT percentages (data preserved; bar→text) ──
+  const earningsCompositionRows: string[][] = (!isSalaried && (regularPay + overtimePay) > 0) ? [
+    [cesc('Regular'), cesc(hoursRegular.toFixed(2)), cesc(fmt(effectiveRate)), cesc(fmt(regularPay)),
+     cesc(`${((regularPay / (regularPay + overtimePay)) * 100).toFixed(1)}%`)],
+    ...(hoursOvertime > 0 ? [[cesc('Overtime (1.5x)'), cesc(hoursOvertime.toFixed(2)), cesc(fmt(effectiveRate * 1.5)), cesc(fmt(overtimePay)),
+     cesc(`${((overtimePay / (regularPay + overtimePay)) * 100).toFixed(1)}%`)]] : []),
+  ] : [];
+
+  // ── YTD progress vs annualized (data preserved; bar→text in classic) ──
+  const annualGross = ytd.gross_pay / yearFrac;
+  const annualNet = ytd.net_pay / yearFrac;
+  const annualTax = ytdTotalDed / yearFrac;
+
+  // ─ Header ─
+  const header = docHeader({
+    coName,
+    coDetailHtml: (logoImg(logoData, coName) + coDetailHtml),
+    title: 'Pay Statement',
+    numberHtml: `<div class="doc-number">Pay Date: ${cesc(stub.pay_date)}</div>` +
+      (stub.check_number ? `<div class="doc-number">Check #${cesc(stub.check_number)}</div>` : '') +
+      `<div class="doc-number">${cesc(runTypeLabel)} Run</div>`,
+  });
+
+  // ─ Meta strip ─
+  const meta = metaStrip([
+    { label: 'Pay Date',   value: stub.pay_date },
+    { label: 'Period',     value: `${stub.period_start} – ${stub.period_end}` },
+    { label: 'Net Pay',    value: fmt(stub.net_pay) },
+    { label: 'Gross Pay',  value: fmt(stub.gross_pay) },
+    { label: 'Total Ded.', value: fmt(totalDed) },
+    { label: 'YTD Net',    value: fmt(ytd.net_pay) },
+  ]);
+
+  // ─ Employee & employer info boxRow ─
+  const empInfoRow = boxRow([
+    {
+      label: 'Employee',
+      html: `<strong>${cesc(stub.employee_name)}</strong>` +
+        (stub.employee_id_short ? `<br>${cesc('ID: ' + stub.employee_id_short)}` : '') +
+        (stub.employee_address ? `<br>${cesc(stub.employee_address)}` : '') +
+        (ssnDisplay ? `<br>SSN: ${cesc(ssnDisplay)} <em style="font-size:9px;">(last 4 only)</em>` : ''),
+    },
+    {
+      label: 'Employment',
+      html: `${cesc(stub.department || '')}${stub.department && stub.job_title ? ' &mdash; ' : ''}${cesc(stub.job_title || '')}` +
+        `<br>${cesc(payType)}${payRate > 0 ? ' &mdash; ' + cesc(payType === 'Salary' ? fmt(payRate) + '/yr' : fmt(payRate) + '/hr') : ''}` +
+        `<br>${cesc(payScheduleLabel || '')}${periodsPerYr ? cesc(' (' + periodsPerYr + '/yr)') : ''}` +
+        `<br>${cesc('Hire: ' + (stub.hire_date || '—'))} &nbsp; ${cesc(stub.employment_type || '')}`,
+    },
+    {
+      label: 'Tax Withholding',
+      html: `Filing: ${cesc(filingLabel || '—')}` +
+        `<br>Fed allowances: ${cesc(stub.federal_allowances != null ? String(stub.federal_allowances) : '—')}` +
+        `<br>State (${cesc(stateName)}): ${cesc(stub.state_allowances != null ? stub.state_allowances + ' exempt.' : '—')}` +
+        (stub.w4_step4c_extra ? `<br>Extra W/H: ${cesc(fmt(stub.w4_step4c_extra))}` : '') +
+        (stub.employer_ein ? `<br>EIN: ${cesc(stub.employer_ein)}` : ''),
+    },
+    {
+      label: 'Hours',
+      html: isSalaried
+        ? 'Salaried (N/A)'
+        : `Regular: ${cesc(hoursRegular.toFixed(2))} h` +
+          `<br>Overtime: ${cesc(hoursOvertime.toFixed(2))} h` +
+          `<br>Total: ${cesc(totalHours.toFixed(2))} h` +
+          (totalHours > 0 ? `<br>Avg $/hr (net): ${cesc(fmt(stub.net_pay / totalHours))}` : ''),
+    },
+  ]);
+
+  // ─ Earnings table ─
+  const earningsRows: string[][] = isSalaried
+    ? [[cesc('Salary'), '--', '--', cesc(fmt(stub.gross_pay)), cesc(fmt(ytd.gross_pay))]]
+    : [
+        [cesc('Regular'), cesc(hoursRegular.toFixed(2)), cesc(fmt(effectiveRate)), cesc(fmt(regularPay)), '--'],
+        ...(hoursOvertime > 0 ? [[cesc('Overtime (1.5x)'), cesc(hoursOvertime.toFixed(2)), cesc(fmt(effectiveRate * 1.5)), cesc(fmt(overtimePay)), '--']] : []),
+        [cesc('<strong>Gross Pay</strong>'), cesc(`<strong>${totalHours.toFixed(2)}</strong>`), '', cesc(`<strong>${fmt(stub.gross_pay)}</strong>`), cesc(`<strong>${fmt(ytd.gross_pay)}</strong>`)],
+      ];
+  if (!isSalaried) {
+    // Remove separate gross total row — already appended above
+  } else {
+    // For salaried: just the one row + totals below
   }
-  .page { max-width: 680px; margin: 0 auto; padding: 36px 40px; }
+  const earningsCols: RuledColumn[] = [
+    { label: 'Description', width: '38%' },
+    { label: 'Hours', align: 'right', width: '12%' },
+    { label: 'Rate', align: 'right', width: '14%' },
+    { label: 'Current', align: 'right', width: '18%' },
+    { label: 'YTD', align: 'right', width: '18%' },
+  ];
+  // Rebuild as simple rows for ruledTable (html allowed in cells as TRUSTED HTML)
+  const earningsTableRows: string[][] = isSalaried
+    ? [
+        ['Salary', '--', '--', cesc(fmt(stub.gross_pay)), cesc(fmt(ytd.gross_pay))],
+        ...(preTax > 0 ? [
+          [`<em>Less: Pre-Tax Deductions</em>`, '', '', `-${cesc(fmt(preTax))}`, '--'],
+          [`<strong>Taxable Wages</strong>`, '', '', `<strong>${cesc(fmt(stub.gross_pay - preTax))}</strong>`, cesc(fmt(ytd.gross_pay))],
+        ] : []),
+      ]
+    : [
+        ['Regular', cesc(hoursRegular.toFixed(2)), cesc(fmt(effectiveRate)), cesc(fmt(regularPay)), '--'],
+        ...(hoursOvertime > 0 ? [['Overtime (1.5x)', cesc(hoursOvertime.toFixed(2)), cesc(fmt(effectiveRate * 1.5)), cesc(fmt(overtimePay)), '--']] : []),
+        [`<strong>Gross Pay</strong>`, `<strong>${cesc(totalHours.toFixed(2))}</strong>`, '', `<strong>${cesc(fmt(stub.gross_pay))}</strong>`, `<strong>${cesc(fmt(ytd.gross_pay))}</strong>`],
+        ...(preTax > 0 ? [
+          [`<em>Less: Pre-Tax Deductions</em>`, '', '', `-${cesc(fmt(preTax))}`, '--'],
+          [`<strong>Taxable Wages</strong>`, '', '', `<strong>${cesc(fmt(stub.gross_pay - preTax))}</strong>`, cesc(fmt(ytd.gross_pay))],
+        ] : []),
+      ];
 
-  /* ── Header (modernized 2026-05-05) ── */
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding-bottom: 22px;
-    border-bottom: 3px solid #0f172a;
-    margin-bottom: 24px;
-    position: relative;
-  }
-  .header::before {
-    content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 3px;
-    background: #0f172a;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .co-name { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; }
-  .co-legal { font-size: 10px; color: #94a3b8; margin-top: 2px; font-weight: 500; }
-  .co-detail { font-size: 10.5px; color: #64748b; margin-top: 7px; line-height: 1.6; }
-  .doc-label {
-    font-size: 12px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 1.6px; color: #0f172a;
-    padding: 8px 18px;
-    border: 2px solid #0f172a;
-    border-radius: 4px;
-    background: #ffffff;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
+  // ─ Deductions table ─
+  const taxableFed = Math.max(0, stub.gross_pay - preTax);
+  const taxableState = Math.max(0, stub.gross_pay - preTax);
+  const taxRows: string[][] = [
+    ['Federal Income Tax',
+     taxableFed > 0 ? cesc((stub.federal_tax / taxableFed * 100).toFixed(2) + '%') : '--',
+     cesc(fmt(stub.federal_tax)), cesc(fmt(ytd.federal_tax)), cesc(fmt(taxableFed))],
+    [`State Income Tax (${cesc(stateName)})`,
+     taxableState > 0 ? cesc((stub.state_tax / taxableState * 100).toFixed(2) + '%') : '--',
+     cesc(fmt(stub.state_tax)), cesc(fmt(ytd.state_tax)), cesc(fmt(taxableState))],
+    ['Social Security (OASDI) — cap $182,100', '6.20%',
+     cesc(fmt(stub.social_security)), cesc(fmt(ytd.social_security)),
+     cesc(fmt(Math.min(stub.gross_pay, Math.max(0, 182100 - (ytd.gross_pay - stub.gross_pay)))))],
+    ['Medicare (HI)', '1.45%',
+     cesc(fmt(stub.medicare)), cesc(fmt(ytd.medicare)), cesc(fmt(stub.gross_pay))],
+    [`<strong>Total Statutory Taxes</strong>`, '',
+     `<strong>${cesc(fmt(taxDed))}</strong>`, `<strong>${cesc(fmt(ytdTotalDed))}</strong>`, ''],
+  ];
+  const taxCols: RuledColumn[] = [
+    { label: 'Tax', width: '34%' },
+    { label: 'Rate', align: 'right', width: '10%' },
+    { label: 'Current', align: 'right', width: '18%' },
+    { label: 'YTD', align: 'right', width: '18%' },
+    { label: 'Taxable Wages', align: 'right', width: '20%' },
+  ];
 
-  /* ── Employee Info Grid (modernized) ── */
-  .info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    gap: 0;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    margin-bottom: 24px;
-    overflow: hidden;
-    background: #ffffff;
-    box-shadow: none;
-  }
-  .info-cell {
-    padding: 11px 14px;
-    border-right: 1px solid #e2e8f0;
-    border-bottom: 1px solid #e2e8f0;
-    background: #ffffff;
-  }
-  .info-cell:nth-child(4n) { border-right: none; }
-  .info-cell:nth-last-child(-n+4) { border-bottom: none; }
-  .info-label {
-    font-size: 9px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 1.1px; color: #94a3b8; margin-bottom: 3px;
-  }
-  .info-value { font-size: 12.5px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
-  .info-value.emp-name { font-size: 14px; font-weight: 800; letter-spacing: -0.2px; }
+  // ─ Voluntary deductions table ─
+  const voluntaryRows: string[][] = [
+    ...(deductionItems.length > 0 ? deductionItems.map(([name, amount]) => {
+      const isPre = name.toLowerCase().includes('401k') || name.toLowerCase().includes('hsa') || name.toLowerCase().includes('fsa') || name.toLowerCase().includes('health') || name.toLowerCase().includes('dental') || name.toLowerCase().includes('vision') || name.toLowerCase().includes('retirement');
+      return [cesc(name), isPre ? 'Pre-Tax' : 'Post-Tax', 'Per Period', cesc(fmt(amount)), '--'];
+    }) : []),
+    ...(preTax > 0 && deductionItems.length === 0 ? [['Pre-Tax Deductions', 'Pre-Tax', 'Per Period', cesc(fmt(preTax)), '--']] : []),
+    ...(postTax > 0 && deductionItems.length === 0 ? [['Post-Tax Deductions', 'Post-Tax', 'Per Period', cesc(fmt(postTax)), '--']] : []),
+    [`<strong>Total Voluntary Deductions</strong>`, '', '', `<strong>${cesc(fmt(preTax + postTax))}</strong>`, '--'],
+  ];
+  const volCols: RuledColumn[] = [
+    { label: 'Deduction', width: '38%' },
+    { label: 'Type', align: 'right', width: '14%' },
+    { label: 'Basis', align: 'right', width: '14%' },
+    { label: 'Current', align: 'right', width: '17%' },
+    { label: 'YTD', align: 'right', width: '17%' },
+  ];
+  const hasVoluntary = preTax > 0 || postTax > 0 || deductionItems.length > 0;
 
-  /* ── Section Headers (modernized) ── */
-  .section {
-    font-size: 10px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 1.6px; color: #fff;
-    padding: 8px 14px; margin-top: 22px; margin-bottom: 0;
-    border-radius: 3px 3px 0 0;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .section-earn    { background: #0f172a; }
-  .section-ded     { background: #7f1d1d; }
-  .section-summary { background: #14532d; }
-  .section-employer{ background: #475569; }
-  .section-deposit { background: #1e3a8a; }
+  // ─ Employer contributions table ─
+  const empContribRows: string[][] = [
+    ...(empSS > 0 ? [['Social Security (OASDI Match)', '6.20%', cesc(fmt(empSS)), '$182,100']] : []),
+    ...(empMed > 0 ? [['Medicare (HI Match)', '1.45%', cesc(fmt(empMed)), 'No limit']] : []),
+    ...(empFuta > 0 ? [['Federal Unemployment (FUTA)', '0.60%', cesc(fmt(empFuta)), '$7,000']] : []),
+    ...(empSuta > 0 ? [['State Unemployment (UT SUI)', '1.20%', cesc(fmt(empSuta)), '$44,800']] : []),
+    ...(empMatch > 0 ? [['Retirement Plan Match', '--', cesc(fmt(empMatch)), '--']] : []),
+    ...(empHealth > 0 ? [['Health Insurance Contribution', '--', cesc(fmt(empHealth)), '--']] : []),
+    [`<strong>Total Employer Cost</strong>`, '', `<strong>${cesc(fmt(employerTotal))}</strong>`, ''],
+  ];
+  const empContribCols: RuledColumn[] = [
+    { label: 'Obligation', width: '42%' },
+    { label: 'Rate', align: 'right', width: '13%' },
+    { label: 'Current', align: 'right', width: '22%' },
+    { label: 'Wage Base', align: 'right', width: '23%' },
+  ];
 
-  /* ── Employee identity block ── */
-  .id-block {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: 0;
-    border: 1px solid #cbd5e1;
-    margin-bottom: 16px;
-  }
-  .id-cell {
-    padding: 12px 14px;
-    border-right: 1px solid #e2e8f0;
-  }
-  .id-cell:last-child { border-right: none; }
-  .id-cell .info-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 4px; }
-  .id-name { font-size: 14px; font-weight: 800; color: #0f172a; }
-  .id-meta-row { font-size: 10px; color: #475569; margin-top: 2px; }
-  .id-period-row { display: flex; justify-content: space-between; font-size: 10px; margin-top: 6px; }
-  .id-period-row .id-pl { color: #94a3b8; text-transform: uppercase; letter-spacing: 0.6px; font-size: 8px; font-weight: 700; }
-  .id-period-row .id-pv { font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; }
+  // ─ YTD summary table ─
+  const ytdRows: string[][] = [
+    [`<strong>Gross Earnings</strong>`, `<strong>${cesc(fmt(ytd.gross_pay))}</strong>`, `<strong>${cesc(fmt(annualGross))}</strong>`],
+    ['Federal Income Tax', cesc(fmt(ytd.federal_tax)), cesc(fmt(ytd.federal_tax / yearFrac))],
+    [`State Income Tax (${cesc(stateName)})`, cesc(fmt(ytd.state_tax)), cesc(fmt(ytd.state_tax / yearFrac))],
+    ['Social Security (OASDI)', cesc(fmt(ytd.social_security)), cesc(fmt(ytd.social_security / yearFrac))],
+    ['Medicare (HI)', cesc(fmt(ytd.medicare)), cesc(fmt(ytd.medicare / yearFrac))],
+    [`<strong>Total Taxes YTD</strong>`, `<strong>${cesc(fmt(ytdTotalDed))}</strong>`, `<strong>${cesc(fmt(annualTax))}</strong>`],
+    [`<strong>Net Pay YTD</strong>`, `<strong>${cesc(fmt(ytd.net_pay))}</strong>`, `<strong>${cesc(fmt(annualNet))}</strong>`],
+  ];
+  const ytdCols: RuledColumn[] = [
+    { label: 'Category', width: '44%' },
+    { label: 'YTD Amount', align: 'right', width: '28%' },
+    { label: `Annualized (${(yearFrac * 100).toFixed(0)}% elapsed)`, align: 'right', width: '28%' },
+  ];
 
-  /* ── Employer contributions ── */
-  .employer-note {
-    font-size: 8px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.8px; color: #64748b;
-    background: #f1f5f9; padding: 4px 12px;
-    border-bottom: 1px solid #e2e8f0;
-  }
-  .employer-table td { font-size: 10px; color: #475569; }
-  .employer-table .total-row td { background: #f1f5f9; }
+  // ─ Hours-to-date table (hourly only) ─
+  const hoursSummaryTable = !isSalaried ? ruledTable(
+    [
+      { label: 'Hours Type', width: '40%' },
+      { label: 'Current Period', align: 'right', width: '30%' },
+      { label: 'YTD', align: 'right', width: '30%' },
+    ],
+    [
+      ['Regular', cesc(hoursRegular.toFixed(2)), cesc((stub.ytd_hours_regular != null ? stub.ytd_hours_regular : hoursRegular).toFixed(2))],
+      ['Overtime', cesc(hoursOvertime.toFixed(2)), cesc((stub.ytd_hours_overtime != null ? stub.ytd_hours_overtime : hoursOvertime).toFixed(2))],
+      [`<strong>Total</strong>`, `<strong>${cesc(totalHours.toFixed(2))}</strong>`, ''],
+    ],
+  ) : '';
 
-  /* ── Direct deposit block ── */
-  .deposit-block {
-    margin-top: 6px;
-    padding: 10px 14px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 11px;
-  }
-  .deposit-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
-  .deposit-val { font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; }
+  // ─ FICA wage base table (data preserved; bars→text) ─
+  const ficaTable = ruledTable(
+    [{ label: 'FICA Wage Base — 2026', width: '40%' }, { label: 'YTD Wages', align: 'right', width: '20%' }, { label: 'Limit', align: 'right', width: '18%' }, { label: '% Used', align: 'right', width: '12%' }, { label: 'Status', align: 'right', width: '10%' }],
+    [
+      ['Social Security (OASDI)', cesc(fmt(ytd.gross_pay)), '$182,100', cesc(ssPct.toFixed(1) + '%'), ytd.gross_pay >= 182100 ? '<strong>CAP REACHED</strong>' : 'Active'],
+      ['Medicare Surtax Threshold', cesc(fmt(ytd.gross_pay)), '$200,000', cesc(medPct.toFixed(1) + '%'), ytd.gross_pay >= 200000 ? '<strong>SURTAX ACTIVE</strong>' : cesc('Remaining: ' + fmt(Math.max(0, 200000 - ytd.gross_pay)))],
+    ],
+  );
 
-  /* ── Confidential footer ── */
-  .confidential {
-    margin-top: 16px; padding: 8px 12px;
-    border: 1px dashed #cbd5e1; background: #fafaf9;
-    text-align: center; font-size: 9px;
-    color: #64748b; letter-spacing: 0.6px;
-    text-transform: uppercase; font-weight: 600;
-  }
+  // ─ Effective tax rate table (data preserved; colored boxes→table) ─
+  const effRateTable = ruledTable(
+    [{ label: 'Tax Rate Analysis', width: '50%' }, { label: 'Effective Rate', align: 'right', width: '50%' }],
+    [
+      ['Effective Federal Rate', cesc(effFedRate + '%')],
+      [`Effective ${cesc(stateName)} State Rate`, cesc(effStateRate + '%')],
+      ['FICA (SS + Medicare) Rate', cesc(effFicaRate + '%')],
+      [`<strong>Total Tax Burden</strong>`, `<strong>${cesc(effTotalRate + '%')}</strong>`],
+      [`Net of Gross`, `${cesc(netOfGrossPct)}%`],
+    ],
+  );
 
-  /* ── Tables ── */
-  table { width: 100%; border-collapse: collapse; }
-  th {
-    padding: 6px 12px; text-align: left;
-    font-size: 8px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.5px; color: #64748b;
-    border-bottom: 1px solid #cbd5e1;
-    background: #f8fafc;
-  }
-  td {
-    padding: 6px 12px; font-size: 11px; color: #334155;
-    border-bottom: 1px solid #e2e8f0;
-  }
-  .r { text-align: right; font-variant-numeric: tabular-nums; }
-  .mono { font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums; }
-  .b { font-weight: 700; }
-  .red { color: #dc2626; }
-  .green { color: #16a34a; }
-  .muted { color: #94a3b8; }
-  .dark { color: #0f172a; }
-  .total-row td { border-top: 2px solid #0f172a; border-bottom: none; background: #f8fafc; }
-  .sub-row td { font-size: 10px; color: #64748b; padding-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #e2e8f0; }
+  // ─ Pay calculation detail (preserved verbatim data) ─
+  const calcDetailRows: string[][] = [
+    ...(isSalaried
+      ? [[`Annual Salary`, payRate > 0 ? cesc(fmt(payRate)) : 'Per employment agreement', `÷ ${cesc(String(periodsPerYr))} periods`, `= ${cesc(fmt(stub.gross_pay))} / period`]]
+      : [
+          ['Regular Pay', `${cesc(hoursRegular.toFixed(2))} h × ${cesc(fmt(effectiveRate))}`, '', `= ${cesc(fmt(regularPay))}`],
+          ...(hoursOvertime > 0 ? [['Overtime Pay', `${cesc(hoursOvertime.toFixed(2))} h × ${cesc(fmt(effectiveRate))} × 1.5`, '', `= ${cesc(fmt(overtimePay))}`]] : []),
+          ['Gross Pay', `${cesc(fmt(regularPay))}${hoursOvertime > 0 ? ' + ' + cesc(fmt(overtimePay)) : ''}`, '', `= ${cesc(fmt(stub.gross_pay))}`],
+        ]),
+    ['Federal W/H', `Annualized ${cesc(fmt(stub.gross_pay * periodsPerYr))} − std ded → bracket ÷ ${cesc(String(periodsPerYr))}${stub.w4_step4c_extra ? ` + ${cesc(fmt(stub.w4_step4c_extra))} extra` : ''}`, '', `= ${cesc(fmt(stub.federal_tax))}`],
+    [`${cesc(stateName)} W/H`, `Annualized × flat rate − exemption credits ÷ ${cesc(String(periodsPerYr))}`, '', `= ${cesc(fmt(stub.state_tax))}`],
+    ['SS (OASDI)', `${cesc(fmt(Math.min(stub.gross_pay, Math.max(0, 182100 - (ytd.gross_pay - stub.gross_pay)))))} × 6.2%`, '', `= ${cesc(fmt(stub.social_security))}`],
+    ['Medicare (HI)', `${cesc(fmt(stub.gross_pay))} × 1.45%`, '', `= ${cesc(fmt(stub.medicare))}`],
+    [`<strong>Net Pay</strong>`, `${cesc(fmt(stub.gross_pay))} − ${cesc(fmt(taxDed))} taxes${preTax > 0 ? ' − ' + cesc(fmt(preTax)) + ' pre-tax' : ''}${postTax > 0 ? ' − ' + cesc(fmt(postTax)) + ' post-tax' : ''}`, '', `<strong>= ${cesc(fmt(stub.net_pay))}</strong>`],
+  ];
+  const calcDetailTable = ruledTable(
+    [{ label: 'Pay Calculation Detail', width: '22%' }, { label: 'Basis', width: '50%' }, { label: '', width: '8%' }, { label: 'Amount', align: 'right', width: '20%' }],
+    calcDetailRows,
+  );
 
-  /* ── Net Pay Box (hero, modernized) ── */
-  .net-box {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 26px;
-    padding: 22px 26px;
-    background: #f0fdf4;
-    border: 1px solid #86efac;
-    border-radius: 4px;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    position: relative;
-    overflow: hidden;
-    box-shadow: none;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .net-box::before {
-    content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
-    background: #16a34a;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .net-current { padding-left: 8px; }
-  .net-label {
-    font-size: 10px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 1.4px; color: #16a34a;
-  }
-  .net-amount {
-    font-size: 36px; font-weight: 800; color: #15803d;
-    font-variant-numeric: tabular-nums; margin-top: 4px;
-    letter-spacing: -0.7px;
-    font-family: 'SF Mono', Menlo, Consolas, monospace;
-    line-height: 1.05;
-  }
-  .net-ytd-label {
-    font-size: 10px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 1.4px; color: #64748b; text-align: right;
-  }
-  .net-ytd-amount {
-    font-size: 18px; font-weight: 800; color: #334155;
-    text-align: right; margin-top: 4px;
-    font-variant-numeric: tabular-nums;
-    font-family: 'SF Mono', Menlo, Consolas, monospace;
-    letter-spacing: -0.3px;
-  }
+  // ─ Earnings composition table (data preserved; bar→table) ─
+  const earningsCompTable = (!isSalaried && (regularPay + overtimePay) > 0)
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Earnings Composition</div>` +
+      ruledTable(
+        [
+          { label: 'Type', width: '25%' },
+          { label: 'Hours', align: 'right', width: '15%' },
+          { label: 'Rate', align: 'right', width: '20%' },
+          { label: 'Amount', align: 'right', width: '20%' },
+          { label: '% of Total', align: 'right', width: '20%' },
+        ],
+        earningsCompositionRows,
+      ) +
+      `</div>`
+    : '';
 
-  /* ── Waterfall Summary ── */
-  .waterfall { margin-top: 20px; }
-  .wf-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 5px 14px;
-    font-size: 11px;
-    border-bottom: 1px solid #f1f5f9;
-  }
-  .wf-row.wf-total {
-    border-top: 2px solid #0f172a;
-    border-bottom: none;
-    font-weight: 800;
-    font-size: 13px;
-    padding-top: 8px;
-    margin-top: 4px;
-    color: #0f172a;
-  }
-  .wf-label { color: #475569; }
-  .wf-value { font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+  // ─ Gross→Net breakdown table (replaces donut; all data preserved) ─
+  const grossNetBreakdownTable = stub.gross_pay > 0
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Gross → Net Breakdown</div>` +
+      ruledTable(
+        [{ label: 'Category', width: '50%' }, { label: 'Amount', align: 'right', width: '25%' }, { label: '% of Gross', align: 'right', width: '25%' }],
+        [
+          ['Statutory Taxes', cesc(fmt(taxDed)), cesc((taxDed / stub.gross_pay * 100).toFixed(1) + '%')],
+          ...(preTax > 0 ? [['Pre-Tax Deductions', cesc(fmt(preTax)), cesc((preTax / stub.gross_pay * 100).toFixed(1) + '%')]] : []),
+          ...(postTax > 0 ? [['Post-Tax Deductions', cesc(fmt(postTax)), cesc((postTax / stub.gross_pay * 100).toFixed(1) + '%')]] : []),
+          [`<strong>Net Pay</strong>`, `<strong>${cesc(fmt(stub.net_pay))}</strong>`, `<strong>${cesc((stub.net_pay / stub.gross_pay * 100).toFixed(1) + '%')}</strong>`],
+        ],
+      ) +
+      `</div>`
+    : '';
 
-  /* ── Footer ── */
-  .footer {
-    margin-top: 32px;
-    padding-top: 12px;
-    border-top: 1px solid #e2e8f0;
-    display: flex;
-    justify-content: space-between;
-    font-size: 9px;
-    color: #94a3b8;
-  }
+  // ─ Totals box ─
+  const totals = totalsBox([
+    { label: 'Gross Pay', value: fmt(stub.gross_pay) },
+    ...(preTax > 0 ? [{ label: 'Pre-Tax Deductions', value: fmt(preTax) }] : []),
+    ...(postTax > 0 ? [{ label: 'Post-Tax Deductions', value: fmt(postTax) }] : []),
+    { label: 'Statutory Taxes', value: fmt(taxDed) },
+    { label: 'Total Deductions', value: fmt(totalDed) },
+    { label: 'Net Pay This Period', value: fmt(stub.net_pay), grand: true },
+  ]);
 
-  /* ── Print ── */
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { padding: 0; }
-    .no-break { page-break-inside: avoid; }
-  }
-</style></head>
-<body>
-<div class="page">
+  // ─ Notices (preserved verbatim) ─
+  const noticesHtml = `<div style="padding:10px 16px;border-bottom:2px solid #000;font-size:9px;line-height:1.7;">` +
+    `<div class="sec-label" style="margin-bottom:4px;">Important Information</div>` +
+    `<div>&bull; Federal tax calculated per IRS Publication 15-T (2026) Percentage Method for Form W-4 (2020 or later).</div>` +
+    `<div>&bull; ${cesc(stateName)} state tax calculated at the flat withholding rate per TC-40W, with applicable personal exemption credits.</div>` +
+    `<div>&bull; Social Security (OASDI) tax applies to wages up to the annual wage base of $182,100 (2026). Once the cap is reached, no further SS tax is withheld for the remainder of the calendar year.</div>` +
+    `<div>&bull; Medicare (HI) tax of 1.45% applies to all wages with no cap. Additional 0.9% Medicare surtax applies to combined wages exceeding $200,000 YTD (IRC &sect;3101(b)(2)).</div>` +
+    `<div>&bull; Pre-tax deductions (401(k), HSA, health insurance) reduce taxable income for federal and state withholding but remain subject to FICA taxes unless specifically exempted.</div>` +
+    `<div>&bull; This earnings statement is provided for informational purposes. Retain for your personal tax records. Report discrepancies to your employer within 30 days of receipt.</div>` +
+    `<div>&bull; Employer contributions shown are paid by the employer and do not reduce your take-home pay. They represent additional compensation value beyond your gross earnings.</div>` +
+    `</div>`;
 
-  <!-- Header -->
-  <div class="header">
-    <div>
-      <div class="co-name">${companyName}</div>
-      ${companyLegal ? `<div class="co-legal">${companyLegal}</div>` : ''}
-      <div class="co-detail">
-        ${companyAddr ? companyAddr + '<br>' : ''}
-        ${companyPhone ? companyPhone : ''}${companyEmail ? (companyPhone ? ' &middot; ' : '') + companyEmail : ''}
-      </div>
-    </div>
-    <div class="doc-label">Earnings Statement</div>
-  </div>
+  // ─ Direct deposit box ─
+  const directDepositBox = (stub.bank_name || bankAcctDisplay)
+    ? boxRow([
+        { label: 'Direct Deposit — Bank', html: cesc(stub.bank_name || '—') },
+        { label: 'Account (last 4 only)', html: cesc(bankAcctDisplay || '—') },
+      ])
+    : '';
 
-  <!-- Employee Identity & Period block -->
-  ${(employeeAddress || ssnDisplay || employeeIdShort) ? `
-  <div class="id-block">
-    <div class="id-cell">
-      <div class="info-label">Employee</div>
-      <div class="id-name">${esc(stub.employee_name)}</div>
-      ${employeeIdShort ? `<div class="id-meta-row">Employee ID: <span class="b dark">${employeeIdShort}</span></div>` : ''}
-      ${employeeAddress ? `<div class="id-meta-row">${employeeAddress}</div>` : ''}
-      ${ssnDisplay ? `<div class="id-meta-row">SSN: <span class="mono b dark">${ssnDisplay}</span> <span class="muted" style="font-size:8px;">(last 4 only)</span></div>` : ''}
-    </div>
-    <div class="id-cell">
-      <div class="info-label">Pay Period</div>
-      <div class="id-period-row"><span class="id-pl">Start</span><span class="id-pv">${esc(stub.period_start)}</span></div>
-      <div class="id-period-row"><span class="id-pl">End</span><span class="id-pv">${esc(stub.period_end)}</span></div>
-      <div class="id-period-row"><span class="id-pl">Pay Date</span><span class="id-pv">${esc(stub.pay_date)}</span></div>
-      ${stub.check_number ? `<div class="id-period-row"><span class="id-pl">Check #</span><span class="id-pv">${esc(stub.check_number)}</span></div>` : ''}
-    </div>
-  </div>
-  ` : ''}
+  // ─ Assemble doc ─
+  const body =
+    header +
+    meta +
+    empInfoRow +
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Earnings</div>` +
+    ruledTable(earningsCols, earningsTableRows) +
+    `</div>` +
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Statutory Tax Withholdings</div>` +
+    ruledTable(taxCols, taxRows) +
+    `</div>` +
+    (hasVoluntary
+      ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+        `<div class="sec-label" style="margin-bottom:6px;">Voluntary Deductions</div>` +
+        ruledTable(volCols, voluntaryRows) +
+        `</div>`
+      : '') +
+    earningsCompTable +
+    grossNetBreakdownTable +
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Tax Rate Analysis</div>` +
+    effRateTable +
+    `</div>` +
+    `<div style="padding:10px 16px 14px;border-bottom:2px solid #000;display:flex;justify-content:flex-end;">` +
+    totals +
+    `</div>` +
+    directDepositBox +
+    (hasEmployerContribs
+      ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+        `<div class="sec-label" style="margin-bottom:4px;">Employer Contributions (Informational — Not Deducted from Pay)</div>` +
+        ruledTable(empContribCols, empContribRows) +
+        (hasEmployerContribs ? `<div style="padding:6px 0;font-size:10px;">Total Compensation This Period: <strong>${cesc(fmt(stub.gross_pay + employerTotal))}</strong> (Gross ${cesc(fmt(stub.gross_pay))} + Employer ${cesc(fmt(employerTotal))})</div>` : '') +
+        `</div>`
+      : '') +
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Year-to-Date Summary</div>` +
+    ruledTable(ytdCols, ytdRows) +
+    `</div>` +
+    (!isSalaried
+      ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+        `<div class="sec-label" style="margin-bottom:6px;">Hours Summary</div>` +
+        hoursSummaryTable +
+        `</div>`
+      : '') +
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">FICA Wage Base Tracking — 2026</div>` +
+    ficaTable +
+    `</div>` +
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Pay Calculation Detail</div>` +
+    calcDetailTable +
+    `</div>` +
+    noticesHtml +
+    footerBar(`${cesc(coName)} · Pay Period ${cesc(stub.period_start)} – ${cesc(stub.period_end)} · Confidential Employee Pay Information — Retain for Tax Records`);
 
-  <!-- Employee Info Grid (expanded) -->
-  <div class="info-grid">
-    <div class="info-cell" style="grid-column: span 2;">
-      <div class="info-label">Employee Name</div>
-      <div class="info-value emp-name">${esc(stub.employee_name)}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Employee ID</div>
-      <div class="info-value">${employeeIdShort || '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">SSN</div>
-      <div class="info-value mono">${ssnDisplay || 'XXX-XX-XXXX'}</div>
-    </div>
-
-    <div class="info-cell">
-      <div class="info-label">Department</div>
-      <div class="info-value">${department || '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Job Title</div>
-      <div class="info-value">${jobTitle || '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Hire Date</div>
-      <div class="info-value">${hireDate || '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Employment</div>
-      <div class="info-value">${empType || '--'}</div>
-    </div>
-
-    <div class="info-cell">
-      <div class="info-label">Pay Date</div>
-      <div class="info-value">${esc(stub.pay_date)}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Period</div>
-      <div class="info-value">${esc(stub.period_start)} &ndash; ${esc(stub.period_end)}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Check #</div>
-      <div class="info-value mono">${esc(stub.check_number || '--')}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Run Type</div>
-      <div class="info-value">${runTypeLabel}</div>
-    </div>
-
-    <div class="info-cell">
-      <div class="info-label">Pay Type / Rate</div>
-      <div class="info-value">${payType}${payRate > 0 ? ' &mdash; ' + (payType === 'Salary' ? fmt(payRate) + '/yr' : fmt(payRate) + '/hr') : ''}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Schedule</div>
-      <div class="info-value">${payScheduleLabel || '--'}${periodsPerYr ? ' (' + periodsPerYr + '/yr)' : ''}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Hours (Reg / OT)</div>
-      <div class="info-value">${isSalaried ? 'Salaried' : hoursRegular.toFixed(2) + ' / ' + hoursOvertime.toFixed(2)}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Total Hours</div>
-      <div class="info-value">${isSalaried ? 'N/A' : totalHours.toFixed(2)}</div>
-    </div>
-
-    <div class="info-cell">
-      <div class="info-label">Filing Status (W-4)</div>
-      <div class="info-value">${filingLabel || '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">Fed Allowances</div>
-      <div class="info-value">${stub.federal_allowances != null ? String(stub.federal_allowances) : '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">State (${stateName})</div>
-      <div class="info-value">${stub.state_allowances != null ? stub.state_allowances + ' exempt.' : '--'}</div>
-    </div>
-    <div class="info-cell">
-      <div class="info-label">W-4 Extra W/H</div>
-      <div class="info-value">${stub.w4_step4c_extra ? fmt(stub.w4_step4c_extra) : '--'}</div>
-    </div>
-  </div>
-
-  ${employerEIN ? `
-  <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;padding:4px 14px;margin-bottom:8px;">
-    <span>Employer EIN: <span class="mono dark" style="font-weight:600;">${employerEIN}</span></span>
-    <span>${companyAddr}</span>
-  </div>
-  ` : ''}
-
-  ${ratePayHTML}
-
-  <!-- Earnings Section -->
-  <div class="section section-earn">Earnings</div>
-  <table>
-    <thead><tr>
-      <th style="width:40%">Description</th>
-      <th class="r" style="width:12%">Hours</th>
-      <th class="r" style="width:12%">Rate</th>
-      <th class="r" style="width:18%">Current</th>
-      <th class="r" style="width:18%">YTD</th>
-    </tr></thead>
-    <tbody>
-      ${isSalaried ? `
-      <tr>
-        <td class="dark">Salary</td>
-        <td class="r mono muted">--</td>
-        <td class="r mono muted">--</td>
-        <td class="r mono b dark">${fmt(stub.gross_pay)}</td>
-        <td class="r mono muted">${fmt(ytd.gross_pay)}</td>
-      </tr>
-      ` : `
-      <tr>
-        <td class="dark">Regular</td>
-        <td class="r mono">${hoursRegular.toFixed(2)}</td>
-        <td class="r mono">${fmt(effectiveRate)}</td>
-        <td class="r mono b dark">${fmt(regularPay)}</td>
-        <td class="r mono muted">--</td>
-      </tr>
-      ${hoursOvertime > 0 ? `
-      <tr>
-        <td class="dark">Overtime (1.5x)</td>
-        <td class="r mono">${hoursOvertime.toFixed(2)}</td>
-        <td class="r mono">${fmt(effectiveRate * 1.5)}</td>
-        <td class="r mono b dark">${fmt(overtimePay)}</td>
-        <td class="r mono muted">--</td>
-      </tr>
-      ` : ''}
-      `}
-      <tr class="total-row">
-        <td class="b dark">Gross Pay</td>
-        <td class="r mono b">${isSalaried ? '' : totalHours.toFixed(2)}</td>
-        <td></td>
-        <td class="r mono b dark" style="font-size:13px;">${fmt(stub.gross_pay)}</td>
-        <td class="r mono b muted">${fmt(ytd.gross_pay)}</td>
-      </tr>
-      ${preTax > 0 ? `
-      <tr>
-        <td style="color:#7c3aed;padding-left:16px;">Less: Pre-Tax Deductions</td>
-        <td></td>
-        <td></td>
-        <td class="r mono" style="color:#7c3aed;">-${fmt(preTax)}</td>
-        <td class="r mono muted">--</td>
-      </tr>
-      <tr class="total-row">
-        <td class="b dark">Taxable Wages (Subject to Tax)</td>
-        <td></td>
-        <td></td>
-        <td class="r mono b dark" style="font-size:13px;">${fmt(stub.gross_pay - preTax)}</td>
-        <td class="r mono b muted">${fmt(ytd.gross_pay)}</td>
-      </tr>
-      ` : ''}
-    </tbody>
-  </table>
-
-  <!-- Statutory Taxes Section -->
-  <div class="section section-ded">Statutory Tax Withholdings</div>
-  <table>
-    <thead><tr>
-      <th style="width:36%">Tax</th>
-      <th class="r" style="width:11%">Rate</th>
-      <th class="r" style="width:18%">Current</th>
-      <th class="r" style="width:18%">YTD</th>
-      <th class="r" style="width:17%">Taxable Wages</th>
-    </tr></thead>
-    <tbody>
-      <tr>
-        <td>Federal Income Tax</td>
-        <td class="r mono muted">${(() => {
-          // BUG FIX: rate must use the SAME taxable base as the "Taxable Wages"
-          // column or the percentage is misleading. Federal withholding is
-          // computed against (gross - pre-tax deductions), not gross_pay.
-          const taxableFed = Math.max(0, stub.gross_pay - preTax);
-          return taxableFed > 0 ? (stub.federal_tax / taxableFed * 100).toFixed(2) + '%' : '--';
-        })()}</td>
-        <td class="r mono red">${fmt(stub.federal_tax)}</td>
-        <td class="r mono muted">${fmt(ytd.federal_tax)}</td>
-        <td class="r mono muted">${fmt(Math.max(0, stub.gross_pay - preTax))}</td>
-      </tr>
-      <tr>
-        <td>State Income Tax (UT)</td>
-        <td class="r mono muted">${(() => {
-          // BUG FIX: Utah honors federal pre-tax deductions (401(k), HSA, FSA,
-          // qualified health insurance), so state taxable wages should also
-          // exclude them. Some states differ — adjust per-state when adding.
-          const taxableState = Math.max(0, stub.gross_pay - preTax);
-          return taxableState > 0 ? (stub.state_tax / taxableState * 100).toFixed(2) + '%' : '--';
-        })()}</td>
-        <td class="r mono red">${fmt(stub.state_tax)}</td>
-        <td class="r mono muted">${fmt(ytd.state_tax)}</td>
-        <td class="r mono muted">${fmt(Math.max(0, stub.gross_pay - preTax))}</td>
-      </tr>
-      <tr>
-        <td>Social Security (OASDI) <span class="muted" style="font-size:8px;">cap $182,100</span></td>
-        <td class="r mono muted">6.20%</td>
-        <td class="r mono red">${fmt(stub.social_security)}</td>
-        <td class="r mono muted">${fmt(ytd.social_security)}</td>
-        <td class="r mono muted">${fmt(Math.min(stub.gross_pay, Math.max(0, 182100 - (ytd.gross_pay - stub.gross_pay))))}</td>
-      </tr>
-      <tr>
-        <td>Medicare (HI)</td>
-        <td class="r mono muted">1.45%</td>
-        <td class="r mono red">${fmt(stub.medicare)}</td>
-        <td class="r mono muted">${fmt(ytd.medicare)}</td>
-        <td class="r mono muted">${fmt(stub.gross_pay)}</td>
-      </tr>
-      <tr class="total-row">
-        <td class="b dark" colspan="2">Total Statutory Taxes</td>
-        <td class="r mono b red" style="font-size:12px;">${fmt(taxDed)}</td>
-        <td class="r mono b muted">${fmt(ytdTotalDed)}</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- Effective Tax Rate Analysis -->
-  <div style="display:flex;gap:12px;margin:10px 0 6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    <div style="flex:1;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#991b1b;">Effective Fed Rate</div>
-      <div style="font-size:16px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums;margin-top:2px;">
-        ${stub.gross_pay > 0 ? (stub.federal_tax / stub.gross_pay * 100).toFixed(2) : '0.00'}%
-      </div>
-    </div>
-    <div style="flex:1;padding:8px 12px;background:#fefce8;border:1px solid #fde68a;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#854d0e;">Effective State Rate</div>
-      <div style="font-size:16px;font-weight:800;color:#d97706;font-variant-numeric:tabular-nums;margin-top:2px;">
-        ${stub.gross_pay > 0 ? (stub.state_tax / stub.gross_pay * 100).toFixed(2) : '0.00'}%
-      </div>
-    </div>
-    <div style="flex:1;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1e40af;">FICA Rate</div>
-      <div style="font-size:16px;font-weight:800;color:#2563eb;font-variant-numeric:tabular-nums;margin-top:2px;">
-        ${stub.gross_pay > 0 ? ((stub.social_security + stub.medicare) / stub.gross_pay * 100).toFixed(2) : '0.00'}%
-      </div>
-    </div>
-    <div style="flex:1;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#166534;">Total Tax Burden</div>
-      <div style="font-size:16px;font-weight:800;color:#16a34a;font-variant-numeric:tabular-nums;margin-top:2px;">
-        ${stub.gross_pay > 0 ? (taxDed / stub.gross_pay * 100).toFixed(2) : '0.00'}%
-      </div>
-    </div>
-  </div>
-
-  <!-- Pre-Tax & Post-Tax Deductions Section -->
-  ${(preTax > 0 || postTax > 0 || deductionItems.length > 0) ? `
-  <div class="section" style="background:#4c1d95;margin-top:16px;">Voluntary Deductions</div>
-  <table>
-    <thead><tr>
-      <th style="width:40%">Deduction</th>
-      <th class="r" style="width:15%">Type</th>
-      <th class="r" style="width:15%">Basis</th>
-      <th class="r" style="width:15%">Current</th>
-      <th class="r" style="width:15%">YTD</th>
-    </tr></thead>
-    <tbody>
-      ${deductionItems.length > 0 ? deductionItems.map(([name, amount]) => {
-        const isPre = name.toLowerCase().includes('401k') || name.toLowerCase().includes('hsa') || name.toLowerCase().includes('fsa') || name.toLowerCase().includes('health') || name.toLowerCase().includes('dental') || name.toLowerCase().includes('vision') || name.toLowerCase().includes('retirement');
-        return `
-      <tr>
-        <td class="dark">${esc(name)}</td>
-        <td class="r muted" style="font-size:10px;">${isPre ? 'Pre-Tax' : 'Post-Tax'}</td>
-        <td class="r muted" style="font-size:10px;">Per Period</td>
-        <td class="r mono red">${fmt(amount)}</td>
-        <td class="r mono muted">--</td>
-      </tr>`;
-      }).join('') : ''}
-      ${(preTax > 0 && deductionItems.length === 0) ? `
-      <tr>
-        <td class="dark">Pre-Tax Deductions</td>
-        <td class="r muted" style="font-size:10px;">Pre-Tax</td>
-        <td class="r muted" style="font-size:10px;">Per Period</td>
-        <td class="r mono red">${fmt(preTax)}</td>
-        <td class="r mono muted">--</td>
-      </tr>` : ''}
-      ${(postTax > 0 && deductionItems.length === 0) ? `
-      <tr>
-        <td class="dark">Post-Tax Deductions</td>
-        <td class="r muted" style="font-size:10px;">Post-Tax</td>
-        <td class="r muted" style="font-size:10px;">Per Period</td>
-        <td class="r mono red">${fmt(postTax)}</td>
-        <td class="r mono muted">--</td>
-      </tr>` : ''}
-      <tr class="total-row">
-        <td class="b dark" colspan="3">Total Voluntary Deductions</td>
-        <td class="r mono b red">${fmt(preTax + postTax)}</td>
-        <td class="r mono b muted">--</td>
-      </tr>
-    </tbody>
-  </table>
-  ` : ''}
-
-  <!-- Combined Deductions Summary -->
-  <div style="display:flex;gap:0;margin:12px 0;border:1px solid #cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Statutory Taxes</div>
-      <div style="font-size:14px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(taxDed)}</div>
-    </div>
-    ${preTax > 0 ? `
-    <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Pre-Tax</div>
-      <div style="font-size:14px;font-weight:800;color:#7c3aed;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(preTax)}</div>
-    </div>
-    ` : ''}
-    ${postTax > 0 ? `
-    <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Post-Tax</div>
-      <div style="font-size:14px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(postTax)}</div>
-    </div>
-    ` : ''}
-    <div style="flex:1;padding:10px 14px;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Total Deducted</div>
-      <div style="font-size:14px;font-weight:800;color:#0f172a;font-variant-numeric:tabular-nums;margin-top:2px;">${fmt(totalDed)}</div>
-    </div>
-  </div>
-
-  ${deductionsDonutHTML}
-  ${ytdProgressHTML}
-
-  <!-- Waterfall Summary -->
-  <div class="waterfall no-break">
-    <div class="section section-summary">Pay Summary</div>
-    <div class="wf-row" style="background:#f8fafc;">
-      <span class="wf-label b">Gross Earnings</span>
-      <span class="wf-value dark b">${fmt(stub.gross_pay)}</span>
-    </div>
-    <div class="wf-row">
-      <span class="wf-label">Statutory Taxes (Federal + State + FICA)</span>
-      <span class="wf-value red">-${fmt(taxDed)}</span>
-    </div>
-    ${preTax > 0 ? `
-    <div class="wf-row">
-      <span class="wf-label">Pre-Tax Deductions</span>
-      <span class="wf-value red">-${fmt(preTax)}</span>
-    </div>
-    ` : ''}
-    ${postTax > 0 ? `
-    <div class="wf-row">
-      <span class="wf-label">Post-Tax Deductions</span>
-      <span class="wf-value red">-${fmt(postTax)}</span>
-    </div>
-    ` : ''}
-    <div class="wf-row wf-total">
-      <span>Net Pay</span>
-      <span class="wf-value green" style="font-size:15px;">${fmt(stub.net_pay)}</span>
-    </div>
-  </div>
-
-  <!-- Net Pay Callout -->
-  <div class="net-box no-break">
-    <div class="net-current">
-      <div class="net-label">Net Pay This Period</div>
-      <div class="net-amount">${fmt(stub.net_pay)}</div>
-      ${netOfGrossHTML}
-    </div>
-    <div>
-      <div class="net-ytd-label">Year-to-Date Net</div>
-      <div class="net-ytd-amount">${fmt(ytd.net_pay)}</div>
-      <div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:4px;">
-        YTD Gross: ${fmt(ytd.gross_pay)}<br>
-        YTD Taxes: ${fmt(ytdTotalDed)}
-      </div>
-    </div>
-  </div>
-
-  <!-- Employer Contributions (informational, NOT deducted from pay) -->
-  ${hasEmployerContribs ? `
-  <div class="section section-employer no-break">Employer Contributions</div>
-  <div class="employer-note">Informational — Employer-paid obligations not deducted from employee pay</div>
-  <table class="employer-table">
-    <thead><tr>
-      <th style="width:44%">Obligation</th>
-      <th class="r" style="width:14%">Rate</th>
-      <th class="r" style="width:21%">Current</th>
-      <th class="r" style="width:21%">Wage Base</th>
-    </tr></thead>
-    <tbody>
-      ${empSS > 0 ? `<tr><td>Social Security (OASDI Match)</td><td class="r mono muted">6.20%</td><td class="r mono">${fmt(empSS)}</td><td class="r mono muted">$182,100</td></tr>` : ''}
-      ${empMed > 0 ? `<tr><td>Medicare (HI Match)</td><td class="r mono muted">1.45%</td><td class="r mono">${fmt(empMed)}</td><td class="r mono muted">No limit</td></tr>` : ''}
-      ${empFuta > 0 ? `<tr><td>Federal Unemployment (FUTA)</td><td class="r mono muted">0.60%</td><td class="r mono">${fmt(empFuta)}</td><td class="r mono muted">$7,000</td></tr>` : ''}
-      ${empSuta > 0 ? `<tr><td>State Unemployment (UT SUI)</td><td class="r mono muted">1.20%</td><td class="r mono">${fmt(empSuta)}</td><td class="r mono muted">$44,800</td></tr>` : ''}
-      ${empMatch > 0 ? `<tr><td>Retirement Plan Match</td><td class="r mono muted">--</td><td class="r mono">${fmt(empMatch)}</td><td class="r mono muted">--</td></tr>` : ''}
-      ${empHealth > 0 ? `<tr><td>Health Insurance Contribution</td><td class="r mono muted">--</td><td class="r mono">${fmt(empHealth)}</td><td class="r mono muted">--</td></tr>` : ''}
-      <tr class="total-row">
-        <td class="b dark" colspan="2">Total Employer Cost</td>
-        <td class="r mono b dark">${fmt(employerTotal)}</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- Total Compensation Statement -->
-  <div style="margin:12px 0;padding:12px 16px;background:#f0f9ff;border:2px solid #93c5fd;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1e40af;margin-bottom:8px;">Total Compensation Statement</div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #dbeafe;">
-      <span style="color:#475569;">Gross Earnings</span>
-      <span style="font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(stub.gross_pay)}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #dbeafe;">
-      <span style="color:#475569;">Employer Contributions</span>
-      <span style="font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(employerTotal)}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0 0;border-top:2px solid #1e40af;margin-top:4px;">
-      <span style="font-weight:800;color:#1e40af;">Total Compensation This Period</span>
-      <span style="font-weight:800;color:#1e40af;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(stub.gross_pay + employerTotal)}</span>
-    </div>
-  </div>
-  ` : ''}
-
-  <!-- Direct Deposit Info (last-4 only — full account never rendered) -->
-  ${(stub.bank_name || bankAcctDisplay) ? `
-  <div class="section section-deposit no-break">Direct Deposit</div>
-  <div class="deposit-block no-break">
-    <div>
-      <div class="deposit-label">Bank</div>
-      <div class="deposit-val">${esc(stub.bank_name || '')}</div>
-    </div>
-    <div style="text-align:right;">
-      <div class="deposit-label">Account</div>
-      <div class="deposit-val">${bankAcctDisplay || '--'} <span class="muted" style="font-weight:400;font-size:9px;">(last 4 only)</span></div>
-    </div>
-  </div>
-  ` : ''}
-
-  <!-- Comprehensive YTD Breakdown -->
-  <div class="section no-break" style="background:#334155;margin-top:20px;">Year-to-Date Summary</div>
-  <table>
-    <thead><tr>
-      <th style="width:44%">Category</th>
-      <th class="r" style="width:28%">YTD Amount</th>
-      <th class="r" style="width:28%">Annualized Projection</th>
-    </tr></thead>
-    <tbody>
-      <tr>
-        <td class="dark b">Gross Earnings</td>
-        <td class="r mono b dark">${fmt(ytd.gross_pay)}</td>
-        <td class="r mono muted">${fmt(ytd.gross_pay / yearFrac)}</td>
-      </tr>
-      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <td style="padding-left:20px;">Federal Income Tax</td>
-        <td class="r mono red">${fmt(ytd.federal_tax)}</td>
-        <td class="r mono muted">${fmt(ytd.federal_tax / yearFrac)}</td>
-      </tr>
-      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <td style="padding-left:20px;">State Income Tax (UT)</td>
-        <td class="r mono red">${fmt(ytd.state_tax)}</td>
-        <td class="r mono muted">${fmt(ytd.state_tax / yearFrac)}</td>
-      </tr>
-      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <td style="padding-left:20px;">Social Security (OASDI)</td>
-        <td class="r mono red">${fmt(ytd.social_security)}</td>
-        <td class="r mono muted">${fmt(ytd.social_security / yearFrac)}</td>
-      </tr>
-      <tr style="background:#fef2f2;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <td style="padding-left:20px;">Medicare (HI)</td>
-        <td class="r mono red">${fmt(ytd.medicare)}</td>
-        <td class="r mono muted">${fmt(ytd.medicare / yearFrac)}</td>
-      </tr>
-      <tr class="total-row">
-        <td class="b dark">Total Taxes YTD</td>
-        <td class="r mono b red">${fmt(ytdTotalDed)}</td>
-        <td class="r mono b muted">${fmt(ytdTotalDed / yearFrac)}</td>
-      </tr>
-      <tr>
-        <td class="dark b" style="color:#16a34a;">Net Pay YTD</td>
-        <td class="r mono b green">${fmt(ytd.net_pay)}</td>
-        <td class="r mono b muted">${fmt(ytd.net_pay / yearFrac)}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- Hours-to-Date (hourly employees) -->
-  ${!isSalaried ? `
-  <div style="display:flex;gap:0;margin:10px 0;border:1px solid #cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    <div style="flex:1;padding:8px 14px;border-right:1px solid #e2e8f0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Current Hours</div>
-      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${totalHours.toFixed(2)}</div>
-    </div>
-    <div style="flex:1;padding:8px 14px;border-right:1px solid #e2e8f0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Regular</div>
-      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${hoursRegular.toFixed(2)}</div>
-    </div>
-    <div style="flex:1;padding:8px 14px;border-right:1px solid #e2e8f0;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Overtime</div>
-      <div style="font-size:14px;font-weight:800;color:${hoursOvertime > 0 ? '#d97706' : '#0f172a'};margin-top:2px;">${hoursOvertime.toFixed(2)}</div>
-    </div>
-    <div style="flex:1;padding:8px 14px;text-align:center;">
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;">Avg $/Hour</div>
-      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${totalHours > 0 ? fmt(stub.net_pay / totalHours) : '--'}</div>
-    </div>
-  </div>
-  ` : ''}
-
-  <!-- Social Security Wage Base Tracker -->
-  <div style="margin:14px 0;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-    <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:8px;">FICA Wage Base Tracking — 2026</div>
-    <div style="display:flex;gap:16px;">
-      <div style="flex:1;">
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;margin-bottom:3px;">
-          <span>Social Security (OASDI)</span>
-          <span class="mono">${fmt(ytd.gross_pay)} of $182,100</span>
-        </div>
-        <div style="height:8px;background:#e2e8f0;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <div style="height:100%;width:${Math.min(100, (ytd.gross_pay / 182100) * 100).toFixed(1)}%;background:${ytd.gross_pay >= 182100 ? '#dc2626' : '#2563eb'};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:2px;">
-          <span>${(Math.min(100, (ytd.gross_pay / 182100) * 100)).toFixed(1)}% used</span>
-          <span>${ytd.gross_pay >= 182100 ? 'CAP REACHED — No further SS withheld' : 'Remaining: ' + fmt(Math.max(0, 182100 - ytd.gross_pay))}</span>
-        </div>
-      </div>
-      <div style="flex:1;">
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;margin-bottom:3px;">
-          <span>Medicare Surtax Threshold</span>
-          <span class="mono">${fmt(ytd.gross_pay)} of $200,000</span>
-        </div>
-        <div style="height:8px;background:#e2e8f0;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <div style="height:100%;width:${Math.min(100, (ytd.gross_pay / 200000) * 100).toFixed(1)}%;background:${ytd.gross_pay >= 200000 ? '#dc2626' : '#7c3aed'};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:2px;">
-          <span>${(Math.min(100, (ytd.gross_pay / 200000) * 100)).toFixed(1)}% toward threshold</span>
-          <span>${ytd.gross_pay >= 200000 ? '0.9% SURTAX ACTIVE' : 'Before surtax: ' + fmt(Math.max(0, 200000 - ytd.gross_pay))}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Pay Calculation Detail -->
-  <div style="margin:10px 0;padding:10px 14px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:9px;color:#475569;line-height:1.7;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-    <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;margin-bottom:4px;">Pay Calculation Detail</div>
-    ${isSalaried ? `
-    <div>&bull; <strong>Annual Salary:</strong> ${payRate > 0 ? fmt(payRate) : 'Per employment agreement'} &divide; ${periodsPerYr} periods = <strong>${fmt(stub.gross_pay)}</strong> per period</div>
-    ` : `
-    <div>&bull; <strong>Regular:</strong> ${hoursRegular.toFixed(2)} hours &times; ${fmt(effectiveRate)} = ${fmt(regularPay)}</div>
-    ${hoursOvertime > 0 ? `<div>&bull; <strong>Overtime:</strong> ${hoursOvertime.toFixed(2)} hours &times; ${fmt(effectiveRate)} &times; 1.5 = ${fmt(overtimePay)}</div>` : ''}
-    <div>&bull; <strong>Gross Pay:</strong> ${fmt(regularPay)}${hoursOvertime > 0 ? ' + ' + fmt(overtimePay) : ''} = <strong>${fmt(stub.gross_pay)}</strong></div>
-    `}
-    <div>&bull; <strong>Federal W/H:</strong> Annualized gross ${fmt(stub.gross_pay * periodsPerYr)} &minus; std deduction &rarr; bracket calc &divide; ${periodsPerYr}${stub.w4_step4c_extra ? ' + $' + stub.w4_step4c_extra.toFixed(2) + ' extra' : ''} = <strong>${fmt(stub.federal_tax)}</strong></div>
-    <div>&bull; <strong>${stateName} W/H:</strong> Annualized gross &times; flat rate &minus; exemption credits &divide; ${periodsPerYr} = <strong>${fmt(stub.state_tax)}</strong></div>
-    <div>&bull; <strong>SS (OASDI):</strong> Taxable wages ${fmt(Math.min(stub.gross_pay, Math.max(0, 182100 - (ytd.gross_pay - stub.gross_pay))))} &times; 6.2% = <strong>${fmt(stub.social_security)}</strong></div>
-    <div>&bull; <strong>Medicare (HI):</strong> ${fmt(stub.gross_pay)} &times; 1.45% = <strong>${fmt(stub.medicare)}</strong></div>
-    <div>&bull; <strong>Net Pay:</strong> ${fmt(stub.gross_pay)} &minus; ${fmt(taxDed)} taxes${preTax > 0 ? ' &minus; ' + fmt(preTax) + ' pre-tax' : ''}${postTax > 0 ? ' &minus; ' + fmt(postTax) + ' post-tax' : ''} = <strong style="color:#16a34a;">${fmt(stub.net_pay)}</strong></div>
-  </div>
-
-  <!-- Important Notices -->
-  <div style="margin:10px 0 8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;font-size:9px;color:#92400e;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-    <div style="font-weight:700;margin-bottom:4px;">Important Information</div>
-    <div>&bull; Federal tax calculated per IRS Publication 15-T (2026) Percentage Method for Form W-4 (2020 or later).</div>
-    <div>&bull; ${stateName} state tax calculated at the flat withholding rate per TC-40W, with applicable personal exemption credits.</div>
-    <div>&bull; Social Security (OASDI) tax applies to wages up to the annual wage base of $182,100 (2026). Once the cap is reached, no further SS tax is withheld for the remainder of the calendar year.</div>
-    <div>&bull; Medicare (HI) tax of 1.45% applies to all wages with no cap. Additional 0.9% Medicare surtax applies to combined wages exceeding $200,000 YTD (IRC &sect;3101(b)(2)).</div>
-    <div>&bull; Pre-tax deductions (401(k), HSA, health insurance) reduce taxable income for federal and state withholding but remain subject to FICA taxes unless specifically exempted.</div>
-    <div>&bull; This earnings statement is provided for informational purposes. Retain for your personal tax records. Report discrepancies to your employer within 30 days of receipt.</div>
-    <div>&bull; Employer contributions shown are paid by the employer and do not reduce your take-home pay. They represent additional compensation value beyond your gross earnings.</div>
-  </div>
-
-  <!-- Confidential notice -->
-  <div class="confidential no-break">Confidential Employee Pay Information &mdash; Retain for Tax Records</div>
-
-  <!-- Footer -->
-  <div class="footer no-break">
-    <span>${companyName}${companyLegal ? ' &middot; ' + companyLegal : ''}</span>
-    <span>Pay Period ${esc(stub.period_start)} &ndash; ${esc(stub.period_end)}</span>
-    <span>Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-  </div>
-
-</div>
-</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pay Statement — ${cesc(stub.employee_name)}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(body) +
+    `</body></html>`;
 }
 
 
@@ -4891,166 +4341,227 @@ export function generateEmployeeRecordHTML(data: {
   garnishments?: any[];
   advances?: any[];
 }): string {
+  // ── CLASSIC THEME: Arial + pure black/white. ──
+
   const { employee: emp, company, ytd, pto = [], garnishments = [], advances = [] } = data;
   const dash = (v: any): string => (v === null || v === undefined || v === '' ? '—' : String(v));
   const money = (v: any): string => formatCurrency(Number(v) || 0);
   const generated = new Date().toLocaleString('en-US');
 
+  const coName = company?.name || 'Company';
+  const coDetailHtml = [
+    [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).map(cesc).join(', '),
+    [company?.phone, company?.email].filter(Boolean).map(cesc).join(' &middot; '),
+  ].filter(Boolean).join('<br>');
+  const logoData = company?.logo_data ?? company?.logo ?? null;
+
+  // ── Privacy masking ──
   const ssnDisplay = emp.ssn_last4 ? `XXX-XX-${emp.ssn_last4}` : '—';
   const acctDisplay = emp.account_number ? `••••${emp.account_number}` : '—';
   const routingDisplay = emp.routing_number ? `••••${emp.routing_number}` : '—';
-  const statusColor = emp.status === 'active' ? '#16a34a' : '#94a3b8';
   const address = [emp.address_line1, emp.address_line2, [emp.city, emp.state, emp.zip].filter(Boolean).join(', ')]
-    .filter(Boolean).join(' · ');
+    .filter(Boolean).join(', ');
 
   const payRateLabel = emp.pay_type === 'salary'
     ? `${money(emp.pay_rate)} / year`
     : `${money(emp.pay_rate)} / hour`;
   const scheduleLabels: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-Weekly', semimonthly: 'Semi-Monthly', monthly: 'Monthly' };
 
-  const grid = (rows: Array<[string, string]>): string => `
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin-top:8px;">
-    ${rows.map(([k, v]) => `<div>
-      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
-      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
-    </div>`).join('')}
-  </div>`;
+  // ── Header ──
+  const header = docHeader({
+    coName,
+    coDetailHtml: logoImg(logoData, coName) + coDetailHtml,
+    title: 'Employee Record',
+    numberHtml: `<div class="doc-number">${cesc(emp.name || '')}</div>` +
+      `<div class="doc-number">${cesc(String(emp.status || 'active').toUpperCase())}</div>` +
+      `<div class="doc-number" style="font-size:10px;">Generated ${cesc(generated)}</div>`,
+  });
 
-  const ptoHTML = pto.length > 0 ? `
-  <div style="margin-top:16px;">
-    <div class="section-label">PTO Balances</div>
-    <table style="margin-top:6px;">
-      <thead><tr><th>Type</th><th class="text-right">Accrued</th><th class="text-right">Used</th><th class="text-right">Available</th></tr></thead>
-      <tbody>${pto.map((p: any) => `<tr>
-        <td>${esc(p.pto_type || p.type || 'PTO')}</td>
-        <td class="text-right">${(Number(p.accrued_hours ?? p.accrued) || 0).toFixed(1)} h</td>
-        <td class="text-right">${(Number(p.used_hours ?? p.used) || 0).toFixed(1)} h</td>
-        <td class="text-right font-bold">${((Number(p.accrued_hours ?? p.accrued) || 0) - (Number(p.used_hours ?? p.used) || 0)).toFixed(1)} h</td>
-      </tr>`).join('')}</tbody>
-    </table>
-  </div>` : '';
+  // ── Meta strip ──
+  const meta = metaStrip([
+    { label: 'Status',      value: String(emp.status || 'active').toUpperCase() },
+    { label: 'Employee ID', value: String(emp.id || '').slice(0, 8).toUpperCase() || '—' },
+    { label: 'Department',  value: dash(emp.department) },
+    { label: 'Job Title',   value: dash(emp.job_title) },
+    { label: 'YTD Gross',   value: money(ytd?.gross) },
+    { label: 'YTD Net',     value: money(ytd?.net) },
+  ]);
 
-  const garnHTML = garnishments.length > 0 ? `
-  <div style="margin-top:16px;">
-    <div class="section-label">Active Garnishment Orders</div>
-    <table style="margin-top:6px;">
-      <thead><tr><th>Type</th><th>Case #</th><th class="text-right">Per-Pay Amount</th><th class="text-right">Remaining</th></tr></thead>
-      <tbody>${garnishments.map((g: any) => `<tr>
-        <td>${esc(g.garnishment_type || g.type || 'Garnishment')}</td>
-        <td>${esc(g.case_number || '—')}</td>
-        <td class="text-right">${money(g.per_pay_amount ?? g.amount_per_pay)}</td>
-        <td class="text-right">${money(g.remaining_balance ?? g.balance)}</td>
-      </tr>`).join('')}</tbody>
-    </table>
-  </div>` : '';
+  // ── Identity & Contact boxRow ──
+  const identityRow = boxRow([
+    {
+      label: 'Identity & Contact',
+      html: `<strong>${cesc(dash(emp.name))}</strong>` +
+        `<br>SSN: ${cesc(ssnDisplay)} <em style="font-size:9px;">(masked)</em>` +
+        `<br>Email: ${cesc(dash(emp.email))}` +
+        `<br>Phone: ${cesc(dash(emp.phone))}`,
+    },
+    {
+      label: 'Address',
+      html: cesc(address || '—'),
+    },
+    {
+      label: 'Emergency Contact',
+      html: `${cesc(dash(emp.emergency_contact_name))}<br>${cesc(dash(emp.emergency_contact_phone))}`,
+    },
+    {
+      label: 'Employee ID',
+      html: `<strong>${cesc(String(emp.id || '').slice(0, 8).toUpperCase() || '—')}</strong>`,
+    },
+  ]);
 
-  const advHTML = advances.length > 0 ? `
-  <div style="margin-top:16px;">
-    <div class="section-label">Outstanding Pay Advances</div>
-    <table style="margin-top:6px;">
-      <thead><tr><th>Date</th><th class="text-right">Advanced</th><th class="text-right">Repay / Pay</th><th class="text-right">Balance</th><th>Status</th></tr></thead>
-      <tbody>${advances.map((a: any) => `<tr>
-        <td>${esc(fmtDateMaybe(a.advance_date))}</td>
-        <td class="text-right">${money(a.advance_amount)}</td>
-        <td class="text-right">${money(a.repayment_per_pay)}</td>
-        <td class="text-right font-bold">${money(a.balance)}</td>
-        <td>${esc(String(a.status || 'active').toUpperCase())}${a.related_debt_id ? ' · IN COLLECTIONS' : ''}</td>
-      </tr>`).join('')}</tbody>
-    </table>
-  </div>` : '';
+  // ── Employment boxRow ──
+  const employmentRow = boxRow([
+    {
+      label: 'Employment',
+      html: `Status: <strong>${cesc(String(emp.status || 'active').toUpperCase())}</strong>` +
+        `<br>Type: ${cesc(dash(emp.employment_type || emp.type))}` +
+        `<br>Role: ${cesc(dash(emp.role))}` +
+        `<br>Work Location: ${cesc(dash(emp.work_location))}`,
+    },
+    {
+      label: 'Dates',
+      html: `Start: ${cesc(fmtDateMaybe(emp.start_date) || '—')}` +
+        `<br>End: ${cesc(emp.end_date ? fmtDateMaybe(emp.end_date) : '—')}`,
+    },
+    {
+      label: 'Department & Title',
+      html: `Dept: ${cesc(dash(emp.department))}` +
+        `<br>Title: ${cesc(dash(emp.job_title))}`,
+    },
+    {
+      label: 'Pay Schedule',
+      html: `${cesc(scheduleLabels[emp.pay_schedule] || dash(emp.pay_schedule))}`,
+    },
+  ]);
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Employee Record — ${esc(emp.name || '')}</title>
-<style>${baseStyles}</style></head>
-<body><div class="rpt-page" style="padding:32px 36px;">
-<div class="fd-letterhead">
-  <div class="fd-letterhead-left">
-    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
-    <div style="font-size:9px;color:#64748b;margin-top:2px;">${esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '))}</div>
-  </div>
-  <div class="fd-letterhead-right">
-    <div class="fd-doc-type" style="font-size:22px;">Employee Record</div>
-    <div class="fd-doc-num">${esc(emp.name || '')}${statusBadgeInline(String(emp.status || 'active').toUpperCase(), statusColor)}</div>
-    <div class="fd-doc-date">Generated ${esc(generated)}</div>
-  </div>
-</div>
+  // ── Compensation boxRow ──
+  const compensationRow = boxRow([
+    {
+      label: 'Pay Type & Rate',
+      html: `<strong>${cesc(emp.pay_type === 'salary' ? 'Salary' : 'Hourly')}</strong>` +
+        `<br>${cesc(payRateLabel)}` +
+        (emp.pay_rate_effective_date ? `<br>Effective: ${cesc(fmtDateMaybe(emp.pay_rate_effective_date))}` : ''),
+    },
+    {
+      label: 'YTD Earnings',
+      html: `Gross: <strong>${cesc(money(ytd?.gross))}</strong>` +
+        `<br>Net: <strong>${cesc(money(ytd?.net))}</strong>`,
+    },
+    {
+      label: 'Tax Withholding (W-4)',
+      html: `Filing: ${cesc(dash(emp.w4_filing_status || emp.filing_status))}` +
+        (emp.w4_received_date ? `<br>W-4 Received: ${cesc(fmtDateMaybe(emp.w4_received_date))}` : ''),
+    },
+    {
+      label: 'Direct Deposit (masked)',
+      html: `Acct Type: ${cesc(dash(emp.account_type))}` +
+        `<br>Routing: ${cesc(routingDisplay)}` +
+        `<br>Account: ${cesc(acctDisplay)}`,
+    },
+  ]);
 
-<div style="margin-top:18px;">
-  <div class="section-label">Identity &amp; Contact</div>
-  ${grid([
-    ['Full Name', dash(emp.name)],
-    ['SSN', ssnDisplay],
-    ['Email', dash(emp.email)],
-    ['Phone', dash(emp.phone)],
-    ['Address', address || '—'],
-    ['Emergency Contact', dash(emp.emergency_contact_name)],
-    ['Emergency Phone', dash(emp.emergency_contact_phone)],
-    ['Employee ID', String(emp.id || '').slice(0, 8).toUpperCase()],
-  ])}
-</div>
+  // ── PTO table ──
+  const ptoSection = pto.length > 0
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">PTO Balances</div>` +
+      ruledTable(
+        [
+          { label: 'Type', width: '40%' },
+          { label: 'Accrued (h)', align: 'right', width: '20%' },
+          { label: 'Used (h)', align: 'right', width: '20%' },
+          { label: 'Available (h)', align: 'right', width: '20%' },
+        ],
+        pto.map((p: any) => {
+          const accrued = Number(p.accrued_hours ?? p.accrued) || 0;
+          const used = Number(p.used_hours ?? p.used) || 0;
+          return [
+            cesc(p.pto_type || p.type || 'PTO'),
+            cesc(accrued.toFixed(1)),
+            cesc(used.toFixed(1)),
+            `<strong>${cesc((accrued - used).toFixed(1))}</strong>`,
+          ];
+        }),
+      ) +
+      `</div>`
+    : '';
 
-<div style="margin-top:16px;">
-  <div class="section-label">Employment</div>
-  ${grid([
-    ['Status', String(emp.status || 'active').toUpperCase()],
-    ['Type', dash(emp.employment_type || emp.type)],
-    ['Department', dash(emp.department)],
-    ['Job Title', dash(emp.job_title)],
-    ['Start Date', fmtDateMaybe(emp.start_date) || '—'],
-    ['End Date', emp.end_date ? fmtDateMaybe(emp.end_date) : '—'],
-    ['Work Location', dash(emp.work_location)],
-    ['Role', dash(emp.role)],
-  ])}
-</div>
+  // ── Garnishments table ──
+  const garnSection = garnishments.length > 0
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Active Garnishment Orders</div>` +
+      ruledTable(
+        [
+          { label: 'Type', width: '30%' },
+          { label: 'Case #', width: '25%' },
+          { label: 'Per-Pay Amount', align: 'right', width: '22%' },
+          { label: 'Remaining', align: 'right', width: '23%' },
+        ],
+        garnishments.map((g: any) => [
+          cesc(g.garnishment_type || g.type || 'Garnishment'),
+          cesc(g.case_number || '—'),
+          cesc(money(g.per_pay_amount ?? g.amount_per_pay)),
+          cesc(money(g.remaining_balance ?? g.balance)),
+        ]),
+      ) +
+      `</div>`
+    : '';
 
-<div style="margin-top:16px;">
-  <div class="section-label">Compensation &amp; Payroll</div>
-  ${grid([
-    ['Pay Type', emp.pay_type === 'salary' ? 'Salary' : 'Hourly'],
-    ['Pay Rate', payRateLabel],
-    ['Pay Schedule', scheduleLabels[emp.pay_schedule] || dash(emp.pay_schedule)],
-    ['Rate Effective', emp.pay_rate_effective_date ? fmtDateMaybe(emp.pay_rate_effective_date) : '—'],
-    ['YTD Gross', money(ytd?.gross)],
-    ['YTD Net', money(ytd?.net)],
-    ['Filing Status', dash(emp.w4_filing_status || emp.filing_status)],
-    ['W-4 Received', emp.w4_received_date ? fmtDateMaybe(emp.w4_received_date) : '—'],
-  ])}
-</div>
+  // ── Advances table ──
+  const advSection = advances.length > 0
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Outstanding Pay Advances</div>` +
+      ruledTable(
+        [
+          { label: 'Date', width: '18%' },
+          { label: 'Advanced', align: 'right', width: '18%' },
+          { label: 'Repay / Pay', align: 'right', width: '18%' },
+          { label: 'Balance', align: 'right', width: '18%' },
+          { label: 'Status', width: '28%' },
+        ],
+        advances.map((a: any) => [
+          cesc(fmtDateMaybe(a.advance_date)),
+          cesc(money(a.advance_amount)),
+          cesc(money(a.repayment_per_pay)),
+          `<strong>${cesc(money(a.balance))}</strong>`,
+          cesc(String(a.status || 'active').toUpperCase()) + (a.related_debt_id ? ' · IN COLLECTIONS' : ''),
+        ]),
+      ) +
+      `</div>`
+    : '';
 
-<div style="margin-top:16px;">
-  <div class="section-label">Direct Deposit (masked)</div>
-  ${grid([
-    ['Account Type', dash(emp.account_type)],
-    ['Routing #', routingDisplay],
-    ['Account #', acctDisplay],
-    ['State', dash(emp.state)],
-  ])}
-</div>
+  // ── Signature block ──
+  const signatureBlock = boxRow([
+    {
+      label: 'Employee Signature',
+      html: `<div style="margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Signature</div>` +
+        `<div style="margin-top:22px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Date</div>`,
+    },
+    {
+      label: 'HR / Authorized Representative',
+      html: `<div style="margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Signature</div>` +
+        `<div style="margin-top:22px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Date</div>`,
+    },
+  ]);
 
-${ptoHTML}
-${garnHTML}
-${advHTML}
+  const body =
+    header +
+    meta +
+    identityRow +
+    employmentRow +
+    compensationRow +
+    ptoSection +
+    garnSection +
+    advSection +
+    signatureBlock +
+    footerBar(
+      `${cesc(coName)} · Confidential Personnel Record · SSN and bank details masked to last-4 by design — never embedded in full · Retain per company document-retention policy · Generated ${cesc(generated)}`,
+    );
 
-<div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
-  <div>
-    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employee Signature</div>
-    <div style="margin-top:24px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
-  </div>
-  <div>
-    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">HR / Authorized Representative</div>
-    <div style="margin-top:24px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
-  </div>
-</div>
-
-<div style="margin-top:18px;font-size:8px;color:#94a3b8;">
-  Confidential personnel record. SSN and bank details are masked to last-4 by design; the full values
-  are never embedded in this document. Retain per company document-retention policy.
-</div>
-
-<div style="margin-top:10px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;">
-  <span>${esc(company?.name || '')}</span>
-  <span>Generated ${esc(generated)}</span>
-</div>
-</div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Employee Record — ${cesc(emp.name || '')}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(body) +
+    `</body></html>`;
 }
 
 // ─── Wage Withholding Agreement (Debt Collections 200 Wave) ───────────
@@ -5063,88 +4574,130 @@ export function generateWageWithholdingAgreementHTML(data: {
   debt: any;
   company: any;
 }): string {
+  // ── CLASSIC THEME: Arial + pure black/white. Agreement body text VERBATIM. ──
+
   const { withholding: w, employee: emp, debt, company } = data;
   const money = (v: any): string => formatCurrency(Number(v) || 0);
   const generated = new Date().toLocaleString('en-US');
+
+  // ── Math (unchanged) ──
   const perPay = Number(w?.per_pay_amount) || 0;
   const balance = Number(debt?.balance_due) || 0;
   const estPayments = perPay > 0 ? Math.ceil(balance / perPay) : 0;
   const scheduleLabels: Record<string, string> = { weekly: 'weekly', biweekly: 'bi-weekly', semimonthly: 'semi-monthly', monthly: 'monthly' };
   const schedule = scheduleLabels[emp?.pay_schedule] || 'per-paycheck';
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Wage Withholding Agreement — ${esc(emp?.name || '')}</title>
-<style>${baseStyles}</style></head>
-<body><div class="rpt-page" style="padding:40px 48px;">
-<div class="fd-letterhead">
-  <div class="fd-letterhead-left">
-    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
-    <div style="font-size:9px;color:#64748b;margin-top:2px;">${esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '))}</div>
-  </div>
-  <div class="fd-letterhead-right">
-    <div class="fd-doc-type" style="font-size:20px;">Wage Withholding<br/>Authorization Agreement</div>
-    <div class="fd-doc-date">Generated ${esc(generated)}</div>
-  </div>
-</div>
+  const coName = company?.name || 'Company';
+  const coDetailHtml = [
+    [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).map(cesc).join(', '),
+    [company?.phone, company?.email].filter(Boolean).map(cesc).join(' &middot; '),
+  ].filter(Boolean).join('<br>');
+  const logoData = company?.logo_data ?? company?.logo ?? null;
 
-<div style="margin-top:20px;font-size:11px;line-height:1.7;color:#0f172a;">
-  <p>This Voluntary Wage Withholding Authorization (“Agreement”) is entered into between
-  <strong>${esc(company?.name || 'the Company')}</strong> (“Employer”) and
-  <strong>${esc(emp?.name || 'the Employee')}</strong>${emp?.job_title ? `, ${esc(emp.job_title)}` : ''}
-  (“Employee”), effective ${esc(fmtDateMaybe(w?.start_date) || '____________')}.</p>
+  // ── Header (letterhead) ──
+  const header = docHeader({
+    coName,
+    coDetailHtml: logoImg(logoData, coName) + coDetailHtml,
+    title: 'Wage Withholding Authorization Agreement',
+    numberHtml: `<div class=”doc-number”>Generated ${cesc(generated)}</div>`,
+  });
 
-  <p><strong>1. Acknowledged Debt.</strong> Employee acknowledges owing Employer the amount of
-  <strong>${money(debt?.original_amount)}</strong> (current outstanding balance
-  <strong>${money(balance)}</strong>, with <strong>${money(debt?.payments_made)}</strong> repaid to date),
-  arising from ${esc(debt?.notes || 'amounts advanced by Employer to Employee')}.</p>
+  // ── Meta strip ──
+  const meta = metaStrip([
+    { label: 'Employee',            value: emp?.name || '—' },
+    { label: 'Outstanding Balance', value: money(balance) },
+    { label: 'Per-Paycheck Deduction', value: money(perPay) },
+    { label: 'Pay Frequency',       value: schedule[0].toUpperCase() + schedule.slice(1) },
+    { label: 'Est. Paychecks',      value: estPayments > 0 ? String(estPayments) : '—' },
+    { label: 'Effective Date',      value: fmtDateMaybe(w?.start_date) || '—' },
+  ]);
 
-  <p><strong>2. Authorization.</strong> Employee voluntarily authorizes Employer to deduct
-  <strong>${money(perPay)}</strong> from each ${esc(schedule)} paycheck, beginning
-  ${esc(fmtDateMaybe(w?.start_date) || 'the next regular pay date')}, and continuing until the
-  balance is paid in full${estPayments > 0 ? ` (approximately <strong>${estPayments}</strong> paychecks at the current balance)` : ''}.
-  The final deduction will be reduced as needed so total withholding never exceeds the outstanding balance.</p>
+  // ── Agreement body — legal wording VERBATIM (only esc() applied to user-data interpolations) ──
+  const agreementBody =
+    `<div style=”padding:16px 20px;border:2px solid #000;margin:0;font-size:11px;line-height:1.8;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;”>` +
+    `<p style=”margin-bottom:10px;”>This Voluntary Wage Withholding Authorization (&ldquo;Agreement&rdquo;) is entered into between ` +
+    `<strong>${cesc(company?.name || 'the Company')}</strong> (&ldquo;Employer&rdquo;) and ` +
+    `<strong>${cesc(emp?.name || 'the Employee')}</strong>${emp?.job_title ? `, ${cesc(emp.job_title)}` : ''} ` +
+    `(&ldquo;Employee&rdquo;), effective ${cesc(fmtDateMaybe(w?.start_date) || '____________')}.</p>` +
 
-  <p><strong>3. Limits.</strong> Deductions under this Agreement shall not reduce Employee's pay below
-  applicable federal or state minimum-wage or wage-deduction limits. If a scheduled deduction would
-  exceed a legal limit, the deduction shall be reduced to the maximum lawful amount for that period.</p>
+    `<p style=”margin-bottom:10px;”><strong>1. Acknowledged Debt.</strong> Employee acknowledges owing Employer the amount of ` +
+    `<strong>${cesc(money(debt?.original_amount))}</strong> (current outstanding balance ` +
+    `<strong>${cesc(money(balance))}</strong>, with <strong>${cesc(money(debt?.payments_made))}</strong> repaid to date), ` +
+    `arising from ${cesc(debt?.notes || 'amounts advanced by Employer to Employee')}.</p>` +
 
-  <p><strong>4. Voluntary; Revocation.</strong> This authorization is voluntary and may be revoked by
-  Employee in writing at any time. Revocation does not extinguish the underlying debt, which remains
-  due and may be pursued through other lawful means.</p>
+    `<p style=”margin-bottom:10px;”><strong>2. Authorization.</strong> Employee voluntarily authorizes Employer to deduct ` +
+    `<strong>${cesc(money(perPay))}</strong> from each ${cesc(schedule)} paycheck, beginning ` +
+    `${cesc(fmtDateMaybe(w?.start_date) || 'the next regular pay date')}, and continuing until the ` +
+    `balance is paid in full${estPayments > 0 ? ` (approximately <strong>${cesc(String(estPayments))}</strong> paychecks at the current balance)` : ''}. ` +
+    `The final deduction will be reduced as needed so total withholding never exceeds the outstanding balance.</p>` +
 
-  <p><strong>5. Early Payoff &amp; Separation.</strong> Employee may repay the remaining balance early at
-  any time without penalty. Upon separation of employment, the remaining balance becomes due and,
-  to the extent permitted by law, may be deducted from final wages.</p>
-</div>
+    `<p style=”margin-bottom:10px;”><strong>3. Limits.</strong> Deductions under this Agreement shall not reduce Employee&rsquo;s pay below ` +
+    `applicable federal or state minimum-wage or wage-deduction limits. If a scheduled deduction would ` +
+    `exceed a legal limit, the deduction shall be reduced to the maximum lawful amount for that period.</p>` +
 
-<div style="margin-top:18px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
-  <div class="section-label">Repayment Summary</div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin-top:8px;">
-    ${[
-      ['Outstanding Balance', money(balance)],
-      ['Per-Paycheck Deduction', money(perPay)],
-      ['Pay Frequency', schedule[0].toUpperCase() + schedule.slice(1)],
-      ['Est. Paychecks to Payoff', estPayments > 0 ? String(estPayments) : '—'],
-    ].map(([k, v]) => `<div>
-      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
-      <div style="font-size:12px;color:#0f172a;font-weight:700;margin-top:2px;">${esc(v)}</div>
-    </div>`).join('')}
-  </div>
-</div>
+    `<p style=”margin-bottom:10px;”><strong>4. Voluntary; Revocation.</strong> This authorization is voluntary and may be revoked by ` +
+    `Employee in writing at any time. Revocation does not extinguish the underlying debt, which remains ` +
+    `due and may be pursued through other lawful means.</p>` +
 
-<div style="margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
-  <div>
-    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employee Signature — ${esc(emp?.name || '')}</div>
-    <div style="margin-top:26px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
-  </div>
-  <div>
-    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employer Representative — ${esc(company?.name || '')}</div>
-    <div style="margin-top:26px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
-  </div>
-</div>
+    `<p style=”margin-bottom:0;”><strong>5. Early Payoff &amp; Separation.</strong> Employee may repay the remaining balance early at ` +
+    `any time without penalty. Upon separation of employment, the remaining balance becomes due and, ` +
+    `to the extent permitted by law, may be deducted from final wages.</p>` +
+    `</div>`;
 
-<div style="margin-top:20px;font-size:8px;color:#94a3b8;">
-  This document is a template for a voluntary wage-deduction authorization and is not legal advice.
-  Wage-deduction rules vary by jurisdiction — consult counsel before relying on this form.
-</div>
-</div></body></html>`;
+  // ── Repayment summary (meta strip style) ──
+  const repaymentSummary =
+    `<div style=”padding:10px 16px;border-bottom:2px solid #000;”>` +
+    `<div class=”sec-label” style=”margin-bottom:6px;”>Repayment Summary</div>` +
+    ruledTable(
+      [
+        { label: 'Outstanding Balance', width: '25%' },
+        { label: 'Per-Paycheck Deduction', align: 'right', width: '25%' },
+        { label: 'Pay Frequency', align: 'right', width: '25%' },
+        { label: 'Est. Paychecks to Payoff', align: 'right', width: '25%' },
+      ],
+      [[
+        `<strong>${cesc(money(balance))}</strong>`,
+        `<strong>${cesc(money(perPay))}</strong>`,
+        cesc(schedule[0].toUpperCase() + schedule.slice(1)),
+        estPayments > 0 ? `<strong>${cesc(String(estPayments))}</strong>` : '—',
+      ]],
+    ) +
+    `</div>`;
+
+  // ── Signature block ──
+  const signatureBlock = boxRow([
+    {
+      label: `Employee Signature — ${cesc(emp?.name || '')}`,
+      html: `<div style=”margin-top:36px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Signature</div>` +
+        `<div style=”margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Date</div>`,
+    },
+    {
+      label: `Employer Representative — ${cesc(company?.name || '')}`,
+      html: `<div style=”margin-top:36px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Signature</div>` +
+        `<div style=”margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Date</div>`,
+    },
+  ]);
+
+  // ── Disclaimer (preserved verbatim) ──
+  const disclaimerHtml =
+    `<div style=”padding:8px 16px;border-bottom:2px solid #000;font-size:9px;line-height:1.6;”>` +
+    `This document is a template for a voluntary wage-deduction authorization and is not legal advice. ` +
+    `Wage-deduction rules vary by jurisdiction &mdash; consult counsel before relying on this form.` +
+    `</div>`;
+
+  const body =
+    header +
+    meta +
+    `<div style=”padding:14px 16px;border-bottom:2px solid #000;”>` +
+    agreementBody +
+    `</div>` +
+    repaymentSummary +
+    signatureBlock +
+    disclaimerHtml +
+    footerBar(`${cesc(coName)} · Wage Withholding Authorization Agreement · ${cesc(emp?.name || '')} · Generated ${cesc(generated)}`);
+
+  return `<!DOCTYPE html><html><head><meta charset=”utf-8”><title>Wage Withholding Agreement — ${cesc(emp?.name || '')}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(body) +
+    `</body></html>`;
 }
