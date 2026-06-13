@@ -75,4 +75,23 @@ test('backfillCompany indexes all existing rows', () => {
   assert.strictEqual(search(d, 'co1', '1024', 10).length, 1);
 });
 
+test('FTS operator injection is neutralized (still matches)', () => {
+  const d = freshDb();
+  d.prepare(`INSERT INTO clients(id,company_id,name) VALUES(?,?,?)`).run('c1', 'co1', 'Acme');
+  reindexEntity(d, 'clients', 'c1');
+  // The query 'acme*"(' contains FTS operators that must be escaped/stripped
+  // so the search does not throw and still returns the 'Acme' hit.
+  let hits;
+  assert.doesNotThrow(() => { hits = search(d, 'co1', 'acme*"(', 10); });
+  assert.strictEqual(hits.length, 1);
+  assert.strictEqual(hits[0].entity_id, 'c1');
+});
+
+test('non-allowlisted table is a silent no-op', () => {
+  const d = freshDb();
+  assert.doesNotThrow(() => { reindexEntity(d, 'users', 'x'); });
+  const hits = search(d, 'co1', 'x', 10);
+  assert.strictEqual(hits.length, 0);
+});
+
 console.log(`\n${passed} passed`);
