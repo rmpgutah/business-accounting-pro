@@ -13,7 +13,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../../lib/api';
 import { useCompanyStore } from '../../../stores/companyStore';
-import { formatCurrency, formatDate, percentChange } from '../../../lib/format';
+import { formatCurrency, formatDate, percentChange, humanizeLabel } from '../../../lib/format';
 
 // ─── Row shapes (only the columns we read) ──────────────
 interface InvoiceRow {
@@ -772,7 +772,7 @@ export default function InvoicesUpgradesPart2() {
               {byType.rows.map((r, i) => (
                 <span key={r.type} style={{ textTransform: 'capitalize' }}>
                   <span style={{ display: 'inline-block', width: 8, height: 8, background: SEGMENT_TOKENS[i % SEGMENT_TOKENS.length], marginRight: 4 }} />
-                  {r.type} {formatCurrency(r.val)}
+                  {humanizeLabel(r.type)} {formatCurrency(r.val)}
                 </span>
               ))}
             </div>
@@ -851,7 +851,7 @@ export default function InvoicesUpgradesPart2() {
       <CardShell title="Payment-method mix">
         {methodMix.total <= 0 ? <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>No payments recorded.</span> : methodMix.rows.map((r) => (
           <div key={r.method} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <span style={{ width: 110, textTransform: 'capitalize' }}>{r.method.replace(/_/g, ' ')}</span>
+            <span style={{ width: 110 }}>{humanizeLabel(r.method)}</span>
             <Bar pct={(r.val / methodMix.total) * 100} color="var(--color-accent-blue)" />
             <span style={{ width: 110, textAlign: 'right', color: 'var(--color-text-secondary)' }}>
               {formatCurrency(r.val)} ({((r.val / methodMix.total) * 100).toFixed(0)}%)

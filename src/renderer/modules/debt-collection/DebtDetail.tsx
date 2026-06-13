@@ -1467,7 +1467,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <td className="text-right font-mono font-bold text-green-400">
                         {formatCurrency(p.amount)}
                       </td>
-                      <td className="text-xs capitalize">{p.method || '--'}</td>
+                      <td className="text-xs capitalize">{humanizeLabel(p.method) || '--'}</td>
                       <td className="text-xs font-mono text-text-muted">
                         {p.reference_number || '--'}
                       </td>
@@ -2001,7 +2001,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`${relevanceClass} capitalize`}>{e.court_relevance}</span>
+                        <span className={`${relevanceClass} capitalize`}>{humanizeLabel(e.court_relevance)}</span>
                         <span className="text-[10px] text-text-muted font-mono">
                           {formatDate(e.date_of_evidence || e.created_at, { style: 'short' })}
                         </span>

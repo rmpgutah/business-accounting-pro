@@ -3,7 +3,7 @@ import { Users, Plus, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Download,
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useCustomizationStore } from '../../stores/customizationStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import {
   EMPLOYEE_ROLE, EMPLOYEE_DEPARTMENT, EMPLOYEE_WORK_LOCATION, EMPLOYMENT_STATUS, EMPLOYEE_COST_CLASS,
@@ -546,7 +546,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                       {emp.type === 'employee' ? 'Employee' : 'Contractor'}
                     </span>
                   </td>
-                  <td className="text-text-secondary capitalize">{emp.pay_type}</td>
+                  <td className="text-text-secondary capitalize">{humanizeLabel(emp.pay_type)}</td>
                   <td className="text-text-secondary font-mono text-xs">
                     {formatCurrency(emp.pay_rate ?? 0)}
                     {emp.pay_type === 'hourly' ? '/hr' : '/yr'}

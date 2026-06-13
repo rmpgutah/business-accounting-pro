@@ -1,8 +1,12 @@
 /**
  * Payroll Check Print Template — Production Grade
  * Check-on-top (3-part) for 8.5x11 blank check paper.
- * Calibri dominant. All text BLACK except YTD Summary taxes(red)/net(green).
+ * Secure-document design: Fraunces letterhead + IBM Plex Sans/Mono, banknote-
+ * green & navy-ink duotone. Enum/status values render through humanizeLabel so
+ * stored tokens (e.g. "married_filing_jointly") never leak as snake_case.
  */
+
+import { humanizeLabel } from './format';
 
 function esc(s: string | null | undefined): string {
   if (!s) return '';
@@ -235,11 +239,11 @@ export function generatePaycheckHTML(
       <div class="ig-c"><div class="ig-lbl">Check #</div><div class="ig-val b">${chk}</div></div>
       <div class="ig-c"><div class="ig-lbl">Department</div><div class="ig-val">${empDept || '—'}</div></div>
       <div class="ig-c"><div class="ig-lbl">Hire Date</div><div class="ig-val">${empHireDate || '—'}</div></div>
-      <div class="ig-c"><div class="ig-lbl">Filing / Allow.</div><div class="ig-val" style="text-transform:capitalize;">${empFiling || '—'} / ${empAllowances !== '' ? empAllowances : '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Filing / Allow.</div><div class="ig-val">${humanizeLabel(empFiling) || '—'} / ${empAllowances !== '' ? empAllowances : '—'}</div></div>
       <div class="ig-c"><div class="ig-lbl">State / Allow.</div><div class="ig-val">${empStateCode || '—'} / ${empStateAllow !== '' ? empStateAllow : '—'}</div></div>
-      <div class="ig-c"><div class="ig-lbl">Pay Type / Rate</div><div class="ig-val" style="text-transform:capitalize;">${payType}${payRate > 0 ? ' @ ' + fmt(payRate) : ''}</div></div>
-      <div class="ig-c"><div class="ig-lbl">Schedule</div><div class="ig-val" style="text-transform:capitalize;">${paySchedule || '—'}</div></div>
-      <div class="ig-c"><div class="ig-lbl">Method / Type</div><div class="ig-val" style="text-transform:capitalize;">${isDD ? 'Direct Dep.' : 'Check'} / ${runType}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Pay Type / Rate</div><div class="ig-val">${humanizeLabel(payType)}${payRate > 0 ? ' @ ' + fmt(payRate) : ''}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Schedule</div><div class="ig-val">${humanizeLabel(paySchedule) || '—'}</div></div>
+      <div class="ig-c"><div class="ig-lbl">Method / Type</div><div class="ig-val">${isDD ? 'Direct Dep.' : 'Check'} / ${humanizeLabel(runType)}</div></div>
     </div>`;
 
   // ── Earnings table (shared) ──
@@ -419,7 +423,7 @@ export function generatePaycheckHTML(
     <!-- Employer footer: compact single row with cost + metadata -->
     <div style="display:flex;gap:4px;margin-top:5px;font-size:7px;">
       <div style="flex:1;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Employer Cost</strong> &nbsp; Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong></div>
-      <div style="flex:0.55;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">EIN</strong> ${coEIN || '—'} &nbsp;·&nbsp; <strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Run</strong> <span style="text-transform:capitalize;">${runType}</span></div>
+      <div style="flex:0.55;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">EIN</strong> ${coEIN || '—'} &nbsp;·&nbsp; <strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Run</strong> ${humanizeLabel(runType)}</div>
       ${empEmail ? `<div style="flex:0.45;border:0.5px solid var(--line);padding:3px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
     </div>
   </div>`;

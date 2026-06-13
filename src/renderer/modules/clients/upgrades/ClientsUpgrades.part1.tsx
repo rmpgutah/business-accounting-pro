@@ -18,7 +18,7 @@ import {
 import api from '../../../lib/api';
 import { downloadCSVBlob } from '../../../lib/csv-export';
 import { useCompanyStore } from '../../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../../lib/format';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../../lib/format';
 import { CLIENT_RISK } from '../../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
@@ -1016,7 +1016,7 @@ const ClientsUpgradesPart1: React.FC = () => {
                       <td className="text-text-primary font-medium truncate max-w-[180px]">{c.name}</td>
                       <td><span className={st.className}>{st.label}</span></td>
                       {visibleCols.terms && <td className="font-mono text-xs text-text-secondary">{c.payment_terms != null ? `Net ${c.payment_terms}` : '—'}</td>}
-                      {visibleCols.risk && <td className="text-xs capitalize text-text-secondary">{risk || '—'}</td>}
+                      {visibleCols.risk && <td className="text-xs capitalize text-text-secondary">{humanizeLabel(risk) || '—'}</td>}
                       {visibleCols.balance && <td className="text-right font-mono text-xs text-accent-expense">{formatCurrency(agg?.outstanding ?? 0)}</td>}
                     </tr>
                   );

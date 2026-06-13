@@ -10,7 +10,7 @@ const ClientsUpgradesPanel = React.lazy(() => import('./upgrades'));
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'dashboard' | 'clients' | 'segments' | 'analytics' | 'upgrades';
@@ -570,7 +570,7 @@ const ClientsModule: React.FC = () => {
                         };
                         return (
                           <div key={i} className="flex items-center justify-between">
-                            <span className="text-xs text-text-secondary capitalize">{r.risk}</span>
+                            <span className="text-xs text-text-secondary capitalize">{humanizeLabel(r.risk)}</span>
                             <span className="text-xs font-mono font-bold" style={{ color: colorMap[r.risk] || 'var(--color-text-secondary)' }}>
                               {r.count}
                             </span>

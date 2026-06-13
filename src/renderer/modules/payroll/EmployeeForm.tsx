@@ -155,7 +155,7 @@ const PayHistory: React.FC<{ employeeId: string }> = ({ employeeId }) => {
               <tr key={s.id}>
                 <td className="font-mono text-xs">{formatDate(s.pay_date)}</td>
                 <td className="text-xs text-text-muted">{formatDate(s.pay_period_start)} — {formatDate(s.pay_period_end)}</td>
-                <td><span className="capitalize text-xs">{s.run_type || 'regular'}</span></td>
+                <td><span className="capitalize text-xs">{humanizeLabel(s.run_type || 'regular')}</span></td>
                 <td className="text-right font-mono">{formatCurrency(s.gross_pay)}</td>
                 <td className="text-right font-mono text-accent-expense">{formatCurrency(s.federal_tax + s.state_tax + s.social_security + s.medicare)}</td>
                 <td className="text-right font-mono text-accent-income font-bold">{formatCurrency(s.net_pay)}</td>

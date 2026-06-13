@@ -1,19 +1,42 @@
 // src/renderer/lib/format.ts
 
 // ─── Labels ──────────────────────────────────────────────
-// Turn raw enum/status/identifier values into formal, readable English.
-// Replaces "_" and "-" spacers with spaces and Sentence-cases the result, so
-// stored values like "in_collection" or "married_filing_jointly" never leak to
-// the UI as snake_case. Use sentenceCase for body text; for badges/labels that
-// should shout, wrap the output in CSS text-transform: uppercase.
+// Acronyms / special-cased terms with a canonical formal spelling. Matched
+// case-insensitively, per whole-word, so "ein" → "EIN" and "user_id" → "User ID".
+const LABEL_OVERRIDES: Record<string, string> = {
+  ach: 'ACH', ein: 'EIN', ssn: 'SSN', fica: 'FICA', futa: 'FUTA', suta: 'SUTA',
+  ytd: 'YTD', mtd: 'MTD', qtd: 'QTD', pto: 'PTO', hsa: 'HSA', fsa: 'FSA',
+  '401k': '401(k)', w2: 'W-2', w4: 'W-4', w9: 'W-9', '1099': '1099',
+  llc: 'LLC', usd: 'USD', vat: 'VAT', po: 'PO', id: 'ID', api: 'API',
+  csv: 'CSV', pdf: 'PDF', url: 'URL', sku: 'SKU', kpi: 'KPI', cogs: 'COGS',
+  ar: 'AR', ap: 'AP', gl: 'GL', je: 'JE', mfj: 'MFJ', hoh: 'HOH',
+  // Compound terms that read better hyphenated.
+  biweekly: 'Bi-Weekly', semimonthly: 'Semi-Monthly', semiweekly: 'Semi-Weekly',
+};
+// Minor words kept lowercase inside a title — never when they are the first word.
+const MINOR_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'vs', 'with']);
+
+// Turn raw enum/status/identifier values into formal, readable Title Case
+// English. Replaces "_"/"-" spacers with spaces, applies acronym/special-term
+// overrides, and Title-Cases the rest (minor words lowercased mid-phrase), so
+// stored values like "in_collection", "married_filing_jointly" or "biweekly"
+// never leak to the UI as snake_case or lower case. For badges that should
+// SHOUT, wrap the output in CSS text-transform: uppercase.
 export function humanizeLabel(value: string | null | undefined): string {
   if (value == null) return '';
-  const words = String(value)
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!words) return '';
-  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+  const raw = String(value).trim();
+  if (!raw) return '';
+  const whole = raw.toLowerCase();
+  if (LABEL_OVERRIDES[whole]) return LABEL_OVERRIDES[whole];
+  const words = raw.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ');
+  return words
+    .map((w, i) => {
+      const lw = w.toLowerCase();
+      if (LABEL_OVERRIDES[lw]) return LABEL_OVERRIDES[lw];
+      if (i > 0 && MINOR_WORDS.has(lw)) return lw;
+      return lw.charAt(0).toUpperCase() + lw.slice(1);
+    })
+    .join(' ');
 }
 
 // Friendly payment-method labels. The DB stores snake_case enum values

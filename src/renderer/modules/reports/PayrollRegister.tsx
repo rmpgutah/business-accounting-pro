@@ -3,7 +3,7 @@ import { Printer, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CHART_SERIES } from '../../lib/chart-palette';
@@ -481,7 +481,7 @@ const PayrollRegister: React.FC = () => {
                 <tbody>
                   {runTypeGroups.map(g => (
                     <tr key={g.run_type}>
-                      <td className="text-text-primary font-medium capitalize">{g.run_type}</td>
+                      <td className="text-text-primary font-medium capitalize">{humanizeLabel(g.run_type)}</td>
                       <td className="text-right font-mono text-xs">{g.count}</td>
                       <td className="text-right font-mono">{formatCurrency(g.gross)}</td>
                       <td className="text-right font-mono text-xs text-accent-expense">{formatCurrency(g.taxes)}</td>

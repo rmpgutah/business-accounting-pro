@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../../lib/api';
-import { formatCurrency, formatDate, percentChange } from '../../../lib/format';
+import { formatCurrency, formatDate, percentChange, humanizeLabel } from '../../../lib/format';
 import { useCompanyStore } from '../../../stores/companyStore';
 
 // ============================================================================
@@ -776,7 +776,7 @@ function ClientsUpgradesPart2(): React.ReactElement {
           <tbody>
             {tiers.map((t) => (
               <tr key={t.tier}>
-                <td className="capitalize">{t.tier}</td>
+                <td className="capitalize">{humanizeLabel(t.tier)}</td>
                 <td className="text-right">{t.count}</td>
                 <td className="text-right">{formatCurrency(t.revenue)}</td>
               </tr>

@@ -5,7 +5,7 @@ import {
   Search, ArrowLeft, ExternalLink, Pencil, Lock, Unlock, RefreshCw,
 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatDate, formatDateTime } from '../../lib/format';
+import { formatDate, formatDateTime, humanizeLabel } from '../../lib/format';
 
 type Tab = 'documents' | 'create';
 type View = 'list' | 'detail';
@@ -514,7 +514,7 @@ const EsignModule: React.FC = () => {
                 {selectedDoc.permissions.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between text-xs">
                     <span className="truncate">{p.user_id || 'User'}</span>
-                    <span className="capitalize text-text-muted">{p.permission_level}</span>
+                    <span className="capitalize text-text-muted">{humanizeLabel(p.permission_level)}</span>
                   </div>
                 ))}
               </div>
