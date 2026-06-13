@@ -221,6 +221,28 @@ export function approveACHUpdate(id: string, approvedBy: string): boolean {
   return r.changes > 0;
 }
 
+export function rejectACHUpdate(id: string, rejectedBy: string): boolean {
+  const r = db.getDb().prepare(`UPDATE vendor_ach_updates SET status = 'rejected', verified_at = ?, approved_by = ? WHERE id = ?`).run(now(), rejectedBy, id);
+  return r.changes > 0;
+}
+
+// Admin review queue: pending ACH change requests first, then recently-decided rows for audit context.
+export function listACHUpdates(companyId: string, opts?: { status?: string; vendor_id?: string }): any[] {
+  const dbi = db.getDb();
+  const params: any[] = [companyId];
+  let where = 'a.company_id = ?';
+  if (opts?.status) { where += ' AND a.status = ?'; params.push(opts.status); }
+  if (opts?.vendor_id) { where += ' AND a.vendor_id = ?'; params.push(opts.vendor_id); }
+  return dbi.prepare(
+    `SELECT a.*, v.name AS vendor_name
+       FROM vendor_ach_updates a
+       LEFT JOIN vendors v ON v.id = a.vendor_id
+      WHERE ${where}
+      ORDER BY CASE WHEN a.status = 'pending' THEN 0 ELSE 1 END, a.submitted_at DESC
+      LIMIT 100`
+  ).all(...params) as any[];
+}
+
 // F398 — 1099 download log
 export function recordVendor1099Download(opts: any): { id: string } {
   const id = uuid();

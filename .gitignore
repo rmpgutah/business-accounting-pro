@@ -7,3 +7,6 @@ release/
 .env
 deploy/vps.env
 .claude/worktrees/
+
+# Superpowers brainstorm scratch
+.superpowers/

@@ -103,7 +103,7 @@ export const DEFAULT_SIDEBAR_ORDER: string[] = [
   // Finance group — Loans must be in this list; the Sidebar render also
   // auto-appends any missing ALL_ITEMS as a safety net for existing users
   // whose persisted sidebarOrder predates the Loans module.
-  'loans', 'bills', 'purchase-orders', 'bank-recon', 'stripe-sync',
+  'loans', 'bills', 'vendors-ap', 'purchase-orders', 'bank-recon', 'stripe-sync',
   'budgets', 'taxes', 'debt-collection',
   'reports', 'kpi-dashboard', 'forecasting', 'report-builder',
   'documents', 'recurring', 'email', 'notifications', 'audit-trail', 'rules', 'automations',
