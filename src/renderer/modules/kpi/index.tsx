@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
+import KpiTargets from './KpiTargets';
 import {
   LineChart,
   Line,
@@ -765,6 +766,7 @@ const KPIDashboard: React.FC = () => {
           </div>
         )}
       </div>
+      <KpiTargets />
       <PrintReportFooter />
     </div>
   );
