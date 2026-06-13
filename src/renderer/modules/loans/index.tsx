@@ -5,7 +5,7 @@
 // active loans on the list view.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw, Calculator } from 'lucide-react';
+import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw, Calculator, Settings } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import { useAppStore } from '../../stores/appStore';
@@ -14,8 +14,9 @@ import LoanDetail from './LoanDetail';
 import AggregateDebtChart from './AggregateDebtChart';
 import LoanWizard from './LoanWizard';
 import Calculators from './Calculators';
+import Servicing from './Servicing';
 
-type View = 'list' | 'form' | 'detail' | 'wizard' | 'calculators';
+type View = 'list' | 'form' | 'detail' | 'wizard' | 'calculators' | 'servicing';
 
 const fmt$ = (n: number, currency: string = 'USD'): string => {
   try {
@@ -112,6 +113,27 @@ const LoansModule: React.FC = () => {
     );
   }
 
+  if (view === 'servicing') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--structure)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => setView('list')} className="block-btn" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              <Landmark size={13} /> Loans & Debt
+            </button>
+            <ChevronRight size={14} style={{ color: 'var(--color-text-muted)' }} />
+            <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Settings size={14} /> Loan Servicing
+            </span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <Servicing />
+        </div>
+      </div>
+    );
+  }
+
   // List view
   return (
     <div style={{ padding: 24, maxWidth: 1200 }}>
@@ -126,6 +148,13 @@ const LoansModule: React.FC = () => {
             title="Financial calculator suite — IDR, CC payoff, HELOC, NPV/IRR, and more"
           >
             <Calculator size={14} /> Calculators
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => setView('servicing')}
+            title="Loan servicing — refi compare/execute, modifications, recast, biweekly, lump-sum, covenants, DSCR/LTV/stress"
+          >
+            <Settings size={14} /> Servicing
           </button>
           <button
             className="block-btn flex items-center gap-2"
