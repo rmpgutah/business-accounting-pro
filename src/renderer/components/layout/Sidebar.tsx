@@ -100,6 +100,7 @@ const sections: NavSection[] = [
   {
     title: 'ANALYTICS',
     items: [
+      { id: 'cockpit', label: 'Intelligence Cockpit', icon: LayoutGridIcon },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
       { id: 'kpi-dashboard', label: 'KPI Dashboard', icon: Gauge },
       { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
