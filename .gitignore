@@ -8,5 +8,5 @@ release/
 deploy/vps.env
 .claude/worktrees/
 
-# Playwright MCP scratch output
-.playwright-mcp/
+# Superpowers brainstorm scratch
+.superpowers/

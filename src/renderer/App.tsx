@@ -48,6 +48,7 @@ const BillsModule = lazy(() => import('./modules/bills'));
 const MileageModule = lazy(() => import('./modules/mileage'));
 const LoansModule = lazy(() => import('./modules/loans'));
 const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
+const VendorsApModule = lazy(() => import('./modules/vendors-ap'));
 const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
 const RulesModule = lazy(() => import('./modules/rules'));
@@ -56,6 +57,9 @@ const QuotesModule = lazy(() => import('./modules/quotes'));
 const EsignModule = lazy(() => import('./modules/esign'));
 const ComponentLibraryModule = lazy(() => import('./modules/component-library/ComponentLibrary'));
 const CustomizationModule = lazy(() => import('./modules/customization/CustomizationCenter'));
+
+// One-time FTS search-index backfill guard (once per company per session).
+const backfilledCompanies = new Set<string>();
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -92,6 +96,7 @@ const MODULE_NAMES: Record<string, string> = {
   loans: 'Loans & Debt',
   bills: 'Bills & Accounts Payable',
   'purchase-orders': 'Purchase Orders',
+  'vendors-ap': 'Vendor & AP Command Center',
   'fixed-assets': 'Fixed Assets',
   'debt-collection': 'Debt Collection',
   quotes: 'Quotes & Estimates',
@@ -144,6 +149,7 @@ const ModuleView: React.FC = () => {
       case 'mileage': return <MileageModule />;
       case 'loans': return <LoansModule />;
       case 'purchase-orders': return <PurchaseOrdersModule />;
+      case 'vendors-ap': return <VendorsApModule />;
       case 'fixed-assets': return <FixedAssetsModule />;
       case 'automations': return <AutomationsModule />;
       case 'rules': return <RulesModule />;
@@ -233,6 +239,14 @@ const App: React.FC = () => {
       usePersonalizationStore.getState().loadFromCloud(authUser.id);
     }
   }, [authUser?.id]);
+
+  // One-time FTS search-index backfill, once per company per session (non-blocking).
+  useEffect(() => {
+    const companyId = activeCompany?.id;
+    if (!authUser?.id || !companyId || backfilledCompanies.has(companyId)) return;
+    backfilledCompanies.add(companyId);
+    api.searchBackfill().catch(() => backfilledCompanies.delete(companyId));
+  }, [authUser?.id, activeCompany?.id]);
 
   // Stable handlers so QuickCreate doesn't re-render on every parent render.
   const handleQuickCreateNavigate = useCallback(

@@ -117,6 +117,16 @@ export function initDatabase(): Database.Database {
 
   // ─── Column migrations (safe — catch errors for already-existing columns) ──
   const migrations: string[] = [
+    // Intelligence Core — full-text search index (B1)
+    `CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+      entity_type UNINDEXED,
+      entity_id UNINDEXED,
+      company_id UNINDEXED,
+      title,
+      subtitle,
+      body,
+      tokenize = 'porter unicode61'
+    )`,
     "ALTER TABLE categories ADD COLUMN color TEXT DEFAULT '#6b7280'",
     "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''",
     "ALTER TABLE categories ADD COLUMN is_active INTEGER DEFAULT 1",
@@ -7792,6 +7802,28 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expenses ADD COLUMN geo_lat REAL",
   "ALTER TABLE expenses ADD COLUMN geo_lng REAL",
   "ALTER TABLE expenses ADD COLUMN geo_location_name TEXT",
+  // Shipping & Handling — order-level amount with optional per-item attribution.
+  // shipping_scope: 'order' (default) applies to the whole expense; 'item'
+  // attributes it to a single line via shipping_line_ref (a line-item id).
+  // shipping_taxable drives whether shipping_tax_amount is computed at save time.
+  // Per-line billable-to-client. Independent of the header is_billable so a
+  // single expense can mix billable and non-billable items. billed_invoice_id
+  // marks lines (or whole expenses) that have already been added to an
+  // invoice, so the billable bundler doesn't double-bill.
+  "ALTER TABLE expense_line_items ADD COLUMN is_billable INTEGER DEFAULT 0",
+  "ALTER TABLE expense_line_items ADD COLUMN billed_invoice_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN billed_invoice_id TEXT",
+  // Mileage trips: same billable-to-client flow as expense line items.
+  // is_billable + client_id → pulled into invoice:from-billable-expenses with
+  // billed_invoice_id stamped on bundle to prevent re-billing.
+  "ALTER TABLE mileage_log ADD COLUMN is_billable INTEGER DEFAULT 0",
+  "ALTER TABLE mileage_log ADD COLUMN billed_invoice_id TEXT",
+  "ALTER TABLE expenses ADD COLUMN shipping_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN shipping_tax_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN shipping_speed TEXT",
+  "ALTER TABLE expenses ADD COLUMN shipping_taxable INTEGER DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN shipping_scope TEXT DEFAULT 'order'",
+  "ALTER TABLE expenses ADD COLUMN shipping_line_ref TEXT",
   `CREATE TABLE IF NOT EXISTS expense_voice_memos (
     id TEXT PRIMARY KEY,
     expense_id TEXT NOT NULL,
@@ -9307,19 +9339,6 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_employee ON employee_wage_withholdings(employee_id)",
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_debt ON employee_wage_withholdings(debt_id)",
-  // rule_logs was referenced by the Rules run-history UI, the system-wide
-  // report, and VALID_TABLES, but never created — every lookup threw
-  // "no such table" (swallowed → permanently empty run log).
-  `CREATE TABLE IF NOT EXISTS rule_logs (
-    id TEXT PRIMARY KEY,
-    company_id TEXT,
-    rule_id TEXT,
-    status TEXT DEFAULT '',
-    detail TEXT DEFAULT '',
-    ran_at TEXT DEFAULT (datetime('now')),
-    created_at TEXT DEFAULT (datetime('now'))
-  )`,
-  "CREATE INDEX IF NOT EXISTS idx_rule_logs_rule ON rule_logs(rule_id)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

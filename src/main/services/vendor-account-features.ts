@@ -253,3 +253,40 @@ export function vendorPortfolioSummary(cid: string) {
 export function vendorQuarterlySpend(cid: string, vendorId: string) {
   return db.getDb().prepare(`SELECT strftime('%Y', date) || '-Q' || ((CAST(strftime('%m', date) AS INTEGER) - 1) / 3 + 1) AS quarter, COUNT(*) AS count, ROUND(SUM(amount),2) AS total FROM expenses WHERE vendor_id = ? AND company_id = ? AND deleted_at IS NULL GROUP BY quarter ORDER BY quarter DESC`).all(vendorId, cid);
 }
+
+// ─── Vendor disputes (net-new reader) ─────────────────────
+export function vendorDisputes(cid: string, vendorId?: string) {
+  const dbi = db.getDb();
+  if (vendorId) {
+    return dbi.prepare(
+      `SELECT d.*, v.name AS vendor_name, b.bill_number
+         FROM vendor_disputes d
+         LEFT JOIN vendors v ON v.id = d.vendor_id
+         LEFT JOIN bills b ON b.id = d.bill_id
+        WHERE d.company_id = ? AND d.vendor_id = ?
+        ORDER BY d.opened_date DESC`
+    ).all(cid, vendorId);
+  }
+  return dbi.prepare(
+    `SELECT d.*, v.name AS vendor_name, b.bill_number
+       FROM vendor_disputes d
+       LEFT JOIN vendors v ON v.id = d.vendor_id
+       LEFT JOIN bills b ON b.id = d.bill_id
+      WHERE d.company_id = ?
+      ORDER BY (d.status = 'open') DESC, d.opened_date DESC`
+  ).all(cid);
+}
+
+// ─── Multi-record W-9 (richer than legacy vendors.w9_status) ──
+export function vendorW9Records(cid: string, vendorId: string) {
+  return db.getDb().prepare(
+    `SELECT * FROM vendor_w9_records WHERE company_id = ? AND vendor_id = ? ORDER BY received_date DESC`
+  ).all(cid, vendorId);
+}
+
+// ─── Multi-policy insurance (richer than legacy vendors.coi_*) ──
+export function vendorInsurancePolicies(cid: string, vendorId: string) {
+  return db.getDb().prepare(
+    `SELECT * FROM vendor_insurance_policies WHERE company_id = ? AND vendor_id = ? ORDER BY expiration_date DESC`
+  ).all(cid, vendorId);
+}

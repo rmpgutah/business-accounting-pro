@@ -578,10 +578,8 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const handleUploadDocument = async () => {
     try {
       const result = await api.openFileDialog();
-      if (result && !result.canceled && result.filePaths?.length > 0) {
-        const fullPath = result.filePaths[0];
-        const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
-        await api.uploadDebtDocument(debtId, fullPath, fileName, 0);
+      if (result && result.path) {
+        await api.uploadDebtDocument(debtId, result.path, result.name, result.size || 0);
         triggerRefresh();
       }
     } catch (err: any) {

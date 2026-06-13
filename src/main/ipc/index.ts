@@ -38,6 +38,8 @@ import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
+import { reindexEntity, removeFromIndex } from '../services/intelligence/searchIndex';
+import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
 import http from 'http';
 import https from 'https';
 
@@ -102,9 +104,34 @@ function scheduleAutoBackup() {
   }, 30000); // 30 second debounce
 }
 
+// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
+// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
+const reindexTimers = new Map<string, NodeJS.Timeout>();
+function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
+  if (!INDEXED_TABLES.has(table)) return;
+  const key = `${table}:${id}`;
+  const existing = reindexTimers.get(key);
+  if (existing) clearTimeout(existing);
+  reindexTimers.set(key, setTimeout(() => {
+    reindexTimers.delete(key);
+    try {
+      const d = db.getDb();
+      if (op === 'delete') removeFromIndex(d, table, id);
+      else reindexEntity(d, table, id);
+    } catch (e) { console.warn('[search-index] reindex failed', table, id, e); }
+  }, 150));
+}
+
 let _lastLoginEmail: string | null = null;
 function setLastLoginEmail(email: string) { _lastLoginEmail = email; }
 function getLastLoginEmail(): string | null { return _lastLoginEmail; }
+
+// Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
+// sides must HMAC over the identical string, so this logic must stay in lockstep
+// with the server: same whitelist, same 100-char cap.
+function sanitizeBackupEmail(email: string): string {
+  return (email || '').replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+}
 
 // Helper: download backup from server
 function downloadBackup(email: string): Promise<Buffer | null> {
@@ -113,11 +140,18 @@ function downloadBackup(email: string): Promise<Buffer | null> {
     const isHttps = url.protocol === 'https:';
     const transport = isHttps ? https : http;
 
+    // The server authenticates download/status by HMAC over the sanitized
+    // email. We sign the raw email; the server applies the same sanitize +
+    // HMAC and compares. Mirror the upload secret-resolution exactly.
+    const secret = process.env.SYNC_SECRET || 'bap-sync-default';
+    const signature = crypto.createHmac('sha256', secret).update(sanitizeBackupEmail(email)).digest('hex');
+
     const req = transport.request({
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
       path: url.pathname,
       method: 'GET',
+      headers: { 'x-bap-signature': signature },
     }, (res) => {
       if (res.statusCode !== 200) { resolve(null); return; }
       const ct = res.headers['content-type'] || '';
@@ -761,6 +795,7 @@ export function registerIpcHandlers(): void {
       }
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      scheduleReindex(table, record.id as string, 'upsert');
       // Debt child table audit
       const DEBT_CHILD_AUDIT: Record<string, string> = {
         debt_payments: 'payment_recorded',
@@ -833,6 +868,7 @@ export function registerIpcHandlers(): void {
         }
         db.logAudit(companyId, table, id, 'update', changes);
       }
+      scheduleReindex(table, id, 'upsert');
       // Debt audit: log each changed field
       if (table === 'debts' && id && old) {
         try {
@@ -978,6 +1014,7 @@ export function registerIpcHandlers(): void {
         cleanupReferencesBeforeDelete(table, id);
       }
       db.remove(table, id);
+      scheduleReindex(table, id, 'delete');
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
     } catch (err) {
@@ -1640,7 +1677,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:reimbursement:list', (_e, { status }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().listReimbursements(cid, status); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:per-diem:upsert', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); return ie().upsertPerDiemRate({ ...record, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:per-diem:lookup', (_e, { city, state, year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ie().lookupPerDiem(cid, city, state, year); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:expense:bulk-recategorize', (_e, { expense_ids, category_id }: any) => { try { return ie().bulkRecategorizeExpenses(expense_ids, category_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:expense:bulk-recategorize', (_e, { expense_ids, category_id }: any) => { const r = eu().bulkRecategorize(expense_ids || [], category_id); scheduleAutoBackup(); return r; });
   ipcMain.handle('feat:expense:report', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ie().buildExpenseReport(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:expense:duplicates', (_e, { expense, days_window }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().findExpenseDuplicates(cid, expense, days_window); } catch (e: any) { return { error: e?.message }; } });
 
@@ -2471,6 +2508,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:vendor-pay:status', (_e, { vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ptd().vendorPaymentStatus(cid, vendor_id); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-ach:submit', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().submitACHUpdate({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-ach:approve', (_e, { id, approved_by }: any) => { try { return { ok: ptd().approveACHUpdate(id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-ach:reject', (_e, { id, rejected_by }: any) => { try { return { ok: ptd().rejectACHUpdate(id, rejected_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-ach:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptd().listACHUpdates(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-1099:download', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().recordVendor1099Download({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-attest:submit', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().submitComplianceAttestation({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
 
@@ -2768,7 +2807,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:tag-hier:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return ecm().upsertTagHierarchy({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:tag-hier:tree', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ecm().getTagTree(cid); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:tags:suggest', (_e, { description }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ecm().suggestTagsForExpense(cid, description); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:exp:bulk-tag', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ecm().bulkTagExpenses({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:bulk-tag', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const r = ecm().bulkTagExpenses({ ...opts, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
 
   // Batch AP — Spend Analytics Advanced
   ipcMain.handle('feat:spend:heatmap', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ecm().spendHeatmap(cid, opts); } catch (e: any) { return { error: e?.message }; } });
@@ -3023,10 +3062,10 @@ export function registerIpcHandlers(): void {
   // Workflow (EX21-EX30)
   ipcMain.handle('ex:check-policy', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().checkPolicyViolations(c, p) : {}; });
   ipcMain.handle('ex:approval-chain', (_e, { amount }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().getApprovalChain(c, amount) : {}; });
-  ipcMain.handle('ex:batch-approve', (_e, { expenseIds, approvedBy }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchApprove(c, expenseIds, approvedBy) : {}; });
-  ipcMain.handle('ex:batch-reject', (_e, { expenseIds, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchReject(c, expenseIds, reason) : {}; });
+  ipcMain.handle('ex:batch-approve', (_e, { expenseIds, approvedBy }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().batchApprove(c, expenseIds, approvedBy); scheduleAutoBackup(); return r; });
+  ipcMain.handle('ex:batch-reject', (_e, { expenseIds, reason }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().batchReject(c, expenseIds, reason); scheduleAutoBackup(); return r; });
   ipcMain.handle('ex:generate-report', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().generateExpenseReport(c, p) : {}; });
-  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().voidExpense(c, expenseId, reason) : {}; });
+  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().voidExpense(c, expenseId, reason); scheduleAutoBackup(); return r; });
   ipcMain.handle('ex:split-expense', (_e, { expenseId, splits }: any) => ex3().splitExpense(expenseId, splits));
   ipcMain.handle('ex:request-clarification', (_e, { expenseId, question }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().requestClarification(c, expenseId, question) : {}; });
   ipcMain.handle('ex:submit-on-behalf', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().submitOnBehalf(c, p.data, p.onBehalfOf) : {}; });
@@ -4447,6 +4486,25 @@ export function registerIpcHandlers(): void {
           expenseData.tax_amount = round2(lineItems.reduce((sum: number, li: any) => sum + lineTax(li), 0));
         }
 
+        // Shipping & Handling tax. Shipping is stored SEPARATELY from amount/
+        // tax_amount (so the goods subtotal and goods tax stay clean); the
+        // display layer adds shipping_amount + shipping_tax_amount on top. When
+        // shipping_taxable is set, we tax it at the EFFECTIVE goods rate
+        // (goods tax ÷ goods subtotal) rather than any single header rate —
+        // this is unambiguous across the inconsistent tax_rate storage and
+        // matches the blended rate the buyer actually paid. Non-taxable
+        // shipping (or a zero amount) yields zero shipping tax.
+        const shippingAmt = round2(Number(expenseData.shipping_amount || 0));
+        const shippingTaxable = expenseData.shipping_taxable === 1 || expenseData.shipping_taxable === true;
+        if (shippingAmt > 0 && shippingTaxable) {
+          const goodsSub = Number(expenseData.amount || 0);
+          const goodsTax = Number(expenseData.tax_amount || 0);
+          const effRate = goodsSub > 0 ? goodsTax / goodsSub : 0;
+          expenseData.shipping_tax_amount = round2(shippingAmt * effRate);
+        } else {
+          expenseData.shipping_tax_amount = 0;
+        }
+
         if (isEdit && expenseId) {
           db.update('expenses', expenseId, expenseData);
           savedId = expenseId;
@@ -4614,44 +4672,67 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Global Search ───────────────────────────────────
-  ipcMain.handle('search:global', (_event, query) => {
-    if (!query || query.length > 200) return [];
-    const results: Array<{ type: string; id: string; title: string; subtitle: string }> = [];
-    const q = `%${query}%`;
+  ipcMain.handle('search:index', (_e, { query, limit }: { query: string; limit?: number }) => {
     const companyId = db.getCurrentCompanyId();
-    if (!companyId) return results;
+    if (!companyId || !query) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, query, Math.min(limit || 20, 50));
+    } catch (e) { console.warn('[search:index] failed', e); return []; }
+  });
 
-    const dbInstance = db.getDb();
+  ipcMain.handle('search:backfill', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { indexed: 0 };
+    try {
+      const { backfillCompany } = require('../services/intelligence/searchIndex');
+      return { indexed: backfillCompany(db.getDb(), companyId) };
+    } catch (e) { console.warn('[search:backfill] failed', e); return { indexed: 0, error: String(e) }; }
+  });
 
-    const clients = dbInstance.prepare(
-      'SELECT id, name, email FROM clients WHERE company_id = ? AND (name LIKE ? OR email LIKE ?) LIMIT 5'
-    ).all(companyId, q, q) as any[];
-    for (const c of clients) {
-      results.push({ type: 'client', id: c.id, title: c.name, subtitle: c.email || '' });
+  // Intelligence Core (B1) — role-checked mutation dispatch. Role enforced in main; never trust renderer.
+  ipcMain.handle('action:invoke', (_e, { actionId, params }: { actionId: string; params?: any }) => {
+    const companyId = db.getCurrentCompanyId();
+    const userId = db.getCurrentUserId();
+    if (!companyId || !userId) return { error: 'Not authenticated' };
+    const { MUTATE_ACTIONS, ROLE_RANK } = require('../../shared/action-registry');
+    const action = MUTATE_ACTIONS.find((a: any) => a.id === actionId);
+    if (!action) return { error: 'Unknown or non-mutating action' };
+    // Role check — never trust the renderer.
+    const userRow: any = db.runQuery('SELECT role FROM users WHERE id = ?', [userId])[0];
+    const role = (userRow?.role || 'viewer');
+    if (action.requiredRole && (ROLE_RANK[role] ?? 0) < ROLE_RANK[action.requiredRole]) {
+      return { error: `Requires ${action.requiredRole} role` };
     }
+    try {
+      let result: any;
+      if (actionId === 'invoice.markPaid') {
+        if (!params?.invoiceId) return { error: 'invoiceId required' };
+        result = db.update('invoices', params.invoiceId, { status: 'paid' });
+        db.logAudit(companyId, 'invoices', params.invoiceId, 'update', { status: { new: 'paid' } });
+      } else if (actionId === 'client.createQuick') {
+        if (!params?.name) return { error: 'name required' };
+        result = db.create('clients', { company_id: companyId, name: params.name, email: params.email || '' });
+        db.logAudit(companyId, 'clients', result.id, 'create');
+      } else {
+        return { error: 'No handler' };
+      }
+      scheduleReindex(actionId.startsWith('invoice') ? 'invoices' : 'clients',
+        (params.invoiceId || result.id), 'upsert');
+      scheduleAutoBackup();
+      return { ok: true, result };
+    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  });
 
-    const invoices = dbInstance.prepare(
-      'SELECT id, invoice_number, status FROM invoices WHERE company_id = ? AND invoice_number LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const i of invoices) {
-      results.push({ type: 'invoice', id: i.id, title: `Invoice ${i.invoice_number}`, subtitle: i.status });
-    }
-
-    const expenses = dbInstance.prepare(
-      'SELECT id, description, amount FROM expenses WHERE company_id = ? AND description LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const e of expenses) {
-      results.push({ type: 'expense', id: e.id, title: e.description || 'Expense', subtitle: `$${e.amount}` });
-    }
-
-    const projects = dbInstance.prepare(
-      'SELECT id, name, status FROM projects WHERE company_id = ? AND name LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const p of projects) {
-      results.push({ type: 'project', id: p.id, title: p.name, subtitle: p.status });
-    }
-
-    return results.slice(0, 20);
+  ipcMain.handle('search:global', (_event, query) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !query || String(query).length > 200) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, String(query), 20).map((h: any) => ({
+        type: h.entity_type, id: h.entity_id, title: h.title, subtitle: h.subtitle || '',
+      }));
+    } catch (e) { console.warn('[search:global] failed', e); return []; }
   });
 
   // ─── Notifications ───────────────────────────────────
@@ -9269,6 +9350,28 @@ export function registerIpcHandlers(): void {
     return { inflow, outflow };
   });
 
+  ipcMain.handle('intelligence:entity-hint', (_e, { entityType, id }: { entityType: string; id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !id) return '';
+    try {
+      if (entityType === 'client') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS amt FROM invoices
+           WHERE company_id = ? AND client_id = ? AND status NOT IN ('paid','cancelled','draft')
+             AND COALESCE(due_date,'') <> '' AND date(due_date) < date('now')`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} overdue invoice${row.n > 1 ? 's' : ''} ($${Math.round(row.amt).toLocaleString()})`;
+      } else if (entityType === 'vendor') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n FROM expenses WHERE company_id = ? AND vendor_id = ?
+             AND instr(COALESCE(tags,''),'anomaly') > 0`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} flagged charge${row.n > 1 ? 's' : ''}`;
+      }
+      return '';
+    } catch { return ''; }
+  });
+
   // ─── Rules Engine ────────────────────────────────────────
   ipcMain.handle('rules:list', (_event, { company_id, category }: { company_id: string; category?: string }) => {
     let sql = `SELECT * FROM rules WHERE company_id = ?`;
@@ -9419,6 +9522,61 @@ export function registerIpcHandlers(): void {
     return { id: newId };
   });
 
+  // ─── Cloud bootstrap ────────────────────────────────────
+  // Push local users + companies + user_companies up to the configured cloud
+  // sync URL so the customer can sign in to the cloud with the SAME email +
+  // password they already use on the desktop. The cloud verifies password
+  // hashes in BOTH formats (pbkdf2-SHA256 cloud-native, pbkdf2-SHA512 from
+  // here), so the hashes transfer 1:1 — no password reset needed.
+  // Idempotent on the cloud side; safe to re-run after adding new local users.
+  ipcMain.handle('cloud:bootstrap-users', async () => {
+    try {
+      const rawDb = db.getDb();
+      const companyId = db.getCurrentCompanyId();
+      // Settings are company-scoped. Cloud Sync settings live on whichever
+      // company is currently active when the user clicks Save in the UI.
+      const readSetting = (k: string): string => {
+        const row = rawDb.prepare('SELECT value FROM settings WHERE company_id = ? AND key = ?').get(companyId, k) as any;
+        return row?.value || '';
+      };
+      const url = readSetting('cloud_sync_url').trim().replace(/\/$/, '');
+      const token = readSetting('cloud_sync_token').trim();
+      if (!url) return { error: 'Cloud Sync URL not set in API & Integrations.' };
+      if (!token) return { error: 'Cloud Sync Token not set in API & Integrations.' };
+      const users = rawDb.prepare(`
+        SELECT id, email, display_name, password_hash, role
+        FROM users
+      `).all() as any[];
+      const companies = rawDb.prepare(`
+        SELECT id, name, email, phone, address, tax_id, currency
+        FROM companies
+      `).all() as any[];
+      const userCompanies = rawDb.prepare(`
+        SELECT user_id, company_id, role
+        FROM user_companies
+      `).all() as any[];
+
+      if (users.length === 0) {
+        return { error: 'No local users to push. Register an account on the desktop first.' };
+      }
+
+      const res = await fetch(url + '/api/auth/bootstrap', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users, companies, user_companies: userCompanies }),
+      });
+      const text = await res.text();
+      let body: any;
+      try { body = JSON.parse(text); } catch { body = { error: text || 'Non-JSON response' }; }
+      if (!res.ok) {
+        return { error: body?.error || ('Cloud responded with HTTP ' + res.status) };
+      }
+      return { ok: true, imported: body?.imported, status: res.status };
+    } catch (err: any) {
+      return { error: err?.message || 'Bootstrap failed' };
+    }
+  });
+
   ipcMain.handle('invoice:from-time-entries', (_event, { project_id, company_id }: { project_id: string; company_id: string }) => {
     const entries = db.getDb().prepare(`
       SELECT te.*, e.name as employee_name, e.pay_rate, p.client_id, p.name as project_name
@@ -9442,6 +9600,155 @@ export function registerIpcHandlers(): void {
       tax_rate: 0,
     }));
     return { client_id, lines, entry_ids: entries.map((e: any) => e.id) };
+  });
+
+  // ─── Invoice from billable expenses ─────────────────────
+  // Bundles unbilled billable expense items into an invoice prefill. Two
+  // billable modes mix here:
+  //   1. WHOLE EXPENSE — expense.is_billable=1: every line becomes an invoice
+  //      line at the expense's amount (or per-line amount if itemized), with
+  //      optional markup_pct applied.
+  //   2. PER LINE — expense_line_items.is_billable=1 on a non-billable header:
+  //      only those specific lines surface.
+  // billed_invoice_id (on either row) suppresses re-billing.
+  ipcMain.handle('invoice:from-billable-expenses', (_event, { client_id, project_id, company_id }: {
+    client_id?: string; project_id?: string; company_id: string;
+  }) => {
+    const rawDb = db.getDb();
+    const whereClient = client_id ? 'AND e.client_id = ?' : '';
+    const whereProject = project_id ? 'AND e.project_id = ?' : '';
+    const params: any[] = [company_id];
+    if (client_id) params.push(client_id);
+    if (project_id) params.push(project_id);
+
+    // Lines from header-billable expenses (no per-line client_id needed)
+    const headerLines = rawDb.prepare(`
+      SELECT e.id as expense_id, e.description as expense_desc, e.date,
+             e.amount as expense_amount, e.tax_amount as expense_tax,
+             e.markup_pct, e.client_id, e.project_id,
+             li.id as line_id, li.description as line_desc,
+             li.quantity, li.unit_price, li.amount as line_amount,
+             li.is_billable as line_billable, li.billed_invoice_id as line_billed
+      FROM expenses e
+      LEFT JOIN expense_line_items li ON li.expense_id = e.id
+      WHERE e.company_id = ?
+        ${whereClient}
+        ${whereProject}
+        AND e.is_billable = 1
+        AND (e.billed_invoice_id IS NULL OR e.billed_invoice_id = '')
+    `).all(...params) as any[];
+
+    // Lines from per-line-billable rows on header-NON-billable expenses
+    const perLineBillable = rawDb.prepare(`
+      SELECT e.id as expense_id, e.description as expense_desc, e.date,
+             e.markup_pct, e.client_id, e.project_id,
+             li.id as line_id, li.description as line_desc,
+             li.quantity, li.unit_price, li.amount as line_amount,
+             li.is_billable as line_billable, li.billed_invoice_id as line_billed
+      FROM expense_line_items li
+      JOIN expenses e ON e.id = li.expense_id
+      WHERE e.company_id = ?
+        ${whereClient}
+        ${whereProject}
+        AND (e.is_billable = 0 OR e.is_billable IS NULL)
+        AND li.is_billable = 1
+        AND (li.billed_invoice_id IS NULL OR li.billed_invoice_id = '')
+    `).all(...params) as any[];
+
+    const lines: any[] = [];
+    const expenseIds = new Set<string>();
+    const lineIds = new Set<string>();
+
+    // Header-billable: prefer line breakdown when present, else single-line
+    // fallback using the expense amount.
+    const byExpense = new Map<string, any[]>();
+    for (const r of headerLines) {
+      if (!byExpense.has(r.expense_id)) byExpense.set(r.expense_id, []);
+      byExpense.get(r.expense_id)!.push(r);
+    }
+    for (const [expenseId, rows] of byExpense) {
+      const first = rows[0];
+      const markup = 1 + (Number(first.markup_pct || 0) / 100);
+      const hasLines = rows.some(r => r.line_id);
+      if (hasLines) {
+        for (const r of rows.filter(r => r.line_id)) {
+          lines.push({
+            description: `${first.expense_desc || 'Expense'} — ${r.line_desc || ''}`.trim(),
+            quantity: Number(r.quantity || 1),
+            unit_price: Number((r.unit_price || 0)) * markup,
+            tax_rate: 0,
+          });
+          lineIds.add(r.line_id);
+        }
+      } else {
+        lines.push({
+          description: first.expense_desc || `Expense ${first.date || ''}`,
+          quantity: 1,
+          unit_price: Number(first.expense_amount || 0) * markup,
+          tax_rate: 0,
+        });
+      }
+      expenseIds.add(expenseId);
+    }
+
+    // Per-line billable on otherwise non-billable expenses
+    for (const r of perLineBillable) {
+      const markup = 1 + (Number(r.markup_pct || 0) / 100);
+      lines.push({
+        description: `${r.expense_desc || 'Expense'} — ${r.line_desc || ''}`.trim(),
+        quantity: Number(r.quantity || 1),
+        unit_price: Number(r.unit_price || 0) * markup,
+        tax_rate: 0,
+      });
+      lineIds.add(r.line_id);
+    }
+
+    // Billable mileage trips for the same client/project. Mileage is billed at
+    // the IRS rate stored on each trip; no markup is applied — clients see the
+    // statutory rate so this is auditable for reimbursement disputes.
+    const mileageParams: any[] = [company_id];
+    if (client_id) mileageParams.push(client_id);
+    if (project_id) mileageParams.push(project_id);
+    const mileageRows = rawDb.prepare(`
+      SELECT id, trip_date, purpose, start_location, end_location,
+             miles, rate_per_mile, deduction_amount, client_id, project_id
+      FROM mileage_log
+      WHERE company_id = ?
+        ${client_id ? 'AND client_id = ?' : ''}
+        ${project_id ? 'AND project_id = ?' : ''}
+        AND is_billable = 1
+        AND (billed_invoice_id IS NULL OR billed_invoice_id = '')
+    `).all(...mileageParams) as any[];
+    const mileageIds: string[] = [];
+    for (const m of mileageRows) {
+      const route = [m.start_location, m.end_location].filter(Boolean).join(' → ');
+      const desc = `Mileage · ${m.trip_date}${m.purpose ? ` — ${m.purpose}` : ''}${route ? ` (${route})` : ''}`;
+      lines.push({
+        description: desc,
+        quantity: Number(m.miles || 0),
+        unit_price: Number(m.rate_per_mile || 0),
+        tax_rate: 0,
+      });
+      mileageIds.push(m.id);
+    }
+
+    if (lines.length === 0) {
+      return { error: 'No unbilled billable expenses or mileage for this selection.' };
+    }
+
+    // Resolve the client to attach (caller-supplied wins; else first source row)
+    const resolvedClient = client_id
+      || headerLines[0]?.client_id
+      || perLineBillable[0]?.client_id
+      || mileageRows[0]?.client_id
+      || '';
+    return {
+      client_id: resolvedClient,
+      lines,
+      expense_ids: Array.from(expenseIds),
+      line_ids: Array.from(lineIds),
+      mileage_ids: mileageIds,
+    };
   });
 
   // ─── Debt Collection ────────────────────────────────────
@@ -15347,6 +15654,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vn:payment-terms', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPaymentTermsBreakdown(c) : []; });
   ipcMain.handle('vn:portfolio-summary', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPortfolioSummary(c) : {}; });
   ipcMain.handle('vn:quarterly-spend', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorQuarterlySpend(c, vendorId) : []; });
+  ipcMain.handle('vn:disputes', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorDisputes(c, vendorId) : []; });
+  ipcMain.handle('vn:w9-records', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorW9Records(c, vendorId) : []; });
+  ipcMain.handle('vn:insurance-policies', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorInsurancePolicies(c, vendorId) : []; });
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   const dc2 = () => require('../services/debt-collection-wave2');

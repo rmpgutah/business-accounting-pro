@@ -88,7 +88,7 @@ export function vendorAnomalies(companyId: string, threshold = 2) {
       FROM expenses WHERE company_id = ? AND vendor_id IS NOT NULL AND deleted_at IS NULL
       GROUP BY vendor_id HAVING COUNT(*) >= 3
     )
-    SELECT e.id, e.amount, e.date, e.description, v.name AS vendor_name,
+    SELECT e.id, e.amount, e.date, e.description, e.tags, v.name AS vendor_name,
       vs.avg_amt, vs.stddev,
       CASE WHEN vs.stddev > 0 THEN (e.amount - vs.avg_amt) / vs.stddev ELSE 0 END AS z_score
     FROM expenses e
@@ -250,7 +250,7 @@ export function generateExpenseReport(companyId: string, opts: { title: string; 
 
 // EX26: Expense return/void with reason
 export function voidExpense(companyId: string, expenseId: string, reason: string) {
-  db.getDb().prepare(`UPDATE expenses SET status = 'void', notes = COALESCE(notes,'') || '\n[VOIDED] ' || ?, updated_at = datetime('now') WHERE id = ? AND company_id = ?`).run(reason, expenseId, companyId);
+  db.getDb().prepare(`UPDATE expenses SET deleted_at = datetime('now'), notes = COALESCE(notes,'') || '\n[VOIDED] ' || ?, updated_at = datetime('now') WHERE id = ? AND company_id = ?`).run(reason, expenseId, companyId);
   return { ok: true };
 }
 

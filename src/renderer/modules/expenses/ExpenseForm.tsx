@@ -21,359 +21,31 @@ import {
   CategoryRow, buildCategoryTree, flattenCategoryTree, suggestCategoryForVendor,
   categoryMonthlyUsage, parseJSON, CustomFieldDef,
 } from './expense-helpers';
-import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
 import ItemizationEditor from './ItemizationEditor';
 import { getExpensesPrefs } from '../../customization/expenses-prefs';
 import AllocationEditor from './AllocationEditor';
 import { useCustomizationStore } from '../../stores/customizationStore';
 import { optionKey } from '../../customization/registry';
 
-// ─── Types ──────────────────────────────────────────────
-interface ExpenseFormData {
-  date: string;
-  amount: string;
-  tax_amount: string;
-  description: string;
-  category_id: string;
-  account_id: string;
-  vendor_id: string;
-  payment_method: string;
-  project_id: string;
-  client_id: string;
-  is_billable: boolean;
-  is_reimbursable: boolean;
-  reimbursed: boolean;
-  reimbursed_date: string;
-  reference: string;
-  tags: string;
-  status: string;
-  approved_by: string;
-  approved_date: string;
-  rejection_reason: string;
-  // ── new tax / categorization / compliance fields ──
-  expense_class: string;
-  is_tax_deductible: boolean;
-  schedule_c_line: string;
-  foreign_tax_amount: string;
-  tax_year_override: string;
-  currency: string;
-  lost_receipt_affidavit: string;
-  // ── capture features (#4-7, #14, #21, #25) ──
-  exchange_rate: string;
-  tax_inclusive: boolean;
-  tax_rate: string;
-  entry_mode: 'standard' | 'mileage' | 'per_diem' | 'fuel';
-  odometer_start: string;
-  odometer_end: string;
-  miles: string;
-  mileage_rate: string;
-  per_diem_location: string;
-  per_diem_days: string;
-  per_diem_rate: string;
-  // Fuel mode (#.### precision on gallons + price). Stored as string so the
-  // user's typed value round-trips without floating-point reformat.
-  fuel_gallons: string;
-  fuel_price_per_gallon: string;
-  fuel_grade: string;
-  fuel_vehicle: string;
-  fuel_odometer: string;
-  fuel_station: string;
-  notes: string;
-  vat_gst: string;
-  // Header-level discount (post-Itemization Wave). Applied AFTER tax — does
-  // not reduce taxable base. Both fields are independent: $ + % both subtract.
-  discount_amount: string;
-  discount_percent: string;
-  // Loan Linkage Wave (F1053-F1062) — soft FK to a loan record. When set,
-  // this expense is treated as the interest-portion bookkeeping of a loan
-  // payment and is surfaced on the Loan Detail page.
-  related_loan_id: string;
-  // Debt-Collection Expense Wave — soft FK to a debt-collection case.
-  // Collection costs (court fees, process servers, skip tracing…) link to
-  // the debt they were incurred for; recoverable ones can be rolled into
-  // the debtor's balance from the Collection Costs panel on DebtDetail.
-  related_debt_id: string;
-  collection_cost_type: string;
-  is_recoverable: boolean;
-  // Merchant / location / markup fields — user-facing columns that existed
-  // in the DB but had no form input until now.
-  merchant_location: string;
-  geo_location_name: string;
-  markup_pct: string;
-  employee_id: string;
-}
+import {
+  ExpenseFormData, DropdownOption, ExpenseLineItem, newLineItem,
+  DetailField, CATEGORY_DETAIL_FIELDS, DEFAULT_DETAIL_FIELDS, getDetailFieldsForCategory,
+  REVIEW_RECEIPT_THRESHOLD, PAYMENT_METHODS, emptyForm,
+} from './form/formShared';
+import AttachedDocs from './form/AttachedDocs';
 
-interface DropdownOption {
-  id: string;
-  name: string;
-}
+// Shipping speed presets. Free-form not needed — these cover carrier tiers and
+// the "no shipping" cases (digital goods / in-store pickup).
+const SHIPPING_SPEEDS = [
+  'Standard', 'Economy', 'Expedited', 'Two-Day', 'Overnight',
+  'Freight / LTL', 'In-Store Pickup', 'Digital / No Shipping',
+];
 
 interface ExpenseFormProps {
   expenseId?: string | null;
   onBack: () => void;
   onSaved: () => void;
 }
-
-// ─── Expense Line Item ─────────────────────────────────
-interface ExpenseLineItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  amount: number;
-  account_id: string;
-  tax_rate: number;
-  tax_amount: number;
-  tax_jurisdictions: Array<{ jurisdiction: string; rate: number; amount: number }>;
-  // Itemization Wave (F841-F862) — per-line accounting + flags
-  category_id?: string;
-  project_id?: string;
-  client_id?: string;
-  discount_amount?: number;
-  discount_percent?: number;
-  is_tax_deductible?: boolean;
-  is_tax_exempt?: boolean;
-  is_billable?: boolean;
-  notes?: string;
-  item_type?: 'item' | 'service' | 'reimbursement';
-  tags?: string[];
-}
-
-function newLineItem(): ExpenseLineItem {
-  return {
-    id: crypto.randomUUID(), description: '', quantity: 1, unit_price: 0, amount: 0, account_id: '',
-    tax_rate: 0, tax_amount: 0, tax_jurisdictions: [],
-    // New per-line defaults: tax-deductible YES (most expenses are), item_type 'item'.
-    category_id: '', project_id: '', client_id: '',
-    discount_amount: 0, discount_percent: 0,
-    is_tax_deductible: true, is_tax_exempt: false,
-    notes: '', item_type: 'item', tags: [],
-  };
-}
-
-// ─── Category-Specific Detail Fields ───────────────────
-interface DetailField {
-  key: string;
-  label: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'textarea';
-  placeholder?: string;
-  options?: string[];
-}
-
-const CATEGORY_DETAIL_FIELDS: Record<string, DetailField[]> = {
-  // Electronics / Technology
-  electronics: [
-    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
-    { key: 'imei', label: 'IMEI', type: 'text', placeholder: 'IMEI number' },
-    { key: 'model', label: 'Model / Product Name', type: 'text', placeholder: 'e.g. MacBook Pro 16"' },
-    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
-    { key: 'condition', label: 'Condition', type: 'select', options: ['new', 'used', 'refurbished'] },
-  ],
-  technology: [
-    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
-    { key: 'imei', label: 'IMEI', type: 'text', placeholder: 'IMEI number' },
-    { key: 'model', label: 'Model / Product Name', type: 'text', placeholder: 'e.g. iPhone 16 Pro' },
-    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
-    { key: 'condition', label: 'Condition', type: 'select', options: ['new', 'used', 'refurbished'] },
-  ],
-  // Food / Meals / Entertainment
-  food: [
-    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
-    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'e.g. Client dinner, team lunch' },
-    { key: 'restaurant', label: 'Restaurant / Venue', type: 'text', placeholder: 'Name of establishment' },
-    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
-  ],
-  meals: [
-    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
-    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'e.g. Client dinner, team lunch' },
-    { key: 'restaurant', label: 'Restaurant / Venue', type: 'text', placeholder: 'Name of establishment' },
-    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
-  ],
-  entertainment: [
-    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
-    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'Purpose of entertainment' },
-    { key: 'restaurant', label: 'Venue', type: 'text', placeholder: 'Name of venue' },
-    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
-  ],
-  // Travel / Transportation
-  travel: [
-    { key: 'destination', label: 'Destination', type: 'text', placeholder: 'City, state or address' },
-    { key: 'departure_date', label: 'Departure Date', type: 'date' },
-    { key: 'return_date', label: 'Return Date', type: 'date' },
-    { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '0' },
-    { key: 'trip_purpose', label: 'Trip Purpose', type: 'text', placeholder: 'e.g. Client visit, conference' },
-  ],
-  transportation: [
-    { key: 'destination', label: 'Destination', type: 'text', placeholder: 'City, state or address' },
-    { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '0' },
-    { key: 'trip_purpose', label: 'Trip Purpose', type: 'text', placeholder: 'Reason for travel' },
-  ],
-  // Office Supplies / Equipment
-  'office supplies': [
-    { key: 'item_name', label: 'Item Name', type: 'text', placeholder: 'e.g. Printer paper, toner' },
-    { key: 'quantity', label: 'Quantity', type: 'number', placeholder: '1' },
-    { key: 'unit_cost', label: 'Unit Cost', type: 'number', placeholder: '0.00' },
-    { key: 'supplier', label: 'Supplier / Store', type: 'text', placeholder: 'e.g. Staples, Amazon' },
-  ],
-  equipment: [
-    { key: 'item_name', label: 'Item Name', type: 'text', placeholder: 'Equipment description' },
-    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
-    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
-    { key: 'supplier', label: 'Supplier', type: 'text', placeholder: 'Purchased from' },
-  ],
-  // Professional Services
-  'professional services': [
-    { key: 'service_provider', label: 'Service Provider', type: 'text', placeholder: 'Name of provider' },
-    { key: 'contract_number', label: 'Contract / Agreement #', type: 'text', placeholder: 'Contract reference' },
-    { key: 'service_start', label: 'Service Period Start', type: 'date' },
-    { key: 'service_end', label: 'Service Period End', type: 'date' },
-    { key: 'scope_of_work', label: 'Scope of Work', type: 'textarea', placeholder: 'Description of services rendered' },
-  ],
-  services: [
-    { key: 'service_provider', label: 'Service Provider', type: 'text', placeholder: 'Name of provider' },
-    { key: 'contract_number', label: 'Contract / Agreement #', type: 'text', placeholder: 'Contract reference' },
-    { key: 'service_start', label: 'Service Period Start', type: 'date' },
-    { key: 'service_end', label: 'Service Period End', type: 'date' },
-    { key: 'scope_of_work', label: 'Scope of Work', type: 'textarea', placeholder: 'Description of services rendered' },
-  ],
-  // Vehicle / Auto
-  vehicle: [
-    { key: 'license_plate', label: 'License Plate', type: 'text', placeholder: 'Plate number' },
-    { key: 'vin', label: 'VIN', type: 'text', placeholder: 'Vehicle identification number' },
-    { key: 'odometer', label: 'Odometer Reading', type: 'number', placeholder: '0' },
-    { key: 'service_type', label: 'Service Type', type: 'select', options: ['fuel', 'maintenance', 'repair', 'insurance', 'registration'] },
-  ],
-  auto: [
-    { key: 'license_plate', label: 'License Plate', type: 'text', placeholder: 'Plate number' },
-    { key: 'vin', label: 'VIN', type: 'text', placeholder: 'Vehicle identification number' },
-    { key: 'odometer', label: 'Odometer Reading', type: 'number', placeholder: '0' },
-    { key: 'service_type', label: 'Service Type', type: 'select', options: ['fuel', 'maintenance', 'repair', 'insurance', 'registration'] },
-  ],
-  // Rent / Utilities
-  rent: [
-    { key: 'property_address', label: 'Property Address', type: 'text', placeholder: 'Address' },
-    { key: 'billing_period', label: 'Billing Period', type: 'text', placeholder: 'e.g. March 2026' },
-    { key: 'account_number', label: 'Account Number', type: 'text', placeholder: 'Utility account #' },
-  ],
-  utilities: [
-    { key: 'property_address', label: 'Property Address', type: 'text', placeholder: 'Address' },
-    { key: 'billing_period', label: 'Billing Period', type: 'text', placeholder: 'e.g. March 2026' },
-    { key: 'account_number', label: 'Account Number', type: 'text', placeholder: 'Utility account #' },
-    { key: 'meter_reading', label: 'Meter Reading', type: 'number', placeholder: '0' },
-  ],
-};
-
-// Fallback detail fields for any category not explicitly mapped
-const DEFAULT_DETAIL_FIELDS: DetailField[] = [
-  { key: 'receipt_items', label: 'Receipt Items', type: 'textarea', placeholder: 'List items from receipt (one per line)' },
-  { key: 'detail_notes', label: 'Additional Notes', type: 'textarea', placeholder: 'Any additional details' },
-];
-
-function getDetailFieldsForCategory(categoryName: string): DetailField[] {
-  const key = categoryName.toLowerCase().trim();
-  // Try exact match first, then partial match
-  if (CATEGORY_DETAIL_FIELDS[key]) return CATEGORY_DETAIL_FIELDS[key];
-  for (const [k, fields] of Object.entries(CATEGORY_DETAIL_FIELDS)) {
-    if (key.includes(k) || k.includes(key)) return fields;
-  }
-  return DEFAULT_DETAIL_FIELDS;
-}
-
-const PAYMENT_METHODS = [
-  { value: '', label: 'Select method...' },
-  { value: 'transfer', label: 'Bank Transfer' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'check', label: 'Check' },
-  { value: 'credit_card', label: 'Credit Card' },
-  { value: 'debit_card', label: 'Debit Card' },
-  { value: 'other', label: 'Other' },
-];
-
-const emptyForm: ExpenseFormData = {
-  // DATE: Item #2 — local-time today.
-  date: todayLocal(),
-  amount: '',
-  tax_amount: '',
-  description: '',
-  category_id: '',
-  account_id: '',
-  vendor_id: '',
-  payment_method: '',
-  project_id: '',
-  client_id: '',
-  is_billable: false,
-  is_reimbursable: false,
-  reimbursed: false,
-  reimbursed_date: '',
-  reference: '',
-  tags: '',
-  status: 'pending',
-  approved_by: '',
-  approved_date: '',
-  rejection_reason: '',
-  expense_class: '',
-  is_tax_deductible: true,
-  schedule_c_line: '',
-  foreign_tax_amount: '',
-  tax_year_override: '',
-  currency: 'USD',
-  lost_receipt_affidavit: '',
-  exchange_rate: '1',
-  // FINAL-PRICE: default tax_inclusive=true so the AMOUNT field's value matches
-  // what the user actually paid (e.g., $71.03), with tax computed/shown as a
-  // breakdown line below. Exclusive mode still available via the radio toggle
-  // for users who prefer entering pre-tax + adding tax on top (US sales-tax style).
-  tax_inclusive: true,
-  tax_rate: '',
-  entry_mode: 'standard',
-  odometer_start: '',
-  odometer_end: '',
-  miles: '',
-  mileage_rate: String(IRS_MILEAGE_RATE_2026),
-  per_diem_location: 'Default (CONUS)',
-  per_diem_days: '',
-  per_diem_rate: String(PER_DIEM_RATES['Default (CONUS)']),
-  fuel_gallons: '',
-  fuel_price_per_gallon: '',
-  fuel_grade: 'regular',
-  fuel_vehicle: '',
-  fuel_odometer: '',
-  fuel_station: '',
-  notes: '',
-  vat_gst: '',
-  discount_amount: '',
-  discount_percent: '',
-  related_loan_id: '',
-  related_debt_id: '',
-  collection_cost_type: '',
-  is_recoverable: false,
-  merchant_location: '',
-  geo_location_name: '',
-  markup_pct: '',
-  employee_id: '',
-};
-
-// ─── Attached Documents (for receipt linking) ─────────
-const AttachedDocs: React.FC<{ expenseId: string }> = ({ expenseId }) => {
-  const [docs, setDocs] = useState<any[]>([]);
-  useEffect(() => {
-    api.rawQuery("SELECT * FROM documents WHERE entity_type = 'expense' AND entity_id = ?", [expenseId])
-      .then(r => setDocs(Array.isArray(r) ? r : []))
-      .catch(() => {});
-  }, [expenseId]);
-  if (docs.length === 0) return null;
-  return (
-    <div className="mt-2 space-y-1">
-      <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Attached Documents</p>
-      {docs.map((d: any) => (
-        <div key={d.id} className="flex items-center gap-2 text-xs text-text-secondary">
-          <FileText size={12} className="text-accent-blue" />
-          <span className="truncate">{d.filename}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 // ─── Component ──────────────────────────────────────────
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved }) => {
@@ -448,6 +120,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
   // ── new state ──
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('');
+  const [suggestedCategory, setSuggestedCategory] = useState<{ id: string; name: string } | null>(null);
   const [categoryUsage, setCategoryUsage] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [showAffidavit, setShowAffidavit] = useState(false);
@@ -606,15 +279,28 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     suggestCategoryForVendor(form.vendor_id).then(id => setSuggestedCategoryId(id || ''));
   }, [form.vendor_id]);
 
-  // IntelligenceService smart-default: auto-fill category when vendor changes
-  // and no category is yet selected. Uses the IPC-backed pattern store.
-  const suggested = useSuggestedCategory(form.vendor_id);
+  // Suggested-category chip: vendor's historically most-used category,
+  // offered (never auto-applied) when a vendor is set and category is empty.
   useEffect(() => {
-    if (suggested && !form.category_id) {
-      setForm(f => ({ ...f, category_id: suggested }));
+    let cancelled = false;
+    if (!activeCompany || !form.vendor_id || form.category_id) {
+      setSuggestedCategory(null);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggested]);
+    api.rawQuery(
+      `SELECT e.category_id AS id, c.name AS name, COUNT(*) AS uses
+       FROM expenses e JOIN categories c ON c.id = e.category_id
+       WHERE e.company_id = ? AND e.vendor_id = ? AND e.category_id IS NOT NULL AND e.category_id != ''
+         AND e.deleted_at IS NULL
+       GROUP BY e.category_id ORDER BY uses DESC LIMIT 1`,
+      [activeCompany.id, form.vendor_id]
+    ).then((r: any) => {
+      if (cancelled) return;
+      const row = Array.isArray(r) ? r[0] : null;
+      setSuggestedCategory(row?.id ? { id: row.id, name: row.name } : null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeCompany, form.vendor_id, form.category_id]);
 
   // Capture #11: prior expense lookup for "copy from prior" / auto-fill
   useEffect(() => {
@@ -859,6 +545,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               merchant_location: existing.merchant_location || '',
               geo_location_name: existing.geo_location_name || '',
               markup_pct: existing.markup_pct != null ? String(existing.markup_pct) : '',
+              shipping_amount: existing.shipping_amount ? String(existing.shipping_amount) : '',
+              shipping_speed: existing.shipping_speed || '',
+              shipping_taxable: !!existing.shipping_taxable,
+              shipping_scope: existing.shipping_scope === 'item' ? 'item' : 'order',
+              shipping_line_ref: existing.shipping_line_ref || '',
               employee_id: existing.employee_id || '',
               entry_mode: (existing.entry_mode as any) || 'standard',
               odometer_start: existing.odometer_start?.toString() || '',
@@ -936,6 +627,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 notes: l.notes || '',
                 item_type: (l.item_type as any) || 'item',
                 tags: parseJSON<string[]>(l.tags, []),
+                is_billable: !!l.is_billable,
+                billed_invoice_id: l.billed_invoice_id || null,
               })));
               setUseLineItems(true);
             }
@@ -1008,6 +701,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           geo_location_name: form.geo_location_name.trim() || null,
           markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
           employee_id: form.employee_id || null,
+          shipping_amount: roundCents(parseFloat(form.shipping_amount) || 0),
+          shipping_speed: form.shipping_speed || null,
+          shipping_taxable: form.shipping_taxable ? 1 : 0,
+          shipping_scope: form.shipping_scope,
+          shipping_line_ref: form.shipping_scope === 'item' ? (form.shipping_line_ref || null) : null,
           entry_mode: form.entry_mode,
           odometer_start: parseFloat(form.odometer_start) || 0,
           odometer_end: parseFloat(form.odometer_end) || 0,
@@ -1143,6 +841,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     }
     setErrors([]);
 
+    // Save-time nudge for the $25–$75 band (≥$75 is already covered by the affidavit requirement)
+    if (!isEditing && !receiptPath && amountValue >= REVIEW_RECEIPT_THRESHOLD && amountValue <= IRS_RECEIPT_THRESHOLD) {
+      const proceed = window.confirm(
+        `No receipt attached for a ${formatCurrency(amountValue)} expense.\n\n` +
+        'It will appear in the Review inbox until a receipt is attached.\n\n' +
+        'Save anyway?'
+      );
+      if (!proceed) return;
+    }
+
     setSaving(true);
 
     try {
@@ -1220,6 +928,21 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         related_debt_id: form.related_debt_id || null,
         collection_cost_type: form.related_debt_id ? (form.collection_cost_type || 'other') : '',
         is_recoverable: form.related_debt_id && form.is_recoverable ? 1 : 0,
+        // REGRESSION FIX: these rode only in the draft payload, so a real save
+        // wiped them. Keep both payloads in sync — see the draft path above.
+        merchant_location: form.merchant_location.trim() || null,
+        geo_location_name: form.geo_location_name.trim() || null,
+        markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
+        related_loan_id: form.related_loan_id || null,
+        employee_id: form.employee_id || null,
+        discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
+        discount_percent: parseFloat(form.discount_percent) || 0,
+        // Shipping & Handling — order-level amount + optional per-item ref.
+        shipping_amount: roundCents(parseFloat(form.shipping_amount) || 0),
+        shipping_speed: form.shipping_speed || null,
+        shipping_taxable: form.shipping_taxable ? 1 : 0,
+        shipping_scope: form.shipping_scope,
+        shipping_line_ref: form.shipping_scope === 'item' ? (form.shipping_line_ref || null) : null,
       };
 
       const lineItemsPayload = useLineItems
@@ -1249,6 +972,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             notes: li.notes || null,
             item_type: li.item_type || 'item',
             tags: JSON.stringify(li.tags || []),
+            // Per-line billable. Persists the flag and any prior invoice
+            // stamp so re-saving doesn't unmark already-billed lines.
+            is_billable: li.is_billable ? 1 : 0,
+            billed_invoice_id: li.billed_invoice_id || null,
           }))
         : [];
 
@@ -1579,11 +1306,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                     const headerFlat = parseFloat(form.discount_amount) || 0;
                     const headerPct = parseFloat(form.discount_percent) || 0;
                     const postLineDiscount = Math.max(0, gross - lineDisc);
-                    const postTax = postLineDiscount + tax;
+                    // Shipping & Handling preview: estimate shipping tax at the
+                    // effective goods rate (matches the server's save-time calc).
+                    const shipping = parseFloat(form.shipping_amount) || 0;
+                    const effRate = postLineDiscount > 0 ? tax / postLineDiscount : 0;
+                    const shippingTax = form.shipping_taxable ? roundCents(shipping * effRate) : 0;
+                    const postTax = postLineDiscount + tax + shipping + shippingTax;
                     const headerPctOff = postTax * (headerPct / 100);
                     const finalTotal = Math.max(0, postTax - headerFlat - headerPctOff);
                     const totalDiscount = lineDisc + headerFlat + headerPctOff;
-                    if (totalDiscount <= 0) return null;
+                    if (totalDiscount <= 0 && shipping <= 0) return null;
                     return (
                       <div className="text-[10px] text-text-muted font-mono space-y-0.5">
                         <div className="flex justify-between gap-3"><span>Subtotal</span><span>{formatCurrency(gross)}</span></div>
@@ -1595,6 +1327,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                         )}
                         {tax > 0 && (
                           <div className="flex justify-between gap-3"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
+                        )}
+                        {shipping > 0 && (
+                          <div className="flex justify-between gap-3"><span>Shipping &amp; Handling</span><span>{formatCurrency(shipping)}</span></div>
+                        )}
+                        {shippingTax > 0 && (
+                          <div className="flex justify-between gap-3"><span>Shipping tax</span><span>{formatCurrency(shippingTax)}</span></div>
                         )}
                         {(headerFlat > 0 || headerPctOff > 0) && (
                           <div className="flex justify-between gap-3 text-accent-blue">
@@ -1824,6 +1562,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 <option key={c.id} value={c.id}>{c.fullPath}</option>
               ))}
             </select>
+            {suggestedCategory && (
+              <button
+                type="button"
+                className="flex items-center gap-1 mt-1 px-2 py-1 text-[11px] border border-border-primary transition-colors"
+                style={{ borderRadius: 'var(--app-radius)', color: 'var(--accent-primary)' }}
+                onClick={() => setForm(f => ({ ...f, category_id: suggestedCategory.id }))}
+              >
+                <Sparkles size={11} /> Suggested: {suggestedCategory.name}
+              </button>
+            )}
             {/* Feature 2 — color dot */}
             {selectedCategory && (
               <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-muted">
@@ -2043,6 +1791,67 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               <input type="number" step="0.1" min="0" className="block-input" placeholder="0"
                 value={form.markup_pct} onChange={e => setForm(p => ({ ...p, markup_pct: e.target.value }))} style={{ paddingRight: 24 }} />
               <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 11 }}>%</span>
+            </div>
+          </div>
+
+          {/* ── Shipping & Handling ───────────────────────────── */}
+          <div className="col-span-3 border border-border-primary p-3" style={{ borderRadius: 'var(--app-radius)' }}>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+              Shipping &amp; Handling
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Amount</label>
+                <div className="relative">
+                  <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input type="number" step="0.01" min="0" className="block-input pl-8" placeholder="0.00"
+                    value={form.shipping_amount}
+                    onChange={e => setForm(p => ({ ...p, shipping_amount: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Shipping Speed</label>
+                <select className="block-select" value={form.shipping_speed}
+                  onChange={e => setForm(p => ({ ...p, shipping_speed: e.target.value }))}>
+                  <option value="">— Speed —</option>
+                  {SHIPPING_SPEEDS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-xs cursor-pointer pb-2">
+                  <input type="checkbox" checked={form.shipping_taxable}
+                    onChange={e => setForm(p => ({ ...p, shipping_taxable: e.target.checked }))}
+                    className="accent-accent-blue" />
+                  <span className="font-semibold uppercase tracking-wider">Shipping is taxable</span>
+                </label>
+              </div>
+            </div>
+            {/* Scope: whole order vs a single line item (only meaningful when itemizing) */}
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Applies to:</span>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="radio" name="shipping_scope" checked={form.shipping_scope === 'order'}
+                  onChange={() => setForm(p => ({ ...p, shipping_scope: 'order', shipping_line_ref: '' }))}
+                  className="accent-accent-blue" />
+                <span>Whole order</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ opacity: useLineItems && lineItems.length > 0 ? 1 : 0.5 }}>
+                <input type="radio" name="shipping_scope" disabled={!useLineItems || lineItems.length === 0}
+                  checked={form.shipping_scope === 'item'}
+                  onChange={() => setForm(p => ({ ...p, shipping_scope: 'item' }))}
+                  className="accent-accent-blue" />
+                <span>A single item</span>
+              </label>
+              {form.shipping_scope === 'item' && useLineItems && lineItems.length > 0 && (
+                <select className="block-select" style={{ width: 'auto', minWidth: 220 }}
+                  value={form.shipping_line_ref}
+                  onChange={e => setForm(p => ({ ...p, shipping_line_ref: e.target.value }))}>
+                  <option value="">— Choose line item —</option>
+                  {lineItems.map((li, i) => (
+                    <option key={li.id} value={li.id}>{`#${i + 1} ${li.description || '(untitled)'}`}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
