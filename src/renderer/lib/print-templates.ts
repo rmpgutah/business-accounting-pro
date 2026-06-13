@@ -2634,77 +2634,74 @@ export function generateReportHTML(
   rows: Record<string, any>[],
   summary?: ReportSummary[]
 ): string {
-  // Distribute column widths proportionally so no column gets starved.
-  // Currency/number columns get less width; text columns get more.
-  const colWidths = columns.map(c => c.format === 'currency' || c.align === 'right' ? 12 : c.key === 'description' || c.key === 'name' ? 25 : 15);
-  const totalW = colWidths.reduce((s, w) => s + w, 0);
-  const colgroup = `<colgroup>${colWidths.map(w => `<col style="width:${Math.round((w / totalW) * 100)}%;" />`).join('')}</colgroup>`;
+  // ── CLASSIC THEME: Arial + pure black/white ──
 
-  const headerCells = columns
-    .map(c => `<th class="${c.align === 'right' ? 'text-right' : ''}" style="${c.align === 'right' ? 'white-space:nowrap;' : ''}">${esc(c.label)}</th>`)
-    .join('');
+  // Map ReportColumn align to ruledTable align (ReportColumn only has left/right)
+  const ruledCols: RuledColumn[] = columns.map(c => ({
+    label: c.label,
+    align: c.align === 'right' ? 'right' : 'left',
+  }));
 
-  const bodyRows = rows.map(row => {
-    const cells = columns.map(c => {
+  // Build table rows — separator rows render as black band; bold rows get inline bold
+  const tableRows: string[][] = rows.map(row =>
+    columns.map(c => {
       const val = row[c.key];
-      const align = c.align === 'right' ? 'text-right' : '';
-      const mono = c.format === 'currency' ? 'font-mono' : '';
-      const display = c.format === 'currency' ? fmt(Number(val) || 0) : esc(String(val ?? ''));
-      const bold = row._bold ? 'font-bold' : '';
-      const accent = row._accent || '';
-      return `<td class="${align} ${mono} ${bold} ${accent}">${display}</td>`;
-    }).join('');
+      const display = c.format === 'currency'
+        ? cesc(fmt(Number(val) || 0))
+        : cesc(String(val ?? ''));
+      if (row._bold || row._separator) {
+        return `<strong>${display}</strong>`;
+      }
+      return display;
+    })
+  );
 
-    const trClass = row._separator ? 'class="rpt-total"' : '';
-    const bgClass = row._highlight ? 'style="background:#f1f5f9;"' : '';
-    return `<tr ${trClass} ${bgClass}>${cells}</tr>`;
-  }).join('');
-
-  const summaryHTML = summary && summary.length > 0 ? `
-    <div class="no-break" style="margin-top:24px;">
-      <div class="rpt-section" style="margin-top:0;">Summary</div>
-      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 3px 3px;overflow:hidden;background:#ffffff;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      ${summary.map((s, i) => {
-        const color = s.accent === 'green' ? '#16a34a' : s.accent === 'red' ? '#dc2626' : '#0f172a';
-        const bg = i % 2 === 0 ? 'background:#f8fafc;' : 'background:#ffffff;';
-        const isLast = i === summary.length - 1;
-        const border = isLast ? '' : 'border-bottom:1px solid #f1f5f9;';
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;font-size:12px;${bg}${border}-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <span style="font-weight:700;color:#0f172a;letter-spacing:0.1px;">${esc(s.label)}</span>
-          <span style="font-weight:800;color:${color};font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;font-size:13px;letter-spacing:-0.2px;">${esc(s.value)}</span>
-        </div>`;
-      }).join('')}
-      </div>
-    </div>
-  ` : '';
-
+  // Count data rows (not separator/subtotal rows)
   const rowCount = rows.filter(r => !r._separator && !r._bold).length;
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-${baseStyles}
-</style></head>
-<body>
-<div class="rpt-page">
-  ${reportHeader(companyName, title, dateRange)}
+  // ── Header ──
+  const header = docHeader({
+    coName: companyName,
+    coDetailHtml: dateRange ? cesc(dateRange) : '',
+    title,
+  });
 
-  <div class="rpt-meta">
-    <div class="rpt-meta-item"><span class="rpt-meta-label">Report</span><span class="rpt-meta-val">${esc(title)}</span></div>
-    <div class="rpt-meta-item"><span class="rpt-meta-label">Period</span><span class="rpt-meta-val">${esc(dateRange)}</span></div>
-    <div class="rpt-meta-item"><span class="rpt-meta-label">Entries</span><span class="rpt-meta-val">${rowCount}</span></div>
-  </div>
+  // ── Meta strip: report name, period, row count ──
+  const meta = metaStrip([
+    { label: 'Report',  value: title },
+    { label: 'Period',  value: dateRange || '—' },
+    { label: 'Entries', value: String(rowCount) },
+  ]);
 
-  <table style="table-layout:fixed;">
-    ${colgroup}
-    <thead><tr>${headerCells}</tr></thead>
-    <tbody>${bodyRows}</tbody>
-  </table>
+  // ── Main data table ──
+  const dataTable = `<div style="padding:0;">${ruledTable(ruledCols, tableRows)}</div>`;
 
-  ${summaryHTML}
+  // ── Summary section (replaces colored flex rows) ──
+  const summaryHTML = summary && summary.length > 0
+    ? `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">` +
+      totalsBox(summary.map((s, i) => ({
+        label: s.label,
+        value: s.value,
+        grand: i === summary.length - 1,
+      }))) +
+      `</div>`
+    : '';
 
-  ${reportFooter(companyName)}
-</div>
-</body></html>`;
+  // ── Footer ──
+  const generated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const footerLine = [companyName, dateRange, `Generated ${generated}`].filter(Boolean).join(' · ');
+
+  const inner =
+    header +
+    meta +
+    dataTable +
+    summaryHTML +
+    footerBar(footerLine);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${cesc(title)} — ${cesc(companyName)}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner) +
+    `</body></html>`;
 }
 
 
@@ -2716,7 +2713,9 @@ export function generateDebtPortfolioReportHTML(
   collectedYtd: number,
   company: any
 ): string {
-  const companyName = esc(company?.name || 'Company');
+  // ── CLASSIC THEME: Arial + pure black/white ──
+
+  const companyName = company?.name || 'Company';
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const now = Date.now();
@@ -2754,139 +2753,117 @@ export function generateDebtPortfolioReportHTML(
 
   const top10 = [...debts].sort((a, b) => Number(b.balance_due) - Number(a.balance_due)).slice(0, 10);
 
-  const agingRows = Object.entries(buckets).map(([label, { count, amount }]) => `
-    <tr>
-      <td>${label} days</td>
-      <td class="text-right">${count}</td>
-      <td class="text-right font-mono">${fmt(amount)}</td>
-      <td class="text-right text-muted">${totalBalance > 0 ? ((amount / totalBalance) * 100).toFixed(1) : '0.0'}%</td>
-    </tr>`).join('');
+  // ── Header ──
+  const header = docHeader({
+    coName: companyName,
+    coDetailHtml: cesc(today),
+    title: 'Debt Portfolio',
+  });
 
-  const stageRows = Object.entries(stages).map(([stage, count]) => `
-    <tr><td style="text-transform:capitalize;">${esc(stage.replace(/_/g, ' '))}</td><td class="text-right">${count}</td></tr>`).join('');
+  // ── Portfolio totals meta strip ──
+  const meta = metaStrip([
+    { label: 'Total Accounts',    value: String(debts.length) },
+    { label: 'Total Outstanding', value: fmt(totalBalance) },
+    { label: 'Original Amount',   value: fmt(totalOriginal) },
+    { label: 'Collected YTD',     value: fmt(collectedYtd) },
+    { label: 'Recovery Rate',     value: `${recoveryRate}%` },
+  ]);
 
-  const top10Rows = top10.map(d => {
-    const days = daysSince(d);
-    return `<tr>
-      <td>${esc(d.debtor_name || '—')}</td>
-      <td class="text-right font-mono">${fmt(Number(d.balance_due || 0))}</td>
-      <td class="text-right">${days}d</td>
-      <td style="text-transform:capitalize;">${esc((d.current_stage || '').replace(/_/g, ' '))}</td>
-    </tr>`;
-  }).join('');
+  // ── Aging Breakdown — classic ruled table (replaces color bar chart; all data preserved) ──
+  const agingSection = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Aging Breakdown</div>` +
+    ruledTable(
+      [
+        { label: 'Age Bucket',  width: '30%' },
+        { label: 'Accounts',    align: 'right', width: '15%' },
+        { label: 'Balance',     align: 'right', width: '30%' },
+        { label: '% of Total',  align: 'right', width: '25%' },
+      ],
+      Object.entries(buckets).map(([label, { count, amount }]) => [
+        cesc(`${label} days`),
+        cesc(String(count)),
+        cesc(fmt(amount)),
+        cesc(`${totalBalance > 0 ? ((amount / totalBalance) * 100).toFixed(1) : '0.0'}%`),
+      ]),
+    ) +
+    `</div>`;
 
-  // Aging bar chart widths
-  const maxBucket = Math.max(...Object.values(buckets).map(b => b.amount), 1);
-  const bucketColors: Record<string, string> = { '0-30': '#22c55e', '31-90': '#eab308', '91-180': '#f97316', '180+': '#dc2626' };
+  // ── Pipeline Stage Breakdown — classic ruled table ──
+  const stageSection = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Pipeline Stage Breakdown</div>` +
+    ruledTable(
+      [
+        { label: 'Stage',      width: '55%' },
+        { label: 'Count',      align: 'right', width: '20%' },
+        { label: '% of Total', align: 'right', width: '25%' },
+      ],
+      Object.entries(stages).map(([stage, count]) => [
+        cesc(stage.replace(/_/g, ' ')),
+        cesc(String(count)),
+        cesc(`${debts.length > 0 ? ((count / debts.length) * 100).toFixed(1) : '0.0'}%`),
+      ]),
+    ) +
+    `</div>`;
 
-  const agingBars = Object.entries(buckets).map(([label, { count, amount }]) => {
-    const pct = maxBucket > 0 ? (amount / maxBucket) * 100 : 0;
-    const color = bucketColors[label] || '#64748b';
-    return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
-      <span style="width:60px;font-size:11px;font-weight:600;color:#334155;">${label}d</span>
-      <div style="flex:1;height:18px;background:#f1f5f9;position:relative;">
-        <div style="height:100%;width:${pct}%;background:${color};min-width:${amount > 0 ? '2px' : '0'};"></div>
-      </div>
-      <span style="width:40px;text-align:right;font-size:10px;color:#64748b;">${count}</span>
-      <span style="width:90px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(amount)}</span>
-      <span style="width:45px;text-align:right;font-size:10px;color:#94a3b8;">${totalBalance > 0 ? ((amount / totalBalance) * 100).toFixed(1) : '0.0'}%</span>
-    </div>`;
-  }).join('');
+  // ── Top 10 Accounts — classic ruled table (replaces colored age cells) ──
+  const top10Section = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Top 10 Accounts by Balance</div>` +
+    ruledTable(
+      [
+        { label: '#',       width: '6%' },
+        { label: 'Debtor',  width: '34%' },
+        { label: 'Balance', align: 'right', width: '22%' },
+        { label: 'Age',     align: 'right', width: '13%' },
+        { label: 'Stage',   width: '25%' },
+      ],
+      top10.map((d, i) => {
+        const days = daysSince(d);
+        return [
+          cesc(String(i + 1)),
+          cesc(d.debtor_name || '—'),
+          cesc(fmt(Number(d.balance_due || 0))),
+          cesc(`${days}d`),
+          cesc((d.current_stage || '').replace(/_/g, ' ')),
+        ];
+      }),
+    ) +
+    `</div>`;
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Debt Portfolio Report</title><style>
-${baseStyles}
-</style></head>
-<body><div class="rpt-page">
-  ${reportHeader(companyName, 'Debt Portfolio Report')}
-
-  <!-- KPI Cards -->
-  <div class="rpt-stats">
-    <div class="rpt-stat" style="border-left:3px solid #0f172a;">
-      <div class="rpt-stat-label">Total Accounts</div>
-      <div class="rpt-stat-val">${debts.length}</div>
-    </div>
-    <div class="rpt-stat" style="border-left:3px solid #dc2626;">
-      <div class="rpt-stat-label">Total Balance Due</div>
-      <div class="rpt-stat-val" style="color:#dc2626;">${fmt(totalBalance)}</div>
-      <div class="rpt-stat-sub">Original: ${fmt(totalOriginal)}</div>
-    </div>
-    <div class="rpt-stat" style="border-left:3px solid #16a34a;">
-      <div class="rpt-stat-label">Collected YTD</div>
-      <div class="rpt-stat-val" style="color:#16a34a;">${fmt(collectedYtd)}</div>
-    </div>
-    <div class="rpt-stat" style="border-left:3px solid #2563eb;">
-      <div class="rpt-stat-label">Recovery Rate</div>
-      <div class="rpt-stat-val">${recoveryRate}%</div>
-    </div>
-  </div>
-
-  <!-- Aging Breakdown (bar chart) -->
-  <div class="rpt-section">Aging Breakdown</div>
-  <div style="padding:12px 0;">
-    <div style="display:flex;gap:12px;padding:0 0 6px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;border-bottom:1px solid #e2e8f0;">
-      <span style="width:60px;">Bucket</span><span style="flex:1;">Distribution</span><span style="width:40px;text-align:right;">Accts</span><span style="width:90px;text-align:right;">Balance</span><span style="width:45px;text-align:right;">%</span>
-    </div>
-    ${agingBars}
-  </div>
-
-  <!-- Pipeline Stages -->
-  <div class="rpt-section rpt-section-alt">Pipeline Stage Breakdown</div>
-  <table><thead><tr><th>Stage</th><th class="text-right">Count</th><th class="text-right">% of Total</th></tr></thead>
-  <tbody>${Object.entries(stages).map(([stage, count]) => `
-    <tr>
-      <td style="text-transform:capitalize;">${esc(stage.replace(/_/g, ' '))}</td>
-      <td class="text-right font-mono">${count}</td>
-      <td class="text-right text-muted">${debts.length > 0 ? ((count / debts.length) * 100).toFixed(1) : '0.0'}%</td>
-    </tr>`).join('')}</tbody></table>
-
-  <!-- Top 10 -->
-  <div class="rpt-section">Top 10 Accounts by Balance</div>
-  <table><thead><tr><th style="width:5%">#</th><th>Debtor</th><th class="text-right">Balance</th><th class="text-right">Age</th><th>Stage</th></tr></thead>
-  <tbody>${top10.map((d, i) => {
-    const days = daysSince(d);
-    const ageColor = days > 180 ? '#dc2626' : days > 90 ? '#f97316' : days > 30 ? '#eab308' : '#22c55e';
-    return `<tr>
-      <td style="color:#94a3b8;font-size:10px;">${i + 1}</td>
-      <td class="font-bold">${esc(d.debtor_name || '\u2014')}</td>
-      <td class="text-right font-mono font-bold">${fmt(Number(d.balance_due || 0))}</td>
-      <td class="text-right" style="color:${ageColor};font-weight:600;">${days}d</td>
-      <td style="text-transform:capitalize;color:#64748b;">${esc((d.current_stage || '').replace(/_/g, ' '))}</td>
-    </tr>`;
-  }).join('')}</tbody></table>
-
-  ${(() => {
-    // ── Feature #13: risk score histogram ──
+  // ── Feature #13: Risk Score Distribution — classic ruled table (replaces color histogram) ──
+  const riskSection = (() => {
     const bands = [
-      { label: 'Low', min: 0, max: 25, color: '#16a34a' },
-      { label: 'Medium', min: 25, max: 50, color: '#eab308' },
-      { label: 'High', min: 50, max: 75, color: '#f97316' },
-      { label: 'Critical', min: 75, max: 101, color: '#dc2626' },
+      { label: 'Low',      min: 0,  max: 25  },
+      { label: 'Medium',   min: 25, max: 50  },
+      { label: 'High',     min: 50, max: 75  },
+      { label: 'Critical', min: 75, max: 101 },
     ];
     const counts = bands.map(b => debts.filter(d => {
       const r = Number(d.risk_score ?? d.risk ?? -1);
       return r >= b.min && r < b.max;
     }).length);
     if (counts.reduce((s, x) => s + x, 0) === 0) return '';
-    const maxC = Math.max(...counts, 1);
-    return `<div class="rpt-section rpt-section-alt">Risk Score Distribution</div>
-      <div style="padding:12px 0;">
-        ${bands.map((b, i) => {
-          const w = (counts[i] / maxC) * 100;
-          return `<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
-            <span style="width:80px;font-size:11px;font-weight:600;color:#334155;">${b.label}</span>
-            <span style="width:60px;font-size:10px;color:#64748b;">${b.min}-${b.max === 101 ? '100' : b.max}</span>
-            <div style="flex:1;height:14px;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-              <div style="height:100%;width:${w.toFixed(1)}%;background:${b.color};min-width:${counts[i] > 0 ? '2px' : '0'};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-            </div>
-            <span style="width:50px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;">${counts[i]}</span>
-          </div>`;
-        }).join('')}
-      </div>`;
-  })()}
+    const total = counts.reduce((s, x) => s + x, 0);
+    return `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Risk Score Distribution</div>` +
+      ruledTable(
+        [
+          { label: 'Band',       width: '25%' },
+          { label: 'Range',      width: '25%' },
+          { label: 'Count',      align: 'right', width: '25%' },
+          { label: '% of Total', align: 'right', width: '25%' },
+        ],
+        bands.map((b, i) => [
+          cesc(b.label),
+          cesc(`${b.min}–${b.max === 101 ? '100' : b.max}`),
+          cesc(String(counts[i])),
+          cesc(`${total > 0 ? ((counts[i] / total) * 100).toFixed(1) : '0.0'}%`),
+        ]),
+      ) +
+      `</div>`;
+  })();
 
-  ${(() => {
-    // ── Feature #14: top collectors dashboard ──
+  // ── Feature #14: Top Collectors — classic ruled table (replaces color bar chart) ──
+  const collectorsSection = (() => {
     const byCollector: Record<string, number> = {};
     debts.forEach(d => {
       const name = d.collector_name || d.assigned_to_name || d.collector || d.assigned_collector || '';
@@ -2896,27 +2873,55 @@ ${baseStyles}
     });
     const top = Object.entries(byCollector).sort((a, b) => b[1] - a[1]).slice(0, 5);
     if (top.length === 0) return '';
-    const max = top[0][1];
-    return `<div class="rpt-section">Top Collectors</div>
-      <div style="padding:12px 0;">
-        ${top.map(([name, amt]) => {
-          const w = (amt / max) * 100;
-          return `<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
-            <span style="width:160px;font-size:11px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
-            <div style="flex:1;height:14px;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-              <div style="height:100%;width:${w.toFixed(1)}%;background:#16a34a;min-width:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-            </div>
-            <span style="width:100px;text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;">${fmt(amt)}</span>
-          </div>`;
-        }).join('')}
-      </div>`;
-  })()}
+    const totalCollected = top.reduce((s, [, v]) => s + v, 0);
+    return `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Top Collectors</div>` +
+      ruledTable(
+        [
+          { label: 'Collector',  width: '55%' },
+          { label: 'Collected',  align: 'right', width: '25%' },
+          { label: '% of Group', align: 'right', width: '20%' },
+        ],
+        top.map(([name, amt]) => [
+          cesc(name),
+          cesc(fmt(amt)),
+          cesc(`${totalCollected > 0 ? ((amt / totalCollected) * 100).toFixed(1) : '0.0'}%`),
+        ]),
+      ) +
+      `</div>`;
+  })();
 
-  ${reportFooter(companyName)}
-  <div style="margin-top:12px;border-top:1px solid #000;padding-top:8px;font-family:Georgia,'Times New Roman',serif;font-size:9pt;color:#444;text-align:center;font-style:italic;">
-    This communication may contain privileged or confidential information. Unauthorized disclosure is prohibited.
-  </div>
-</div></body></html>`;
+  // ── Totals box ──
+  const portfolioTotals = totalsBox([
+    { label: 'Total Outstanding', value: fmt(totalBalance) },
+    { label: 'Collected YTD',     value: fmt(collectedYtd) },
+    { label: 'Recovery Rate',     value: `${recoveryRate}%`, grand: true },
+  ]);
+
+  // ── Footer (legal disclaimer preserved as plain text) ──
+  const generated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const footerLine = [
+    companyName,
+    `Generated ${generated}`,
+    'This communication may contain privileged or confidential information. Unauthorized disclosure is prohibited.',
+  ].join(' · ');
+
+  const inner =
+    header +
+    meta +
+    agingSection +
+    stageSection +
+    top10Section +
+    riskSection +
+    collectorsSection +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">${portfolioTotals}</div>` +
+    footerBar(footerLine);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debt Portfolio — ${cesc(companyName)}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner) +
+    `</body></html>`;
+
 }
 
 // ═══════════════════════════════════════════════════════════════
