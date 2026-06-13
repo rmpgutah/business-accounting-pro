@@ -14,6 +14,7 @@ import {
   resolveTemplateString, computeScheduleDates, detectAndSplit,
   buildBalanceSuggestions, rememberBalancer, generateJeCoverSheetHTML,
 } from '../../lib/je-helpers';
+import PdfPreview from '../../components/PdfPreview';
 
 // ─── Types ──────────────────────────────────────────────
 interface AccountOption {
@@ -1240,13 +1241,13 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
             <div className="bg-bg-elevated border border-border-primary w-full max-w-3xl shadow-xl" style={{ borderRadius: '6px' }}>
               <div className="px-4 py-2 border-b border-border-primary flex items-center justify-between">
                 <h3 className="text-sm font-bold">Preview</h3>
-                <div className="flex items-center gap-2">
-                  <button onClick={printWithSignature} className="block-btn px-2 py-1 text-xs" style={{ borderRadius: '4px' }}>Print</button>
-                  <button onClick={() => setShowPreview(false)} className="text-text-muted">×</button>
-                </div>
+                <button onClick={() => setShowPreview(false)} className="text-text-muted">×</button>
               </div>
-              <iframe title="JE preview" className="w-full bg-white" style={{ height: '70vh' }}
-                srcDoc={buildPreviewHTML(true)} />
+              <PdfPreview
+                html={buildPreviewHTML(true)}
+                title={`JE ${entry?.entry_number || ''}`}
+                style={{ height: '70vh', width: '100%' }}
+              />
             </div>
           </div>
         )}

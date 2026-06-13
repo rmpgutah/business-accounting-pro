@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { generateInvoiceHTML, InvoiceSettings as ISettings, InvoiceColumnConfig, DEFAULT_COLUMNS } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
+import PdfPreview from '../../components/PdfPreview';
 
 // ─── Component ──────────────────────────────────────────
 interface InvoiceSettingsProps {
@@ -603,9 +604,11 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
             <div style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b', fontWeight: 600, background: '#e2e8f0', borderBottom: '1px solid #cbd5e1', flexShrink: 0 }}>
               SAMPLE PREVIEW — updates live as you change settings
             </div>
-            <iframe srcDoc={previewHTML} title="Invoice Template Preview"
-              style={{ flex: 1, border: 'none', width: '100%', background: '#fff' }}
-              sandbox="allow-same-origin" />
+            <PdfPreview
+              html={previewHTML}
+              title="Invoice Template Preview"
+              style={{ flex: 1, width: '100%', minHeight: 0 }}
+            />
           </div>
         )}
       </div>
