@@ -5,7 +5,7 @@ import { useWidgetData } from './widgets/useWidgetData';
 import { widgetDef, WIDGET_DEFS } from './widgets/registry';
 import WidgetFrame from './widgets/WidgetFrame';
 import WidgetBody from './widgets/WidgetBody';
-import { GRID_COLS } from './layout-utils';
+import { GRID_COLS, pixelToCell } from './layout-utils';
 import { useAppStore } from '../../stores/appStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -17,7 +17,7 @@ const DRILL: Record<string, string> = {
   'anomalies': 'expenses', 'cash-forecast': 'reports', 'kpis': 'dashboard',
 };
 
-const WidgetSlot: React.FC<{ p: any; editing: boolean }> = ({ p, editing }) => {
+const WidgetSlot: React.FC<{ p: any; editing: boolean; onDragStart?: () => void }> = ({ p, editing, onDragStart }) => {
   const def = widgetDef(p.type);
   const { data, loading } = useWidgetData(p.type);
   const setModule = useAppStore((s) => s.setModule);
@@ -26,7 +26,8 @@ const WidgetSlot: React.FC<{ p: any; editing: boolean }> = ({ p, editing }) => {
   return (
     <div style={{ gridColumn: `${p.x + 1} / span ${p.w}`, gridRow: `${p.y + 1} / span ${p.h}` }}>
       <WidgetFrame title={def.title} accent={def.accent} editing={editing}
-        onRemove={() => removeWidget(p.id)} onOpen={() => setModule(DRILL[p.type] || 'dashboard')}>
+        onRemove={() => removeWidget(p.id)} onOpen={() => setModule(DRILL[p.type] || 'dashboard')}
+        dragHandleProps={editing ? { draggable: true, onDragStart } : undefined}>
         <WidgetBody type={p.type} data={data} loading={loading} />
       </WidgetFrame>
     </div>
@@ -34,13 +35,25 @@ const WidgetSlot: React.FC<{ p: any; editing: boolean }> = ({ p, editing }) => {
 };
 
 const Cockpit: React.FC = () => {
-  const { layout, editing, setEditing, addWidget, resetLayout, loadFromCloud, saveToCloud } = useCockpitLayoutStore();
+  const { layout, editing, setEditing, addWidget, resetLayout, updatePlacement, loadFromCloud, saveToCloud } = useCockpitLayoutStore();
   const user = useAuthStore((s) => s.user);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const gridRef = React.useRef<HTMLDivElement>(null);
+  const dragId = React.useRef<string | null>(null);
 
   useEffect(() => { if (user?.id && activeCompany?.id) loadFromCloud(user.id, activeCompany.id); }, [user?.id, activeCompany?.id]);
 
   const persist = () => { if (user?.id && activeCompany?.id) saveToCloud(user.id, activeCompany.id); };
+
+  const onGridDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!dragId.current || !gridRef.current) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    const { x, y } = pixelToCell(e.clientX - rect.left, e.clientY - rect.top, rect.width, ROW_H, GRID_COLS);
+    updatePlacement(dragId.current, { x, y });
+    dragId.current = null;
+    persist();
+  };
 
   return (
     <div className="p-6 h-full overflow-y-auto">
@@ -60,8 +73,9 @@ const Cockpit: React.FC = () => {
           </button>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`, gridAutoRows: `${ROW_H}px`, gap: '12px' }}>
-        {layout.map(p => <WidgetSlot key={p.id} p={p} editing={editing} />)}
+      <div ref={gridRef} onDragOver={(e) => e.preventDefault()} onDrop={onGridDrop}
+        style={{ display: 'grid', gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`, gridAutoRows: `${ROW_H}px`, gap: '12px' }}>
+        {layout.map(p => <WidgetSlot key={p.id} p={p} editing={editing} onDragStart={() => { dragId.current = p.id; }} />)}
       </div>
     </div>
   );
