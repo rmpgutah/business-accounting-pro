@@ -8,6 +8,7 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
 import { CHART_SERIES } from '../../lib/chart-palette';
+import { generateExpenseByCategoryHTML } from '../../lib/financial-statement-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface CategoryRow {
@@ -158,6 +159,28 @@ const ExpenseByCategory: React.FC = () => {
     return m;
   }, [priorMonthData]);
 
+  // ─── Classic PDF Print ─────────────────────────────────
+  const handlePrint = async () => {
+    if (!activeCompany) return;
+    // Optionally load vendor spend for the PDF (best-effort — non-blocking)
+    let vendors: { vendor_name: string; total_spend: number; transaction_count: number }[] = [];
+    try {
+      const vRows: any[] = await api.vendorSpend(startDate, endDate);
+      vendors = Array.isArray(vRows) ? vRows : [];
+    } catch {
+      // vendor data is supplemental — proceed without it
+    }
+    const html = generateExpenseByCategoryHTML(categories, activeCompany, {
+      startDate,
+      endDate,
+      totalExpenses,
+      showMoM,
+      priorMonthData,
+      vendors,
+    });
+    await api.printPreview(html, `Expenses by Category ${startDate} to ${endDate}`);
+  };
+
   // ─── Change 50: CSV Export ─────────────────────────────
   const handleExportCSV = () => {
     downloadCSVBlob(
@@ -187,7 +210,7 @@ const ExpenseByCategory: React.FC = () => {
           </label>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="block-btn flex items-center gap-2 text-xs"><Printer size={14} /> Print</button>
+          <button onClick={handlePrint} className="block-btn flex items-center gap-2 text-xs"><Printer size={14} /> Print</button>
           <button onClick={handleExportCSV} className="block-btn flex items-center gap-2 text-xs"><Download size={14} /> CSV</button>
         </div>
       </div>
