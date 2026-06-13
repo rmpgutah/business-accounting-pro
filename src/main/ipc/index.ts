@@ -15314,6 +15314,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vn:payment-terms', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPaymentTermsBreakdown(c) : []; });
   ipcMain.handle('vn:portfolio-summary', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPortfolioSummary(c) : {}; });
   ipcMain.handle('vn:quarterly-spend', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorQuarterlySpend(c, vendorId) : []; });
+  ipcMain.handle('vn:disputes', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorDisputes(c, vendorId) : []; });
+  ipcMain.handle('vn:w9-records', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorW9Records(c, vendorId) : []; });
+  ipcMain.handle('vn:insurance-policies', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorInsurancePolicies(c, vendorId) : []; });
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   const dc2 = () => require('../services/debt-collection-wave2');

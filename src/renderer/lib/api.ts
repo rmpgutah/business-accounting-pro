@@ -814,6 +814,9 @@ const api = {
   vnPaymentTermsBreakdown: () => window.electronAPI.invoke('vn:payment-terms'),
   vnPortfolioSummary: () => window.electronAPI.invoke('vn:portfolio-summary'),
   vnQuarterlySpend: (vendorId: string) => window.electronAPI.invoke('vn:quarterly-spend', { vendorId }),
+  vnDisputes: (vendorId?: string) => window.electronAPI.invoke('vn:disputes', { vendorId }),
+  vnW9Records: (vendorId: string) => window.electronAPI.invoke('vn:w9-records', { vendorId }),
+  vnInsurancePolicies: (vendorId: string) => window.electronAPI.invoke('vn:insurance-policies', { vendorId }),
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   dcDashboard: () => window.electronAPI.invoke('dc:dashboard'),
