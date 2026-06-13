@@ -48,7 +48,8 @@ export type ReportType =
   | 'income-by-month'
   | 'debt-collection'
   | 'inventory-valuation'
-  | 'sales-tax';
+  | 'sales-tax'
+  | 'variance-analysis';
 
 interface ReportCard {
   id: ReportType;
@@ -264,6 +265,13 @@ const REPORTS: ReportCard[] = [
     icon: Receipt,
     accentClass: 'border-l-[#f59e0b]',
   },
+  {
+    id: 'variance-analysis',
+    title: 'Variance Analysis',
+    description: 'Year-over-year, quarter-over-quarter, period-over-period, actual vs budget, and over-budget account detection.',
+    icon: TrendingUp,
+    accentClass: 'border-l-accent-warning',
+  },
 ];
 
 // ─── Category Groups ────────────────────────────────────
@@ -272,7 +280,7 @@ const CATEGORIES = [
   { title: 'Ledger & Accounts', reports: ['trial-balance', 'general-ledger'] },
   { title: 'Receivables & Revenue', reports: ['ar-aging', 'revenue-by-client', 'income-by-month', 'sales-tax'] },
   { title: 'Payables & Expenses', reports: ['ap-aging', 'expense-by-category', 'expense-detail', 'vendor-spend'] },
-  { title: 'Operations', reports: ['budget-vs-actual', 'payroll-register', 'project-profitability', 'inventory-valuation'] },
+  { title: 'Operations', reports: ['budget-vs-actual', 'payroll-register', 'project-profitability', 'inventory-valuation', 'variance-analysis'] },
   { title: 'Collections', reports: ['debt-collection'] },
 ];
 

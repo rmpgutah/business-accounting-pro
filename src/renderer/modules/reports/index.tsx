@@ -32,6 +32,7 @@ const IncomeByMonth = React.lazy(() => import('./IncomeByMonth'));
 const DebtCollectionReport = React.lazy(() => import('./DebtCollectionReport'));
 const InventoryValuation = React.lazy(() => import('./InventoryValuation'));
 const SalesTaxReport = React.lazy(() => import('./SalesTaxReport'));
+const VarianceReport = React.lazy(() => import('./VarianceReport'));
 
 // ─── Report title map ───────────────────────────────────
 const REPORT_TITLES: Record<ReportType, string> = {
@@ -61,6 +62,7 @@ const REPORT_TITLES: Record<ReportType, string> = {
   'debt-collection': 'Debt Collection Report',
   'inventory-valuation': 'Inventory Valuation',
   'sales-tax': 'Sales Tax Report',
+  'variance-analysis': 'Variance Analysis',
 };
 
 // ─── LocalStorage keys ──────────────────────────────────
@@ -255,6 +257,8 @@ const ReportsModule: React.FC = () => {
         return <Suspense fallback={<LazyFallback />}><InventoryValuation /></Suspense>;
       case 'sales-tax':
         return <Suspense fallback={<LazyFallback />}><SalesTaxReport /></Suspense>;
+      case 'variance-analysis':
+        return <Suspense fallback={<LazyFallback />}><VarianceReport /></Suspense>;
       default:
         return null;
     }
