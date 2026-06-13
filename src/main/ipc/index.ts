@@ -15610,6 +15610,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vn:disputes', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorDisputes(c, vendorId) : []; });
   ipcMain.handle('vn:w9-records', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorW9Records(c, vendorId) : []; });
   ipcMain.handle('vn:insurance-policies', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorInsurancePolicies(c, vendorId) : []; });
+  ipcMain.handle('vn:ach-risk-flags', (_e, { withinDays }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorAchRiskFlags(c, withinDays) : []; });
+  ipcMain.handle('vn:duplicate-vendors', () => { const c = db.getCurrentCompanyId(); return c ? vn().duplicateVendors(c) : []; });
+  ipcMain.handle('vn:risk-score', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorRiskScore(c) : []; });
+  ipcMain.handle('vn:off-contract-spend', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorOffContractSpend(c) : []; });
+  ipcMain.handle('vn:price-variance', (_e, { minOccurrences }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPriceVariance(c, minOccurrences) : []; });
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   const dc2 = () => require('../services/debt-collection-wave2');

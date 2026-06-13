@@ -290,3 +290,183 @@ export function vendorInsurancePolicies(cid: string, vendorId: string) {
     `SELECT * FROM vendor_insurance_policies WHERE company_id = ? AND vendor_id = ? ORDER BY expiration_date DESC`
   ).all(cid, vendorId);
 }
+
+// ─── Phase A / B Intelligence readers ────────────────────────
+
+// vn:ach-risk-flags — ACH bank-detail change within `withinDays` days of an open bill due date
+export function vendorAchRiskFlags(cid: string, withinDays = 14): object[] {
+  const dbi = db.getDb();
+  const rows = dbi.prepare(
+    `SELECT
+       a.vendor_id,
+       v.name AS vendor_name,
+       a.submitted_at AS ach_submitted_at,
+       a.status AS ach_status,
+       b.id AS bill_id,
+       b.bill_number,
+       b.due_date,
+       ROUND(b.total - COALESCE(b.amount_paid, 0), 2) AS balance
+     FROM vendor_ach_updates a
+     JOIN vendors v ON v.id = a.vendor_id AND v.company_id = ?
+     JOIN bills b ON b.vendor_id = a.vendor_id AND b.company_id = ?
+       AND b.status IN ('pending','received','approved','partial')
+       AND b.due_date IS NOT NULL
+       AND b.deleted_at IS NULL
+     WHERE a.company_id = ?
+       AND ABS(JULIANDAY(a.submitted_at) - JULIANDAY(b.due_date)) <= ?
+     ORDER BY a.submitted_at DESC`
+  ).all(cid, cid, cid, withinDays) as any[];
+  return rows.map(r => ({ ...r, reason: 'Bank details changed near payment' }));
+}
+
+// vn:duplicate-vendors — candidate pairs with same name, tax_id, email, or ach_account
+export function duplicateVendors(cid: string): object[] {
+  const dbi = db.getDb();
+  const results: object[] = [];
+
+  // name match
+  const nameMatches = dbi.prepare(
+    `SELECT a.id AS id_a, a.name AS name_a, b.id AS id_b, b.name AS name_b
+     FROM vendors a JOIN vendors b ON a.id < b.id
+     WHERE a.company_id = ? AND b.company_id = ?
+       AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+       AND lower(trim(a.name)) = lower(trim(b.name))`
+  ).all(cid, cid) as any[];
+  nameMatches.forEach(r => results.push({ ...r, match_reason: 'Duplicate name' }));
+
+  // tax_id match
+  const taxMatches = dbi.prepare(
+    `SELECT a.id AS id_a, a.name AS name_a, b.id AS id_b, b.name AS name_b
+     FROM vendors a JOIN vendors b ON a.id < b.id
+     WHERE a.company_id = ? AND b.company_id = ?
+       AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+       AND a.tax_id IS NOT NULL AND a.tax_id <> ''
+       AND a.tax_id = b.tax_id`
+  ).all(cid, cid) as any[];
+  taxMatches.forEach(r => results.push({ ...r, match_reason: 'Duplicate tax_id' }));
+
+  // email match
+  const emailMatches = dbi.prepare(
+    `SELECT a.id AS id_a, a.name AS name_a, b.id AS id_b, b.name AS name_b
+     FROM vendors a JOIN vendors b ON a.id < b.id
+     WHERE a.company_id = ? AND b.company_id = ?
+       AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+       AND a.email IS NOT NULL AND a.email <> ''
+       AND a.email = b.email`
+  ).all(cid, cid) as any[];
+  emailMatches.forEach(r => results.push({ ...r, match_reason: 'Duplicate email' }));
+
+  // ach_account match
+  const achMatches = dbi.prepare(
+    `SELECT a.id AS id_a, a.name AS name_a, b.id AS id_b, b.name AS name_b
+     FROM vendors a JOIN vendors b ON a.id < b.id
+     WHERE a.company_id = ? AND b.company_id = ?
+       AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+       AND a.ach_account IS NOT NULL AND a.ach_account <> ''
+       AND a.ach_account = b.ach_account`
+  ).all(cid, cid) as any[];
+  achMatches.forEach(r => results.push({ ...r, match_reason: 'Duplicate ACH account' }));
+
+  return results;
+}
+
+// vn:risk-score — composite 0-100 score + A-F grade per vendor
+export function vendorRiskScore(cid: string): object[] {
+  const dbi = db.getDb();
+  const vendors = dbi.prepare(
+    `SELECT id, name, on_time_payment_count, late_payment_count, avg_days_to_pay,
+            dispute_count, coi_expiry, contract_end_date, contract_end,
+            is_1099_eligible, tax_id
+     FROM vendors WHERE company_id = ? AND deleted_at IS NULL`
+  ).all(cid) as any[];
+
+  const t = today();
+  return vendors
+    .map(v => {
+      let score = 100;
+      const factors: string[] = [];
+      const onTime = v.on_time_payment_count || 0;
+      const late = v.late_payment_count || 0;
+      const total = onTime + late;
+      if (total > 0) {
+        const lateRatio = late / total;
+        if (lateRatio > 0.5) { score -= 25; factors.push('High late-payment rate (>50%)'); }
+        else if (lateRatio > 0.25) { score -= 15; factors.push('Elevated late-payment rate (>25%)'); }
+        else if (lateRatio > 0.1) { score -= 8; factors.push('Some late payments (>10%)'); }
+      }
+      const avgDays = v.avg_days_to_pay || 0;
+      if (avgDays > 60) { score -= 15; factors.push('Avg days to pay > 60'); }
+      else if (avgDays > 30) { score -= 8; factors.push('Avg days to pay > 30'); }
+      const disputes = v.dispute_count || 0;
+      if (disputes >= 3) { score -= 20; factors.push(`${disputes} disputes on record`); }
+      else if (disputes >= 1) { score -= 10; factors.push(`${disputes} dispute(s) on record`); }
+      const coiExpiry = v.coi_expiry;
+      if (coiExpiry && coiExpiry < t) { score -= 15; factors.push('Insurance (COI) expired'); }
+      const contractEnd = v.contract_end_date || v.contract_end;
+      if (contractEnd && contractEnd < t) { score -= 10; factors.push('Contract expired'); }
+      if (v.is_1099_eligible && (!v.tax_id || v.tax_id.trim() === '')) {
+        score -= 10; factors.push('1099-eligible but no Tax ID on file');
+      }
+      score = Math.max(0, score);
+      const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 45 ? 'D' : 'F';
+      return { vendorId: v.id, name: v.name, score, grade, factors };
+    })
+    .sort((a, b) => (a as any).score - (b as any).score);
+}
+
+// vn:off-contract-spend — total spend for unapproved or contract-expired vendors
+export function vendorOffContractSpend(cid: string): object[] {
+  const dbi = db.getDb();
+  const vendors = dbi.prepare(
+    `SELECT id, name, approval_status,
+            COALESCE(contract_end_date, contract_end) AS contract_end_col
+     FROM vendors
+     WHERE company_id = ? AND deleted_at IS NULL
+       AND (
+         approval_status IS NULL OR approval_status <> 'approved'
+         OR (COALESCE(contract_end_date, contract_end) IS NOT NULL
+             AND COALESCE(contract_end_date, contract_end) <> ''
+             AND COALESCE(contract_end_date, contract_end) < date('now'))
+       )`
+  ).all(cid) as any[];
+
+  return vendors
+    .map(v => {
+      const expSpend = (dbi.prepare(
+        `SELECT COALESCE(SUM(amount),0) t FROM expenses WHERE vendor_id = ? AND company_id = ? AND deleted_at IS NULL`
+      ).get(v.id, cid) as any)?.t || 0;
+      const billSpend = (dbi.prepare(
+        `SELECT COALESCE(SUM(total),0) t FROM bills WHERE vendor_id = ? AND company_id = ? AND deleted_at IS NULL`
+      ).get(v.id, cid) as any)?.t || 0;
+      const total_spend = round2(expSpend + billSpend);
+      const contractExpired = v.contract_end_col && v.contract_end_col < today();
+      const notApproved = !v.approval_status || v.approval_status !== 'approved';
+      const reason = notApproved ? 'Not approved' : 'Contract expired';
+      return { vendor_id: v.id, name: v.name, approval_status: v.approval_status || '', total_spend, reason };
+    })
+    .sort((a, b) => b.total_spend - a.total_spend);
+}
+
+// vn:price-variance — price drift per vendor+description across bill line items
+export function vendorPriceVariance(cid: string, minOccurrences = 3): object[] {
+  return db.getDb().prepare(
+    `SELECT
+       b.vendor_id,
+       v.name AS vendor_name,
+       lower(trim(li.description)) AS description,
+       COUNT(*) AS occurrences,
+       ROUND(MIN(li.unit_price), 4) AS min_price,
+       ROUND(MAX(li.unit_price), 4) AS max_price,
+       ROUND(AVG(li.unit_price), 4) AS avg_price,
+       ROUND((MAX(li.unit_price) - MIN(li.unit_price)) / NULLIF(AVG(li.unit_price), 0) * 100, 2) AS variance_pct
+     FROM bill_line_items li
+     JOIN bills b ON b.id = li.bill_id AND b.company_id = ? AND b.deleted_at IS NULL
+     JOIN vendors v ON v.id = b.vendor_id AND v.company_id = ?
+     WHERE li.description IS NOT NULL AND li.description <> ''
+       AND li.unit_price IS NOT NULL
+     GROUP BY b.vendor_id, lower(trim(li.description))
+     HAVING COUNT(*) >= ? AND MAX(li.unit_price) > MIN(li.unit_price)
+     ORDER BY variance_pct DESC
+     LIMIT 100`
+  ).all(cid, cid, minOccurrences) as object[];
+}
