@@ -3625,72 +3625,37 @@ export function generateExpenseReportHTML(
   dateRange: string,
   groupBy: string
 ): string {
+  // ── CLASSIC THEME: Arial + pure black/white. ──
+
+  // ── Math (unchanged) ──
   const grandTotal = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const totalTax = expenses.reduce((s, e) => s + (Number(e.tax_amount) || 0), 0);
+  const avgExpense = expenses.length > 0 ? grandTotal / expenses.length : 0;
+  const largestExpense = expenses.reduce((m, e) => Math.max(m, Number(e.amount) || 0), 0);
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      paid: '#16a34a', approved: '#16a34a', pending: '#d97706',
-      rejected: '#dc2626', draft: '#475569',
-    };
-    const c = colors[status?.toLowerCase()] || '#64748b';
-    return `<span style="display:inline-block;font-size:9px;font-weight:700;color:${c};text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;text-align:center;">${status || '—'}</span>`;
-  };
-
-  // Short date for table rows \u2014 "Mar 17, 2026" instead of "March 17, 2026"
-  // to prevent overflow in the fixed-width Date column.
+  // Short date for table rows — "Mar 17, 2026" to prevent overflow.
   const fmtDateShort = (d: string) => {
     if (!d) return '';
     try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
     catch { return d; }
   };
 
-  const renderRow = (e: ExpenseReportRow) => {
-    const mainRow = `<tr>
-      <td style="white-space:nowrap;">${fmtDateShort(e.date)}</td>
-      <td>${esc(e.description) || '\u2014'}</td>
-      <td>${esc(e.vendor_name) || '\u2014'}</td>
-      <td>${esc(e.category_name) || '\u2014'}</td>
-      <td class="text-right font-mono" style="white-space:nowrap;">${fmt(Number(e.amount) || 0)}</td>
-      <td style="text-align:center;white-space:nowrap;">${statusBadge(e.status)}</td>
-    </tr>`;
+  // Status: plain-text uppercase label (no color in classic)
+  const statusLabel = (status: string) => cesc(status ? String(status).toUpperCase() : '—');
 
-    const lineItemRows = e.line_items && e.line_items.length > 0
-      ? `<tr><td colspan="6" style="padding:0 0 0 28px;">
-          <table style="width:100%;margin:4px 0 8px;">
-            <thead><tr>
-              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;">Description</th>
-              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:right;">Qty</th>
-              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:right;">Unit Price</th>
-              <th style="font-size:9px;border-bottom:1px solid #e2e8f0;padding:4px 8px;text-align:right;">Amount</th>
-            </tr></thead>
-            <tbody>
-              ${e.line_items.map(li => `<tr style="background:#f8fafc;">
-                <td style="padding:3px 8px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;">${esc(li.description) || '\u2014'}</td>
-                <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;border-bottom:1px solid #f1f5f9;">${li.quantity}</td>
-                <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid #f1f5f9;">${fmt(Number(li.unit_price) || 0)}</td>
-                <td style="padding:3px 8px;font-size:11px;color:#475569;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid #f1f5f9;">${fmt(Number(li.amount) || 0)}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </td></tr>`
-      : '';
-
-    return mainRow + lineItemRows;
-  };
-
-  // \u2500\u2500 Grouping \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // ── Grouping logic (unchanged) ──
   const quarterOf = (d: string) => {
     const m = parseInt((d || '').substring(5, 7), 10);
     const y = (d || '').substring(0, 4);
     if (!m) return 'Undated';
-    if (m <= 3) return `${y} \u00b7 Q1`;
-    if (m <= 6) return `${y} \u00b7 Q2`;
-    if (m <= 9) return `${y} \u00b7 Q3`;
-    return `${y} \u00b7 Q4`;
+    if (m <= 3) return `${y} · Q1`;
+    if (m <= 6) return `${y} · Q2`;
+    if (m <= 9) return `${y} · Q3`;
+    return `${y} · Q4`;
   };
   const pmLabel = (m: string | null | undefined) => {
     const map: Record<string, string> = { cash: 'Cash', check: 'Check', credit_card: 'Credit Card', bank_transfer: 'Bank Transfer' };
-    return map[(m || '').toLowerCase()] || (m ? esc(m) : 'Unspecified');
+    return map[(m || '').toLowerCase()] || (m ? String(m) : 'Unspecified');
   };
   const groupKey = (e: ExpenseReportRow): string => {
     switch (groupBy) {
@@ -3723,226 +3688,176 @@ export function generateExpenseReportHTML(
     tax_deductible: 'Tax Status', payment_method: 'Payment Method',
   } as Record<string, string>)[groupBy] || '';
 
-  // Shared table head — widened Date column + tighter padding so it never crops
-  const detailColgroup = `<colgroup>
-      <col style="width:16%;" /><col style="width:21%;" /><col style="width:17%;" />
-      <col style="width:16%;" /><col style="width:15%;" /><col style="width:15%;" />
-    </colgroup>`;
-  const detailHead = `<thead><tr>
-      <th>Date</th><th>Description</th><th>Vendor</th><th>Category</th>
-      <th class="text-right">Amount</th><th style="text-align:center;">Status</th>
-    </tr></thead>`;
-
-  // Compute stats
-  const totalTax = expenses.reduce((s, e) => s + (Number(e.tax_amount) || 0), 0);
-  const avgExpense = expenses.length > 0 ? grandTotal / expenses.length : 0;
-  const largestExpense = expenses.reduce((m, e) => Math.max(m, Number(e.amount) || 0), 0);
-
-  // Category breakdown
+  // ── Category breakdown (data preserved; rendered as ruled table) ──
   const catTotals: Record<string, number> = {};
   expenses.forEach(e => { const c = e.category_name || 'Uncategorized'; catTotals[c] = (catTotals[c] || 0) + (Number(e.amount) || 0); });
   const topCategories = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const maxCat = Math.max(...topCategories.map(([, v]) => v), 1);
 
-  // Front-page analytics visualisations (pure inline SVG, print-safe)
-  const timelineSVG = expenseTimelineSVG(expenses as any);
-  const heatmapSVG = expenseHeatmapSVG(expenses as any);
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-${baseStyles}
-</style>
-<style>
-  /* ── Expense Detail Report — flat, formal financial-statement styling ──
-     Scoped under .exp-report so shared .rpt-* classes elsewhere are unaffected.
-     No gradients, no shadows, hairline rules, restrained monochrome palette. */
-
-  /* Formal letterhead */
-  .exp-report .exp-hdr {
-    border-top: 2px solid var(--ink);
-    border-bottom: 1px solid var(--ink);
-    padding: 16px 0 14px; margin-bottom: 20px;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  // ── Spending timeline data (preserved; rendered as ruled table instead of SVG) ──
+  const byMonth = new Map<string, number>();
+  for (const e of expenses) {
+    const key = (e.date || '').slice(0, 7);
+    if (!key) continue;
+    byMonth.set(key, (byMonth.get(key) || 0) + (Number(e.amount) || 0));
   }
-  .exp-report .exp-hdr-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 28px; }
-  .exp-report .exp-hdr-eyebrow {
-    font-size: 9px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 2.4px; color: var(--ink-faint); margin-bottom: 7px;
-  }
-  .exp-report .exp-hdr-co { font-size: 23px; font-weight: 800; color: var(--ink); letter-spacing: -0.3px; line-height: 1.12; }
-  .exp-report .exp-hdr-period {
-    font-size: 10.5px; font-weight: 500; color: var(--ink-faint);
-    margin-top: 5px; font-variant-numeric: tabular-nums; letter-spacing: 0.2px;
-  }
-  .exp-report .exp-hdr-total { text-align: right; flex-shrink: 0; padding-left: 26px; border-left: 1px solid var(--rule); }
-  .exp-report .exp-hdr-total-lbl {
-    font-size: 8.5px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.8px; color: var(--ink-faint);
-  }
-  .exp-report .exp-hdr-total-val {
-    font-size: 30px; font-weight: 800; color: var(--ink); letter-spacing: -0.6px;
-    line-height: 1.05; margin-top: 5px; font-variant-numeric: tabular-nums;
-  }
-  .exp-report .exp-hdr-total-sub { font-size: 9.5px; color: var(--ink-faint); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  const months = Array.from(byMonth.keys()).sort();
+  const fmtMonthLabel = (ym: string) => {
+    const [y, mo] = ym.split('-');
+    const d = new Date(Number(y), Number(mo) - 1, 1);
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
 
-  /* Flat KPI tiles — no gradient, no shadow, hairline border, square */
-  .exp-report .rpt-stats { gap: 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
-  .exp-report .rpt-stat {
-    background: var(--paper); border: none; border-radius: 0; box-shadow: none;
-    border-left: 1px solid var(--rule); padding: 13px 16px;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .exp-report .rpt-stat:first-child { border-left: none; }
-  .exp-report .rpt-stat::before { display: none; content: none; }
-  .exp-report .rpt-stat-val { color: var(--ink); font-size: 19px; font-weight: 800; }
-  .exp-report .rpt-stat-label { color: var(--ink-faint); }
+  // ── Header ──
+  const header = docHeader({
+    coName: companyName,
+    coDetailHtml: dateRange ? cesc(dateRange) : '',
+    title: 'Expense Report',
+  });
 
-  /* Flat section bars + analytics cards */
-  .exp-report .rpt-section,
-  .exp-report .rpt-section-alt {
-    background: var(--ink); border-radius: 0; letter-spacing: 1.8px;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .exp-report .exp-viz-card {
-    border: 1px solid var(--rule); border-radius: 3px;
-    padding: 11px 16px 8px; margin-bottom: 11px; background: var(--paper);
-    box-shadow: none; break-inside: avoid; page-break-inside: avoid;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .exp-report .exp-viz-title {
-    font-size: 9.5px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.6px; color: var(--ink-faint); margin-bottom: 8px;
-    padding-bottom: 7px; border-bottom: 1px solid var(--rule-soft);
-  }
-  /* Cover spacing — compact so all front matter fits one page */
-  .exp-report .exp-cover .rpt-section { margin-top: 14px; }
-  .exp-report .exp-cover .exp-cat-row { padding: 3.5px 0; }
-  .exp-report .exp-cover .exp-cat-card { break-inside: avoid; page-break-inside: avoid; }
-  .exp-report .exp-hdr { padding: 14px 0 12px; margin-bottom: 16px; }
-  .exp-report .exp-viz-cap {
-    font-size: 9px; color: var(--ink-faint); margin-top: 8px;
-    padding-top: 8px; border-top: 1px solid var(--rule-soft);
-    font-variant-numeric: tabular-nums; letter-spacing: 0.2px;
-  }
-  /* Flat category breakdown */
-  .exp-report .exp-cat-row { display: flex; align-items: center; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--rule-soft); }
-  .exp-report .exp-cat-row:last-child { border-bottom: none; }
-  .exp-report .exp-cat-name { width: 190px; font-size: 10px; font-weight: 600; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .exp-report .exp-cat-track { flex: 1; height: 9px; background: var(--rule-soft); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .exp-report .exp-cat-fill { height: 100%; background: var(--ink-muted); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .exp-report .exp-cat-amt { width: 84px; text-align: right; font-size: 10px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; font-family: 'SF Mono',Menlo,monospace; }
-  .exp-report .exp-cat-pct { width: 40px; text-align: right; font-size: 9px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  // ── Meta strip: key stats ──
+  const meta = metaStrip([
+    { label: 'Date Range',   value: dateRange || '—' },
+    { label: 'Transactions', value: String(expenses.length) },
+    { label: 'Total Spend',  value: fmt(grandTotal) },
+    { label: 'Average',      value: fmt(avgExpense) },
+    { label: 'Largest',      value: fmt(largestExpense) },
+    { label: 'Total Tax',    value: fmt(totalTax) },
+  ]);
 
-  /* Front matter occupies its own cover page; transactions follow */
-  .exp-report .exp-cover { page-break-after: always; break-after: page; }
-  /* Tighter, formal table padding so the Date column never truncates */
-  .exp-report .exp-detail-table th,
-  .exp-report .exp-detail-table td { padding: 7px 10px; }
-  .exp-report .exp-detail-table td:first-child { font-variant-numeric: tabular-nums; }
-  /* Per-group header band */
-  .exp-report .exp-group-hd {
-    display: flex; justify-content: space-between; align-items: baseline;
-    padding: 8px 12px; margin-top: 16px;
-    background: var(--paper-tint); border: 1px solid var(--rule); border-bottom: 2px solid var(--ink);
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .exp-report .exp-group-hd .g-lbl { font-size: 11px; font-weight: 800; color: var(--ink); text-transform: uppercase; letter-spacing: 0.8px; }
-  .exp-report .exp-group-hd .g-tot { font-size: 11px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; font-family: 'SF Mono',Menlo,monospace; }
-  .exp-report .exp-group-wrap { page-break-inside: auto; }
-</style></head>
-<body>
-<div class="rpt-page exp-report">
- <div class="exp-cover">
-  <!-- Formal letterhead -->
-  <div class="exp-hdr no-break">
-    <div class="exp-hdr-row">
-      <div>
-        <div class="exp-hdr-eyebrow">Expense Detail Report</div>
-        <div class="exp-hdr-co">${esc(companyName)}</div>
-        ${dateRange ? `<div class="exp-hdr-period">${esc(dateRange)}</div>` : ''}
-      </div>
-      <div class="exp-hdr-total">
-        <div class="exp-hdr-total-lbl">Total Spend</div>
-        <div class="exp-hdr-total-val">${fmt(grandTotal)}</div>
-        <div class="exp-hdr-total-sub">${expenses.length} transactions &middot; avg ${fmt(avgExpense)}</div>
-      </div>
-    </div>
-  </div>
+  // ── Spending over time — classic ruled table (replaces SVG bar chart; all data preserved) ──
+  const timelineHTML = months.length > 0
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Spending Over Time</div>` +
+      ruledTable(
+        [
+          { label: 'Month', width: '60%' },
+          { label: 'Amount', align: 'right', width: '40%' },
+        ],
+        months.map(m => [cesc(fmtMonthLabel(m)), cesc(fmt(byMonth.get(m) || 0))]),
+      ) +
+      (() => {
+        if (months.length < 2) return '';
+        const vals = months.map(m => byMonth.get(m) || 0);
+        let peakI = 0, lowI = 0;
+        vals.forEach((v, i) => { if (v > vals[peakI]) peakI = i; if (v < vals[lowI]) lowI = i; });
+        const mean = grandTotal / months.length;
+        return `<div style="font-size:10px;margin-top:6px;font-variant-numeric:tabular-nums;">` +
+          `Peak: ${cesc(fmtMonthLabel(months[peakI]))} (${cesc(fmt(vals[peakI]))}) &nbsp;&middot;&nbsp; ` +
+          `Lowest: ${cesc(fmtMonthLabel(months[lowI]))} (${cesc(fmt(vals[lowI]))}) &nbsp;&middot;&nbsp; ` +
+          `Monthly average: ${cesc(fmt(mean))}</div>`;
+      })() +
+      `</div>`
+    : '';
 
-  <!-- KPI tiles -->
-  <div class="rpt-stats" style="margin-bottom:12px;">
-    <div class="rpt-stat">
-      <div class="rpt-stat-label">Transactions</div>
-      <div class="rpt-stat-val">${expenses.length}</div>
-    </div>
-    <div class="rpt-stat">
-      <div class="rpt-stat-label">Average</div>
-      <div class="rpt-stat-val">${fmt(avgExpense)}</div>
-    </div>
-    <div class="rpt-stat">
-      <div class="rpt-stat-label">Largest</div>
-      <div class="rpt-stat-val">${fmt(largestExpense)}</div>
-    </div>
-    <div class="rpt-stat">
-      <div class="rpt-stat-label">Total Tax</div>
-      <div class="rpt-stat-val">${fmt(totalTax)}</div>
-    </div>
-  </div>
+  // ── Top Categories — classic ruled table (replaces bar chart; all data preserved) ──
+  const catHTML = topCategories.length > 0
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Top Categories</div>` +
+      ruledTable(
+        [
+          { label: 'Category', width: '50%' },
+          { label: 'Amount', align: 'right', width: '25%' },
+          { label: '% of Total', align: 'right', width: '25%' },
+        ],
+        topCategories.map(([cat, amount]) => {
+          const sharePct = grandTotal > 0 ? (amount / grandTotal) * 100 : 0;
+          return [cesc(cat), cesc(fmt(amount)), cesc(`${sharePct.toFixed(1)}%`)];
+        }),
+      ) +
+      `</div>`
+    : '';
 
-  <!-- Spending timeline + daily heatmap -->
-  ${timelineSVG}
-  ${heatmapSVG}
+  // ── Line items sub-table renderer (classic styled) ──
+  const renderLineItems = (e: ExpenseReportRow): string => {
+    if (!e.line_items || e.line_items.length === 0) return '';
+    return `<tr><td colspan="6" style="padding:0 0 0 24px;border-bottom:1px solid #000;">` +
+      ruledTable(
+        [
+          { label: 'Description', width: '52%' },
+          { label: 'Qty', align: 'right', width: '12%' },
+          { label: 'Unit Price', align: 'right', width: '18%' },
+          { label: 'Amount', align: 'right', width: '18%' },
+        ],
+        e.line_items.map(li => [
+          cesc(li.description || '—'),
+          cesc(String(li.quantity)),
+          cesc(fmt(Number(li.unit_price) || 0)),
+          cesc(fmt(Number(li.amount) || 0)),
+        ]),
+      ) +
+      `</td></tr>`;
+  };
 
-  <!-- Top Categories -->
-  ${topCategories.length > 0 ? `
-  <div class="rpt-section">Top Categories</div>
-  <div class="exp-viz-card" style="border-top:none;border-radius:0 0 3px 3px;margin-bottom:14px;">
-    ${topCategories.map(([cat, amount]) => {
-      const pct = maxCat > 0 ? (amount / maxCat) * 100 : 0;
-      const sharePct = grandTotal > 0 ? (amount / grandTotal) * 100 : 0;
-      return `<div class="exp-cat-row">
-        <span class="exp-cat-name">${esc(cat)}</span>
-        <div class="exp-cat-track"><div class="exp-cat-fill" style="width:${pct.toFixed(1)}%;"></div></div>
-        <span class="exp-cat-amt">${fmt(amount)}</span>
-        <span class="exp-cat-pct">${sharePct.toFixed(0)}%</span>
-      </div>`;
-    }).join('')}
-  </div>
-  ` : ''}
- </div><!-- /exp-cover -->
+  // ── Main expense row renderer ──
+  const renderRow = (e: ExpenseReportRow): string => {
+    const mainRow = `<tr>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums;">${cesc(fmtDateShort(e.date))}</td>
+      <td>${cesc(e.description) || '—'}</td>
+      <td>${cesc(e.vendor_name) || '—'}</td>
+      <td>${cesc(e.category_name) || '—'}</td>
+      <td class="num" style="white-space:nowrap;">${cesc(fmt(Number(e.amount) || 0))}</td>
+      <td class="ctr">${statusLabel(e.status)}</td>
+    </tr>`;
+    return mainRow + renderLineItems(e);
+  };
 
-  <!-- Detail Table -->
-  <div class="rpt-section">Transaction Detail${isGrouped ? ` — Grouped by ${esc(groupByLabel)}` : ''}</div>
-  ${isGrouped ? groups.map(g => `
-  <div class="exp-group-wrap no-break">
-    <div class="exp-group-hd">
-      <span class="g-lbl">${esc(g.label)}</span>
-      <span class="g-tot">${fmt(g.total)} &middot; ${g.rows.length} item${g.rows.length === 1 ? '' : 's'}</span>
-    </div>
-    <table class="exp-detail-table" style="table-layout:fixed;">
-      ${detailColgroup}${detailHead}
-      <tbody>${g.rows.map(renderRow).join('')}</tbody>
-    </table>
-  </div>`).join('') : `
-  <table class="exp-detail-table" style="table-layout:fixed;">
-    ${detailColgroup}${detailHead}
-    <tbody>${expenses.map(renderRow).join('')}</tbody>
-  </table>`}
+  // ── Detail table header row (matches ruledTable column structure) ──
+  const detailColumns: RuledColumn[] = [
+    { label: 'Date',        width: '13%' },
+    { label: 'Description', width: '22%' },
+    { label: 'Vendor',      width: '17%' },
+    { label: 'Category',    width: '16%' },
+    { label: 'Amount',      align: 'right', width: '16%' },
+    { label: 'Status',      align: 'center', width: '16%' },
+  ];
+  const colHead = `<tr>${detailColumns.map(c =>
+    `<th${c.width ? ` style="width:${c.width}"` : ''}>${cesc(c.label)}</th>`).join('')}</tr>`;
 
-  <!-- Grand Total -->
-  <div class="no-break" style="margin-top:16px;">
-    <div class="rpt-section" style="margin-top:0;">Total</div>
-    <div style="display:flex;justify-content:space-between;padding:11px 14px;background:var(--paper-tint);border:1px solid var(--rule);border-top:none;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <span style="font-weight:700;color:var(--ink);">Grand Total (${expenses.length} transactions)</span>
-      <span style="font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;font-family:'SF Mono',Menlo,monospace;">${fmt(grandTotal)}</span>
-    </div>
-  </div>
+  // Grouped or flat detail rows
+  const detailRows = isGrouped
+    ? groups.map(g => {
+        const groupRowsHtml = g.rows.map(renderRow).join('');
+        // Group header: full-width bold classic band
+        const groupHdr = `<tr><td colspan="6" style="background:#000;color:#fff;font-weight:bold;` +
+          `letter-spacing:0.8px;text-transform:uppercase;padding:6px 8px;font-size:10px;">` +
+          `${cesc(g.label)} &nbsp;—&nbsp; ${cesc(fmt(g.total))} &middot; ${g.rows.length} item${g.rows.length === 1 ? '' : 's'}` +
+          `</td></tr>`;
+        return groupHdr + groupRowsHtml;
+      }).join('')
+    : expenses.map(renderRow).join('');
 
-  ${reportFooter(companyName)}
-</div>
-</body></html>`;
+  const detailTable = `<table class="ruled" style="table-layout:fixed;"><thead>${colHead}</thead><tbody>${detailRows}</tbody></table>`;
+
+  // Section title bar for detail section
+  const detailTitle = `<div style="padding:8px 16px;background:#000;color:#fff;font-size:10px;font-weight:bold;` +
+    `letter-spacing:1.6px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact;">` +
+    `Transaction Detail${isGrouped ? ` — Grouped by ${cesc(groupByLabel)}` : ''}</div>`;
+
+  // ── Totals box (math unchanged) ──
+  const totals = totalsBox([
+    { label: `Grand Total (${expenses.length} transaction${expenses.length === 1 ? '' : 's'})`, value: fmt(grandTotal), grand: true },
+  ]);
+
+  // ── Footer ──
+  const generated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const footerLine = [companyName, dateRange, `Generated ${generated}`].filter(Boolean).join(' · ');
+
+  // ── Assemble ──
+  const inner =
+    header +
+    meta +
+    timelineHTML +
+    catHTML +
+    detailTitle +
+    detailTable +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">${totals}</div>` +
+    footerBar(footerLine);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expense Report — ${cesc(companyName)}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner) +
+    `</body></html>`;
 }
-
 // ─── Court Packet (Judge-Ready PDF Bundle) ──────────────────
 export function generateCourtPacketHTML(data: {
   debt: any;
@@ -4765,13 +4680,15 @@ export function generateExpenseReceiptHTML(
   vendor?: any,
   lineItems?: any[]
 ): string {
+  // ── CLASSIC THEME: Arial + pure black/white. ──
+
   // Multi-currency: shadow module-level fmt with expense's currency
   const docCurrency = expense.currency || 'USD';
   const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
 
+  // ── Math (unchanged) ──
   // FINAL-PRICE: expense.amount is the PRE-TAX subtotal and tax_amount is the
   // tax, so the final cost ALWAYS adds tax on top (amount + tax − discount).
-  // Tax is shown whether the expense was entered tax-inclusive or -exclusive.
   const tax = Number(expense.tax_amount || 0);
   const subtotal = Number(expense.amount || expense.subtotal || 0);
   const expDiscFlat = Number(expense.discount_amount || 0);
@@ -4781,29 +4698,29 @@ export function generateExpenseReceiptHTML(
   const total = Math.max(0, grossWithTax - expDiscountTotal);
 
   const reimbStatus = expense.reimbursement_status || expense.status || 'pending';
-  const reimbColor =
-    reimbStatus === 'reimbursed' || reimbStatus === 'paid' ? '#16a34a' :
-    reimbStatus === 'approved' ? '#2563eb' :
-    reimbStatus === 'rejected' ? '#dc2626' : '#d97706';
 
-  const receiptHTML = safeImg(expense.receipt_path || expense.receipt_data || null, 'Receipt',
-    'max-width:100%;max-height:380px;object-fit:contain;border:1px solid #e2e8f0;padding:6px;background:#fff;');
+  // ── Receipt image (preserved) ──
+  const receiptImgSrc = expense.receipt_path || expense.receipt_data || null;
+  const receiptImgHTML = receiptImgSrc
+    ? (() => {
+        const s = String(receiptImgSrc);
+        if (!/^data:|^https?:/i.test(s)) return '';
+        return `<img src="${cesc(s)}" alt="Receipt" style="max-width:100%;max-height:380px;object-fit:contain;border:2px solid #000;padding:6px;background:#fff;display:block;margin:0 auto;filter:grayscale(1);">`;
+      })()
+    : '';
 
-  const linesHTML = (lineItems && lineItems.length > 0) ? `
-    <table style="margin-top:12px;">
-      <thead><tr><th>Description</th><th class="text-right">Amount</th></tr></thead>
-      <tbody>
-        ${lineItems.map((l: any) => `<tr>
-          <td>${esc(l.description || '')}</td>
-          <td class="text-right font-bold">${fmt(Number(l.amount || 0))}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>` : '';
+  // ── Line items table (preserved) ──
+  const linesHTML = (lineItems && lineItems.length > 0)
+    ? ruledTable(
+        [
+          { label: 'Description' },
+          { label: 'Amount', align: 'right', width: '120px' },
+        ],
+        lineItems.map((l: any) => [cesc(l.description || ''), cesc(fmt(Number(l.amount || 0)))]),
+      )
+    : '';
 
-  const generated = new Date().toLocaleString('en-US');
-
-  // ── Details & Classification: every available field, blanks backfilled with
-  // an em dash so the grid structure is retained (no collapsing gaps). ──
+  // ── Details & Classification grid (all fields preserved) ──
   const dash = (v: any): string => {
     if (v === 0) return '0';
     if (v === null || v === undefined || v === '') return '—';
@@ -4833,78 +4750,129 @@ export function generateExpenseReceiptHTML(
     ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
     ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
   ];
-  const detailsHTML = `
-<div style="margin-top:14px;">
-  <div class="section-label">Details &amp; Classification</div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px 18px;margin-top:8px;">
-    ${detailRows.map(([k, v]) => `<div>
-      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
-      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
-    </div>`).join('')}
-  </div>
-</div>`;
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Expense ${esc(expense.reference || expense.id || '')}</title>
-<style>${baseStyles}</style></head>
-<body><div class="rpt-page" style="padding:32px 36px;">
-<div class="fd-letterhead">
-  <div class="fd-letterhead-left">
-    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
-  </div>
-  <div class="fd-letterhead-right">
-    <div class="fd-doc-type" style="font-size:22px;">Expense Record</div>
-    <div class="fd-doc-num">${esc(expense.reference || expense.expense_number || expense.id || '')}${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
-    <div class="fd-doc-date">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</div>
-  </div>
-</div>
+  // ── Determine title (receipt vs. affidavit mode) ──
+  // The old code showed 'Expense Record' unconditionally.
+  // Classic restyle uses 'Expense Receipt' as the docHeader title.
+  // No affidavit watermark was passed by the original function signature —
+  // the function itself has no watermark/affidavit parameter, so no mode switch is needed.
+  const docTitle = 'Expense Receipt';
 
-<div class="fd-meta-strip">
-  <div class="fd-meta-row"><span class="lbl">Vendor</span><span class="val">${esc(vendor?.name || expense.vendor_name || '—')}</span></div>
-  <div class="fd-meta-row"><span class="lbl">Category</span><span class="val">${esc(expense.category || expense.category_name || '—')}</span></div>
-  <div class="fd-meta-row"><span class="lbl">Date</span><span class="val">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</span></div>
-  <div class="fd-meta-row"><span class="lbl">Reference</span><span class="val">${esc(expense.reference || '—')}</span></div>
-</div>
+  // ── Header ──
+  const coAddr = cesc([
+    company?.address_line1, company?.address_line2,
+    [company?.city, company?.state, company?.zip].filter(Boolean).join(', '),
+  ].filter(Boolean).join(', '));
+  const coPhone = cesc(company?.phone || '');
+  const coEmail = cesc(company?.email || '');
+  const coDetail = [coAddr, [coEmail, coPhone].filter(Boolean).join(' &middot;')].filter(Boolean).join('<br>');
+  const numberHtml = expense.reference || expense.expense_number || expense.id
+    ? `No. ${cesc(String(expense.reference || expense.expense_number || expense.id))}` +
+      (reimbStatus ? `  [${cesc(String(reimbStatus).toUpperCase().replace('_', ' '))}]` : '')
+    : '';
+  const header = docHeader({
+    coName: company?.name || 'Company',
+    coDetailHtml: coDetail,
+    title: docTitle,
+    ...(numberHtml ? { numberHtml } : {}),
+  });
 
-${detailsHTML}
+  // ── Meta strip: date / amount / payment method / category ──
+  const meta = metaStrip([
+    { label: 'Date',           value: fmtDateMaybe(expense.date || expense.expense_date) || '—' },
+    { label: 'Amount',         value: fmt(total) },
+    { label: 'Payment Method', value: expense.payment_method ? titleCase(String(expense.payment_method)) : '—' },
+    { label: 'Category',       value: cesc(expense.category || expense.category_name || '—') },
+    { label: 'Reference',      value: cesc(expense.reference || '—') },
+  ]);
 
-${expense.description ? `<div style="margin-bottom:14px;">
-  <div class="section-label">Description</div>
-  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(expense.description)}</div>
-</div>` : ''}
+  // ── Box row: payee/vendor + category/account details ──
+  const vendorHtml = `<b>${cesc(vendor?.name || expense.vendor_name || '—')}</b>` +
+    (vendor?.email ? `<br>${cesc(vendor.email)}` : '') +
+    (vendor?.phone ? `<br>${cesc(vendor.phone)}` : '');
+  const accountHtml = `<b>${cesc(expense.category || expense.category_name || '—')}</b>` +
+    (expense.account_name ? `<br>${cesc(expense.account_name)}` : '') +
+    (expense.account_code ? `<br>Code: ${cesc(expense.account_code)}` : '');
+  const parties = boxRow([
+    { label: 'Vendor / Payee', html: vendorHtml },
+    { label: 'Category / Account', html: accountHtml },
+  ]);
 
-${linesHTML}
+  // ── Description ──
+  const descHTML = expense.description
+    ? boxRow([{ label: 'Description', html: `<div style="white-space:pre-line;">${cesc(expense.description)}</div>` }])
+    : '';
 
-<div style="overflow:hidden;margin-top:14px;">
-  <div class="fd-totals-card">
-    <div class="totals-rows">
-      <div class="totals-row"><span>Subtotal (pre-tax)</span><span class="val">${fmt(subtotal)}</span></div>
-      <div class="totals-row"><span>Tax${expense.tax_inclusive ? ' (incl.)' : ''}</span><span class="val">${fmt(tax)}</span></div>
-      ${expDiscountTotal > 0 ? `<div class="totals-row" style="color:#16a34a;"><span>Discount</span><span class="val">−${fmt(expDiscountTotal)}</span></div>` : ''}
-    </div>
-    <div class="totals-grand">
-      <div class="lbl">Total Expense${tax > 0 ? ' (incl. tax)' : ''}</div>
-      <div class="val">${fmt(total)}</div>
-    </div>
-  </div>
-</div>
+  // ── Details & Classification — classic ruled mini-table ──
+  const detailsHTML = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:6px;">Details &amp; Classification</div>` +
+    ruledTable(
+      [
+        { label: 'Field',  width: '40%' },
+        { label: 'Value',  width: '60%' },
+      ],
+      detailRows.map(([k, v]) => [cesc(k), cesc(v)]),
+    ) +
+    `</div>`;
 
-<div style="clear:both;margin-top:18px;padding:14px 16px;background:var(--paper-tint);border:1px solid var(--rule);border-radius:6px;border-left:3px solid var(--accent);">
-  <div class="section-label">Reimbursement</div>
-  <div style="font-size:11px;color:#475569;">Status: ${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
-</div>
+  // ── Line items section ──
+  const lineItemsHTML = linesHTML
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Line Items</div>` +
+      linesHTML +
+      `</div>`
+    : '';
 
-${receiptHTML ? `<div style="margin-top:22px;page-break-inside:avoid;">
-  <div class="section-label">Receipt</div>
-  <div style="text-align:center;">${receiptHTML}</div>
-</div>` : ''}
+  // ── Totals box (math unchanged) ──
+  const totalRows: { label: string; value: string; grand?: boolean }[] = [
+    { label: 'Subtotal (pre-tax)', value: fmt(subtotal) },
+    { label: `Tax${expense.tax_inclusive ? ' (incl.)' : ''}`, value: fmt(tax) },
+  ];
+  if (expDiscountTotal > 0) {
+    totalRows.push({ label: 'Discount', value: `−${fmt(expDiscountTotal)}` });
+  }
+  totalRows.push({ label: `Total Expense${tax > 0 ? ' (incl. tax)' : ''}`, value: fmt(total), grand: true });
+  const totals = totalsBox(totalRows);
 
-<div class="rpt-footer" style="margin-top:32px;">
-  <span>${esc(company?.name || '')}</span>
-  <span>Generated ${esc(generated)}</span>
-</div>
-</div></body></html>`;
+  // ── Reimbursement status row ──
+  const reimbHTML = boxRow([{
+    label: 'Reimbursement',
+    html: `<b>${cesc(String(reimbStatus).toUpperCase().replace('_', ' '))}</b>` +
+      (expense.is_reimbursable !== undefined
+        ? `<br>Reimbursable: ${expense.is_reimbursable ? 'Yes' : 'No'}`
+        : ''),
+  }]);
+
+  // ── Receipt image section (preserved) ──
+  const receiptSectionHTML = receiptImgHTML
+    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Receipt</div>` +
+      `<div style="text-align:center;padding:8px 0;">${receiptImgHTML}</div>` +
+      `</div>`
+    : '';
+
+  // ── Footer ──
+  const generated = new Date().toLocaleString('en-US');
+  const footerLine = [company?.name || '', `Generated ${generated}`].filter(Boolean).join(' · ');
+
+  // ── Assemble ──
+  const inner =
+    header +
+    meta +
+    parties +
+    descHTML +
+    detailsHTML +
+    lineItemsHTML +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">${totals}</div>` +
+    reimbHTML +
+    receiptSectionHTML +
+    footerBar(footerLine);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expense ${cesc(String(expense.reference || expense.id || ''))}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner) +
+    `</body></html>`;
 }
-
 // ─── Employee Record (HR Portal Wave) ─────────────────────────────────
 // Full printable employee record — 8.5×11 personnel file sheet covering
 // identity (SSN last-4 only), employment, compensation, tax withholding,
