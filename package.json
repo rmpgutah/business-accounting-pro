@@ -14,6 +14,7 @@
     "test:search": "npm run build:main && node scripts/test-search-index.cjs",
     "test:classic": "node scripts/test-classic-styles.cjs",
     "test:micr": "node scripts/test-micr.cjs",
+    "prepare": "git config core.hooksPath scripts/git-hooks || true",
     "postinstall": "electron-builder install-app-deps",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
