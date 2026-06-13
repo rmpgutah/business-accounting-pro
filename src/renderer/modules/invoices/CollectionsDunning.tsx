@@ -81,14 +81,18 @@ const SubTabBtn: React.FC<{ active: boolean; label: string; onClick: () => void 
 // ─── Risk badge ──────────────────────────────────────────────────────────────
 
 const RiskBadge: React.FC<{ risk: string }> = ({ risk }) => {
-  const styles: Record<string, string> = {
-    high: 'bg-red-900/30 text-red-300 border border-red-700/40',
-    medium: 'bg-yellow-900/30 text-yellow-300 border border-yellow-700/40',
-    low: 'bg-green-900/30 text-green-300 border border-green-700/40',
-  };
+  const token =
+    risk === 'high' ? 'var(--color-accent-expense)'
+    : risk === 'low' ? 'var(--color-accent-income)'
+    : 'var(--color-accent-warning)';
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${styles[risk] ?? styles.medium}`}
+      className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+      style={{
+        color: token,
+        background: `color-mix(in srgb, ${token} 18%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${token} 40%, transparent)`,
+      }}
     >
       {risk}
     </span>
@@ -417,7 +421,7 @@ const DunningSequences: React.FC = () => {
         <div
           className="px-4 py-3 text-sm rounded"
           style={{
-            background: 'rgba(245,158,11,0.10)',
+            background: 'color-mix(in srgb, var(--color-accent-warning) 10%, transparent)',
             border: '1px solid var(--color-accent-warning)',
             color: 'var(--color-accent-warning)',
           }}
@@ -602,7 +606,8 @@ const DunningSequences: React.FC = () => {
                     <td className="text-center text-text-secondary font-mono">{stepCount}</td>
                     <td className="text-center">
                       <span
-                        className={`text-[10px] font-bold uppercase ${s.is_active ? 'text-green-400' : 'text-text-muted'}`}
+                        className="text-[10px] font-bold uppercase"
+                        style={{ color: s.is_active ? 'var(--color-accent-income)' : undefined }}
                       >
                         {s.is_active ? 'Yes' : 'No'}
                       </span>

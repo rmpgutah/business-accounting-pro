@@ -183,7 +183,7 @@ const KpiTargets: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Target size={14} style={{ color: 'var(--color-accent-primary)' }} />
+          <Target size={14} style={{ color: 'var(--accent-primary)' }} />
           <h2
             className="text-xs font-semibold text-text-muted"
             style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}

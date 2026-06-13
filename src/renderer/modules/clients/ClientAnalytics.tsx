@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, TrendingDown, Users, DollarSign } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -97,34 +97,6 @@ function LtvLeaderboard({
       )}
     </SectionCard>
   );
-}
-
-// ─── Revenue Ranking (sw:client-revenue-ranking) ────────────────
-function RevenueRankingStrip() {
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<any[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        // → { id, name, email, invoice_count, total_invoiced, total_paid, outstanding }
-        const data = await api.swClientRevenueRanking(10);
-        if (!cancelled) setRows(Array.isArray(data) ? data : []);
-      } catch {
-        if (!cancelled) setRows([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  if (loading) return null; // leaderboard already loading
-  if (rows.length === 0) return null;
-  // Only used for the KPI strip — max LTV for normalizing the bar
-  return null; // rendered inline in KPI strip below
 }
 
 // ─── Retention & Acquisition ─────────────────────────────────────

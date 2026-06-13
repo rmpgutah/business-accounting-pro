@@ -85,7 +85,7 @@ function ResultRow({ label, value, highlight, warn }: ResultRowProps) {
 
 function ErrorBox({ msg }: { msg: string }) {
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: 12, background: 'rgba(220,38,38,0.08)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, marginTop: 12, fontSize: 12, color: 'var(--color-accent-expense)' }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: 12, background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, marginTop: 12, fontSize: 12, color: 'var(--color-accent-expense)' }}>
       <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
       {msg}
     </div>
@@ -613,7 +613,7 @@ function McaCalc() {
           <ResultRow label="Months to Repay"      value={num(res.months_to_repay, 1)} />
           <ResultRow label="Annualized APR"       value={pct(res.annualized_apr_pct)} warn={res.annualized_apr_pct > 50} />
           {res.warning && (
-            <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(220,38,38,0.08)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 11, color: 'var(--color-accent-expense)' }}>
+            <div style={{ marginTop: 10, padding: '8px 10px', background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 11, color: 'var(--color-accent-expense)' }}>
               {res.warning}
             </div>
           )}

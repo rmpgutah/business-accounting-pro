@@ -57,24 +57,17 @@ const CouponsManager: React.FC = () => {
   const [testing, setTesting] = useState(false);
 
   const load = useCallback(async () => {
-    let cancelled = false;
     setLoading(true);
     try {
-      const [list, sum] = await Promise.resolve().then(() =>
-        Promise.all([
-          (api as any).ivCoupons(false),
-          (api as any).ivCouponSummary(),
-        ])
-      );
-      if (cancelled) return;
+      const list = await (api as any).ivCoupons(false);
+      const sum = await (api as any).ivCouponSummary();
       setCoupons(Array.isArray(list) ? list : []);
       setSummary(sum || null);
     } catch (err) {
       console.error('CouponsManager load:', err);
     } finally {
-      if (!cancelled) setLoading(false);
+      setLoading(false);
     }
-    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {

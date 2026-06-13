@@ -57,7 +57,7 @@ function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }
 
 function ErrBox({ msg }: { msg: string }) {
   return (
-    <div style={{ padding: 10, background: 'rgba(220,38,38,0.08)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 12, color: 'var(--color-accent-expense)', marginTop: 8 }}>
+    <div style={{ padding: 10, background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 12, color: 'var(--color-accent-expense)', marginTop: 8 }}>
       <AlertTriangle size={12} style={{ display: 'inline', marginRight: 4 }} />{msg}
     </div>
   );
@@ -254,7 +254,7 @@ function RefiSection({ loanId }: { loanId: string }) {
         {execErr && <ErrBox msg={execErr} />}
 
         {execResult && !execResult.error && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
             <CheckCircle size={12} style={{ display: 'inline', marginRight: 4, color: 'var(--color-accent-income)' }} />
             Refinance executed. New loan ID: <span style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{execResult.new_loan_id}</span>. Effective: {fmtDate(execResult.effective_date)}.
           </div>
@@ -349,7 +349,7 @@ function RefiSection({ loanId }: { loanId: string }) {
         </button>
         {modErr && <ErrBox msg={modErr} />}
         {modResult && !modResult.error && (
-          <div style={{ marginTop: 8, padding: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
+          <div style={{ marginTop: 8, padding: 10, background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
             <CheckCircle size={12} style={{ display: 'inline', marginRight: 4, color: 'var(--color-accent-income)' }} />
             Modification applied. Effective: {fmtDate(modResult.effective_date)}.
           </div>
@@ -369,7 +369,7 @@ function RefiSection({ loanId }: { loanId: string }) {
         </button>
         {recastErr && <ErrBox msg={recastErr} />}
         {recastResult && !recastResult.error && (
-          <div style={{ marginTop: 8, padding: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
+          <div style={{ marginTop: 8, padding: 10, background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
             <CheckCircle size={12} style={{ display: 'inline', marginRight: 4, color: 'var(--color-accent-income)' }} />
             Schedule recast. New monthly payment: <strong>{fmt$(recastResult.new_payment)}</strong> over {recastResult.remaining_payments} payments.
           </div>
@@ -509,7 +509,7 @@ function AcceleratorsSection({ loanId }: { loanId: string }) {
         </button>
         {lumpErr && <ErrBox msg={lumpErr} />}
         {lumpResult && !lumpResult.error && (
-          <div style={{ marginTop: 8, padding: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
+          <div style={{ marginTop: 8, padding: 10, background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
             <CheckCircle size={12} style={{ display: 'inline', marginRight: 4, color: 'var(--color-accent-income)' }} />
             Payment recorded. New balance: <strong>{fmt$(lumpResult.new_balance)}</strong>.
           </div>
@@ -894,7 +894,7 @@ function CovenantRiskSection({ loanId }: { loanId: string }) {
         </button>
         {covErr && <ErrBox msg={covErr} />}
         {covResult && !covResult.error && (
-          <div style={{ marginTop: 8, padding: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
+          <div style={{ marginTop: 8, padding: 10, background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)', border: '1px solid var(--color-accent-income)', borderRadius: 6, fontSize: 12 }}>
             <CheckCircle size={12} style={{ display: 'inline', marginRight: 4, color: 'var(--color-accent-income)' }} />
             Covenant created.
           </div>

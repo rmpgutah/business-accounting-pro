@@ -5,15 +5,12 @@ import {
   Trash2,
   Save,
   RotateCcw,
-  Share2,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
   X,
   BarChart3,
-  DollarSign,
-  TrendingUp,
   RefreshCw,
 } from 'lucide-react';
 import api from '../../lib/api';
@@ -377,7 +374,7 @@ const AddWidgetForm: React.FC<{
 
 const SaveVersionForm: React.FC<{
   dashboardId: string;
-  onSaved: () => void;
+  onSaved: (id: string) => void;
   onCancel: () => void;
 }> = ({ dashboardId, onSaved, onCancel }) => {
   const [note, setNote] = useState('');
@@ -389,10 +386,11 @@ const SaveVersionForm: React.FC<{
     setError(null);
     try {
       const result = await api.rptDashSaveVersion(dashboardId, undefined, note || undefined);
-      if (result && (result as { error?: string }).error) {
-        setError((result as { error: string }).error);
+      const r = result as { error?: string; id?: string };
+      if (r.error) {
+        setError(r.error);
       } else {
-        onSaved();
+        onSaved(r.id ?? '');
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save version');
@@ -452,6 +450,7 @@ const DashboardDetail: React.FC<{
   const [showAddWidget, setShowAddWidget] = useState(false);
   const [showSaveVersion, setShowSaveVersion] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [lastVersionId, setLastVersionId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -501,11 +500,9 @@ const DashboardDetail: React.FC<{
   };
 
   const handleRestoreVersion = async () => {
-    // Restore takes a version id — we need to pick the latest. Since we don't
-    // have a version list in this view, show a simple prompt for the version id.
-    const versionId = window.prompt('Enter the version ID to restore (from a saved version snapshot):');
-    if (!versionId) return;
-    const result = await api.rptDashRestoreVersion(versionId);
+    if (!lastVersionId) return;
+    if (!window.confirm('Restore this dashboard to the last saved version snapshot? The current layout will be replaced.')) return;
+    const result = await api.rptDashRestoreVersion(lastVersionId);
     const r = result as { error?: string; restored?: boolean; widget_count?: number };
     if (r.error) {
       setActionMsg('Error: ' + r.error);
@@ -562,7 +559,8 @@ const DashboardDetail: React.FC<{
           <button
             className="block-btn text-sm flex items-center gap-1"
             onClick={handleRestoreVersion}
-            title="Restore a previous version by ID"
+            disabled={!lastVersionId}
+            title={lastVersionId ? 'Restore the last saved version snapshot' : 'Save a version first to enable restore'}
           >
             <RotateCcw size={14} />
             Restore Version
@@ -596,7 +594,7 @@ const DashboardDetail: React.FC<{
       {showSaveVersion && (
         <SaveVersionForm
           dashboardId={dashboardId}
-          onSaved={() => { setShowSaveVersion(false); setActionMsg('Version snapshot saved.'); }}
+          onSaved={(id) => { setLastVersionId(id || null); setShowSaveVersion(false); setActionMsg('Version snapshot saved.'); }}
           onCancel={() => setShowSaveVersion(false)}
         />
       )}

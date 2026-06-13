@@ -195,7 +195,7 @@ function NewDefForm({ onSaved, onCancel }: NewDefFormProps) {
                   className="text-xs px-2 py-0.5 transition-colors"
                   style={{
                     borderRadius: 'var(--app-radius)',
-                    background: active ? 'var(--color-accent-primary)' : 'var(--color-bg-tertiary)',
+                    background: active ? 'var(--accent-primary)' : 'var(--color-bg-tertiary)',
                     color: active ? '#fff' : 'var(--color-text-secondary)',
                     border: '1px solid var(--color-border-primary)',
                   }}
@@ -304,7 +304,7 @@ function DefList({ selectedId, onSelect, refreshKey, onNew }: DefListProps) {
         <div className="text-xs text-center py-6" style={{ color: 'var(--color-text-muted)' }}>
           No report definitions yet.
           <br />
-          <button className="underline mt-1" style={{ color: 'var(--color-accent-primary)' }} onClick={onNew}>
+          <button className="underline mt-1" style={{ color: 'var(--accent-primary)' }} onClick={onNew}>
             Create one
           </button>
         </div>
@@ -318,7 +318,7 @@ function DefList({ selectedId, onSelect, refreshKey, onNew }: DefListProps) {
               className="flex items-center gap-2 px-2 py-2 cursor-pointer transition-colors"
               style={{
                 borderRadius: 'var(--app-radius)',
-                background: active ? 'var(--color-accent-primary)' : 'transparent',
+                background: active ? 'var(--accent-primary)' : 'transparent',
                 color: active ? '#fff' : 'var(--color-text-primary)',
               }}
             >
@@ -490,7 +490,7 @@ function SavedViewsPanel({ reportId, currentRows, currentRunId, onViewRun }: Sav
                 title="Run this view"
                 onClick={() => handleRunView(v)}
                 className="p-0.5 hover:opacity-70 transition-colors"
-                style={{ color: 'var(--color-accent-primary)' }}
+                style={{ color: 'var(--accent-primary)' }}
               >
                 <Play size={10} />
               </button>

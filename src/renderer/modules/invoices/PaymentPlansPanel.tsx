@@ -218,7 +218,7 @@ const PaymentPlansPanel: React.FC = () => {
       {overdue.length > 0 && (
         <div
           className="flex items-start gap-3 px-4 py-3"
-          style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }}
+          style={{ background: 'color-mix(in srgb, var(--color-accent-expense) 7%, transparent)', border: '1px solid var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }}
         >
           <AlertTriangle size={15} className="text-accent-expense mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">

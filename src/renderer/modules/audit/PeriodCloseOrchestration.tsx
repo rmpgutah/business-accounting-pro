@@ -314,6 +314,7 @@ const RollForward: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [result, setResult] = useState<any>(null);
 
   const roll = async () => {
+    if (!window.confirm('Roll forward balances? This posts retained-earnings entries and cannot be undone.')) return;
     setBusy(true);
     setResult(null);
     try {
@@ -378,6 +379,7 @@ const YearEndPanel: React.FC<{ companyId: string }> = ({ companyId }) => {
   useEffect(() => { loadYearEnds(); }, [loadYearEnds]);
 
   const runYearEnd = async () => {
+    if (!window.confirm(`Run year-end close for ${yeForm.fiscal_year}? This posts closing entries and cannot be undone.`)) return;
     setBusy(true);
     setYeResult(null);
     try {

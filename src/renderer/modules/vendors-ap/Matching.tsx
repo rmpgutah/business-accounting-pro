@@ -55,6 +55,8 @@ interface Exception extends MatchResult {}
 function statusColor(status: string): string {
   const s = (status || '').toLowerCase();
   if (s === 'matched' || s === 'clean') return TOK.income;
+  if (s === 'qty_over' || s === 'qty_under') return TOK.warning;
+  if (s === 'price_mismatch' || s === 'unlinked') return TOK.expense;
   if (s === 'exception' || s === 'mismatch') return TOK.expense;
   if (s === 'partial') return TOK.warning;
   return TOK.blue;
@@ -521,7 +523,7 @@ const Matching: React.FC<MatchingProps> = () => {
           </p>
           <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
             <label style={{ fontSize: 11, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>Max variance threshold ($)</span>
+              <span>Max bill total ($)</span>
               <input
                 type="number"
                 min={0}
