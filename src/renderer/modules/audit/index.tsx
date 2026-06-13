@@ -10,6 +10,8 @@ import ErrorBanner from '../../components/ErrorBanner';
 
 const SoxControls = lazy(() => import('./SoxControls'));
 const AuditSampling = lazy(() => import('./AuditSampling'));
+const PeriodCloseOrchestration = lazy(() => import('./PeriodCloseOrchestration'));
+const DocumentNumbering = lazy(() => import('./DocumentNumbering'));
 
 // ─── Types ──────────────────────────────────────────────
 interface AuditEntry {
@@ -24,7 +26,7 @@ interface AuditEntry {
 }
 
 type ActionFilter = '' | 'create' | 'update' | 'delete';
-type MainTab = 'trail' | 'sox' | 'sampling';
+type MainTab = 'trail' | 'sox' | 'sampling' | 'close' | 'numbering';
 
 // ─── Action Badges ──────────────────────────────────────
 const actionBadgeClass: Record<string, string> = {
@@ -295,6 +297,8 @@ const AuditModule: React.FC = () => {
     { id: 'trail', label: 'Audit Trail' },
     { id: 'sox', label: 'Controls (SOX/SOD)' },
     { id: 'sampling', label: 'Audit Sampling' },
+    { id: 'close', label: 'Period Close' },
+    { id: 'numbering', label: 'Doc Numbering' },
   ];
 
   return (
@@ -345,6 +349,16 @@ const AuditModule: React.FC = () => {
         {tab === 'sampling' && (
           <Suspense fallback={<div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading...</div>}>
             <AuditSampling />
+          </Suspense>
+        )}
+        {tab === 'close' && (
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading...</div>}>
+            <PeriodCloseOrchestration />
+          </Suspense>
+        )}
+        {tab === 'numbering' && (
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading...</div>}>
+            <DocumentNumbering />
           </Suspense>
         )}
       </div>

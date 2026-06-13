@@ -3627,6 +3627,22 @@ const api = {
   lkCashflowTimeline: (loan_id: string, opts?: { since?: string; until?: string }) => window.electronAPI.invoke('lk:cashflow-timeline', { loan_id, opts: opts || {} }),
   lkLoanContextForExpense: (expense_id: string) => window.electronAPI.invoke('lk:loan-context-for-expense', { expense_id }),
 
+  // ─── Close orchestration (close:/feat:close*) ─────────────────────────────
+  closeCycleDashboard: (companyId: string) => window.electronAPI.invoke('close:cycle-dashboard', { companyId }),
+  closeRunMonth: (year: number, month: number) => window.electronAPI.invoke('close:run-month', { year, month }),
+  closeLockPeriodV2: (companyId: string, periodStart: string, periodEnd: string, lockedBy: string, reason?: string, lockLevel?: string) =>
+    window.electronAPI.invoke('close:lock-period-v2', { companyId, periodStart, periodEnd, lockedBy, reason, lockLevel }),
+  closeRollForward: (companyId: string, logId?: string) => window.electronAPI.invoke('close:roll-forward', { companyId, logId }),
+
+  // ─── Document numbering (numbering:) ──────────────────────────────────────
+  numberingList: (companyId: string) => window.electronAPI.invoke('numbering:list', { companyId }),
+  numberingPreview: (companyId: string, entityType: string) => window.electronAPI.invoke('numbering:preview', { companyId, entityType }),
+  numberingGaps: (companyId: string, entityType: string) => window.electronAPI.invoke('numbering:gaps', { companyId, entityType }),
+  numberingRenumber: (companyId: string, entityType: string, dryRun: boolean) =>
+    window.electronAPI.invoke('numbering:renumber', { companyId, entityType, dryRun }),
+  numberingRelease: (companyId: string, entityType: string, value: string) =>
+    window.electronAPI.invoke('numbering:release', { companyId, entityType, value }),
+
   // SOX Controls & Tests
   soxControlsList: (companyId: string) => window.electronAPI.invoke('sox:controls-list', { companyId }),
   soxControlSave: (data: { id?: string; companyId?: string; code: string; description: string; owner?: string; frequency?: string; risk?: string }) => window.electronAPI.invoke('sox:control-save', data),
