@@ -14,6 +14,7 @@ import {
   ruledTable,
   totalsBox,
   footerBar,
+  logoImg,
   esc as cesc,
   type RuledColumn,
 } from './classic-styles';
@@ -1296,10 +1297,8 @@ export function generateInvoiceHTML(
   const statusBadge = statusBadges[String(invoice.status || '').toLowerCase()];
 
   // ── Logo (only embed data: / https: URIs — file:// fails in Electron PDF) ──
-  const safeLogo = logoData && /^(data:|https?:)/.test(String(logoData)) ? logoData : null;
-  const logoHTML = safeLogo
-    ? `<img src="${cesc(safeLogo)}" alt="${companyName}" style="max-height:48px;max-width:220px;width:auto;height:auto;object-fit:contain;display:block;margin-bottom:6px;">`
-    : '';
+  // Grayscale + sizing centralized in classic-styles `.doc-logo`.
+  const logoHTML = logoImg(logoData, companyName);
 
   // ── P1.4: Custom Letterhead banner (data-URI validated) ──
   const letterheadSrc = settings?.letterhead_data && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(String(settings.letterhead_data))
@@ -4399,11 +4398,13 @@ export function generateBillHTML(
   const coPhone = cesc(company?.phone || '');
   const coEmail = cesc(company?.email || '');
   const coDetail = [coAddr, [coEmail, coPhone].filter(Boolean).join(' &middot;')].filter(Boolean).join('<br>');
+  const showLogo = settings?.show_logo !== 0 && settings?.show_logo !== false;
+  const logoHTML = logoImg(showLogo ? settings?.logo_data : null, company?.name || '');
   const currLabel = (bill.currency && bill.currency !== 'USD') ? ` (${bill.currency})` : '';
   const numberHtml = `No. ${cesc(bill.bill_number || '')}${statusTag ? `  [${cesc(statusTag)}]` : ''}`;
   const header = docHeader({
     coName: company?.name || 'Company',
-    coDetailHtml: coDetail,
+    coDetailHtml: logoHTML + coDetail,
     title: `Bill${currLabel}`,
     numberHtml,
   });
@@ -4584,11 +4585,13 @@ export function generatePurchaseOrderHTML(
   const coPhone = cesc(company?.phone || '');
   const coEmail = cesc(company?.email || '');
   const coDetail = [coAddr, [coEmail, coPhone].filter(Boolean).join(' &middot;')].filter(Boolean).join('<br>');
+  const showLogo = settings?.show_logo !== 0 && settings?.show_logo !== false;
+  const logoHTML = logoImg(showLogo ? settings?.logo_data : null, company?.name || '');
   const currLabel = (po.currency && po.currency !== 'USD') ? ` (${po.currency})` : '';
   const numberHtml = `No. ${cesc(po.po_number || '')}${statusTag ? `  [${cesc(statusTag)}]` : ''}`;
   const header = docHeader({
     coName: company?.name || 'Company',
-    coDetailHtml: coDetail,
+    coDetailHtml: logoHTML + coDetail,
     title: `Purchase Order${currLabel}`,
     numberHtml,
   });

@@ -49,5 +49,12 @@ t('docHeader numberHtml passes trusted multi-line markup unescaped', () => {
   assert.ok(esc2.includes('&lt;b&gt;'), 'plain number escaped');
 });
 
+t('logoImg renders grayscale class for safe URLs, empty otherwise', () => {
+  assert.ok(m.logoImg('data:image/png;base64,xx').includes('class="doc-logo"'), 'data URI ok');
+  assert.ok(m.logoImg('https://x/y.png').includes('class="doc-logo"'), 'https ok');
+  assert.strictEqual(m.logoImg('file:///etc/passwd'), '', 'file:// rejected');
+  assert.strictEqual(m.logoImg(null), '', 'null → empty');
+});
+
 fs.rmSync(out, { recursive: true, force: true });
 console.log(`\n${passed} passed`);

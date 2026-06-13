@@ -27,6 +27,8 @@ export function classicStyles(): string {
   .doc-header { display: flex; border-bottom: 2px solid #000; }
   .doc-header .co { flex: 1; padding: 14px 16px; border-right: 2px solid #000; }
   .doc-header .co-name { font-size: 17px; font-weight: bold; letter-spacing: 0.5px; }
+  .doc-logo { max-height: 48px; max-width: 220px; width: auto; height: auto;
+    object-fit: contain; display: block; margin-bottom: 6px; filter: grayscale(1); }
   .doc-header .co-detail { font-size: 11px; margin-top: 5px; line-height: 1.5; }
   .doc-header .doc-meta { width: 230px; padding: 14px 16px; text-align: right; }
   .doc-title { font-size: 27px; font-weight: bold; letter-spacing: 3px; text-transform: uppercase; }
@@ -114,6 +116,14 @@ export function docFrame(inner: string, opts?: { draft?: boolean }): string {
 
 export function footerBar(text: string): string {
   return `<div class="footer-bar">${esc(text)}</div>`;
+}
+
+// Renders a company logo <img> (grayscale, classic) from a data: or https: URL,
+// or '' if missing/unsafe. Centralizes logo treatment across all forms so the
+// "pure B&W, logo grayscale" decision is enforced in one place.
+export function logoImg(logoData: string | null | undefined, alt = ''): string {
+  const safe = logoData && /^(data:|https?:)/.test(String(logoData)) ? logoData : null;
+  return safe ? `<img class="doc-logo" src="${esc(safe)}" alt="${esc(alt)}">` : '';
 }
 
 export function classicDocument(o: { title: string; bodyHtml: string; extraHead?: string }): string {
