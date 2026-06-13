@@ -29,6 +29,7 @@ import PaymentPlanCard from './PaymentPlanCard';
 import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
+import { applyDebtPaymentDelta } from '../../../shared/payment-math';
 import { todayLocal } from '../../lib/date-helpers';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useNavigation } from '../../lib/navigation';
@@ -473,7 +474,23 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const handleDeletePayment = async (id: string) => {
     if (!window.confirm('Delete this payment record?')) return;
     try {
+      // Grab the amount BEFORE removing so we can give it back to the debt.
+      const pay = await api.get('debt_payments', id);
       await api.remove('debt_payments', id);
+      // Deleting a payment used to leave balance_due/payments_made wrong (and a
+      // settled debt stuck settled with money still owed). Reverse it as a
+      // negative delta, preserving any accrued interest/fees in balance_due.
+      if (pay && debt) {
+        const next = applyDebtPaymentDelta(
+          { balance_due: debt.balance_due, payments_made: debt.payments_made, status: debt.status },
+          -(Number(pay.amount) || 0),
+        );
+        await api.update('debts', debtId, {
+          balance_due: next.balance_due,
+          payments_made: next.payments_made,
+          status: next.status,
+        });
+      }
       triggerRefresh();
     } catch (err: any) {
       console.error('Failed to delete payment:', err);

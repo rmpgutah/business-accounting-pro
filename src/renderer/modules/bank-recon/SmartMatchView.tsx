@@ -55,11 +55,15 @@ const SmartMatchView: React.FC = () => {
     try {
       // Pull unmatched bank transactions that are credits (positive amounts
       // i.e. money in — likely invoice payments).
+      // bank_transactions has no company_id column — it is scoped through
+      // bank_accounts. The old `WHERE company_id = ?` threw "no such column"
+      // and left Smart Match permanently empty. Scope via the account JOIN.
       const txns = await api.rawQuery(
-        "SELECT id, date, description, amount " +
-        "FROM bank_transactions " +
-        "WHERE company_id = ? AND amount > 0 AND matched_entry_id IS NULL " +
-        "ORDER BY date DESC LIMIT 100",
+        "SELECT bt.id, bt.date, bt.description, bt.amount " +
+        "FROM bank_transactions bt " +
+        "JOIN bank_accounts ba ON ba.id = bt.bank_account_id " +
+        "WHERE ba.company_id = ? AND bt.amount > 0 AND bt.matched_entry_id IS NULL " +
+        "ORDER BY bt.date DESC LIMIT 100",
         [activeCompany.id]
       );
       const txnList = Array.isArray(txns) ? txns as BankTxn[] : [];

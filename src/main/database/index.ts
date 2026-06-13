@@ -9307,6 +9307,19 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_employee ON employee_wage_withholdings(employee_id)",
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_debt ON employee_wage_withholdings(debt_id)",
+  // rule_logs was referenced by the Rules run-history UI, the system-wide
+  // report, and VALID_TABLES, but never created — every lookup threw
+  // "no such table" (swallowed → permanently empty run log).
+  `CREATE TABLE IF NOT EXISTS rule_logs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT,
+    rule_id TEXT,
+    status TEXT DEFAULT '',
+    detail TEXT DEFAULT '',
+    ran_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_rule_logs_rule ON rule_logs(rule_id)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

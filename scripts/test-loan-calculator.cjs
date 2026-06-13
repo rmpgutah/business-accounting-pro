@@ -22,7 +22,7 @@ try {
   throw e;
 }
 
-const { generateSchedule, splitPayment } = calc;
+const { generateSchedule, splitPayment, periodicPayment, periodicRate, paymentsForTerm } = calc;
 
 let passed = 0;
 function test(name, fn) {
@@ -110,6 +110,25 @@ test('splitPayment caps interest at the payment amount on a partial payment', ()
   assert.ok(approx(s.interest, 31), `interest should be capped at 31, got ${s.interest}`);
   assert.ok(approx(s.principal, 0), `no principal on a sub-interest payment, got ${s.principal}`);
   assert.ok(approx(s.deferred_interest, 469), `expected 469 deferred, got ${s.deferred_interest}`);
+});
+
+// ── Stored payment_amount honors the loan's payment frequency ──
+test('biweekly stored payment matches the schedule, not a monthly figure', () => {
+  const principal = 26000, annual = 0.065, term = 60, freq = 'biweekly';
+  // What loans:save now stores (frequency-aware):
+  const stored = periodicPayment(principal, periodicRate(annual, freq), paymentsForTerm(term, freq));
+  // What the amortization schedule actually bills each biweekly period:
+  const rows = generateSchedule({
+    principal, annual_rate: annual, term_months: term,
+    first_payment_date: '2025-01-01', payment_frequency: freq,
+    amortization_type: 'standard',
+  });
+  assert.ok(approx(stored, rows[0].scheduled_payment),
+    `stored ${stored} should match biweekly schedule payment ${rows[0].scheduled_payment}`);
+  // …and must NOT be the (wrong) monthly figure the old code stored.
+  const monthlyFigure = periodicPayment(principal, annual / 12, term);
+  assert.ok(Math.abs(stored - monthlyFigure) > 1,
+    `biweekly payment ${stored} should differ from monthly ${monthlyFigure}`);
 });
 
 console.log(`\n${passed} passed\n`);

@@ -390,8 +390,22 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    // Perf: keep cap consistent with initial load (2000 most recent).
-    const expData = await api.query('expenses', { company_id: activeCompany.id }, { field: 'date', dir: 'desc' }, 2000);
+    // Must mirror the initial load's JOINed query (NOT a flat api.query) so the
+    // Category/Vendor/Project NAMES survive after a batch op / inline edit /
+    // import. The flat query returned only FK ids, which blanked those columns
+    // and reverted the vendor chip to "vendor <id>" until a full page reload.
+    const expData = await api.rawQuery(
+      `SELECT e.*, c.name as category_name, c.color as category_color,
+              v.name as vendor_name, v.is_1099_eligible as vendor_is_1099, v.w9_status as vendor_w9_status,
+              p.name as project_name
+       FROM expenses e
+       LEFT JOIN categories c ON e.category_id = c.id
+       LEFT JOIN vendors v ON e.vendor_id = v.id
+       LEFT JOIN projects p ON e.project_id = p.id
+       WHERE e.company_id = ?
+       ORDER BY e.date DESC LIMIT 2000`,
+      [activeCompany.id]
+    );
     setExpenses(Array.isArray(expData) ? expData : []);
     setSelectedIds(new Set());
   }, [activeCompany]);

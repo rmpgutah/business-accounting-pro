@@ -458,8 +458,14 @@ const TrialBalance: React.FC = () => {
 
   const totalDebits = useMemo(() => visible.reduce((s, l) => s + l.debit_total + (workingMode ? (l.adj_debit || 0) : 0), 0), [visible, workingMode]);
   const totalCredits = useMemo(() => visible.reduce((s, l) => s + l.credit_total + (workingMode ? (l.adj_credit || 0) : 0), 0), [visible, workingMode]);
-  const isBalanced = Math.abs(totalDebits - totalCredits) < 0.01;
-  const delta = totalDebits - totalCredits;
+  // The debits=credits ASSERTION must be evaluated over the full line set, not
+  // the display-filtered `visible`. Hiding an inactive account that still
+  // carries a residual balance would otherwise drop its debit/credit and fire a
+  // false "Out of balance" warning on a perfectly balanced ledger.
+  const fullDebits = useMemo(() => lines.reduce((s, l) => s + l.debit_total + (workingMode ? (l.adj_debit || 0) : 0), 0), [lines, workingMode]);
+  const fullCredits = useMemo(() => lines.reduce((s, l) => s + l.credit_total + (workingMode ? (l.adj_credit || 0) : 0), 0), [lines, workingMode]);
+  const isBalanced = Math.abs(fullDebits - fullCredits) < 0.01;
+  const delta = fullDebits - fullCredits;
 
   // Exception report (feature #4)
   const exceptions = useMemo(() => {
