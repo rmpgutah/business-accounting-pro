@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import {
   BookOpen, FileSpreadsheet, BarChart3, Scale, GitBranch, Lock, ShieldCheck,
-  HelpCircle, X, Clock,
+  HelpCircle, X, Clock, CalendarClock,
 } from 'lucide-react';
+import SchedulesPanel from './SchedulesPanel';
 import AccountsList from './AccountsList';
 import AccountForm from './AccountForm';
 import JournalEntries from './JournalEntries';
@@ -55,7 +56,8 @@ type Tab =
   | 'reconciliation'
   | 'period-close'
   | 'analytics'
-  | 'audit';
+  | 'audit'
+  | 'schedules';
 
 interface RecentEntry { id: string; entry_number: string; date: string; description: string; ts: number; }
 const RECENT_KEY = 'bap-accounts-recent-jes';
@@ -185,6 +187,7 @@ const AccountsModule: React.FC = () => {
     { id: 'period-close',       label: 'Period Close',   icon: <Lock size={14} />,            key: '6' },
     { id: 'analytics',          label: 'Analytics',      icon: <BarChart3 size={14} />,       key: '7' },
     { id: 'audit',              label: 'Audit',          icon: <ShieldCheck size={14} />,     key: '8' },
+    { id: 'schedules',          label: 'Schedules',      icon: <CalendarClock size={14} />,   key: '9' },
   ], []);
 
   // ─── Hotkeys (features 25 + 29) ────────────────────
@@ -195,8 +198,8 @@ const AccountsModule: React.FC = () => {
       if (inForm) return;
       if (e.key === '?' || (e.shiftKey && e.key === '/')) { setShowHelp((v) => !v); return; }
       if (e.key === 'Escape') { setShowHelp(false); return; }
-      // Number keys 1..8 → tabs
-      if (/^[1-8]$/.test(e.key)) {
+      // Number keys 1..9 → tabs
+      if (/^[1-9]$/.test(e.key)) {
         const t = tabs.find((x) => x.key === e.key);
         if (t) { setActiveTab(t.id); e.preventDefault(); }
       }
@@ -290,6 +293,7 @@ const AccountsModule: React.FC = () => {
         {activeTab === 'period-close' && <SiblingTab name="Period Close" modulePath="PeriodClose" />}
         {activeTab === 'analytics' && <GLAnalytics />}
         {activeTab === 'audit' && <SiblingTab name="Audit Trail" modulePath="AuditTrail" />}
+        {activeTab === 'schedules' && <SchedulesPanel />}
       </Suspense>
 
       {/* Account Form Modal */}
@@ -330,6 +334,7 @@ const AccountsModule: React.FC = () => {
                   ['6', 'Period Close'],
                   ['7', 'Analytics'],
                   ['8', 'Audit'],
+                  ['9', 'Schedules'],
                   ['Esc', 'Close dialog / overlay'],
                   ['Shift+Click', 'Select range in tables'],
                   ['Right-click', 'Quick actions on JE rows'],
@@ -355,7 +360,7 @@ const AccountsModule: React.FC = () => {
             </div>
             <div className="text-sm text-text-primary mb-3">
               {[
-                'This is the Accounts module. Use the numbered tabs (1–8) or click to switch between Chart, Journal Entries, Trial Balance, GL, and Analytics.',
+                'This is the Accounts module. Use the numbered tabs (1–9) or click to switch between Chart, Journal Entries, Trial Balance, GL, Analytics, and Schedules.',
                 'Press ? at any time to see all keyboard shortcuts. Right-click a journal entry for quick actions like Edit, Duplicate, Reverse, and Post.',
                 'The Analytics tab gives you 15 reports — activity timelines, suspicious entry detection, budget variance, common-size statements, and more.',
                 'Recent journal entries you opened appear above the JE list. Saved filter views and column visibility help you focus on what matters.',
