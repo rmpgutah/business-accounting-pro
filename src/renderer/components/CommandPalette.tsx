@@ -163,7 +163,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
           width: '600px', maxWidth: '90vw',
           maxHeight: '70vh', overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
-          borderRadius: '6px',
+          borderRadius: 'var(--app-radius)',
         }}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-primary">
@@ -178,7 +178,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
           />
           <span
             className="text-[10px] text-text-muted font-mono px-2 py-1 border border-border-primary"
-            style={{ borderRadius: '4px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             ESC
           </span>

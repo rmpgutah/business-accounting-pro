@@ -16,7 +16,7 @@ const s = (v: any) => (v == null ? '' : String(v));
 export const INDEX_ENTRIES: IndexEntry[] = [
   { table: 'clients', module: 'clients', entityType: 'client',
     toDoc: r => ({ title: s(r.name), subtitle: s(r.email), body: `${s(r.phone)} ${s(r.notes)}` }) },
-  { table: 'vendors', module: 'vendors', entityType: 'vendor',
+  { table: 'vendors', module: 'expenses', entityType: 'vendor',
     toDoc: r => ({ title: s(r.name), subtitle: s(r.email), body: `${s(r.phone)} ${s(r.notes)}` }) },
   { table: 'invoices', module: 'invoicing', entityType: 'invoice',
     toDoc: r => ({ title: `Invoice ${s(r.invoice_number)}`, subtitle: s(r.status), body: s(r.notes) }) },
