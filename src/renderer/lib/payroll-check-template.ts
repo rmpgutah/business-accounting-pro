@@ -1,8 +1,11 @@
 /**
  * Payroll Check Print Template — Production Grade
  * Check-on-top (3-part) for 8.5x11 blank check paper.
- * Calibri dominant. All text BLACK except YTD Summary taxes(red)/net(green).
+ * Classic Arial/B&W. Authentic MICR E-13B line.
  */
+
+import { buildMicrLine, buildMicrUnicode } from './micr';
+import { micrFontFace, hasMicrFont } from './micr-font';
 
 function esc(s: string | null | undefined): string {
   if (!s) return '';
@@ -31,43 +34,28 @@ function maskSSN(ssn: string | undefined | null): string {
   return d.length >= 4 ? '***-**-' + d.slice(-4) : ssn;
 }
 
-const CSS = `
+const CHECK_STYLES = `
 @page { size: letter; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-size: 10px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 10px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .pg { width: 8.5in; height: 11in; position: relative; }
 
-.chk { height: 3.667in; padding: 0.18in 0.42in 0.3in; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+.chk { height: 3.667in; padding: 0.18in 0.42in 0.5in; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
 .stb { height: 3.667in; padding: 0.06in 0.3in 0.04in; position: relative; overflow: hidden; }
 
 /* Check face */
 .chk-co { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
 .chk-num { font-size: 22px; font-weight: 800; letter-spacing: 1.5px; line-height: 1; font-variant-numeric: tabular-nums; }
 
-/* MICR line — clean monospace numbers with labeled sections.
-   Real MICR encoding is pre-printed with magnetic ink on check stock;
-   this line provides the human-readable reference only. */
-.micr-bar {
-  position: absolute; bottom: 0.15in; left: 0.42in; right: 0.42in;
-  display: flex; align-items: baseline; gap: 6px;
-  font-family: 'OCR B', 'Courier New', Courier, monospace;
-  font-size: 11px; letter-spacing: 2px; color: #000;
-  border-top: 0.5px solid #ccc; padding-top: 3px;
+/* MICR E-13B line — CLEAR BAND, no labels */
+.micr-line {
+  position: absolute; bottom: 0.375in; left: 0.5in; right: 0.5in;
+  font-family: 'MICRE13B', 'Courier New', monospace;
+  font-size: 16px; letter-spacing: 2px; color: #000; white-space: nowrap;
 }
-.micr-bar .micr-seg {
-  display: inline-flex; align-items: baseline; gap: 2px;
+.micr-line.fallback {
+  font-family: 'Courier New', monospace; font-size: 15px; letter-spacing: 3px;
 }
-.micr-bar .micr-lbl {
-  font-family: Calibri, sans-serif; font-size: 5.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.5px; color: #666;
-  margin-right: 2px;
-}
-.micr-bar .micr-num {
-  font-family: 'OCR B', 'Courier New', Courier, monospace;
-  font-size: 12px; font-weight: 400; letter-spacing: 2.5px;
-  font-variant-numeric: tabular-nums;
-}
-.micr-bar .micr-spacer { width: 16px; }
 
 /* Stub header */
 .stb-hdr { display: flex; justify-content: space-between; align-items: center; background: #000; color: #fff; padding: 2px 6px; margin-bottom: 3px; }
@@ -77,7 +65,7 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 /* Info grid */
 .ig { display: grid; border: 1.5px solid #000; margin-bottom: 4px; }
 .ig7 { grid-template-columns: repeat(7, 1fr); }
-.ig-c { padding: 2px 4px; border-right: 0.5px solid #bbb; border-bottom: 0.5px solid #bbb; }
+.ig-c { padding: 2px 4px; border-right: 0.5px solid #000; border-bottom: 0.5px solid #000; }
 .ig-c:nth-child(7n) { border-right: none; }
 .ig-c:nth-last-child(-n+7) { border-bottom: none; }
 .ig-c.s2 { grid-column: span 2; }
@@ -87,21 +75,21 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 .ig-val.b { font-weight: 700; }
 
 /* Tables */
-.st { width: 100%; border-collapse: collapse; border: 1px solid #999; }
+.st { width: 100%; border-collapse: collapse; border: 1px solid #000; }
 .st th {
   padding: 2.5px 5px; font-size: 7px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.3px;
-  background: #c0c0c0; border-bottom: 1.5px solid #000; text-align: left;
+  background: #000; color: #fff; border-bottom: 1.5px solid #000; text-align: left;
 }
 .st th.r { text-align: right; }
-.st td { padding: 2.5px 5px; font-size: 8.5px; border-bottom: 0.5px solid #ddd; }
+.st td { padding: 2.5px 5px; font-size: 8.5px; border-bottom: 0.5px solid #000; }
 .st td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .st td.b { font-weight: 700; }
-.st tr:nth-child(even) td { background: #f5f5f5; }
-.st tr.tot td { border-top: 1.5px solid #000; border-bottom: none; font-weight: 700; background: #e0e0e0; padding-top: 3px; }
-.st tr.tot:nth-child(even) td { background: #e0e0e0; }
-.st tr.sub td { font-size: 7.5px; padding-left: 12px; border-bottom: 0.5px dashed #ccc; }
-.st-section { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: #333; color: #fff; padding: 2px 5px; }
+.st tr:nth-child(even) td { background: #f0f0f0; }
+.st tr.tot td { border-top: 1.5px solid #000; border-bottom: none; font-weight: 700; background: #d8d8d8; padding-top: 3px; }
+.st tr.tot:nth-child(even) td { background: #d8d8d8; }
+.st tr.sub td { font-size: 7.5px; padding-left: 12px; border-bottom: 0.5px solid #000; }
+.st-section { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: #000; color: #fff; padding: 2px 5px; }
 
 /* Summary boxes */
 .net-box { border: 2.5px solid #000; text-align: center; padding: 5px 8px; background: #e8e8e8; margin-bottom: 4px; }
@@ -113,9 +101,9 @@ body { font-family: Calibri, 'Segoe UI', -apple-system, Arial, sans-serif; font-
 .sr { display: flex; justify-content: space-between; }
 .sr-tot { border-top: 1.5px solid #000; padding-top: 2px; margin-top: 2px; font-weight: 700; }
 
-.void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-size:56px; font-weight:900; color:rgba(200,0,0,0.12); letter-spacing:10px; pointer-events:none; z-index:10; }
+.void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-size:56px; font-weight:900; color:rgba(0,0,0,0.10); letter-spacing:10px; pointer-events:none; z-index:10; }
 .emp-ft { display:flex; gap:4px; margin-top:3px; font-size:7px; }
-.emp-ft-c { flex:1; border:1px solid #999; padding:2px 5px; background:#f0f0f0; }
+.emp-ft-c { flex:1; border:1px solid #000; padding:2px 5px; background:#f0f0f0; }
 
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 `;
@@ -283,8 +271,8 @@ export function generatePaycheckHTML(
       <div class="stitle">Year-to-Date</div>
       ${ytdHours > 0 ? `<div class="sr"><span>Hours</span><span style="font-weight:700;">${ytdHours.toFixed(1)}</span></div>` : ''}
       <div class="sr"><span>Gross</span><span style="font-weight:700;">${fmt(ytdG)}</span></div>
-      <div class="sr"><span>Taxes</span><span style="font-weight:700;color:#dc2626;">${fmt(ytdT)}</span></div>
-      <div class="sr sr-tot"><span>Net</span><span style="color:#16a34a;">${fmt(ytdN)}</span></div>
+      <div class="sr"><span>Taxes</span><span style="font-weight:700;">${fmt(ytdT)}</span></div>
+      <div class="sr sr-tot"><span>Net</span><span>${fmt(ytdN)}</span></div>
     </div>`;
 
   // ══════════════════════════════════════════════════
@@ -323,12 +311,12 @@ export function generatePaycheckHTML(
           <div style="font-size:14px;font-weight:700;">${empName}</div>
           <div style="font-size:8.5px;margin-top:1px;">${[empAddr1, empAddr2, empCSZ].filter(Boolean).join(', ')}</div>
         </div>
-        <div style="border:2.5px solid #000;padding:4px 16px;text-align:center;background:#f5f5f5;">
+        <div style="border:2.5px solid #000;padding:4px 16px;text-align:center;background:#ebebeb;">
           <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Amount</div>
           <div style="font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(net)}</div>
         </div>
       </div>
-      <div style="font-size:10px;border-bottom:1.5px solid #000;padding-bottom:3px;">${amountToWords(net)} <span style="letter-spacing:2px;color:#999;">********</span></div>
+      <div style="font-size:10px;border-bottom:1.5px solid #000;padding-bottom:3px;">${amountToWords(net)} <span style="letter-spacing:2px;">********</span></div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end;">
       <div style="font-size:8.5px;">
@@ -345,14 +333,12 @@ export function generatePaycheckHTML(
         </div>
       </div>
     </div>
-    <!-- MICR — labeled segments, clean monospace -->
-    <div class="micr-bar">
-      <div class="micr-seg"><span class="micr-lbl">CHK</span><span class="micr-num">${chk}</span></div>
-      <div class="micr-spacer"></div>
-      <div class="micr-seg"><span class="micr-lbl">RTN</span><span class="micr-num">${coRouting || '000000000'}</span></div>
-      <div class="micr-spacer"></div>
-      <div class="micr-seg"><span class="micr-lbl">ACCT</span><span class="micr-num">${coAcct || '0000000000'}</span></div>
-    </div>
+    <!-- MICR E-13B line — clear band, no labels -->
+    <div class="micr-line${hasMicrFont() ? '' : ' fallback'}">${
+      hasMicrFont()
+        ? buildMicrLine({ routing: coRouting, account: coAcct, checkNumber: chk })
+        : buildMicrUnicode({ routing: coRouting, account: coAcct, checkNumber: chk })
+    }</div>
   </div>`;
 
   // ══════════════════════════════════════════════════
@@ -398,17 +384,17 @@ export function generatePaycheckHTML(
     </div>
     <!-- Employer footer: compact single row with cost + metadata -->
     <div style="display:flex;gap:3px;margin-top:2px;font-size:6.5px;">
-      <div style="flex:1;border:1px solid #999;padding:1.5px 4px;background:#e8e8e8;">
+      <div style="flex:1;border:1px solid #000;padding:1.5px 4px;background:#e8e8e8;">
         <strong>Employer Cost:</strong> Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong>
       </div>
-      <div style="flex:0.5;border:1px solid #999;padding:1.5px 4px;background:#f0f0f0;">
+      <div style="flex:0.5;border:1px solid #000;padding:1.5px 4px;background:#f0f0f0;">
         <strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span>
       </div>
-      ${empEmail ? `<div style="flex:0.4;border:1px solid #999;padding:1.5px 4px;background:#f0f0f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
+      ${empEmail ? `<div style="flex:0.4;border:1px solid #000;padding:1.5px 4px;background:#f0f0f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
     </div>
   </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${micrFontFace()}${CHECK_STYLES}</style></head><body>
 <div class="pg">
   ${checkHTML}
   ${employeeStub}
@@ -422,5 +408,5 @@ export function extractCheckBody(html: string): string {
   return match?.[1] || html;
 }
 export function wrapBatchChecks(bodies: string[]): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>${bodies.join('<div style="page-break-before:always;"></div>')}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${micrFontFace()}${CHECK_STYLES}</style></head><body>${bodies.join('<div style="page-break-before:always;"></div>')}</body></html>`;
 }
