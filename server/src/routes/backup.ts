@@ -22,7 +22,12 @@ function sanitizeEmail(email: string): string {
  * This is the authoritative path-traversal barrier — every fs path flows through here.
  */
 function resolveInBackupDir(filename: string): string {
-  const full = path.resolve(BACKUP_DIR, filename);
+  // Strip any directory component first. path.basename is a sanitizer that
+  // removes path separators and traversal segments, so only a flat filename is
+  // ever joined to BACKUP_DIR. All callers already pass flat names, so this is
+  // a no-op in practice — it's defense-in-depth ahead of the containment check.
+  const safe = path.basename(filename);
+  const full = path.resolve(BACKUP_DIR, safe);
   if (full !== BACKUP_DIR && !full.startsWith(BACKUP_DIR + path.sep)) {
     throw new Error('Path escapes backup directory');
   }
