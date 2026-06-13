@@ -95,44 +95,43 @@ body { font-family: var(--font-body); font-size: 10px; color: var(--ink); backgr
 .stb-hdr-label { font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color:#ccd5e2; }
 .stb-hdr-co { font-family: var(--font-display); font-size: 11px; font-weight: 700; }
 
-/* Info grid */
-.ig { display: grid; border: 1px solid var(--ink); margin-bottom: 4px; background:#fff; }
+/* Info strip — borderless, aligned key/value cells. No internal box lines:
+   the 7-col alignment + a faint per-row hairline organize it like a ledger. */
+.ig { display: grid; border-top: 1.5px solid var(--accent); margin-bottom: 7px; background:#fff; }
 .ig7 { grid-template-columns: repeat(7, 1fr); }
-.ig-c { padding: 2.5px 5px; border-right: 0.5px solid var(--line); border-bottom: 0.5px solid var(--line); }
-.ig-c:nth-child(7n) { border-right: none; }
-.ig-c:nth-last-child(-n+7) { border-bottom: none; }
+.ig-c { padding: 3px 8px 3px 0; border-bottom: 0.5px solid var(--line-soft); }
 .ig-c.s2 { grid-column: span 2; }
-.ig-lbl { font-size: 5.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 1px; color: var(--accent); }
-.ig-val { font-size: 8px; color: var(--ink); }
-.ig-val.big { font-family: var(--font-display); font-size: 11px; font-weight: 600; }
+.ig-lbl { font-size: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 1.5px; color: var(--accent); }
+.ig-val { font-size: 8.5px; color: var(--ink); }
+.ig-val.big { font-family: var(--font-display); font-size: 11.5px; font-weight: 600; }
 .ig-val.b { font-weight: 600; }
 
-/* Tables */
-.st { width: 100%; border-collapse: collapse; border: 1px solid var(--line); }
+/* Tables — quiet headers (accent label + underline, no fill), no zebra.
+   Rows are separated by hairlines and the column alignment, not boxes. */
+.st { width: 100%; border-collapse: collapse; }
 .st th {
-  padding: 3px 6px; font-size: 7px; font-weight: 600;
+  padding: 3px 6px 2.5px; font-size: 6.5px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.5px;
-  background: var(--accent); color: #fff; border-bottom: 1px solid var(--accent-2); text-align: left;
+  color: var(--accent); background: none; border-bottom: 1px solid var(--accent); text-align: left;
 }
 .st th.r { text-align: right; }
 .st td { padding: 3px 6px; font-size: 8.5px; border-bottom: 0.5px solid var(--line-soft); color: var(--ink); }
 .st td.r { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 .st td.b { font-weight: 700; }
-.st tr:nth-child(even) td { background: var(--wash); }
-.st tr.tot td { border-top: 1.25px solid var(--ink); border-bottom: none; font-weight: 700; background: var(--wash-2); padding-top: 3.5px; }
-.st tr.tot:nth-child(even) td { background: var(--wash-2); }
-.st tr.sub td { font-size: 7.5px; padding-left: 14px; border-bottom: 0.5px dashed var(--line); color: var(--ink-soft); }
-.st-section { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: var(--ink); color: #fff; padding: 2px 6px; }
+.st tr.tot td { border-top: 1px solid var(--ink); border-bottom: none; font-weight: 700; background: none; padding-top: 3.5px; }
+.st tr.sub td { font-size: 7.5px; padding-left: 14px; border-bottom: 0.5px solid var(--line-soft); color: var(--ink-soft); }
+.st-section { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: none; color: var(--accent); padding: 2px 0; border-bottom: 0.5px solid var(--line); }
 
-/* Summary boxes */
-.net-box { border: 1.5px solid var(--accent); text-align: center; padding: 6px 8px; background: var(--accent-wash); margin-bottom: 5px; }
+/* Net pay — the hero figure, kept prominent */
+.net-box { border: 1.5px solid var(--accent); text-align: center; padding: 6px 8px; background: var(--accent-wash); margin-bottom: 8px; }
 .net-box .lbl { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); }
 .net-box .amt { font-family: var(--font-mono); font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 1px 0; color: var(--ink); }
 .net-box .sub { font-size: 6.5px; color: var(--ink-soft); }
-.sum-box { border: 1px solid var(--line); padding: 4px 6px; font-size: 7px; line-height: 1.55; margin-bottom: 4px; background:#fff; }
-.sum-box .stitle { font-weight: 700; text-transform: uppercase; font-size: 5.5px; letter-spacing: 0.8px; background: var(--ink); color: #fff; margin: -4px -6px 3px; padding: 2px 6px; }
-.sr { display: flex; justify-content: space-between; }
-.sr-tot { border-top: 1px solid var(--ink); padding-top: 2px; margin-top: 2px; font-weight: 700; }
+/* Summary lists — borderless, accent caption, clean ledger rows */
+.sum-box { font-size: 8px; line-height: 1.6; margin-bottom: 8px; }
+.sum-box .stitle { font-weight: 700; text-transform: uppercase; font-size: 6px; letter-spacing: 0.6px; color: var(--accent); border-bottom: 0.5px solid var(--line); padding-bottom: 1.5px; margin-bottom: 3px; }
+.sr { display: flex; justify-content: space-between; padding: 0.5px 0; }
+.sr-tot { border-top: 1px solid var(--ink); padding-top: 2.5px; margin-top: 2.5px; font-weight: 700; }
 
 .void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); font-family:var(--font-display); font-size:58px; font-weight:900; color:rgba(179,38,30,0.12); letter-spacing:10px; pointer-events:none; z-index:10; }
 .emp-ft { display:flex; gap:4px; margin-top:3px; font-size:7px; }
@@ -304,8 +303,8 @@ export function generatePaycheckHTML(
       <div class="stitle">Year-to-Date</div>
       ${ytdHours > 0 ? `<div class="sr"><span>Hours</span><span style="font-weight:700;">${ytdHours.toFixed(1)}</span></div>` : ''}
       <div class="sr"><span>Gross</span><span style="font-weight:700;">${fmt(ytdG)}</span></div>
-      <div class="sr"><span>Taxes</span><span style="font-weight:700;color:#dc2626;">${fmt(ytdT)}</span></div>
-      <div class="sr sr-tot"><span>Net</span><span style="color:#16a34a;">${fmt(ytdN)}</span></div>
+      <div class="sr"><span>Taxes</span><span style="font-weight:700;color:var(--danger);">${fmt(ytdT)}</span></div>
+      <div class="sr sr-tot"><span>Net</span><span style="color:var(--accent);">${fmt(ytdN)}</span></div>
     </div>`;
 
   // ══════════════════════════════════════════════════
@@ -418,14 +417,10 @@ export function generatePaycheckHTML(
       </div>
     </div>
     <!-- Employer footer: compact single row with cost + metadata -->
-    <div style="display:flex;gap:3px;margin-top:2px;font-size:6.5px;">
-      <div style="flex:1;border:1px solid #999;padding:1.5px 4px;background:#e8e8e8;">
-        <strong>Employer Cost:</strong> Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong>
-      </div>
-      <div style="flex:0.5;border:1px solid #999;padding:1.5px 4px;background:#f0f0f0;">
-        <strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span>
-      </div>
-      ${empEmail ? `<div style="flex:0.4;border:1px solid #999;padding:1.5px 4px;background:#f0f0f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
+    <div style="display:flex;gap:4px;margin-top:5px;font-size:7px;">
+      <div style="flex:1;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Employer Cost</strong> &nbsp; Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong></div>
+      <div style="flex:0.55;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">EIN</strong> ${coEIN || '—'} &nbsp;·&nbsp; <strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Run</strong> <span style="text-transform:capitalize;">${runType}</span></div>
+      ${empEmail ? `<div style="flex:0.45;border:0.5px solid var(--line);padding:3px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
     </div>
   </div>`;
 
