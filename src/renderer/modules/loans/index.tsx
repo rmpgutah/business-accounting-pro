@@ -5,7 +5,7 @@
 // active loans on the list view.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw, Calculator } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import { useAppStore } from '../../stores/appStore';
@@ -13,8 +13,9 @@ import LoanForm from './LoanForm';
 import LoanDetail from './LoanDetail';
 import AggregateDebtChart from './AggregateDebtChart';
 import LoanWizard from './LoanWizard';
+import Calculators from './Calculators';
 
-type View = 'list' | 'form' | 'detail' | 'wizard';
+type View = 'list' | 'form' | 'detail' | 'wizard' | 'calculators';
 
 const fmt$ = (n: number, currency: string = 'USD'): string => {
   try {
@@ -90,6 +91,27 @@ const LoansModule: React.FC = () => {
     );
   }
 
+  if (view === 'calculators') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--structure)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => setView('list')} className="block-btn" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              <Landmark size={13} /> Loans & Debt
+            </button>
+            <ChevronRight size={14} style={{ color: 'var(--color-text-muted)' }} />
+            <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Calculator size={14} /> Financial Calculators
+            </span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <Calculators />
+        </div>
+      </div>
+    );
+  }
+
   // List view
   return (
     <div style={{ padding: 24, maxWidth: 1200 }}>
@@ -98,6 +120,13 @@ const LoansModule: React.FC = () => {
           <Landmark size={22} /> Loans & Debt
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => setView('calculators')}
+            title="Financial calculator suite — IDR, CC payoff, HELOC, NPV/IRR, and more"
+          >
+            <Calculator size={14} /> Calculators
+          </button>
           <button
             className="block-btn flex items-center gap-2"
             onClick={async () => {
