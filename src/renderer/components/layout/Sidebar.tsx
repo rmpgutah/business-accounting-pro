@@ -41,6 +41,7 @@ import {
   FileCheck,
   PenTool,
   Car,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -93,6 +94,7 @@ const sections: NavSection[] = [
       { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
       { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
       { id: 'stripe-sync', label: 'Stripe Sync', icon: CreditCard },
+      { id: 'subscriptions', label: 'Subscriptions', icon: RefreshCw },
       { id: 'budgets', label: 'Budgets', icon: PiggyBank },
       { id: 'taxes', label: 'Taxes', icon: Calculator },
       { id: 'debt-collection', label: 'Debt Collection', icon: Scale },

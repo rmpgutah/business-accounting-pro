@@ -104,7 +104,7 @@ export const DEFAULT_SIDEBAR_ORDER: string[] = [
   // auto-appends any missing ALL_ITEMS as a safety net for existing users
   // whose persisted sidebarOrder predates the Loans module.
   'loans', 'bills', 'vendors-ap', 'purchase-orders', 'bank-recon', 'stripe-sync',
-  'budgets', 'taxes', 'debt-collection',
+  'subscriptions', 'budgets', 'taxes', 'debt-collection',
   'reports', 'kpi-dashboard', 'forecasting', 'report-builder', 'custom-dashboards',
   'documents', 'recurring', 'email', 'notifications', 'audit-trail', 'rules', 'automations',
   'companies', 'api-integrations', 'client-portal', 'mobile', 'settings',
