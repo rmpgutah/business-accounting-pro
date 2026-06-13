@@ -17,7 +17,7 @@ const DRILL: Record<string, string> = {
   'anomalies': 'expenses', 'cash-forecast': 'reports', 'kpis': 'dashboard',
 };
 
-const WidgetSlot: React.FC<{ p: any; editing: boolean; onDragStart?: () => void }> = ({ p, editing, onDragStart }) => {
+const WidgetSlot: React.FC<{ p: any; editing: boolean; onDragStart?: () => void; onResizeStart?: (e: React.MouseEvent) => void }> = ({ p, editing, onDragStart, onResizeStart }) => {
   const def = widgetDef(p.type);
   const { data, loading } = useWidgetData(p.type);
   const setModule = useAppStore((s) => s.setModule);
@@ -27,7 +27,8 @@ const WidgetSlot: React.FC<{ p: any; editing: boolean; onDragStart?: () => void 
     <div style={{ gridColumn: `${p.x + 1} / span ${p.w}`, gridRow: `${p.y + 1} / span ${p.h}` }}>
       <WidgetFrame title={def.title} accent={def.accent} editing={editing}
         onRemove={() => removeWidget(p.id)} onOpen={() => setModule(DRILL[p.type] || 'dashboard')}
-        dragHandleProps={editing ? { draggable: true, onDragStart } : undefined}>
+        dragHandleProps={editing ? { draggable: true, onDragStart } : undefined}
+        onResizeStart={editing ? onResizeStart : undefined}>
         <WidgetBody type={p.type} data={data} loading={loading} />
       </WidgetFrame>
     </div>
@@ -55,6 +56,21 @@ const Cockpit: React.FC = () => {
     persist();
   };
 
+  const startResize = (p: any) => (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!gridRef.current) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    const cellW = rect.width / GRID_COLS;
+    const startX = e.clientX, startY = e.clientY, startW = p.w, startH = p.h;
+    const move = (ev: MouseEvent) => {
+      const dw = Math.round((ev.clientX - startX) / cellW);
+      const dh = Math.round((ev.clientY - startY) / ROW_H);
+      updatePlacement(p.id, { w: startW + dw, h: startH + dh });
+    };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); persist(); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  };
+
   return (
     <div className="p-6 h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-5">
@@ -75,7 +91,7 @@ const Cockpit: React.FC = () => {
       </div>
       <div ref={gridRef} onDragOver={(e) => e.preventDefault()} onDrop={onGridDrop}
         style={{ display: 'grid', gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`, gridAutoRows: `${ROW_H}px`, gap: '12px' }}>
-        {layout.map(p => <WidgetSlot key={p.id} p={p} editing={editing} onDragStart={() => { dragId.current = p.id; }} />)}
+        {layout.map(p => <WidgetSlot key={p.id} p={p} editing={editing} onDragStart={() => { dragId.current = p.id; }} onResizeStart={startResize(p)} />)}
       </div>
     </div>
   );
