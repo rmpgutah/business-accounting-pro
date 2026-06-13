@@ -34,6 +34,8 @@ import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
+import { reindexEntity, removeFromIndex } from '../services/intelligence/searchIndex';
+import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
 import http from 'http';
 import https from 'https';
 
@@ -96,6 +98,24 @@ function scheduleAutoBackup() {
       console.warn('Auto-backup error:', err);
     }
   }, 30000); // 30 second debounce
+}
+
+// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
+// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
+const reindexTimers = new Map<string, NodeJS.Timeout>();
+function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
+  if (!INDEXED_TABLES.has(table)) return;
+  const key = `${table}:${id}`;
+  const existing = reindexTimers.get(key);
+  if (existing) clearTimeout(existing);
+  reindexTimers.set(key, setTimeout(() => {
+    reindexTimers.delete(key);
+    try {
+      const d = db.getDb();
+      if (op === 'delete') removeFromIndex(d, table, id);
+      else reindexEntity(d, table, id);
+    } catch (e) { console.warn('[search-index] reindex failed', table, id, e); }
+  }, 150));
 }
 
 let _lastLoginEmail: string | null = null;
@@ -757,6 +777,7 @@ export function registerIpcHandlers(): void {
       }
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      scheduleReindex(table, record.id as string, 'upsert');
       // Debt child table audit
       const DEBT_CHILD_AUDIT: Record<string, string> = {
         debt_payments: 'payment_recorded',
@@ -829,6 +850,7 @@ export function registerIpcHandlers(): void {
         }
         db.logAudit(companyId, table, id, 'update', changes);
       }
+      scheduleReindex(table, id, 'upsert');
       // Debt audit: log each changed field
       if (table === 'debts' && id && old) {
         try {
@@ -974,6 +996,7 @@ export function registerIpcHandlers(): void {
         cleanupReferencesBeforeDelete(table, id);
       }
       db.remove(table, id);
+      scheduleReindex(table, id, 'delete');
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
     } catch (err) {
