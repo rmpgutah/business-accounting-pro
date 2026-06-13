@@ -1489,6 +1489,11 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </div>
           )}
 
+          {/* Deliberate exception to the PDF-redesign: this live preview stays
+              an HTML iframe (not <PdfPreview>) because analyzePages walks the
+              iframe's DOM for page-straddler analysis — a PDF <embed> has no
+              inspectable DOM — and for per-keystroke responsiveness. The
+              Preview/Print/Save actions still produce the real classic PDF. */}
           <iframe
             ref={previewIframeRef}
             srcDoc={inlinePreviewHTML}

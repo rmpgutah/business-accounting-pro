@@ -2032,6 +2032,11 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <div style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b', fontWeight: 600, background: '#e2e8f0', borderBottom: '1px solid #cbd5e1', flexShrink: 0 }}>
               LIVE PREVIEW
             </div>
+            {/* Deliberate exception to the PDF-redesign: the live-edit preview
+                stays an HTML iframe (not <PdfPreview>) for per-keystroke
+                responsiveness — re-rendering a real PDF on every edit would be
+                too slow. The Preview/Print/Save actions route through the real
+                classic-PDF pipeline (api.printPreview / api.print / api.saveToPDF). */}
             <iframe
               srcDoc={previewHTML}
               title="Invoice Preview"
