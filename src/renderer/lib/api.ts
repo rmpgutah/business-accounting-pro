@@ -330,6 +330,11 @@ const api = {
     window.electronAPI.invoke('print:save-pdf', { html, title, ...(opts || {}) }),
   print: (html: string): Promise<{ success?: boolean; error?: string }> =>
     window.electronAPI.invoke('print:print', { html }),
+  renderPdf: (
+    html: string,
+    pdfOptions?: { pageSize?: 'A4' | 'Letter' | 'Legal' | 'Tabloid'; landscape?: boolean; printBackground?: boolean }
+  ): Promise<{ base64?: string; error?: string }> =>
+    window.electronAPI.invoke('print:render', { html, pdfOptions }),
 
   // Journal Entry Utilities
   // Bug fix #13/#49: journal_entries.entry_number is NOT NULL + UNIQUE;

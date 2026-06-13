@@ -7186,6 +7186,18 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('print:render', async (
+    _event,
+    { html, pdfOptions }: { html: string; pdfOptions?: import('../services/print-preview').PDFOptions }
+  ): Promise<{ base64?: string; error?: string }> => {
+    try {
+      const buf = await htmlToPDFBuffer(html, pdfOptions);
+      return { base64: buf.toString('base64') };
+    } catch (err: any) {
+      return { error: err?.message || 'PDF render failed' };
+    }
+  });
+
   // ═══════════════════════════════════════════════════════════
   // ENTERPRISE FEATURES v2.0
   // ═══════════════════════════════════════════════════════════
