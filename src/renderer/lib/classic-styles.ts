@@ -92,7 +92,7 @@ export function ruledTable(columns: RuledColumn[], rows: string[][]): string {
     `<th${c.width ? ` style="width:${c.width}"` : ''}>${esc(c.label)}</th>`).join('')}</tr>`;
   const body = rows.map(r => `<tr>${r.map((cell, i) =>
     `<td${cls(columns[i]?.align)}>${cell}</td>`).join('')}</tr>`).join('');
-  return `<table class="ruled">${head}<tbody>${body}</tbody></table>`;
+  return `<table class="ruled"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 export interface TotalRow { label: string; value: string; grand?: boolean; }

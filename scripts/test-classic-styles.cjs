@@ -29,7 +29,8 @@ t('ruledTable emits one th per column and num class on right cols', () => {
     [{ label: 'Desc' }, { label: 'Amt', align: 'right' }],
     [['Widget', '$1.00']]);
   assert.ok(html.includes('<table class="ruled">'));
-  assert.strictEqual((html.match(/<th/g) || []).length, 2);
+  assert.ok(html.includes('<thead>'), 'has thead (repeats header across PDF pages)');
+  assert.strictEqual((html.match(/<th[\s>]/g) || []).length, 2);
   assert.ok(html.includes('<td class="num">$1.00</td>'));
 });
 t('metaStrip escapes labels', () => {
