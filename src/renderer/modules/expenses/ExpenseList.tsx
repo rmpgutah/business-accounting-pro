@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText, Settings, Star, ChevronDown, ChevronRight, Edit, Banknote, CreditCard, Save } from 'lucide-react';
+import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText, Settings, Star, ChevronDown, ChevronRight, Edit, Banknote, CreditCard, Save, Scale } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
@@ -9,6 +9,11 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCustomizationStore } from '../../stores/customizationStore';
+import {
+  useExpensesPrefs,
+  formatExpenseAmount,
+  formatExpenseDate,
+} from '../../customization/expenses-prefs';
 import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
@@ -19,7 +24,9 @@ import BulkEditModal from './BulkEditModal';
 import CreditCardImportModal from './CreditCardImportModal';
 import { BulkPasteModal, QuickAddBar, ReceiptThumb } from './CaptureFeatures';
 import { BulkActionBar, SmartFiltersDropdown, TopVendorsWidget, MissingReceiptsBanner } from './ExpenseUpgradesUI';
-import { expenseGrandTotal } from './expense-helpers';
+import { GroupKey, ColKey, ALL_COLS, DEFAULT_VISIBLE_COLS, expenseDisplayTotal } from './list/columns';
+import ExpenseListFilters from './list/ExpenseListFilters';
+import GroupingControls from './list/GroupingControls';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -88,28 +95,7 @@ interface SavedView {
   visibleCols: ColKey[];
 }
 
-type GroupKey = 'none' | 'vendor' | 'category' | 'project' | 'month' | 'quarter' | 'dayofweek' | 'taxded' | 'currency';
-type ColKey = 'date' | 'description' | 'category' | 'vendor' | 'project' | 'amount' | 'status' | 'approval' | 'receipt' | 'taxded' | 'mileage' | 'billable' | 'actions';
-const ALL_COLS: { key: ColKey; label: string }[] = [
-  { key: 'date', label: 'Date' },
-  { key: 'description', label: 'Description' },
-  { key: 'category', label: 'Category' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'project', label: 'Project' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'status', label: 'Status' },
-  { key: 'approval', label: 'Approval' },
-  { key: 'receipt', label: 'Receipt' },
-  { key: 'taxded', label: 'Tax Deductible' },
-  { key: 'mileage', label: 'Mileage' },
-  { key: 'billable', label: 'Billable' },
-  { key: 'actions', label: 'Actions' },
-];
-
 const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CHF', 'MXN', 'INR'];
-
-// Default visible columns (mileage and approval hidden by default)
-const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vendor', 'project', 'amount', 'status', 'receipt', 'taxded', 'billable', 'actions'];
 
 // Maps a table column to its Customization Center option (Expenses → Columns).
 // When the user turns one of these OFF, the column hides regardless of the
@@ -129,10 +115,6 @@ const COL_CUSTOMIZATION: Partial<Record<ColKey, string>> = {
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
 
-// FINAL-PRICE rule v4: amount + tax + shipping + shipping_tax − header_discount.
-// Delegates to the shared expenseGrandTotal helper so the list, detail header,
-// and print/voucher templates all reconcile to the same number.
-const expenseDisplayTotal = expenseGrandTotal;
 const COLS_KEY = (uid: string) => `expense_cols_${uid}`;
 
 interface ExpenseListProps {
@@ -784,7 +766,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   // otherwise falls back to the local column-menu state. Subscribing to
   // `values` makes this reactive to changes made in the Customization Center.
   const custValues = useCustomizationStore((s) => s.values);
-  const cDensity = useCustomizationStore((s) => String(s.get('expenses.expenses-density') ?? 'comfortable'));
+  // Typed pref bag — replaces the scattered `s.get('expenses.…')` reads
+  // and adds sticky-header / zebra / rows-per-page support.
+  const xprefs = useExpensesPrefs();
+  const cDensity = xprefs.density;
   const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
   const colVisible = (k: ColKey) => {
     const cid = COL_CUSTOMIZATION[k];
@@ -809,7 +794,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         <td onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: 'var(--accent-primary)' }} />
         </td>
-        {colVisible('date') && <td className="font-mono text-text-secondary text-xs col-nowrap">{formatDate(exp.date)}</td>}
+        {colVisible('date') && <td className="font-mono text-text-secondary text-xs col-nowrap">{formatExpenseDate(exp.date)}</td>}
         {colVisible('description') && (
           <td className="text-text-primary font-medium">
             {isEditingDesc ? (
@@ -840,6 +825,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 {exp.custom_fields && exp.custom_fields !== '{}' && <span title="Has detailed info"><FileText size={12} className="text-accent-blue shrink-0" /></span>}
                 {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#ef4444' }}>FLAGGED</span> : null}
                 {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#a855f7' }}>AUTO</span> : null}
+                {(exp as any).related_debt_id ? <span title={`Collection cost${(exp as any).is_recoverable ? ' (recoverable from debtor)' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>DEBT{(exp as any).is_recoverable ? '·R' : ''}</span> : null}
+                {Number((exp as any).allocation_count) > 0 ? <span title={`Split across ${(exp as any).allocation_count} allocation target${Number((exp as any).allocation_count) !== 1 ? 's' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0ea5e922', color: '#38bdf8' }}>SPLIT×{(exp as any).allocation_count}</span> : null}
                 {isAnomaly ? <span title="Unusually high amount for this vendor" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444433', color: '#ef4444' }}>ANOMALY</span> : null}
                 {isRecent ? <span title="Added in the last 3 days" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#22c55e22', color: '#22c55e' }}>NEW</span> : null}
                 {/* Capture #2: receipt thumbnail with hover preview */}
@@ -917,12 +904,12 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                    explains the breakdown. */
                 onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'amount', exp.amount); }}
                 title={(exp.tax_amount || 0) > 0
-                  ? `Total ${formatCurrency(expenseDisplayTotal(exp))} = Subtotal ${formatCurrency(exp.amount || 0)} + Tax ${formatCurrency(exp.tax_amount || 0)}\nDouble-click to edit subtotal only.`
+                  ? `Total ${formatExpenseAmount(expenseDisplayTotal(exp))} = Subtotal ${formatExpenseAmount(exp.amount || 0)} + Tax ${formatExpenseAmount(exp.tax_amount || 0)}\nDouble-click to edit subtotal only.`
                   : 'Double-click to edit'}
               >
                 {/* FINAL-PRICE display: amount + tax. Legacy tax_inclusive rows stored
                     amount = total already, so don't double-count by adding tax again. */}
-                {formatCurrency(expenseDisplayTotal(exp))}
+                {formatExpenseAmount(expenseDisplayTotal(exp))}
               </span>
             )}
           </td>
@@ -1027,10 +1014,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         </div>
       </div>
 
-      {/* Summary Bar */}
-      {expenseSummary && (
+      {/* Summary Bar + quick-stats strip — both gated by
+          Customization › Expenses › Display › Show summary cards header. */}
+      {xprefs.showSummaryCards && expenseSummary && (
         <SummaryBar items={[
-          { label: 'This Month', value: formatCurrency(expenseSummary.month_total), tooltip: 'Total expenses recorded in the current calendar month' },
+          { label: 'This Month', value: formatExpenseAmount(expenseSummary.month_total), tooltip: 'Total expenses recorded in the current calendar month' },
           { label: 'Top Category', value: expenseSummary.top_category ?? '—' },
           ...(Number(expenseSummary.over_budget_count) > 0
             ? [{ label: 'Over Budget', value: `${expenseSummary.over_budget_count} categories`, accent: 'red' as const, tooltip: 'Categories where spending this month exceeds the budget line' }]
@@ -1039,12 +1027,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       )}
 
       {/* Quick stats strip (feature 18) */}
+      {xprefs.showSummaryCards && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 report-summary-tiles">
-        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">This Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.thisMonth)}</div></div>
-        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Last Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.lastMonth)}</div></div>
+        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">This Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatExpenseAmount(quickStats.thisMonth)}</div></div>
+        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Last Month</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatExpenseAmount(quickStats.lastMonth)}</div></div>
         <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Pending</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{quickStats.pending}</div></div>
-        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Reimbursable</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(quickStats.reimbursable)}</div></div>
+        <div className="block-card p-2.5"><div className="text-xs uppercase font-bold text-text-muted">Reimbursable</div><div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatExpenseAmount(quickStats.reimbursable)}</div></div>
       </div>
+      )}
 
       {/* Stripe refund capture banner (feature 23) */}
       {unmatchedRefunds.length > 0 && (
@@ -1128,67 +1118,17 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         WebkitBackdropFilter: 'none',
       }}>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search expenses... (press / to focus)"
-              className="block-input pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-text-muted" />
-            <select
-              className="block-select"
-              style={{ width: 'auto', minWidth: '140px' }}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">All Categories</option>
-              {[...categories]
-                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-                .map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-            </select>
-          </div>
-          <input
-            type="date"
-            className="block-input"
-            style={{ width: 'auto' }}
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            placeholder="From"
+          <ExpenseListFilters
+            search={search} setSearch={setSearch}
+            categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
+            dateFrom={dateFrom} setDateFrom={setDateFrom}
+            dateTo={dateTo} setDateTo={setDateTo}
+            reimbursableOnly={reimbursableOnly} setReimbursableOnly={setReimbursableOnly}
+            amountMin={amountMin} setAmountMin={setAmountMin}
+            amountMax={amountMax} setAmountMax={setAmountMax}
+            categories={categories}
+            searchRef={searchRef}
           />
-          <input
-            type="date"
-            className="block-input"
-            style={{ width: 'auto' }}
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            placeholder="To"
-          />
-          {/* Capture #16: amount range */}
-          <input type="number" step="0.01" placeholder="Min $" className="block-input" style={{ width: 100 }}
-            value={amountMin} onChange={e => setAmountMin(e.target.value)} />
-          <input type="number" step="0.01" placeholder="Max $" className="block-input" style={{ width: 100 }}
-            value={amountMax} onChange={e => setAmountMax(e.target.value)} />
-          <button
-            type="button"
-            onClick={() => setReimbursableOnly((v) => !v)}
-            className="px-3 py-2 text-xs font-bold uppercase border"
-            style={{
-              borderColor: reimbursableOnly ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
-              color: reimbursableOnly ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
-              borderRadius: 4,
-            }}
-            title="Show only reimbursable expenses"
-          >
-            Reimbursable
-          </button>
 
           {/* Smart filters dropdown (Expense Upgrades Wave F870) */}
           <SmartFiltersDropdown onApply={(preset) => {
@@ -1217,17 +1157,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           }} />
 
           {/* Group by (feature 19) */}
-          <select className="block-select" style={{ width: 'auto' }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)}>
-            <option value="none">No grouping</option>
-            <option value="vendor">Group by Vendor</option>
-            <option value="category">Group by Category</option>
-            <option value="project">Group by Project</option>
-            <option value="month">Group by Month</option>
-            <option value="quarter">Group by Quarter</option>
-            <option value="dayofweek">Group by Day of Week</option>
-            <option value="taxded">Group by Tax Deductibility</option>
-            <option value="currency">Group by Currency</option>
-          </select>
+          <GroupingControls groupBy={groupBy} setGroupBy={setGroupBy} />
 
           {/* Advanced filters toggle */}
           <button
@@ -1381,9 +1311,22 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         />
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <div className="table-wrap-fade">
-          <table className="block-table" style={{ fontSize: cTableFontSize }}>
-            <thead>
+          <div
+            className="table-wrap-fade"
+            style={xprefs.stickyHeader ? { maxHeight: '70vh', overflowY: 'auto' } : undefined}
+          >
+          <table
+            className="block-table"
+            style={{ fontSize: cTableFontSize }}
+            data-zebra={xprefs.zebra ? 'on' : 'off'}
+          >
+            <thead
+              style={
+                xprefs.stickyHeader
+                  ? { position: 'sticky', top: 0, zIndex: 2, background: 'var(--color-bg-secondary)' }
+                  : undefined
+              }
+            >
               <tr>
                 <th style={{ width: '40px' }}>
                   <input
@@ -1520,6 +1463,43 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px' }}
           >
             <Edit size={13} /> Bulk Edit
+          </button>
+
+          {/* Debt Wave: bulk-link selected expenses to a debt case as
+              collection costs. Prompts for the case (by debtor name),
+              defaults type 'other' + recoverable. */}
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            disabled={batchLoading}
+            onClick={async () => {
+              try {
+                const debts = await api.rawQuery(
+                  "SELECT id, debtor_name FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') ORDER BY debtor_name",
+                  [activeCompany?.id]
+                );
+                if (!Array.isArray(debts) || debts.length === 0) { alert('No open debt cases.'); return; }
+                const list = debts.map((d: any, i: number) => `${i + 1}. ${d.debtor_name}`).join('\n');
+                const pick = prompt(`Link ${selectedIds.size} expense(s) to which debt case?\n\n${list}\n\nEnter number:`);
+                if (pick == null) return;
+                const idx = parseInt(pick, 10) - 1;
+                if (!(idx >= 0 && idx < debts.length)) { alert('Invalid selection.'); return; }
+                const recoverable = confirm('Mark these costs as RECOVERABLE from the debtor?\n\nOK = recoverable · Cancel = non-recoverable');
+                const r = await api.expensesBulkLinkDebt({
+                  expense_ids: Array.from(selectedIds),
+                  debt_id: (debts[idx] as any).id,
+                  cost_type: 'other',
+                  is_recoverable: recoverable,
+                });
+                if (r?.error) alert(r.error);
+                else { setSelectedIds(new Set()); reload(); }
+              } catch (e: any) {
+                alert(e?.message || 'Bulk link failed');
+              }
+            }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px' }}
+            title="Link selected expenses to a debt-collection case as collection costs"
+          >
+            <Scale size={13} /> Link to Debt
           </button>
 
           {/* Mass status change (feature 25) */}

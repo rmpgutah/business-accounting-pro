@@ -5217,3 +5217,274 @@ ${receiptHTML ? `<div style="margin-top:22px;page-break-inside:avoid;">
 </div>
 </div></body></html>`;
 }
+
+// ─── Employee Record (HR Portal Wave) ─────────────────────────────────
+// Full printable employee record — 8.5×11 personnel file sheet covering
+// identity (SSN last-4 only), employment, compensation, tax withholding,
+// banking (last-4 only), emergency contact, PTO balances, active
+// garnishments/advances, and acknowledgment signature lines.
+export function generateEmployeeRecordHTML(data: {
+  employee: any;
+  company: any;
+  ytd?: { gross: number; net: number };
+  pto?: any[];
+  garnishments?: any[];
+  advances?: any[];
+}): string {
+  const { employee: emp, company, ytd, pto = [], garnishments = [], advances = [] } = data;
+  const dash = (v: any): string => (v === null || v === undefined || v === '' ? '—' : String(v));
+  const money = (v: any): string => formatCurrency(Number(v) || 0);
+  const generated = new Date().toLocaleString('en-US');
+
+  const ssnDisplay = emp.ssn_last4 ? `XXX-XX-${emp.ssn_last4}` : '—';
+  const acctDisplay = emp.account_number ? `••••${emp.account_number}` : '—';
+  const routingDisplay = emp.routing_number ? `••••${emp.routing_number}` : '—';
+  const statusColor = emp.status === 'active' ? '#16a34a' : '#94a3b8';
+  const address = [emp.address_line1, emp.address_line2, [emp.city, emp.state, emp.zip].filter(Boolean).join(', ')]
+    .filter(Boolean).join(' · ');
+
+  const payRateLabel = emp.pay_type === 'salary'
+    ? `${money(emp.pay_rate)} / year`
+    : `${money(emp.pay_rate)} / hour`;
+  const scheduleLabels: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-Weekly', semimonthly: 'Semi-Monthly', monthly: 'Monthly' };
+
+  const grid = (rows: Array<[string, string]>): string => `
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin-top:8px;">
+    ${rows.map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>`;
+
+  const ptoHTML = pto.length > 0 ? `
+  <div style="margin-top:16px;">
+    <div class="section-label">PTO Balances</div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Type</th><th class="text-right">Accrued</th><th class="text-right">Used</th><th class="text-right">Available</th></tr></thead>
+      <tbody>${pto.map((p: any) => `<tr>
+        <td>${esc(p.pto_type || p.type || 'PTO')}</td>
+        <td class="text-right">${(Number(p.accrued_hours ?? p.accrued) || 0).toFixed(1)} h</td>
+        <td class="text-right">${(Number(p.used_hours ?? p.used) || 0).toFixed(1)} h</td>
+        <td class="text-right font-bold">${((Number(p.accrued_hours ?? p.accrued) || 0) - (Number(p.used_hours ?? p.used) || 0)).toFixed(1)} h</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
+
+  const garnHTML = garnishments.length > 0 ? `
+  <div style="margin-top:16px;">
+    <div class="section-label">Active Garnishment Orders</div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Type</th><th>Case #</th><th class="text-right">Per-Pay Amount</th><th class="text-right">Remaining</th></tr></thead>
+      <tbody>${garnishments.map((g: any) => `<tr>
+        <td>${esc(g.garnishment_type || g.type || 'Garnishment')}</td>
+        <td>${esc(g.case_number || '—')}</td>
+        <td class="text-right">${money(g.per_pay_amount ?? g.amount_per_pay)}</td>
+        <td class="text-right">${money(g.remaining_balance ?? g.balance)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
+
+  const advHTML = advances.length > 0 ? `
+  <div style="margin-top:16px;">
+    <div class="section-label">Outstanding Pay Advances</div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Date</th><th class="text-right">Advanced</th><th class="text-right">Repay / Pay</th><th class="text-right">Balance</th><th>Status</th></tr></thead>
+      <tbody>${advances.map((a: any) => `<tr>
+        <td>${esc(fmtDateMaybe(a.advance_date))}</td>
+        <td class="text-right">${money(a.advance_amount)}</td>
+        <td class="text-right">${money(a.repayment_per_pay)}</td>
+        <td class="text-right font-bold">${money(a.balance)}</td>
+        <td>${esc(String(a.status || 'active').toUpperCase())}${a.related_debt_id ? ' · IN COLLECTIONS' : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Employee Record — ${esc(emp.name || '')}</title>
+<style>${baseStyles}</style></head>
+<body><div class="rpt-page" style="padding:32px 36px;">
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+    <div style="font-size:9px;color:#64748b;margin-top:2px;">${esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '))}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:22px;">Employee Record</div>
+    <div class="fd-doc-num">${esc(emp.name || '')}${statusBadgeInline(String(emp.status || 'active').toUpperCase(), statusColor)}</div>
+    <div class="fd-doc-date">Generated ${esc(generated)}</div>
+  </div>
+</div>
+
+<div style="margin-top:18px;">
+  <div class="section-label">Identity &amp; Contact</div>
+  ${grid([
+    ['Full Name', dash(emp.name)],
+    ['SSN', ssnDisplay],
+    ['Email', dash(emp.email)],
+    ['Phone', dash(emp.phone)],
+    ['Address', address || '—'],
+    ['Emergency Contact', dash(emp.emergency_contact_name)],
+    ['Emergency Phone', dash(emp.emergency_contact_phone)],
+    ['Employee ID', String(emp.id || '').slice(0, 8).toUpperCase()],
+  ])}
+</div>
+
+<div style="margin-top:16px;">
+  <div class="section-label">Employment</div>
+  ${grid([
+    ['Status', String(emp.status || 'active').toUpperCase()],
+    ['Type', dash(emp.employment_type || emp.type)],
+    ['Department', dash(emp.department)],
+    ['Job Title', dash(emp.job_title)],
+    ['Start Date', fmtDateMaybe(emp.start_date) || '—'],
+    ['End Date', emp.end_date ? fmtDateMaybe(emp.end_date) : '—'],
+    ['Work Location', dash(emp.work_location)],
+    ['Role', dash(emp.role)],
+  ])}
+</div>
+
+<div style="margin-top:16px;">
+  <div class="section-label">Compensation &amp; Payroll</div>
+  ${grid([
+    ['Pay Type', emp.pay_type === 'salary' ? 'Salary' : 'Hourly'],
+    ['Pay Rate', payRateLabel],
+    ['Pay Schedule', scheduleLabels[emp.pay_schedule] || dash(emp.pay_schedule)],
+    ['Rate Effective', emp.pay_rate_effective_date ? fmtDateMaybe(emp.pay_rate_effective_date) : '—'],
+    ['YTD Gross', money(ytd?.gross)],
+    ['YTD Net', money(ytd?.net)],
+    ['Filing Status', dash(emp.w4_filing_status || emp.filing_status)],
+    ['W-4 Received', emp.w4_received_date ? fmtDateMaybe(emp.w4_received_date) : '—'],
+  ])}
+</div>
+
+<div style="margin-top:16px;">
+  <div class="section-label">Direct Deposit (masked)</div>
+  ${grid([
+    ['Account Type', dash(emp.account_type)],
+    ['Routing #', routingDisplay],
+    ['Account #', acctDisplay],
+    ['State', dash(emp.state)],
+  ])}
+</div>
+
+${ptoHTML}
+${garnHTML}
+${advHTML}
+
+<div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employee Signature</div>
+    <div style="margin-top:24px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">HR / Authorized Representative</div>
+    <div style="margin-top:24px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+</div>
+
+<div style="margin-top:18px;font-size:8px;color:#94a3b8;">
+  Confidential personnel record. SSN and bank details are masked to last-4 by design; the full values
+  are never embedded in this document. Retain per company document-retention policy.
+</div>
+
+<div style="margin-top:10px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;">
+  <span>${esc(company?.name || '')}</span>
+  <span>Generated ${esc(generated)}</span>
+</div>
+</div></body></html>`;
+}
+
+// ─── Wage Withholding Agreement (Debt Collections 200 Wave) ───────────
+// Printable authorization: employee agrees to a per-paycheck deduction
+// applied to a specific employee-debtor case. 8.5×11 with terms,
+// repayment math, and dual signature blocks.
+export function generateWageWithholdingAgreementHTML(data: {
+  withholding: any;
+  employee: any;
+  debt: any;
+  company: any;
+}): string {
+  const { withholding: w, employee: emp, debt, company } = data;
+  const money = (v: any): string => formatCurrency(Number(v) || 0);
+  const generated = new Date().toLocaleString('en-US');
+  const perPay = Number(w?.per_pay_amount) || 0;
+  const balance = Number(debt?.balance_due) || 0;
+  const estPayments = perPay > 0 ? Math.ceil(balance / perPay) : 0;
+  const scheduleLabels: Record<string, string> = { weekly: 'weekly', biweekly: 'bi-weekly', semimonthly: 'semi-monthly', monthly: 'monthly' };
+  const schedule = scheduleLabels[emp?.pay_schedule] || 'per-paycheck';
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Wage Withholding Agreement — ${esc(emp?.name || '')}</title>
+<style>${baseStyles}</style></head>
+<body><div class="rpt-page" style="padding:40px 48px;">
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+    <div style="font-size:9px;color:#64748b;margin-top:2px;">${esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '))}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:20px;">Wage Withholding<br/>Authorization Agreement</div>
+    <div class="fd-doc-date">Generated ${esc(generated)}</div>
+  </div>
+</div>
+
+<div style="margin-top:20px;font-size:11px;line-height:1.7;color:#0f172a;">
+  <p>This Voluntary Wage Withholding Authorization (“Agreement”) is entered into between
+  <strong>${esc(company?.name || 'the Company')}</strong> (“Employer”) and
+  <strong>${esc(emp?.name || 'the Employee')}</strong>${emp?.job_title ? `, ${esc(emp.job_title)}` : ''}
+  (“Employee”), effective ${esc(fmtDateMaybe(w?.start_date) || '____________')}.</p>
+
+  <p><strong>1. Acknowledged Debt.</strong> Employee acknowledges owing Employer the amount of
+  <strong>${money(debt?.original_amount)}</strong> (current outstanding balance
+  <strong>${money(balance)}</strong>, with <strong>${money(debt?.payments_made)}</strong> repaid to date),
+  arising from ${esc(debt?.notes || 'amounts advanced by Employer to Employee')}.</p>
+
+  <p><strong>2. Authorization.</strong> Employee voluntarily authorizes Employer to deduct
+  <strong>${money(perPay)}</strong> from each ${esc(schedule)} paycheck, beginning
+  ${esc(fmtDateMaybe(w?.start_date) || 'the next regular pay date')}, and continuing until the
+  balance is paid in full${estPayments > 0 ? ` (approximately <strong>${estPayments}</strong> paychecks at the current balance)` : ''}.
+  The final deduction will be reduced as needed so total withholding never exceeds the outstanding balance.</p>
+
+  <p><strong>3. Limits.</strong> Deductions under this Agreement shall not reduce Employee's pay below
+  applicable federal or state minimum-wage or wage-deduction limits. If a scheduled deduction would
+  exceed a legal limit, the deduction shall be reduced to the maximum lawful amount for that period.</p>
+
+  <p><strong>4. Voluntary; Revocation.</strong> This authorization is voluntary and may be revoked by
+  Employee in writing at any time. Revocation does not extinguish the underlying debt, which remains
+  due and may be pursued through other lawful means.</p>
+
+  <p><strong>5. Early Payoff &amp; Separation.</strong> Employee may repay the remaining balance early at
+  any time without penalty. Upon separation of employment, the remaining balance becomes due and,
+  to the extent permitted by law, may be deducted from final wages.</p>
+</div>
+
+<div style="margin-top:18px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
+  <div class="section-label">Repayment Summary</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin-top:8px;">
+    ${[
+      ['Outstanding Balance', money(balance)],
+      ['Per-Paycheck Deduction', money(perPay)],
+      ['Pay Frequency', schedule[0].toUpperCase() + schedule.slice(1)],
+      ['Est. Paychecks to Payoff', estPayments > 0 ? String(estPayments) : '—'],
+    ].map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:12px;color:#0f172a;font-weight:700;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>
+</div>
+
+<div style="margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employee Signature — ${esc(emp?.name || '')}</div>
+    <div style="margin-top:26px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employer Representative — ${esc(company?.name || '')}</div>
+    <div style="margin-top:26px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+</div>
+
+<div style="margin-top:20px;font-size:8px;color:#94a3b8;">
+  This document is a template for a voluntary wage-deduction authorization and is not legal advice.
+  Wage-deduction rules vary by jurisdiction — consult counsel before relying on this form.
+</div>
+</div></body></html>`;
+}

@@ -21,84 +21,18 @@ import {
   CategoryRow, buildCategoryTree, flattenCategoryTree, suggestCategoryForVendor,
   categoryMonthlyUsage, parseJSON, CustomFieldDef,
 } from './expense-helpers';
-import { useSuggestedCategory } from '../../components/SmartDefaultsHook';
 import ItemizationEditor from './ItemizationEditor';
+import { getExpensesPrefs } from '../../customization/expenses-prefs';
+import AllocationEditor from './AllocationEditor';
+import { useCustomizationStore } from '../../stores/customizationStore';
+import { optionKey } from '../../customization/registry';
 
-// ─── Types ──────────────────────────────────────────────
-interface ExpenseFormData {
-  date: string;
-  amount: string;
-  tax_amount: string;
-  description: string;
-  category_id: string;
-  account_id: string;
-  vendor_id: string;
-  payment_method: string;
-  project_id: string;
-  client_id: string;
-  is_billable: boolean;
-  is_reimbursable: boolean;
-  reimbursed: boolean;
-  reimbursed_date: string;
-  reference: string;
-  tags: string;
-  status: string;
-  approved_by: string;
-  approved_date: string;
-  rejection_reason: string;
-  // ── new tax / categorization / compliance fields ──
-  expense_class: string;
-  is_tax_deductible: boolean;
-  schedule_c_line: string;
-  foreign_tax_amount: string;
-  tax_year_override: string;
-  currency: string;
-  lost_receipt_affidavit: string;
-  // ── capture features (#4-7, #14, #21, #25) ──
-  exchange_rate: string;
-  tax_inclusive: boolean;
-  tax_rate: string;
-  entry_mode: 'standard' | 'mileage' | 'per_diem' | 'fuel';
-  odometer_start: string;
-  odometer_end: string;
-  miles: string;
-  mileage_rate: string;
-  per_diem_location: string;
-  per_diem_days: string;
-  per_diem_rate: string;
-  // Fuel mode (#.### precision on gallons + price). Stored as string so the
-  // user's typed value round-trips without floating-point reformat.
-  fuel_gallons: string;
-  fuel_price_per_gallon: string;
-  fuel_grade: string;
-  fuel_vehicle: string;
-  fuel_odometer: string;
-  fuel_station: string;
-  notes: string;
-  vat_gst: string;
-  // Header-level discount (post-Itemization Wave). Applied AFTER tax — does
-  // not reduce taxable base. Both fields are independent: $ + % both subtract.
-  discount_amount: string;
-  discount_percent: string;
-  // Loan Linkage Wave (F1053-F1062) — soft FK to a loan record. When set,
-  // this expense is treated as the interest-portion bookkeeping of a loan
-  // payment and is surfaced on the Loan Detail page.
-  related_loan_id: string;
-  // Merchant / location / markup fields — user-facing columns that existed
-  // in the DB but had no form input until now.
-  merchant_location: string;
-  geo_location_name: string;
-  markup_pct: string;
-  employee_id: string;
-  // Shipping & Handling. shipping_scope 'order' applies to the whole expense;
-  // 'item' attributes it to the line in shipping_line_ref. shipping_taxable
-  // makes the server compute shipping tax at the effective goods rate.
-  shipping_amount: string;
-  shipping_speed: string;
-  shipping_taxable: boolean;
-  shipping_scope: 'order' | 'item';
-  shipping_line_ref: string;
-}
+import {
+  ExpenseFormData, DropdownOption, ExpenseLineItem, newLineItem,
+  DetailField, CATEGORY_DETAIL_FIELDS, DEFAULT_DETAIL_FIELDS, getDetailFieldsForCategory,
+  REVIEW_RECEIPT_THRESHOLD, PAYMENT_METHODS, emptyForm,
+} from './form/formShared';
+import AttachedDocs from './form/AttachedDocs';
 
 // Shipping speed presets. Free-form not needed — these cover carrier tiers and
 // the "no shipping" cases (digital goods / in-store pickup).
@@ -107,286 +41,48 @@ const SHIPPING_SPEEDS = [
   'Freight / LTL', 'In-Store Pickup', 'Digital / No Shipping',
 ];
 
-interface DropdownOption {
-  id: string;
-  name: string;
-}
-
 interface ExpenseFormProps {
   expenseId?: string | null;
   onBack: () => void;
   onSaved: () => void;
 }
 
-// ─── Expense Line Item ─────────────────────────────────
-interface ExpenseLineItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  amount: number;
-  account_id: string;
-  tax_rate: number;
-  tax_amount: number;
-  tax_jurisdictions: Array<{ jurisdiction: string; rate: number; amount: number }>;
-  // Itemization Wave (F841-F862) — per-line accounting + flags
-  category_id?: string;
-  project_id?: string;
-  client_id?: string;
-  discount_amount?: number;
-  discount_percent?: number;
-  is_tax_deductible?: boolean;
-  is_tax_exempt?: boolean;
-  is_billable?: boolean;
-  notes?: string;
-  item_type?: 'item' | 'service' | 'reimbursement';
-  tags?: string[];
-  is_billable?: boolean;
-  billed_invoice_id?: string | null;
-}
-
-function newLineItem(): ExpenseLineItem {
-  return {
-    id: crypto.randomUUID(), description: '', quantity: 1, unit_price: 0, amount: 0, account_id: '',
-    tax_rate: 0, tax_amount: 0, tax_jurisdictions: [],
-    // New per-line defaults: tax-deductible YES (most expenses are), item_type 'item'.
-    category_id: '', project_id: '', client_id: '',
-    discount_amount: 0, discount_percent: 0,
-    is_tax_deductible: true, is_tax_exempt: false,
-    notes: '', item_type: 'item', tags: [],
-  };
-}
-
-// ─── Category-Specific Detail Fields ───────────────────
-interface DetailField {
-  key: string;
-  label: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'textarea';
-  placeholder?: string;
-  options?: string[];
-}
-
-const CATEGORY_DETAIL_FIELDS: Record<string, DetailField[]> = {
-  // Electronics / Technology
-  electronics: [
-    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
-    { key: 'imei', label: 'IMEI', type: 'text', placeholder: 'IMEI number' },
-    { key: 'model', label: 'Model / Product Name', type: 'text', placeholder: 'e.g. MacBook Pro 16"' },
-    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
-    { key: 'condition', label: 'Condition', type: 'select', options: ['new', 'used', 'refurbished'] },
-  ],
-  technology: [
-    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
-    { key: 'imei', label: 'IMEI', type: 'text', placeholder: 'IMEI number' },
-    { key: 'model', label: 'Model / Product Name', type: 'text', placeholder: 'e.g. iPhone 16 Pro' },
-    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
-    { key: 'condition', label: 'Condition', type: 'select', options: ['new', 'used', 'refurbished'] },
-  ],
-  // Food / Meals / Entertainment
-  food: [
-    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
-    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'e.g. Client dinner, team lunch' },
-    { key: 'restaurant', label: 'Restaurant / Venue', type: 'text', placeholder: 'Name of establishment' },
-    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
-  ],
-  meals: [
-    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
-    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'e.g. Client dinner, team lunch' },
-    { key: 'restaurant', label: 'Restaurant / Venue', type: 'text', placeholder: 'Name of establishment' },
-    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
-  ],
-  entertainment: [
-    { key: 'attendees', label: 'Attendees', type: 'text', placeholder: 'Names of people present' },
-    { key: 'business_purpose', label: 'Business Purpose', type: 'text', placeholder: 'Purpose of entertainment' },
-    { key: 'restaurant', label: 'Venue', type: 'text', placeholder: 'Name of venue' },
-    { key: 'num_guests', label: 'Number of Guests', type: 'number', placeholder: '0' },
-  ],
-  // Travel / Transportation
-  travel: [
-    { key: 'destination', label: 'Destination', type: 'text', placeholder: 'City, state or address' },
-    { key: 'departure_date', label: 'Departure Date', type: 'date' },
-    { key: 'return_date', label: 'Return Date', type: 'date' },
-    { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '0' },
-    { key: 'trip_purpose', label: 'Trip Purpose', type: 'text', placeholder: 'e.g. Client visit, conference' },
-  ],
-  transportation: [
-    { key: 'destination', label: 'Destination', type: 'text', placeholder: 'City, state or address' },
-    { key: 'mileage', label: 'Mileage', type: 'number', placeholder: '0' },
-    { key: 'trip_purpose', label: 'Trip Purpose', type: 'text', placeholder: 'Reason for travel' },
-  ],
-  // Office Supplies / Equipment
-  'office supplies': [
-    { key: 'item_name', label: 'Item Name', type: 'text', placeholder: 'e.g. Printer paper, toner' },
-    { key: 'quantity', label: 'Quantity', type: 'number', placeholder: '1' },
-    { key: 'unit_cost', label: 'Unit Cost', type: 'number', placeholder: '0.00' },
-    { key: 'supplier', label: 'Supplier / Store', type: 'text', placeholder: 'e.g. Staples, Amazon' },
-  ],
-  equipment: [
-    { key: 'item_name', label: 'Item Name', type: 'text', placeholder: 'Equipment description' },
-    { key: 'serial_number', label: 'Serial Number', type: 'text', placeholder: 'S/N' },
-    { key: 'warranty_expiration', label: 'Warranty Expiration', type: 'date' },
-    { key: 'supplier', label: 'Supplier', type: 'text', placeholder: 'Purchased from' },
-  ],
-  // Professional Services
-  'professional services': [
-    { key: 'service_provider', label: 'Service Provider', type: 'text', placeholder: 'Name of provider' },
-    { key: 'contract_number', label: 'Contract / Agreement #', type: 'text', placeholder: 'Contract reference' },
-    { key: 'service_start', label: 'Service Period Start', type: 'date' },
-    { key: 'service_end', label: 'Service Period End', type: 'date' },
-    { key: 'scope_of_work', label: 'Scope of Work', type: 'textarea', placeholder: 'Description of services rendered' },
-  ],
-  services: [
-    { key: 'service_provider', label: 'Service Provider', type: 'text', placeholder: 'Name of provider' },
-    { key: 'contract_number', label: 'Contract / Agreement #', type: 'text', placeholder: 'Contract reference' },
-    { key: 'service_start', label: 'Service Period Start', type: 'date' },
-    { key: 'service_end', label: 'Service Period End', type: 'date' },
-    { key: 'scope_of_work', label: 'Scope of Work', type: 'textarea', placeholder: 'Description of services rendered' },
-  ],
-  // Vehicle / Auto
-  vehicle: [
-    { key: 'license_plate', label: 'License Plate', type: 'text', placeholder: 'Plate number' },
-    { key: 'vin', label: 'VIN', type: 'text', placeholder: 'Vehicle identification number' },
-    { key: 'odometer', label: 'Odometer Reading', type: 'number', placeholder: '0' },
-    { key: 'service_type', label: 'Service Type', type: 'select', options: ['fuel', 'maintenance', 'repair', 'insurance', 'registration'] },
-  ],
-  auto: [
-    { key: 'license_plate', label: 'License Plate', type: 'text', placeholder: 'Plate number' },
-    { key: 'vin', label: 'VIN', type: 'text', placeholder: 'Vehicle identification number' },
-    { key: 'odometer', label: 'Odometer Reading', type: 'number', placeholder: '0' },
-    { key: 'service_type', label: 'Service Type', type: 'select', options: ['fuel', 'maintenance', 'repair', 'insurance', 'registration'] },
-  ],
-  // Rent / Utilities
-  rent: [
-    { key: 'property_address', label: 'Property Address', type: 'text', placeholder: 'Address' },
-    { key: 'billing_period', label: 'Billing Period', type: 'text', placeholder: 'e.g. March 2026' },
-    { key: 'account_number', label: 'Account Number', type: 'text', placeholder: 'Utility account #' },
-  ],
-  utilities: [
-    { key: 'property_address', label: 'Property Address', type: 'text', placeholder: 'Address' },
-    { key: 'billing_period', label: 'Billing Period', type: 'text', placeholder: 'e.g. March 2026' },
-    { key: 'account_number', label: 'Account Number', type: 'text', placeholder: 'Utility account #' },
-    { key: 'meter_reading', label: 'Meter Reading', type: 'number', placeholder: '0' },
-  ],
-};
-
-// Fallback detail fields for any category not explicitly mapped
-const DEFAULT_DETAIL_FIELDS: DetailField[] = [
-  { key: 'receipt_items', label: 'Receipt Items', type: 'textarea', placeholder: 'List items from receipt (one per line)' },
-  { key: 'detail_notes', label: 'Additional Notes', type: 'textarea', placeholder: 'Any additional details' },
-];
-
-function getDetailFieldsForCategory(categoryName: string): DetailField[] {
-  const key = categoryName.toLowerCase().trim();
-  // Try exact match first, then partial match
-  if (CATEGORY_DETAIL_FIELDS[key]) return CATEGORY_DETAIL_FIELDS[key];
-  for (const [k, fields] of Object.entries(CATEGORY_DETAIL_FIELDS)) {
-    if (key.includes(k) || k.includes(key)) return fields;
-  }
-  return DEFAULT_DETAIL_FIELDS;
-}
-
-const PAYMENT_METHODS = [
-  { value: '', label: 'Select method...' },
-  { value: 'transfer', label: 'Bank Transfer' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'check', label: 'Check' },
-  { value: 'credit_card', label: 'Credit Card' },
-  { value: 'debit_card', label: 'Debit Card' },
-  { value: 'other', label: 'Other' },
-];
-
-const emptyForm: ExpenseFormData = {
-  // DATE: Item #2 — local-time today.
-  date: todayLocal(),
-  amount: '',
-  tax_amount: '',
-  description: '',
-  category_id: '',
-  account_id: '',
-  vendor_id: '',
-  payment_method: '',
-  project_id: '',
-  client_id: '',
-  is_billable: false,
-  is_reimbursable: false,
-  reimbursed: false,
-  reimbursed_date: '',
-  reference: '',
-  tags: '',
-  status: 'pending',
-  approved_by: '',
-  approved_date: '',
-  rejection_reason: '',
-  expense_class: '',
-  is_tax_deductible: true,
-  schedule_c_line: '',
-  foreign_tax_amount: '',
-  tax_year_override: '',
-  currency: 'USD',
-  lost_receipt_affidavit: '',
-  exchange_rate: '1',
-  // FINAL-PRICE: default tax_inclusive=true so the AMOUNT field's value matches
-  // what the user actually paid (e.g., $71.03), with tax computed/shown as a
-  // breakdown line below. Exclusive mode still available via the radio toggle
-  // for users who prefer entering pre-tax + adding tax on top (US sales-tax style).
-  tax_inclusive: true,
-  tax_rate: '',
-  entry_mode: 'standard',
-  odometer_start: '',
-  odometer_end: '',
-  miles: '',
-  mileage_rate: String(IRS_MILEAGE_RATE_2026),
-  per_diem_location: 'Default (CONUS)',
-  per_diem_days: '',
-  per_diem_rate: String(PER_DIEM_RATES['Default (CONUS)']),
-  fuel_gallons: '',
-  fuel_price_per_gallon: '',
-  fuel_grade: 'regular',
-  fuel_vehicle: '',
-  fuel_odometer: '',
-  fuel_station: '',
-  notes: '',
-  vat_gst: '',
-  discount_amount: '',
-  discount_percent: '',
-  related_loan_id: '',
-  merchant_location: '',
-  geo_location_name: '',
-  markup_pct: '',
-  employee_id: '',
-  shipping_amount: '',
-  shipping_speed: '',
-  shipping_taxable: false,
-  shipping_scope: 'order',
-  shipping_line_ref: '',
-};
-
-// ─── Attached Documents (for receipt linking) ─────────
-const AttachedDocs: React.FC<{ expenseId: string }> = ({ expenseId }) => {
-  const [docs, setDocs] = useState<any[]>([]);
-  useEffect(() => {
-    api.rawQuery("SELECT * FROM documents WHERE entity_type = 'expense' AND entity_id = ?", [expenseId])
-      .then(r => setDocs(Array.isArray(r) ? r : []))
-      .catch(() => {});
-  }, [expenseId]);
-  if (docs.length === 0) return null;
-  return (
-    <div className="mt-2 space-y-1">
-      <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Attached Documents</p>
-      {docs.map((d: any) => (
-        <div key={d.id} className="flex items-center gap-2 text-xs text-text-secondary">
-          <FileText size={12} className="text-accent-blue" />
-          <span className="truncate">{d.filename}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 // ─── Component ──────────────────────────────────────────
 const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const [form, setForm] = useState<ExpenseFormData>({ ...emptyForm });
+
+  // Seed the form from the Customization Center for NEW expenses. The edit
+  // loader (further down) overwrites these as soon as the existing row
+  // arrives, so the prefs only affect new-expense workflows.
+  const [form, setForm] = useState<ExpenseFormData>(() => {
+    const p = getExpensesPrefs();
+    const get = (id: string) =>
+      useCustomizationStore.getState().get(optionKey('expenses', id));
+    const dateMode = String(get('expenses-default-date') ?? 'today');
+    const startDate = dateMode === 'blank'
+      ? ''
+      : dateMode === 'lastused'
+        ? (localStorage.getItem('expenses:last-used-date') || todayLocal())
+        : todayLocal();
+    const taxRateDefault = Number(get('expenses-default-tax-rate') ?? 0);
+    return {
+      ...emptyForm,
+      date: startDate,
+      payment_method: String(get('expenses-default-payment-method') ?? '') || emptyForm.payment_method,
+      currency: String(get('expenses-default-currency') ?? 'usd').toUpperCase() || emptyForm.currency,
+      is_billable: Boolean(get('expenses-default-billable') ?? false),
+      is_reimbursable: Boolean(get('expenses-default-reimbursable') ?? false),
+      status: String(get('expenses-default-status') ?? emptyForm.status),
+      tax_inclusive: Boolean(get('expenses-default-tax-inclusive') ?? emptyForm.tax_inclusive),
+      tax_rate: taxRateDefault > 0 ? String(taxRateDefault) : emptyForm.tax_rate,
+      // We intentionally keep `category_id`/`vendor_id`/`account_id` empty —
+      // the descriptors store FREE-TEXT names ("Operating Checking") which
+      // wouldn't resolve to a row id without a lookup. The auto-fill effects
+      // further down handle smart-default selection by name.
+      // Suppress unused warning until those name→id resolvers land:
+      ...(p ? {} : {}),
+    };
+  });
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [accounts, setAccounts] = useState<DropdownOption[]>([]);
   // Tracks whether the current account_id was auto-suggested from the category
@@ -398,6 +94,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   // Loan Linkage: loans list for the "Linked to Loan" picker. Only active
   // loans are loaded — closed/refinanced loans rarely need new payment links.
   const [loans, setLoans] = useState<Array<{ id: string; name: string }>>([]);
+  // Debt Linkage: open debt-collection cases for the "Collection Cost"
+  // picker + allocation targets. Settled/written-off cases excluded.
+  const [debts, setDebts] = useState<Array<{ id: string; name: string }>>([]);
+  // Allocation splits — loaded for edits, persisted after the expense saves.
+  const [allocations, setAllocations] = useState<import('./AllocationEditor').AllocationRow[]>([]);
+  const [showAllocations, setShowAllocations] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
@@ -418,6 +120,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [lineItems, setLineItems] = useState<ExpenseLineItem[]>([]);
   // ── new state ──
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('');
+  const [suggestedCategory, setSuggestedCategory] = useState<{ id: string; name: string } | null>(null);
   const [categoryUsage, setCategoryUsage] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [showAffidavit, setShowAffidavit] = useState(false);
@@ -576,15 +279,28 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
     suggestCategoryForVendor(form.vendor_id).then(id => setSuggestedCategoryId(id || ''));
   }, [form.vendor_id]);
 
-  // IntelligenceService smart-default: auto-fill category when vendor changes
-  // and no category is yet selected. Uses the IPC-backed pattern store.
-  const suggested = useSuggestedCategory(form.vendor_id);
+  // Suggested-category chip: vendor's historically most-used category,
+  // offered (never auto-applied) when a vendor is set and category is empty.
   useEffect(() => {
-    if (suggested && !form.category_id) {
-      setForm(f => ({ ...f, category_id: suggested }));
+    let cancelled = false;
+    if (!activeCompany || !form.vendor_id || form.category_id) {
+      setSuggestedCategory(null);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggested]);
+    api.rawQuery(
+      `SELECT e.category_id AS id, c.name AS name, COUNT(*) AS uses
+       FROM expenses e JOIN categories c ON c.id = e.category_id
+       WHERE e.company_id = ? AND e.vendor_id = ? AND e.category_id IS NOT NULL AND e.category_id != ''
+         AND e.deleted_at IS NULL
+       GROUP BY e.category_id ORDER BY uses DESC LIMIT 1`,
+      [activeCompany.id, form.vendor_id]
+    ).then((r: any) => {
+      if (cancelled) return;
+      const row = Array.isArray(r) ? r[0] : null;
+      setSuggestedCategory(row?.id ? { id: row.id, name: row.name } : null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeCompany, form.vendor_id, form.category_id]);
 
   // Capture #11: prior expense lookup for "copy from prior" / auto-fill
   useEffect(() => {
@@ -719,6 +435,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         api.rawQuery(`SELECT id, name FROM loans WHERE company_id = ? AND status = 'active' AND (deleted_at IS NULL) ORDER BY name`, [cid])
           .then((r: any) => { if (!cancelled) setLoans(Array.isArray(r) ? r : []); })
           .catch(() => {});
+        // Debt Linkage: open collection cases for the collection-cost picker
+        // and as allocation targets. debtor_name doubles as the display name.
+        api.rawQuery(
+          `SELECT id, debtor_name AS name FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off') ORDER BY debtor_name`,
+          [cid]
+        )
+          .then((r: any) => { if (!cancelled) setDebts(Array.isArray(r) ? r : []); })
+          .catch(() => {});
         // Tag autocomplete corpus (#22)
         api.rawQuery('SELECT tags FROM expenses WHERE company_id = ? AND tags IS NOT NULL', [cid])
           .then((rows: any[]) => {
@@ -814,6 +538,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               discount_percent: existing.discount_percent ? String(existing.discount_percent) : '',
               // Loan Linkage — soft FK
               related_loan_id: existing.related_loan_id || '',
+              // Debt-Collection linkage
+              related_debt_id: existing.related_debt_id || '',
+              collection_cost_type: existing.collection_cost_type || '',
+              is_recoverable: !!existing.is_recoverable,
               merchant_location: existing.merchant_location || '',
               geo_location_name: existing.geo_location_name || '',
               markup_pct: existing.markup_pct != null ? String(existing.markup_pct) : '',
@@ -844,6 +572,25 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               const recj = typeof existing.receipts_json === 'string' ? JSON.parse(existing.receipts_json) : (existing.receipts_json || []);
               setExtraReceipts(Array.isArray(recj) ? recj : []);
             } catch { setExtraReceipts([]); }
+            // Load allocation splits for this expense (replace-all model —
+            // whatever is in the editor at save time becomes the truth).
+            api.expenseAllocationsGet(expenseId)
+              .then((allocs: any) => {
+                if (cancelled || !Array.isArray(allocs)) return;
+                if (allocs.length > 0) {
+                  setAllocations(allocs.map((a: any) => ({
+                    target_type: a.target_type || 'custom',
+                    target_id: a.target_id || '',
+                    target_name: a.target_name || '',
+                    percent: Number(a.percent) || 0,
+                    amount: Number(a.amount) || 0,
+                    is_billable: !!a.is_billable,
+                    note: a.note || '',
+                  })));
+                  setShowAllocations(true);
+                }
+              })
+              .catch(() => {});
             if (existing.lost_receipt_affidavit) {
               try { setAffidavit(JSON.parse(existing.lost_receipt_affidavit)); } catch { /* */ }
             }
@@ -947,6 +694,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           discount_amount: roundCents(parseFloat(form.discount_amount) || 0),
           discount_percent: parseFloat(form.discount_percent) || 0,
           related_loan_id: form.related_loan_id || null,
+          related_debt_id: form.related_debt_id || null,
+          collection_cost_type: form.related_debt_id ? (form.collection_cost_type || 'other') : '',
+          is_recoverable: form.related_debt_id && form.is_recoverable ? 1 : 0,
           merchant_location: form.merchant_location.trim() || null,
           geo_location_name: form.geo_location_name.trim() || null,
           markup_pct: form.markup_pct ? parseFloat(form.markup_pct) : null,
@@ -988,6 +738,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           isEdit: isEditing,
         });
         if (result?.error) throw new Error(result.error);
+        // Stash the date so `expenses-default-date = lastused` works on
+        // the next new-expense screen. Safe to write unconditionally — the
+        // initializer only reads it when the preference is set.
+        if (form.date) localStorage.setItem('expenses:last-used-date', form.date);
         onSaved();
       } catch (err) {
         console.error('Save draft failed:', err);
@@ -1051,12 +805,51 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         && !/^\s*override:/i.test(form.notes || '')) {
       checks.push('Vendor is BLOCKED — start the Notes field with "Override: <reason>" to proceed.');
     }
+    // Customization-driven validation gates.
+    // - require-category : block save if category is empty
+    // - require-memo     : block save if description is empty
+    // - require-receipt-over : block save if amount ≥ threshold but no receipt
+    const xp = getExpensesPrefs();
+    const requireCategory = Boolean(useCustomizationStore.getState().get(optionKey('expenses', 'expenses-require-category')));
+    const requireMemo = Boolean(useCustomizationStore.getState().get(optionKey('expenses', 'expenses-require-memo')));
+    const receiptThreshold = Number(useCustomizationStore.getState().get(optionKey('expenses', 'expenses-require-receipt-over')) ?? 0);
+    if (requireCategory && !form.category_id) {
+      checks.push('Category is required — set it in Customization › Expenses › Behavior.');
+    }
+    if (requireMemo && !(form.description || '').trim()) {
+      checks.push('Description/memo is required — set it in Customization › Expenses › Behavior.');
+    }
+    if (receiptThreshold > 0
+        && Number(form.amount) >= receiptThreshold
+        && !receiptPath) {
+      checks.push(`Receipt required for expenses ≥ ${formatCurrency(receiptThreshold)} (Customization › Expenses › Behavior).`);
+    }
+    // Suppress unused-warning for xp (kept for symmetry with InvoiceForm pattern).
+    void xp;
+    // Expense policy engine (ex:check-policy) — company-defined policies
+    // (max amounts, receipt thresholds) block the save with named
+    // violations. Engine is optional: any failure (no policies table,
+    // no policies defined) silently passes.
+    try {
+      const pol = await api.exCheckPolicy({ amount: parseFloat(form.amount) || 0, category_id: form.category_id || undefined });
+      if (pol?.hasViolation && Array.isArray(pol.violations)) checks.push(...pol.violations);
+    } catch { /* policy engine optional */ }
     const validationErrors = validateForm(checks);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;
     }
     setErrors([]);
+
+    // Save-time nudge for the $25–$75 band (≥$75 is already covered by the affidavit requirement)
+    if (!isEditing && !receiptPath && amountValue >= REVIEW_RECEIPT_THRESHOLD && amountValue <= IRS_RECEIPT_THRESHOLD) {
+      const proceed = window.confirm(
+        `No receipt attached for a ${formatCurrency(amountValue)} expense.\n\n` +
+        'It will appear in the Review inbox until a receipt is attached.\n\n' +
+        'Save anyway?'
+      );
+      if (!proceed) return;
+    }
 
     setSaving(true);
 
@@ -1131,6 +924,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         vendor_is_1099: selectedVendor?.is_1099_eligible ? 1 : 0,
         vendor_w9_status: selectedVendor?.w9_status || '',
         lost_receipt_affidavit: requiresAffidavit ? JSON.stringify(affidavit) : '',
+        // Debt-Collection Expense Wave — collection-cost linkage
+        related_debt_id: form.related_debt_id || null,
+        collection_cost_type: form.related_debt_id ? (form.collection_cost_type || 'other') : '',
+        is_recoverable: form.related_debt_id && form.is_recoverable ? 1 : 0,
         // REGRESSION FIX: these rode only in the draft payload, so a real save
         // wiped them. Keep both payloads in sync — see the draft path above.
         merchant_location: form.merchant_location.trim() || null,
@@ -1190,6 +987,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       });
       if (result?.error) throw new Error(result.error);
 
+      // Persist allocation splits (replace-all). Non-fatal: the expense is
+      // already saved; an allocation failure surfaces as a banner instead
+      // of rolling the whole save back.
+      const savedExpenseId = result?.id || (isEditing ? expenseId : null);
+      if (savedExpenseId && (allocations.length > 0 || showAllocations)) {
+        try {
+          const ar = await api.expenseAllocationsSave(savedExpenseId, allocations);
+          if (ar?.error) {
+            // Stay on the form so the user can correct the split — the
+            // expense row itself saved fine.
+            setErrors([`Expense saved, but allocations failed: ${ar.error}`]);
+            setSaving(false);
+            return;
+          }
+        } catch (e: any) {
+          setErrors([`Expense saved, but allocations failed: ${e?.message || e}`]);
+          setSaving(false);
+          return;
+        }
+      }
+
       // Capture #14: create recurring template if requested
       if (makeRecurring && !isEditing && activeCompany && result?.id) {
         const today = new Date();
@@ -1217,6 +1035,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         }
       }
 
+      // Remember the date for `expenses-default-date = lastused`.
+      if (form.date) localStorage.setItem('expenses:last-used-date', form.date);
       onSaved();
     } catch (err: any) {
       console.error('Failed to save expense:', err);
@@ -1570,6 +1390,106 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             </div>
           )}
 
+          {/* Debt-Collection Expense Wave — link this expense to a debt case
+              as a COLLECTION COST (court fees, process server, skip tracing…).
+              Recoverable costs can be rolled into the debtor's balance from
+              the Collection Costs panel on the Debt Detail page. */}
+          {debts.length > 0 && (
+            <div className="col-span-3">
+              <details className="block-card p-2" style={{ borderRadius: 6 }} open={!!form.related_debt_id}>
+                <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
+                  Collection Cost (Debt Case)
+                  {form.related_debt_id && (
+                    <span className="ml-2 text-accent-blue normal-case font-normal">
+                      {debts.find(d => d.id === form.related_debt_id)?.name || form.related_debt_id}
+                      {form.is_recoverable && <span className="ml-1 text-accent-income">· recoverable</span>}
+                    </span>
+                  )}
+                </summary>
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Debt Case</label>
+                    <select
+                      className="block-input"
+                      value={form.related_debt_id}
+                      onChange={(e) => setForm(p => ({ ...p, related_debt_id: e.target.value }))}
+                    >
+                      <option value="">— Not a collection cost —</option>
+                      {debts.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Cost Type</label>
+                    <select
+                      className="block-input"
+                      value={form.collection_cost_type}
+                      disabled={!form.related_debt_id}
+                      onChange={(e) => setForm(p => ({ ...p, collection_cost_type: e.target.value }))}
+                    >
+                      <option value="">— Select type —</option>
+                      <option value="court_fee">Court Fee</option>
+                      <option value="filing_fee">Filing Fee</option>
+                      <option value="legal_fee">Legal / Attorney Fee</option>
+                      <option value="process_server">Process Server</option>
+                      <option value="skip_tracing">Skip Tracing</option>
+                      <option value="agency_commission">Agency Commission</option>
+                      <option value="credit_report">Credit Report</option>
+                      <option value="postage">Postage / Certified Mail</option>
+                      <option value="travel">Travel</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="self-end pb-1">
+                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none" title="The contract or judgment allows charging this cost back to the debtor">
+                      <input
+                        type="checkbox"
+                        checked={form.is_recoverable}
+                        disabled={!form.related_debt_id}
+                        onChange={(e) => setForm(p => ({ ...p, is_recoverable: e.target.checked }))}
+                        className="accent-accent-blue"
+                      />
+                      <span className="text-text-secondary">Recoverable from debtor</span>
+                    </label>
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
+
+          {/* Expense Allocation Engine — split this expense across clients,
+              projects, debt cases, departments, or custom buckets by percent
+              or fixed amount. Splits persist to expense_allocations after
+              the expense saves; reports aggregate by target. */}
+          <div className="col-span-3">
+            <details
+              className="block-card p-2"
+              style={{ borderRadius: 6 }}
+              open={showAllocations}
+              onToggle={(e) => setShowAllocations((e.target as HTMLDetailsElement).open)}
+            >
+              <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
+                Allocations / Cost Splitting
+                {allocations.length > 0 && (
+                  <span className="ml-2 text-accent-blue normal-case font-normal">
+                    {allocations.length} split{allocations.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </summary>
+              <div className="mt-2">
+                <AllocationEditor
+                  expenseTotal={roundCents(parseFloat(form.amount) || 0)}
+                  rows={allocations}
+                  onChange={setAllocations}
+                  clients={clients}
+                  projects={projects}
+                  debts={debts}
+                />
+              </div>
+            </details>
+          </div>
+
           {/* Line Items Toggle + Editor — full width */}
           <div className="col-span-3">
             <div className="flex items-center gap-3 mb-2">
@@ -1642,6 +1562,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 <option key={c.id} value={c.id}>{c.fullPath}</option>
               ))}
             </select>
+            {suggestedCategory && (
+              <button
+                type="button"
+                className="flex items-center gap-1 mt-1 px-2 py-1 text-[11px] border border-border-primary transition-colors"
+                style={{ borderRadius: 'var(--app-radius)', color: 'var(--accent-primary)' }}
+                onClick={() => setForm(f => ({ ...f, category_id: suggestedCategory.id }))}
+              >
+                <Sparkles size={11} /> Suggested: {suggestedCategory.name}
+              </button>
+            )}
             {/* Feature 2 — color dot */}
             {selectedCategory && (
               <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-muted">

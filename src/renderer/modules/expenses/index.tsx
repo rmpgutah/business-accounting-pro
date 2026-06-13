@@ -1,16 +1,19 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard, Sparkles } from 'lucide-react';
+import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard, Sparkles, Lightbulb } from 'lucide-react';
 import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
 import ExpenseDetail from './ExpenseDetail';
 import ExpenseAnalytics from './ExpenseAnalytics';
+import ExpenseInsights from './ExpenseInsights';
+import ExpenseCompliance from './ExpenseCompliance';
 import VendorList from './VendorList';
 import VendorForm from './VendorForm';
 import VendorDetail from './VendorDetail';
 import ExpenseAuditReport from './ExpenseAuditReport';
-import ExpenseCategorySettings from './ExpenseCategorySettings';
+import ExpenseSettings from './settings/ExpenseSettings';
 import ExpenseApprovalQueue from './ExpenseApprovalQueue';
 import ReimbursementRun from './ReimbursementRun';
+import ExpenseReview from './ExpenseReview';
 import ExpensesUpgradesPanel from './upgrades';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -18,7 +21,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'expenses' | 'vendors' | 'approvals' | 'reimbursement' | 'audit' | 'settings' | 'analytics' | 'upgrades';
+type Tab = 'dashboard' | 'expenses' | 'review' | 'vendors' | 'approvals' | 'reimbursement' | 'settings' | 'insights' | 'compliance' | 'upgrades';
 type ExpenseView = 'list' | 'form' | 'detail';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -26,8 +29,9 @@ const TabBtn: React.FC<{
   active: boolean;
   icon: React.ReactNode;
   label: string;
+  badge?: number;
   onClick: () => void;
-}> = ({ active, icon, label, onClick }) => (
+}> = ({ active, icon, label, badge, onClick }) => (
   <button
     onClick={onClick}
     className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
@@ -35,16 +39,23 @@ const TabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
+    {badge != null && badge > 0 && (
+      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-bg-tertiary text-accent-warning border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
+        {badge}
+      </span>
+    )}
   </button>
 );
 
 // ─── Main Module ────────────────────────────────────────
 const ExpensesModule: React.FC = () => {
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [insightsView, setInsightsView] = useState<'overview' | 'charts'>('overview');
+  const [complianceView, setComplianceView] = useState<'compliance' | 'audit'>('compliance');
   const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   // Dashboard state
@@ -152,6 +163,26 @@ const ExpensesModule: React.FC = () => {
   const [expenseView, setExpenseView] = useState<ExpenseView>('list');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseKey, setExpenseKey] = useState(0);
+
+  // Review badge count
+  const [reviewCount, setReviewCount] = useState<number>(0);
+
+  // Lightweight badge count (single query, not the full queues)
+  useEffect(() => {
+    if (!activeCompany) return;
+    let cancelled = false;
+    api.rawQuery(
+      `SELECT
+         SUM(CASE WHEN receipt_path IS NULL AND amount >= 25 THEN 1 ELSE 0 END) +
+         SUM(CASE WHEN category_id IS NULL OR category_id = '' THEN 1 ELSE 0 END) AS c
+       FROM expenses
+       WHERE company_id = ? AND status != 'void' AND (deleted_at IS NULL)`,
+      [activeCompany.id]
+    ).then((r: any) => {
+      if (!cancelled) setReviewCount(Array.isArray(r) ? (r[0]?.c ?? 0) : 0);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeCompany, tab, expenseKey]);
 
   // Vendor view state
   const [vendorView, setVendorView] = useState<'list' | 'detail'>('list');
@@ -270,6 +301,13 @@ const ExpensesModule: React.FC = () => {
           onClick={() => switchTab('expenses')}
         />
         <TabBtn
+          active={tab === 'review'}
+          icon={<CheckSquare size={16} />}
+          label="Review"
+          badge={reviewCount}
+          onClick={() => switchTab('review')}
+        />
+        <TabBtn
           active={tab === 'vendors'}
           icon={<Building2 size={16} />}
           label="Vendors"
@@ -288,16 +326,16 @@ const ExpensesModule: React.FC = () => {
           onClick={() => switchTab('reimbursement')}
         />
         <TabBtn
-          active={tab === 'audit'}
-          icon={<ShieldCheck size={16} />}
-          label="Audit Log"
-          onClick={() => switchTab('audit')}
+          active={tab === 'insights'}
+          icon={<Lightbulb size={16} />}
+          label="Insights"
+          onClick={() => switchTab('insights')}
         />
         <TabBtn
-          active={tab === 'analytics'}
-          icon={<BarChart3 size={16} />}
-          label="Analytics"
-          onClick={() => switchTab('analytics')}
+          active={tab === 'compliance'}
+          icon={<ShieldCheck size={16} />}
+          label="Compliance"
+          onClick={() => switchTab('compliance')}
         />
         <TabBtn
           active={tab === 'settings'}
@@ -353,7 +391,7 @@ const ExpensesModule: React.FC = () => {
                 <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => switchTab('reimbursement')}>
                   <DollarSign size={14} /> Run Reimbursement
                 </button>
-                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => switchTab('analytics')}>
+                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => { switchTab('insights'); setInsightsView('charts'); }}>
                   <BarChart3 size={14} /> View Analytics
                 </button>
               </div>
@@ -645,7 +683,37 @@ const ExpensesModule: React.FC = () => {
         />
       )}
 
-      {tab === 'analytics' && <ExpenseAnalytics />}
+      {tab === 'review' && (
+        <ExpenseReview
+          onViewExpense={(id) => { setTab('expenses'); handleEditExpense(id); }}
+          onCountsChange={setReviewCount}
+        />
+      )}
+
+      {tab === 'insights' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <button className={`block-btn text-xs ${insightsView === 'overview' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setInsightsView('overview')}>Overview</button>
+            <button className={`block-btn text-xs ${insightsView === 'charts' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setInsightsView('charts')}>Charts</button>
+          </div>
+          {insightsView === 'overview' ? <ExpenseInsights onViewExpense={handleEditExpense} /> : <ExpenseAnalytics />}
+        </div>
+      )}
+      {tab === 'compliance' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <button className={`block-btn text-xs ${complianceView === 'compliance' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setComplianceView('compliance')}>Compliance</button>
+            <button className={`block-btn text-xs ${complianceView === 'audit' ? 'text-text-primary' : 'text-text-muted'}`}
+              onClick={() => setComplianceView('audit')}>Audit Log</button>
+          </div>
+          {complianceView === 'compliance'
+            ? <ExpenseCompliance onViewExpense={handleEditExpense} />
+            : <ExpenseAuditReport onBack={() => setComplianceView('compliance')} />}
+        </div>
+      )}
 
       {tab === 'vendors' && vendorView === 'list' && (
         <VendorList
@@ -669,12 +737,8 @@ const ExpensesModule: React.FC = () => {
 
       {tab === 'reimbursement' && <ReimbursementRun />}
 
-      {tab === 'audit' && (
-        <ExpenseAuditReport onBack={() => setTab('expenses')} />
-      )}
-
       {tab === 'settings' && (
-        <ExpenseCategorySettings onBack={() => setTab('expenses')} />
+        <ExpenseSettings onBack={() => setTab('expenses')} />
       )}
 
       {tab === 'upgrades' && <ExpensesUpgradesPanel />}

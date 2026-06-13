@@ -11,11 +11,12 @@ import EmployeeForm from './EmployeeForm';
 import PayrollRunner from './PayrollRunner';
 import PayStubView from './PayStubView';
 import PtoDashboard from './PtoDashboard';
+import HrPortal from './HrPortal';
 import ErrorBanner from '../../components/ErrorBanner';
 import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto';
+type Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto' | 'hr-portal';
 
 interface PayrollRun {
   id: string;
@@ -266,7 +267,17 @@ const PayrollModule: React.FC = () => {
     const stubFocus = consumeFocusEntity('pay_stub');
     if (stubFocus) {
       setViewStubId(stubFocus.id);
+      return;
     }
+    // payroll_run rows (from the pay-stub entity graph) land on History
+    // with the run expanded. toggleExpandRun (not bare setExpandedRunId)
+    // so the stub rows are actually fetched, not an empty expansion.
+    const runFocus = consumeFocusEntity('payroll_run');
+    if (runFocus) {
+      setActiveTab('history');
+      toggleExpandRun(runFocus.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumeFocusEntity]);
 
   // ─── Expand a run to see pay stubs ────────────────────
@@ -539,6 +550,7 @@ const PayrollModule: React.FC = () => {
     { key: 'run', label: 'Run Payroll', icon: <Calculator size={14} /> },
     { key: 'history', label: 'History', icon: <FileText size={14} /> },
     { key: 'pto', label: 'PTO', icon: <DollarSign size={14} /> },
+    { key: 'hr-portal', label: 'HR Portal', icon: <Users size={14} /> },
   ];
 
   // ─── Render ─────────────────────────────────────────
@@ -742,6 +754,7 @@ const PayrollModule: React.FC = () => {
 
         {/* PTO Tab */}
         {activeTab === 'pto' && <PtoDashboard />}
+        {activeTab === 'hr-portal' && <HrPortal />}
 
         {/* ─── History Tab ─────────────────────────────── */}
         {activeTab === 'history' && (

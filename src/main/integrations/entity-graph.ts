@@ -73,7 +73,7 @@ export type EntityType =
   | 'employee' | 'pay_stub' | 'payroll_run' | 'time_entry' | 'budget'
   | 'account' | 'journal_entry' | 'tax_payment' | 'fixed_asset'
   | 'bank_account' | 'bank_transaction' | 'recurring_template'
-  | 'stripe_object';
+  | 'loan' | 'stripe_object';
 
 export interface RelatedGroup {
   key: string;                 // stable id for React keys / group header
@@ -170,7 +170,7 @@ function invoiceGraph(companyId: string, invoiceId: string): RelatedGroup[] {
   if (!inv) return groups;
 
   const lines = safeAll(
-    `SELECT id, description, quantity, unit_price, amount
+    `SELECT id, invoice_id, description, quantity, unit_price, amount
        FROM invoice_line_items WHERE invoice_id = ?`, [invoiceId]);
   if (lines.length) groups.push({ key: 'lines', label: `Line Items (${lines.length})`, entityType: 'invoice', rows: lines, total: sumField(lines, 'amount') });
 
@@ -216,7 +216,7 @@ function invoiceGraph(companyId: string, invoiceId: string): RelatedGroup[] {
 function billGraph(companyId: string, billId: string): RelatedGroup[] {
   const groups: RelatedGroup[] = [];
   const lines = safeAll(
-    `SELECT id, description, quantity, unit_price, amount FROM bill_line_items WHERE bill_id = ?`, [billId]);
+    `SELECT id, bill_id, description, quantity, unit_price, amount FROM bill_line_items WHERE bill_id = ?`, [billId]);
   if (lines.length) groups.push({ key: 'lines', label: `Line Items (${lines.length})`, entityType: 'bill', rows: lines, total: sumField(lines, 'amount') });
 
   const payments = safeAll(
@@ -425,7 +425,7 @@ function explicitGraph(companyId: string, type: EntityType, id: string): Related
 
 function purchaseOrderGraph(companyId: string, poId: string): RelatedGroup[] {
   const groups: RelatedGroup[] = [];
-  const lines = safeAll(`SELECT id, description, quantity, unit_price, amount FROM po_line_items WHERE purchase_order_id = ?`, [poId]);
+  const lines = safeAll(`SELECT id, purchase_order_id, description, quantity, unit_price, amount FROM po_line_items WHERE purchase_order_id = ?`, [poId]);
   if (lines.length) groups.push({ key: 'lines', label: `Line Items (${lines.length})`, entityType: 'purchase_order', rows: lines, total: sumField(lines, 'amount') });
   const bills = safeAll(`SELECT id, bill_number, total, status FROM bills WHERE company_id = ? AND purchase_order_id = ?`, [companyId, poId]);
   if (bills.length) groups.push({ key: 'bills', label: `Bills from this PO (${bills.length})`, entityType: 'bill', rows: bills, total: sumField(bills, 'total') });
@@ -530,8 +530,59 @@ function bankAccountGraph(companyId: string, bankId: string): RelatedGroup[] {
 
 function expenseGraph(_companyId: string, expenseId: string): RelatedGroup[] {
   const groups: RelatedGroup[] = [];
-  const lines = safeAll(`SELECT id, description, amount, account_id FROM expense_line_items WHERE expense_id = ?`, [expenseId]);
+  // expense_id on each line lets RelatedPanel route the click back to the
+  // PARENT expense rather than dead-ending on the line-item id.
+  const lines = safeAll(`SELECT id, expense_id, description, amount, account_id FROM expense_line_items WHERE expense_id = ?`, [expenseId]);
   if (lines.length) groups.push({ key: 'lines', label: `Line Items (${lines.length})`, entityType: 'expense', rows: lines, total: sumField(lines, 'amount') });
+
+  // Loan + debt linkage (related_loan_id / related_debt_id soft FKs).
+  const exp = safeAll(`SELECT related_loan_id, related_debt_id, vendor_id, project_id, client_id FROM expenses WHERE id = ?`, [expenseId])[0] as any;
+  if (exp?.related_loan_id) {
+    const loan = safeAll(`SELECT id, name, current_balance AS amount, status FROM loans WHERE id = ?`, [exp.related_loan_id]);
+    if (loan.length) groups.push({ key: 'loan', label: 'Linked Loan', entityType: 'loan', rows: loan });
+  }
+  if (exp?.related_debt_id) {
+    const debt = safeAll(`SELECT id, debtor_name AS name, balance_due AS amount, status FROM debts WHERE id = ?`, [exp.related_debt_id]);
+    if (debt.length) groups.push({ key: 'debt', label: 'Collection Case', entityType: 'debt', rows: debt });
+  }
+  if (exp?.vendor_id) {
+    const vendor = safeAll(`SELECT id, name FROM vendors WHERE id = ?`, [exp.vendor_id]);
+    if (vendor.length) groups.push({ key: 'vendor', label: 'Vendor', entityType: 'vendor', rows: vendor });
+  }
+  if (exp?.project_id) {
+    const project = safeAll(`SELECT id, name, status FROM projects WHERE id = ?`, [exp.project_id]);
+    if (project.length) groups.push({ key: 'project', label: 'Project', entityType: 'project', rows: project });
+  }
+  if (exp?.client_id) {
+    const client = safeAll(`SELECT id, name FROM clients WHERE id = ?`, [exp.client_id]);
+    if (client.length) groups.push({ key: 'client', label: 'Client', entityType: 'client', rows: client });
+  }
+  return groups;
+}
+
+function loanGraph(companyId: string, loanId: string): RelatedGroup[] {
+  const groups: RelatedGroup[] = [];
+  // Expenses traced to this loan (interest/principal bookkeeping rows).
+  const expenses = safeAll(
+    `SELECT id, date, description, amount, status FROM expenses
+     WHERE related_loan_id = ? AND company_id = ? AND COALESCE(deleted_at, '') = ''
+     ORDER BY date DESC LIMIT 25`,
+    [loanId, companyId],
+  );
+  if (expenses.length) groups.push({
+    key: 'expenses', label: `Linked Expenses (${expenses.length})`, entityType: 'expense',
+    rows: expenses, total: sumField(expenses, 'amount'),
+  });
+  // Payment history — loan_id on each row routes clicks back to this loan.
+  const payments = safeAll(
+    `SELECT id, loan_id, payment_date AS date, amount, principal_amount, interest_amount FROM loan_payments
+     WHERE loan_id = ? ORDER BY payment_date DESC LIMIT 25`,
+    [loanId],
+  );
+  if (payments.length) groups.push({
+    key: 'payments', label: `Payments (${payments.length})`, entityType: 'loan',
+    rows: payments, total: sumField(payments, 'amount'),
+  });
   return groups;
 }
 
@@ -554,6 +605,7 @@ export function graph(companyId: string, type: EntityType, id: string): RelatedG
     case 'fixed_asset':     groups = fixedAssetGraph(companyId, id); break;
     case 'bank_account':    groups = bankAccountGraph(companyId, id); break;
     case 'expense':         groups = expenseGraph(companyId, id); break;
+    case 'loan':            groups = loanGraph(companyId, id); break;
     case 'stripe_object':   groups = stripeGraph(companyId, id); break;
     default:                groups = [];
   }

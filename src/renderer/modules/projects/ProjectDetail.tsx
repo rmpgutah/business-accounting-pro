@@ -157,12 +157,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           ),
           // CLAUDE.md: db:query returns flat rows — use rawQuery + JOINs so the
           // expenses tab shows Category and Vendor names instead of "--".
+          // Keep the soft-delete filter so voided expenses don't appear.
           api.rawQuery(
             `SELECT e.*, c.name as category_name, v.name as vendor_name
              FROM expenses e
              LEFT JOIN categories c ON c.id = e.category_id
              LEFT JOIN vendors v ON v.id = e.vendor_id
-             WHERE e.company_id = ? AND e.project_id = ?
+             WHERE e.company_id = ? AND e.project_id = ? AND COALESCE(e.deleted_at, '') = ''
              ORDER BY e.date DESC`,
             [cid, projectId]
           ),
@@ -186,10 +187,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         // Time entries already filtered by project in the SQL query
         setTimeEntries(Array.isArray(allTimeEntries) ? allTimeEntries : []);
 
-        const projectExpenses = Array.isArray(allExpenses)
-          ? allExpenses.filter((e: any) => e.project_id === projectId)
-          : [];
-        setExpenses(projectExpenses);
+        // Already scoped to this project by the SQL WHERE clause.
+        setExpenses(Array.isArray(allExpenses) ? allExpenses : []);
 
         // Filter line items by project, then find matching invoices
         const projectLineItems = Array.isArray(allLineItems)

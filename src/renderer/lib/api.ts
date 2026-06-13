@@ -673,6 +673,74 @@ const api = {
   generateDebtPortalToken: (debtId: string): Promise<{ token?: string; portalUrl?: string; error?: string }> =>
     window.electronAPI.invoke('debt:generate-portal-token', { debtId }),
 
+  // ── HR PORTAL ──────────────────────────────────────────
+  // (hr:portal-* namespace — hrDirectory/hrEmployeeSnapshot below belong
+  // to the earlier HR analytics wave and hit different handlers.)
+  hrPortalSnapshot: (employeeId: string): Promise<any> =>
+    window.electronAPI.invoke('hr:portal-snapshot', { employee_id: employeeId }),
+  hrPortalDirectory: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:portal-directory'),
+  hrAnnouncementsList: (opts?: { include_expired?: boolean }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:list', opts || {}),
+  hrAnnouncementSave: (payload: { id?: string; title: string; body?: string; category?: string; priority?: string; requires_ack?: boolean; pinned?: boolean; effective_date?: string; expires_date?: string }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:save', payload),
+  hrAnnouncementDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:delete', { id }),
+  hrAnnouncementAck: (announcementId: string, employeeId: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:ack', { announcement_id: announcementId, employee_id: employeeId }),
+  hrAnnouncementAcks: (announcementId: string): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:announcements:acks', { announcement_id: announcementId }),
+  hrAdvanceToDebt: (advanceId: string): Promise<{ ok?: boolean; debt_id?: string; already_linked?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:advance-to-debt', { advance_id: advanceId }),
+  hrEmployeeDebtSummary: (): Promise<{ count?: number; total_balance?: number; by_employee?: any[]; error?: string }> =>
+    window.electronAPI.invoke('hr:employee-debt-summary'),
+  hrEmployeeRecordData: (employeeId: string): Promise<any> =>
+    window.electronAPI.invoke('hr:employee-record-data', { employee_id: employeeId }),
+
+  // ── DEBT WAVE: scoring, action queue, budgets, withholding ──
+  debtScoreAll: (): Promise<{ scored?: number; debts?: any[]; error?: string }> =>
+    window.electronAPI.invoke('debt:score-all'),
+  debtActionQueue: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('debt:action-queue'),
+  debtSetExpenseBudget: (debtId: string, budget: number): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('debt:set-expense-budget', { debt_id: debtId, budget }),
+  debtMarkCostsUnrecoverable: (debtId: string): Promise<{ ok?: boolean; updated?: number; error?: string }> =>
+    window.electronAPI.invoke('debts:mark-costs-unrecoverable', { debt_id: debtId }),
+  expensesBulkLinkDebt: (payload: { expense_ids: string[]; debt_id: string; cost_type?: string; is_recoverable?: boolean }): Promise<{ ok?: boolean; updated?: number; error?: string }> =>
+    window.electronAPI.invoke('expenses:bulk-link-debt', payload),
+  hrWithholdingList: (opts?: { employee_id?: string; debt_id?: string }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:list', opts || {}),
+  hrWithholdingSave: (payload: { id?: string; employee_id: string; debt_id: string; per_pay_amount: number; start_date?: string; agreement_signed_date?: string; notes?: string }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:save', payload),
+  hrWithholdingStop: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:stop', { id }),
+  hrWithholdingRecordDeduction: (payload: { withholding_id: string; amount?: number; pay_date?: string }): Promise<{ ok?: boolean; applied?: number; new_balance?: number; completed?: boolean; error?: string }> =>
+    window.electronAPI.invoke('hr:withholding:record-deduction', payload),
+  hrWithholdingAgreementData: (withholdingId: string): Promise<any> =>
+    window.electronAPI.invoke('hr:withholding:agreement-data', { withholding_id: withholdingId }),
+
+  // ── DEBT COLLECTION COSTS + EXPENSE ALLOCATIONS ───────
+  debtCollectionCosts: (debtId: string): Promise<{ costs?: any[]; summary?: any; error?: string }> =>
+    window.electronAPI.invoke('debts:collection-costs', { debt_id: debtId }),
+  debtApplyRecoverableCosts: (debtId: string): Promise<{ ok?: boolean; applied?: number; count?: number; error?: string }> =>
+    window.electronAPI.invoke('debts:apply-recoverable-costs', { debt_id: debtId }),
+  debtCollectionCostAnalytics: (): Promise<{ by_type?: any[]; by_debt?: any[]; portfolio?: any; error?: string }> =>
+    window.electronAPI.invoke('debts:collection-cost-analytics'),
+  expenseSetRecovery: (payload: { expense_id: string; recovery_status: string; recovered_amount?: number; recovered_date?: string }): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('expenses:set-recovery', payload),
+  expenseAllocationsGet: (expenseId: string): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('expenses:allocations:get', { expense_id: expenseId }),
+  expenseAllocationsSave: (expenseId: string, allocations: any[]): Promise<{ ok?: boolean; count?: number; error?: string }> =>
+    window.electronAPI.invoke('expenses:allocations:save', { expense_id: expenseId, allocations }),
+  expenseAllocationSummary: (opts?: { target_type?: string; from?: string; to?: string }): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('expenses:allocation-summary', opts || {}),
+  expenseAllocTemplatesList: (): Promise<any[] | { error?: string }> =>
+    window.electronAPI.invoke('expense-alloc-templates:list'),
+  expenseAllocTemplateSave: (payload: { id?: string; name: string; splits: any[] }): Promise<{ ok?: boolean; id?: string; error?: string }> =>
+    window.electronAPI.invoke('expense-alloc-templates:save', payload),
+  expenseAllocTemplateDelete: (id: string): Promise<{ ok?: boolean; error?: string }> =>
+    window.electronAPI.invoke('expense-alloc-templates:delete', { id }),
+
   // ── LOAN TRACKING ──────────────────────────────────────
   loansList: (opts?: { status?: string }): Promise<any[] | { error?: string }> =>
     window.electronAPI.invoke('loans:list', opts || {}),

@@ -479,6 +479,14 @@ const BankReconModule: React.FC = () => {
           setShowForm(true);
         }
       }).catch(() => {});
+      return;
+    }
+    // bank_transaction rows → resolve the owning account and land on the
+    // Reconcile tab where the transaction is workable. There's no
+    // single-transaction detail view, so account context is the best target.
+    const txnFocus = consumeFocusEntity('bank_transaction');
+    if (txnFocus) {
+      setActiveTab('reconcile');
     }
   }, [consumeFocusEntity]);
 

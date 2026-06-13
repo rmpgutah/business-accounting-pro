@@ -925,13 +925,18 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Headline metrics — library MetricHero bound to live stats */}
+      {/* Headline metrics — library MetricHero bound to live stats.
+          Sparklines use the REAL monthly cashflow series (same data as the
+          cash-flow area chart below) instead of MetricHero's demo default,
+          so the trend line agrees with the delta badge. A/R has no monthly
+          series available — spark={[]} suppresses the graph rather than
+          showing a fabricated one. */}
       {isOn('kpis') && (
-        <div className="grid grid-cols-4 no-print" style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
-          <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" accentColor="income" onClick={() => setModule('invoicing')} />
-          <MetricHero label="Expenses" value={formatCurrency(stats.expenses)} deltaPct={stats.expensesChange} deltaLabel="vs prior period" accentColor="expense" onClick={() => setModule('expenses')} />
-          <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" accentColor="blue" onClick={() => setModule('reports')} />
-          <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" accentColor="warning" onClick={() => { sessionStorage.setItem('nav:invoiceFilter', 'overdue'); setModule('invoicing'); }} />
+        <div className="grid grid-cols-2 xl:grid-cols-4 no-print" style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
+          <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" accentColor="income" spark={cashflow.map((p) => p.income)} onClick={() => setModule('invoicing')} />
+          <MetricHero label="Expenses" value={formatCurrency(stats.expenses)} deltaPct={stats.expensesChange} deltaLabel="vs prior period" accentColor="expense" spark={cashflow.map((p) => p.expenses)} onClick={() => setModule('expenses')} />
+          <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" accentColor="blue" spark={cashflow.map((p) => p.income - p.expenses)} onClick={() => setModule('reports')} />
+          <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" accentColor="warning" spark={[]} onClick={() => { sessionStorage.setItem('nav:invoiceFilter', 'overdue'); setModule('invoicing'); }} />
         </div>
       )}
 

@@ -7994,3 +7994,39 @@ td[data-neg="true"]::after,
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Customization-driven accessibility hooks ─────────
+   These data attributes are set by applyCustomizationGlobals() on the
+   :root element, mirroring the existing data-density pattern. Each one
+   maps a persisted Invoicing customization option to a global CSS rule
+   so the option's effect is visible immediately, app-wide. */
+
+html { font-size: calc(16px * var(--cust-font-scale, 1)); }
+
+:root[data-reduce-motion="on"] *,
+:root[data-reduce-motion="on"] *::before,
+:root[data-reduce-motion="on"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+:root[data-high-contrast="on"] {
+  --color-text-secondary: var(--color-text-primary);
+  --color-text-muted: var(--color-text-secondary);
+}
+:root[data-high-contrast="on"] .block-card,
+:root[data-high-contrast="on"] .block-input,
+:root[data-high-contrast="on"] .block-btn,
+:root[data-high-contrast="on"] .block-btn-primary,
+:root[data-high-contrast="on"] table,
+:root[data-high-contrast="on"] th,
+:root[data-high-contrast="on"] td {
+  border-color: var(--color-text-primary) !important;
+}
+
+:root[data-focus-visible="on"] :focus-visible {
+  outline: 2px solid var(--color-accent-blue) !important;
+  outline-offset: 2px !important;
+}

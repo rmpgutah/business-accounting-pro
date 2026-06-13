@@ -40,6 +40,9 @@ const ExpenseAnalytics: React.FC = () => {
   const [revenueYtd, setRevenueYtd] = useState(0);
   const [taxCats, setTaxCats] = useState<any[]>([]);
   const [projBilled, setProjBilled] = useState<Record<string, number>>({});
+  // Allocation Engine + Debt-Collection Expense Wave roll-ups
+  const [allocSummary, setAllocSummary] = useState<any[]>([]);
+  const [collectionCosts, setCollectionCosts] = useState<{ by_type: any[]; portfolio: any } | null>(null);
 
   useEffect(() => {
     if (!activeCompany) return;
@@ -97,6 +100,15 @@ const ExpenseAnalytics: React.FC = () => {
         const billedMap: Record<string, number> = {};
         (Array.isArray(projInv) ? projInv : []).forEach((r: any) => { billedMap[r.pid] = Number(r.billed) || 0; });
         setProjBilled(billedMap);
+        // Non-critical secondary analytics — failures don't blank the page.
+        api.expenseAllocationSummary()
+          .then((r) => { if (!cancelled && Array.isArray(r)) setAllocSummary(r); })
+          .catch(() => {});
+        api.debtCollectionCostAnalytics()
+          .then((r: any) => {
+            if (!cancelled && r && !r.error) setCollectionCosts({ by_type: r.by_type || [], portfolio: r.portfolio || {} });
+          })
+          .catch(() => {});
       } catch (err: any) {
         console.error('Analytics load failed:', err);
         if (!cancelled) setError(err?.message || 'Failed to load analytics');
@@ -780,6 +792,73 @@ const ExpenseAnalytics: React.FC = () => {
           </table>
         )}
       </div>
+
+      {/* ── Expense Allocations by Target ─────────────────────────
+          Where allocated money actually goes — percent rows resolve
+          against each expense's total at query time. */}
+      {allocSummary.length > 0 && (
+        <div className="block-card p-4">
+          <h3 className="text-sm font-bold text-text-primary mb-3">Expense Allocations by Target</h3>
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Type</th>
+                <th className="text-right">Expenses</th>
+                <th className="text-right">Allocated</th>
+                <th className="text-right">Billable Splits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allocSummary.map((a: any, i: number) => (
+                <tr key={i}>
+                  <td className="text-text-primary font-medium">{a.target_name || '(unnamed)'}</td>
+                  <td className="text-text-muted text-xs uppercase">{a.target_type}</td>
+                  <td className="text-right font-mono">{a.expense_count}</td>
+                  <td className="text-right font-mono text-accent-expense">{formatCurrency(a.allocated_total)}</td>
+                  <td className="text-right font-mono">{a.billable_count || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Collection Cost Analytics (Debt-Collection Expense Wave) ── */}
+      {collectionCosts && collectionCosts.by_type.length > 0 && (
+        <div className="block-card p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h3 className="text-sm font-bold text-text-primary">Debt Collection Spend</h3>
+            <div className="text-xs text-text-muted font-mono">
+              Spend {formatCurrency(collectionCosts.portfolio.total_spend || 0)}
+              {' · '}Collected {formatCurrency(collectionCosts.portfolio.total_collected || 0)}
+              {collectionCosts.portfolio.roi != null && (
+                <span style={{ color: collectionCosts.portfolio.roi >= 1 ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
+                  {' · '}ROI {collectionCosts.portfolio.roi.toFixed(2)}×
+                </span>
+              )}
+            </div>
+          </div>
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Cost Type</th>
+                <th className="text-right">Count</th>
+                <th className="text-right">Total Spend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {collectionCosts.by_type.map((t: any, i: number) => (
+                <tr key={i}>
+                  <td className="text-text-primary font-medium capitalize">{String(t.cost_type).replace(/_/g, ' ')}</td>
+                  <td className="text-right font-mono">{t.count}</td>
+                  <td className="text-right font-mono text-accent-expense">{formatCurrency(t.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

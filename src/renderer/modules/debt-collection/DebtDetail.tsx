@@ -35,6 +35,7 @@ import { useNavigation } from '../../lib/navigation';
 import { calcRiskScore, getRiskBadge, collectionScore, getCollectionBadge } from './riskScore';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import CollectionCostsPanel from './CollectionCostsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -667,6 +668,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         status: 'written_off',
         write_off_reason: writeOffReason.trim(),
       });
+      // Debt Wave: a written-off debt's recoverable collection costs are by
+      // definition unrecoverable — flip every still-pending linked cost so
+      // expense reports stop counting them as future recoveries.
+      await api.debtMarkCostsUnrecoverable(debtId).catch(() => {});
       setShowWriteOff(false);
       setWriteOffReason('');
       triggerRefresh();
@@ -2371,6 +2376,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Collection Costs (Debt-Collection Expense Wave) ───────
+          Expenses linked to this debt via related_debt_id, with
+          recoverability roll-ups, ROI, and apply-to-balance. */}
+      <div className="mt-6">
+        <CollectionCostsPanel debtId={debtId} onBalanceChanged={triggerRefresh} />
       </div>
 
       {/* ── Cross-entity integration ────────────────────────────── */}

@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
+import { useAppStore } from '../../stores/appStore';
 import LoanForm from './LoanForm';
 import LoanDetail from './LoanDetail';
 import AggregateDebtChart from './AggregateDebtChart';
@@ -46,6 +47,16 @@ const LoansModule: React.FC = () => {
   }, []);
 
   useEffect(() => { if (view === 'list') load(); }, [view, load]);
+
+  // Cross-module deep link from RelatedPanel/EntityChip → open loan detail.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('loan');
+    if (focus) {
+      setSelectedId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   if (view === 'form') {
     return (

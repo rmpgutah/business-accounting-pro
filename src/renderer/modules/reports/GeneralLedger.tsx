@@ -686,22 +686,54 @@ const GeneralLedger: React.FC = () => {
   // Feature #35 accountant-adj
   const toggleAccountantAdj = (t: GLTransaction) => updateLineField(t.line_id, { is_accountant_adj: t.is_accountant_adj ? 0 : 1 });
 
-  // Feature #28 transaction reversal
+  // Feature #28 transaction reversal.
+  //
+  // REPAIRED: the original implementation reversed only the clicked LINE,
+  // producing a one-sided (unbalanced) journal entry, auto-posted it, and
+  // numbered it outside the JE sequence (REV-xxxxxx). Double-entry
+  // bookkeeping has no such thing as a single-line reversal — the offset
+  // side must move too. This now reverses the ENTIRE parent entry: every
+  // line flipped (debit↔credit), numbered from the normal sequence,
+  // linked via reversed_from_id, and verified line-by-line — a partial
+  // failure rolls the header back instead of leaving a zero-line shell.
   const reverseLine = async (t: GLTransaction) => {
     if (!activeCompany) return;
-    if (!confirm(`Create offsetting JE to reverse line ${t.entry_number} (${formatCurrency(t.amount)})?`)) return;
+    if (!confirm(
+      `Reverse entry ${t.entry_number}?\n\nThis creates a balanced reversing entry that flips EVERY line of ${t.entry_number} (a single line cannot be reversed alone — the offsetting side must move too).`
+    )) return;
     try {
+      const srcLines: any = await api.query('journal_entry_lines', { journal_entry_id: t.entry_id });
+      if (!Array.isArray(srcLines) || srcLines.length === 0) {
+        alert(`Entry ${t.entry_number} has no lines to reverse.`);
+        return;
+      }
       const dateStr = format(new Date(), 'yyyy-MM-dd');
-      const entryNo = `REV-${Date.now().toString().slice(-6)}`;
+      const entryNo = await api.nextJournalNumber();
       const er = await api.create('journal_entries', {
         company_id: activeCompany.id, entry_number: entryNo, date: dateStr,
-        description: `Reversal of ${t.entry_number}`, reference: 'GL-Reverse', is_posted: 1,
+        description: `Reversal of ${t.entry_number}`, reference: 'GL-Reverse',
+        is_posted: 1, reversed_from_id: t.entry_id,
       });
-      const eid = er?.id || er;
-      await api.create('journal_entry_lines', {
-        journal_entry_id: eid, account_id: t.account_id,
-        debit: t.credit, credit: t.debit, description: 'Reversal',
-      });
+      const eid = er?.id;
+      if (!eid) throw new Error('Reversing entry header was not created');
+      try {
+        for (let i = 0; i < srcLines.length; i++) {
+          const l = srcLines[i];
+          await api.create('journal_entry_lines', {
+            journal_entry_id: eid,
+            account_id: l.account_id,
+            debit: Number(l.credit) || 0,   // flip
+            credit: Number(l.debit) || 0,
+            description: l.description || 'Reversal',
+            sort_order: i,
+          });
+        }
+      } catch (lineErr: any) {
+        // Roll back the header so we never leave a zero/partial-line shell
+        // (the bug that produced unbalanced REV-* entries).
+        await api.remove('journal_entries', eid).catch(() => {});
+        throw new Error(`Line creation failed (${lineErr?.message || lineErr}) — reversing entry rolled back`);
+      }
       setRefreshTick((tk) => tk + 1);
       window.dispatchEvent(new CustomEvent('je:posted'));
     } catch (err: any) { alert('Reversal failed: ' + (err?.message || err)); }

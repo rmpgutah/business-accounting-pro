@@ -189,6 +189,10 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
   const [monthlyTarget, setMonthlyTarget] = useState(0);
   const [collectorPerf, setCollectorPerf] = useState<CollectorPerf[]>([]);
   const [weekStats, setWeekStats] = useState<{ collected: number; calls: number; promises: number }>({ collected: 0, calls: 0, promises: 0 });
+  // Debt Wave: portfolio action queue + collectability scores
+  const [actionQueue, setActionQueue] = useState<any[]>([]);
+  const [topScored, setTopScored] = useState<any[]>([]);
+  const [scoring, setScoring] = useState(false);
 
   const load = async () => {
     if (!activeCompany) return;
@@ -199,6 +203,9 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
 
       // Smart Recommendations (non-blocking)
       api.smartRecommendations(activeCompany.id).then(r => setRecommendations(Array.isArray(r) ? r : [])).catch(() => {});
+
+      // Debt Wave: action queue (non-blocking)
+      api.debtActionQueue().then(r => setActionQueue(Array.isArray(r) ? r : [])).catch(() => {});
 
       // Feature 1-4: Portfolio KPIs
       try {
@@ -992,6 +999,88 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           </div>
         </div>
       )}
+
+      {/* Debt Wave: Action Queue — rule-driven "work on this today" list:
+          stale cases, SOL deadlines, missed installments, aging settlement
+          offers, over-budget collection spend. */}
+      {actionQueue.length > 0 && (
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#f59e0b' }}>
+            <span className="text-sm font-semibold text-text-primary">Action Queue</span>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#f59e0b22', color: '#f59e0b' }}>
+              {actionQueue.length}
+            </span>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {actionQueue.map((a: any, idx: number) => {
+              const color = a.severity === 'urgent' ? 'var(--color-accent-expense)' : a.severity === 'warning' ? 'var(--color-accent-warning)' : 'var(--color-accent-blue)';
+              return (
+                <div
+                  key={a.debt_id + idx}
+                  className="flex items-start gap-3 px-4 py-2.5 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
+                  onClick={() => onViewDebt(a.debt_id)}
+                >
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', whiteSpace: 'nowrap', marginTop: 2 }}>
+                    {a.severity}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-text-primary font-medium">{a.debtor_name} <span className="text-text-muted font-mono text-xs">· {Number(a.balance_due || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></p>
+                    <p className="text-xs text-text-secondary font-semibold">{a.action}</p>
+                    <p className="text-xs text-text-muted mt-0.5">{a.reason}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Debt Wave: Collectability scores — on-demand portfolio scoring.
+          Persists to debts.collectability_score so other views can sort. */}
+      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: '#3b82f6' }}>
+          <span className="text-sm font-semibold text-text-primary">Collectability Scores</span>
+          <button
+            className="block-btn text-xs"
+            disabled={scoring}
+            onClick={async () => {
+              setScoring(true);
+              try {
+                const r = await api.debtScoreAll();
+                if (r && !r.error) setTopScored((r.debts || []).slice(0, 12));
+              } finally { setScoring(false); }
+            }}
+          >
+            {scoring ? 'Scoring…' : 'Score Portfolio'}
+          </button>
+        </div>
+        {topScored.length === 0 ? (
+          <div className="px-4 py-3 text-xs text-text-muted">
+            Score every active case 0–100 from payment recency, age, stage, promise history, and balance size.
+            Higher = more likely to collect — work the top of the list first.
+          </div>
+        ) : (
+          <div className="max-h-72 overflow-y-auto">
+            {topScored.map((d: any) => {
+              const color = d.score >= 65 ? '#16a34a' : d.score >= 35 ? '#f59e0b' : '#ef4444';
+              return (
+                <div
+                  key={d.id}
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0"
+                  onClick={() => onViewDebt(d.id)}
+                >
+                  <span style={{ width: 34, textAlign: 'center', fontSize: 12, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color }}>{d.score}</span>
+                  <div style={{ flex: 1, height: 4, background: 'var(--color-bg-tertiary)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${d.score}%`, height: '100%', background: color }} />
+                  </div>
+                  <span className="text-xs text-text-primary truncate" style={{ width: 160 }}>{d.debtor_name}</span>
+                  <span className="text-xs text-text-muted font-mono">{Number(d.balance_due || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

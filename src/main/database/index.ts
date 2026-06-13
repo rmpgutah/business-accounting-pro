@@ -9209,6 +9209,126 @@ export function initDatabase(): Database.Database {
   // underlying invoice is hard-deleted, the token becomes dangling and
   // the schema validator flags it as an orphan FK. Idempotent + safe.
   "DELETE FROM invoice_tokens WHERE invoice_id NOT IN (SELECT id FROM invoices)",
+
+  // ─── Debt-Collection Expense Wave ─────────────────────────────────
+  // Soft FK linking an expense to a debt-collection case (mirrors the
+  // related_loan_id pattern). Collection costs — court fees, process
+  // servers, skip tracing, agency commissions — are real expenses that
+  // belong to a specific debt; linking them enables cost-to-collect
+  // ROI per case and (where the jurisdiction allows) rolling
+  // recoverable costs into the debtor's balance.
+  "ALTER TABLE expenses ADD COLUMN related_debt_id TEXT",
+  // What kind of collection cost this is. '' for normal expenses.
+  // court_fee | filing_fee | legal_fee | process_server | skip_tracing |
+  // agency_commission | credit_report | postage | travel | other
+  "ALTER TABLE expenses ADD COLUMN collection_cost_type TEXT DEFAULT ''",
+  // Recoverable = the contract/judgment allows charging this cost back
+  // to the debtor. Recoverable costs can be applied to the debt balance.
+  "ALTER TABLE expenses ADD COLUMN is_recoverable INTEGER DEFAULT 0",
+  // '' | pending | recovered | unrecoverable — tracks whether the cost
+  // was actually collected back from the debtor.
+  "ALTER TABLE expenses ADD COLUMN recovery_status TEXT DEFAULT ''",
+  "ALTER TABLE expenses ADD COLUMN recovered_amount REAL DEFAULT 0",
+  "ALTER TABLE expenses ADD COLUMN recovered_date TEXT",
+  // Set once the cost has been rolled into debts.fees_accrued so the
+  // apply-recoverable action is idempotent (never double-counts).
+  "ALTER TABLE expenses ADD COLUMN added_to_debt INTEGER DEFAULT 0",
+  "CREATE INDEX IF NOT EXISTS idx_expenses_related_debt ON expenses(related_debt_id)",
+
+  // ─── Expense Allocation Engine ────────────────────────────────────
+  // Split a single expense across multiple targets (clients, projects,
+  // debts, departments, custom buckets) by percent or fixed amount.
+  // Denormalized count on the expense row so lists can show an
+  // allocation indicator without joining.
+  "ALTER TABLE expenses ADD COLUMN allocation_count INTEGER DEFAULT 0",
+  `CREATE TABLE IF NOT EXISTS expense_allocations (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    expense_id TEXT NOT NULL,
+    target_type TEXT NOT NULL DEFAULT 'client',
+    target_id TEXT DEFAULT '',
+    target_name TEXT DEFAULT '',
+    percent REAL DEFAULT 0,
+    amount REAL DEFAULT 0,
+    is_billable INTEGER DEFAULT 0,
+    billed_invoice_id TEXT,
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_expense_alloc_expense ON expense_allocations(expense_id)",
+  "CREATE INDEX IF NOT EXISTS idx_expense_alloc_target ON expense_allocations(company_id, target_type, target_id)",
+  // Saved split presets (e.g. "60/40 Office Split") — splits stored as
+  // JSON [{target_type, target_id, target_name, percent}].
+  `CREATE TABLE IF NOT EXISTS expense_allocation_templates (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    splits TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+
+  // ─── HR Portal Wave ───────────────────────────────────────────────
+  // Company announcements board with per-employee acknowledgment
+  // tracking ("read receipts" for policy updates, meeting notices…).
+  `CREATE TABLE IF NOT EXISTS hr_announcements (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT DEFAULT '',
+    category TEXT DEFAULT 'general',
+    priority TEXT DEFAULT 'normal',
+    requires_ack INTEGER DEFAULT 0,
+    pinned INTEGER DEFAULT 0,
+    effective_date TEXT,
+    expires_date TEXT,
+    created_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS hr_announcement_acks (
+    id TEXT PRIMARY KEY,
+    announcement_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    acked_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(announcement_id, employee_id)
+  )`,
+  // Employee↔Debt integration: a pay advance can be escalated into a
+  // formal debt-collection case (debtor_type='employee'). Soft FK keeps
+  // the link traceable in both directions.
+  "ALTER TABLE pay_advances ADD COLUMN related_debt_id TEXT",
+
+  // ─── Debt Collections 200 Wave ────────────────────────────────────
+  // Per-case collection-cost budget cap. The Collection Costs panel
+  // warns when linked expense spend exceeds this (0 = no cap).
+  "ALTER TABLE debts ADD COLUMN expense_budget REAL DEFAULT 0",
+  // Collectability score 0-100 (-1 = never scored). Computed by
+  // debt:score-all from age, stage, payment recency, promise history,
+  // and balance size. Persisted so lists can sort without recomputing.
+  "ALTER TABLE debts ADD COLUMN collectability_score REAL DEFAULT -1",
+  "ALTER TABLE debts ADD COLUMN score_updated_at TEXT",
+  // Wage-withholding agreements: employee authorizes a per-paycheck
+  // deduction applied to a specific debt case. Printable agreement form
+  // (generateWageWithholdingAgreementHTML) documents the authorization.
+  `CREATE TABLE IF NOT EXISTS employee_wage_withholdings (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    debt_id TEXT NOT NULL,
+    per_pay_amount REAL NOT NULL DEFAULT 0,
+    start_date TEXT,
+    end_date TEXT,
+    total_withheld REAL DEFAULT 0,
+    deduction_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    agreement_signed_date TEXT,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_wage_withholding_employee ON employee_wage_withholdings(employee_id)",
+  "CREATE INDEX IF NOT EXISTS idx_wage_withholding_debt ON employee_wage_withholdings(debt_id)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
