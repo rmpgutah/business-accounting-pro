@@ -71,8 +71,24 @@ const Documents: React.FC = () => {
     if (!activeCompany) return;
     setError('');
     try {
-      // Perf: cap at 1000 most-recent documents; older docs surfaced via search/filter UI
-      const rows = await api.query('documents', { company_id: activeCompany.id }, { field: 'uploaded_at', dir: 'desc' }, 1000);
+      // Perf: cap at 1000 most-recent documents; older docs surfaced via search/filter UI.
+      // Resolve the polymorphic entity FK to a readable name (the flat query
+      // returned only entity_id, so the Entity column showed a raw uuid). Unknown
+      // entity types fall through to NULL → entity_id, the prior behavior.
+      const rows = await api.rawQuery(
+        `SELECT d.*,
+           CASE d.entity_type
+             WHEN 'client'  THEN (SELECT name FROM clients WHERE id = d.entity_id)
+             WHEN 'invoice' THEN (SELECT invoice_number FROM invoices WHERE id = d.entity_id)
+             WHEN 'project' THEN (SELECT name FROM projects WHERE id = d.entity_id)
+             WHEN 'expense' THEN (SELECT description FROM expenses WHERE id = d.entity_id)
+           END AS entity_name
+         FROM documents d
+         WHERE d.company_id = ?
+         ORDER BY d.uploaded_at DESC
+         LIMIT 1000`,
+        [activeCompany.id]
+      );
       setDocuments(Array.isArray(rows) ? rows : []);
     } catch (err: any) {
       console.error('Failed to load documents:', err);

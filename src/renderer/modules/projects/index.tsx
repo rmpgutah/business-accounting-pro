@@ -69,12 +69,12 @@ const ProjectsDashboard: React.FC<{
         `;
         const recentTimeSql = `
           SELECT t.id, p.name AS project_name, e.name AS employee_name,
-            t.duration_minutes, t.entry_date, t.is_billable
+            t.duration_minutes, t.date AS entry_date, t.is_billable
           FROM time_entries t
           LEFT JOIN projects p ON t.project_id = p.id
           LEFT JOIN employees e ON t.employee_id = e.id
           WHERE t.company_id = ?
-          ORDER BY t.entry_date DESC, t.created_at DESC
+          ORDER BY t.date DESC, t.created_at DESC
           LIMIT 10
         `;
         const [profit, time] = await Promise.all([

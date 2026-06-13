@@ -16,11 +16,6 @@ interface CategoryRow {
   category_id?: string;
 }
 
-interface BudgetRow {
-  category_id: string;
-  budgeted: number;
-}
-
 interface PriorMonthRow {
   category: string;
   amount: number;
@@ -71,7 +66,6 @@ const ExpenseByCategory: React.FC = () => {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [showMoM, setShowMoM] = useState(false);
   const [priorMonthData, setPriorMonthData] = useState<PriorMonthRow[]>([]);
-  const [budgetData, setBudgetData] = useState<BudgetRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,23 +99,13 @@ const ExpenseByCategory: React.FC = () => {
           }))
         );
 
-        // Change 49: Budget comparison
-        try {
-          const budgetRows: any[] = await api.rawQuery(
-            `SELECT bl.category_id, COALESCE(SUM(bl.amount), 0) as budgeted
-             FROM budget_lines bl JOIN budgets b ON bl.budget_id = b.id
-             WHERE b.company_id = ? AND b.status = 'active'
-             GROUP BY bl.category_id`,
-            [activeCompany.id]
-          );
-          if (!cancelled) setBudgetData((budgetRows ?? []).map((r: any) => ({
-            category_id: r.category_id || '',
-            budgeted: Number(r.budgeted) || 0,
-          })));
-        } catch {
-          // budget tables may not exist
-          if (!cancelled) setBudgetData([]);
-        }
+        // NOTE: a budget-vs-actual overlay was removed here. It queried a
+        // nonexistent budget_lines.category_id column (threw every load,
+        // swallowed) AND keyed budgets to this report's account-SUBTYPE rows,
+        // which never align with budget category names — so it could never show
+        // real data. Budget-vs-actual lives correctly in the Budgets module
+        // (BudgetDetail / reports:budget-vs-actual). Adding it here would
+        // require regrouping this report by category instead of a.subtype.
       } catch (err) {
         console.error('Failed to load expense by category:', err);
       } finally {
@@ -304,9 +288,6 @@ const ExpenseByCategory: React.FC = () => {
                       <th className="text-right px-6 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Change %</th>
                     </>
                   )}
-                  {budgetData.length > 0 && (
-                    <th className="text-right px-6 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">Budget</th>
-                  )}
                 </tr>
               </thead>
               <tbody>
@@ -332,9 +313,6 @@ const ExpenseByCategory: React.FC = () => {
                           </td>
                         </>
                       )}
-                      {budgetData.length > 0 && (
-                        <td className="px-6 py-2 text-right font-mono text-xs text-text-muted">--</td>
-                      )}
                     </tr>
                   );
                 })}
@@ -350,7 +328,6 @@ const ExpenseByCategory: React.FC = () => {
                       <td className="px-6 py-2" />
                     </>
                   )}
-                  {budgetData.length > 0 && <td className="px-6 py-2" />}
                 </tr>
               </tfoot>
             </table>

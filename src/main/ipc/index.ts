@@ -9,6 +9,7 @@ import path from 'path';
 import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { SCHEDULE_C_BY_CATEGORY } from '../services/schedule-c-map';
+import { monthlyDepreciation } from '../services/depreciation';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
@@ -7204,10 +7205,14 @@ export function registerIpcHandlers(): void {
       dbInstance.prepare(
         "UPDATE settings SET value = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(value, existing.id);
-      scheduleAutoBackup();
     } else {
       db.create('settings', { company_id: companyId, key, value });
     }
+    // Back up on BOTH paths — the first save of any setting for a company hit
+    // the INSERT branch, which previously skipped scheduleAutoBackup(), so a
+    // brand-new API key / SMTP config could be lost on restore until the next
+    // unrelated write happened to trigger a backup.
+    scheduleAutoBackup();
   });
 
   // ─── Settings list (company-scoped) ──────────────────────
@@ -8087,10 +8092,13 @@ export function registerIpcHandlers(): void {
       }
 
       const billId = uuid();
+      // Carry the PO's tax_amount onto the bill — omitting it left the bill's
+      // subtotal+tax out of sync with its (tax-inclusive) total and undercounted
+      // any tax reporting that reads bills.tax_amount.
       dbInstance.prepare(`
-        INSERT INTO bills (id, company_id, vendor_id, bill_number, status, issue_date, due_date, subtotal, total, notes, reference)
-        VALUES (?, ?, ?, ?, 'received', date('now'), date('now', '+30 days'), ?, ?, ?, ?)
-      `).run(billId, companyId, po.vendor_id, billNumber, po.subtotal || 0, po.total || 0, po.notes || '', `PO: ${po.po_number}`);
+        INSERT INTO bills (id, company_id, vendor_id, bill_number, status, issue_date, due_date, subtotal, tax_amount, total, notes, reference)
+        VALUES (?, ?, ?, ?, 'received', date('now'), date('now', '+30 days'), ?, ?, ?, ?, ?)
+      `).run(billId, companyId, po.vendor_id, billNumber, po.subtotal || 0, po.tax_amount || 0, po.total || 0, po.notes || '', `PO: ${po.po_number}`);
 
       for (const item of poItems) {
         dbInstance.prepare(`
@@ -8211,14 +8219,17 @@ export function registerIpcHandlers(): void {
     return schedule;
   });
 
-  ipcMain.handle('assets:run-depreciation', (_event, { periodDate }: { periodDate: string }) => {
+  ipcMain.handle('assets:run-depreciation', (_event, { periodDate, assetId }: { periodDate: string; assetId?: string }) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
 
-    const assets = dbInstance.prepare(`
-      SELECT * FROM fixed_assets WHERE company_id = ? AND status = 'active'
-    `).all(companyId) as any[];
+    // Honor an optional assetId so "run depreciation" on a selected subset only
+    // touches those assets. Without it the handler depreciated EVERY active
+    // asset on every call, ignoring the user's selection.
+    const assets = (assetId
+      ? dbInstance.prepare(`SELECT * FROM fixed_assets WHERE company_id = ? AND status = 'active' AND id = ?`).all(companyId, assetId)
+      : dbInstance.prepare(`SELECT * FROM fixed_assets WHERE company_id = ? AND status = 'active'`).all(companyId)) as any[];
 
     let processed = 0;
     const depTx = dbInstance.transaction(() => {
@@ -8231,19 +8242,18 @@ export function registerIpcHandlers(): void {
 
         const cost = asset.purchase_price || 0;
         const salvage = asset.salvage_value || 0;
-        const life = asset.useful_life_years || 5;
-        const depreciable = cost - salvage;
         const accum = asset.accumulated_depreciation || 0;
 
-        let monthlyDep = 0;
-        if (asset.depreciation_method === 'straight_line') {
-          monthlyDep = depreciable / (life * 12);
-        } else if (asset.depreciation_method === 'double_declining') {
-          const bookValue = cost - accum;
-          monthlyDep = (bookValue * (2 / life)) / 12;
-        }
-
-        monthlyDep = Math.min(monthlyDep, Math.max(0, (cost - accum - salvage)));
+        // Per-method monthly figure (incl. the formerly-missing SYD branch),
+        // salvage-floored. See services/depreciation.ts (unit-tested).
+        const monthlyDep = monthlyDepreciation(asset.depreciation_method, {
+          cost,
+          salvage,
+          life: asset.useful_life_years || 5,
+          accumulated: accum,
+          purchaseDate: asset.purchase_date,
+          periodDate,
+        });
         if (monthlyDep <= 0) continue;
 
         const newAccum = accum + monthlyDep;
@@ -8323,7 +8333,14 @@ export function registerIpcHandlers(): void {
           if (rule.transaction_type && tx.type !== rule.transaction_type) matches = false;
 
           if (matches) {
-            dbInstance.prepare(`UPDATE bank_transactions SET status = 'categorized', description = COALESCE(NULLIF(?, ''), description) WHERE id = ?`)
+            // NOTE: bank_transactions.status CHECK only allows
+            // ('pending','matched','excluded') — writing 'categorized' here
+            // threw a CHECK-constraint error that rolled back the whole batch,
+            // so "Apply Rules" silently did nothing. The rule's meaningful
+            // effect on a bank_transaction is the description rename (the table
+            // has no category column to hold action_category_id/account_id);
+            // leave status as 'pending' so the txn still flows to matching.
+            dbInstance.prepare(`UPDATE bank_transactions SET description = COALESCE(NULLIF(?, ''), description) WHERE id = ?`)
               .run(rule.action_description || '', tx.id);
             dbInstance.prepare(`UPDATE bank_rules SET times_applied = times_applied + 1, updated_at = datetime('now') WHERE id = ?`).run(rule.id);
             applied++;
@@ -9236,11 +9253,27 @@ export function registerIpcHandlers(): void {
           notes: notes || '',
         });
 
+        // Capture pre-adjustment state for weighted-average costing.
+        const before = rawDb.prepare(`SELECT quantity, unit_cost FROM inventory_items WHERE id = ?`).get(itemId) as any;
+        const oldQty = Number(before?.quantity) || 0;
+        const oldCost = Number(before?.unit_cost) || 0;
+
         // Update the inventory item's quantity
         const delta = type === 'out' ? -Math.abs(quantity) : Math.abs(quantity);
         rawDb.prepare(
           `UPDATE inventory_items SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?`
         ).run(delta, itemId);
+
+        // On a receipt at a real cost, roll unit_cost forward as a weighted
+        // moving average. Previously unit_cost never changed on receipt, so the
+        // item's value (qty × unit_cost), the Stock Value KPI and the valuation
+        // exports all stayed wrong whenever stock came in at a new price.
+        const recvQty = Math.abs(quantity);
+        const recvCost = Number(unitCost) || 0;
+        if (type !== 'out' && recvCost > 0 && oldQty + recvQty > 0) {
+          const newCost = Math.round(((oldQty * oldCost + recvQty * recvCost) / (oldQty + recvQty)) * 10000) / 10000;
+          rawDb.prepare(`UPDATE inventory_items SET unit_cost = ? WHERE id = ?`).run(newCost, itemId);
+        }
 
         const item = rawDb.prepare(`SELECT quantity, reorder_point FROM inventory_items WHERE id = ?`).get(itemId) as any;
         return { ok: true, newQuantity: item?.quantity ?? 0, reorderPoint: item?.reorder_point ?? 0 };

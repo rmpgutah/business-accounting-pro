@@ -67,7 +67,7 @@ interface Invoice {
   client_id: string;
   total: number;
   status: string;
-  date: string;
+  issue_date: string;
   due_date: string;
 }
 
@@ -621,7 +621,7 @@ const InvoicesTab: React.FC<{ invoices: Invoice[]; onNavigate?: (id: string) => 
                 <EntityChip type="invoice" id={inv.id} label={inv.invoice_number || '--'} variant="inline" />
               </td>
               <td className="text-text-secondary font-mono text-xs">
-                {formatDate(inv.date)}
+                {formatDate(inv.issue_date)}
               </td>
               <td className="text-text-secondary font-mono text-xs">
                 {formatDate(inv.due_date)}
