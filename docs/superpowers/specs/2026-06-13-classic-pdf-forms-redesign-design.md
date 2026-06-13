@@ -119,12 +119,12 @@ Each generator is refactored to compose the helpers above. Inventory:
 | `generatePaycheckHTML` | payroll-check-template.ts | **+ MICR module (§4)**; keep functional check layout |
 | `generateJeCoverSheetHTML` | je-helpers.ts | |
 | `buildStatementHTML` | debt-collection/DebtInvoiceFormatter.tsx | |
-| `buildInvoiceHTML` | main/services/pdf-generator.ts | headless fallback; align to classic (or thin-wrap) |
+| `buildInvoiceHTML` | main/services/pdf-generator.ts | headless fallback; **restyle to classic** so cron/automation PDFs match |
 
 Letters (demand/collection) and legal packets keep their semantic structure
 (letterhead, caption, jurat, exhibit covers) but adopt Arial + black rules + boxed
-blocks. `buildInvoiceHTML` in the main process is only a headless fallback; restyle it
-to match, or have it import shared classic CSS, so cron/automation PDFs match too.
+blocks. `buildInvoiceHTML` in the main process is a headless fallback and **will be restyled
+to the classic look** (sharing the same classic CSS) so cron/automation PDFs match.
 
 ### 3. Force Arial + remove font picker
 
