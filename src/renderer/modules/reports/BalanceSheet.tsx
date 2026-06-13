@@ -11,6 +11,7 @@ import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { CHART_SERIES } from '../../lib/chart-palette';
+import { generateBalanceSheetHTML } from '../../lib/financial-statement-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface AccountLine {
@@ -641,10 +642,30 @@ const BalanceSheet: React.FC = () => {
             <GitCompare size={15} />
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={async () => {
+              if (!activeCompany) return;
+              const html = generateBalanceSheetHTML(
+                data,
+                activeCompany,
+                {
+                  asOfDate,
+                  isBalanced,
+                  totalCurrentAssets,
+                  totalFixedAssets,
+                  totalOtherAssets,
+                  totalAssets,
+                  totalCurrentLiabilities,
+                  totalLongTermLiabilities,
+                  totalLiabilities,
+                  totalEquity,
+                  totalLiabilitiesAndEquity,
+                },
+              );
+              await api.printPreview(html, `Balance Sheet — As of ${asOfDate}`);
+            }}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
-            title="Print"
+            title="Print / Save PDF"
           >
             <Printer size={15} />
           </button>

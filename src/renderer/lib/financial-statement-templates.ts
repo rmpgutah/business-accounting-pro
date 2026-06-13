@@ -1,4 +1,5 @@
-// Classic PDF generators for financial statements (Trial Balance + General Ledger).
+// Classic PDF generators for financial statements (Trial Balance + General Ledger +
+// Balance Sheet + Cash Flow Statement).
 // These produce Arial/B&W ruled-table output via the classic-styles helpers.
 // All HTML is safe: user-supplied text is passed through esc().
 
@@ -247,4 +248,337 @@ export function generateGeneralLedgerHTML(
   );
 
   return classicDocument({ title: `General Ledger ${period}`, bodyHtml: body });
+}
+
+// ─── Balance Sheet ───────────────────────────────────────────────────────────
+
+export interface BSAccountLine {
+  account_name: string;
+  account_code: string;
+  subtype: string;
+  balance: number;
+}
+
+export interface BSData {
+  currentAssets: BSAccountLine[];
+  fixedAssets: BSAccountLine[];
+  otherAssets: BSAccountLine[];
+  currentLiabilities: BSAccountLine[];
+  longTermLiabilities: BSAccountLine[];
+  equity: BSAccountLine[];
+}
+
+export interface BSOpts {
+  asOfDate: string;
+  isBalanced: boolean;
+  totalCurrentAssets: number;
+  totalFixedAssets: number;
+  totalOtherAssets: number;
+  totalAssets: number;
+  totalCurrentLiabilities: number;
+  totalLongTermLiabilities: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  totalLiabilitiesAndEquity: number;
+}
+
+/**
+ * Generates a classic-style Balance Sheet HTML document.
+ *
+ * @param data     The BSData sections already loaded by the screen.
+ * @param company  The active company (for header).
+ * @param opts     As-of date + all computed totals from the screen's useMemo hooks.
+ */
+export function generateBalanceSheetHTML(
+  data: BSData,
+  company: Company,
+  opts: BSOpts,
+): string {
+  const title = 'Balance Sheet';
+  const asOf = `As of ${opts.asOfDate}`;
+
+  const header = docHeader({
+    coName: company.name || 'Company',
+    coDetailHtml: coDetailHtml(company),
+    title,
+    number: asOf,
+  });
+
+  const meta = metaStrip([
+    { label: 'As of', value: opts.asOfDate },
+    { label: 'Status', value: opts.isBalanced ? 'Balanced' : 'OUT OF BALANCE' },
+    { label: 'Total Assets', value: `$${fmt(opts.totalAssets)}` },
+    { label: 'Generated', value: generated() },
+  ]);
+
+  // Helper: render a group of lines as <tr> rows inside an outer <tbody>
+  const lineRows = (items: BSAccountLine[]): string =>
+    items.map(a =>
+      `<tr><td style="padding-left:32px;">${esc(a.account_name)}</td>` +
+      `<td class="num">$${fmt(a.balance)}</td></tr>`
+    ).join('');
+
+  const sectionBar = (label: string): string =>
+    `<tr><td colspan="2" style="background:#000;color:#fff;font-weight:bold;` +
+    `letter-spacing:1px;padding:7px 8px;font-size:11px;">${esc(label)}</td></tr>`;
+
+  const subBar = (label: string): string =>
+    `<tr><td colspan="2" style="font-weight:bold;font-size:10px;letter-spacing:0.5px;` +
+    `text-transform:uppercase;padding:6px 8px 3px 20px;color:#444;">${esc(label)}</td></tr>`;
+
+  const subtotalRow = (label: string, amount: number, strong = false): string =>
+    `<tr style="${strong ? 'border-top:2px solid #000;' : 'border-top:1px solid #000;'}">` +
+    `<td style="padding-left:16px;${strong ? 'font-weight:bold;' : ''}">${esc(label)}</td>` +
+    `<td class="num" style="${strong ? 'font-weight:bold;' : ''}">$${fmt(amount)}</td></tr>`;
+
+  const spacerRow = (): string =>
+    `<tr><td colspan="2" style="padding:4px 0;"></td></tr>`;
+
+  // Build tbody rows
+  let rows = '';
+
+  // ASSETS section
+  rows += sectionBar('ASSETS');
+
+  if (data.currentAssets.length > 0) {
+    rows += subBar('Current Assets');
+    rows += lineRows(data.currentAssets);
+    rows += subtotalRow('Total Current Assets', opts.totalCurrentAssets);
+  }
+
+  if (data.fixedAssets.length > 0) {
+    rows += subBar('Fixed Assets');
+    rows += lineRows(data.fixedAssets);
+    rows += subtotalRow('Total Fixed Assets', opts.totalFixedAssets);
+  }
+
+  if (data.otherAssets.length > 0) {
+    rows += subBar('Other Assets');
+    rows += lineRows(data.otherAssets);
+    rows += subtotalRow('Total Other Assets', opts.totalOtherAssets);
+  }
+
+  rows += `<tr style="border-top:2px solid #000;background:#f0f0f0;">` +
+    `<td style="font-weight:bold;padding-left:8px;">TOTAL ASSETS</td>` +
+    `<td class="num" style="font-weight:bold;">$${fmt(opts.totalAssets)}</td></tr>`;
+
+  rows += spacerRow();
+
+  // LIABILITIES section
+  rows += sectionBar('LIABILITIES');
+
+  if (data.currentLiabilities.length > 0) {
+    rows += subBar('Current Liabilities');
+    rows += lineRows(data.currentLiabilities);
+    rows += subtotalRow('Total Current Liabilities', opts.totalCurrentLiabilities);
+  }
+
+  if (data.longTermLiabilities.length > 0) {
+    rows += subBar('Long-Term Liabilities');
+    rows += lineRows(data.longTermLiabilities);
+    rows += subtotalRow('Total Long-Term Liabilities', opts.totalLongTermLiabilities);
+  }
+
+  rows += `<tr style="border-top:2px solid #000;background:#f0f0f0;">` +
+    `<td style="font-weight:bold;padding-left:8px;">TOTAL LIABILITIES</td>` +
+    `<td class="num" style="font-weight:bold;">$${fmt(opts.totalLiabilities)}</td></tr>`;
+
+  rows += spacerRow();
+
+  // EQUITY section
+  rows += sectionBar('EQUITY');
+  rows += lineRows(data.equity);
+  rows += subtotalRow('Total Equity', opts.totalEquity);
+
+  rows += spacerRow();
+
+  // Grand total
+  rows += `<tr style="border-top:2px solid #000;background:#000;color:#fff;">` +
+    `<td style="font-weight:bold;padding:9px 8px;letter-spacing:0.5px;">TOTAL LIABILITIES &amp; EQUITY</td>` +
+    `<td class="num" style="font-weight:bold;padding:9px 8px;">$${fmt(opts.totalLiabilitiesAndEquity)}</td></tr>`;
+
+  // Balance check note
+  const balanceNote = opts.isBalanced
+    ? `<tr style="background:#e8f5e9;"><td colspan="2" style="text-align:center;padding:5px 8px;font-size:10px;font-style:italic;">` +
+      `Assets = Liabilities + Equity — Balanced</td></tr>`
+    : `<tr style="background:#fdecea;"><td colspan="2" style="text-align:center;padding:5px 8px;font-size:10px;font-style:italic;font-weight:bold;">` +
+      `WARNING: Out of Balance by $${fmt(Math.abs(opts.totalAssets - opts.totalLiabilitiesAndEquity))}</td></tr>`;
+
+  rows += balanceNote;
+
+  const table =
+    `<table class="ruled" style="width:100%;border-collapse:collapse;">` +
+    `<thead><tr>` +
+    `<th style="width:70%;">Account</th>` +
+    `<th style="text-align:right;">Amount</th>` +
+    `</tr></thead>` +
+    `<tbody>${rows}</tbody></table>`;
+
+  const body = docFrame(
+    header +
+    meta +
+    `<div style="padding:0;">${table}</div>` +
+    footerBar(`${company.name} · Balance Sheet · ${asOf}`),
+  );
+
+  return classicDocument({ title: `Balance Sheet ${opts.asOfDate}`, bodyHtml: body });
+}
+
+// ─── Cash Flow Statement ─────────────────────────────────────────────────────
+
+export interface CFData {
+  operatingInflows: number;
+  operatingOutflows: number;
+  investingOutflows: number;
+  financingEquityIn: number;
+  financingDraws: number;
+  beginningCash: number;
+}
+
+export interface CFIndirectData {
+  netIncome: number;
+  depreciation: number;
+  amortization: number;
+  arChange: number;
+  apChange: number;
+  inventoryChange: number;
+  prepaidChange: number;
+}
+
+export interface CFOpts {
+  startDate: string;
+  endDate: string;
+  method: 'direct' | 'indirect';
+  netOperating: number;
+  netInvesting: number;
+  netFinancing: number;
+  netChange: number;
+  endingCash: number;
+  indirectOperatingCF: number;
+}
+
+/**
+ * Generates a classic-style Statement of Cash Flows HTML document.
+ *
+ * @param data          Direct-method raw numbers from the screen's `data` state.
+ * @param indirectData  Indirect-method adjustment figures from the screen's `indirectData` state.
+ * @param company       The active company (for header).
+ * @param opts          Date range, method toggle, and all computed totals from the screen.
+ */
+export function generateCashFlowHTML(
+  data: CFData,
+  indirectData: CFIndirectData,
+  company: Company,
+  opts: CFOpts,
+): string {
+  const period = `${opts.startDate} to ${opts.endDate}`;
+  const methodLabel = opts.method === 'direct' ? 'Direct Method' : 'Indirect Method';
+
+  const header = docHeader({
+    coName: company.name || 'Company',
+    coDetailHtml: coDetailHtml(company),
+    title: 'Cash Flows',
+    number: period,
+  });
+
+  const meta = metaStrip([
+    { label: 'Period', value: period },
+    { label: 'Method', value: methodLabel },
+    { label: 'Net Change', value: `$${fmt(opts.netChange)}` },
+    { label: 'Generated', value: generated() },
+  ]);
+
+  // Section header row (black bar)
+  const sectionBar = (label: string): string =>
+    `<tr><td colspan="2" style="background:#000;color:#fff;font-weight:bold;` +
+    `letter-spacing:0.5px;padding:7px 8px;font-size:11px;">${esc(label)}</td></tr>`;
+
+  const lineRow = (label: string, amount: number, indent = 1): string =>
+    `<tr><td style="padding-left:${8 + indent * 16}px;">${esc(label)}</td>` +
+    `<td class="num">${amount >= 0 ? '' : '('}$${fmt(Math.abs(amount))}${amount < 0 ? ')' : ''}</td></tr>`;
+
+  const subBar = (label: string): string =>
+    `<tr><td colspan="2" style="font-weight:bold;font-size:10px;letter-spacing:0.5px;` +
+    `text-transform:uppercase;padding:6px 8px 3px 20px;color:#444;">${esc(label)}</td></tr>`;
+
+  const subtotalRow = (label: string, amount: number, strong = false): string =>
+    `<tr style="border-top:1px solid #000;">` +
+    `<td style="${strong ? 'font-weight:bold;' : ''}padding-left:8px;">${esc(label)}</td>` +
+    `<td class="num" style="${strong ? 'font-weight:bold;' : ''}">` +
+    `${amount >= 0 ? '' : '('}$${fmt(Math.abs(amount))}${amount < 0 ? ')' : ''}` +
+    `</td></tr>`;
+
+  const spacerRow = (): string =>
+    `<tr><td colspan="2" style="padding:4px 0;"></td></tr>`;
+
+  let rows = '';
+
+  // ── Operating Activities ──
+  rows += sectionBar('CASH FLOWS FROM OPERATING ACTIVITIES');
+
+  if (opts.method === 'direct') {
+    rows += lineRow('Cash received from customers', data.operatingInflows, 1);
+    rows += lineRow('Cash paid for expenses', -data.operatingOutflows, 1);
+  } else {
+    rows += lineRow('Net Income', indirectData.netIncome, 1);
+    rows += subBar('Adjustments for Non-Cash Items');
+    rows += lineRow('Add: Depreciation', indirectData.depreciation, 2);
+    rows += lineRow('Add: Amortization', indirectData.amortization, 2);
+    rows += subBar('Changes in Working Capital');
+    rows += lineRow('(Increase)/Decrease in Accounts Receivable', -indirectData.arChange, 2);
+    rows += lineRow('Increase/(Decrease) in Accounts Payable', indirectData.apChange, 2);
+    rows += lineRow('(Increase)/Decrease in Inventory', -indirectData.inventoryChange, 2);
+    rows += lineRow('(Increase)/Decrease in Prepaid Expenses', -indirectData.prepaidChange, 2);
+  }
+
+  const operatingCF = opts.method === 'direct' ? opts.netOperating : opts.indirectOperatingCF;
+  rows += subtotalRow('Net Cash from Operating Activities', operatingCF, true);
+  rows += spacerRow();
+
+  // ── Investing Activities ──
+  rows += sectionBar('CASH FLOWS FROM INVESTING ACTIVITIES');
+  rows += lineRow('Purchase of assets', -data.investingOutflows, 1);
+  rows += subtotalRow('Net Cash from Investing Activities', opts.netInvesting, true);
+  rows += spacerRow();
+
+  // ── Financing Activities ──
+  rows += sectionBar('CASH FLOWS FROM FINANCING ACTIVITIES');
+  rows += lineRow('Owner equity contributions', data.financingEquityIn, 1);
+  rows += lineRow('Owner draws', -data.financingDraws, 1);
+  rows += subtotalRow('Net Cash from Financing Activities', opts.netFinancing, true);
+  rows += spacerRow();
+
+  // ── Net Change in Cash ──
+  rows += `<tr style="border-top:2px solid #000;background:#f0f0f0;">` +
+    `<td style="font-weight:bold;padding-left:8px;">NET CHANGE IN CASH</td>` +
+    `<td class="num" style="font-weight:bold;">` +
+    `${opts.netChange >= 0 ? '' : '('}$${fmt(Math.abs(opts.netChange))}${opts.netChange < 0 ? ')' : ''}` +
+    `</td></tr>`;
+  rows += spacerRow();
+
+  // Beginning / Ending cash
+  rows += lineRow('Beginning Cash Balance', data.beginningCash, 1);
+
+  rows += `<tr style="border-top:2px solid #000;background:#000;color:#fff;">` +
+    `<td style="font-weight:bold;padding:9px 8px;letter-spacing:0.5px;">ENDING CASH BALANCE</td>` +
+    `<td class="num" style="font-weight:bold;padding:9px 8px;">` +
+    `${opts.endingCash >= 0 ? '' : '('}$${fmt(Math.abs(opts.endingCash))}${opts.endingCash < 0 ? ')' : ''}` +
+    `</td></tr>`;
+
+  const table =
+    `<table class="ruled" style="width:100%;border-collapse:collapse;">` +
+    `<thead><tr>` +
+    `<th style="width:70%;">Description</th>` +
+    `<th style="text-align:right;">Amount</th>` +
+    `</tr></thead>` +
+    `<tbody>${rows}</tbody></table>`;
+
+  const body = docFrame(
+    header +
+    meta +
+    `<div style="padding:0;">${table}</div>` +
+    footerBar(`${company.name} · Statement of Cash Flows (${methodLabel}) · ${period}`),
+  );
+
+  return classicDocument({ title: `Cash Flow Statement ${period}`, bodyHtml: body });
 }
