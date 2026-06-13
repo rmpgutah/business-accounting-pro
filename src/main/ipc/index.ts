@@ -4687,7 +4687,7 @@ export function registerIpcHandlers(): void {
         if (!params?.invoiceId) return { error: 'invoiceId required' };
         result = db.update('invoices', params.invoiceId, { status: 'paid' });
         db.logAudit(companyId, 'invoices', params.invoiceId, 'update', { status: { new: 'paid' } });
-      } else if (actionId === 'client.create') {
+      } else if (actionId === 'client.createQuick') {
         if (!params?.name) return { error: 'name required' };
         result = db.create('clients', { company_id: companyId, name: params.name, email: params.email || '' });
         db.logAudit(companyId, 'clients', result.id, 'create');

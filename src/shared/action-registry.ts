@@ -67,7 +67,7 @@ export const NAV_ACTIONS: AppAction[] = [
 // First mutation actions — small, safe set. Money-moving stays proposal-only (navigate).
 export const MUTATE_ACTIONS: AppAction[] = [
   { id: 'invoice.markPaid', label: 'Mark Invoice Paid…', keywords: ['mark', 'paid', 'invoice'], kind: 'mutate', requiredRole: 'accountant' },
-  { id: 'client.create', label: 'Create Client (quick)', keywords: ['quick', 'add', 'client'], kind: 'mutate', requiredRole: 'accountant' },
+  { id: 'client.createQuick', label: 'Create Client (quick)', keywords: ['quick', 'add', 'client'], kind: 'mutate', requiredRole: 'accountant' },
 ];
 
 export const ALL_ACTIONS: AppAction[] = [...NAV_ACTIONS, ...MUTATE_ACTIONS];
