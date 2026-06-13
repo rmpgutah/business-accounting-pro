@@ -4369,80 +4369,112 @@ export function generateBillHTML(
   settings?: InvoiceSettings,
   accounts?: Array<{ id: string; code?: string; name?: string }>
 ): string {
+  // ── CLASSIC THEME: Arial + pure black/white. ──
+
   // Multi-currency: shadow module-level fmt with bill's currency
   const docCurrency = bill.currency || 'USD';
   const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
 
+  // Build account lookup map for GL coding
   const accountMap = new Map<string, { code?: string; name?: string }>();
   (accounts || []).forEach(a => accountMap.set(a.id, a));
 
-  const total = Number(bill.total || 0);
-  const paid = Number(bill.amount_paid || 0);
-  const balance = total - paid;
+  // ── Math (unchanged from original) ──
+  const total    = Number(bill.total || 0);
+  const paid     = Number(bill.amount_paid || 0);
+  const balance  = total - paid;
   const subtotal = Number(bill.subtotal || 0);
-  const tax = Number(bill.tax_amount || 0);
+  const tax      = Number(bill.tax_amount || 0);
 
-  const stamp = getStatusStamp(bill.status);
-  const statusColor =
-    bill.status === 'paid' ? '#16a34a' :
-    bill.status === 'overdue' ? '#dc2626' :
-    bill.status === 'partial' ? '#d97706' :
-    bill.status === 'draft' ? '#475569' : '#2563eb';
+  // Status: draft gets docFrame watermark; others appear in numberHtml block
+  const isDraft = bill.status === 'draft';
+  const statusBadges: Record<string, string> = {
+    paid: 'PAID', overdue: 'OVERDUE', partial: 'PARTIAL', sent: 'SENT', void: 'VOID',
+  };
+  const statusTag = statusBadges[String(bill.status || '').toLowerCase()] || '';
 
-  const logoHTML = safeImg(settings?.logo_data || null, esc(company?.name || ''),
-    'max-height:42px;max-width:160px;object-fit:contain;margin-bottom:6px;');
+  // ── Header ──
+  const coAddr  = cesc([company?.address_line1, company?.address_line2,
+    [company?.city, company?.state, company?.zip].filter(Boolean).join(', ')].filter(Boolean).join(', '));
+  const coPhone = cesc(company?.phone || '');
+  const coEmail = cesc(company?.email || '');
+  const coDetail = [coAddr, [coEmail, coPhone].filter(Boolean).join(' &middot;')].filter(Boolean).join('<br>');
+  const currLabel = (bill.currency && bill.currency !== 'USD') ? ` (${bill.currency})` : '';
+  const numberHtml = `No. ${cesc(bill.bill_number || '')}${statusTag ? `  [${cesc(statusTag)}]` : ''}`;
+  const header = docHeader({
+    coName: company?.name || 'Company',
+    coDetailHtml: coDetail,
+    title: `Bill${currLabel}`,
+    numberHtml,
+  });
 
-  // ── Feature #17: 1099 eligible badge ──
+  // ── Meta strip ──
+  const metaCells: { label: string; value: string }[] = [
+    { label: 'Bill Date', value: fmtDateMaybe(bill.bill_date || bill.issue_date) || '—' },
+    { label: 'Due Date',  value: bill.due_date ? fmtDateMaybe(bill.due_date) : '—' },
+    { label: 'Terms',     value: bill.terms || '—' },
+  ];
+  if (bill.po_number)       metaCells.push({ label: 'PO Ref',  value: String(bill.po_number) });
+  if (bill.reference)       metaCells.push({ label: 'Ref',     value: String(bill.reference) });
+  if (statusTag)            metaCells.push({ label: 'Status',  value: statusTag });
+  const meta = metaStrip(metaCells);
+
+  // ── Feature #17: 1099 eligible badge (classic = bordered monochrome box) ──
   const is1099 = !!(vendor?.is_1099_eligible || vendor?.vendor_1099 || vendor?.requires_1099);
-  const badge1099 = is1099
-    ? `<div style="display:inline-block;margin-top:6px;padding:3px 8px;background:#fef3c7;color:#92400e;border:1.5px solid #b45309;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact;">1099 Eligible</div>`
+  const badge1099Html = is1099
+    ? `<div style="display:inline-block;margin-top:6px;padding:2px 7px;border:1.5px solid #000;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">1099 Eligible</div>`
     : '';
 
-  const vendorBlock = `
-    <div class="fd-addr-card">
-      <div class="fd-addr-lbl">Bill From</div>
-      <div class="fd-addr-name">${esc(vendor?.name || 'Vendor')}</div>
-      <div class="fd-addr-detail">
-        ${addrLines([vendor?.address_line1, vendor?.address_line2,
-          [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', ') || null])}
-        ${vendor?.email ? `<div>${esc(vendor.email)}</div>` : ''}
-        ${vendor?.phone ? `<div>${esc(vendor.phone)}</div>` : ''}
-      </div>
-      ${badge1099}
-    </div>`;
+  // ── Party boxes ──
+  const vendorAddrHtml = [
+    vendor?.address_line1, vendor?.address_line2,
+    [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', '),
+  ].filter(Boolean).map(l => cesc(l as string)).join('<br>');
+  const vendorContactHtml = [vendor?.email, vendor?.phone].filter(Boolean).map(cesc).join(' &middot; ');
+  const vendorHtml = `<b>${cesc(vendor?.name || 'Vendor')}</b>` +
+    (vendorAddrHtml ? '<br>' + vendorAddrHtml : '') +
+    (vendorContactHtml ? '<br>' + vendorContactHtml : '') +
+    badge1099Html;
 
-  const companyBlock = `
-    <div class="fd-addr-card">
-      <div class="fd-addr-lbl">Bill To</div>
-      <div class="fd-addr-name">${esc(company?.name || 'Company')}</div>
-      <div class="fd-addr-detail">
-        ${addrLines([company?.address_line1, company?.address_line2,
-          [company?.city, company?.state, company?.zip].filter(Boolean).join(', ') || null])}
-        ${company?.email ? `<div>${esc(company.email)}</div>` : ''}
-        ${company?.phone ? `<div>${esc(company.phone)}</div>` : ''}
-      </div>
-    </div>`;
+  const companyAddrHtml = [
+    company?.address_line1, company?.address_line2,
+    [company?.city, company?.state, company?.zip].filter(Boolean).join(', '),
+  ].filter(Boolean).map(l => cesc(l as string)).join('<br>');
+  const companyContactHtml = [company?.email, company?.phone].filter(Boolean).map(cesc).join(' &middot; ');
+  const companyHtml = `<b>${cesc(company?.name || 'Company')}</b>` +
+    (companyAddrHtml ? '<br>' + companyAddrHtml : '') +
+    (companyContactHtml ? '<br>' + companyContactHtml : '');
 
-  const rows = (lineItems || []).map((l: any) => {
-    const qty = Number(l.quantity || 0);
-    const unit = Number(l.unit_price || 0);
-    const amt = Number(l.amount ?? qty * unit);
+  const parties = boxRow([
+    { label: 'From', html: vendorHtml },
+    { label: 'Bill To', html: companyHtml },
+  ]);
+
+  // ── Line items table ──
+  // Columns: Description / Qty / Unit Price / Account (GL) / Amount
+  const lineColumns: RuledColumn[] = [
+    { label: 'Description' },
+    { label: 'Qty',        align: 'right', width: '60px' },
+    { label: 'Unit Price', align: 'right', width: '100px' },
+    { label: 'Account',    align: 'right', width: '130px' },
+    { label: 'Amount',     align: 'right', width: '100px' },
+  ];
+  const lineRows: string[][] = (lineItems || []).map((l: any) => {
+    const qty    = Number(l.quantity || 0);
+    const unit   = Number(l.unit_price || 0);
+    const amt    = Number(l.amount ?? qty * unit);
     const acctId = l.expense_account_id || l.account_id || '';
-    const acct = acctId ? accountMap.get(acctId) : null;
-    const acctLabel = acct ? esc(acct.code || acct.name || '') : '';
-    return `<tr>
-      <td>${esc(l.description || '')}</td>
-      <td class="text-right">${qty}</td>
-      <td class="text-right">${fmt(unit)}</td>
-      <td class="text-right" style="font-size:10px;color:#64748b;">${acctLabel}</td>
-      <td class="text-right font-bold" style="color:#0f172a;">${fmt(amt)}</td>
-    </tr>`;
-  }).join('');
+    const acct   = acctId ? accountMap.get(acctId) : null;
+    const acctLabel = acct ? cesc(acct.code || acct.name || '') : '';
+    return [cesc(l.description || ''), cesc(String(qty)), cesc(fmt(unit)), acctLabel, cesc(fmt(amt))];
+  });
+  const emptyRow: string[][] = lineRows.length === 0
+    ? [[`<span style="font-style:italic;">(no line items)</span>`, '', '', '', '']]
+    : [];
+  const itemsTable = ruledTable(lineColumns, lineRows.length > 0 ? lineRows : emptyRow);
 
-  const created = bill.created_at ? fmtDateMaybe(bill.created_at) : '';
-  const generated = new Date().toLocaleString('en-US');
-
-  // ── Feature #5: bill account allocation visual ──
+  // ── Feature #5: Account Allocation breakdown (classic = ruled mini-table) ──
+  // Replaces the color-filled stacked bar with a plain black/white breakdown.
   const allocByAcct: Record<string, { label: string; total: number }> = {};
   (lineItems || []).forEach((l: any) => {
     const acctId = l.expense_account_id || l.account_id || '';
@@ -4454,77 +4486,58 @@ export function generateBillHTML(
     allocByAcct[label].total += amt;
   });
   const allocEntries = Object.values(allocByAcct).sort((a, b) => b.total - a.total);
-  const allocPalette = ['#0f766e', '#0891b2', '#7c3aed', '#db2777', '#ea580c', '#65a30d'];
   const allocationHTML = allocEntries.length > 1
-    ? `<div style="margin-top:12px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div class="section-label" style="margin-bottom:6px;">Account Allocation</div>
-        ${stackedBar(allocEntries.map((e, i) => ({ value: e.total, color: allocPalette[i % allocPalette.length], label: e.label })), 14)}
-      </div>`
+    ? `<div style="padding:10px 16px;border-top:1px solid #000;">` +
+      `<div class="sec-label" style="margin-bottom:6px;">Account Allocation</div>` +
+      ruledTable(
+        [{ label: 'Account' }, { label: 'Amount', align: 'right', width: '110px' }],
+        allocEntries.map(e => [cesc(e.label), cesc(fmt(e.total))]),
+      ) +
+      `</div>`
     : '';
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Bill ${esc(bill.bill_number || '')}</title>
-<style>${baseStyles}${stamp ? statusStampCSS(stamp.color) : ''}</style></head>
-<body><div class="rpt-page" style="padding:32px 36px;">
-${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
-<div class="fd-letterhead">
-  <div class="fd-letterhead-left">
-    ${logoHTML}
-    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
-    <div class="fd-co-line">${esc([company?.address_line1, company?.city, company?.state].filter(Boolean).join(' · '))}</div>
-  </div>
-  <div class="fd-letterhead-right">
-    <div class="fd-doc-type" style="font-size:22px;">Vendor Bill</div>
-    <div class="fd-doc-num">${esc(bill.bill_number || '')}${statusBadgeInline((bill.status || '').toUpperCase(), statusColor)}</div>
-    <div class="fd-doc-date">${esc(fmtDateMaybe(bill.bill_date || bill.issue_date))}</div>
-    ${bill.due_date ? `<div class="fd-doc-date">Due ${esc(fmtDateMaybe(bill.due_date))}</div>` : ''}
-  </div>
-</div>
+  // ── Totals box (math unchanged) ──
+  const totalRows: { label: string; value: string; grand?: boolean }[] = [
+    { label: 'Subtotal', value: fmt(subtotal) },
+  ];
+  if (tax > 0) totalRows.push({ label: 'Tax', value: fmt(tax) });
+  totalRows.push({ label: 'Total', value: fmt(total), grand: true });
+  if (paid > 0) {
+    totalRows.push({ label: 'Amount Paid', value: `−${fmt(paid)}` });
+    totalRows.push({ label: 'Balance Due', value: fmt(balance), grand: true });
+  }
+  const totals = totalsBox(totalRows);
 
-<div class="fd-addr-grid">
-  ${vendorBlock}
-  ${companyBlock}
-</div>
+  // ── Notes ──
+  const notesHTML = bill.notes
+    ? boxRow([{ label: 'Notes', html: `<div style="white-space:pre-line;">${cesc(bill.notes)}</div>` }])
+    : '';
 
-<table style="margin-top:8px;">
-  <thead>
-    <tr>
-      <th>Description</th>
-      <th class="text-right">Qty</th>
-      <th class="text-right">Unit Price</th>
-      <th class="text-right">Account</th>
-      <th class="text-right">Amount</th>
-    </tr>
-  </thead>
-  <tbody>${rows || `<tr class="fd-empty-row"><td colspan="5">(no line items)</td></tr>`}</tbody>
-</table>
+  // ── Footer ──
+  const created   = bill.created_at ? fmtDateMaybe(bill.created_at) : '';
+  const generated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const footerLine = [
+    company?.name || 'Company',
+    `Bill #${bill.bill_number || ''}`,
+    created ? `Created ${created}` : '',
+    `Generated ${generated}`,
+  ].filter(Boolean).join(' · ');
 
-${allocationHTML}
+  // ── Assemble ──
+  const inner =
+    header +
+    meta +
+    parties +
+    itemsTable +
+    allocationHTML +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    notesHTML +
+    footerBar(footerLine);
 
-<div style="overflow:hidden;margin-top:18px;">
-  <div class="fd-totals-card">
-    <div class="totals-rows">
-      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
-    </div>
-    <div class="totals-grand">
-      <div class="lbl">Total</div>
-      <div class="val">${fmt(total)}</div>
-    </div>
-    ${paid > 0 ? `<div class="totals-paid"><span>Amount Paid</span><span style="font-variant-numeric:tabular-nums;">−${fmt(paid)}</span></div>` : ''}
-    ${(paid > 0 || balance !== total) ? `<div class="totals-balance-due"><span>Balance Due</span><span style="font-variant-numeric:tabular-nums;">${fmt(balance)}</span></div>` : ''}
-  </div>
-</div>
-
-${bill.notes ? `<div style="clear:both;margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;">
-  <div class="section-label">Notes</div>
-  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(bill.notes)}</div>
-</div>` : '<div style="clear:both;"></div>'}
-
-<div class="rpt-footer" style="margin-top:32px;">
-  <span>${created ? `Created ${esc(created)}` : ''}</span>
-  <span>Generated ${esc(generated)}</span>
-</div>
-</div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bill ${cesc(bill.bill_number || '')}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner, { draft: isDraft }) +
+    `</body></html>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4547,193 +4560,196 @@ export function generatePurchaseOrderHTML(
     payment_terms?: string;
   }
 ): string {
+  // ── CLASSIC THEME: Arial + pure black/white. ──
+
   // Multi-currency: shadow module-level fmt with PO's currency
   const docCurrency = po.currency || 'USD';
   const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
 
+  // ── Math (unchanged from original) ──
   const subtotal = Number(po.subtotal || 0);
-  const tax = Number(po.tax_amount || 0);
-  const total = Number(po.total || 0);
+  const tax      = Number(po.tax_amount || 0);
+  const total    = Number(po.total || 0);
 
-  const statusColor =
-    po.status === 'received' ? '#16a34a' :
-    po.status === 'cancelled' ? '#dc2626' :
-    po.status === 'approved' ? '#2563eb' :
-    po.status === 'sent' ? '#d97706' : '#475569';
+  // Status: draft gets docFrame watermark; others appear in numberHtml block
+  const isDraft = po.status === 'draft';
+  const statusBadgesMap: Record<string, string> = {
+    sent: 'SENT', received: 'RECEIVED', cancelled: 'CLOSED', approved: 'APPROVED',
+  };
+  const statusTag = statusBadgesMap[String(po.status || '').toLowerCase()] || '';
 
-  const stamp =
-    po.status === 'draft' ? { label: 'DRAFT', color: '#475569' } :
-    po.status === 'sent' ? { label: 'SENT', color: '#d97706' } :
-    po.status === 'received' ? { label: 'RECEIVED', color: '#16a34a' } :
-    po.status === 'cancelled' ? { label: 'CLOSED', color: '#dc2626' } :
-    null;
+  // ── Header ──
+  const coAddr  = cesc([company?.address_line1, company?.address_line2,
+    [company?.city, company?.state, company?.zip].filter(Boolean).join(', ')].filter(Boolean).join(', '));
+  const coPhone = cesc(company?.phone || '');
+  const coEmail = cesc(company?.email || '');
+  const coDetail = [coAddr, [coEmail, coPhone].filter(Boolean).join(' &middot;')].filter(Boolean).join('<br>');
+  const currLabel = (po.currency && po.currency !== 'USD') ? ` (${po.currency})` : '';
+  const numberHtml = `No. ${cesc(po.po_number || '')}${statusTag ? `  [${cesc(statusTag)}]` : ''}`;
+  const header = docHeader({
+    coName: company?.name || 'Company',
+    coDetailHtml: coDetail,
+    title: `Purchase Order${currLabel}`,
+    numberHtml,
+  });
 
-  const logoHTML = safeImg(settings?.logo_data || null, esc(company?.name || ''),
-    'max-height:42px;max-width:160px;object-fit:contain;margin-bottom:6px;');
+  // ── Meta strip ──
+  const orderDateStr    = fmtDateMaybe(po.order_date || po.issue_date);
+  const expectedDateStr = fmtDateMaybe(po.expected_delivery_date || po.expected_date);
+  const metaCells: { label: string; value: string }[] = [
+    { label: 'PO Date',      value: orderDateStr || '—' },
+    { label: 'Required By',  value: expectedDateStr || '—' },
+    { label: 'Terms',        value: po.terms || settings?.payment_terms || '—' },
+  ];
+  if (settings?.delivery_terms) metaCells.push({ label: 'Delivery',  value: settings.delivery_terms });
+  if (statusTag)                metaCells.push({ label: 'Status',    value: statusTag });
+  const meta = metaStrip(metaCells);
 
-  const vendorBlock = `
-    <div class="fd-addr-card">
-      <div class="fd-addr-lbl">Vendor</div>
-      <div class="fd-addr-name">${esc(vendor?.name || 'Vendor')}</div>
-      <div class="fd-addr-detail">
-        ${addrLines([vendor?.address_line1, vendor?.address_line2,
-          [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', ') || null])}
-        ${vendor?.email ? `<div>${esc(vendor.email)}</div>` : ''}
-        ${vendor?.phone ? `<div>${esc(vendor.phone)}</div>` : ''}
-      </div>
-    </div>`;
+  // ── Party boxes ──
+  const vendorAddrHtml = [
+    vendor?.address_line1, vendor?.address_line2,
+    [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', '),
+  ].filter(Boolean).map(l => cesc(l as string)).join('<br>');
+  const vendorContactHtml = [vendor?.email, vendor?.phone].filter(Boolean).map(cesc).join(' &middot; ');
+  const vendorHtml = `<b>${cesc(vendor?.name || 'Vendor')}</b>` +
+    (vendorAddrHtml ? '<br>' + vendorAddrHtml : '') +
+    (vendorContactHtml ? '<br>' + vendorContactHtml : '');
 
-  const shipName = settings?.ship_to_name || company?.name || '';
-  const shipL1 = settings?.ship_to_address_line1 || company?.address_line1 || '';
-  const shipL2 = settings?.ship_to_address_line2 || company?.address_line2 || '';
-  const shipCity = settings?.ship_to_city || company?.city || '';
+  // Ship To resolves settings overrides → company address (original logic unchanged)
+  const shipName  = settings?.ship_to_name  || company?.name  || '';
+  const shipL1    = settings?.ship_to_address_line1 || company?.address_line1 || '';
+  const shipL2    = settings?.ship_to_address_line2 || company?.address_line2 || '';
+  const shipCity  = settings?.ship_to_city  || company?.city  || '';
   const shipState = settings?.ship_to_state || company?.state || '';
-  const shipZip = settings?.ship_to_zip || company?.zip || '';
+  const shipZip   = settings?.ship_to_zip   || company?.zip   || '';
+  const shipAddrHtml = [shipL1, shipL2, [shipCity, shipState, shipZip].filter(Boolean).join(', ')]
+    .filter(Boolean).map(l => cesc(l as string)).join('<br>');
+  const shipHtml = `<b>${cesc(shipName)}</b>` + (shipAddrHtml ? '<br>' + shipAddrHtml : '');
 
-  const shipBlock = `
-    <div class="fd-addr-card">
-      <div class="fd-addr-lbl">Ship To</div>
-      <div class="fd-addr-name">${esc(shipName)}</div>
-      <div class="fd-addr-detail">
-        ${addrLines([shipL1, shipL2, [shipCity, shipState, shipZip].filter(Boolean).join(', ') || null])}
-      </div>
-    </div>`;
+  const parties = boxRow([
+    { label: 'Vendor',   html: vendorHtml },
+    { label: 'Ship To',  html: shipHtml },
+  ]);
 
-  const rows = (lineItems || []).map((l: any) => {
-    const qty = Number(l.quantity || 0);
-    const unit = Number(l.unit_price || 0);
-    const amt = Number(l.amount ?? qty * unit);
-    const taxRate = Number(l.tax_rate || 0);
-    return `<tr>
-      <td>${esc(l.description || '')}</td>
-      <td class="text-right">${qty}</td>
-      <td class="text-right" style="font-size:10px;color:#64748b;">${esc(l.unit_label || '')}</td>
-      <td class="text-right">${fmt(unit)}</td>
-      <td class="text-right" style="font-size:10px;color:#64748b;">${taxRate > 0 ? taxRate + '%' : '—'}</td>
-      <td class="text-right font-bold" style="color:#0f172a;">${fmt(amt)}</td>
-    </tr>`;
-  }).join('');
-
-  const generated = new Date().toLocaleString('en-US');
-
-  // ── Feature #8: PO delivery timeline ──
+  // ── Feature #8: PO delivery timeline (classic = text info row) ──
+  // The original shows a color-filled progress bar. Classic replaces this with
+  // a plain text row showing order status relative to today's date.
   const deliveryTimelineHTML = (() => {
-    const orderRaw = po.order_date || po.issue_date;
+    const orderRaw    = po.order_date || po.issue_date;
     const expectedRaw = po.expected_delivery_date || po.expected_date;
     if (!orderRaw || !expectedRaw) return '';
-    const order = new Date(orderRaw + 'T12:00:00').getTime();
+    const order    = new Date(orderRaw + 'T12:00:00').getTime();
     const expected = new Date(expectedRaw + 'T12:00:00').getTime();
-    const today = Date.now();
+    const today    = Date.now();
     if (!isFinite(order) || !isFinite(expected) || expected <= order) return '';
-    const span = expected - order;
-    const todayPct = Math.max(0, Math.min(100, ((today - order) / span) * 100));
-    const overdue = today > expected;
-    const approaching = !overdue && expected - today < span * 0.2;
-    const color = overdue ? '#dc2626' : approaching ? '#d97706' : '#2563eb';
-    const status = overdue ? `${Math.floor((today - expected) / 86_400_000)}d overdue` : approaching ? 'Approaching' : 'On track';
-    return `<div style="margin-top:14px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:6px;">
-        <span>Delivery Timeline</span>
-        <span style="color:${color};">${status}</span>
-      </div>
-      <div style="position:relative;height:14px;background:#e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100, todayPct).toFixed(1)}%;background:${color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-        <div style="position:absolute;right:0;top:-3px;bottom:-3px;width:2px;background:#0f172a;"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:#475569;margin-top:4px;font-variant-numeric:tabular-nums;">
-        <span>Ordered ${esc(fmtDateMaybe(orderRaw))}</span>
-        <span>Today</span>
-        <span>Expected ${esc(fmtDateMaybe(expectedRaw))}</span>
-      </div>
-    </div>`;
+    const overdue     = today > expected;
+    const approaching = !overdue && (expected - today) < (expected - order) * 0.2;
+    const daysLeft    = Math.ceil((expected - today) / 86_400_000);
+    const daysOver    = Math.floor((today - expected) / 86_400_000);
+    const statusText  = overdue
+      ? `OVERDUE by ${daysOver} day${daysOver !== 1 ? 's' : ''}`
+      : approaching
+        ? `APPROACHING — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`
+        : `ON TRACK — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+    return `<div style="padding:7px 16px;border-top:1px solid #000;border-bottom:1px solid #000;font-size:10px;">` +
+      `<span class="sec-label">Delivery Timeline</span>&nbsp;&nbsp;` +
+      `Ordered ${cesc(fmtDateMaybe(orderRaw))} &nbsp;&middot;&nbsp; ` +
+      `Expected ${cesc(fmtDateMaybe(expectedRaw))} &nbsp;&middot;&nbsp; ` +
+      `<b>${cesc(statusText)}</b>` +
+      `</div>`;
   })();
 
-  const terms: string = po.terms || '';
+  // ── Line items table ──
+  // Columns: Description / Qty / Unit / Unit Price / Tax % / Line Total
+  const lineColumns: RuledColumn[] = [
+    { label: 'Description' },
+    { label: 'Qty',        align: 'right',  width: '50px' },
+    { label: 'Unit',       align: 'center', width: '60px' },
+    { label: 'Unit Price', align: 'right',  width: '90px' },
+    { label: 'Tax %',      align: 'right',  width: '60px' },
+    { label: 'Line Total', align: 'right',  width: '100px' },
+  ];
+  const lineRows: string[][] = (lineItems || []).map((l: any) => {
+    const qty     = Number(l.quantity || 0);
+    const unit    = Number(l.unit_price || 0);
+    const amt     = Number(l.amount ?? qty * unit);
+    const taxRate = Number(l.tax_rate || 0);
+    return [
+      cesc(l.description || ''),
+      cesc(String(qty)),
+      cesc(l.unit_label || ''),
+      cesc(fmt(unit)),
+      taxRate > 0 ? cesc(taxRate + '%') : '—',
+      cesc(fmt(amt)),
+    ];
+  });
+  const emptyRow: string[][] = lineRows.length === 0
+    ? [[`<span style="font-style:italic;">(no line items)</span>`, '', '', '', '', '']]
+    : [];
+  const itemsTable = ruledTable(lineColumns, lineRows.length > 0 ? lineRows : emptyRow);
+
+  // ── Totals box (math unchanged) ──
+  const totalRows: { label: string; value: string; grand?: boolean }[] = [
+    { label: 'Subtotal', value: fmt(subtotal) },
+  ];
+  if (tax > 0) totalRows.push({ label: 'Tax', value: fmt(tax) });
+  totalRows.push({ label: 'Order Total', value: fmt(total), grand: true });
+  const totals = totalsBox(totalRows);
+
+  // ── Terms & Conditions ──
+  const terms         = po.terms || '';
   const deliveryTerms = settings?.delivery_terms || '';
-  const paymentTerms = settings?.payment_terms || '';
+  const paymentTerms  = settings?.payment_terms || '';
+  const termsHTML = (terms || deliveryTerms || paymentTerms)
+    ? boxRow([{
+        label: 'Terms & Conditions',
+        html: [
+          deliveryTerms ? `<b>Delivery:</b> ${cesc(deliveryTerms)}` : '',
+          paymentTerms  ? `<b>Payment:</b> ${cesc(paymentTerms)}`  : '',
+          terms         ? `<div style="margin-top:4px;white-space:pre-line;">${cesc(terms)}</div>` : '',
+        ].filter(Boolean).join('<br>'),
+      }])
+    : '';
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Purchase Order ${esc(po.po_number || '')}</title>
-<style>${baseStyles}${stamp ? statusStampCSS(stamp.color) : ''}</style></head>
-<body><div class="rpt-page" style="padding:32px 36px;">
-${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
-<div class="fd-letterhead">
-  <div class="fd-letterhead-left">
-    ${logoHTML}
-    <div class="fd-co-name">${esc(company?.name || 'Company')}</div>
-    <div class="fd-co-line">${esc([company?.address_line1, company?.city, company?.state].filter(Boolean).join(' · '))}</div>
-  </div>
-  <div class="fd-letterhead-right">
-    <div class="fd-doc-type">Purchase Order</div>
-    <div class="fd-doc-num">${esc(po.po_number || '')}${statusBadgeInline((po.status || '').toUpperCase().replace('_',' '), statusColor)}</div>
-    <div class="fd-doc-date">Order ${esc(fmtDateMaybe(po.order_date || po.issue_date))}</div>
-    ${(po.expected_delivery_date || po.expected_date) ? `<div class="fd-doc-date">Expected ${esc(fmtDateMaybe(po.expected_delivery_date || po.expected_date))}</div>` : ''}
-  </div>
-</div>
+  // ── Notes ──
+  const notesHTML = po.notes
+    ? boxRow([{ label: 'Notes', html: `<div style="white-space:pre-line;">${cesc(po.notes)}</div>` }])
+    : '';
 
-<div class="fd-addr-grid">
-  ${vendorBlock}
-  ${shipBlock}
-</div>
+  // ── Signature block (Approved by / Date) ──
+  const sigHTML = `<div style="padding:18px 16px 12px;border-top:2px solid #000;">` +
+    `<div style="display:flex;gap:40px;">` +
+    `<div style="flex:1;"><div style="border-bottom:1px solid #000;height:28px;"></div>` +
+    `<div style="font-size:10px;margin-top:4px;">Approved by</div></div>` +
+    `<div style="flex:1;"><div style="border-bottom:1px solid #000;height:28px;"></div>` +
+    `<div style="font-size:10px;margin-top:4px;">Date</div></div>` +
+    `</div></div>`;
 
-${deliveryTimelineHTML}
+  // ── Footer ──
+  const generated  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const footerLine = [
+    `Purchase Order ${po.po_number || ''}`,
+    company?.name || 'Company',
+    `Generated ${generated}`,
+  ].filter(Boolean).join(' · ');
 
-<table style="margin-top:8px;">
-  <thead>
-    <tr>
-      <th>Description</th>
-      <th class="text-right">Qty</th>
-      <th class="text-right">Unit</th>
-      <th class="text-right">Unit Price</th>
-      <th class="text-right">Tax %</th>
-      <th class="text-right">Line Total</th>
-    </tr>
-  </thead>
-  <tbody>${rows || `<tr class="fd-empty-row"><td colspan="6">(no line items)</td></tr>`}</tbody>
-</table>
+  // ── Assemble ──
+  const inner =
+    header +
+    meta +
+    parties +
+    deliveryTimelineHTML +
+    itemsTable +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    termsHTML +
+    notesHTML +
+    sigHTML +
+    footerBar(footerLine);
 
-<div style="overflow:hidden;margin-top:18px;">
-  <div class="fd-totals-card">
-    <div class="totals-rows">
-      <div class="totals-row"><span>Subtotal</span><span class="val">${fmt(subtotal)}</span></div>
-      ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span class="val">${fmt(tax)}</span></div>` : ''}
-    </div>
-    <div class="totals-grand">
-      <div class="lbl">Order Total</div>
-      <div class="val">${fmt(total)}</div>
-    </div>
-  </div>
-</div>
-
-<div style="clear:both;"></div>
-
-${(terms || deliveryTerms || paymentTerms) ? `<div style="margin-top:24px;padding:14px 16px;background:var(--paper-tint);border:1px solid var(--rule);border-radius:6px;border-left:3px solid var(--accent);">
-  <div class="section-label">Terms &amp; Conditions</div>
-  ${deliveryTerms ? `<div style="font-size:10.5px;margin-bottom:4px;"><strong>Delivery:</strong> ${esc(deliveryTerms)}</div>` : ''}
-  ${paymentTerms ? `<div style="font-size:10.5px;margin-bottom:4px;"><strong>Payment:</strong> ${esc(paymentTerms)}</div>` : ''}
-  ${terms ? `<div style="font-size:10.5px;color:#475569;white-space:pre-line;">${esc(terms)}</div>` : ''}
-</div>` : ''}
-
-${po.notes ? `<div style="margin-top:18px;">
-  <div class="section-label">Notes</div>
-  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(po.notes)}</div>
-</div>` : ''}
-
-<div class="signature-block" style="margin-top:42px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
-  <div>
-    <div class="fd-sig-line"></div>
-    <div class="fd-sig-lbl">Approved by</div>
-  </div>
-  <div>
-    <div class="fd-sig-line"></div>
-    <div class="fd-sig-lbl">Date</div>
-  </div>
-</div>
-
-<div class="rpt-footer" style="margin-top:32px;">
-  <span>Purchase Order ${esc(po.po_number || '')}</span>
-  <span>Generated ${esc(generated)}</span>
-</div>
-</div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order ${cesc(po.po_number || '')}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner, { draft: isDraft }) +
+    `</body></html>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
