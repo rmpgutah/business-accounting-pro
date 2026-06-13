@@ -125,6 +125,13 @@ let _lastLoginEmail: string | null = null;
 function setLastLoginEmail(email: string) { _lastLoginEmail = email; }
 function getLastLoginEmail(): string | null { return _lastLoginEmail; }
 
+// Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
+// sides must HMAC over the identical string, so this logic must stay in lockstep
+// with the server: same whitelist, same 100-char cap.
+function sanitizeBackupEmail(email: string): string {
+  return (email || '').replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+}
+
 // Helper: download backup from server
 function downloadBackup(email: string): Promise<Buffer | null> {
   return new Promise((resolve) => {
@@ -132,11 +139,18 @@ function downloadBackup(email: string): Promise<Buffer | null> {
     const isHttps = url.protocol === 'https:';
     const transport = isHttps ? https : http;
 
+    // The server authenticates download/status by HMAC over the sanitized
+    // email. We sign the raw email; the server applies the same sanitize +
+    // HMAC and compares. Mirror the upload secret-resolution exactly.
+    const secret = process.env.SYNC_SECRET || 'bap-sync-default';
+    const signature = crypto.createHmac('sha256', secret).update(sanitizeBackupEmail(email)).digest('hex');
+
     const req = transport.request({
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
       path: url.pathname,
       method: 'GET',
+      headers: { 'x-bap-signature': signature },
     }, (res) => {
       if (res.statusCode !== 200) { resolve(null); return; }
       const ct = res.headers['content-type'] || '';
