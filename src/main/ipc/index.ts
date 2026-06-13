@@ -4667,6 +4667,40 @@ export function registerIpcHandlers(): void {
     } catch (e) { console.warn('[search:backfill] failed', e); return { indexed: 0, error: String(e) }; }
   });
 
+  // Intelligence Core (B1) — role-checked mutation dispatch. Role enforced in main; never trust renderer.
+  ipcMain.handle('action:invoke', (_e, { actionId, params }: { actionId: string; params?: any }) => {
+    const companyId = db.getCurrentCompanyId();
+    const userId = db.getCurrentUserId();
+    if (!companyId || !userId) return { error: 'Not authenticated' };
+    const { MUTATE_ACTIONS, ROLE_RANK } = require('../../shared/action-registry');
+    const action = MUTATE_ACTIONS.find((a: any) => a.id === actionId);
+    if (!action) return { error: 'Unknown or non-mutating action' };
+    // Role check — never trust the renderer.
+    const userRow: any = db.runQuery('SELECT role FROM users WHERE id = ?', [userId])[0];
+    const role = (userRow?.role || 'viewer');
+    if (action.requiredRole && (ROLE_RANK[role] ?? 0) < ROLE_RANK[action.requiredRole]) {
+      return { error: `Requires ${action.requiredRole} role` };
+    }
+    try {
+      let result: any;
+      if (actionId === 'invoice.markPaid') {
+        if (!params?.invoiceId) return { error: 'invoiceId required' };
+        result = db.update('invoices', params.invoiceId, { status: 'paid' });
+        db.logAudit(companyId, 'invoices', params.invoiceId, 'update', { status: { new: 'paid' } });
+      } else if (actionId === 'client.create') {
+        if (!params?.name) return { error: 'name required' };
+        result = db.create('clients', { company_id: companyId, name: params.name, email: params.email || '' });
+        db.logAudit(companyId, 'clients', result.id, 'create');
+      } else {
+        return { error: 'No handler' };
+      }
+      scheduleReindex(actionId.startsWith('invoice') ? 'invoices' : 'clients',
+        (params.invoiceId || result.id), 'upsert');
+      scheduleAutoBackup();
+      return { ok: true, result };
+    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  });
+
   ipcMain.handle('search:global', (_event, query) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId || !query || String(query).length > 200) return [];
