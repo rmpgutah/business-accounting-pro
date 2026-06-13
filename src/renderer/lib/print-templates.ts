@@ -974,26 +974,6 @@ export const FONT_OPTIONS: Array<{ id: string; label: string; stack: string; cat
   { id: 'mono',      label: 'Mono (Menlo)',       stack: "Menlo, Consolas, 'Courier New', Courier, monospace", category: 'mono' },
 ];
 
-function fontStack(family: string | undefined): string {
-  if (!family) return FONT_OPTIONS[0].stack;
-  const opt = FONT_OPTIONS.find(f => f.id === family);
-  return opt ? opt.stack : FONT_OPTIONS[0].stack;
-}
-
-function watermarkCSS(text: string, opacity: number): string {
-  if (!text) return '';
-  return `
-  .watermark {
-    position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%) rotate(-35deg);
-    font-size: 80px; font-weight: 900; text-transform: uppercase;
-    letter-spacing: 8px; color: #000;
-    opacity: ${Math.min(0.15, Math.max(0.02, opacity || 0.06))};
-    pointer-events: none; white-space: nowrap; z-index: 0;
-  }
-  @media print { .watermark { position: fixed; } }`;
-}
-
 // ─── QR Code Generator (synchronous SVG render from qrcode.create()) ──
 // Uses qrcode's sync .create() to get the raw module matrix, then renders
 // inline SVG ourselves. This avoids making the entire template chain
@@ -1025,20 +1005,6 @@ function generateQRSVG(text: string, sizePx: number = 100): string {
   } catch {
     return ''; // Graceful degrade — no QR rather than broken PDF
   }
-}
-
-// Render a complete QR card (svg + caption) for embedding in invoices/POs
-function qrCard(url: string, caption: string = 'Scan to pay online'): string {
-  if (!url) return '';
-  const svg = generateQRSVG(url, 96);
-  if (!svg) return '';
-  return `<div style="display:inline-flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    <div style="width:96px;height:96px;flex:0 0 96px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${svg}</div>
-    <div style="font-size:11px;line-height:1.4;color:var(--ink-muted);max-width:160px;">
-      <div style="font-weight:800;color:var(--ink);font-size:11.5px;text-transform:uppercase;letter-spacing:1.1px;margin-bottom:3px;">${esc(caption)}</div>
-      <div style="color:var(--ink-faint);font-size:9.5px;">Scan with your phone camera to view, pay, and download a receipt.</div>
-    </div>
-  </div>`;
 }
 
 export function generateInvoiceHTML(
