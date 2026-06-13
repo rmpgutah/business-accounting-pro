@@ -1328,18 +1328,14 @@ export function generateInvoiceHTML(
   // For 'replace' letterhead the banner stands in for the company block, so
   // emit an empty company cell; otherwise show logo + company details.
   const useReplaceHeader = !!(letterheadSrc && letterheadPos === 'replace');
-  const header = docHeader({
+  // numberLines is multi-line trusted HTML (number + status + optional
+  // "Re: …"), so pass it via docHeader's numberHtml option.
+  const headerWithNumber = docHeader({
     coName: useReplaceHeader ? '' : (company?.name || 'Company'),
     coDetailHtml: useReplaceHeader ? '' : (logoHTML + coDetail),
     title: `${invoiceTypeLabel}${currencyLabel}`,
-    number: undefined,
+    numberHtml: numberLines,
   });
-  // docHeader's `number` is escaped internally and can't carry <br> markup,
-  // so inject the multi-line number block ourselves.
-  const headerWithNumber = header.replace(
-    '</div></div></div>',
-    `<div class="doc-number">${numberLines}</div></div></div>`
-  );
 
   // ── Meta strip (Issue/Due or Quote/Valid Until + PO + custom fields) ──
   const statusPretty = invoice.status

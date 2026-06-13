@@ -76,13 +76,19 @@ export function boxRow(boxes: DocBox[]): string {
     `<div style="margin-top:5px;">${b.html}</div></div>`).join('')}</div>`;
 }
 
-export interface DocHeaderOpts { coName: string; coDetailHtml: string; title: string; number?: string; }
+// `number` is plain text (escaped). `numberHtml` is TRUSTED HTML for multi-line
+// number/status blocks (e.g. "No. 42 [SENT]<br>Re: Invoice #7") — caller must
+// esc() any user text inside it. If both are given, numberHtml wins.
+export interface DocHeaderOpts { coName: string; coDetailHtml: string; title: string; number?: string; numberHtml?: string; }
 export function docHeader(o: DocHeaderOpts): string {
+  const numberBlock = o.numberHtml
+    ? `<div class="doc-number">${o.numberHtml}</div>`
+    : (o.number ? `<div class="doc-number">${esc(o.number)}</div>` : '');
   return `<div class="doc-header">` +
     `<div class="co"><div class="co-name">${esc(o.coName)}</div>` +
     `<div class="co-detail">${o.coDetailHtml}</div></div>` +
     `<div class="doc-meta"><div class="doc-title">${esc(o.title)}</div>` +
-    `${o.number ? `<div class="doc-number">${esc(o.number)}</div>` : ''}</div></div>`;
+    `${numberBlock}</div></div>`;
 }
 
 export interface RuledColumn { label: string; align?: 'left' | 'right' | 'center'; width?: string; }

@@ -41,6 +41,13 @@ t('totalsBox marks grand row', () => {
   const html = m.totalsBox([{ label: 'Total', value: '$5', grand: true }]);
   assert.ok(html.includes('<tr class="grand">'));
 });
+t('docHeader numberHtml passes trusted multi-line markup unescaped', () => {
+  const html = m.docHeader({ coName: 'Co', coDetailHtml: '', title: 'Invoice', numberHtml: 'No. 7<br>[SENT]' });
+  assert.ok(html.includes('No. 7<br>[SENT]'), 'numberHtml not escaped');
+  // plain `number` is still escaped:
+  const esc2 = m.docHeader({ coName: 'Co', coDetailHtml: '', title: 'Invoice', number: '<b>' });
+  assert.ok(esc2.includes('&lt;b&gt;'), 'plain number escaped');
+});
 
 fs.rmSync(out, { recursive: true, force: true });
 console.log(`\n${passed} passed`);
