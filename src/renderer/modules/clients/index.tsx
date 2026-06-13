@@ -2,18 +2,20 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, UserCircle, PieChart, BarChart3, Plus, TrendingUp, TrendingDown,
   DollarSign, Clock, AlertTriangle, Star, Users, ArrowRight, Printer, Upload, Sparkles,
+  Brain,
 } from 'lucide-react';
 import ClientList from './ClientList';
 import ClientDetail from './ClientDetail';
 import ClientForm from './ClientForm';
 const ClientsUpgradesPanel = React.lazy(() => import('./upgrades'));
+const ClientAnalytics = React.lazy(() => import('./ClientAnalytics'));
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'clients' | 'segments' | 'analytics' | 'upgrades';
+type Tab = 'dashboard' | 'clients' | 'segments' | 'analytics' | 'insights' | 'upgrades';
 type SegmentGroupBy = 'tier' | 'industry' | 'segment';
 
 // ─── Tab Button ─────────────────────────────────────────
@@ -377,6 +379,7 @@ const ClientsModule: React.FC = () => {
         <TabBtn active={tab === 'clients'} icon={<UserCircle size={16} />} label="Clients" onClick={() => switchTab('clients')} />
         <TabBtn active={tab === 'segments'} icon={<PieChart size={16} />} label="Segments" onClick={() => switchTab('segments')} />
         <TabBtn active={tab === 'analytics'} icon={<BarChart3 size={16} />} label="Analytics" onClick={() => switchTab('analytics')} />
+        <TabBtn active={tab === 'insights'} icon={<Brain size={16} />} label="Insights" onClick={() => switchTab('insights')} />
         <TabBtn active={tab === 'upgrades'} icon={<Sparkles size={16} />} label="Upgrades" onClick={() => switchTab('upgrades')} />
       </div>
 
@@ -859,6 +862,15 @@ const ClientsModule: React.FC = () => {
             </>
           )}
         </div>
+      )}
+
+      {/* ─── Insights Tab (LTV/Cohort/Churn/CAC deep analytics) ─── */}
+      {tab === 'insights' && (
+        <React.Suspense fallback={<div className="flex items-center justify-center h-48 text-text-muted text-sm">Loading insights...</div>}>
+          <ClientAnalytics
+            onSelectClient={(id: string) => { switchTab('clients'); handleSelectClient(id); }}
+          />
+        </React.Suspense>
       )}
 
       {/* ─── Upgrades Tab ─── */}
