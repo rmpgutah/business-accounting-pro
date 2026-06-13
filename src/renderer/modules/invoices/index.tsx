@@ -16,6 +16,7 @@ import {
   Printer,
   Sparkles,
   CreditCard,
+  ShieldAlert,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -30,9 +31,10 @@ import InvoicesUpgradesPanel from './upgrades';
 import CouponsManager from './CouponsManager';
 import PaymentPlansPanel from './PaymentPlansPanel';
 import CreditMemosPanel from './CreditMemosPanel';
+import CollectionsDunning from './CollectionsDunning';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics' | 'upgrades' | 'billing-addons';
+type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics' | 'upgrades' | 'billing-addons' | 'collections';
 type InvoiceView = 'list' | 'detail' | 'form';
 
 type View =
@@ -1097,6 +1099,12 @@ const InvoicingModule: React.FC = () => {
           />
           <TabBtn
             active={false}
+            icon={<ShieldAlert size={14} />}
+            label="Collections"
+            onClick={() => setTab('collections')}
+          />
+          <TabBtn
+            active={false}
             icon={<Sparkles size={14} />}
             label="Upgrades"
             onClick={() => setTab('upgrades')}
@@ -1146,6 +1154,12 @@ const InvoicingModule: React.FC = () => {
           />
           <TabBtn
             active={false}
+            icon={<ShieldAlert size={14} />}
+            label="Collections"
+            onClick={() => setTab('collections')}
+          />
+          <TabBtn
+            active={false}
             icon={<Sparkles size={14} />}
             label="Upgrades"
             onClick={() => setTab('upgrades')}
@@ -1153,6 +1167,61 @@ const InvoicingModule: React.FC = () => {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-6">
           {renderBillingAddons()}
+        </div>
+      </div>
+    );
+  }
+
+  // Collections tab
+  if ((tab as string) === 'collections') {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-1 border-b border-border-primary px-6 pt-4">
+          <TabBtn
+            active={false}
+            icon={<LayoutDashboard size={14} />}
+            label="Dashboard"
+            onClick={() => setTab('dashboard')}
+          />
+          <TabBtn
+            active={false}
+            icon={<FileText size={14} />}
+            label="Invoices"
+            onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
+          />
+          <TabBtn
+            active={false}
+            icon={<Repeat size={14} />}
+            label="Recurring"
+            onClick={() => setTab('recurring')}
+          />
+          <TabBtn
+            active={false}
+            icon={<BarChart3 size={14} />}
+            label="Analytics"
+            onClick={() => setTab('analytics')}
+          />
+          <TabBtn
+            active={false}
+            icon={<CreditCard size={14} />}
+            label="Billing Add-ons"
+            onClick={() => setTab('billing-addons')}
+          />
+          <TabBtn
+            active={true}
+            icon={<ShieldAlert size={14} />}
+            label="Collections"
+            onClick={() => setTab('collections')}
+          />
+          <TabBtn
+            active={false}
+            icon={<Sparkles size={14} />}
+            label="Upgrades"
+            onClick={() => setTab('upgrades')}
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          <CollectionsDunning />
         </div>
       </div>
     );
@@ -1192,6 +1261,12 @@ const InvoicingModule: React.FC = () => {
             icon={<CreditCard size={14} />}
             label="Billing Add-ons"
             onClick={() => setTab('billing-addons')}
+          />
+          <TabBtn
+            active={false}
+            icon={<ShieldAlert size={14} />}
+            label="Collections"
+            onClick={() => setTab('collections')}
           />
           <TabBtn
             active={true}
@@ -1242,6 +1317,12 @@ const InvoicingModule: React.FC = () => {
           onClick={() => setTab('billing-addons')}
         />
         <TabBtn
+          active={(tab as string) === 'collections'}
+          icon={<ShieldAlert size={14} />}
+          label="Collections"
+          onClick={() => setTab('collections')}
+        />
+        <TabBtn
           active={false}
           icon={<Sparkles size={14} />}
           label="Upgrades"
@@ -1253,6 +1334,7 @@ const InvoicingModule: React.FC = () => {
       {tab === 'recurring' && renderRecurring()}
       {tab === 'analytics' && renderAnalytics()}
       {(tab as string) === 'billing-addons' && renderBillingAddons()}
+      {(tab as string) === 'collections' && <CollectionsDunning />}
     </div>
   );
 };

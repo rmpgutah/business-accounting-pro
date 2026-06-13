@@ -1568,6 +1568,12 @@ const api = {
     window.electronAPI.invoke('invoice:apply-late-fees'),
   runDunning: (): Promise<{ advanced: number }> =>
     window.electronAPI.invoke('invoice:run-dunning'),
+  dunningRun: (): Promise<{ invoicesProcessed: number; remindersQueued: number; collectionsSuggested: number; errors?: string[] }> =>
+    window.electronAPI.invoke('dunning:run'),
+  dunningPreview: (): Promise<any> =>
+    window.electronAPI.invoke('dunning:preview'),
+  dunningSeqList: (): Promise<any[]> =>
+    window.electronAPI.invoke('db:query', { table: 'dunning_sequences', where: {}, orderBy: 'created_at DESC' }),
 
   // ─── Payroll Summary ─────────────────────────────
   employeeSummary: (employeeId: string): Promise<any> =>
