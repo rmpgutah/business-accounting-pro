@@ -15,6 +15,7 @@ import {
   Bell,
   Printer,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -26,9 +27,12 @@ import InvoiceDetail from './InvoiceDetail';
 import InvoiceSettings from './InvoiceSettings';
 import CatalogManager from './CatalogManager';
 import InvoicesUpgradesPanel from './upgrades';
+import CouponsManager from './CouponsManager';
+import PaymentPlansPanel from './PaymentPlansPanel';
+import CreditMemosPanel from './CreditMemosPanel';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics' | 'upgrades';
+type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics' | 'upgrades' | 'billing-addons';
 type InvoiceView = 'list' | 'detail' | 'form';
 
 type View =
@@ -189,6 +193,7 @@ const InvoicingModule: React.FC = () => {
   const [duplicates, setDuplicates] = useState<DuplicateInvoice[]>([]);
   const [trend, setTrend] = useState<MonthlyTrend[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [billingSubTab, setBillingSubTab] = useState<'coupons' | 'plans' | 'credits'>('coupons');
 
   const loadDashboard = useCallback(async () => {
     if (!activeCompany || tab !== 'dashboard') return;
@@ -892,6 +897,35 @@ const InvoicingModule: React.FC = () => {
     );
   };
 
+  // ─── Billing Add-ons sub-tab ────────────────────────
+  const renderBillingAddons = () => (
+    <div className="space-y-5">
+      <div className="flex items-center gap-1 border-b border-border-primary pb-1">
+        <button
+          onClick={() => setBillingSubTab('coupons')}
+          className={`px-3 py-1.5 text-xs font-semibold transition-colors rounded-t ${billingSubTab === 'coupons' ? 'text-text-primary border-b-2 border-accent-primary' : 'text-text-muted hover:text-text-secondary'}`}
+        >
+          Coupons &amp; Promos
+        </button>
+        <button
+          onClick={() => setBillingSubTab('plans')}
+          className={`px-3 py-1.5 text-xs font-semibold transition-colors rounded-t ${billingSubTab === 'plans' ? 'text-text-primary border-b-2 border-accent-primary' : 'text-text-muted hover:text-text-secondary'}`}
+        >
+          Payment Plans
+        </button>
+        <button
+          onClick={() => setBillingSubTab('credits')}
+          className={`px-3 py-1.5 text-xs font-semibold transition-colors rounded-t ${billingSubTab === 'credits' ? 'text-text-primary border-b-2 border-accent-primary' : 'text-text-muted hover:text-text-secondary'}`}
+        >
+          Credit Memos
+        </button>
+      </div>
+      {billingSubTab === 'coupons' && <CouponsManager />}
+      {billingSubTab === 'plans' && <PaymentPlansPanel />}
+      {billingSubTab === 'credits' && <CreditMemosPanel />}
+    </div>
+  );
+
   const renderRecurring = () => (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-text-primary">Recurring Invoices</h2>
@@ -1057,6 +1091,12 @@ const InvoicingModule: React.FC = () => {
           />
           <TabBtn
             active={false}
+            icon={<CreditCard size={14} />}
+            label="Billing Add-ons"
+            onClick={() => setTab('billing-addons')}
+          />
+          <TabBtn
+            active={false}
             icon={<Sparkles size={14} />}
             label="Upgrades"
             onClick={() => setTab('upgrades')}
@@ -1064,6 +1104,55 @@ const InvoicingModule: React.FC = () => {
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           {renderInvoicesTab()}
+        </div>
+      </div>
+    );
+  }
+
+  // Billing Add-ons tab
+  if (tab === 'billing-addons') {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-1 border-b border-border-primary px-6 pt-4">
+          <TabBtn
+            active={false}
+            icon={<LayoutDashboard size={14} />}
+            label="Dashboard"
+            onClick={() => setTab('dashboard')}
+          />
+          <TabBtn
+            active={false}
+            icon={<FileText size={14} />}
+            label="Invoices"
+            onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
+          />
+          <TabBtn
+            active={false}
+            icon={<Repeat size={14} />}
+            label="Recurring"
+            onClick={() => setTab('recurring')}
+          />
+          <TabBtn
+            active={false}
+            icon={<BarChart3 size={14} />}
+            label="Analytics"
+            onClick={() => setTab('analytics')}
+          />
+          <TabBtn
+            active={true}
+            icon={<CreditCard size={14} />}
+            label="Billing Add-ons"
+            onClick={() => setTab('billing-addons')}
+          />
+          <TabBtn
+            active={false}
+            icon={<Sparkles size={14} />}
+            label="Upgrades"
+            onClick={() => setTab('upgrades')}
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          {renderBillingAddons()}
         </div>
       </div>
     );
@@ -1097,6 +1186,12 @@ const InvoicingModule: React.FC = () => {
             icon={<BarChart3 size={14} />}
             label="Analytics"
             onClick={() => setTab('analytics')}
+          />
+          <TabBtn
+            active={false}
+            icon={<CreditCard size={14} />}
+            label="Billing Add-ons"
+            onClick={() => setTab('billing-addons')}
           />
           <TabBtn
             active={true}
@@ -1141,6 +1236,12 @@ const InvoicingModule: React.FC = () => {
           onClick={() => setTab('analytics')}
         />
         <TabBtn
+          active={(tab as string) === 'billing-addons'}
+          icon={<CreditCard size={14} />}
+          label="Billing Add-ons"
+          onClick={() => setTab('billing-addons')}
+        />
+        <TabBtn
           active={false}
           icon={<Sparkles size={14} />}
           label="Upgrades"
@@ -1151,6 +1252,7 @@ const InvoicingModule: React.FC = () => {
       {tab === 'dashboard' && renderDashboard()}
       {tab === 'recurring' && renderRecurring()}
       {tab === 'analytics' && renderAnalytics()}
+      {(tab as string) === 'billing-addons' && renderBillingAddons()}
     </div>
   );
 };
