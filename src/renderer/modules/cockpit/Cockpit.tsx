@@ -82,7 +82,7 @@ const Cockpit: React.FC = () => {
               {WIDGET_DEFS.map(w => <option key={w.type} value={w.type}>{w.title}</option>)}
             </select>
           )}
-          {editing && <button className="block-btn flex items-center gap-1 text-xs" onClick={resetLayout}><RotateCcw size={12} /> Reset</button>}
+          {editing && <button className="block-btn flex items-center gap-1 text-xs" onClick={() => { resetLayout(); persist(); }}><RotateCcw size={12} /> Reset</button>}
           <button className={`block-btn flex items-center gap-1 text-xs ${editing ? 'text-accent-income' : ''}`}
             onClick={() => { if (editing) persist(); setEditing(!editing); }}>
             <Pencil size={12} /> {editing ? 'Done' : 'Edit'}
