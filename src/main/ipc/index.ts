@@ -2493,6 +2493,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:vendor-pay:status', (_e, { vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ptd().vendorPaymentStatus(cid, vendor_id); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-ach:submit', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().submitACHUpdate({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-ach:approve', (_e, { id, approved_by }: any) => { try { return { ok: ptd().approveACHUpdate(id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-ach:reject', (_e, { id, rejected_by }: any) => { try { return { ok: ptd().rejectACHUpdate(id, rejected_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-ach:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptd().listACHUpdates(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-1099:download', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().recordVendor1099Download({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-attest:submit', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().submitComplianceAttestation({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
 
@@ -15605,6 +15607,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vn:payment-terms', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPaymentTermsBreakdown(c) : []; });
   ipcMain.handle('vn:portfolio-summary', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPortfolioSummary(c) : {}; });
   ipcMain.handle('vn:quarterly-spend', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorQuarterlySpend(c, vendorId) : []; });
+  ipcMain.handle('vn:disputes', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorDisputes(c, vendorId) : []; });
+  ipcMain.handle('vn:w9-records', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorW9Records(c, vendorId) : []; });
+  ipcMain.handle('vn:insurance-policies', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorInsurancePolicies(c, vendorId) : []; });
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   const dc2 = () => require('../services/debt-collection-wave2');
