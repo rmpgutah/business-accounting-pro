@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { FileText, Check, AlertTriangle, Eye, Printer, Mail, ClipboardCheck } from 'lucide-react';
 import api from '../../lib/api';
+import PdfPreview from '../../components/PdfPreview';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
@@ -225,25 +226,15 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
     }
   }, [generatedHtml, savingPdf, selectedTemplate, debt]);
 
-  // ── Print directly (Blob URL avoids document.write XSS surface) ──
-  const handlePrint = useCallback(() => {
+  // ── Print via Electron system print dialog ──
+  const handlePrint = useCallback(async () => {
     if (!generatedHtml) return;
-    const blob = new Blob([generatedHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const w = window.open(url, '_blank', 'width=900,height=1100');
-    if (!w) {
-      URL.revokeObjectURL(url);
-      setErrorMsg('Could not open print window — check popup blocker.');
-      return;
+    try {
+      await api.print(generatedHtml);
+    } catch (err: any) {
+      console.error('Failed to print:', err);
+      setErrorMsg(`Failed to print: ${err?.message ?? String(err)}`);
     }
-    // Wait for the new window to load before invoking print, then revoke URL.
-    const tryPrint = () => {
-      try { w.focus(); w.print(); } catch {}
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    };
-    w.addEventListener('load', tryPrint, { once: true });
-    // Fallback: if load event doesn't fire within 1.5s, print anyway.
-    setTimeout(tryPrint, 1500);
   }, [generatedHtml]);
 
   // ── Copy plain-text body to clipboard (for pasting into email) ──
@@ -371,14 +362,10 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
 
           {/* When generated, show the actual rendered HTML (matches PDF) */}
           {generatedHtml ? (
-            <iframe
-              srcDoc={generatedHtml}
-              title="Demand letter preview"
-              sandbox="allow-same-origin"
-              style={{
-                width: '100%', height: 620, border: '1px solid var(--color-border-primary)',
-                background: '#fff', borderRadius: 6,
-              }}
+            <PdfPreview
+              html={generatedHtml}
+              title={`${selectedTemplate?.name || 'Demand Letter'} — ${debt?.debtor_name || ''}`}
+              style={{ flex: 1, minHeight: 620, width: '100%' }}
             />
           ) : (
             <div

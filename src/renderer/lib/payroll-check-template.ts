@@ -1,8 +1,11 @@
 /**
  * Payroll Check Print Template — Production Grade
  * Check-on-top (3-part) for 8.5x11 blank check paper.
- * Calibri dominant. All text BLACK except YTD Summary taxes(red)/net(green).
+ * Classic Arial/B&W. Authentic MICR E-13B line.
  */
+
+import { buildMicrLine, buildMicrUnicode } from './micr';
+import { micrFontFace, hasMicrFont } from './micr-font';
 
 function esc(s: string | null | undefined): string {
   if (!s) return '';
@@ -365,14 +368,12 @@ export function generatePaycheckHTML(
         </div>
       </div>
     </div>
-    <!-- MICR — labeled segments, clean monospace -->
-    <div class="micr-bar">
-      <div class="micr-seg"><span class="micr-lbl">CHK</span><span class="micr-num">${chk}</span></div>
-      <div class="micr-spacer"></div>
-      <div class="micr-seg"><span class="micr-lbl">RTN</span><span class="micr-num">${coRouting || '000000000'}</span></div>
-      <div class="micr-spacer"></div>
-      <div class="micr-seg"><span class="micr-lbl">ACCT</span><span class="micr-num">${coAcct || '0000000000'}</span></div>
-    </div>
+    <!-- MICR E-13B line — clear band, no labels -->
+    <div class="micr-line${hasMicrFont() ? '' : ' fallback'}">${
+      hasMicrFont()
+        ? buildMicrLine({ routing: coRouting, account: coAcct, checkNumber: chk })
+        : buildMicrUnicode({ routing: coRouting, account: coAcct, checkNumber: chk })
+    }</div>
   </div>`;
 
   // ══════════════════════════════════════════════════

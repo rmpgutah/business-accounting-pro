@@ -182,6 +182,10 @@ export function nextMonthEnd(iso: string): string {
 }
 
 // ─── Printable cover sheet HTML ───────────────────────────
+import {
+  classicStyles, docFrame, docHeader, metaStrip, boxRow, ruledTable, totalsBox, footerBar, esc as cesc,
+} from './classic-styles';
+
 export function generateJeCoverSheetHTML(args: {
   entry: { entry_number: string; date: string; description: string; reference?: string; class?: string };
   totalDebit: number;
@@ -190,47 +194,84 @@ export function generateJeCoverSheetHTML(args: {
   companyName?: string;
   withSignatureLine?: boolean;
 }): string {
-  const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const fmt = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-  const lineRows = args.lines.map((l) => `
-    <tr>
-      <td style="padding:4px 8px;font-family:monospace;">${esc(l.account_code)}</td>
-      <td style="padding:4px 8px;">${esc(l.account_name)}</td>
-      <td style="padding:4px 8px;text-align:right;font-family:monospace;">${l.debit ? fmt(l.debit) : ''}</td>
-      <td style="padding:4px 8px;text-align:right;font-family:monospace;">${l.credit ? fmt(l.credit) : ''}</td>
-      <td style="padding:4px 8px;color:#666;">${esc(l.description || '')}</td>
-    </tr>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>JE ${esc(args.entry.entry_number)}</title>
-<style>
-body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;padding:32px;font-size:12px;}
-h1{font-size:18px;margin:0 0 4px;}
-.meta{color:#555;margin-bottom:18px;}
-table{width:100%;border-collapse:collapse;border-top:2px solid #000;border-bottom:2px solid #000;margin:14px 0;}
-th{font-size:10px;text-transform:uppercase;text-align:left;padding:6px 8px;border-bottom:1px solid #999;background:#f6f6f6;}
-.totals td{border-top:1px solid #000;font-weight:bold;}
-.sigblock{margin-top:48px;display:flex;gap:48px;}
-.sigblock div{flex:1;border-top:1px solid #000;padding-top:6px;font-size:10px;color:#555;}
-</style></head><body>
-<h1>Journal Entry — ${esc(args.entry.entry_number)}</h1>
-<div class="meta">
-  <strong>${esc(args.companyName || '')}</strong><br>
-  Date: ${esc(args.entry.date)} &nbsp;·&nbsp; Reference: ${esc(args.entry.reference || '—')} &nbsp;·&nbsp; Class: ${esc(args.entry.class || '—')}
-</div>
-<div><strong>Description:</strong> ${esc(args.entry.description)}</div>
-<table>
-  <thead><tr>
-    <th>Account</th><th>Name</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th>Memo</th>
-  </tr></thead>
-  <tbody>
-    ${lineRows}
-    <tr class="totals">
-      <td colspan="2" style="padding:6px 8px;text-align:right;">Totals</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;">${fmt(args.totalDebit)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;">${fmt(args.totalCredit)}</td>
-      <td></td>
-    </tr>
-  </tbody>
-</table>
-${args.withSignatureLine ? `<div class="sigblock"><div>Reviewed by</div><div>Date</div></div>` : ''}
-</body></html>`;
+  const isBalanced = Math.abs(args.totalDebit - args.totalCredit) < 0.005;
+
+  // ── Header ──
+  const header = docHeader({
+    coName: args.companyName || '',
+    coDetailHtml: '',
+    title: 'Journal Entry',
+    numberHtml: `No. ${cesc(args.entry.entry_number)}`,
+  });
+
+  // ── Meta strip: Entry # / Date / Reference / Class ──
+  const meta = metaStrip([
+    { label: 'Entry #',    value: args.entry.entry_number || '—' },
+    { label: 'Date',       value: args.entry.date || '—' },
+    { label: 'Reference',  value: args.entry.reference || '—' },
+    { label: 'Class',      value: args.entry.class || '—' },
+  ]);
+
+  // ── Description box ──
+  const descBox = boxRow([
+    { label: 'Description / Memo', html: `<div style="white-space:pre-line;">${cesc(args.entry.description)}</div>` },
+  ]);
+
+  // ── Line items ruled table ──
+  const lineRows: string[][] = args.lines.map((l) => [
+    cesc(l.account_code),
+    cesc(l.account_name),
+    l.debit  ? cesc(fmt(l.debit))  : '',
+    l.credit ? cesc(fmt(l.credit)) : '',
+    cesc(l.description || ''),
+  ]);
+  const itemsTable = ruledTable(
+    [
+      { label: 'Code' },
+      { label: 'Account Name' },
+      { label: 'Debit',  align: 'right', width: '110px' },
+      { label: 'Credit', align: 'right', width: '110px' },
+      { label: 'Memo' },
+    ],
+    lineRows,
+  );
+
+  // ── Totals box ──
+  const balanceStatus = isBalanced ? 'BALANCED' : `OFF BY ${fmt(Math.abs(args.totalDebit - args.totalCredit))}`;
+  const totals = totalsBox([
+    { label: 'Total Debits',  value: fmt(args.totalDebit) },
+    { label: 'Total Credits', value: fmt(args.totalCredit) },
+    { label: balanceStatus,   value: isBalanced ? '—' : fmt(Math.abs(args.totalDebit - args.totalCredit)), grand: true },
+  ]);
+
+  // ── Optional signature lines ──
+  const sigHTML = args.withSignatureLine
+    ? `<div style="display:flex;gap:64px;padding:24px 16px;border-top:1px solid #000;">` +
+      `<div style="flex:1;border-top:2px solid #000;padding-top:6px;font-size:10px;">Prepared by</div>` +
+      `<div style="flex:1;border-top:2px solid #000;padding-top:6px;font-size:10px;">Reviewed by</div>` +
+      `<div style="flex:1;border-top:2px solid #000;padding-top:6px;font-size:10px;">Date</div>` +
+      `</div>`
+    : '';
+
+  // ── Footer ──
+  const generated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const footer = footerBar(
+    [args.companyName, `JE #${args.entry.entry_number}`, `Generated ${generated}`].filter(Boolean).join(' · ')
+  );
+
+  // ── Assemble ──
+  const inner =
+    header +
+    meta +
+    descBox +
+    itemsTable +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    sigHTML +
+    footer;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>JE ${cesc(args.entry.entry_number)}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner) +
+    `</body></html>`;
 }
