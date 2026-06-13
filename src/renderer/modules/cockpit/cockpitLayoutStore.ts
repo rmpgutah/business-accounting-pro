@@ -33,7 +33,7 @@ export const useCockpitLayoutStore = create<CockpitState>()(
       editing: false,
       setEditing: (v) => set({ editing: v }),
       setLayout: (l) => set({ layout: l }),
-      addWidget: (type) => set({ layout: addW(get().layout, type, `w-${type}-${get().layout.length}-${(get().layout.reduce((a, p) => a + p.x + p.y, 0))}`) }),
+      addWidget: (type) => set({ layout: addW(get().layout, type, `w-${type}-${crypto.randomUUID()}`) }),
       removeWidget: (id) => set({ layout: removeW(get().layout, id) }),
       updatePlacement: (id, patch) => set({ layout: updateP(get().layout, id, patch) }),
       resetLayout: () => set({ layout: DEFAULT_LAYOUT }),

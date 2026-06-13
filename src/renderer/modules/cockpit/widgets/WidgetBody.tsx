@@ -29,9 +29,22 @@ const WidgetBody: React.FC<{ type: string; data: any; loading: boolean }> = ({ t
   }
 
   if (type === 'cash-forecast') {
-    const rows = Array.isArray(data) ? data : (data?.points || data?.series || []);
-    if (!rows.length) return <Empty />;
-    const chartData = rows.map((r: any) => ({ label: r.date || r.label || '', value: r.predicted ?? r.value ?? r.amount ?? 0 }));
+    // Real payload: { inflow: [{ amount, due_date }], outflow: [{ amount, due_date }] }
+    const inflow: any[] = Array.isArray(data?.inflow) ? data.inflow : [];
+    const outflow: any[] = Array.isArray(data?.outflow) ? data.outflow : [];
+    const byDate = new Map<string, number>();
+    for (const r of inflow) {
+      const d = r.due_date || '';
+      byDate.set(d, (byDate.get(d) || 0) + (Number(r.amount) || 0));
+    }
+    for (const r of outflow) {
+      const d = r.due_date || '';
+      byDate.set(d, (byDate.get(d) || 0) - (Number(r.amount) || 0));
+    }
+    const chartData = Array.from(byDate.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([label, value]) => ({ label, value }));
+    if (!chartData.length) return <Empty />;
     return (
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData}>
@@ -61,8 +74,16 @@ const WidgetBody: React.FC<{ type: string; data: any; loading: boolean }> = ({ t
   }
 
   if (type === 'ar-aging' || type === 'ap-aging') {
-    const buckets = data?.buckets || data?.rows || (Array.isArray(data) ? data : []);
-    if (!buckets.length) return <Empty />;
+    // Real payload: { totals: { current, days1_30, days31_60, days61_90, over90 }, buckets, grandTotal }
+    const totals = data?.totals || {};
+    const buckets = [
+      { label: 'Current', amount: Number(totals.current) || 0 },
+      { label: '1–30', amount: Number(totals.days1_30) || 0 },
+      { label: '31–60', amount: Number(totals.days31_60) || 0 },
+      { label: '61–90', amount: Number(totals.days61_90) || 0 },
+      { label: '90+', amount: Number(totals.over90) || 0 },
+    ];
+    if (!buckets.some(b => b.amount !== 0)) return <Empty />;
     const max = Math.max(...buckets.map((b: any) => Math.abs(b.amount ?? b.total ?? 0)), 1);
     return (
       <div className="space-y-2">
