@@ -15,6 +15,7 @@ import {
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
 import KpiTargets from './KpiTargets';
+import ExecutiveScorecard from './ExecutiveScorecard';
 import {
   LineChart,
   Line,
@@ -767,6 +768,7 @@ const KPIDashboard: React.FC = () => {
         )}
       </div>
       <KpiTargets />
+      <ExecutiveScorecard />
       <PrintReportFooter />
     </div>
   );
