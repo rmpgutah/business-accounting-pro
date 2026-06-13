@@ -2880,6 +2880,7 @@ const api = {
   featWebhookRecvProvision: (opts: { provider?: string }) => window.electronAPI.invoke('feat:webhook-recv:provision', opts),
   featWebhookRecvReceived: (endpoint_path: string) => window.electronAPI.invoke('feat:webhook-recv:received', { endpoint_path }),
   featWebhookRecvList: () => window.electronAPI.invoke('feat:webhook-recv:list'),
+  cloudBootstrapUsers: () => window.electronAPI.invoke('cloud:bootstrap-users'),
 
   // ═══════════════ Finance Wave (F441-F540, 100 features) ═══════════════
   // Batch AB — Invoice Advanced
