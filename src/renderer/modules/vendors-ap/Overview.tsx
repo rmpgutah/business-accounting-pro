@@ -1,6 +1,6 @@
 // src/renderer/modules/vendors-ap/Overview.tsx
 import React, { useEffect, useState } from 'react';
-import { Building2, AlertTriangle, TrendingUp, Layers, Wallet } from 'lucide-react';
+import { Building2, AlertTriangle, Layers, Wallet } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 import { Section, Empty, Th, Td, StatCard, MiniBar, TOK } from './shared/ui';
