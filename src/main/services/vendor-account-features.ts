@@ -452,7 +452,7 @@ export function vendorOffContractSpend(cid: string): object[] {
 // vn:pos-for-vendor — open/approved POs for a vendor (feeds the link picker)
 export function posForVendor(cid: string, vendorId: string): object[] {
   return db.getDb().prepare(
-    `SELECT id, po_number, total, status
+    `SELECT id AS po_id, po_number, total, status
      FROM purchase_orders
      WHERE company_id = ? AND vendor_id = ?
        AND status IN ('draft','sent','approved','partially_received','received')
@@ -466,6 +466,9 @@ export function linkBillToPo(cid: string, billId: string, poId: string): { ok: b
   // Scope-check: bill must belong to this company
   const bill = dbi.prepare('SELECT id FROM bills WHERE id = ? AND company_id = ?').get(billId, cid) as any;
   if (!bill) return { ok: false, linkedLines: 0 };
+  // Scope-check: PO must belong to this company (prevent cross-tenant write)
+  const po = dbi.prepare('SELECT id FROM purchase_orders WHERE id = ? AND company_id = ?').get(poId, cid) as any;
+  if (!po) return { ok: false, linkedLines: 0 };
   // Set bills.po_id
   dbi.prepare('UPDATE bills SET po_id = ? WHERE id = ? AND company_id = ?').run(poId, billId, cid);
   // Best-effort auto-map bill lines → PO lines by lower(trim(description))

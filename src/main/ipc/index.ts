@@ -1280,7 +1280,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('dunning:run', () => {
     try {
       const { runAutoDunning } = require('../services/auto-dunning');
-      return runAutoDunning();
+      const result = runAutoDunning();
+      scheduleAutoBackup();
+      return result;
     } catch (err: any) {
       return { invoicesProcessed: 0, remindersQueued: 0, collectionsSuggested: 0, errors: [err?.message] };
     }
