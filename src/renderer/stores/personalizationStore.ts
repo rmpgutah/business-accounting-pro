@@ -105,7 +105,7 @@ export const DEFAULT_SIDEBAR_ORDER: string[] = [
   // whose persisted sidebarOrder predates the Loans module.
   'loans', 'bills', 'vendors-ap', 'purchase-orders', 'bank-recon', 'stripe-sync',
   'budgets', 'taxes', 'debt-collection',
-  'reports', 'kpi-dashboard', 'forecasting', 'report-builder',
+  'reports', 'kpi-dashboard', 'forecasting', 'report-builder', 'custom-dashboards',
   'documents', 'recurring', 'email', 'notifications', 'audit-trail', 'rules', 'automations',
   'companies', 'api-integrations', 'client-portal', 'mobile', 'settings',
 ];

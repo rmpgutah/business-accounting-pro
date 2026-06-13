@@ -57,6 +57,7 @@ const QuotesModule = lazy(() => import('./modules/quotes'));
 const EsignModule = lazy(() => import('./modules/esign'));
 const ComponentLibraryModule = lazy(() => import('./modules/component-library/ComponentLibrary'));
 const CustomizationModule = lazy(() => import('./modules/customization/CustomizationCenter'));
+const CustomDashboardsModule = lazy(() => import('./modules/custom-dashboards'));
 
 // One-time FTS search-index backfill guard (once per company per session).
 const backfilledCompanies = new Set<string>();
@@ -103,6 +104,7 @@ const MODULE_NAMES: Record<string, string> = {
   automations: 'Automations',
   rules: 'Approval Rules',
   esign: 'E-Sign',
+  'custom-dashboards': 'Custom Dashboards',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -158,6 +160,7 @@ const ModuleView: React.FC = () => {
       case 'esign': return <EsignModule />;
       case 'component-library': return <ComponentLibraryModule />;
       case 'customization': return <CustomizationModule />;
+      case 'custom-dashboards': return <CustomDashboardsModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">

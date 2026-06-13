@@ -105,6 +105,7 @@ const sections: NavSection[] = [
       { id: 'kpi-dashboard', label: 'KPI Dashboard', icon: Gauge },
       { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
       { id: 'report-builder', label: 'Report Builder', icon: FileBarChart },
+      { id: 'custom-dashboards', label: 'Custom Dashboards', icon: LayoutGridIcon },
     ],
   },
   {
