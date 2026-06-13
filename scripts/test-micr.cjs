@@ -34,6 +34,12 @@ t('glyph map converts tokens (T->A, O->C)', () => {
   assert.ok(!/[TO]/.test(g), 'no raw tokens left');
   assert.ok(g.startsWith('C1042C A123456789A'), 'mapped glyphs');
 });
+t('unicode fallback uses real MICR symbols, no token letters', () => {
+  const u = m.buildMicrUnicode({ routing: '123456789', account: '0001234567', checkNumber: '1042' });
+  assert.ok(!/[TOAD]/.test(u), 'no raw tokens left');
+  assert.ok(u.includes('⑆123456789⑆'), 'transit symbol flanks routing');
+  assert.ok(u.endsWith('⑉'), 'on-us symbol closes the line');
+});
 
 fs.rmSync(out, { recursive: true, force: true });
 console.log(`\n${passed} passed`);

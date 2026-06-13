@@ -37,3 +37,18 @@ export function toFontGlyphs(canonical: string): string {
 export function buildMicrLine(f: MicrFields): string {
   return toFontGlyphs(buildMicrCanonical(f));
 }
+
+// Unicode MICR symbols, for a readable fallback line when no E-13B font is
+// embedded. These code points render as the actual transit/on-us/amount/dash
+// glyphs in most system fonts, so the fallback looks like a real MICR line
+// rather than the font's A/B/C/D glyph-slot letters.
+export const MICR_UNICODE: Record<string, string> = {
+  [TRANSIT]: '⑆', // ⑆ OCR branch bank identification (transit)
+  [AMOUNT]:  '⑇', // ⑇ OCR amount of check
+  [ONUS]:    '⑉', // ⑉ OCR customer account number (on-us)
+  [DASH]:    '⑈', // ⑈ OCR dash
+};
+
+export function buildMicrUnicode(f: MicrFields): string {
+  return buildMicrCanonical(f).replace(/[TOAD]/g, (c) => MICR_UNICODE[c] ?? c);
+}
