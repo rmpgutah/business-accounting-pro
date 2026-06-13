@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileBarChart, Plus, Play, Download, Printer, Save, Trash2 } from 'lucide-react';
+import ReportEngine from './ReportEngine';
 import api from '../../lib/api';
 import { humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -72,6 +73,7 @@ function computeTotals(rows: any[], keys: string[]): Record<string, number | nul
 
 export default function CustomReportsModule() {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const [view, setView] = useState<'builder' | 'engine'>('builder');
   const [config, setConfig] = useState<ReportConfig>({ ...defaultConfig });
   const [results, setResults] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -213,7 +215,7 @@ export default function CustomReportsModule() {
   return (
     <div>
       <div className="module-header">
-        <h1 className="module-title">Report Builder</h1>
+        <h1 className="module-title">Reports</h1>
         <div className="module-actions">
           <button className="block-btn-primary flex items-center gap-2" onClick={runReport} disabled={loading}>
             <Play size={14} />
@@ -234,7 +236,31 @@ export default function CustomReportsModule() {
         </div>
       </div>
 
-      {error && (
+      {/* View tab strip */}
+      <div
+        className="flex gap-1 mb-4"
+        style={{ borderBottom: '1px solid var(--color-border-primary)', paddingBottom: '8px' }}
+      >
+        {(['builder', 'engine'] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className="text-xs px-3 py-1.5 font-medium transition-colors"
+            style={{
+              borderRadius: 'var(--app-radius)',
+              background: view === v ? 'var(--color-accent-primary)' : 'transparent',
+              color: view === v ? '#fff' : 'var(--color-text-secondary)',
+              border: view === v ? 'none' : '1px solid var(--color-border-primary)',
+            }}
+          >
+            {v === 'builder' ? 'Ad-hoc Builder' : 'Saved Reports'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'engine' && <ReportEngine />}
+
+      {view === 'builder' && error && (
         <div
           style={{
             background: 'rgba(248,113,113,0.08)',
@@ -248,7 +274,7 @@ export default function CustomReportsModule() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-6">
+      {view === 'builder' && <div className="grid grid-cols-3 gap-6">
         {/* Config Panel */}
         <div className="space-y-4">
           <div className="block-card space-y-3">
@@ -404,7 +430,7 @@ export default function CustomReportsModule() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
