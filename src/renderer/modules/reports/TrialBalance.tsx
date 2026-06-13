@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency, humanizeLabel } from '../../lib/format';
+import { generateTrialBalanceHTML } from '../../lib/financial-statement-templates';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
@@ -538,10 +539,17 @@ const TrialBalance: React.FC = () => {
   };
 
   const handlePrintPDF = async () => {
-    const html = document.getElementById('tb-print-area')?.outerHTML || '';
-    try {
-      await api.printPreview(`<html><head><style>body{font-family:system-ui;padding:24px;}table{width:100%;border-collapse:collapse;}th,td{padding:6px;border-bottom:1px solid #ddd;font-size:11px;}.acc-neg::before{content:"(";}.acc-neg::after{content:")";}</style></head><body>${html}</body></html>`, `Trial Balance ${startDate} to ${endDate}`);
-    } catch { window.print(); }
+    if (!activeCompany) return;
+    const title = `Trial Balance ${startDate} to ${endDate}`;
+    const html = generateTrialBalanceHTML(visible, activeCompany, {
+      startDate,
+      endDate,
+      view,
+      balanced: isBalanced,
+      totalDebits,
+      totalCredits,
+    });
+    await api.printPreview(html, title);
   };
 
   const periodIsLocked = lockDate && endDate <= lockDate;
