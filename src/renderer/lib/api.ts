@@ -62,6 +62,11 @@ const api = {
 
   // Search
   globalSearch: (query: string) => window.electronAPI.invoke('search:global', query),
+  searchIndex: (query: string, limit?: number) =>
+    window.electronAPI.invoke('search:index', { query, limit }),
+  searchBackfill: () => window.electronAPI.invoke('search:backfill'),
+  invokeAction: (actionId: string, params?: any) =>
+    window.electronAPI.invoke('action:invoke', { actionId, params }),
 
   // Notifications
   listNotifications: (unreadOnly?: boolean) =>
@@ -533,6 +538,8 @@ const api = {
     window.electronAPI.invoke('intelligence:dismiss-anomaly', id),
   cashProjection: (days: number): Promise<{ inflow: any[]; outflow: any[] }> =>
     window.electronAPI.invoke('intelligence:cash-projection', { days }),
+  entityHint: (entityType: string, id: string): Promise<string> =>
+    window.electronAPI.invoke('intelligence:entity-hint', { entityType, id }),
 
   // Rules Engine
   listRules: (company_id: string, category?: string) =>
@@ -553,6 +560,8 @@ const api = {
     window.electronAPI.invoke('record:clone', { table, id }),
   invoiceFromTimeEntries: (project_id: string, company_id: string) =>
     window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
+  invoiceFromBillableExpenses: (opts: { client_id?: string; project_id?: string; company_id: string }) =>
+    window.electronAPI.invoke('invoice:from-billable-expenses', opts),
 
   // ─── Debt Collection ─────────────────────────
   debtStats: (companyId: string): Promise<{

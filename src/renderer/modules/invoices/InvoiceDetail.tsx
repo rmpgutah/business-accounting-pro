@@ -8,7 +8,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency, formatStatus, formatDate, humanizeLabel } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import { InvoiceStatusBadge, PaymentProgress, DueDateChip } from '../../components/library';
 import EntityTimeline from '../../components/EntityTimeline';
