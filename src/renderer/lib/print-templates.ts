@@ -5,6 +5,18 @@
  */
 
 import QRCode from 'qrcode';
+import {
+  classicStyles,
+  docFrame,
+  docHeader,
+  metaStrip,
+  boxRow,
+  ruledTable,
+  totalsBox,
+  footerBar,
+  esc as cesc,
+  type RuledColumn,
+} from './classic-styles';
 
 // ─── HTML escape helper (XSS prevention) ────────────────────
 function esc(s: string | null | undefined): string {
@@ -945,6 +957,9 @@ function resolveColumns(raw: InvoiceColumnConfig[] | string | undefined): Invoic
 // Each entry: { id, label, stack, sample }
 // `stack` is the CSS font-family value, `sample` is a one-word label
 // the picker UI uses for the visual preview swatch.
+// @deprecated — output is always Arial (classic theme). Generated documents
+// no longer honor `settings.font_family`; this list is retained only so the
+// settings UI's (now inert) font picker keeps compiling.
 export const FONT_OPTIONS: Array<{ id: string; label: string; stack: string; category: 'sans' | 'serif' | 'mono' }> = [
   { id: 'system',    label: 'System Default',     stack: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", category: 'sans' },
   { id: 'inter',     label: 'Inter (Modern Sans)', stack: "'Inter', 'Segoe UI', Helvetica, Arial, sans-serif", category: 'sans' },
@@ -1041,27 +1056,27 @@ export function generateInvoiceHTML(
   const docCurrency = invoice.currency || 'USD';
   const fmt = (v: number | string | null | undefined) => formatCurrency(v, docCurrency);
 
-  const accent    = settings?.accent_color || '#2563eb';
-  const secondary = settings?.secondary_color || '#64748b';
-  const style     = settings?.template_style || 'classic';
+  // ── CLASSIC THEME: output is always Arial + pure black/white. The
+  // per-invoice accent/secondary/font/template_style settings are
+  // intentionally ignored for presentation — only structural/feature
+  // settings (logo, watermark text, QR, columns, custom fields) are honored.
   const showLogo  = settings?.show_logo !== 0 && settings?.show_logo !== false;
   const logoData  = showLogo ? (settings?.logo_data || null) : null;
   const footerText = settings?.footer_text || '';
-  const headerLayout = settings?.header_layout || 'logo-left';
   const wmText    = settings?.watermark_text || '';
-  const wmOpacity = settings?.watermark_opacity ?? 0.06;
   const showQR    = settings?.show_payment_qr && settings?.show_payment_qr !== 0;
   const qrUrl     = settings?.payment_qr_url || '';
   const cols      = resolveColumns(settings?.column_config);
 
-  const customFieldRows = [1, 2, 3, 4]
+  // Custom fields (1-4) → classic meta-strip cells appended after the
+  // standard meta cells. Only populated (label + value) pairs are shown.
+  const customFieldCells = [1, 2, 3, 4]
     .map(n => ({
       label: settings?.[`custom_field_${n}_label` as keyof InvoiceSettings] as string | undefined,
       value: (invoice as any)[`custom_field_${n}`] as string | undefined,
     }))
     .filter(f => f.label && f.value)
-    .map(f => `<div><div class="meta-label">${esc(f.label!)}</div><div class="meta-value">${esc(f.value!)}</div></div>`)
-    .join('');
+    .map(f => ({ label: String(f.label), value: String(f.value) }));
 
   const companyName  = esc(company?.name || 'Company');
   const companyAddr  = esc([company?.address_line1, company?.address_line2, company?.city, company?.state, company?.zip].filter(Boolean).join(', '));
@@ -1107,97 +1122,75 @@ export function generateInvoiceHTML(
   }
   const sortedRates = Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b));
   const hasMultipleRates = sortedRates.length > 1;
-  const totalTaxSum = sortedRates.reduce((s, r) => s + taxByRate[r].tax, 0);
-  // Composition bar segments (CSS-grid widths) for visual tax-rate composition
-  const taxRateColors = ['#0f766e', '#0891b2', '#7c3aed', '#db2777', '#ea580c'];
-  const taxBreakdownBar = hasMultipleRates && totalTaxSum > 0
-    ? `<div class="fd-tax-breakdown" style="display:flex;height:8px;width:100%;margin:6px 0 8px;border-radius:2px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;border:1px solid #e2e8f0;">
-        ${sortedRates.map((r, i) => {
-          const pct = (taxByRate[r].tax / totalTaxSum) * 100;
-          return `<div title="${r}% = ${fmt(taxByRate[r].tax)}" style="width:${pct.toFixed(2)}%;background:${taxRateColors[i % taxRateColors.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:9px;color:#64748b;margin-bottom:6px;">
-        ${sortedRates.map((r, i) => {
-          const pct = (taxByRate[r].tax / totalTaxSum) * 100;
-          return `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:8px;height:8px;background:${taxRateColors[i % taxRateColors.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${r}% &middot; ${fmt(taxByRate[r].tax)} (${pct.toFixed(0)}%)</span>`;
-        }).join('')}
-      </div>`
-    : '';
-  const taxBreakdownHTML = hasMultipleRates
-    ? taxBreakdownBar + sortedRates.map(rate =>
-        `<div class="totals-row"><span>Tax @ ${rate}% on ${fmt(taxByRate[rate].taxable)}</span><span>${fmt(taxByRate[rate].tax)}</span></div>`
-      ).join('')
-    : (taxAmount > 0
-        ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>`
-        : '');
+  // Tax breakdown rows for the classic totals box. Multi-rate → one row per
+  // rate (EU VAT Art. 226 / US mixed-rate compliance); single rate → one
+  // "Tax" row. Returned as TotalRow[] so they slot into totalsBox().
+  const taxTotalRows: { label: string; value: string }[] = hasMultipleRates
+    ? sortedRates.map(rate => ({
+        label: `Tax @ ${rate}% on ${fmt(taxByRate[rate].taxable)}`,
+        value: fmt(taxByRate[rate].tax),
+      }))
+    : (taxAmount > 0 ? [{ label: 'Tax', value: fmt(taxAmount) }] : []);
 
   const discountAmount = Number(invoice.discount_amount || 0);
   const amountPaid     = Number(invoice.amount_paid || 0);
   const total          = Number(invoice.total || 0);
   const balance        = total - amountPaid;
-  const stamp          = getStatusStamp(invoice.status);
 
-  const isCompact = style === 'compact';
-  const baseFontSize = isCompact ? '11px' : '13px';
-
-  // ── Font override in baseStyles ──
-  const bodyFont = fontStack(settings?.font_family);
-  const styledBase = baseStyles.replace(
-    "font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
-    `font-family: ${bodyFont};`
-  ).replace('font-size: 13px;', `font-size: ${baseFontSize};`);
-
-  // ── Column headers ──
-  const colHeaders = cols.map(c => {
-    const right = ['quantity','unit_price','tax_rate','tax_amount','amount'].includes(c.key);
-    return `<th class="${right ? 'text-right' : ''}">${c.label}</th>`;
-  }).join('');
+  // ── Classic ruled-table columns (drives both the <thead> and the
+  // per-row cell mapping below). Numeric columns right-align. ──
+  const numericKeys = ['quantity', 'unit_price', 'tax_rate', 'tax_amount', 'amount'];
+  const tableColumns: RuledColumn[] = cols.map(c => ({
+    label: c.label,
+    align: numericKeys.includes(c.key) ? 'right' : 'left',
+  }));
+  const colSpan = cols.length;
 
   // ── Calculate running subtotal for subtotal rows ──
-  let runningItemAmt = 0;
   let lastSubtotalAt = 0;
 
   // ── Line item rows (rich row types) ──
+  // Each entry is a complete <tr> string (classic styling). Special row
+  // types (section/note/spacer/image/subtotal) span all columns; standard
+  // item rows map onto the resolved `cols`. Cell text is escaped here
+  // because we emit raw <td> markup (matching ruledTable's contract).
   const lineRows = lineItems.map((l, i) => {
     const rowType: LineRowType = l.row_type || 'item';
-    const colSpan = cols.length;
 
     if (rowType === 'spacer') {
-      return `<tr><td colspan="${colSpan}" style="height:16px;border:none;"></td></tr>`;
+      return `<tr><td colspan="${colSpan}" style="height:14px;border:none;"></td></tr>`;
     }
 
     if (rowType === 'section') {
       return `<tr>
-        <td colspan="${colSpan}" style="background:${secondary}22;font-weight:700;font-size:${isCompact?'10px':'11px'};
-          text-transform:uppercase;letter-spacing:0.8px;color:#0f172a;padding:${isCompact?'4px 12px':'6px 12px'};border-bottom:none;">
-          ${esc(l.description || '')}
+        <td colspan="${colSpan}" style="background:#000;color:#fff;font-weight:bold;font-size:10px;
+          text-transform:uppercase;letter-spacing:1px;padding:6px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          ${cesc(l.description || '')}
         </td>
       </tr>`;
     }
 
     if (rowType === 'note') {
       return `<tr>
-        <td colspan="${colSpan}" style="font-style:italic;color:#64748b;font-size:${isCompact?'10px':'11px'};
-          padding-left:24px;border-bottom:none;">
-          ${esc(l.description || '')}
+        <td colspan="${colSpan}" style="font-style:italic;font-size:10px;padding-left:20px;">
+          ${cesc(l.description || '')}
         </td>
       </tr>`;
     }
 
     if (rowType === 'image') {
-      const caption = esc(l.unit_label || '');
+      const caption = cesc(l.unit_label || '');
       return `<tr>
-        <td colspan="${colSpan}" style="text-align:center;padding:12px;border-bottom:none;">
-          ${l.description ? `<img src="${esc(l.description)}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
-          ${caption ? `<div style="font-size:10px;color:#64748b;margin-top:4px;">${caption}</div>` : ''}
+        <td colspan="${colSpan}" style="text-align:center;padding:10px;">
+          ${l.description ? `<img src="${cesc(l.description)}" alt="${caption}" style="max-width:300px;max-height:180px;object-fit:contain;">` : ''}
+          ${caption ? `<div style="font-size:10px;margin-top:4px;">${caption}</div>` : ''}
         </td>
       </tr>`;
     }
 
     if (rowType === 'subtotal') {
       // MATH: in-table subtotal row sums per-line "Amount" column values, which
-      // now include tax (matching the user's per-line tax-inclusive change).
+      // include tax (matching the per-line tax-inclusive Amount column).
       // Sum (discountedBase + lineTax) for each item row so the running subtotal
       // reconciles exactly to the visible Amount column above it.
       const subtotalAmt = lineItems
@@ -1210,21 +1203,21 @@ export function generateInvoiceHTML(
           return sum + base + tax;
         }, 0);
       lastSubtotalAt = i + 1;
-      return `<tr style="border-top:1px solid #334155;">
-        <td colspan="${colSpan - 1}" style="font-weight:700;font-size:${isCompact?'11px':'12px'};color:#0f172a;">
-          ${esc(l.description || 'Subtotal')}
+      return `<tr>
+        <td colspan="${colSpan - 1}" style="font-weight:bold;text-align:right;">
+          ${cesc(l.description || 'Subtotal')}
         </td>
-        <td class="text-right font-mono font-bold" style="color:#0f172a;">${fmt(subtotalAmt)}</td>
+        <td class="num" style="font-weight:bold;">${cesc(fmt(subtotalAmt))}</td>
       </tr>`;
     }
 
     // ── Standard item row ──
-    const rowBg = (style === 'modern' || style === 'executive') && i % 2 === 0 ? `background:${secondary}14;` : '';
-    const rowPad = isCompact ? 'padding-top:4px;padding-bottom:4px;' : '';
+    // Preserve per-line emphasis (bold/italic/highlight). Highlight color is
+    // user-configured; honored as an inline background so it survives print.
     const lineStyleAttr = [
-      (l.bold || 0) ? 'font-weight:700' : '',
+      (l.bold || 0) ? 'font-weight:bold' : '',
       (l.italic || 0) ? 'font-style:italic' : '',
-      (l.highlight_color || '') ? `background-color:${l.highlight_color}` : '',
+      (l.highlight_color || '') ? `background-color:${l.highlight_color};-webkit-print-color-adjust:exact;print-color-adjust:exact;` : '',
     ].filter(Boolean).join(';');
     // MATH: pre-discount raw (qty × unit_price) for strikethrough display.
     const baseAmtRaw = Number(l.quantity || 1) * Number(l.unit_price || 0);
@@ -1238,23 +1231,22 @@ export function generateInvoiceHTML(
     const lineAmountWithTax = discountedPrice + lineTaxAmount;
 
     const cells = cols.map(c => {
-      const right = ['quantity','unit_price','tax_rate','tax_amount','amount'].includes(c.key);
-      const cls = `${right ? 'text-right font-mono' : ''} ${c.key === 'amount' ? 'font-bold' : ''}`.trim();
+      const isNum = numericKeys.includes(c.key);
       let val = '';
       switch (c.key) {
-        case 'item_code':    val = l.item_code ? `<span style="font-size:9px;background:#f1f5f9;padding:1px 4px;border-radius:2px;color:#64748b;">${esc(l.item_code)}</span>` : ''; break;
+        case 'item_code':    val = l.item_code ? `<span style="font-size:9px;border:1px solid #000;padding:0 3px;">${cesc(l.item_code)}</span>` : ''; break;
         case 'description': {
-          const desc = esc(l.description || '');
+          const desc = cesc(l.description || '');
           const isService = String(l.row_type || 'item') === 'item' && (l.is_service || /service|consult|labor|hour/i.test(String(l.description || '')));
-          const chip = isService ? `<span class="fd-row-chip">SVC</span>` : '';
+          const chip = isService ? ` <span style="font-size:8px;border:1px solid #000;padding:0 3px;letter-spacing:0.5px;">SVC</span>` : '';
           val = `${desc}${chip}`;
           break;
         }
-        case 'quantity':     val = String(l.quantity ?? 1); break;
-        case 'unit_label':   val = esc(l.unit_label || ''); break;
-        case 'unit_price':   val = fmt(l.unit_price || 0); break;
-        case 'tax_rate':     val = lineEffectiveTaxRate > 0 ? lineEffectiveTaxRate + '%' : '—'; break;
-        case 'tax_amount':   val = lineEffectiveTaxRate > 0 ? fmt(lineTaxAmount) : '—'; break;
+        case 'quantity':     val = cesc(String(l.quantity ?? 1)); break;
+        case 'unit_label':   val = cesc(l.unit_label || ''); break;
+        case 'unit_price':   val = cesc(fmt(l.unit_price || 0)); break;
+        case 'tax_rate':     val = lineEffectiveTaxRate > 0 ? cesc(lineEffectiveTaxRate + '%') : '—'; break;
+        case 'tax_amount':   val = lineEffectiveTaxRate > 0 ? cesc(fmt(lineTaxAmount)) : '—'; break;
         case 'amount': {
           // MATH: show strikethrough whenever EITHER per-line discount field
           // reduced the base — so the visual matches taxByRate / totals box.
@@ -1262,530 +1254,278 @@ export function generateInvoiceHTML(
             const dlbl = hasLineDiscount
               ? (l.line_discount_type === 'flat' ? `−${fmt(Number(l.line_discount))}` : `−${Number(l.line_discount)}%`)
               : `−${Number(l.discount_pct)}%`;
-            val = `<span style="text-decoration:line-through;color:#94a3b8;font-weight:400;font-size:10px;display:block;line-height:1.1;">${fmt(baseAmtRaw)}</span><span style="color:#16a34a;display:block;line-height:1.2;">${fmt(lineAmountWithTax)}</span><span style="font-size:8px;color:#16a34a;font-weight:600;">${dlbl}</span>`;
+            val = `<span style="text-decoration:line-through;font-size:10px;display:block;line-height:1.1;">${cesc(fmt(baseAmtRaw))}</span><span style="display:block;line-height:1.2;font-weight:bold;">${cesc(fmt(lineAmountWithTax))}</span><span style="font-size:8px;">${cesc(dlbl)}</span>`;
           } else {
-            val = fmt(lineAmountWithTax);
+            val = cesc(fmt(lineAmountWithTax));
           }
           break;
         }
       }
-      return `<td class="${cls}" style="${rowPad}">${val}</td>`;
+      return `<td${isNum ? ' class="num"' : ''}>${val}</td>`;
     }).join('');
 
-    const discountAccent = (hasLineDiscount || hasPctDiscount) && discountedPrice < baseAmtRaw
-      ? 'box-shadow: inset 3px 0 0 #16a34a; -webkit-print-color-adjust:exact; print-color-adjust:exact;'
-      : '';
-    const mergedRowStyle = [rowBg, lineStyleAttr, discountAccent].filter(Boolean).join(';');
-    return `<tr style="${mergedRowStyle}">${cells}</tr>`;
+    return `<tr${lineStyleAttr ? ` style="${lineStyleAttr}"` : ''}>${cells}</tr>`;
   }).join('');
 
-  // ── Template CSS ──
-  const templateStyles =
-    style === 'modern' ? `
-      .header { display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 0; }
-      .header-left { background: ${accent}; color: #fff; padding: 32px 28px; min-width: 220px; }
-      .header-right { padding: 28px 28px 28px 0; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; }
-      .company-name { font-size: 20px; font-weight: 800; color: #fff; }
-      .company-detail { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 8px; line-height: 1.6; }
-      .inv-title { font-size: 32px; font-weight: 900; color: ${accent}; text-transform: uppercase; text-align: right; }
-      .inv-number { font-size: 14px; color: #64748b; text-align: right; margin-top: 4px; font-weight: 700; }
-      .page { padding: 0; }
-      .content { padding: 32px 28px; }
-      th { background: ${accent}; color: #fff !important; border-bottom: none; }
-      td { border-bottom: 1px solid #e2e8f0; }
-    ` : style === 'minimal' ? `
-      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; }
-      .company-name { font-size: 18px; font-weight: 700; color: #0f172a; }
-      .company-detail { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.6; }
-      .inv-title { font-size: 22px; font-weight: 700; color: #0f172a; text-align: right; }
-      .inv-number { font-size: 12px; color: #64748b; text-align: right; margin-top: 2px; }
-      .page { padding: 40px; }
-      .content { padding: 0; }
-      th { border-bottom: 1px solid #0f172a; }
-    ` : style === 'executive' ? `
-      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0; }
-      .header-top { background: ${accent}; padding: 24px 32px 20px; }
-      .header-bottom { background: #fff; padding: 12px 32px 24px; border-bottom: 3px solid ${accent}; display: flex; justify-content: space-between; align-items: flex-end; }
-      .company-name { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
-      .company-detail { font-size: 11px; color: rgba(255,255,255,0.8); margin-top: 6px; line-height: 1.7; }
-      .inv-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: ${accent}; }
-      .inv-number { font-size: 28px; font-weight: 900; color: #0f172a; }
-      .page { padding: 0; }
-      .content { padding: 28px 32px; }
-      th { border-bottom: 2px solid ${accent}; color: ${accent} !important; }
-    ` : style === 'compact' ? `
-      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid ${accent}; }
-      .company-name { font-size: 16px; font-weight: 800; color: #0f172a; }
-      .company-detail { font-size: 10px; color: #64748b; margin-top: 3px; line-height: 1.5; }
-      .inv-title { font-size: 20px; font-weight: 800; color: ${accent}; text-transform: uppercase; text-align: right; }
-      .inv-number { font-size: 11px; color: #64748b; text-align: right; font-weight: 600; }
-      .page { padding: 28px 32px; }
-      .content { padding: 0; }
-      th { border-bottom: 2px solid ${accent}; color: ${accent} !important; font-size: 9px; }
-      td { padding: 4px 12px; font-size: 11px; border-bottom: 1px solid #f1f5f9; }
-      .meta-row { padding: 8px 12px; margin-bottom: 14px; }
-      .addresses { margin-bottom: 12px; }
-    ` : /* classic */ `
-      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; }
-      .company-name { font-size: 22px; font-weight: 800; color: #0f172a; }
-      .company-detail { font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.6; }
-      .inv-title { font-size: 28px; font-weight: 800; color: ${accent}; text-transform: uppercase; text-align: right; }
-      .inv-number { font-size: 13px; color: #64748b; text-align: right; margin-top: 4px; font-weight: 600; }
-      .page { padding: 48px; }
-      .content { padding: 0; }
-      th { border-bottom: 2px solid ${accent}; color: ${accent} !important; }
-    `;
+  // Assemble the ruled line-items table (classic <thead> + custom body rows).
+  const itemsTableHead = `<tr>${tableColumns.map(c =>
+    `<th>${cesc(c.label)}</th>`).join('')}</tr>`;
+  const itemsTableHTML = `<table class="ruled"><thead>${itemsTableHead}</thead><tbody>${lineRows}</tbody></table>`;
 
-  // Only embed logo if it's a data: URI or https: URL — file:// paths fail in
-  // Electron print-to-PDF renderers that load from data:text/html.
-  const safeLogo = logoData && /^(data:|https?:)/.test(String(logoData)) ? logoData : null;
-  const logoHTML = safeLogo
-    ? `<img src="${esc(safeLogo)}" alt="${companyName}" style="max-height:56px;max-width:180px;width:auto;height:auto;object-fit:contain;display:block;margin-bottom:8px;">`
-    : '';
-
-  // ── Header layout variants ──
-  const companyBlock = `
-    ${logoHTML}
-    <div class="company-name">${companyName}</div>
-    <div class="company-detail">
-      ${companyAddr ? companyAddr + '<br>' : ''}
-      ${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}
-    </div>`;
-
+  // ── Document type / labels ──
   const isCreditNote = invoice.invoice_type === 'credit_note';
   const isQuote = invoice.invoice_type === 'quote' || invoice.document_type === 'quote';
+  const isProforma = invoice.invoice_type === 'proforma';
   const invoiceTypeLabel = isCreditNote ? 'Credit Note'
     : isQuote ? 'Quote'
-    : invoice.invoice_type === 'proforma' ? 'Proforma Invoice'
+    : isProforma ? 'Proforma Invoice'
     : invoice.invoice_type === 'retainer' ? 'Retainer Invoice'
     : invoice.invoice_type === 'service' ? 'Service Invoice'
     : invoice.invoice_type === 'product' ? 'Invoice'
     : 'Invoice';
 
-  // Status badge near the doc number (only for sent/paid/overdue/void)
-  const badgeMap: Record<string, { label: string; bg: string; fg: string }> = {
-    paid:      { label: 'PAID',     bg: '#dcfce7', fg: '#166534' },
-    overdue:   { label: 'OVERDUE',  bg: '#fee2e2', fg: '#991b1b' },
-    cancelled: { label: 'VOID',     bg: '#fee2e2', fg: '#991b1b' },
-    void:      { label: 'VOID',     bg: '#fee2e2', fg: '#991b1b' },
-    sent:      { label: 'SENT',     bg: '#dbeafe', fg: '#1e40af' },
-    accepted:  { label: 'ACCEPTED', bg: '#dcfce7', fg: '#166534' },
-    declined:  { label: 'DECLINED', bg: '#fee2e2', fg: '#991b1b' },
-  };
-  const badge = badgeMap[String(invoice.status || '').toLowerCase()];
-  const statusBadgeHTML = badge
-    ? `<span class="fd-status-badge" style="background:${badge.bg};color:${badge.fg};">${badge.label}</span>`
-    : '';
-  const currencyLabel = invoice.currency && invoice.currency !== 'USD' ? ` (${invoice.currency})` : '';
   const shippingAmount = Number(invoice.shipping_amount || 0);
-
+  const subtotalNum    = Number(invoice.subtotal || 0);
   const docNumberField = invoice.invoice_number || invoice.quote_number || invoice.document_number || '';
-  const invBlock = `
-    <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
-    <div class="inv-number">#${esc(docNumberField)}${statusBadgeHTML}</div>
-    ${isCreditNote && invoice.reference_invoice_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Re: Invoice #${esc(invoice.reference_invoice_number)}</div>` : ''}
-    ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${esc(invoice.po_number)}</div>` : ''}
-    ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}
-    ${isQuote && invoice.valid_until ? `<div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:6px;border-top:2px solid ${accent};padding-top:4px;display:inline-block;">Valid until ${fmtDate(invoice.valid_until)}</div>` : ''}`;
 
-  // ── P1.4: Custom Letterhead ───────────────────────────────────
-  // Renders a wider banner image (e.g. company letterhead PDF rasterized
-  // to PNG/JPEG and pasted in). Three positions:
-  //   'top'     — banner spans page-width above the standard header
-  //   'replace' — banner becomes the entire header (no co-name text)
-  //   'bottom'  — banner reserved for the bottom of the last page
-  // Validates the data URI prefix to prevent script-URL injection.
+  // Status badge (classic = boxed monochrome label, no color fills).
+  const statusBadges: Record<string, string> = {
+    paid: 'PAID', overdue: 'OVERDUE', cancelled: 'VOID', void: 'VOID',
+    sent: 'SENT', accepted: 'ACCEPTED', declined: 'DECLINED', partial: 'PARTIAL',
+  };
+  const statusBadge = statusBadges[String(invoice.status || '').toLowerCase()];
+
+  // ── Logo (only embed data: / https: URIs — file:// fails in Electron PDF) ──
+  const safeLogo = logoData && /^(data:|https?:)/.test(String(logoData)) ? logoData : null;
+  const logoHTML = safeLogo
+    ? `<img src="${cesc(safeLogo)}" alt="${companyName}" style="max-height:48px;max-width:220px;width:auto;height:auto;object-fit:contain;display:block;margin-bottom:6px;">`
+    : '';
+
+  // ── P1.4: Custom Letterhead banner (data-URI validated) ──
   const letterheadSrc = settings?.letterhead_data && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(String(settings.letterhead_data))
     ? String(settings.letterhead_data)
     : null;
   const letterheadPos = settings?.letterhead_position || 'top';
   const letterheadH = Math.min(300, Math.max(40, Number(settings?.letterhead_height) || 90));
   const letterheadHTML = letterheadSrc
-    ? `<div style="margin:0 0 ${letterheadPos === 'replace' ? '20px' : '14px'} 0;text-align:center;">
+    ? `<div style="margin:0 0 ${letterheadPos === 'replace' ? '14px' : '10px'} 0;text-align:center;">
         <img src="${letterheadSrc}" alt="Letterhead" style="display:block;width:100%;max-width:100%;height:${letterheadH}px;object-fit:contain;object-position:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;"/>
       </div>`
     : '';
 
-  let headerHTML = '';
-  if (letterheadSrc && letterheadPos === 'replace') {
-    // Banner IS the header — only render the invoice-number block alongside
-    headerHTML = `
-    ${letterheadHTML}
-    <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">${invBlock}</div>`;
-  } else if (style === 'executive') {
-    headerHTML = `
-    <div class="header-top">
-      <div class="company-name">${companyName}</div>
-      <div class="company-detail">
-        ${companyAddr ? companyAddr + '<br>' : ''}
-        ${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}
-      </div>
-    </div>
-    <div class="header-bottom">
-      <div>${logoHTML}</div>
-      <div>
-        <div class="inv-title">${invoiceTypeLabel}${currencyLabel}</div>
-        <div class="inv-number">#${esc(invoice.invoice_number || '')}</div>
-        ${invoice.po_number ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">PO# ${esc(invoice.po_number)}</div>` : ''}
-        ${invoice.job_reference ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">Project: ${esc(invoice.job_reference)}</div>` : ''}
-      </div>
-    </div>`;
-  } else if (style === 'modern') {
-    headerHTML = `
-    <div class="header">
-      <div class="header-left">${companyBlock}</div>
-      <div class="header-right">${invBlock}</div>
-    </div>`;
-  } else if (headerLayout === 'logo-center') {
-    headerHTML = `
-    <div style="text-align:center;margin-bottom:24px;">
-      ${logoHTML}
-      <div class="company-name">${companyName}</div>
-      <div class="company-detail">${companyAddr ? companyAddr + '<br>' : ''}${companyEmail}${companyPhone ? ' &middot; ' + companyPhone : ''}</div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">${invBlock}</div>`;
-  } else if (headerLayout === 'logo-right') {
-    headerHTML = `
-    <div class="header">
-      <div>${invBlock}</div>
-      <div>${companyBlock}</div>
-    </div>`;
-  } else {
-    headerHTML = `
-    <div class="header">
-      <div>${companyBlock}</div>
-      <div style="text-align:right;">${invBlock}</div>
-    </div>`;
-  }
+  // ── Classic header (company block + doc title/number) ──
+  // companyName/companyAddr/companyEmail/companyPhone are ALREADY esc()-ed
+  // above, so they are trusted HTML here — do not double-escape.
+  const coDetail = [
+    companyAddr,
+    [companyEmail, companyPhone].filter(Boolean).join(' &middot; '),
+  ].filter(Boolean).join('<br>');
+  const currencyLabel = invoice.currency && invoice.currency !== 'USD' ? ` (${invoice.currency})` : '';
+  const numberLines = [
+    `No. ${cesc(docNumberField)}${statusBadge ? `  [${cesc(statusBadge)}]` : ''}`,
+    isCreditNote && invoice.reference_invoice_number ? `Re: Invoice #${cesc(invoice.reference_invoice_number)}` : '',
+  ].filter(Boolean).join('<br>');
+  // For 'replace' letterhead the banner stands in for the company block, so
+  // emit an empty company cell; otherwise show logo + company details.
+  const useReplaceHeader = !!(letterheadSrc && letterheadPos === 'replace');
+  const header = docHeader({
+    coName: useReplaceHeader ? '' : (company?.name || 'Company'),
+    coDetailHtml: useReplaceHeader ? '' : (logoHTML + coDetail),
+    title: `${invoiceTypeLabel}${currencyLabel}`,
+    number: undefined,
+  });
+  // docHeader's `number` is escaped internally and can't carry <br> markup,
+  // so inject the multi-line number block ourselves.
+  const headerWithNumber = header.replace(
+    '</div></div></div>',
+    `<div class="doc-number">${numberLines}</div></div></div>`
+  );
 
-  // ── Payment schedule ──
+  // ── Meta strip (Issue/Due or Quote/Valid Until + PO + custom fields) ──
+  const statusPretty = invoice.status
+    ? String(invoice.status).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : '';
+  const metaCells: { label: string; value: string }[] = [
+    { label: isQuote ? 'Quote Date' : isCreditNote ? 'Credit Date' : 'Issue Date', value: fmtDate(invoice.issue_date) },
+    isQuote
+      ? { label: 'Valid Until', value: fmtDate(invoice.valid_until || invoice.due_date || '') }
+      : { label: isCreditNote ? 'Ref Invoice' : 'Due Date', value: isCreditNote ? (invoice.reference_invoice_number || '—') : fmtDate(invoice.due_date) },
+    { label: 'Terms', value: invoice.terms || (isQuote ? 'Quote' : 'Net 30') },
+  ];
+  if (invoice.po_number) metaCells.push({ label: 'PO Number', value: String(invoice.po_number) });
+  if (invoice.job_reference) metaCells.push({ label: 'Project', value: String(invoice.job_reference) });
+  if (!isQuote && !isCreditNote && statusPretty) metaCells.push({ label: 'Status', value: statusPretty });
+  if (invoice.sent_date) metaCells.push({ label: 'Sent', value: fmtDate(invoice.sent_date) });
+  metaCells.push({ label: 'Currency', value: invoice.currency || 'USD' });
+  // Custom fields appended (already filtered for label + value).
+  metaCells.push(...customFieldCells);
+  const meta = metaStrip(metaCells);
+
+  // ── Bill To / Ship To boxes ──
+  const shipName = esc(invoice.ship_to_name || '');
+  const shipAddr = esc([invoice.ship_to_address_line1, invoice.ship_to_address_line2, invoice.ship_to_city, invoice.ship_to_state, invoice.ship_to_zip].filter(Boolean).join(', '));
+  const hasShip = !!(shipName || shipAddr);
+  // Client tenure note (informational; classic = plain text).
+  const tenureNote = (() => {
+    const since = (client?.created_at || client?.client_since || '').toString().slice(0, 4);
+    const sinceYear = parseInt(since, 10);
+    if (!sinceYear || sinceYear < 1990 || sinceYear > new Date().getFullYear()) return '';
+    return `<div style="font-size:10px;margin-top:5px;">Client since ${sinceYear}</div>`;
+  })();
+  const billHtml = `<b>${clientName}</b>` +
+    ((clientAddr || clientEmail || clientPhone)
+      ? '<br>' + [clientAddr, [clientEmail, clientPhone].filter(Boolean).join(' &middot; ')].filter(Boolean).join('<br>')
+      : '') +
+    tenureNote;
+  const partyBoxes = [{ label: isQuote ? 'Quote For' : 'Bill To', html: billHtml }];
+  if (hasShip) {
+    partyBoxes.push({
+      label: 'Ship To',
+      html: `<b>${shipName || clientName}</b>${shipAddr ? '<br>' + shipAddr : ''}`,
+    });
+  }
+  const parties = boxRow(partyBoxes);
+
+  // ── Payment progress note (partial payments; classic = plain text) ──
+  const paymentPct = total > 0 ? Math.min(100, Math.max(0, (amountPaid / total) * 100)) : 0;
+  const paymentNote = (amountPaid > 0 && balance > 0.005 && total > 0 && !isQuote && !isCreditNote)
+    ? `<div style="padding:8px 16px;border-bottom:2px solid #000;font-size:11px;">` +
+      `<b>Payment Progress:</b> ${paymentPct.toFixed(0)}% paid &middot; ${cesc(fmt(amountPaid))} of ${cesc(fmt(total))} ` +
+      `&middot; Balance Due ${cesc(fmt(balance))}</div>`
+    : '';
+
+  // ── Totals box ──
+  const totalRows: { label: string; value: string; grand?: boolean }[] = [
+    { label: 'Subtotal', value: fmt(subtotalNum) },
+    ...taxTotalRows,
+  ];
+  if (discountAmount > 0) totalRows.push({ label: 'Discount', value: `−${fmt(discountAmount)}` });
+  if (shippingAmount > 0) totalRows.push({ label: 'Shipping', value: fmt(shippingAmount) });
+  totalRows.push(
+    isCreditNote
+      ? { label: 'Credit Amount', value: `(${fmt(Math.abs(total))}) CR`, grand: true }
+      : { label: 'Total', value: fmt(total), grand: true }
+  );
+  if (amountPaid > 0 && !isCreditNote) {
+    totalRows.push({ label: 'Amount Paid', value: fmt(amountPaid) });
+    totalRows.push({ label: 'Balance Due', value: fmt(Math.max(0, balance)), grand: true });
+  }
+  const totals = totalsBox(totalRows);
+
+  // ── Payment schedule (classic ruled table) ──
   const scheduleHTML = (() => {
     if (!paymentSchedule || paymentSchedule.length === 0) return '';
-    const rows = paymentSchedule.map(m => `
-      <tr>
-        <td>${esc(m.milestone_label || '')}</td>
-        <td class="text-right">${fmtDate(m.due_date)}</td>
-        <td class="text-right font-mono">${fmt(Number(m.amount || 0))}</td>
-        <td class="text-right">${m.paid ? '<span style="color:#16a34a;font-weight:700;">PAID</span>' : '<span style="color:#64748b;">Due</span>'}</td>
-      </tr>`).join('');
-    return `
-    <div style="margin-top:24px;">
-      <div class="section-label" style="margin-bottom:8px;">Payment Schedule</div>
-      <table>
-        <thead><tr>
-          <th>Milestone</th><th class="text-right">Due Date</th>
-          <th class="text-right">Amount</th><th class="text-right">Status</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+    const rows: string[][] = paymentSchedule.map(m => [
+      cesc(m.milestone_label || ''),
+      cesc(fmtDate(m.due_date)),
+      cesc(fmt(Number(m.amount || 0))),
+      m.paid ? 'PAID' : 'Due',
+    ]);
+    return `<div style="padding:12px 16px;border-top:2px solid #000;">
+      <div class="sec-label" style="margin-bottom:6px;">Payment Schedule</div>
+      ${ruledTable(
+        [
+          { label: 'Milestone' },
+          { label: 'Due Date', align: 'right' },
+          { label: 'Amount', align: 'right' },
+          { label: 'Status', align: 'center' },
+        ],
+        rows,
+      )}
     </div>`;
   })();
 
-  // QR code: prefer the deep-link to the client portal (portal_token)
-  // since it scopes the recipient directly to THIS invoice. Falls back to
-  // a custom payment URL the user configured in settings (legacy path).
-  // buildPortalUrl() handles {token} substitution, /login query-param
-  // mode, and legacy /portal path-style URLs transparently.
+  // ── Payment QR (classic = QR inside a bordered box) ──
+  // Prefer the portal deep-link (scopes recipient to THIS invoice); fall back
+  // to a configured payment-URL prefix. buildPortalUrl() handles {token}
+  // substitution, /login query-param mode, and legacy /portal path-style URLs.
   const portalDeepLink = invoice.portal_token
     ? buildPortalUrl(settings?.portal_base_url, invoice.portal_token)
     : (qrUrl ? `${qrUrl.replace(/\/$/, '')}/${invoice.invoice_number || ''}` : '');
   const showQRResolved = (showQR || !!invoice.portal_token) && !!portalDeepLink && !isQuote;
   const qrCaption = isCreditNote ? 'View Credit' : (balance > 0.005 ? 'Pay this Invoice' : 'View Receipt');
-  const qrSection = showQRResolved
-    ? `<div style="margin-top:20px;">${qrCard(portalDeepLink, qrCaption)}</div>`
-    : '';
-
-  // ── Feature #2: payment status progress bar (only for partial payments) ──
-  const paymentPct = total > 0 ? Math.min(100, Math.max(0, (amountPaid / total) * 100)) : 0;
-  const paymentBarHTML = (amountPaid > 0 && balance > 0.005 && total > 0 && !isQuote && !isCreditNote)
-    ? `<div class="fd-payment-progress" style="margin:0 0 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:3px;">
-          <span>Payment Progress</span>
-          <span style="color:#0f172a;">${paymentPct.toFixed(0)}% paid &middot; ${fmt(amountPaid)} of ${fmt(total)}</span>
+  const qrSvg = showQRResolved ? generateQRSVG(portalDeepLink, 96) : '';
+  const qrSection = (showQRResolved && qrSvg)
+    ? `<div style="padding:12px 16px;border-top:2px solid #000;">
+        <div style="display:inline-flex;align-items:center;gap:14px;border:1px solid #000;padding:10px 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="width:96px;height:96px;flex:0 0 96px;">${qrSvg}</div>
+          <div style="font-size:11px;line-height:1.4;max-width:170px;">
+            <div style="font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">${cesc(qrCaption)}</div>
+            <div style="font-size:9.5px;">Scan with your phone camera to view, pay, and download a receipt.</div>
+          </div>
         </div>
-        <div style="display:flex;height:10px;width:100%;border:1px solid #e2e8f0;border-radius:2px;overflow:hidden;background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <div style="width:${paymentPct.toFixed(2)}%;background:${accent};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-          <div style="flex:1;background:#e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-        </div>
-        <div style="font-size:9px;color:#dc2626;font-weight:600;margin-top:3px;text-align:right;">Balance Due: ${fmt(balance)}</div>
       </div>`
     : '';
 
-  // ── Feature #4: totals composition donut ──
-  const subtotalNum = Number(invoice.subtotal || 0);
-  // MATH: Only the flat discount_amount is actually deducted from total.
-  // Header `discount_pct` is stored for reference but not subtracted, so
-  // including it in the donut would mis-state the visualization.
-  const discTotal = discountAmount;
-  const totalsDonutHTML = (() => {
-    const segs = [
-      { value: subtotalNum, color: accent, label: 'Subtotal' },
-      { value: taxAmount, color: '#0891b2', label: 'Tax' },
-      { value: shippingAmount, color: '#7c3aed', label: 'Ship' },
-      { value: discTotal, color: '#16a34a', label: 'Disc' },
-    ];
-    if (segs.reduce((s, x) => s + x.value, 0) <= 0) return '';
-    return `<div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0;">
-      ${svgDonut(segs, 72, '', '')}
-      <div style="font-size:9px;color:#475569;line-height:1.5;">
-        ${segs.filter(s => s.value > 0).map(s => `<div style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:8px;height:8px;background:${s.color};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)}: ${fmt(s.value)}</div>`).join('')}
-      </div>
-    </div>`;
-  })();
+  // ── Notes / Terms (boxRow) ──
+  const noteBoxes: { label: string; html: string }[] = [];
+  if (invoice.notes) noteBoxes.push({ label: 'Notes', html: `<div style="white-space:pre-line;">${cesc(invoice.notes)}</div>` });
+  if (invoice.terms_text) noteBoxes.push({ label: 'Terms & Conditions', html: `<div style="white-space:pre-line;">${cesc(invoice.terms_text)}</div>` });
+  const notesHTML = noteBoxes.length ? boxRow(noteBoxes) : '';
 
-  // ── Feature #16: client tenure indicator ──
-  const tenureBadgeHTML = (() => {
-    const since = (client?.created_at || client?.client_since || '').toString().slice(0, 4);
-    const sinceYear = parseInt(since, 10);
-    if (!sinceYear || sinceYear < 1990 || sinceYear > new Date().getFullYear()) return '';
-    const years = Math.max(0, new Date().getFullYear() - sinceYear);
-    const dotPct = Math.min(100, (years / 10) * 100);
-    return `<div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;color:#64748b;margin-top:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <span style="text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Client since ${sinceYear}</span>
-      <span style="display:inline-block;width:48px;height:4px;background:#e2e8f0;position:relative;">
-        <span style="position:absolute;left:${dotPct.toFixed(0)}%;top:-2px;width:8px;height:8px;border-radius:50%;background:${accent};margin-left:-4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>
-      </span>
-      <span>${years}y</span>
-    </div>`;
-  })();
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Invoice ${esc(invoice.invoice_number || '')}</title><style>
-${styledBase}
-${templateStyles}
-${stamp ? statusStampCSS(stamp.color) : ''}
-${wmText ? watermarkCSS(wmText, wmOpacity) : invoice.invoice_type === 'proforma' ? watermarkCSS('PROFORMA', 0.07) : ''}
-.addresses { display: flex; justify-content: space-between; margin-bottom: 24px; }
-.addr-block { max-width: 48%; }
-.addr-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
-.addr-detail { font-size: 12px; color: #64748b; line-height: 1.5; }
-.meta-row { display: flex; gap: 36px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; margin-bottom: 24px; flex-wrap: wrap; }
-.meta-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; }
-.meta-value { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px; }
-/* Per-document footer: reserves space via @page running content
-   so it never overlaps body content (replaces old position:fixed) */
-@page {
-  margin: 0.55in 0.5in 0.85in 0.5in;
-  @bottom-left {
-    content: "${escCss(companyName)} · ${escCss(invoiceTypeLabel)} #${escCss((docNumberField || '').toString())} · Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}";
-    font-family: 'SF Mono', Menlo, Consolas, monospace;
-    font-size: 8pt;
-    color: #94a3b8;
-    padding-bottom: 12pt;
-  }
-  @bottom-right {
-    padding-bottom: 12pt;
-  }
-}
-.totals { display: flex; justify-content: flex-end; margin-top: 14px; }
-.totals-box {
-  width: 320px;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  background: #ffffff;
-  overflow: hidden;
-  box-shadow: none;
-}
-.totals-box > .totals-row,
-.totals-box > [class^="totals-row"] { padding-left: 18px; padding-right: 18px; }
-.totals-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 7px 0;
-  font-size: 11.5px;
-  color: #64748b;
-  font-weight: 500;
-  letter-spacing: 0.1px;
-}
-.totals-row > span:first-child { text-transform: none; }
-.totals-row > span:last-child {
-  font-variant-numeric: tabular-nums;
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  color: #1e293b;
-  font-weight: 600;
-}
-.totals-row:first-child { padding-top: 14px; }
-.totals-total {
-  background: #0f172a;
-  color: #ffffff !important;
-  padding: 14px 18px !important;
-  margin-top: 6px;
-  border-top: none;
-  font-weight: 800;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1.4px;
-}
-.totals-total > span:first-child {
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1.4px;
-  color: rgba(255,255,255,0.72);
-  align-self: center;
-}
-.totals-total > span:last-child {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: #ffffff !important;
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-variant-numeric: tabular-nums;
-}
-.totals-paid {
-  background: rgba(22,163,74,0.06);
-  color: #16a34a !important;
-  padding: 10px 18px !important;
-  border-top: 1px solid rgba(22,163,74,0.18);
-  font-size: 11px;
-  font-weight: 600;
-}
-.totals-paid > span:last-child { color: #16a34a !important; }
-.totals-balance {
-  background: ${balance > 0.005 ? 'rgba(220,38,38,0.06)' : 'rgba(22,163,74,0.06)'};
-  color: ${balance > 0.005 ? '#dc2626' : '#16a34a'} !important;
-  padding: 12px 18px !important;
-  border-top: 1px solid ${balance > 0.005 ? 'rgba(220,38,38,0.2)' : 'rgba(22,163,74,0.2)'};
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-}
-.totals-balance > span:last-child {
-  color: ${balance > 0.005 ? '#dc2626' : '#16a34a'} !important;
-  font-size: 14px;
-  font-weight: 800;
-}
-.footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e2e8f0; }
-.footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.footer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; margin-bottom: 4px; }
-.footer-text { font-size: 11px; color: #64748b; line-height: 1.6; white-space: pre-line; }
-.footer-bottom { text-align: center; margin-top: 28px; font-size: 10px; color: #64748b; }
-.accent-bar { height: 4px; background: ${accent}; margin-bottom: 0; }
-.draft-watermark {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) rotate(-30deg);
-  font-size: 80px;
-  font-weight: 900;
-  color: rgba(200, 0, 0, 0.06);
-  letter-spacing: 15px;
-  pointer-events: none;
-  z-index: 1;
-}
-</style></head>
-<body>
-${wmText ? `<div class="watermark">${esc(wmText)}</div>` : invoice.invoice_type === 'proforma' ? '<div class="watermark">PROFORMA</div>' : ''}
-${invoice.status === 'draft' && !wmText ? '<div class="draft-watermark">DRAFT</div>' : ''}
-${style === 'modern' ? `<div class="accent-bar"></div>` : ''}
-${stamp ? `<div class="status-stamp">${stamp.label}</div>` : ''}
-<div class="page">
-<div class="content">
-  ${letterheadSrc && letterheadPos === 'top' ? letterheadHTML : ''}
-  ${headerHTML}
-
-  ${(() => {
-    const shipName = esc(invoice.ship_to_name || '');
-    const shipAddr = esc([invoice.ship_to_address_line1, invoice.ship_to_address_line2, invoice.ship_to_city, invoice.ship_to_state, invoice.ship_to_zip].filter(Boolean).join(', '));
-    const hasShip = !!(shipName || shipAddr);
-    const billCard = `
-      <div class="fd-addr-card">
-        <div class="fd-addr-lbl">${isQuote ? 'Quote For' : 'Bill To'}</div>
-        <div class="fd-addr-name">${clientName}</div>
-        <div class="fd-addr-detail">
-          ${clientAddr ? clientAddr + '<br>' : ''}
-          ${clientEmail ? clientEmail + (clientPhone ? ' &middot; ' + clientPhone : '') : (clientPhone || '')}
+  // ── Quote signature block ──
+  const quoteSigHTML = isQuote
+    ? `<div style="padding:18px 16px 12px;border-top:2px solid #000;">
+        <div style="display:flex;gap:40px;">
+          <div style="flex:1;"><div style="border-bottom:1px solid #000;height:28px;"></div><div style="font-size:10px;margin-top:4px;">Authorized Signature &middot; ${companyName}</div></div>
+          <div style="flex:1;"><div style="border-bottom:1px solid #000;height:28px;"></div><div style="font-size:10px;margin-top:4px;">Accepted by ${clientName} &middot; Date</div></div>
         </div>
-        ${tenureBadgeHTML}
-      </div>`;
-    const shipCard = hasShip ? `
-      <div class="fd-addr-card">
-        <div class="fd-addr-lbl">Ship To</div>
-        <div class="fd-addr-name">${shipName || clientName}</div>
-        <div class="fd-addr-detail">${shipAddr || ''}</div>
-      </div>` : '';
-    return `<div class="fd-addr-grid${hasShip ? '' : ' single'}">${billCard}${shipCard}</div>`;
-  })()}
+        <div style="font-size:10px;font-style:italic;margin-top:10px;line-height:1.5;">
+          By signing above, the customer accepts the goods and services described in this quote at the prices stated, subject to the terms above. This quote is valid${invoice.valid_until ? ` until ${cesc(fmtDate(invoice.valid_until))}` : ''}.
+        </div>
+      </div>`
+    : '';
 
-  ${paymentBarHTML}
+  // ── Credit note / late-fee notices ──
+  const creditNoteHTML = isCreditNote
+    ? `<div style="padding:12px 16px;border-top:2px solid #000;font-size:10px;font-style:italic;line-height:1.5;">
+        Amounts shown are credits to the customer's account. Negative values or "(CR)" indicate funds owed to the customer${invoice.reference_invoice_number ? ` against Invoice #${cesc(invoice.reference_invoice_number)}` : ''}.
+      </div>`
+    : '';
+  const lateFeeNote = (invoice.late_fee_pct && invoice.late_fee_pct > 0 && !isQuote && !isCreditNote)
+    ? `<div style="padding:0 16px 10px;font-size:10px;">A late fee of ${cesc(String(invoice.late_fee_pct))}% per month applies after ${cesc(String(invoice.late_fee_grace_days || 0))} days.</div>`
+    : '';
 
-  <div class="fd-meta-strip">
-    <div class="fd-meta-row"><span class="lbl">${isQuote ? 'Quote Date' : isCreditNote ? 'Credit Date' : 'Issue Date'}</span><span class="val">${fmtDate(invoice.issue_date)}</span></div>
-    ${isQuote
-      ? `<div class="fd-meta-row"><span class="lbl">Valid Until</span><span class="val">${fmtDate(invoice.valid_until || '')}</span></div>`
-      : `<div class="fd-meta-row"><span class="lbl">${isCreditNote ? 'Ref Invoice' : 'Due Date'}</span><span class="val">${isCreditNote ? esc(invoice.reference_invoice_number || '—') : fmtDate(invoice.due_date)}</span></div>`}
-    <div class="fd-meta-row"><span class="lbl">PO Number</span><span class="val">${esc(invoice.po_number || '—')}</span></div>
-    <div class="fd-meta-row"><span class="lbl">Project</span><span class="val">${esc(invoice.job_reference || '—')}</span></div>
-    ${!isQuote && !isCreditNote ? `<div class="fd-meta-row"><span class="lbl">Status</span><span class="val">${esc(invoice.status ? String(invoice.status).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—')}</span></div>` : ''}
-    ${invoice.sent_date ? `<div class="fd-meta-row"><span class="lbl">Sent</span><span class="val">${fmtDate(invoice.sent_date)}</span></div>` : ''}
-    <div class="fd-meta-row"><span class="lbl">Currency</span><span class="val">${esc(invoice.currency || 'USD')}</span></div>
-    <div class="fd-meta-row"><span class="lbl">Terms</span><span class="val">${esc(invoice.terms || (isQuote ? 'Quote' : 'Net 30'))}</span></div>
-  </div>
+  // ── Custom watermark (faint, in addition to DRAFT via docFrame). PROFORMA
+  // documents get an automatic watermark when no custom one is set. ──
+  const effectiveWmText = wmText || (isProforma ? 'PROFORMA' : '');
+  const wmOpacity = settings?.watermark_opacity ?? 0.06;
+  const customWmHTML = effectiveWmText
+    ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:84px;font-weight:bold;color:rgba(0,0,0,${Math.max(0.02, Math.min(0.3, wmOpacity))});letter-spacing:10px;pointer-events:none;z-index:0;white-space:nowrap;">${cesc(effectiveWmText)}</div>`
+    : '';
+  // DRAFT watermark via docFrame only when there's no explicit/proforma
+  // custom watermark (avoids overlapping watermarks).
+  const showDraftWm = invoice.status === 'draft' && !effectiveWmText;
 
-  <table>
-    <thead><tr>${colHeaders}</tr></thead>
-    <tbody>${lineRows}</tbody>
-  </table>
+  // ── Footer bar ──
+  const footerLine = `${esc(footerText) || companyName} · ${invoiceTypeLabel} #${esc(String(docNumberField))} · Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`;
 
-  <div class="totals">
-    <div class="totals-box">
-      <div class="totals-row"><span>Subtotal</span><span>${fmt(invoice.subtotal)}</span></div>
-      ${taxBreakdownHTML}
-      ${discountAmount > 0 ? `<div class="totals-row" style="color:#16a34a"><span>Discount</span><span>\u2212${fmt(discountAmount)}</span></div>` : ''}
-      ${shippingAmount > 0 ? `<div class="totals-row"><span>Shipping</span><span>${fmt(shippingAmount)}</span></div>` : ''}
-      <div class="totals-row totals-total">
-        <span>${invoice.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}</span>
-        <span style="${invoice.invoice_type === 'credit_note' ? 'color:#16a34a' : ''}">${invoice.invoice_type === 'credit_note' ? `(${fmt(Math.abs(total))}) CR` : fmt(total)}</span>
-      </div>
-      ${amountPaid > 0 && invoice.invoice_type !== 'credit_note' ? `
-        <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
-        <div class="totals-row totals-balance"><span>Balance Due</span><span>${fmt(Math.max(0, balance))}</span></div>
-      ` : ''}
-      ${totalsDonutHTML}
-    </div>
-  </div>
+  // ── Assemble the document frame ──
+  const inner =
+    customWmHTML +
+    headerWithNumber +
+    meta +
+    parties +
+    paymentNote +
+    itemsTableHTML +
+    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    scheduleHTML +
+    qrSection +
+    notesHTML +
+    quoteSigHTML +
+    creditNoteHTML +
+    lateFeeNote +
+    footerBar(footerLine);
 
-  ${scheduleHTML}
-  ${qrSection}
+  const bodyInner =
+    (letterheadSrc && letterheadPos === 'top' ? letterheadHTML : '') +
+    docFrame(inner, { draft: showDraftWm }) +
+    (letterheadSrc && letterheadPos === 'bottom' ? letterheadHTML : '');
 
-  ${(invoice.notes || invoice.terms_text) ? `
-  <div class="footer">
-    <div class="footer-grid">
-      ${invoice.notes ? `<div><div class="footer-label">Notes</div><div class="footer-text">${esc(invoice.notes)}</div></div>` : ''}
-      ${invoice.terms_text ? `<div><div class="footer-label">Terms &amp; Conditions</div><div class="footer-text">${esc(invoice.terms_text)}</div></div>` : ''}
-    </div>
-  </div>` : ''}
-
-  ${isQuote ? `
-  <div class="fd-quote-sig">
-    <div>
-      <div class="fd-sig-line"></div>
-      <div class="fd-sig-lbl">Authorized Signature &middot; ${companyName}</div>
-    </div>
-    <div>
-      <div class="fd-sig-line"></div>
-      <div class="fd-sig-lbl">Accepted by ${clientName} &middot; Date</div>
-    </div>
-  </div>
-  <div style="font-size:10px;color:#64748b;font-style:italic;margin-top:10px;line-height:1.5;">
-    By signing above, the customer accepts the goods and services described in this quote at the prices stated, subject to the terms above. This quote is valid${invoice.valid_until ? ` until ${fmtDate(invoice.valid_until)}` : ''}.
-  </div>` : ''}
-
-  ${isCreditNote ? `
-  <div style="font-size:10px;color:#64748b;font-style:italic;margin-top:14px;line-height:1.5;">
-    Amounts shown are credits to the customer's account. Negative values or "(CR)" indicate funds owed to the customer${invoice.reference_invoice_number ? ` against Invoice #${esc(invoice.reference_invoice_number)}` : ''}.
-  </div>` : ''}
-
-  <div class="footer-bottom">
-    ${esc(footerText) || companyName}
-    ${invoice.late_fee_pct && invoice.late_fee_pct > 0 && !isQuote && !isCreditNote ? `<p style="font-size:10px;color:#64748b;margin-top:8px;">A late fee of ${invoice.late_fee_pct}% per month applies after ${invoice.late_fee_grace_days || 0} days.</p>` : ''}
-  </div>
-  ${letterheadSrc && letterheadPos === 'bottom' ? letterheadHTML : ''}
-</div>
-</div>
-
-</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${cesc(docNumberField)}</title>` +
+    `<style>${classicStyles()}</style></head><body>${bodyInner}</body></html>`;
 }
+
 
 
 // ═══════════════════════════════════════════════════════════════
