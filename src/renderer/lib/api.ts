@@ -538,6 +538,8 @@ const api = {
     window.electronAPI.invoke('intelligence:dismiss-anomaly', id),
   cashProjection: (days: number): Promise<{ inflow: any[]; outflow: any[] }> =>
     window.electronAPI.invoke('intelligence:cash-projection', { days }),
+  entityHint: (entityType: string, id: string): Promise<string> =>
+    window.electronAPI.invoke('intelligence:entity-hint', { entityType, id }),
 
   // Rules Engine
   listRules: (company_id: string, category?: string) =>

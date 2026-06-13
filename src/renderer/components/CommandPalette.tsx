@@ -24,6 +24,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [entities, setEntities] = useState<any[]>([]);
+  const [hints, setHints] = useState<Record<string, string>>({});
   const [recent, setRecent] = useState<AppAction[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const setModule = useAppStore((s) => s.setModule);
@@ -54,6 +55,16 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
     }).catch(() => { if (!cancelled) setEntities([]); });
     return () => { cancelled = true; };
   }, [query, activeCompany]);
+
+  useEffect(() => {
+    const targets = entities.filter(e => e.type === 'client' || e.type === 'vendor');
+    if (!targets.length) { setHints({}); return; }
+    let cancelled = false;
+    Promise.all(targets.map(e =>
+      api.entityHint(e.type, e.id).then((h: string) => [`${e.type}:${e.id}`, h] as const).catch(() => [`${e.type}:${e.id}`, ''] as const)
+    )).then(pairs => { if (!cancelled) setHints(Object.fromEntries(pairs.filter(p => p[1]))); });
+    return () => { cancelled = true; };
+  }, [entities]);
 
   const parsed = useMemo(() => parseCommand(query), [query]);
 
@@ -205,6 +216,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
                     : r.parsed!.description
                   }
                   subtitle={r.type === 'entity' ? r.entity!.subtitle : undefined}
+                  badge={r.type === 'entity' ? hints[`${r.entity!.type}:${r.entity!.id}`] : undefined}
                   icon={
                     r.type === 'parsed' ? <Zap size={14} className="text-accent-blue" />
                     : <ArrowRight size={14} className="text-text-muted" />
@@ -234,8 +246,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
 
 const ResultRow: React.FC<{
   label: string; subtitle?: string; icon: React.ReactNode;
-  selected: boolean; onClick: () => void;
-}> = ({ label, subtitle, icon, selected, onClick }) => (
+  selected: boolean; onClick: () => void; badge?: string;
+}> = ({ label, subtitle, icon, selected, onClick, badge }) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -245,7 +257,12 @@ const ResultRow: React.FC<{
     {icon}
     <div className="flex-1 min-w-0">
       <div className="text-sm font-medium truncate">{label}</div>
-      {subtitle && <div className="text-xs text-text-muted truncate">{subtitle}</div>}
+      {(subtitle || badge) && (
+        <div className="text-xs text-text-muted truncate">
+          {subtitle}
+          {badge && <span className="text-accent-warning ml-1">{badge}</span>}
+        </div>
+      )}
     </div>
   </button>
 );

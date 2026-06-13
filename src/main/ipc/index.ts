@@ -9295,6 +9295,28 @@ export function registerIpcHandlers(): void {
     return { inflow, outflow };
   });
 
+  ipcMain.handle('intelligence:entity-hint', (_e, { entityType, id }: { entityType: string; id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !id) return '';
+    try {
+      if (entityType === 'client') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS amt FROM invoices
+           WHERE company_id = ? AND client_id = ? AND status NOT IN ('paid','cancelled','draft')
+             AND COALESCE(due_date,'') <> '' AND date(due_date) < date('now')`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} overdue invoice${row.n > 1 ? 's' : ''} ($${Math.round(row.amt).toLocaleString()})`;
+      } else if (entityType === 'vendor') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n FROM expenses WHERE company_id = ? AND vendor_id = ?
+             AND instr(COALESCE(tags,''),'anomaly') > 0`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} flagged charge${row.n > 1 ? 's' : ''}`;
+      }
+      return '';
+    } catch { return ''; }
+  });
+
   // ─── Rules Engine ────────────────────────────────────────
   ipcMain.handle('rules:list', (_event, { company_id, category }: { company_id: string; category?: string }) => {
     let sql = `SELECT * FROM rules WHERE company_id = ?`;
