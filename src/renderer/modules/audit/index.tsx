@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import {
   Shield, Search, Filter, Clock,
 } from 'lucide-react';
@@ -7,6 +7,9 @@ import api from '../../lib/api';
 import { humanizeLabel } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+
+const SoxControls = lazy(() => import('./SoxControls'));
+const AuditSampling = lazy(() => import('./AuditSampling'));
 
 // ─── Types ──────────────────────────────────────────────
 interface AuditEntry {
@@ -21,6 +24,7 @@ interface AuditEntry {
 }
 
 type ActionFilter = '' | 'create' | 'update' | 'delete';
+type MainTab = 'trail' | 'sox' | 'sampling';
 
 // ─── Action Badges ──────────────────────────────────────
 const actionBadgeClass: Record<string, string> = {
@@ -61,7 +65,7 @@ const formatChanges = (changes: string | Record<string, unknown>): string => {
 
 const getTimestamp = (entry: AuditEntry): string => entry.timestamp || entry.created_at || '';
 
-// ─── Component ──────────────────────────────────────────
+// ─── Audit Trail ─────────────────────────────────────────
 const AuditTrail: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [entries, setEntries] = useState<AuditEntry[]>([]);
@@ -144,23 +148,6 @@ const AuditTrail: React.FC = () => {
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
       {loadError && <ErrorBanner message={loadError} title="Failed to load audit log" onDismiss={() => setLoadError('')} />}
-      {/* Header */}
-      <div className="module-header">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
-          >
-            <Shield size={18} className="text-accent-blue" />
-          </div>
-          <div>
-            <h2 className="module-title text-text-primary">Audit Trail</h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              {filtered.length} entr{filtered.length !== 1 ? 'ies' : 'y'} recorded
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Filters */}
       <div className="block-card p-3">
@@ -300,4 +287,69 @@ const AuditTrail: React.FC = () => {
   );
 };
 
-export default AuditTrail;
+// ─── Main Module ──────────────────────────────────────────
+const AuditModule: React.FC = () => {
+  const [tab, setTab] = useState<MainTab>('trail');
+
+  const TABS: { id: MainTab; label: string }[] = [
+    { id: 'trail', label: 'Audit Trail' },
+    { id: 'sox', label: 'Controls (SOX/SOD)' },
+    { id: 'sampling', label: 'Audit Sampling' },
+  ];
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Module header */}
+      <div className="px-6 pt-6 pb-0 flex-shrink-0">
+        <div className="module-header mb-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
+              style={{ borderRadius: 'var(--app-radius)' }}
+            >
+              <Shield size={18} className="text-accent-blue" />
+            </div>
+            <div>
+              <h2 className="module-title text-text-primary">Audit</h2>
+              <p className="text-xs text-text-muted mt-0.5">Trail, controls, sampling &amp; inquiry</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex gap-1 border-b border-border-primary">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${
+                tab === t.id
+                  ? 'border-accent-primary text-accent-primary font-medium'
+                  : 'border-transparent text-text-muted hover:text-text-secondary'
+              }`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-hidden">
+        {tab === 'trail' && <AuditTrail />}
+        {tab === 'sox' && (
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading...</div>}>
+            <SoxControls />
+          </Suspense>
+        )}
+        {tab === 'sampling' && (
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-text-muted text-sm">Loading...</div>}>
+            <AuditSampling />
+          </Suspense>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AuditModule;

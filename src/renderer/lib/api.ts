@@ -3627,6 +3627,13 @@ const api = {
   lkCashflowTimeline: (loan_id: string, opts?: { since?: string; until?: string }) => window.electronAPI.invoke('lk:cashflow-timeline', { loan_id, opts: opts || {} }),
   lkLoanContextForExpense: (expense_id: string) => window.electronAPI.invoke('lk:loan-context-for-expense', { expense_id }),
 
+  // SOX Controls & Tests
+  soxControlsList: (companyId: string) => window.electronAPI.invoke('sox:controls-list', { companyId }),
+  soxControlSave: (data: { id?: string; companyId?: string; code: string; description: string; owner?: string; frequency?: string; risk?: string }) => window.electronAPI.invoke('sox:control-save', data),
+  soxControlDelete: (id: string) => window.electronAPI.invoke('sox:control-delete', { id }),
+  soxTestsList: (controlId: string) => window.electronAPI.invoke('sox:tests-list', { controlId }),
+  soxTestSave: (data: { controlId: string; companyId?: string; testedBy?: string; testedAt?: string; result?: string; evidence?: string; notes?: string }) => window.electronAPI.invoke('sox:test-save', data),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 };
