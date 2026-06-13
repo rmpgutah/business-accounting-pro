@@ -54,6 +54,26 @@ function resolvePDFOptions(opts?: PDFOptions): PageLayoutOptions {
   };
 }
 
+// Page-number footer rendered by Chromium in the bottom margin of EVERY page
+// (CSS @page margin boxes aren't reliably supported by printToPDF). Small
+// Arial to match the classic theme; header is intentionally empty. The
+// per-document .footer-bar (company · generated date) still appears at the end
+// of the body — this adds page numbering for multi-page documents.
+const PDF_HEADER_TEMPLATE = '<div></div>';
+const PDF_FOOTER_TEMPLATE =
+  '<div style="font-family:Arial,Helvetica,sans-serif;font-size:8px;color:#000;' +
+  'width:100%;text-align:center;padding:0 0.4in;">' +
+  'Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>';
+
+function toPrintToPDFOptions(layout: PageLayoutOptions) {
+  return {
+    ...layout,
+    displayHeaderFooter: true,
+    headerTemplate: PDF_HEADER_TEMPLATE,
+    footerTemplate: PDF_FOOTER_TEMPLATE,
+  };
+}
+
 // ─── Safe filename builder ──────────────────────────────────
 // {doctype}-{identifier}-{yyyy-MM-dd}.pdf
 export function buildPdfFilename(doctype: string, identifier: string, date: Date = new Date()): string {
@@ -128,7 +148,7 @@ async function renderHTMLToPDF(
   try {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
     const resolved = resolvePDFOptions(options);
-    const pdfData = await win.webContents.printToPDF(resolved);
+    const pdfData = await win.webContents.printToPDF(toPrintToPDFOptions(resolved));
     const buf = Buffer.from(pdfData);
     // Apply metadata if provided. The destructured `metadata` field is
     // dropped from `resolved` since printToPDF rejects unknown options.
@@ -242,7 +262,7 @@ export function openPrintPreview(
         filters: [{ name: 'PDF', extensions: ['pdf'] }],
       });
       if (canceled || !filePath) return;
-      const pdfData = await previewWin.webContents.printToPDF(resolvePDFOptions(pdfOptions));
+      const pdfData = await previewWin.webContents.printToPDF(toPrintToPDFOptions(resolvePDFOptions(pdfOptions)));
       await fsp.writeFile(filePath, Buffer.from(pdfData));
     } catch (err) {
       console.error('Print preview save-pdf error:', err);
