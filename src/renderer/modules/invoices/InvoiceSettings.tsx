@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Upload, X, Eye, GripVertical } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
-import { generateInvoiceHTML, InvoiceSettings as ISettings, InvoiceColumnConfig, DEFAULT_COLUMNS, FONT_OPTIONS as FONT_OPTIONS_FROM_TEMPLATES } from '../../lib/print-templates';
+import { generateInvoiceHTML, InvoiceSettings as ISettings, InvoiceColumnConfig, DEFAULT_COLUMNS } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Component ──────────────────────────────────────────
@@ -17,18 +17,6 @@ const TEMPLATE_OPTIONS = [
   { value: 'executive', label: 'Executive', description: 'Two-tone split header with company watermark feel' },
   { value: 'compact',   label: 'Compact',   description: 'Dense layout for multi-page invoices, smaller type' },
 ] as const;
-
-// Single source of truth for the font picker — re-exported from
-// print-templates.ts so the rendered PDF and the settings UI never
-// drift apart. Locally normalized to the {value, label, description,
-// stack} shape the existing UI already expects.
-const FONT_OPTIONS = (FONT_OPTIONS_FROM_TEMPLATES as ReadonlyArray<{ id: string; label: string; stack: string; category: string }>)
-  .map(o => ({
-    value: o.id,
-    label: o.label,
-    description: o.category === 'sans' ? 'Sans-serif' : o.category === 'serif' ? 'Serif' : 'Monospace',
-    stack: o.stack,
-  }));
 
 const HEADER_LAYOUT_OPTIONS = [
   { value: 'logo-left',   label: 'Logo Left',   description: 'Company info left, invoice number right (default)' },
@@ -407,48 +395,10 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
               </div>
             </div>
 
-            {/* Font & Layout */}
+            {/* Layout */}
             <div className="block-card">
-              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Font &amp; Layout</div>
+              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Layout</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">Font Family</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                    {FONT_OPTIONS.map((opt) => {
-                      const selected = settings.font_family === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          onClick={() => setSettings((p) => ({ ...p, font_family: opt.value }))}
-                          style={{
-                            padding: '10px 14px',
-                            borderRadius: '6px',
-                            border: `2px solid ${selected ? accent : 'var(--color-border-primary)'}`,
-                            background: selected ? `${accent}15` : 'var(--color-bg-secondary)',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                          title={opt.stack}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{opt.label}</div>
-                            <div style={{ fontSize: '9px', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{opt.description}</div>
-                          </div>
-                          {/* Live preview rendered using the actual stack */}
-                          <div style={{
-                            fontFamily: opt.stack,
-                            fontSize: '15px',
-                            color: 'var(--color-text-primary)',
-                            marginTop: 6,
-                            lineHeight: 1.3,
-                          }}>
-                            Invoice $1,234.56
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
                 <div>
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">Header Layout</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
