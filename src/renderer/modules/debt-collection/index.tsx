@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   LayoutDashboard,
+  TrendingUp,
 } from 'lucide-react';
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
@@ -19,6 +20,7 @@ import ContactForm from './ContactForm';
 import PipelineView from './PipelineView';
 import LegalToolkit from './LegalToolkit';
 import AnalyticsView from './AnalyticsView';
+import DebtAnalytics from './DebtAnalytics';
 import AutomationSettings from './AutomationSettings';
 import CollectorDashboard from './CollectorDashboard';
 import DebtMiniList from './DebtMiniList';
@@ -26,7 +28,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics' | 'dashboard';
+type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics' | 'dashboard' | 'portfolio-analytics';
 type DebtView = 'list' | 'detail' | 'form' | 'invoice';
 type DebtFormType = 'receivable' | 'payable';
 
@@ -203,6 +205,12 @@ const DebtCollectionModule: React.FC = () => {
           label="Dashboard"
           onClick={() => switchTab('dashboard')}
         />
+        <TabBtn
+          active={tab === 'portfolio-analytics'}
+          icon={<TrendingUp size={16} />}
+          label="Portfolio Analytics"
+          onClick={() => switchTab('portfolio-analytics')}
+        />
         <div className="ml-auto">
           <button
             onClick={() => setShowSettings(true)}
@@ -280,6 +288,10 @@ const DebtCollectionModule: React.FC = () => {
 
       {tab === 'dashboard' && view === 'list' && (
         <CollectorDashboard onViewDebt={(id) => { setActiveDebtId(id); setView('detail'); }} />
+      )}
+
+      {tab === 'portfolio-analytics' && view === 'list' && (
+        <DebtAnalytics />
       )}
 
       {/* Modals — Communication */}
