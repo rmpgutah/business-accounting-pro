@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -7,7 +7,10 @@ import {
   SlidersHorizontal,
   Download,
   Printer,
+  Cpu,
 } from 'lucide-react';
+
+const SmartForecast = lazy(() => import('./SmartForecast'));
 import {
   downloadCSVBlob,
   dateStampedFilename,
@@ -161,9 +164,12 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
   );
 };
 
+type ForecastView = 'linear' | 'smart';
+
 // ─── Forecasting Component ──────────────────────────────
 const Forecasting: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const [activeView, setActiveView] = useState<ForecastView>('linear');
   const [projections, setProjections] = useState<Record<Scenario, Projection[]>>({
     conservative: [],
     moderate: [],
@@ -398,6 +404,47 @@ const Forecasting: React.FC = () => {
   const totalProjectedExpenses = activeProjections.reduce((s, p) => s + p.expenses, 0);
   const totalProjectedCashflow = totalProjectedRevenue - totalProjectedExpenses;
 
+  if (activeView === 'smart') {
+    return (
+      <div className="p-6 space-y-6 overflow-y-auto h-full">
+        {/* Smart Forecast Header */}
+        <div className="module-header">
+          <div className="flex items-center gap-2">
+            <Cpu size={20} className="text-accent-purple" />
+            <h1 className="module-title">Smart Forecast</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveView('linear')}
+              className="block-btn flex items-center gap-2"
+            >
+              <Calculator size={13} />
+              Linear Forecast
+            </button>
+          </div>
+        </div>
+        {/* Tab indicator */}
+        <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
+          <button
+            onClick={() => setActiveView('linear')}
+            className="px-4 py-2 text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
+          >
+            Linear Regression
+          </button>
+          <button
+            className="px-4 py-2 text-xs font-medium border-b-2 -mb-px"
+            style={{ borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}
+          >
+            Smart Forecast
+          </button>
+        </div>
+        <Suspense fallback={<div className="text-xs text-text-muted py-8 text-center">Loading Smart Forecast…</div>}>
+          <SmartForecast />
+        </Suspense>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center h-full">
@@ -427,6 +474,22 @@ const Forecasting: React.FC = () => {
             Print
           </button>
         </div>
+      </div>
+      {/* View tabs */}
+      <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
+        <button
+          className="px-4 py-2 text-xs font-medium border-b-2 -mb-px"
+          style={{ borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}
+        >
+          Linear Regression
+        </button>
+        <button
+          onClick={() => setActiveView('smart')}
+          className="px-4 py-2 text-xs font-medium text-text-muted hover:text-text-primary transition-colors flex items-center gap-1.5"
+        >
+          <Cpu size={12} />
+          Smart Forecast
+        </button>
       </div>
 
       {/* Estimate disclaimer — always visible, prints too */}
