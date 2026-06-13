@@ -4649,44 +4649,33 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Global Search ───────────────────────────────────
-  ipcMain.handle('search:global', (_event, query) => {
-    if (!query || query.length > 200) return [];
-    const results: Array<{ type: string; id: string; title: string; subtitle: string }> = [];
-    const q = `%${query}%`;
+  ipcMain.handle('search:index', (_e, { query, limit }: { query: string; limit?: number }) => {
     const companyId = db.getCurrentCompanyId();
-    if (!companyId) return results;
+    if (!companyId || !query) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, query, Math.min(limit || 20, 50));
+    } catch (e) { console.warn('[search:index] failed', e); return []; }
+  });
 
-    const dbInstance = db.getDb();
+  ipcMain.handle('search:backfill', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { indexed: 0 };
+    try {
+      const { backfillCompany } = require('../services/intelligence/searchIndex');
+      return { indexed: backfillCompany(db.getDb(), companyId) };
+    } catch (e) { console.warn('[search:backfill] failed', e); return { indexed: 0, error: String(e) }; }
+  });
 
-    const clients = dbInstance.prepare(
-      'SELECT id, name, email FROM clients WHERE company_id = ? AND (name LIKE ? OR email LIKE ?) LIMIT 5'
-    ).all(companyId, q, q) as any[];
-    for (const c of clients) {
-      results.push({ type: 'client', id: c.id, title: c.name, subtitle: c.email || '' });
-    }
-
-    const invoices = dbInstance.prepare(
-      'SELECT id, invoice_number, status FROM invoices WHERE company_id = ? AND invoice_number LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const i of invoices) {
-      results.push({ type: 'invoice', id: i.id, title: `Invoice ${i.invoice_number}`, subtitle: i.status });
-    }
-
-    const expenses = dbInstance.prepare(
-      'SELECT id, description, amount FROM expenses WHERE company_id = ? AND description LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const e of expenses) {
-      results.push({ type: 'expense', id: e.id, title: e.description || 'Expense', subtitle: `$${e.amount}` });
-    }
-
-    const projects = dbInstance.prepare(
-      'SELECT id, name, status FROM projects WHERE company_id = ? AND name LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const p of projects) {
-      results.push({ type: 'project', id: p.id, title: p.name, subtitle: p.status });
-    }
-
-    return results.slice(0, 20);
+  ipcMain.handle('search:global', (_event, query) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !query || String(query).length > 200) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, String(query), 20).map((h: any) => ({
+        type: h.entity_type, id: h.entity_id, title: h.title, subtitle: h.subtitle || '',
+      }));
+    } catch (e) { console.warn('[search:global] failed', e); return []; }
   });
 
   // ─── Notifications ───────────────────────────────────

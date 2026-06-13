@@ -62,6 +62,9 @@ const api = {
 
   // Search
   globalSearch: (query: string) => window.electronAPI.invoke('search:global', query),
+  searchIndex: (query: string, limit?: number) =>
+    window.electronAPI.invoke('search:index', { query, limit }),
+  searchBackfill: () => window.electronAPI.invoke('search:backfill'),
 
   // Notifications
   listNotifications: (unreadOnly?: boolean) =>
