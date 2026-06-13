@@ -2,17 +2,19 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, FolderKanban, TrendingUp, Plus, Clock, FileText,
   AlertTriangle, CheckCircle2, Activity, DollarSign, Percent, Briefcase,
+  BarChart2,
 } from 'lucide-react';
 import ProjectList from './ProjectList';
 import ProjectForm from './ProjectForm';
 import ProjectDetail from './ProjectDetail';
+import ProjectAnalytics from './ProjectAnalytics';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── View State ─────────────────────────────────────────
-type Tab = 'dashboard' | 'projects' | 'profitability';
+type Tab = 'dashboard' | 'projects' | 'profitability' | 'analytics';
 type View =
   | { type: 'list' }
   | { type: 'form'; projectId?: string }
@@ -533,6 +535,7 @@ const ProjectsModule: React.FC = () => {
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={13} /> },
     { key: 'projects', label: 'Projects', icon: <FolderKanban size={13} /> },
     { key: 'profitability', label: 'Profitability', icon: <TrendingUp size={13} /> },
+    { key: 'analytics', label: 'Analytics', icon: <BarChart2 size={13} /> },
   ];
 
   return (
@@ -557,6 +560,7 @@ const ProjectsModule: React.FC = () => {
 
       {tab === 'dashboard' && <ProjectsDashboard onNewProject={goToNew} onSwitchTab={setTab} />}
       {tab === 'profitability' && <ProfitabilityTab />}
+      {tab === 'analytics' && <ProjectAnalytics />}
       {tab === 'projects' && (
         <>
           <ProjectList
