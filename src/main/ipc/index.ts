@@ -15615,6 +15615,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vn:risk-score', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorRiskScore(c) : []; });
   ipcMain.handle('vn:off-contract-spend', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorOffContractSpend(c) : []; });
   ipcMain.handle('vn:price-variance', (_e, { minOccurrences }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPriceVariance(c, minOccurrences) : []; });
+  // ─── Phase C: 3-way match (2026-06-13) ───────────────────
+  ipcMain.handle('vn:pos-for-vendor', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().posForVendor(c, vendorId) : []; });
+  ipcMain.handle('vn:link-bill-po', (_e, { billId, poId }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; try { const r = vn().linkBillToPo(c, billId, poId); scheduleAutoBackup(); return r; } catch (e: any) { return { ok: false, linkedLines: 0 }; } });
+  ipcMain.handle('vn:match-results', (_e, { billId }: any = {}) => { const c = db.getCurrentCompanyId(); return c ? vn().threeWayMatch(c, billId) : []; });
+  ipcMain.handle('vn:match-exceptions', () => { const c = db.getCurrentCompanyId(); return c ? vn().matchExceptions(c) : []; });
+  ipcMain.handle('vn:unmatched-bills', () => { const c = db.getCurrentCompanyId(); return c ? vn().unmatchedBills(c) : []; });
+  ipcMain.handle('vn:auto-approve-matched', (_e, { maxAmount }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; try { const r = vn().autoApproveMatched(c, maxAmount ?? 0); scheduleAutoBackup(); return r; } catch (e: any) { return { approvedCount: 0, billIds: [] }; } });
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   const dc2 = () => require('../services/debt-collection-wave2');

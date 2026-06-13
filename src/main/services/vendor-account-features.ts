@@ -447,6 +447,229 @@ export function vendorOffContractSpend(cid: string): object[] {
     .sort((a, b) => b.total_spend - a.total_spend);
 }
 
+// ─── Phase C: 3-way match engine ─────────────────────────────────────────────
+
+// vn:pos-for-vendor — open/approved POs for a vendor (feeds the link picker)
+export function posForVendor(cid: string, vendorId: string): object[] {
+  return db.getDb().prepare(
+    `SELECT id, po_number, total, status
+     FROM purchase_orders
+     WHERE company_id = ? AND vendor_id = ?
+       AND status IN ('draft','sent','approved','partially_received','received')
+     ORDER BY created_at DESC`
+  ).all(cid, vendorId) as object[];
+}
+
+// vn:link-bill-po (WRITE) — link a bill to a PO; auto-map lines by description
+export function linkBillToPo(cid: string, billId: string, poId: string): { ok: boolean; linkedLines: number } {
+  const dbi = db.getDb();
+  // Scope-check: bill must belong to this company
+  const bill = dbi.prepare('SELECT id FROM bills WHERE id = ? AND company_id = ?').get(billId, cid) as any;
+  if (!bill) return { ok: false, linkedLines: 0 };
+  // Set bills.po_id
+  dbi.prepare('UPDATE bills SET po_id = ? WHERE id = ? AND company_id = ?').run(poId, billId, cid);
+  // Best-effort auto-map bill lines → PO lines by lower(trim(description))
+  const billLines = dbi.prepare(
+    'SELECT id, lower(trim(description)) AS desc_key FROM bill_line_items WHERE bill_id = ?'
+  ).all(billId) as any[];
+  const poLines = dbi.prepare(
+    'SELECT id, lower(trim(description)) AS desc_key FROM po_line_items WHERE po_id = ?'
+  ).all(poId) as any[];
+  const poLineMap = new Map<string, string>();
+  for (const pl of poLines) {
+    if (pl.desc_key) poLineMap.set(pl.desc_key, pl.id);
+  }
+  let linkedLines = 0;
+  const updateLine = dbi.prepare('UPDATE bill_line_items SET po_line_id = ? WHERE id = ?');
+  for (const bl of billLines) {
+    const matchedPoLineId = bl.desc_key ? poLineMap.get(bl.desc_key) : undefined;
+    if (matchedPoLineId) {
+      updateLine.run(matchedPoLineId, bl.id);
+      linkedLines++;
+    }
+  }
+  return { ok: true, linkedLines };
+}
+
+// vn:match-results — 3-way match engine (per bill, per line: qty + price variance)
+export function threeWayMatch(cid: string, billId?: string): object[] {
+  const dbi = db.getDb();
+  const billWhere = billId
+    ? 'AND b.id = ?'
+    : '';
+  const billArgs: any[] = billId ? [cid, billId] : [cid];
+
+  const bills = dbi.prepare(
+    `SELECT b.id AS bill_id, b.bill_number, b.total, b.status, b.po_id,
+            v.name AS vendor_name,
+            po.po_number
+     FROM bills b
+     LEFT JOIN vendors v ON v.id = b.vendor_id
+     LEFT JOIN purchase_orders po ON po.id = b.po_id
+     WHERE b.company_id = ? AND b.po_id IS NOT NULL ${billWhere}
+     ORDER BY b.created_at DESC`
+  ).all(...billArgs) as any[];
+
+  const results: object[] = [];
+
+  for (const bill of bills) {
+    const billLines = dbi.prepare(
+      `SELECT bl.id, bl.description,
+              COALESCE(bl.quantity, 1) AS bill_qty,
+              COALESCE(bl.unit_price, 0) AS bill_price,
+              bl.po_line_id
+       FROM bill_line_items bl
+       WHERE bl.bill_id = ?`
+    ).all(bill.bill_id) as any[];
+
+    const lines: object[] = [];
+    let totalVarianceAmount = 0;
+    const lineStatuses: string[] = [];
+
+    for (const bl of billLines) {
+      if (!bl.po_line_id) {
+        lines.push({
+          description: bl.description,
+          bill_qty: bl.bill_qty,
+          po_received_qty: null,
+          qty_variance: null,
+          bill_price: bl.bill_price,
+          po_price: null,
+          price_variance: null,
+          status: 'unlinked',
+        });
+        lineStatuses.push('unlinked');
+        continue;
+      }
+
+      const pl = dbi.prepare(
+        `SELECT COALESCE(quantity_received, 0) AS quantity_received,
+                COALESCE(unit_price, 0) AS unit_price
+         FROM po_line_items WHERE id = ?`
+      ).get(bl.po_line_id) as any;
+
+      if (!pl) {
+        lines.push({
+          description: bl.description,
+          bill_qty: bl.bill_qty,
+          po_received_qty: null,
+          qty_variance: null,
+          bill_price: bl.bill_price,
+          po_price: null,
+          price_variance: null,
+          status: 'unlinked',
+        });
+        lineStatuses.push('unlinked');
+        continue;
+      }
+
+      const qtyVariance = round2(bl.bill_qty - pl.quantity_received);
+      const priceVariance = round2(bl.bill_price - pl.unit_price);
+      const absQty = Math.abs(qtyVariance);
+      const absPrice = Math.abs(priceVariance);
+
+      let lineStatus: string;
+      if (absQty <= 0 && absPrice <= 0.01) {
+        lineStatus = 'matched';
+      } else if (absQty > 0 && absPrice > 0.01) {
+        // worst: report price_mismatch as the dominant signal
+        lineStatus = 'price_mismatch';
+      } else if (absQty > 0) {
+        lineStatus = qtyVariance > 0 ? 'qty_over' : 'qty_under';
+      } else {
+        lineStatus = 'price_mismatch';
+      }
+
+      totalVarianceAmount += Math.abs(priceVariance * bl.bill_qty);
+      lineStatuses.push(lineStatus);
+
+      lines.push({
+        description: bl.description,
+        bill_qty: bl.bill_qty,
+        po_received_qty: pl.quantity_received,
+        qty_variance: qtyVariance,
+        bill_price: bl.bill_price,
+        po_price: pl.unit_price,
+        price_variance: priceVariance,
+        status: lineStatus,
+      });
+    }
+
+    // Bill-level rollup: 'matched' only if all lines matched; otherwise worst issue
+    const STATUS_RANK: Record<string, number> = {
+      matched: 0,
+      qty_over: 1,
+      qty_under: 1,
+      price_mismatch: 2,
+      unlinked: 3,
+    };
+    let worstStatus = 'matched';
+    for (const s of lineStatuses) {
+      if ((STATUS_RANK[s] ?? 0) > (STATUS_RANK[worstStatus] ?? 0)) {
+        worstStatus = s;
+      }
+    }
+    if (lineStatuses.length === 0) worstStatus = 'unlinked';
+
+    results.push({
+      bill_id: bill.bill_id,
+      bill_number: bill.bill_number,
+      vendor_name: bill.vendor_name,
+      po_number: bill.po_number,
+      status: worstStatus,
+      totalVarianceAmount: round2(totalVarianceAmount),
+      lines,
+    });
+  }
+
+  return results;
+}
+
+// vn:match-exceptions — bills whose rollup status != 'matched'
+export function matchExceptions(cid: string): object[] {
+  return (threeWayMatch(cid) as any[]).filter(r => r.status !== 'matched');
+}
+
+// vn:unmatched-bills — bills with po_id IS NULL whose vendor has ≥1 PO
+export function unmatchedBills(cid: string): object[] {
+  return db.getDb().prepare(
+    `SELECT b.id AS bill_id, b.bill_number, b.vendor_id,
+            v.name AS vendor_name,
+            b.total, b.due_date
+     FROM bills b
+     JOIN vendors v ON v.id = b.vendor_id
+     WHERE b.company_id = ?
+       AND b.po_id IS NULL
+       AND b.deleted_at IS NULL
+       AND EXISTS (
+         SELECT 1 FROM purchase_orders po
+         WHERE po.vendor_id = b.vendor_id AND po.company_id = b.company_id
+       )
+     ORDER BY b.due_date ASC`
+  ).all(cid) as object[];
+}
+
+// vn:auto-approve-matched (WRITE) — approve cleanly-matched bills under threshold
+export function autoApproveMatched(cid: string, maxAmount: number): { approvedCount: number; billIds: string[] } {
+  const matched = (threeWayMatch(cid) as any[]).filter(
+    r => r.status === 'matched' && r.bill_id
+  );
+  const dbi = db.getDb();
+  const billIds: string[] = [];
+  const updateStmt = dbi.prepare(
+    `UPDATE bills SET status = 'approved' WHERE id = ? AND company_id = ? AND status IN ('pending','received')`
+  );
+  for (const m of matched) {
+    const bill = dbi.prepare('SELECT total, status FROM bills WHERE id = ? AND company_id = ?').get(m.bill_id, cid) as any;
+    if (!bill) continue;
+    if (bill.total > maxAmount) continue;
+    if (!['pending', 'received'].includes(bill.status)) continue;
+    const info = updateStmt.run(m.bill_id, cid);
+    if (info.changes > 0) billIds.push(m.bill_id);
+  }
+  return { approvedCount: billIds.length, billIds };
+}
+
 // vn:price-variance — price drift per vendor+description across bill line items
 export function vendorPriceVariance(cid: string, minOccurrences = 3): object[] {
   return db.getDb().prepare(

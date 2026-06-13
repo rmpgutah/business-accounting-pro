@@ -831,6 +831,13 @@ const api = {
   vnRiskScore: () => window.electronAPI.invoke('vn:risk-score'),
   vnOffContractSpend: () => window.electronAPI.invoke('vn:off-contract-spend'),
   vnPriceVariance: (minOccurrences?: number) => window.electronAPI.invoke('vn:price-variance', { minOccurrences }),
+  // ─── Phase C: 3-way match (2026-06-13) ───────────────────
+  vnPosForVendor: (vendorId: string) => window.electronAPI.invoke('vn:pos-for-vendor', { vendorId }),
+  vnLinkBillPo: (billId: string, poId: string) => window.electronAPI.invoke('vn:link-bill-po', { billId, poId }),
+  vnMatchResults: (billId?: string) => window.electronAPI.invoke('vn:match-results', { billId }),
+  vnMatchExceptions: () => window.electronAPI.invoke('vn:match-exceptions'),
+  vnUnmatchedBills: () => window.electronAPI.invoke('vn:unmatched-bills'),
+  vnAutoApproveMatched: (maxAmount: number) => window.electronAPI.invoke('vn:auto-approve-matched', { maxAmount }),
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   dcDashboard: () => window.electronAPI.invoke('dc:dashboard'),

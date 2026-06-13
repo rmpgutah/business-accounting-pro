@@ -9339,6 +9339,11 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_employee ON employee_wage_withholdings(employee_id)",
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_debt ON employee_wage_withholdings(debt_id)",
+  // ─── Phase C: 3-way match — bill↔PO link columns (2026-06-13) ────────
+  // Both nullable; existing rows unaffected. try/catch migration loop
+  // swallows "duplicate column name" on re-run (idempotent).
+  "ALTER TABLE bills ADD COLUMN po_id TEXT",
+  "ALTER TABLE bill_line_items ADD COLUMN po_line_id TEXT",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
