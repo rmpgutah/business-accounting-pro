@@ -8,7 +8,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency, formatStatus, formatDate, humanizeLabel } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import { InvoiceStatusBadge, PaymentProgress, DueDateChip } from '../../components/library';
 import EntityTimeline from '../../components/EntityTimeline';
@@ -1195,18 +1195,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                           try {
                             await api.remove('payments', p.id);
                             const remainingPayments = await api.query('payments', { invoice_id: invoiceId });
-                            const newPaid = (remainingPayments || []).reduce((s: number, pay: any) => s + (pay.amount || 0), 0);
-                            let newStatus: string;
-                            if (newPaid >= (invoice?.total || 0)) {
-                              newStatus = 'paid';
-                            } else if (newPaid > 0) {
-                              newStatus = 'partial';
-                            } else if (invoice?.due_date && new Date() > new Date(invoice.due_date)) {
-                              newStatus = 'overdue';
-                            } else {
-                              newStatus = 'sent';
-                            }
-                            await api.update('invoices', invoiceId, { amount_paid: newPaid, status: newStatus });
+                            // Shared recompute keeps delete/edit/create in agreement.
+                            const { amountPaid, status } = computeInvoicePaidStatus(
+                              invoice?.total || 0,
+                              (remainingPayments || []).map((pay: any) => pay.amount),
+                              invoice?.due_date,
+                            );
+                            await api.update('invoices', invoiceId, { amount_paid: amountPaid, status });
                             loadData();
                           } catch (err: any) {
                             alert('Failed to delete payment: ' + (err?.message || 'Unknown error'));

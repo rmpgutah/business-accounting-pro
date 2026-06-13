@@ -88,10 +88,8 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
   const handleAttachFile = async () => {
     try {
       const result = await api.openFileDialog();
-      if (result && !result.canceled && result.filePaths?.length > 0) {
-        const fullPath = result.filePaths[0];
-        const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
-        setForm((prev) => ({ ...prev, file_path: fullPath, file_name: fileName }));
+      if (result && result.path) {
+        setForm((prev) => ({ ...prev, file_path: result.path, file_name: result.name }));
       }
     } catch (err) {
       console.error('File dialog error:', err);

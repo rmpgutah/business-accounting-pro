@@ -16,6 +16,46 @@ export function humanizeLabel(value: string | null | undefined): string {
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
+// Friendly payment-method labels. The DB stores snake_case enum values
+// (debit_card, credit_card, bank_transfer, ach, …); this map turns them into
+// proper-English for every UI surface and printed document. Unknown values
+// fall back to humanizeLabel so newly-added methods aren't shown raw.
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  check: 'Check',
+  credit_card: 'Credit Card',
+  debit_card: 'Debit Card',
+  bank_transfer: 'Bank Transfer',
+  ach: 'ACH',
+  wire: 'Wire Transfer',
+  wire_transfer: 'Wire Transfer',
+  paypal: 'PayPal',
+  venmo: 'Venmo',
+  zelle: 'Zelle',
+  apple_pay: 'Apple Pay',
+  google_pay: 'Google Pay',
+  stripe: 'Stripe',
+  square: 'Square',
+  cashapp: 'Cash App',
+  money_order: 'Money Order',
+  cashiers_check: "Cashier's Check",
+  gift_card: 'Gift Card',
+  store_credit: 'Store Credit',
+  other: 'Other',
+};
+
+/**
+ * Format a payment-method enum value for display. Empty/null returns '—'.
+ * Unknown values pass through humanizeLabel rather than rendering raw
+ * snake_case (e.g. an unmapped "money_order_express" still becomes
+ * "Money order express" instead of leaking the underscore).
+ */
+export function formatPaymentMethod(value: string | null | undefined): string {
+  if (!value) return '—';
+  const key = String(value).toLowerCase().trim();
+  return PAYMENT_METHOD_LABELS[key] || humanizeLabel(value);
+}
+
 // ─── Currency ────────────────────────────────────────────
 const _currencyFmt = new Intl.NumberFormat('en-US', {
   style: 'currency',

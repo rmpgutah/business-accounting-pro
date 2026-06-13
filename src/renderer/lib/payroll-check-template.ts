@@ -34,76 +34,111 @@ function maskSSN(ssn: string | undefined | null): string {
   return d.length >= 4 ? '***-**-' + d.slice(-4) : ssn;
 }
 
-const CHECK_STYLES = `
+// Real, embedded type system (loaded in the print-preview window). Fraunces =
+// refined serif for the company letterhead; IBM Plex Sans = technical body for
+// the dense stub data; IBM Plex Mono = tabular figures for amounts + bank line.
+const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">`;
+
+const CSS = `
+:root{
+  --paper:#fdfdfb; --ink:#16233a; --ink-soft:#51607a;
+  --accent:#15663f; --accent-2:#0f4e30; --accent-wash:rgba(21,102,63,0.07);
+  --line:#c9cfd8; --line-soft:#e4e8ee; --wash:#f3f6f3; --wash-2:#e7ece8;
+  --danger:#b3261e;
+  --font-display:'Fraunces',Georgia,'Times New Roman',serif;
+  --font-body:'IBM Plex Sans','Segoe UI',system-ui,Arial,sans-serif;
+  --font-mono:'IBM Plex Mono','Courier New',Courier,monospace;
+}
 @page { size: letter; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 10px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.pg { width: 8.5in; height: 11in; position: relative; }
+body { font-family: var(--font-body); font-size: 10px; color: var(--ink); background:#fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pg { width: 8.5in; height: 11in; position: relative; background:#fff; }
 
-.chk { height: 3.667in; padding: 0.18in 0.42in 0.5in; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
-.stb { height: 3.667in; padding: 0.06in 0.3in 0.04in; position: relative; overflow: hidden; }
+/* Check face — secure-document paper with a subtle guilloché texture */
+.chk {
+  height: 3.667in; padding: 0.18in 0.42in 0.3in; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 6px;
+  background-color: var(--paper);
+  /* Engine-turned security hatch — two fine diagonal rules cross into a
+     subtle banknote moiré. Cheap to rasterize (vs. radial guilloché) so it
+     prints fast and never muddies the text. */
+  background-image:
+    repeating-linear-gradient(21deg, transparent 0 5.5px, rgba(21,102,63,0.04) 5.5px 6.25px),
+    repeating-linear-gradient(-21deg, transparent 0 5.5px, rgba(21,102,63,0.032) 5.5px 6.25px);
+}
+/* engraved security frame */
+.chk::after { content:''; position:absolute; inset:0.09in; border:1px solid rgba(21,102,63,0.32); pointer-events:none; }
+.stb { height: 3.667in; padding: 0.06in 0.3in 0.04in; position: relative; overflow: hidden; background:#fff; }
 
 /* Check face */
-.chk-co { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
-.chk-num { font-size: 22px; font-weight: 800; letter-spacing: 1.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+.chk-co { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.04; color: var(--ink); }
+.chk-num { font-family: var(--font-mono); font-size: 22px; font-weight: 700; letter-spacing: 1px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--accent-2); }
 
-/* MICR E-13B line — CLEAR BAND, no labels */
-.micr-line {
-  position: absolute; bottom: 0.375in; left: 0.5in; right: 0.5in;
-  font-family: 'MICRE13B', 'Courier New', monospace;
-  font-size: 16px; letter-spacing: 2px; color: #000; white-space: nowrap;
+/* MICR line — clean tabular mono with labeled sections.
+   Real MICR encoding is pre-printed with magnetic ink on check stock;
+   this line provides the human-readable reference only. */
+.micr-bar {
+  position: absolute; bottom: 0.15in; left: 0.42in; right: 0.42in;
+  display: flex; align-items: baseline; gap: 6px;
+  background: var(--paper); border-top: 1px solid var(--line); padding-top: 4px;
 }
-.micr-line.fallback {
-  font-family: 'Courier New', monospace; font-size: 15px; letter-spacing: 3px;
+.micr-bar .micr-seg { display: inline-flex; align-items: baseline; gap: 3px; }
+.micr-bar .micr-lbl {
+  font-family: var(--font-body); font-size: 5.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.6px; color: var(--accent); margin-right: 1px;
 }
+.micr-bar .micr-num {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+  letter-spacing: 2px; font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.micr-bar .micr-spacer { width: 16px; }
 
 /* Stub header */
-.stb-hdr { display: flex; justify-content: space-between; align-items: center; background: #000; color: #fff; padding: 2px 6px; margin-bottom: 3px; }
-.stb-hdr-label { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
-.stb-hdr-co { font-size: 10px; font-weight: 800; }
+.stb-hdr { display: flex; justify-content: space-between; align-items: center; background: var(--ink); color: #fff; padding: 3px 8px; margin-bottom: 4px; }
+.stb-hdr-label { font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color:#ccd5e2; }
+.stb-hdr-co { font-family: var(--font-display); font-size: 11px; font-weight: 700; }
 
-/* Info grid */
-.ig { display: grid; border: 1.5px solid #000; margin-bottom: 4px; }
+/* Info strip — borderless, aligned key/value cells. No internal box lines:
+   the 7-col alignment + a faint per-row hairline organize it like a ledger. */
+.ig { display: grid; border-top: 1.5px solid var(--accent); margin-bottom: 7px; background:#fff; }
 .ig7 { grid-template-columns: repeat(7, 1fr); }
-.ig-c { padding: 2px 4px; border-right: 0.5px solid #000; border-bottom: 0.5px solid #000; }
-.ig-c:nth-child(7n) { border-right: none; }
-.ig-c:nth-last-child(-n+7) { border-bottom: none; }
+.ig-c { padding: 3px 8px 3px 0; border-bottom: 0.5px solid var(--line-soft); }
 .ig-c.s2 { grid-column: span 2; }
-.ig-lbl { font-size: 5.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 1px; }
-.ig-val { font-size: 8px; }
-.ig-val.big { font-size: 10px; font-weight: 700; }
-.ig-val.b { font-weight: 700; }
+.ig-lbl { font-size: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 1.5px; color: var(--accent); }
+.ig-val { font-size: 8.5px; color: var(--ink); }
+.ig-val.big { font-family: var(--font-display); font-size: 11.5px; font-weight: 600; }
+.ig-val.b { font-weight: 600; }
 
-/* Tables */
-.st { width: 100%; border-collapse: collapse; border: 1px solid #000; }
+/* Tables — quiet headers (accent label + underline, no fill), no zebra.
+   Rows are separated by hairlines and the column alignment, not boxes. */
+.st { width: 100%; border-collapse: collapse; }
 .st th {
-  padding: 2.5px 5px; font-size: 7px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.3px;
-  background: #000; color: #fff; border-bottom: 1.5px solid #000; text-align: left;
+  padding: 3px 6px 2.5px; font-size: 6.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--accent); background: none; border-bottom: 1px solid var(--accent); text-align: left;
 }
 .st th.r { text-align: right; }
-.st td { padding: 2.5px 5px; font-size: 8.5px; border-bottom: 0.5px solid #000; }
-.st td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.st td { padding: 3px 6px; font-size: 8.5px; border-bottom: 0.5px solid var(--line-soft); color: var(--ink); }
+.st td.r { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 .st td.b { font-weight: 700; }
-.st tr:nth-child(even) td { background: #f0f0f0; }
-.st tr.tot td { border-top: 1.5px solid #000; border-bottom: none; font-weight: 700; background: #d8d8d8; padding-top: 3px; }
-.st tr.tot:nth-child(even) td { background: #d8d8d8; }
-.st tr.sub td { font-size: 7.5px; padding-left: 12px; border-bottom: 0.5px solid #000; }
-.st-section { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: #000; color: #fff; padding: 2px 5px; }
+.st tr.tot td { border-top: 1px solid var(--ink); border-bottom: none; font-weight: 700; background: none; padding-top: 3.5px; }
+.st tr.sub td { font-size: 7.5px; padding-left: 14px; border-bottom: 0.5px solid var(--line-soft); color: var(--ink-soft); }
+.st-section { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: none; color: var(--accent); padding: 2px 0; border-bottom: 0.5px solid var(--line); }
 
-/* Summary boxes */
-.net-box { border: 2.5px solid #000; text-align: center; padding: 5px 8px; background: #e8e8e8; margin-bottom: 4px; }
-.net-box .lbl { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-.net-box .amt { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 1px 0; }
-.net-box .sub { font-size: 6.5px; }
-.sum-box { border: 1.5px solid #000; padding: 3px 5px; font-size: 7px; line-height: 1.5; margin-bottom: 3px; }
-.sum-box .stitle { font-weight: 700; text-transform: uppercase; font-size: 5.5px; letter-spacing: 0.5px; background: #000; color: #fff; margin: -3px -5px 2px; padding: 1.5px 5px; }
-.sr { display: flex; justify-content: space-between; }
-.sr-tot { border-top: 1.5px solid #000; padding-top: 2px; margin-top: 2px; font-weight: 700; }
+/* Net pay — the hero figure, kept prominent */
+.net-box { border: 1.5px solid var(--accent); text-align: center; padding: 6px 8px; background: var(--accent-wash); margin-bottom: 8px; }
+.net-box .lbl { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); }
+.net-box .amt { font-family: var(--font-mono); font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 1px 0; color: var(--ink); }
+.net-box .sub { font-size: 6.5px; color: var(--ink-soft); }
+/* Summary lists — borderless, accent caption, clean ledger rows */
+.sum-box { font-size: 8px; line-height: 1.6; margin-bottom: 8px; }
+.sum-box .stitle { font-weight: 700; text-transform: uppercase; font-size: 6px; letter-spacing: 0.6px; color: var(--accent); border-bottom: 0.5px solid var(--line); padding-bottom: 1.5px; margin-bottom: 3px; }
+.sr { display: flex; justify-content: space-between; padding: 0.5px 0; }
+.sr-tot { border-top: 1px solid var(--ink); padding-top: 2.5px; margin-top: 2.5px; font-weight: 700; }
 
-.void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); font-size:56px; font-weight:900; color:rgba(0,0,0,0.10); letter-spacing:10px; pointer-events:none; z-index:10; }
+.void-wm { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); font-family:var(--font-display); font-size:58px; font-weight:900; color:rgba(179,38,30,0.12); letter-spacing:10px; pointer-events:none; z-index:10; }
 .emp-ft { display:flex; gap:4px; margin-top:3px; font-size:7px; }
-.emp-ft-c { flex:1; border:1px solid #000; padding:2px 5px; background:#f0f0f0; }
+.emp-ft-c { flex:1; border:1px solid var(--line); padding:2px 5px; background:var(--wash); }
 
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 `;
@@ -271,8 +306,8 @@ export function generatePaycheckHTML(
       <div class="stitle">Year-to-Date</div>
       ${ytdHours > 0 ? `<div class="sr"><span>Hours</span><span style="font-weight:700;">${ytdHours.toFixed(1)}</span></div>` : ''}
       <div class="sr"><span>Gross</span><span style="font-weight:700;">${fmt(ytdG)}</span></div>
-      <div class="sr"><span>Taxes</span><span style="font-weight:700;">${fmt(ytdT)}</span></div>
-      <div class="sr sr-tot"><span>Net</span><span>${fmt(ytdN)}</span></div>
+      <div class="sr"><span>Taxes</span><span style="font-weight:700;color:var(--danger);">${fmt(ytdT)}</span></div>
+      <div class="sr sr-tot"><span>Net</span><span style="color:var(--accent);">${fmt(ytdN)}</span></div>
     </div>`;
 
   // ══════════════════════════════════════════════════
@@ -293,30 +328,30 @@ export function generatePaycheckHTML(
           </div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Check No.</div>
+          <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Check No.</div>
           <div class="chk-num">${chk}</div>
-          ${coFraction ? `<div style="font-size:7.5px;margin-top:1px;">${coFraction}</div>` : ''}
-          <div style="border:1.5px solid #000;padding:3px 10px;text-align:center;margin-top:6px;">
-            <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Date</div>
-            <div style="font-size:10px;font-weight:700;">${payDate}</div>
+          ${coFraction ? `<div style="font-size:7.5px;margin-top:1px;color:var(--ink-soft);">${coFraction}</div>` : ''}
+          <div style="border-bottom:1px solid var(--ink);padding:3px 10px 2px;text-align:center;margin-top:6px;">
+            <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Date</div>
+            <div style="font-size:10px;font-weight:600;">${payDate}</div>
           </div>
           ${coBank ? `<div style="font-size:7.5px;margin-top:3px;font-weight:600;">${coBank}</div>` : ''}
         </div>
       </div>
     </div>
     <div>
-      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">Pay to the Order of</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:5px;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;color:var(--accent);">Pay to the Order of</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--ink);padding-bottom:3px;margin-bottom:5px;">
         <div>
-          <div style="font-size:14px;font-weight:700;">${empName}</div>
-          <div style="font-size:8.5px;margin-top:1px;">${[empAddr1, empAddr2, empCSZ].filter(Boolean).join(', ')}</div>
+          <div style="font-family:var(--font-display);font-size:15px;font-weight:600;">${empName}</div>
+          <div style="font-size:8.5px;margin-top:1px;color:var(--ink-soft);">${[empAddr1, empAddr2, empCSZ].filter(Boolean).join(', ')}</div>
         </div>
-        <div style="border:2.5px solid #000;padding:4px 16px;text-align:center;background:#ebebeb;">
-          <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Amount</div>
-          <div style="font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;">${fmt(net)}</div>
+        <div style="border:1px solid var(--accent);padding:4px 16px;text-align:center;">
+          <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);">Amount</div>
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);">${fmt(net)}</div>
         </div>
       </div>
-      <div style="font-size:10px;border-bottom:1.5px solid #000;padding-bottom:3px;">${amountToWords(net)} <span style="letter-spacing:2px;">********</span></div>
+      <div style="font-size:10px;border-bottom:1.5px solid var(--ink);padding-bottom:3px;font-weight:500;">${amountToWords(net)} <span style="letter-spacing:2px;color:var(--line);">**************</span></div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end;">
       <div style="font-size:8.5px;">
@@ -328,8 +363,8 @@ export function generatePaycheckHTML(
           ? `<img src="${coSignature}" alt="Authorized signature" style="height:36px;max-width:200px;object-fit:contain;display:block;margin:0 auto 2px;" />`
           : `<div style="height:36px;"></div>`
         }
-        <div style="border-top:1.5px solid #000;padding-top:3px;">
-          <span style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">Authorized Signature</span>
+        <div style="border-top:1.5px solid var(--ink);padding-top:3px;">
+          <span style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--accent);">Authorized Signature</span>
         </div>
       </div>
     </div>
@@ -383,18 +418,14 @@ export function generatePaycheckHTML(
       </div>
     </div>
     <!-- Employer footer: compact single row with cost + metadata -->
-    <div style="display:flex;gap:3px;margin-top:2px;font-size:6.5px;">
-      <div style="flex:1;border:1px solid #000;padding:1.5px 4px;background:#e8e8e8;">
-        <strong>Employer Cost:</strong> Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong>
-      </div>
-      <div style="flex:0.5;border:1px solid #000;padding:1.5px 4px;background:#f0f0f0;">
-        <strong>EIN:</strong> ${coEIN || '—'} &nbsp;|&nbsp; <strong>Run:</strong> <span style="text-transform:capitalize;">${runType}</span>
-      </div>
-      ${empEmail ? `<div style="flex:0.4;border:1px solid #000;padding:1.5px 4px;background:#f0f0f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
+    <div style="display:flex;gap:4px;margin-top:5px;font-size:7px;">
+      <div style="flex:1;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Employer Cost</strong> &nbsp; Gross ${fmt(gross)} + FICA ${fmt(employerFICA)} = <strong>${fmt(employerTotal)}</strong></div>
+      <div style="flex:0.55;border:0.5px solid var(--line);padding:3px 6px;"><strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">EIN</strong> ${coEIN || '—'} &nbsp;·&nbsp; <strong style="color:var(--accent);text-transform:uppercase;letter-spacing:0.3px;font-size:6px;">Run</strong> <span style="text-transform:capitalize;">${runType}</span></div>
+      ${empEmail ? `<div style="flex:0.45;border:0.5px solid var(--line);padding:3px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${empEmail}</div>` : ''}
     </div>
   </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${micrFontFace()}${CHECK_STYLES}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${FONT_LINKS}<style>${CSS}</style></head><body>
 <div class="pg">
   ${checkHTML}
   ${employeeStub}
@@ -408,5 +439,5 @@ export function extractCheckBody(html: string): string {
   return match?.[1] || html;
 }
 export function wrapBatchChecks(bodies: string[]): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${micrFontFace()}${CHECK_STYLES}</style></head><body>${bodies.join('<div style="page-break-before:always;"></div>')}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${FONT_LINKS}<style>${CSS}</style></head><body>${bodies.join('<div style="page-break-before:always;"></div>')}</body></html>`;
 }

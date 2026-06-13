@@ -24,6 +24,9 @@ import BulkEditModal from './BulkEditModal';
 import CreditCardImportModal from './CreditCardImportModal';
 import { BulkPasteModal, QuickAddBar, ReceiptThumb } from './CaptureFeatures';
 import { BulkActionBar, SmartFiltersDropdown, TopVendorsWidget, MissingReceiptsBanner } from './ExpenseUpgradesUI';
+import { GroupKey, ColKey, ALL_COLS, DEFAULT_VISIBLE_COLS, expenseDisplayTotal } from './list/columns';
+import ExpenseListFilters from './list/ExpenseListFilters';
+import GroupingControls from './list/GroupingControls';
 
 // ─── Types ──────────────────────────────────────────────
 interface Expense {
@@ -40,6 +43,8 @@ interface Expense {
   amount: number;
   tax_amount?: number;
   tax_inclusive?: number;
+  shipping_amount?: number;
+  shipping_tax_amount?: number;
   discount_amount?: number;
   discount_percent?: number;
   status: 'pending' | 'approved' | 'paid' | 'rejected';
@@ -90,28 +95,7 @@ interface SavedView {
   visibleCols: ColKey[];
 }
 
-type GroupKey = 'none' | 'vendor' | 'category' | 'project' | 'month' | 'quarter' | 'dayofweek' | 'taxded' | 'currency';
-type ColKey = 'date' | 'description' | 'category' | 'vendor' | 'project' | 'amount' | 'status' | 'approval' | 'receipt' | 'taxded' | 'mileage' | 'billable' | 'actions';
-const ALL_COLS: { key: ColKey; label: string }[] = [
-  { key: 'date', label: 'Date' },
-  { key: 'description', label: 'Description' },
-  { key: 'category', label: 'Category' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'project', label: 'Project' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'status', label: 'Status' },
-  { key: 'approval', label: 'Approval' },
-  { key: 'receipt', label: 'Receipt' },
-  { key: 'taxded', label: 'Tax Deductible' },
-  { key: 'mileage', label: 'Mileage' },
-  { key: 'billable', label: 'Billable' },
-  { key: 'actions', label: 'Actions' },
-];
-
 const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CHF', 'MXN', 'INR'];
-
-// Default visible columns (mileage and approval hidden by default)
-const DEFAULT_VISIBLE_COLS: ColKey[] = ['date', 'description', 'category', 'vendor', 'project', 'amount', 'status', 'receipt', 'taxded', 'billable', 'actions'];
 
 // Maps a table column to its Customization Center option (Expenses → Columns).
 // When the user turns one of these OFF, the column hides regardless of the
@@ -131,20 +115,6 @@ const COL_CUSTOMIZATION: Partial<Record<ColKey, string>> = {
 const PINNED_VENDORS_KEY = (uid: string, cid: string) => `expense_pinned_vendors_${uid}_${cid}`;
 const VIEWS_KEY = (uid: string) => `expense_views_${uid}`;
 
-// FINAL-PRICE rule v3: amount + tax − header_discount = total, ALWAYS.
-//
-// Discount math: applied AFTER tax (does NOT reduce taxable base) for parity
-// with the invoice form. Both $ flat AND % apply independently — if both are
-// set, they both subtract. Negative totals are clamped to 0 (a discount can
-// never make an expense's value negative; that would be a credit memo
-// scenario which lives elsewhere).
-function expenseDisplayTotal(e: { amount?: number; tax_amount?: number; discount_amount?: number; discount_percent?: number }): number {
-  const grossTotal = (e.amount || 0) + (e.tax_amount || 0);
-  const flat = e.discount_amount || 0;
-  const pct = e.discount_percent || 0;
-  const pctOff = grossTotal * (pct / 100);
-  return Math.max(0, grossTotal - flat - pctOff);
-}
 const COLS_KEY = (uid: string) => `expense_cols_${uid}`;
 
 interface ExpenseListProps {
@@ -390,8 +360,22 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    // Perf: keep cap consistent with initial load (2000 most recent).
-    const expData = await api.query('expenses', { company_id: activeCompany.id }, { field: 'date', dir: 'desc' }, 2000);
+    // Must mirror the initial load's JOINed query (NOT a flat api.query) so the
+    // Category/Vendor/Project NAMES survive after a batch op / inline edit /
+    // import. The flat query returned only FK ids, which blanked those columns
+    // and reverted the vendor chip to "vendor <id>" until a full page reload.
+    const expData = await api.rawQuery(
+      `SELECT e.*, c.name as category_name, c.color as category_color,
+              v.name as vendor_name, v.is_1099_eligible as vendor_is_1099, v.w9_status as vendor_w9_status,
+              p.name as project_name
+       FROM expenses e
+       LEFT JOIN categories c ON e.category_id = c.id
+       LEFT JOIN vendors v ON e.vendor_id = v.id
+       LEFT JOIN projects p ON e.project_id = p.id
+       WHERE e.company_id = ?
+       ORDER BY e.date DESC LIMIT 2000`,
+      [activeCompany.id]
+    );
     setExpenses(Array.isArray(expData) ? expData : []);
     setSelectedIds(new Set());
   }, [activeCompany]);
@@ -1148,67 +1132,17 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         WebkitBackdropFilter: 'none',
       }}>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search expenses... (press / to focus)"
-              className="block-input pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-text-muted" />
-            <select
-              className="block-select"
-              style={{ width: 'auto', minWidth: '140px' }}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">All Categories</option>
-              {[...categories]
-                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-                .map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-            </select>
-          </div>
-          <input
-            type="date"
-            className="block-input"
-            style={{ width: 'auto' }}
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            placeholder="From"
+          <ExpenseListFilters
+            search={search} setSearch={setSearch}
+            categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
+            dateFrom={dateFrom} setDateFrom={setDateFrom}
+            dateTo={dateTo} setDateTo={setDateTo}
+            reimbursableOnly={reimbursableOnly} setReimbursableOnly={setReimbursableOnly}
+            amountMin={amountMin} setAmountMin={setAmountMin}
+            amountMax={amountMax} setAmountMax={setAmountMax}
+            categories={categories}
+            searchRef={searchRef}
           />
-          <input
-            type="date"
-            className="block-input"
-            style={{ width: 'auto' }}
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            placeholder="To"
-          />
-          {/* Capture #16: amount range */}
-          <input type="number" step="0.01" placeholder="Min $" className="block-input" style={{ width: 100 }}
-            value={amountMin} onChange={e => setAmountMin(e.target.value)} />
-          <input type="number" step="0.01" placeholder="Max $" className="block-input" style={{ width: 100 }}
-            value={amountMax} onChange={e => setAmountMax(e.target.value)} />
-          <button
-            type="button"
-            onClick={() => setReimbursableOnly((v) => !v)}
-            className="px-3 py-2 text-xs font-bold uppercase border"
-            style={{
-              borderColor: reimbursableOnly ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
-              color: reimbursableOnly ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
-              borderRadius: 4,
-            }}
-            title="Show only reimbursable expenses"
-          >
-            Reimbursable
-          </button>
 
           {/* Smart filters dropdown (Expense Upgrades Wave F870) */}
           <SmartFiltersDropdown onApply={(preset) => {
@@ -1237,17 +1171,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           }} />
 
           {/* Group by (feature 19) */}
-          <select className="block-select" style={{ width: 'auto' }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)}>
-            <option value="none">No grouping</option>
-            <option value="vendor">Group by Vendor</option>
-            <option value="category">Group by Category</option>
-            <option value="project">Group by Project</option>
-            <option value="month">Group by Month</option>
-            <option value="quarter">Group by Quarter</option>
-            <option value="dayofweek">Group by Day of Week</option>
-            <option value="taxded">Group by Tax Deductibility</option>
-            <option value="currency">Group by Currency</option>
-          </select>
+          <GroupingControls groupBy={groupBy} setGroupBy={setGroupBy} />
 
           {/* Advanced filters toggle */}
           <button

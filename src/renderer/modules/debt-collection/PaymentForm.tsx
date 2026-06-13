@@ -4,12 +4,15 @@ import api from '../../lib/api';
 import { formatCurrency, roundCents } from '../../lib/format';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
+import { applyDebtPaymentDelta } from '../../../shared/payment-math';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtData {
   balance_due: number;
   interest_accrued: number;
   fees_accrued: number;
+  payments_made: number;
+  status: string;
 }
 
 interface PaymentFormProps {
@@ -42,6 +45,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
   const [amountError, setAmountError] = useState('');
   const [amountWarning, setAmountWarning] = useState('');
   const [saveError, setSaveError] = useState('');
+  // Original amount of the payment being edited, for the balance delta.
+  const [originalAmount, setOriginalAmount] = useState(0);
 
   // ── Load debt data ──
   useEffect(() => {
@@ -54,6 +59,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
             balance_due: Number(data.balance_due) || 0,
             interest_accrued: Number(data.interest_accrued) || 0,
             fees_accrued: Number(data.fees_accrued) || 0,
+            payments_made: Number(data.payments_made) || 0,
+            status: data.status || 'active',
           });
         }
       } catch (err) {
@@ -75,6 +82,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
         const row = await api.get('debt_payments', editId);
         if (row && !cancelled) {
           setAmount(String(row.amount || ''));
+          setOriginalAmount(Number(row.amount) || 0);
           setMethod(row.method || 'check');
           setReferenceNumber(row.reference_number || '');
           setReceivedDate(row.received_date ? row.received_date.slice(0, 10) : todayISO());
@@ -161,6 +169,21 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
       if (editId) {
         // Update existing payment record
         await api.update('debt_payments', editId, paymentPayload);
+        // Editing the amount used to leave the debt's balance_due/payments_made
+        // untouched (only the NEW-payment path adjusted them). Apply the change
+        // as a delta so accrued interest/fees folded into balance_due survive.
+        const delta = roundCents(roundedAmount - originalAmount);
+        if (delta !== 0 && debt) {
+          const next = applyDebtPaymentDelta(
+            { balance_due: debt.balance_due, payments_made: debt.payments_made, status: debt.status },
+            delta,
+          );
+          await api.update('debts', debtId, {
+            balance_due: next.balance_due,
+            payments_made: next.payments_made,
+            status: next.status,
+          });
+        }
       } else {
         // 1. Create payment record
         await api.create('debt_payments', paymentPayload);

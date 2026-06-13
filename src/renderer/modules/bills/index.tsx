@@ -431,24 +431,35 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
     if (selectedIds.size === 0) return;
     if (
       !window.confirm(
-        `Mark ${selectedIds.size} bill${selectedIds.size !== 1 ? 's' : ''} as fully paid? This sets amount_paid to total and status to paid.`
+        `Mark ${selectedIds.size} bill${selectedIds.size !== 1 ? 's' : ''} as fully paid? This records a payment for each remaining balance and posts the AP→Cash journal entries.`
       )
     )
       return;
     setBulkBusy(true);
     try {
       let count = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      const today = todayLocal();
       for (const id of selectedIds) {
         const b = bills.find((x) => x.id === id);
         if (!b) continue;
-        await api.update('bills', id, {
-          amount_paid: b.total,
-          status: 'paid',
-        });
+        const balance = roundCents((b.total || 0) - (b.amount_paid || 0));
+        if (balance <= 0) { skipped += 1; continue; }
+        // Route through bills:pay so the AP→Cash journal entry is posted and a
+        // bill_payment row is recorded. The old api.update('bills', …) only
+        // flipped status to paid, leaving the general ledger silently out of
+        // sync (AP overstated, cash never reduced).
+        const res: any = await api.billsPay(id, balance, today, 'check', '');
+        if (res?.error) { errors.push(`${b.bill_number || id}: ${res.error}`); continue; }
         count += 1;
       }
       setSelectedIds(new Set());
-      flashMessage('success', `Marked ${count} bill${count !== 1 ? 's' : ''} as paid`);
+      if (errors.length) {
+        flashMessage('error', `Paid ${count}; ${errors.length} could not be paid (${errors[0]})`);
+      } else {
+        flashMessage('success', `Marked ${count} bill${count !== 1 ? 's' : ''} as paid${skipped ? ` · ${skipped} already paid` : ''}`);
+      }
       const billData = await api.query(
         'bills',
         { company_id: activeCompany!.id },

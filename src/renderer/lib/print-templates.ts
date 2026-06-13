@@ -67,6 +67,25 @@ export function buildPortalUrl(base: string | null | undefined, token: string): 
   return `${noTrail}/${token}`;
 }
 
+// ─── Payment Method Formatter ─────────────────────────────────
+// Mirrors src/renderer/lib/format.ts → formatPaymentMethod. Print templates
+// can't import from the React/Vite side, so the map is duplicated here. Keep
+// the two in sync when adding methods.
+const PRINT_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Cash', check: 'Check', credit_card: 'Credit Card', debit_card: 'Debit Card',
+  bank_transfer: 'Bank Transfer', ach: 'ACH', wire: 'Wire Transfer', wire_transfer: 'Wire Transfer',
+  paypal: 'PayPal', venmo: 'Venmo', zelle: 'Zelle', apple_pay: 'Apple Pay', google_pay: 'Google Pay',
+  stripe: 'Stripe', square: 'Square', cashapp: 'Cash App', money_order: 'Money Order',
+  cashiers_check: "Cashier's Check", gift_card: 'Gift Card', store_credit: 'Store Credit', other: 'Other',
+};
+function formatPaymentMethod(value: string | null | undefined): string {
+  if (!value) return '—';
+  const key = String(value).toLowerCase().trim();
+  if (PRINT_PAYMENT_METHOD_LABELS[key]) return PRINT_PAYMENT_METHOD_LABELS[key];
+  // Fallback: humanize raw snake_case so unmapped values never leak underscores.
+  return String(value).replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // ─── Currency Formatter ──────────────────────────────────────
 // formatCurrency guards against Infinity/NaN/non-finite values that would
 // otherwise render as "$NaN" or "$∞" in customer-facing PDFs.
@@ -3324,6 +3343,64 @@ export function generateExpenseReceiptHTML(
   const total = Math.max(0, grossWithTax - expDiscountTotal);
 
   const reimbStatus = expense.reimbursement_status || expense.status || 'pending';
+  const reimbColor =
+    reimbStatus === 'reimbursed' || reimbStatus === 'paid' ? '#16a34a' :
+    reimbStatus === 'approved' ? '#2563eb' :
+    reimbStatus === 'rejected' ? '#dc2626' : '#d97706';
+
+  const receiptHTML = safeImg(expense.receipt_path || expense.receipt_data || null, 'Receipt',
+    'max-width:100%;max-height:380px;object-fit:contain;border:1px solid #e2e8f0;padding:6px;background:#fff;');
+
+  // Line items table — surface per-line notations (tags + notes) directly
+  // beneath the description so the printed record is auditable: each purchase
+  // line carries its own context, not just the rolled-up expense description.
+  // tags is stored as a JSON array string; notes is plain text.
+  const renderLineMeta = (l: any): string => {
+    let tags: string[] = [];
+    if (Array.isArray(l.tags)) {
+      tags = l.tags.filter((t: any) => t != null && String(t).trim() !== '');
+    } else if (typeof l.tags === 'string' && l.tags.trim() && l.tags.trim() !== '[]') {
+      try {
+        const parsed = JSON.parse(l.tags);
+        if (Array.isArray(parsed)) tags = parsed.filter((t: any) => t != null && String(t).trim() !== '');
+      } catch {
+        // tags may also be stored as a comma-separated string in legacy rows
+        tags = l.tags.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
+    const notes = (l.notes || '').toString().trim();
+    if (tags.length === 0 && !notes) return '';
+    const tagsHTML = tags.length > 0
+      ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;">${tags.map(t =>
+          `<span style="display:inline-block;padding:1px 6px;font-size:9px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:3px;">${esc(t)}</span>`
+        ).join('')}</div>`
+      : '';
+    const notesHTML = notes
+      ? `<div style="margin-top:3px;font-size:10px;color:#64748b;font-style:italic;white-space:pre-line;">${esc(notes)}</div>`
+      : '';
+    return tagsHTML + notesHTML;
+  };
+
+  const linesHTML = (lineItems && lineItems.length > 0) ? `
+    <table style="margin-top:12px;">
+      <thead><tr><th>Description</th><th class="text-right" style="width:80px;">Qty</th><th class="text-right" style="width:110px;">Unit Price</th><th class="text-right" style="width:110px;">Amount</th></tr></thead>
+      <tbody>
+        ${lineItems.map((l: any) => {
+          const qty = Number(l.quantity || 1);
+          const unit = Number(l.unit_price || 0);
+          const amt = Number(l.amount || 0);
+          return `<tr>
+            <td>
+              <div>${esc(l.description || '')}</div>
+              ${renderLineMeta(l)}
+            </td>
+            <td class="text-right">${qty}</td>
+            <td class="text-right">${fmt(unit)}</td>
+            <td class="text-right font-bold">${fmt(amt)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : '';
 
   // ── Receipt image (preserved) ──
   const receiptImgSrc = expense.receipt_path || expense.receipt_data || null;
@@ -3376,129 +3453,87 @@ export function generateExpenseReceiptHTML(
     ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
     ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
   ];
+  const detailsHTML = `
+<div style="margin-top:14px;">
+  <div class="section-label">Details &amp; Classification</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px 18px;margin-top:8px;">
+    ${detailRows.map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>
+</div>`;
 
-  // ── Determine title (receipt vs. affidavit mode) ──
-  // The old code showed 'Expense Record' unconditionally.
-  // Classic restyle uses 'Expense Receipt' as the docHeader title.
-  // No affidavit watermark was passed by the original function signature —
-  // the function itself has no watermark/affidavit parameter, so no mode switch is needed.
-  const docTitle = 'Expense Receipt';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Expense ${esc(expense.reference || expense.id || '')}</title>
+<style>${baseStyles}</style></head>
+<body><div class="rpt-page" style="padding:32px 36px;">
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:22px;">Expense Record</div>
+    <div class="fd-doc-num">${esc(expense.reference || expense.expense_number || expense.id || '')}${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
+    <div class="fd-doc-date">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</div>
+  </div>
+</div>
 
-  // ── Header ──
-  const coAddr = cesc([
-    company?.address_line1, company?.address_line2,
-    [company?.city, company?.state, company?.zip].filter(Boolean).join(', '),
-  ].filter(Boolean).join(', '));
-  const coPhone = cesc(company?.phone || '');
-  const coEmail = cesc(company?.email || '');
-  const coDetail = [coAddr, [coEmail, coPhone].filter(Boolean).join(' &middot;')].filter(Boolean).join('<br>');
-  const numberHtml = expense.reference || expense.expense_number || expense.id
-    ? `No. ${cesc(String(expense.reference || expense.expense_number || expense.id))}` +
-      (reimbStatus ? `  [${cesc(String(reimbStatus).toUpperCase().replace('_', ' '))}]` : '')
-    : '';
-  const header = docHeader({
-    coName: company?.name || 'Company',
-    coDetailHtml: coDetail,
-    title: docTitle,
-    ...(numberHtml ? { numberHtml } : {}),
-  });
+<div class="fd-meta-strip">
+  <div class="fd-meta-row"><span class="lbl">Vendor</span><span class="val">${esc(vendor?.name || expense.vendor_name || '—')}</span></div>
+  ${vendor?.address ? `<div class="fd-meta-row"><span class="lbl">Vendor Address</span><span class="val" style="white-space:pre-line;">${esc(vendor.address)}</span></div>` : ''}
+  ${vendor?.phone ? `<div class="fd-meta-row"><span class="lbl">Vendor Phone</span><span class="val">${esc(vendor.phone)}</span></div>` : ''}
+  ${vendor?.email ? `<div class="fd-meta-row"><span class="lbl">Vendor Email</span><span class="val">${esc(vendor.email)}</span></div>` : ''}
+  ${vendor?.website ? `<div class="fd-meta-row"><span class="lbl">Vendor Website</span><span class="val">${esc(vendor.website)}</span></div>` : ''}
+  ${vendor?.tax_id ? `<div class="fd-meta-row"><span class="lbl">Vendor Tax ID</span><span class="val">${esc(vendor.tax_id)}</span></div>` : ''}
+  <div class="fd-meta-row"><span class="lbl">Category</span><span class="val">${esc(expense.category || expense.category_name || '—')}</span></div>
+  <div class="fd-meta-row"><span class="lbl">Date</span><span class="val">${esc(fmtDateMaybe(expense.date || expense.expense_date))}</span></div>
+  <div class="fd-meta-row"><span class="lbl">Reference</span><span class="val">${esc(expense.reference || '—')}</span></div>
+  ${expense.payment_method ? `<div class="fd-meta-row"><span class="lbl">Payment Method</span><span class="val">${esc(formatPaymentMethod(expense.payment_method))}</span></div>` : ''}
+  ${expense.merchant_location ? `<div class="fd-meta-row"><span class="lbl">Merchant Location</span><span class="val">${esc(expense.merchant_location)}</span></div>` : ''}
+  ${expense.geo_location_name ? `<div class="fd-meta-row"><span class="lbl">GPS / Location</span><span class="val">${esc(expense.geo_location_name)}</span></div>` : ''}
+  ${shipping > 0 && expense.shipping_speed ? `<div class="fd-meta-row"><span class="lbl">Shipping Speed</span><span class="val">${esc(expense.shipping_speed)}</span></div>` : ''}
+</div>
 
-  // ── Meta strip: date / amount / payment method / category ──
-  const meta = metaStrip([
-    { label: 'Date',           value: fmtDateMaybe(expense.date || expense.expense_date) || '—' },
-    { label: 'Amount',         value: fmt(total) },
-    { label: 'Payment Method', value: expense.payment_method ? titleCase(String(expense.payment_method)) : '—' },
-    { label: 'Category',       value: cesc(expense.category || expense.category_name || '—') },
-    { label: 'Reference',      value: cesc(expense.reference || '—') },
-  ]);
+${detailsHTML}
 
-  // ── Box row: payee/vendor + category/account details ──
-  const vendorHtml = `<b>${cesc(vendor?.name || expense.vendor_name || '—')}</b>` +
-    (vendor?.email ? `<br>${cesc(vendor.email)}` : '') +
-    (vendor?.phone ? `<br>${cesc(vendor.phone)}` : '');
-  const accountHtml = `<b>${cesc(expense.category || expense.category_name || '—')}</b>` +
-    (expense.account_name ? `<br>${cesc(expense.account_name)}` : '') +
-    (expense.account_code ? `<br>Code: ${cesc(expense.account_code)}` : '');
-  const parties = boxRow([
-    { label: 'Vendor / Payee', html: vendorHtml },
-    { label: 'Category / Account', html: accountHtml },
-  ]);
+${expense.description ? `<div style="margin-bottom:14px;">
+  <div class="section-label">Description</div>
+  <div style="font-size:11px;color:#475569;white-space:pre-line;">${esc(expense.description)}</div>
+</div>` : ''}
 
-  // ── Description ──
-  const descHTML = expense.description
-    ? boxRow([{ label: 'Description', html: `<div style="white-space:pre-line;">${cesc(expense.description)}</div>` }])
-    : '';
+${linesHTML}
 
-  // ── Details & Classification — classic ruled mini-table ──
-  const detailsHTML = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
-    `<div class="sec-label" style="margin-bottom:6px;">Details &amp; Classification</div>` +
-    ruledTable(
-      [
-        { label: 'Field',  width: '40%' },
-        { label: 'Value',  width: '60%' },
-      ],
-      detailRows.map(([k, v]) => [cesc(k), cesc(v)]),
-    ) +
-    `</div>`;
+<div style="overflow:hidden;margin-top:14px;">
+  <div class="fd-totals-card">
+    <div class="totals-rows">
+      <div class="totals-row"><span>Subtotal (pre-tax)</span><span class="val">${fmt(subtotal)}</span></div>
+      <div class="totals-row"><span>Tax${expense.tax_inclusive ? ' (incl.)' : ''}</span><span class="val">${fmt(tax)}</span></div>
+      ${expDiscountTotal > 0 ? `<div class="totals-row" style="color:#16a34a;"><span>Discount</span><span class="val">−${fmt(expDiscountTotal)}</span></div>` : ''}
+    </div>
+    <div class="totals-grand">
+      <div class="lbl">Total Expense${tax > 0 ? ' (incl. tax)' : ''}</div>
+      <div class="val">${fmt(total)}</div>
+    </div>
+  </div>
+</div>
 
-  // ── Line items section ──
-  const lineItemsHTML = linesHTML
-    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
-      `<div class="sec-label" style="margin-bottom:6px;">Line Items</div>` +
-      linesHTML +
-      `</div>`
-    : '';
+<div style="clear:both;margin-top:18px;padding:14px 16px;background:var(--paper-tint);border:1px solid var(--rule);border-radius:6px;border-left:3px solid var(--accent);">
+  <div class="section-label">Reimbursement</div>
+  <div style="font-size:11px;color:#475569;">Status: ${statusBadgeInline(String(reimbStatus).toUpperCase().replace('_',' '), reimbColor)}</div>
+</div>
 
-  // ── Totals box (math unchanged) ──
-  const totalRows: { label: string; value: string; grand?: boolean }[] = [
-    { label: 'Subtotal (pre-tax)', value: fmt(subtotal) },
-    { label: `Tax${expense.tax_inclusive ? ' (incl.)' : ''}`, value: fmt(tax) },
-  ];
-  if (expDiscountTotal > 0) {
-    totalRows.push({ label: 'Discount', value: `−${fmt(expDiscountTotal)}` });
-  }
-  totalRows.push({ label: `Total Expense${tax > 0 ? ' (incl. tax)' : ''}`, value: fmt(total), grand: true });
-  const totals = totalsBox(totalRows);
+${receiptHTML ? `<div style="margin-top:22px;page-break-inside:avoid;">
+  <div class="section-label">Receipt</div>
+  <div style="text-align:center;">${receiptHTML}</div>
+</div>` : ''}
 
-  // ── Reimbursement status row ──
-  const reimbHTML = boxRow([{
-    label: 'Reimbursement',
-    html: `<b>${cesc(String(reimbStatus).toUpperCase().replace('_', ' '))}</b>` +
-      (expense.is_reimbursable !== undefined
-        ? `<br>Reimbursable: ${expense.is_reimbursable ? 'Yes' : 'No'}`
-        : ''),
-  }]);
-
-  // ── Receipt image section (preserved) ──
-  const receiptSectionHTML = receiptImgHTML
-    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
-      `<div class="sec-label" style="margin-bottom:6px;">Receipt</div>` +
-      `<div style="text-align:center;padding:8px 0;">${receiptImgHTML}</div>` +
-      `</div>`
-    : '';
-
-  // ── Footer ──
-  const generated = new Date().toLocaleString('en-US');
-  const footerLine = [company?.name || '', `Generated ${generated}`].filter(Boolean).join(' · ');
-
-  // ── Assemble ──
-  const inner =
-    header +
-    meta +
-    parties +
-    descHTML +
-    detailsHTML +
-    lineItemsHTML +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">${totals}</div>` +
-    reimbHTML +
-    receiptSectionHTML +
-    footerBar(footerLine);
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expense ${cesc(String(expense.reference || expense.id || ''))}</title>` +
-    `<style>${classicStyles()}</style></head><body>` +
-    docFrame(inner) +
-    `</body></html>`;
+<div class="rpt-footer" style="margin-top:32px;">
+  <span>${esc(company?.name || '')}</span>
+  <span>Generated ${esc(generated)}</span>
+</div>
+</div></body></html>`;
 }
+
 // ─── Employee Record (HR Portal Wave) ─────────────────────────────────
 // Full printable employee record — 8.5×11 personnel file sheet covering
 // identity (SSN last-4 only), employment, compensation, tax withholding,
@@ -3512,227 +3547,166 @@ export function generateEmployeeRecordHTML(data: {
   garnishments?: any[];
   advances?: any[];
 }): string {
-  // ── CLASSIC THEME: Arial + pure black/white. ──
-
   const { employee: emp, company, ytd, pto = [], garnishments = [], advances = [] } = data;
   const dash = (v: any): string => (v === null || v === undefined || v === '' ? '—' : String(v));
   const money = (v: any): string => formatCurrency(Number(v) || 0);
   const generated = new Date().toLocaleString('en-US');
 
-  const coName = company?.name || 'Company';
-  const coDetailHtml = [
-    [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).map(cesc).join(', '),
-    [company?.phone, company?.email].filter(Boolean).map(cesc).join(' &middot; '),
-  ].filter(Boolean).join('<br>');
-  const logoData = company?.logo_data ?? company?.logo ?? null;
-
-  // ── Privacy masking ──
   const ssnDisplay = emp.ssn_last4 ? `XXX-XX-${emp.ssn_last4}` : '—';
   const acctDisplay = emp.account_number ? `••••${emp.account_number}` : '—';
   const routingDisplay = emp.routing_number ? `••••${emp.routing_number}` : '—';
+  const statusColor = emp.status === 'active' ? '#16a34a' : '#94a3b8';
   const address = [emp.address_line1, emp.address_line2, [emp.city, emp.state, emp.zip].filter(Boolean).join(', ')]
-    .filter(Boolean).join(', ');
+    .filter(Boolean).join(' · ');
 
   const payRateLabel = emp.pay_type === 'salary'
     ? `${money(emp.pay_rate)} / year`
     : `${money(emp.pay_rate)} / hour`;
   const scheduleLabels: Record<string, string> = { weekly: 'Weekly', biweekly: 'Bi-Weekly', semimonthly: 'Semi-Monthly', monthly: 'Monthly' };
 
-  // ── Header ──
-  const header = docHeader({
-    coName,
-    coDetailHtml: logoImg(logoData, coName) + coDetailHtml,
-    title: 'Employee Record',
-    numberHtml: `<div class="doc-number">${cesc(emp.name || '')}</div>` +
-      `<div class="doc-number">${cesc(String(emp.status || 'active').toUpperCase())}</div>` +
-      `<div class="doc-number" style="font-size:10px;">Generated ${cesc(generated)}</div>`,
-  });
+  const grid = (rows: Array<[string, string]>): string => `
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin-top:8px;">
+    ${rows.map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>`;
 
-  // ── Meta strip ──
-  const meta = metaStrip([
-    { label: 'Status',      value: String(emp.status || 'active').toUpperCase() },
-    { label: 'Employee ID', value: String(emp.id || '').slice(0, 8).toUpperCase() || '—' },
-    { label: 'Department',  value: dash(emp.department) },
-    { label: 'Job Title',   value: dash(emp.job_title) },
-    { label: 'YTD Gross',   value: money(ytd?.gross) },
-    { label: 'YTD Net',     value: money(ytd?.net) },
-  ]);
+  const ptoHTML = pto.length > 0 ? `
+  <div style="margin-top:16px;">
+    <div class="section-label">PTO Balances</div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Type</th><th class="text-right">Accrued</th><th class="text-right">Used</th><th class="text-right">Available</th></tr></thead>
+      <tbody>${pto.map((p: any) => `<tr>
+        <td>${esc(p.pto_type || p.type || 'PTO')}</td>
+        <td class="text-right">${(Number(p.accrued_hours ?? p.accrued) || 0).toFixed(1)} h</td>
+        <td class="text-right">${(Number(p.used_hours ?? p.used) || 0).toFixed(1)} h</td>
+        <td class="text-right font-bold">${((Number(p.accrued_hours ?? p.accrued) || 0) - (Number(p.used_hours ?? p.used) || 0)).toFixed(1)} h</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
 
-  // ── Identity & Contact boxRow ──
-  const identityRow = boxRow([
-    {
-      label: 'Identity & Contact',
-      html: `<strong>${cesc(dash(emp.name))}</strong>` +
-        `<br>SSN: ${cesc(ssnDisplay)} <em style="font-size:9px;">(masked)</em>` +
-        `<br>Email: ${cesc(dash(emp.email))}` +
-        `<br>Phone: ${cesc(dash(emp.phone))}`,
-    },
-    {
-      label: 'Address',
-      html: cesc(address || '—'),
-    },
-    {
-      label: 'Emergency Contact',
-      html: `${cesc(dash(emp.emergency_contact_name))}<br>${cesc(dash(emp.emergency_contact_phone))}`,
-    },
-    {
-      label: 'Employee ID',
-      html: `<strong>${cesc(String(emp.id || '').slice(0, 8).toUpperCase() || '—')}</strong>`,
-    },
-  ]);
+  const garnHTML = garnishments.length > 0 ? `
+  <div style="margin-top:16px;">
+    <div class="section-label">Active Garnishment Orders</div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Type</th><th>Case #</th><th class="text-right">Per-Pay Amount</th><th class="text-right">Remaining</th></tr></thead>
+      <tbody>${garnishments.map((g: any) => `<tr>
+        <td>${esc(g.garnishment_type || g.type || 'Garnishment')}</td>
+        <td>${esc(g.case_number || '—')}</td>
+        <td class="text-right">${money(g.per_pay_amount ?? g.amount_per_pay)}</td>
+        <td class="text-right">${money(g.remaining_balance ?? g.balance)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
 
-  // ── Employment boxRow ──
-  const employmentRow = boxRow([
-    {
-      label: 'Employment',
-      html: `Status: <strong>${cesc(String(emp.status || 'active').toUpperCase())}</strong>` +
-        `<br>Type: ${cesc(dash(emp.employment_type || emp.type))}` +
-        `<br>Role: ${cesc(dash(emp.role))}` +
-        `<br>Work Location: ${cesc(dash(emp.work_location))}`,
-    },
-    {
-      label: 'Dates',
-      html: `Start: ${cesc(fmtDateMaybe(emp.start_date) || '—')}` +
-        `<br>End: ${cesc(emp.end_date ? fmtDateMaybe(emp.end_date) : '—')}`,
-    },
-    {
-      label: 'Department & Title',
-      html: `Dept: ${cesc(dash(emp.department))}` +
-        `<br>Title: ${cesc(dash(emp.job_title))}`,
-    },
-    {
-      label: 'Pay Schedule',
-      html: `${cesc(scheduleLabels[emp.pay_schedule] || dash(emp.pay_schedule))}`,
-    },
-  ]);
+  const advHTML = advances.length > 0 ? `
+  <div style="margin-top:16px;">
+    <div class="section-label">Outstanding Pay Advances</div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Date</th><th class="text-right">Advanced</th><th class="text-right">Repay / Pay</th><th class="text-right">Balance</th><th>Status</th></tr></thead>
+      <tbody>${advances.map((a: any) => `<tr>
+        <td>${esc(fmtDateMaybe(a.advance_date))}</td>
+        <td class="text-right">${money(a.advance_amount)}</td>
+        <td class="text-right">${money(a.repayment_per_pay)}</td>
+        <td class="text-right font-bold">${money(a.balance)}</td>
+        <td>${esc(String(a.status || 'active').toUpperCase())}${a.related_debt_id ? ' · IN COLLECTIONS' : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
 
-  // ── Compensation boxRow ──
-  const compensationRow = boxRow([
-    {
-      label: 'Pay Type & Rate',
-      html: `<strong>${cesc(emp.pay_type === 'salary' ? 'Salary' : 'Hourly')}</strong>` +
-        `<br>${cesc(payRateLabel)}` +
-        (emp.pay_rate_effective_date ? `<br>Effective: ${cesc(fmtDateMaybe(emp.pay_rate_effective_date))}` : ''),
-    },
-    {
-      label: 'YTD Earnings',
-      html: `Gross: <strong>${cesc(money(ytd?.gross))}</strong>` +
-        `<br>Net: <strong>${cesc(money(ytd?.net))}</strong>`,
-    },
-    {
-      label: 'Tax Withholding (W-4)',
-      html: `Filing: ${cesc(dash(emp.w4_filing_status || emp.filing_status))}` +
-        (emp.w4_received_date ? `<br>W-4 Received: ${cesc(fmtDateMaybe(emp.w4_received_date))}` : ''),
-    },
-    {
-      label: 'Direct Deposit (masked)',
-      html: `Acct Type: ${cesc(dash(emp.account_type))}` +
-        `<br>Routing: ${cesc(routingDisplay)}` +
-        `<br>Account: ${cesc(acctDisplay)}`,
-    },
-  ]);
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Employee Record — ${esc(emp.name || '')}</title>
+<style>${baseStyles}</style></head>
+<body><div class="rpt-page" style="padding:32px 36px;">
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+    <div style="font-size:9px;color:#64748b;margin-top:2px;">${esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '))}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:22px;">Employee Record</div>
+    <div class="fd-doc-num">${esc(emp.name || '')}${statusBadgeInline(String(emp.status || 'active').toUpperCase(), statusColor)}</div>
+    <div class="fd-doc-date">Generated ${esc(generated)}</div>
+  </div>
+</div>
 
-  // ── PTO table ──
-  const ptoSection = pto.length > 0
-    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
-      `<div class="sec-label" style="margin-bottom:6px;">PTO Balances</div>` +
-      ruledTable(
-        [
-          { label: 'Type', width: '40%' },
-          { label: 'Accrued (h)', align: 'right', width: '20%' },
-          { label: 'Used (h)', align: 'right', width: '20%' },
-          { label: 'Available (h)', align: 'right', width: '20%' },
-        ],
-        pto.map((p: any) => {
-          const accrued = Number(p.accrued_hours ?? p.accrued) || 0;
-          const used = Number(p.used_hours ?? p.used) || 0;
-          return [
-            cesc(p.pto_type || p.type || 'PTO'),
-            cesc(accrued.toFixed(1)),
-            cesc(used.toFixed(1)),
-            `<strong>${cesc((accrued - used).toFixed(1))}</strong>`,
-          ];
-        }),
-      ) +
-      `</div>`
-    : '';
+<div style="margin-top:18px;">
+  <div class="section-label">Identity &amp; Contact</div>
+  ${grid([
+    ['Full Name', dash(emp.name)],
+    ['SSN', ssnDisplay],
+    ['Email', dash(emp.email)],
+    ['Phone', dash(emp.phone)],
+    ['Address', address || '—'],
+    ['Emergency Contact', dash(emp.emergency_contact_name)],
+    ['Emergency Phone', dash(emp.emergency_contact_phone)],
+    ['Employee ID', String(emp.id || '').slice(0, 8).toUpperCase()],
+  ])}
+</div>
 
-  // ── Garnishments table ──
-  const garnSection = garnishments.length > 0
-    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
-      `<div class="sec-label" style="margin-bottom:6px;">Active Garnishment Orders</div>` +
-      ruledTable(
-        [
-          { label: 'Type', width: '30%' },
-          { label: 'Case #', width: '25%' },
-          { label: 'Per-Pay Amount', align: 'right', width: '22%' },
-          { label: 'Remaining', align: 'right', width: '23%' },
-        ],
-        garnishments.map((g: any) => [
-          cesc(g.garnishment_type || g.type || 'Garnishment'),
-          cesc(g.case_number || '—'),
-          cesc(money(g.per_pay_amount ?? g.amount_per_pay)),
-          cesc(money(g.remaining_balance ?? g.balance)),
-        ]),
-      ) +
-      `</div>`
-    : '';
+<div style="margin-top:16px;">
+  <div class="section-label">Employment</div>
+  ${grid([
+    ['Status', String(emp.status || 'active').toUpperCase()],
+    ['Type', dash(emp.employment_type || emp.type)],
+    ['Department', dash(emp.department)],
+    ['Job Title', dash(emp.job_title)],
+    ['Start Date', fmtDateMaybe(emp.start_date) || '—'],
+    ['End Date', emp.end_date ? fmtDateMaybe(emp.end_date) : '—'],
+    ['Work Location', dash(emp.work_location)],
+    ['Role', dash(emp.role)],
+  ])}
+</div>
 
-  // ── Advances table ──
-  const advSection = advances.length > 0
-    ? `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
-      `<div class="sec-label" style="margin-bottom:6px;">Outstanding Pay Advances</div>` +
-      ruledTable(
-        [
-          { label: 'Date', width: '18%' },
-          { label: 'Advanced', align: 'right', width: '18%' },
-          { label: 'Repay / Pay', align: 'right', width: '18%' },
-          { label: 'Balance', align: 'right', width: '18%' },
-          { label: 'Status', width: '28%' },
-        ],
-        advances.map((a: any) => [
-          cesc(fmtDateMaybe(a.advance_date)),
-          cesc(money(a.advance_amount)),
-          cesc(money(a.repayment_per_pay)),
-          `<strong>${cesc(money(a.balance))}</strong>`,
-          cesc(String(a.status || 'active').toUpperCase()) + (a.related_debt_id ? ' · IN COLLECTIONS' : ''),
-        ]),
-      ) +
-      `</div>`
-    : '';
+<div style="margin-top:16px;">
+  <div class="section-label">Compensation &amp; Payroll</div>
+  ${grid([
+    ['Pay Type', emp.pay_type === 'salary' ? 'Salary' : 'Hourly'],
+    ['Pay Rate', payRateLabel],
+    ['Pay Schedule', scheduleLabels[emp.pay_schedule] || dash(emp.pay_schedule)],
+    ['Rate Effective', emp.pay_rate_effective_date ? fmtDateMaybe(emp.pay_rate_effective_date) : '—'],
+    ['YTD Gross', money(ytd?.gross)],
+    ['YTD Net', money(ytd?.net)],
+    ['Filing Status', dash(emp.w4_filing_status || emp.filing_status)],
+    ['W-4 Received', emp.w4_received_date ? fmtDateMaybe(emp.w4_received_date) : '—'],
+  ])}
+</div>
 
-  // ── Signature block ──
-  const signatureBlock = boxRow([
-    {
-      label: 'Employee Signature',
-      html: `<div style="margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Signature</div>` +
-        `<div style="margin-top:22px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Date</div>`,
-    },
-    {
-      label: 'HR / Authorized Representative',
-      html: `<div style="margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Signature</div>` +
-        `<div style="margin-top:22px;border-top:1px solid #000;padding-top:4px;font-size:9px;">Date</div>`,
-    },
-  ]);
+<div style="margin-top:16px;">
+  <div class="section-label">Direct Deposit (masked)</div>
+  ${grid([
+    ['Account Type', dash(emp.account_type)],
+    ['Routing #', routingDisplay],
+    ['Account #', acctDisplay],
+    ['State', dash(emp.state)],
+  ])}
+</div>
 
-  const body =
-    header +
-    meta +
-    identityRow +
-    employmentRow +
-    compensationRow +
-    ptoSection +
-    garnSection +
-    advSection +
-    signatureBlock +
-    footerBar(
-      `${cesc(coName)} · Confidential Personnel Record · SSN and bank details masked to last-4 by design — never embedded in full · Retain per company document-retention policy · Generated ${cesc(generated)}`,
-    );
+${ptoHTML}
+${garnHTML}
+${advHTML}
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Employee Record — ${cesc(emp.name || '')}</title>` +
-    `<style>${classicStyles()}</style></head><body>` +
-    docFrame(body) +
-    `</body></html>`;
+<div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employee Signature</div>
+    <div style="margin-top:24px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">HR / Authorized Representative</div>
+    <div style="margin-top:24px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+</div>
+
+<div style="margin-top:18px;font-size:8px;color:#94a3b8;">
+  Confidential personnel record. SSN and bank details are masked to last-4 by design; the full values
+  are never embedded in this document. Retain per company document-retention policy.
+</div>
+
+<div style="margin-top:10px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;">
+  <span>${esc(company?.name || '')}</span>
+  <span>Generated ${esc(generated)}</span>
+</div>
+</div></body></html>`;
 }
 
 // ─── Wage Withholding Agreement (Debt Collections 200 Wave) ───────────
@@ -3745,130 +3719,88 @@ export function generateWageWithholdingAgreementHTML(data: {
   debt: any;
   company: any;
 }): string {
-  // ── CLASSIC THEME: Arial + pure black/white. Agreement body text VERBATIM. ──
-
   const { withholding: w, employee: emp, debt, company } = data;
   const money = (v: any): string => formatCurrency(Number(v) || 0);
   const generated = new Date().toLocaleString('en-US');
-
-  // ── Math (unchanged) ──
   const perPay = Number(w?.per_pay_amount) || 0;
   const balance = Number(debt?.balance_due) || 0;
   const estPayments = perPay > 0 ? Math.ceil(balance / perPay) : 0;
   const scheduleLabels: Record<string, string> = { weekly: 'weekly', biweekly: 'bi-weekly', semimonthly: 'semi-monthly', monthly: 'monthly' };
   const schedule = scheduleLabels[emp?.pay_schedule] || 'per-paycheck';
 
-  const coName = company?.name || 'Company';
-  const coDetailHtml = [
-    [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).map(cesc).join(', '),
-    [company?.phone, company?.email].filter(Boolean).map(cesc).join(' &middot; '),
-  ].filter(Boolean).join('<br>');
-  const logoData = company?.logo_data ?? company?.logo ?? null;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Wage Withholding Agreement — ${esc(emp?.name || '')}</title>
+<style>${baseStyles}</style></head>
+<body><div class="rpt-page" style="padding:40px 48px;">
+<div class="fd-letterhead">
+  <div class="fd-letterhead-left">
+    <div class="fd-co-name" style="font-size:14px;">${esc(company?.name || 'Company')}</div>
+    <div style="font-size:9px;color:#64748b;margin-top:2px;">${esc([company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean).join(', '))}</div>
+  </div>
+  <div class="fd-letterhead-right">
+    <div class="fd-doc-type" style="font-size:20px;">Wage Withholding<br/>Authorization Agreement</div>
+    <div class="fd-doc-date">Generated ${esc(generated)}</div>
+  </div>
+</div>
 
-  // ── Header (letterhead) ──
-  const header = docHeader({
-    coName,
-    coDetailHtml: logoImg(logoData, coName) + coDetailHtml,
-    title: 'Wage Withholding Authorization Agreement',
-    numberHtml: `<div class=”doc-number”>Generated ${cesc(generated)}</div>`,
-  });
+<div style="margin-top:20px;font-size:11px;line-height:1.7;color:#0f172a;">
+  <p>This Voluntary Wage Withholding Authorization (“Agreement”) is entered into between
+  <strong>${esc(company?.name || 'the Company')}</strong> (“Employer”) and
+  <strong>${esc(emp?.name || 'the Employee')}</strong>${emp?.job_title ? `, ${esc(emp.job_title)}` : ''}
+  (“Employee”), effective ${esc(fmtDateMaybe(w?.start_date) || '____________')}.</p>
 
-  // ── Meta strip ──
-  const meta = metaStrip([
-    { label: 'Employee',            value: emp?.name || '—' },
-    { label: 'Outstanding Balance', value: money(balance) },
-    { label: 'Per-Paycheck Deduction', value: money(perPay) },
-    { label: 'Pay Frequency',       value: schedule[0].toUpperCase() + schedule.slice(1) },
-    { label: 'Est. Paychecks',      value: estPayments > 0 ? String(estPayments) : '—' },
-    { label: 'Effective Date',      value: fmtDateMaybe(w?.start_date) || '—' },
-  ]);
+  <p><strong>1. Acknowledged Debt.</strong> Employee acknowledges owing Employer the amount of
+  <strong>${money(debt?.original_amount)}</strong> (current outstanding balance
+  <strong>${money(balance)}</strong>, with <strong>${money(debt?.payments_made)}</strong> repaid to date),
+  arising from ${esc(debt?.notes || 'amounts advanced by Employer to Employee')}.</p>
 
-  // ── Agreement body — legal wording VERBATIM (only esc() applied to user-data interpolations) ──
-  const agreementBody =
-    `<div style=”padding:16px 20px;border:2px solid #000;margin:0;font-size:11px;line-height:1.8;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;”>` +
-    `<p style=”margin-bottom:10px;”>This Voluntary Wage Withholding Authorization (&ldquo;Agreement&rdquo;) is entered into between ` +
-    `<strong>${cesc(company?.name || 'the Company')}</strong> (&ldquo;Employer&rdquo;) and ` +
-    `<strong>${cesc(emp?.name || 'the Employee')}</strong>${emp?.job_title ? `, ${cesc(emp.job_title)}` : ''} ` +
-    `(&ldquo;Employee&rdquo;), effective ${cesc(fmtDateMaybe(w?.start_date) || '____________')}.</p>` +
+  <p><strong>2. Authorization.</strong> Employee voluntarily authorizes Employer to deduct
+  <strong>${money(perPay)}</strong> from each ${esc(schedule)} paycheck, beginning
+  ${esc(fmtDateMaybe(w?.start_date) || 'the next regular pay date')}, and continuing until the
+  balance is paid in full${estPayments > 0 ? ` (approximately <strong>${estPayments}</strong> paychecks at the current balance)` : ''}.
+  The final deduction will be reduced as needed so total withholding never exceeds the outstanding balance.</p>
 
-    `<p style=”margin-bottom:10px;”><strong>1. Acknowledged Debt.</strong> Employee acknowledges owing Employer the amount of ` +
-    `<strong>${cesc(money(debt?.original_amount))}</strong> (current outstanding balance ` +
-    `<strong>${cesc(money(balance))}</strong>, with <strong>${cesc(money(debt?.payments_made))}</strong> repaid to date), ` +
-    `arising from ${cesc(debt?.notes || 'amounts advanced by Employer to Employee')}.</p>` +
+  <p><strong>3. Limits.</strong> Deductions under this Agreement shall not reduce Employee's pay below
+  applicable federal or state minimum-wage or wage-deduction limits. If a scheduled deduction would
+  exceed a legal limit, the deduction shall be reduced to the maximum lawful amount for that period.</p>
 
-    `<p style=”margin-bottom:10px;”><strong>2. Authorization.</strong> Employee voluntarily authorizes Employer to deduct ` +
-    `<strong>${cesc(money(perPay))}</strong> from each ${cesc(schedule)} paycheck, beginning ` +
-    `${cesc(fmtDateMaybe(w?.start_date) || 'the next regular pay date')}, and continuing until the ` +
-    `balance is paid in full${estPayments > 0 ? ` (approximately <strong>${cesc(String(estPayments))}</strong> paychecks at the current balance)` : ''}. ` +
-    `The final deduction will be reduced as needed so total withholding never exceeds the outstanding balance.</p>` +
+  <p><strong>4. Voluntary; Revocation.</strong> This authorization is voluntary and may be revoked by
+  Employee in writing at any time. Revocation does not extinguish the underlying debt, which remains
+  due and may be pursued through other lawful means.</p>
 
-    `<p style=”margin-bottom:10px;”><strong>3. Limits.</strong> Deductions under this Agreement shall not reduce Employee&rsquo;s pay below ` +
-    `applicable federal or state minimum-wage or wage-deduction limits. If a scheduled deduction would ` +
-    `exceed a legal limit, the deduction shall be reduced to the maximum lawful amount for that period.</p>` +
+  <p><strong>5. Early Payoff &amp; Separation.</strong> Employee may repay the remaining balance early at
+  any time without penalty. Upon separation of employment, the remaining balance becomes due and,
+  to the extent permitted by law, may be deducted from final wages.</p>
+</div>
 
-    `<p style=”margin-bottom:10px;”><strong>4. Voluntary; Revocation.</strong> This authorization is voluntary and may be revoked by ` +
-    `Employee in writing at any time. Revocation does not extinguish the underlying debt, which remains ` +
-    `due and may be pursued through other lawful means.</p>` +
+<div style="margin-top:18px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;">
+  <div class="section-label">Repayment Summary</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;margin-top:8px;">
+    ${[
+      ['Outstanding Balance', money(balance)],
+      ['Per-Paycheck Deduction', money(perPay)],
+      ['Pay Frequency', schedule[0].toUpperCase() + schedule.slice(1)],
+      ['Est. Paychecks to Payoff', estPayments > 0 ? String(estPayments) : '—'],
+    ].map(([k, v]) => `<div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:12px;color:#0f172a;font-weight:700;margin-top:2px;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>
+</div>
 
-    `<p style=”margin-bottom:0;”><strong>5. Early Payoff &amp; Separation.</strong> Employee may repay the remaining balance early at ` +
-    `any time without penalty. Upon separation of employment, the remaining balance becomes due and, ` +
-    `to the extent permitted by law, may be deducted from final wages.</p>` +
-    `</div>`;
+<div style="margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employee Signature — ${esc(emp?.name || '')}</div>
+    <div style="margin-top:26px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+  <div>
+    <div style="border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Employer Representative — ${esc(company?.name || '')}</div>
+    <div style="margin-top:26px;border-top:1px solid #0f172a;padding-top:4px;font-size:9px;color:#64748b;">Date</div>
+  </div>
+</div>
 
-  // ── Repayment summary (meta strip style) ──
-  const repaymentSummary =
-    `<div style=”padding:10px 16px;border-bottom:2px solid #000;”>` +
-    `<div class=”sec-label” style=”margin-bottom:6px;”>Repayment Summary</div>` +
-    ruledTable(
-      [
-        { label: 'Outstanding Balance', width: '25%' },
-        { label: 'Per-Paycheck Deduction', align: 'right', width: '25%' },
-        { label: 'Pay Frequency', align: 'right', width: '25%' },
-        { label: 'Est. Paychecks to Payoff', align: 'right', width: '25%' },
-      ],
-      [[
-        `<strong>${cesc(money(balance))}</strong>`,
-        `<strong>${cesc(money(perPay))}</strong>`,
-        cesc(schedule[0].toUpperCase() + schedule.slice(1)),
-        estPayments > 0 ? `<strong>${cesc(String(estPayments))}</strong>` : '—',
-      ]],
-    ) +
-    `</div>`;
-
-  // ── Signature block ──
-  const signatureBlock = boxRow([
-    {
-      label: `Employee Signature — ${cesc(emp?.name || '')}`,
-      html: `<div style=”margin-top:36px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Signature</div>` +
-        `<div style=”margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Date</div>`,
-    },
-    {
-      label: `Employer Representative — ${cesc(company?.name || '')}`,
-      html: `<div style=”margin-top:36px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Signature</div>` +
-        `<div style=”margin-top:28px;border-top:1px solid #000;padding-top:4px;font-size:9px;”>Date</div>`,
-    },
-  ]);
-
-  // ── Disclaimer (preserved verbatim) ──
-  const disclaimerHtml =
-    `<div style=”padding:8px 16px;border-bottom:2px solid #000;font-size:9px;line-height:1.6;”>` +
-    `This document is a template for a voluntary wage-deduction authorization and is not legal advice. ` +
-    `Wage-deduction rules vary by jurisdiction &mdash; consult counsel before relying on this form.` +
-    `</div>`;
-
-  const body =
-    header +
-    meta +
-    `<div style=”padding:14px 16px;border-bottom:2px solid #000;”>` +
-    agreementBody +
-    `</div>` +
-    repaymentSummary +
-    signatureBlock +
-    disclaimerHtml +
-    footerBar(`${cesc(coName)} · Wage Withholding Authorization Agreement · ${cesc(emp?.name || '')} · Generated ${cesc(generated)}`);
-
-  return `<!DOCTYPE html><html><head><meta charset=”utf-8”><title>Wage Withholding Agreement — ${cesc(emp?.name || '')}</title>` +
-    `<style>${classicStyles()}</style></head><body>` +
-    docFrame(body) +
-    `</body></html>`;
+<div style="margin-top:20px;font-size:8px;color:#94a3b8;">
+  This document is a template for a voluntary wage-deduction authorization and is not legal advice.
+  Wage-deduction rules vary by jurisdiction — consult counsel before relying on this form.
+</div>
+</div></body></html>`;
 }
