@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import {
-  LayoutDashboard, Building2, CheckSquare, Banknote, FileText, ShieldCheck, Inbox, Activity,
+  LayoutDashboard, Building2, CheckSquare, Banknote, FileText, ShieldCheck, Inbox, Activity, TrendingUp,
 } from 'lucide-react';
 import Overview from './Overview';
 import Directory from './Directory';
@@ -17,8 +17,9 @@ import TaxCompliance1099 from './TaxCompliance1099';
 import ComplianceHub from './ComplianceHub';
 import PortalAdmin from './PortalAdmin';
 import Intelligence from './Intelligence';
+import Optimization from './Optimization';
 
-type TabId = 'overview' | 'directory' | 'approvals' | 'payments' | 'tax1099' | 'compliance' | 'portal' | 'intelligence';
+type TabId = 'overview' | 'directory' | 'approvals' | 'payments' | 'tax1099' | 'compliance' | 'portal' | 'intelligence' | 'optimization';
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
   { id: 'directory', label: 'Directory', icon: <Building2 size={14} /> },
@@ -28,6 +29,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'compliance', label: 'Compliance', icon: <ShieldCheck size={14} /> },
   { id: 'portal', label: 'Vendor Portal', icon: <Inbox size={14} /> },
   { id: 'intelligence', label: 'Intelligence', icon: <Activity size={14} /> },
+  { id: 'optimization', label: 'Optimization', icon: <TrendingUp size={14} /> },
 ];
 
 const VendorsApModule: React.FC = () => {
@@ -72,6 +74,7 @@ const VendorsApModule: React.FC = () => {
             {tab === 'compliance' && <ComplianceHub onViewVendor={viewVendor} />}
             {tab === 'portal' && <PortalAdmin />}
             {tab === 'intelligence' && <Intelligence onViewVendor={viewVendor} />}
+            {tab === 'optimization' && <Optimization onViewVendor={viewVendor} />}
           </div>
         </>
       )}
