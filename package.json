@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.main.json && tsc --noEmit --project tsconfig.json",
     "test:loan": "npm run build:main && node scripts/test-loan-calculator.cjs",
     "test:search": "npm run build:main && node scripts/test-search-index.cjs",
+    "test:cockpit": "node scripts/test-cockpit-layout.cjs",
     "postinstall": "electron-builder install-app-deps",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
