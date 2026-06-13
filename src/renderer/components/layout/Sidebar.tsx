@@ -88,6 +88,7 @@ const sections: NavSection[] = [
       // users reported "I don't see anything for LOAN on the side." High-value
       // module deserves prominence.
       { id: 'loans', label: 'Loans', icon: Banknote },
+      { id: 'vendors-ap', label: 'Vendors & AP', icon: Building2 },
       { id: 'bills', label: 'Bills (AP)', icon: FileInput },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
       { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
