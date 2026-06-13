@@ -100,7 +100,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
     } else if (r.type === 'entity' && r.entity) {
       const moduleMap: Record<string, string> = {
         invoice: 'invoicing', expense: 'expenses', client: 'clients',
-        vendor: 'vendors', quote: 'quotes', debt: 'debt-collection',
+        vendor: 'expenses', quote: 'quotes', debt: 'debt-collection',
         bill: 'bills', account: 'accounts', employee: 'payroll',
         project: 'projects', purchase_order: 'purchase-orders', payment: 'invoicing',
       };
