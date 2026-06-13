@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import api from '../../lib/api';
+import PdfPreview from '../../components/PdfPreview';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 import {
@@ -445,12 +446,10 @@ const DebtInvoiceFormatter: React.FC<DebtInvoiceFormatterProps> = ({ debtId, onB
             Rendered exactly as the exported PDF
           </span>
         </div>
-        {/* iframe isolates the statement CSS so it can't leak into the app */}
-        <iframe
-          srcDoc={html}
-          title="Statement Preview"
-          style={{ width: '100%', minHeight: '900px', border: 'none', background: '#fff' }}
-          sandbox="allow-same-origin"
+        <PdfPreview
+          html={html}
+          title={`Statement of Account — ${debt.debtor_name}`}
+          style={{ flex: 1, minHeight: 900, width: '100%' }}
         />
       </div>
     </div>
