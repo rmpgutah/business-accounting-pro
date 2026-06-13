@@ -2789,6 +2789,8 @@ const api = {
   featVendorPayStatus: (vendor_id: string) => window.electronAPI.invoke('feat:vendor-pay:status', { vendor_id }),
   featVendorAchSubmit: (opts: any) => window.electronAPI.invoke('feat:vendor-ach:submit', opts),
   featVendorAchApprove: (id: string, approved_by: string) => window.electronAPI.invoke('feat:vendor-ach:approve', { id, approved_by }),
+  featVendorAchReject: (id: string, rejected_by: string) => window.electronAPI.invoke('feat:vendor-ach:reject', { id, rejected_by }),
+  featVendorAchList: (opts?: any) => window.electronAPI.invoke('feat:vendor-ach:list', opts || {}),
   featVendor1099Download: (opts: any) => window.electronAPI.invoke('feat:vendor-1099:download', opts),
   featVendorAttestSubmit: (opts: any) => window.electronAPI.invoke('feat:vendor-attest:submit', opts),
 
