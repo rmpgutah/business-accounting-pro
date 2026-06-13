@@ -117,6 +117,16 @@ export function initDatabase(): Database.Database {
 
   // ─── Column migrations (safe — catch errors for already-existing columns) ──
   const migrations: string[] = [
+    // Intelligence Core — full-text search index (B1)
+    `CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+      entity_type UNINDEXED,
+      entity_id UNINDEXED,
+      company_id UNINDEXED,
+      title,
+      subtitle,
+      body,
+      tokenize = 'porter unicode61'
+    )`,
     "ALTER TABLE categories ADD COLUMN color TEXT DEFAULT '#6b7280'",
     "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''",
     "ALTER TABLE categories ADD COLUMN is_active INTEGER DEFAULT 1",

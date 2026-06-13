@@ -308,6 +308,7 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'predictions',
   'rule_logs',
   'rules',
+  'search_index',
   'sync_queue',
   'workflow_definitions',
 ]);
@@ -759,6 +760,8 @@ export const TABLES_WITHOUT_UPDATED_AT = new Set([
   'client_portal_tokens',
   'client_churn_predictions',
   'client_ltv_snapshots',
+  // Intelligence Core — FTS5 search index (B1) has only its declared columns.
+  'search_index',
 ]);
 
 // Tables with a `deleted_at` column for soft-delete support.
