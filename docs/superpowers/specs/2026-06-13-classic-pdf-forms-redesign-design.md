@@ -187,9 +187,14 @@ Replace the simulated monospace MICR bar in
 
 **Migrate call sites** (replace path 2 & 3 with `<PdfPreview>` / the real-PDF APIs):
 
-- HTML `srcDoc` iframes → `<PdfPreview>`: `InvoiceDetail.tsx`, `InvoiceForm.tsx`,
-  `InvoiceSettings.tsx` (template preview), `QuoteDetail.tsx`, `QuoteForm.tsx`,
-  `JournalEntryForm.tsx`, `DemandLetterGenerator.tsx`, `DebtInvoiceFormatter.tsx`.
+- HTML `srcDoc` iframes → `<PdfPreview>`: `InvoiceSettings.tsx` (template preview),
+  `QuoteDetail.tsx`, `QuoteForm.tsx`, `JournalEntryForm.tsx`, `DemandLetterGenerator.tsx`,
+  `DebtInvoiceFormatter.tsx`.
+- **Exception — live-edit editor iframe stays HTML:** `InvoiceDetail.tsx` / `InvoiceForm.tsx`
+  keep their `srcDoc` HTML iframe because it powers `analyzePages` (DOM-based page-straddler
+  analysis) and per-keystroke responsiveness that a PDF `<embed>` cannot provide. Their
+  **output** actions (Preview / Print / Save) already route through the real-PDF APIs, which
+  now emit the classic template; optionally add a "Preview as PDF" button using `<PdfPreview>`.
 - Legacy `window.open()`+`window.print()` → `api.print` / `<PdfPreview>`:
   `DemandLetterGenerator.tsx`, local `printHTML` in `InvoicesUpgrades.part4.tsx`
   (statement, register, invoice) and `ClientsUpgrades.part4.tsx` (6 call sites).
